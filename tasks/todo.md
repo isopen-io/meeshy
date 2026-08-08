@@ -493,3 +493,81 @@ enfilent déjà correctement, ne diffusent PAS d'aperçu de liste (un épinglage
 change pas le dernier message) et leur `eventType` n'est pas dans le couple
 edit/delete — les y forcer aurait été une uniformisation de façade qui change
 leur comportement observable sans test capable de le justifier.
+
+# Les trois écrivains de préférences hors `conversation-preferences.ts` ne synchronisaient rien (2026-08-08)
+
+## Demande
+Routine messaging autonome — cycle d'audit du cœur temps-réel. Env Linux, pas
+de Xcode : périmètre TS (gateway / shared / web).
+
+## Constats
+
+### D1 (racine) — un contrat à deux moitiés, appliqué par 2 écrivains sur 5
+`UserConversationPreferences` est une ligne **par utilisateur**. Toute écriture
+doit incrémenter `version` (schema : « Monotonic version […] clients drop
+incoming payloads whose `version` is <= their local snapshot ») **et** diffuser
+l'instantané sur `user:<id>`. Les deux ne valent que conjointes : une diffusion
+non versionnée est jetée par tous, un incrément non diffusé ne change rien.
+
+Cinq écrivains existent ; seuls `PUT` et `DELETE /user-preferences/conversations/:id`
+honoraient le contrat. `routes/user-deletions.ts` en porte trois qui
+n'honoraient **ni l'une ni l'autre** : `delete-for-me`, `restore-for-me`,
+`clear-history` — `upsert`/`update` bruts, aucun `version`, aucun `broadcastToUser`.
+
+### D2 (portée réelle) — les deux clients étaient déjà câblés, seul le serveur se taisait
+`ConversationPreferencesPayload` déclare `deletedForUserAt` et `clearHistoryBefore` ;
+`ConversationStoreSocketBridge.mapPreferences` (iOS) les mappe sur `userState` et
+`ConversationUserState.isVisible` en dépend ; le web écoute `USER_PREFERENCES_UPDATED`
+(`preferences-sync.service.ts`). Une conversation supprimée sur l'iPhone restait
+donc dans la liste de l'iPad, un historique vidé restait affiché ailleurs.
+
+### D3 (empreinte de l'oubli) — le commentaire de type nomme 2 écrivains sur 5
+`UserPreferencesConversationUpdatedEventData` est documenté « émis par
+`PUT/DELETE /user-preferences/conversations/:id` ». L'affirmation est vraie et
+incomplète — même signal que « les trois transports » pour cinq sites REST
+(leçon 2026-08-07 (3) #2).
+
+### D4 (pourquoi ça ne se rattrape pas) — le ricochet n'arrive jamais
+Une autre préférence changée sur la même conversation (épingler, sourdine)
+transporte l'état par ricochet, le payload étant un instantané complet. Mais on
+n'épingle pas une conversation qu'on vient de supprimer : pour le cas nominal,
+la divergence est permanente, pas différée.
+
+## Plan
+- [x] T1 — RED : 7 tests de diffusion multi-appareils sur les 3 routes (5 rouges)
+- [x] T2 — D1/D3 : écrivain unique `writeConversationPreferences` portant persister + incrémenter + diffuser ; `version` retiré du type d'écriture
+- [x] T3 — les 4 sites de mise à jour y passent (déduplication de `toPreferencesPayload`)
+- [x] T4 — vérification par mutation (retrait du seul incrément → 2 rouges) + suite gateway complète + tsc propre
+- [x] T5 — changeset + CHANGELOG + lessons
+
+## Revue
+Une seule racine (un contrat à deux moitiés appliqué par une minorité de ses
+écrivains), invisible dans tout diff isolé : il faut croiser le schema Prisma
+(qui énonce la monotonie), le type d'événement partagé (qui déclare les deux
+champs), le bridge socket iOS (qui prouve que le client les attend) et
+`user-deletions.ts` (qui les écrit sans rien émettre).
+
+Le correctif n'est pas de recopier « incrémente + diffuse » dans trois blocs de
+plus : c'est ce fractionnement qui a permis à trois écrivains de n'en appliquer
+aucune moitié sans que rien ne le signale. `writeConversationPreferences` nomme
+les trois obligations en un seul endroit, et exclut `version` de son type
+d'entrée — le compteur appartient au module, pas aux appelants.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 5 tests de diffusion ont
+été vus ROUGES avant le correctif, tous sur « aucune émission ». Le retrait du
+seul `version: { increment: 1 }` fait retomber 2 tests — les deux moitiés sont
+couvertes indépendamment. Le passage de `restore-for-me` de `update` à l'`upsert`
+du helper a fait virer au rouge un test EXISTANT (« 500 on database error during
+update ») dont le levier de mock désignait `update` : le levier a été recentré
+sur le chemin réellement emprunté et le knob devenu mort supprimé.
+
+Non retenu : faire passer le reset (`DELETE`) par le même helper. Il diffuse
+`reset: true` / `preferences: null` et restaure les colonnes aux défauts — une
+sémantique différente que le helper aurait dû accueillir par un drapeau, au
+prix d'une fonction qui fait deux choses. Il honore déjà les deux moitiés du
+contrat, ce qui est l'invariant qui importe.
+
+Hors périmètre, constaté : `ConversationStore.dispatchPreferencesUpdate` (iOS)
+traite `.setClearHistoryBefore` comme un succès local sans appeler la route
+(« until the server endpoint is wired ») alors que `POST /clear-history` existe
+depuis longtemps — dette iOS, non vérifiable sans Xcode dans cet environnement.

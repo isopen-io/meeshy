@@ -850,3 +850,82 @@ Non traité, relevé pour un cycle suivant :
   existante** (`updateMany`), alors que le client applique l'ordre de façon
   optimiste et reçoit un 200. À confirmer : une conversation réordonnée a-t-elle
   toujours une ligne (elle en a une dès qu'elle est catégorisée) ?
+
+---
+
+## Cycle 12 (2026-08-08) — arbitrage « delete-for-me », demandé par le cycle 11
+
+Le cycle 11 avait laissé ouvert : « `routes/user-deletions.ts` écrit `deletedForUserAt`
+sans incrémenter `version` ni diffuser. C'est aussi une seconde implémentation du
+même geste produit que `routes/conversations/delete-for-me.ts`. Nécessite un
+arbitrage — supprimer le chemin legacy ou le câbler — avant d'être corrigé. »
+
+### Ce qui a été corrigé dans ce cycle
+Le contrat de synchronisation (incrément de `version` + diffusion `USER_PREFERENCES_UPDATED`)
+est désormais porté par un écrivain unique `writeConversationPreferences`, emprunté par
+les quatre sites de mise à jour de `UserConversationPreferences`. Voir `tasks/todo.md`
+(entrée 2026-08-08) et le CHANGELOG.
+
+### L'arbitrage, avec les faits qui le tranchent
+Les deux implémentations ne sont pas deux copies : ce sont **deux colonnes différentes**,
+et la paire supprimer/restaurer est câblée en travers.
+
+| | `routes/conversations/delete-for-me.ts` | `routes/user-deletions.ts` |
+|---|---|---|
+| URL | `/api/v1/conversations/:id/delete-for-me` (`API_PREFIX`) | `/api/conversations/:id/delete-for-me` (prefix `''`, `/api/` en dur) |
+| Écrit | `Participant.deletedForMe = now`, `isActive = false` | `UserConversationPreferences.deletedForUserAt` |
+| Transfert de propriété (creator) | oui | non |
+| Éviction des sockets de la room | oui | non |
+| Invalidation des caches participant | oui | non |
+| Diffusion | `conversation:deleted` → `user:<id>` | `user:preferences-updated` (depuis ce cycle) |
+| Appelé par un client | **oui** — iOS `ConversationService.deleteForMe` (`MeeshyConfig.defaultApiPath = "/api/v1"`) | **aucun** (ni iOS ni web) |
+
+**Le fait décisif : `GET /conversations` filtre sur `Participant.deletedForMe`
+(`core.ts`, clause `OR: [{ deletedForMe: null }, { deletedForMe: { isSet: false } }]`),
+jamais sur `deletedForUserAt`** — qu'il se contente de *sélectionner* et d'expédier au
+client (`conversationUserPreferencesSelect`). Conséquences :
+
+1. Le seul `delete-for-me` réellement emprunté n'écrit **jamais** `deletedForUserAt`.
+2. Or `POST /api/conversations/:id/restore-for-me` **lit** `deletedForUserAt` : après la
+   suppression que les clients effectuent vraiment, il répond invariablement
+   `400 "Conversation is not deleted"`. La restauration est **structurellement
+   impossible** — la paire supprimer/restaurer opère sur deux colonnes distinctes.
+3. Même racine pour `GET /api/user/deleted-conversations` : il interroge
+   `deletedForUserAt: { not: null }`, donc renvoie **toujours une liste vide**.
+
+C'est la leçon 84 (« toute transition d'état a une inverse : auditer les DEUX sens »)
+sous une forme plus dure : ici l'inverse n'est pas incomplète, elle vise une autre
+colonne que l'aller.
+
+### Recommandation
+`Participant.deletedForMe` est la source de vérité : c'est ce que la requête de liste
+filtre, ce que le client appelle, et le seul chemin qui fasse le travail complet
+(succession du créateur, éviction des sockets, invalidation des caches, diffusion
+`conversation:deleted`). `UserConversationPreferences.deletedForUserAt` en est une
+représentation seconde et plus faible, actionnable par le client seul.
+
+Trois suites possibles, par ordre de préférence :
+1. **Reconstruire `restore-for-me` contre `Participant.deletedForMe`** — remettre
+   `deletedForMe: null`, `isActive: true`, **rejoindre la room AVANT de diffuser**
+   (leçon 84 #3 : l'ordre porte le contrat), invalider les mêmes caches que l'aller ;
+   `GET /api/user/deleted-conversations` interroge la même colonne. Idem pour la trio
+   conversation de `user-deletions.ts`, qui doit alors déléguer au mécanisme unique.
+2. Retirer les trois routes conversation de `user-deletions.ts` et la colonne
+   `deletedForUserAt` si le produit ne veut pas de restauration.
+3. Statu quo — non recommandé : deux endpoints publics documentés qui ne peuvent pas
+   fonctionner ensemble.
+
+**Non fait dans ce cycle, délibérément.** (1) comme (2) changent le comportement
+observable d'API publiques (sémantique de restauration, ou retrait d'endpoints) sur la
+base d'un choix de colonne canonique qui est une décision produit. L'arbitrage demandé
+par le cycle 11 est ici tranché sur les faits ; l'exécution demande une validation
+humaine, pas une passe non surveillée.
+
+### Suivis du cycle 11 encore ouverts
+- Le scope **communauté** de `user:preferences-updated` n'est pas routé côté iOS
+  (`MessageSocketManager` ne discrimine que deux des trois formes émises).
+- `POST /user-preferences/reorder` est un no-op silencieux quand aucune ligne n'existe
+  (`updateMany`), alors que le client applique l'ordre optimistiquement et reçoit `200`.
+- Nouveau : `ConversationStore.dispatchPreferencesUpdate` (iOS) traite
+  `.setClearHistoryBefore` comme un succès purement local sans appeler la route
+  (« until the server endpoint is wired ») alors que `POST /clear-history` existe.
