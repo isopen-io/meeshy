@@ -1,111 +1,93 @@
-# Cycle 23 — Le cinquième écrivain : `message:edit` ne nommait personne
+# Cycle 26 — Réparer les liens déjà écrits, et rendre les réparateurs exécutables
 
-Tête laissée par le cycle 22 :
-« **`MessageHandler.handleMessageEdit` (édition par WebSocket) ne touche AUCUNE mention.**
-Il écrit `content`, `isEdited`, `editedAt`, `translations: null` et s'arrête là : ni ligne
-`Mention`, ni `validatedMentions`. Éditer « salut @alice » en « salut @bob » par socket laisse
-Alice mentionnée et ne nomme jamais Bob. C'est le cinquième écrivain de la famille, et le seul
-qui n'écrit rien du tout. »
+Tête laissée par le cycle 25 :
+« **Les `TrackingLink` déjà écrits portent des `Participant.id` dans `createdBy`.** Le correctif ne
+vaut que pour les liens à venir ; les anciens restent invisibles pour leur auteur. Un script de
+réparation est à écrire, sur le modèle de `repair-mention-user-ids.ts` — qui lui-même **n'a jamais
+été exécuté**. »
 
-Vérifié, et c'est bien le cas — sur le transport d'édition **PRIMAIRE**. Le handler porte déjà
-la parité stricte avec REST sur la fenêtre de 24 h, sur la garde anti-suppression concurrente, sur
-le report des pièces jointes et sur l'éventail `conversation:updated`. La seule chose qu'il n'avait
-jamais reprise à REST, c'est ce que le message doit aux gens qu'il nomme.
+Les deux moitiés de cette phrase se sont révélées liées : en écrivant le nouveau script, on
+découvre pourquoi l'ancien n'a jamais tourné.
 
-## Ce que l'édition socket cassait
+## D1 — `repair-tracking-link-created-by.ts`
 
-| # | Défaut | Ce que l'utilisateur voyait |
-|---|---|---|
-| D1 | aucune ligne `Mention` créée | éditer un message pour y ajouter `@bob` ne mettait jamais Bob dans son inbox `/mentions` |
-| D2 | aucune ligne `Mention` supprimée | retirer `@alice` du texte la laissait mentionnée pour toujours — la ligne survit au mot qui l'a produite |
-| D3 | `validatedMentions` jamais réécrit | le web surligne depuis ce champ : le nom retiré restait surligné, le nom ajouté restait du texte brut |
-| D4 | aucune notification | personne n'apprenait jamais avoir été nommé par une édition |
-| D5 | aucun `mention:created` | même en ligne, un nouveau nommé hors du salon de conversation n'était averti par rien : `message:edited` ne fan qu'à `conversation:<id>` |
+Même forme que son aîné : classification par appartenance à `Participant` (les deux espaces d'ids
+sont disjoints, donc le classement est déterministe et le script idempotent), résolution des
+participants **par lots** de 500, et surtout **aucune écriture sans `--apply`** — un `--dry-run`
+oublié sur un script qui écrit par défaut est irréversible ; l'inverse ne coûte qu'un second
+lancement.
 
-## La forme du correctif — souder ce qui n'avait de sens qu'ensemble
+Une décision le sépare franchement de son aîné : **il ne supprime jamais rien.**
 
-Le cycle 22 avait livré `replaceMessageMentions` (la réconciliation) et la route REST gardait,
-dépliée à côté, la notification des entrants. Deux appels séparés, dont le second consomme le seul
-produit que le premier ne consomme pas (`newlyMentionedUserIds`). C'est exactement la forme qui
-permet à un écrivain d'en oublier une moitié — ou, ici, les deux.
+`repair-mention-user-ids.ts` supprime la ligne redondante quand une réécriture entre en collision
+avec l'unicité — une ligne `Mention` en double ne porte aucune information que l'autre n'ait pas.
+Un `TrackingLink`, si : son `token` **est une URL publique** (`/l/<token>`) possiblement déjà
+partagée, et `TrackingLinkClick` référence la ligne. La détruire casserait un lien vivant et
+perdrait son historique de clics. Une collision sur l'unicité applicative `(targetId, createdBy)`
+est donc **signalée et la ligne laissée intacte** : un lien mal attribué reste préférable à un lien
+mort.
 
-`reconcileEditedMentions` les soude en un point d'appel public unique :
+Même retenue pour un participant **anonyme** (aucun `userId`) : remettre `createdBy` à `null` serait
+plus fidèle au schéma, mais détruirait la seule trace de provenance que la ligne porte, pour un gain
+nul — aucun `User.id` ne pouvant égaler un `Participant.id`, le lien est déjà sans propriétaire
+effectif.
 
-```ts
-export async function reconcileEditedMentions(params: EditedMentionParams): Promise<ResolvedMentions> {
-  const resolved = await replaceMessageMentions(params);
-  await notifyNewlyMentioned(params, resolved.newlyMentionedUserIds);
-  return resolved;
-}
+L'unicité `(targetId, createdBy)` n'est relevée que pour les liens à **cible interne** : l'index qui
+la porte est PARTIEL (cf. `schema.prisma`), et les liens `EXTERNAL` — ceux que produit précisément
+le chemin défectueux — ont `targetId: null`.
+
+## D2 — aucun des deux scripts ne pouvait s'exécuter
+
+```
+$ npx tsx scripts/migrations/repair-mention-user-ids.ts
+Error: Cannot find module 'mongodb'
 ```
 
-Les deux appelants d'édition passent par là : la route REST (qui perd 45 lignes dépliées) et
-`MessageHandler.handleMessageEdit` (qui en gagne 10). Même contrat des deux côtés :
+`mongodb` est déclaré par `services/gateway`, pas par la racine. La résolution CommonJS remonte
+depuis le FICHIER, pas depuis le répertoire courant : `scripts/migrations/` → `scripts/node_modules`
+→ `node_modules` racine → introuvable. Aucun `cd` ne rattrape ça. Les deux scripts de réparation
+échouaient donc à la première ligne, quel que soit l'environnement — ce qui explique sans mystère
+pourquoi `repair-mention-user-ids.ts` « n'a jamais été exécuté ».
 
-- **Seuls les ENTRANTS sont notifiés.** Renotifier l'ensemble ferait de dix corrections de frappe
-  dix pushes pour quelqu'un nommé au premier envoi.
-- **La notification est APRÈS l'écriture et son échec ne la défait pas.** `reconciled` continue de
-  décrire la base, qui a bel et bien été réconciliée.
-- **`editorUserId` est un `User.id`,** pas le `Participant.id` que porte `Message.senderId` — c'est
-  contre lui que `createMentionNotificationsBatch` filtre l'auto-mention (cf. cycle 22, D3).
+`mongodb: ^7.5.0` (la version que gateway déclare déjà, donc aucune empreinte nouvelle dans le
+graphe) est ajouté aux devDependencies de la racine. Les deux scripts atteignent désormais leur
+garde :
 
-## `validatedMentions` dans le payload : établi vide ≠ rien établi
+```
+$ npx tsx scripts/migrations/repair-tracking-link-created-by.ts
+No MongoDB URL found. Set MONGODB_URL or DATABASE_URL in .env
+$ npx tsx scripts/migrations/repair-mention-user-ids.ts
+No MongoDB URL found. Set MONGODB_URL or DATABASE_URL in .env
+```
 
-Le handler ne recopie `validatedUsernames` dans `message:edited` que si `reconciled`. Poser le
-champ inconditionnellement rejouerait **au niveau du payload** l'effacement que l'unité vient
-d'empêcher en base : les clients écrasent leur message caché avec `{ ...cached, ...editedPayload }`,
-et un `[]` venu d'une panne transitoire effacerait un surlignage vivant. Le web cache avec
-`staleTime: Infinity` — la mention ne reviendrait pas.
+C'est exactement le comportement attendu sans base : le module se charge, le script démarre, et
+s'arrête sur l'absence d'URL.
 
-À l'inverse, un texte édité qui ne nomme plus personne **doit** produire `validatedMentions: []` :
-c'est un vide ÉTABLI. Les deux cas sont testés séparément, parce que rien dans le champ lui-même ne
-les distingue.
-
-## `mention:created` sur l'édition (D5)
-
-Émis aux entrants dans leur salon **personnel**, avec la garde d'auto-mention. Les `User.id` sont
-déjà résolus par la réconciliation, donc contrairement au chemin d'envoi
-(`broadcastNewMessage`, qui repart des usernames de `validatedMentions`), aucune requête de
-résolution n'est nécessaire. C'est le point resté ouvert depuis le cycle 21 — clos pour le chemin
-socket ; la route REST n'émet toujours rien (cf. « reste ouvert »).
-
-## Ce que le cycle a aussi corrigé, côté test
-
-Le double d'`io` de `MessageHandlerEditDelete.test.ts` partageait **un seul** objet d'émission pour
-tous les salons : « émis à `user:bob` » et « émis à `conversation:X` » y étaient indistinguables.
-Toute assertion de ciblage y passait par accident — y compris celle qui affirmait que
-`conversation:updated` partait vers le salon de conversation, alors qu'il ne part qu'aux salons
-personnels. Le double est désormais **par salon** (`emitsTo(io, room)`), et l'assertion de
-l'éventail a été retournée dans le bon sens (`.not.toContainEqual` sur le salon de conversation).
+`bun.lock` est mis à jour (7 lignes : la dépendance, plus deux versions de workspace que le fichier
+portait périmées). **`pnpm-lock.yaml` est laissé tel quel** : la CI installe pnpm avec
+`--no-frozen-lockfile`, et régénérer ce fichier ici produirait un diff massif sans rapport avec le
+changement, propice aux conflits avec les autres branches.
 
 ## Vérification
 
-```
-services/gateway : 600 suites / 15622 tests — tous verts
-tsc --noEmit     : propre
-```
+Aucun code de service n'est touché — le cycle livre un outil d'exploitation et une déclaration de
+dépendance. Les deux scripts se chargent et s'arrêtent proprement sur l'absence d'URL ; le typecheck
+gateway reste propre.
 
-Nouveaux tests : 5 sur `reconcileEditedMentions` (entrants seuls, déjà-mentionné silencieux, rien
-établi ⇒ rien notifié, notification en panne ⇒ réconciliation acquise, sans notifier câblé), 7 sur
-le chemin socket (réconciliation des lignes, `validatedMentions` persisté + diffusé, notification
-du seul entrant, `mention:created` au salon personnel, auto-mention silencieuse, panne qui
-n'efface rien, vide établi qui efface).
+**Ce script n'a pas de test unitaire**, comme son aîné : sa logique n'existe qu'en présence d'un
+MongoDB, et cette routine n'a aucun accès base. C'est un choix assumé, pas un oubli — la garde qui
+en tient lieu est le refus d'écrire sans `--apply`, doublé d'un rapport de comptage à relire avant
+de l'accorder.
 
 ## Reste ouvert après ce cycle
 
-- **`MessageHandler.handleMessageEdit` ne repasse toujours pas par le traitement des liens
-  `[[url]]` / `<url>`** que la route REST applique avant de sauver (`trackingLinkService
-  .processExplicitLinksInContent`). Éditer un message par socket pour y coller un lien traçable
-  écrit le texte brut ; par REST, le même geste crée le lien. Sixième asymétrie du même handler,
-  et la seule qui reste sur le contenu lui-même. **Tête du prochain cycle.**
-- **L'édition REST n'émet toujours aucun `mention:created`** (cycle 21). Le chemin socket le fait
-  désormais ; REST n'a pas d'`io` sous la main dans cette route — le câblage passe par le
-  `fastify.socketIOManager`, une pièce distincte.
+- **Les deux réparations attendent une exécution avec accès base.** À lancer SANS `--apply`
+  d'abord, sur `MONGODB_URL`, et à relire : `Rewritten to User.id` donne l'ampleur, `Collisions` et
+  `Anonymous` les cas laissés intacts. **Tête du prochain cycle si un accès base devient
+  disponible ; sinon, c'est une action humaine.**
 - **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
   édition de post) et `routes/posts/comments.ts` : un `@John Doe` dans un post ou un commentaire ne
-  nomme personne — jamais, pas seulement à l'édition.
-- **`repair-mention-user-ids.ts` n'a jamais été exécuté** — aucun accès base depuis cette routine.
-  À lancer sans `--apply` d'abord.
+  nomme personne. **Tête du prochain cycle à défaut d'accès base.**
 - **`MentionCreatedEventData.mentionedParticipantId` reste dans les types partagés** et n'est peuplé
   par aucun émetteur ; le SDK iOS le décode. Champ mort des deux côtés.
 - **`getMentionsForMessage` et `getRecentMentionsForUser` n'ont aucun consommateur d'écran** —
@@ -115,3 +97,6 @@ n'efface rien, vide établi qui efface).
 - **`getLatestMessageSummary` résume le DERNIER message de la conversation, pas celui qu'on vient
   d'acquitter** (cycle 19, inchangé).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
+- **La suppression de la branche distante échoue depuis cette routine** : `git push --delete`
+  répond « Everything up-to-date » sans agir (réessayé 4 fois). Les branches mergées des cycles
+  s'accumulent côté remote — à supprimer depuis l'interface GitHub.

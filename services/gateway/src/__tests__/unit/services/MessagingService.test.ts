@@ -27,6 +27,9 @@ const mockHandleNewMessage = jest.fn();
 const mockUpdateOnNewMessage = jest.fn();
 const mockFindExistingTrackingLink = jest.fn();
 const mockCreateTrackingLink = jest.fn();
+const mockProcessExplicitLinksInContent = jest.fn(
+  async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+);
 const mockExtractMentions = jest.fn();
 const mockResolveUsernames = jest.fn();
 const mockValidateMentionPermissions = jest.fn();
@@ -49,10 +52,15 @@ jest.mock('../../../services/ConversationStatsService', () => ({
 }));
 
 // Mock TrackingLinkService
+// `processExplicitLinksInContent` porte désormais l'algorithme `[[url]]` /
+// `<url>` en UN seul exemplaire ; l'envoi le traverse au lieu d'appeler
+// lui-même `findExistingTrackingLink` / `createTrackingLink`. Le double garde
+// ces deux-là (d'autres chemins les utilisent) et gagne le point d'entrée réel.
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: mockFindExistingTrackingLink,
     createTrackingLink: mockCreateTrackingLink,
+    processExplicitLinksInContent: mockProcessExplicitLinksInContent,
     collectContentTrackingLinks: jest.fn(async () => [])
   }))
 }));
@@ -1579,8 +1587,14 @@ describe('MessagingService - Tracking Links Processing', () => {
       );
 
     expect(response.success).toBe(true);
-    // The tracking link service should have been called to find/create
-    expect(mockFindExistingTrackingLink).toHaveBeenCalled();
+    // Le contenu passe par le traitement des liens explicites — c'est LUI qui
+    // trouve ou crée le lien. L'assertion portait sur `findExistingTrackingLink`,
+    // une étape INTERNE de l'algorithme que l'envoi recopiait ; il ne la recopie
+    // plus, et un test qui nomme les pas d'un algorithme se casse dès qu'on le
+    // range ailleurs.
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ content, conversationId: testConversationId })
+    );
   });
 
   it('should process angle bracket <url> tracking links', async () => {
@@ -1614,7 +1628,9 @@ describe('MessagingService - Tracking Links Processing', () => {
       );
 
     expect(response.success).toBe(true);
-    expect(mockFindExistingTrackingLink).toHaveBeenCalled();
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ content, conversationId: testConversationId })
+    );
   });
 
   it('should handle tracking link creation errors gracefully', async () => {

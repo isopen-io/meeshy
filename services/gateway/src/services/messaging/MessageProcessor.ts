@@ -8,6 +8,7 @@ import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { MessageRequest } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../TrackingLinkService';
+import { processExplicitLinks } from './messageLinks';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -64,128 +65,59 @@ export class MessageProcessor {
   }
 
   /**
-   * Traite les liens dans le contenu du message selon les règles suivantes:
-   * - Règle 1: Markdown [texte](url) → Lien normal (pas de tracking)
-   * - Règle 2: URLs brutes → Aucun tracking automatique
-   * - Règle 3: [[url]] → Force le tracking → m+token
-   * - Règle 4: <url> → Force le tracking → m+token
+   * Traite les liens du contenu selon les règles suivantes :
+   * - Règle 1 : Markdown [texte](url) → lien normal (pas de tracking)
+   * - Règle 2 : URLs brutes → aucun tracking automatique (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 3 : [[url]] → force le tracking → m+token
+   * - Règle 4 : <url> → force le tracking → m+token
+   *
+   * Le corps de ces quatre étapes vivait ICI, en second exemplaire complet de
+   * `TrackingLinkService.processExplicitLinksInContent` : mêmes expressions
+   * régulières, même réutilisation de token, ~90 lignes chacun. Deux copies
+   * d'un algorithme ne restent pas d'accord — le correctif des séquences `$`
+   * (replacer fonction) a dû être appliqué aux deux, séparément. Il n'y en a
+   * plus qu'une, et l'envoi la traverse par la même unité que les deux chemins
+   * d'édition.
+   *
+   * `createdBy` est un **`User.id`** — cf. `ExplicitLinkParams`. Ce chemin y
+   * passait le `Participant.id` de l'expéditeur, d'un espace d'ids disjoint.
    */
   async processLinksInContent(
     content: string,
     conversationId: string,
-    senderId?: string,
+    createdBy?: string,
     messageId?: string
   ): Promise<string> {
+    return processExplicitLinks({
+      trackingLinkService: this.trackingLinkService,
+      content,
+      conversationId,
+      messageId,
+      createdBy,
+      onError: (error) => logger.error('[MessageProcessor] Error processing links', error),
+    });
+  }
+
+  /**
+   * L'identité UTILISATEUR derrière le participant expéditeur — la seule que
+   * `TrackingLink.createdBy` accepte de désigner (`/tracking-links` y compare
+   * un `User.id` pour lister « mes liens » ET pour autoriser l'accès).
+   *
+   * `undefined` pour un expéditeur anonyme (aucun `User.id`) comme pour une
+   * lecture en échec : dans les deux cas, un lien sans propriétaire vaut mieux
+   * qu'un lien attribué à un id qui ne désigne aucun utilisateur. Même forme et
+   * même raison que `resolveSenderUserId` côté mentions (cf. messageMentions.ts).
+   */
+  private async resolveLinkAuthorUserId(senderParticipantId: string): Promise<string | undefined> {
     try {
-      let processedContent = content;
-      const protectedItems: Array<{ placeholder: string; original: string }> = [];
-      let placeholderCounter = 0;
-
-      // Track URLs already processed in this message to reuse tokens for identical URLs
-      const urlTokenMap = new Map<string, string>();
-
-      // ÉTAPE 1: Protéger les liens markdown [texte](url) - Règle 1
-      const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(([^)]+)\)/g;
-      processedContent = processedContent.replace(MARKDOWN_LINK_REGEX, (match) => {
-        const placeholder = `__PROTECTED_MD_${placeholderCounter++}__`;
-        protectedItems.push({ placeholder, original: match });
-        return placeholder;
+      const participant = await this.prisma.participant.findUnique({
+        where: { id: senderParticipantId },
+        select: { userId: true },
       });
-
-      // ÉTAPE 2: Traiter [[url]] - Règle 3: Force le tracking
-      const DOUBLE_BRACKET_REGEX = /\[\[(https?:\/\/[^\]]+)\]\]/gi;
-      const doubleBracketMatches = [...processedContent.matchAll(DOUBLE_BRACKET_REGEX)];
-
-      for (const match of doubleBracketMatches) {
-        const fullMatch = match[0];
-        const url = match[1];
-
-        try {
-          let token: string;
-
-          if (urlTokenMap.has(url)) {
-            token = urlTokenMap.get(url)!;
-            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
-          } else {
-            let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
-              url,
-              conversationId
-            );
-
-            if (!trackingLink) {
-              trackingLink = await this.trackingLinkService.createTrackingLink({
-                originalUrl: url,
-                conversationId,
-                createdBy: senderId,
-                messageId
-              });
-            }
-
-            token = trackingLink.token;
-            urlTokenMap.set(url, token);
-          }
-
-          const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
-        } catch (linkError) {
-          logger.error(`[MessageProcessor] Error processing [[url]]:`, linkError);
-          processedContent = processedContent.replace(fullMatch, () => url);
-        }
-      }
-
-      // ÉTAPE 3: Traiter <url> - Règle 4: Force le tracking
-      const ANGLE_BRACKET_REGEX = /<(https?:\/\/[^>]+)>/gi;
-      const angleBracketMatches = [...processedContent.matchAll(ANGLE_BRACKET_REGEX)];
-
-      for (const match of angleBracketMatches) {
-        const fullMatch = match[0];
-        const url = match[1];
-
-        try {
-          let token: string;
-
-          if (urlTokenMap.has(url)) {
-            token = urlTokenMap.get(url)!;
-            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
-          } else {
-            let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
-              url,
-              conversationId
-            );
-
-            if (!trackingLink) {
-              trackingLink = await this.trackingLinkService.createTrackingLink({
-                originalUrl: url,
-                conversationId,
-                createdBy: senderId,
-                messageId
-              });
-            }
-
-            token = trackingLink.token;
-            urlTokenMap.set(url, token);
-          }
-
-          const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
-        } catch (linkError) {
-          logger.error(`[MessageProcessor] Error processing <url>:`, linkError);
-          processedContent = processedContent.replace(fullMatch, () => url);
-        }
-      }
-
-      // ÉTAPE 4: Restaurer les liens markdown protégés.
-      // Function replacer (not a string) so `$`-sequences the user typed inside
-      // the link (`$$`, `$&`, `` $` ``, `$'`) are reinstated verbatim instead of
-      // being interpreted by String.prototype.replace substitution rules.
-      for (const { placeholder, original } of protectedItems) {
-        processedContent = processedContent.replace(placeholder, () => original);
-      }
-
-      return processedContent;
+      return participant?.userId ?? undefined;
     } catch (error) {
-      logger.error('[MessageProcessor] Error processing links', error);
-      return content;
+      logger.error('[MessageProcessor] Error resolving link author', error);
+      return undefined;
     }
   }
 
@@ -200,12 +132,12 @@ export class MessageProcessor {
   private async buildRawUrlTrackingLinks(
     content: string,
     conversationId: string,
-    senderId?: string
+    createdBy?: string
   ): Promise<Array<{ url: string; token: string }>> {
     return this.trackingLinkService.collectContentTrackingLinks({
       content,
       conversationId,
-      createdBy: senderId,
+      createdBy,
     });
   }
 
@@ -362,13 +294,27 @@ export class MessageProcessor {
       senderId: data.senderId
     };
 
+    // À qui appartiendront les liens de ce message : le `User.id` DERRIÈRE le
+    // participant expéditeur, résolu UNE fois pour les deux chemins de tracking
+    // (syntaxe explicite ci-dessous, URLs brutes plus bas). `Message.senderId`
+    // est un `Participant.id` ; `TrackingLink.createdBy` est un `User.id`, et
+    // c'est contre lui que `/tracking-links` autorise l'accès.
+    //
+    // La résolution est PAYÉE seulement si le texte porte une URL — un message
+    // sans lien ne produit aucun `TrackingLink`, donc aucun propriétaire à
+    // désigner. `containsLinks` couvre les deux syntaxes explicites autant que
+    // les URLs brutes : `[[https://…]]` contient une URL.
+    const linkAuthorUserId = this.containsLinks(data.content)
+      ? await this.resolveLinkAuthorUserId(data.senderId)
+      : undefined;
+
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
     const processedContent = await performanceLogger.withTiming(
       'messaging.processLinks',
       () => this.processLinksInContent(
         data.content,
         data.conversationId,
-        data.senderId,
+        linkAuthorUserId,
         undefined
       ),
       corr
@@ -419,7 +365,7 @@ export class MessageProcessor {
     // Ignoré pour les messages chiffrés (contenu vide côté serveur).
     const trackingLinks = encryptionContext.isEncrypted
       ? []
-      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, data.senderId);
+      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthorUserId);
 
     // Partage de position : le client transporte un champ `location` DÉDIÉ
     // (jamais un `metadata` brut — voir sharedPlace.ts). `parseSharedPlace`

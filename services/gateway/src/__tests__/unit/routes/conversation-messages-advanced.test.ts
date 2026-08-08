@@ -129,9 +129,11 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_DELETED: 'message:deleted',
     REACTION_ADDED: 'reaction:added',
     REACTION_REMOVED: 'reaction:removed',
+    MENTION_CREATED: 'mention:created',
   },
   ROOMS: {
     conversation: (id: string) => `conversation:${id}`,
+    user: (id: string) => `user:${id}`,
   },
 }));
 
@@ -593,9 +595,13 @@ describe('registerMessagesAdvancedRoutes', () => {
       ]);
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
 
+      // Le texte porte une syntaxe tra\u00e7able : sans elle, le traitement des
+      // liens court-circuite (il ne peut rien r\u00e9\u00e9crire) et le contenu extrait
+      // serait trivialement le contenu d'entr\u00e9e \u2014 l'assertion ne prouverait
+      // plus le couplage qu'elle vise.
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
-        body: { content: 'Salut @John Doe, corrig\u00e9' },
+        body: { content: 'Salut @John Doe, corrig\u00e9 <https://example.com>' },
       });
 
       await getEditHandler(fastify)(req, makeReply());
@@ -617,6 +623,38 @@ describe('registerMessagesAdvancedRoutes', () => {
           data: expect.objectContaining({ validatedMentions: ['john'] }),
         })
       );
+    });
+
+    // `message:edited` ne fan qu'au salon de la conversation : quelqu'un que
+    // l'\u00e9dition vient de nommer n'y est pas forc\u00e9ment. C'est `mention:created`
+    // qui porte la nouvelle \u2014 et cette route, transport d'\u00e9dition PRIMAIRE du
+    // client iOS (`PUT /messages/:id`), n'en \u00e9mettait aucun.
+    it('emits mention:created to the personal room of a newly mentioned user', async () => {
+      fastify.mentionService = {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue(['bob']),
+        resolveUsernames: jest.fn().mockResolvedValue(new Map([['bob', { id: 'user-bob', username: 'bob' }]])),
+        validateMentionPermissions: jest.fn().mockResolvedValue({ validUserIds: ['user-bob'] }),
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      };
+      prisma.mention.findMany.mockResolvedValue([]);
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'Salut @bob' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      expect(fastify._mockTo).toHaveBeenCalledWith('user:user-bob');
+      const mention = fastify._mockEmit.mock.calls.find((call: any[]) => call[0] === 'mention:created');
+      expect(mention?.[1]).toEqual(expect.objectContaining({
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+        mentionedUserId: 'user-bob',
+        senderId: USER_ID,
+        content: 'Salut @bob',
+      }));
     });
 
     // L'inverse : une mention retir\u00e9e du texte doit sortir du champ ET de
