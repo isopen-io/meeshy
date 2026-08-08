@@ -4776,3 +4776,55 @@ toolchain dans ce sandbox — reconfirmé.
   (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only
   (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain
   vérifiable, reconfirmé cette vague).
+
+## Vague 75 — `ringtone.ts` : le cycle de sonnerie se ré-armait tout seul et n'était jamais annulé par `stop()` (2026-08-08)
+
+Point d'entrée : reprise directe de la « note complémentaire » laissée en candidat par la Vague 74
+ci-dessus. Audit préalable du reste du périmètre web (`utils/`, `services/socketio/`) pour la même classe de
+bug — `ringtone.ts` était le SEUL timer auto-reprogrammé du répertoire ; `orchestrator.service.ts`
+(`pendingMessageTimeouts`, `clearPendingTimeout`) et `use-auto-retry-failed-messages.ts` (jeton
+`activeRun`) sont déjà durcis par les vagues précédentes, rien à reprendre. Backlog Android (Vague 70) et
+iOS (`CallManager.swift`, `actor CallEventQueue`, `reportNewIncomingCall`) toujours hors d'atteinte faute de
+toolchain dans ce sandbox — reconfirmé.
+
+- **Root cause confirmée par lecture directe** : `playRingPattern()` (`apps/web/utils/ringtone.ts`, alors
+  L216-251) programmait sa propre ré-invocation via `setTimeout(..., 2300)` sans jamais stocker le handle,
+  et `stop()` n'annulait que `vibrationInterval` — jamais ce timer-là. Le timer périmé survivait donc à
+  `stop()`, et son unique garde était `if (this.isPlaying)`. Or `getRingtone()` est un SINGLETON partagé
+  (`CallNotification` fait `getRingtone().play()` au montage et `.stop()` au démontage) : toute séquence
+  stop→play à moins de 2,3 s — deux appels entrants consécutifs, un appel refusé immédiatement suivi d'un
+  autre, un remontage de `CallNotification` — retrouvait `isPlaying === true` au réveil du timer périmé, qui
+  relançait alors une SECONDE boucle de sonnerie par-dessus la nouvelle. Les deux boucles, déphasées,
+  sonnaient en parallèle jusqu'au prochain `stop()`, et chaque nouvelle séquence rapprochée en ajoutait une
+  de plus (cacophonie cumulative, pas de crash).
+- **Second effet, plus insidieux** : le callback fait `this.oscillators = []` avant de récurser. Avec deux
+  boucles concurrentes, le reset de l'une jette les références des oscillateurs fraîchement créés par
+  l'autre — `stop()` ne pouvait plus ni les `stop()` ni les `disconnect()`. Oscillateurs orphelins,
+  déconnectés du graphe seulement à la fermeture du contexte.
+- **Fix** : le timer devient un état possédé (`private ringPatternTimeout`), avec un `stopRingPattern()`
+  privé symétrique du `stopVibration()` déjà présent. Appelé (a) dans `stop()`, pour qu'aucun timer ne
+  survive à une session de sonnerie, et (b) défensivement juste avant chaque re-programmation, pour qu'une
+  boucle ne puisse jamais en armer deux. Le callback remet le handle à `null` avant de récurser. Une seule
+  boucle peut désormais exister par instance, par construction.
+- **Tests** (TDD, RED confirmé avant fix — 2 des 4 nouveaux tests échouaient) : nouveau fichier
+  `apps/web/__tests__/utils/ringtone.test.ts` (4 tests) avec un faux `AudioContext` traçant les
+  oscillateurs créés — re-sonne un cycle par période tant que ça joue ; ne crée plus rien après `stop()` ;
+  **ne sonne qu'un seul cycle quand on redémarre dans la fenêtre de 2,3 s** (RED : 4 oscillateurs au lieu
+  de 2 = deux boucles) ; **tout oscillateur programmé après un redémarrage dans la fenêtre reste
+  arrêtable** (RED : les orphelins ne recevaient ni `stop()` ni `disconnect()`). Le fichier n'avait aucun
+  test avant cette vague, ce qui explique qu'il ait échappé aux 74 précédentes.
+- **Vérification** : `__tests__/utils/ringtone.test.ts` (4 tests) vert ; sweep
+  `components/video-call/**` + `__tests__/utils/**` + `__tests__/services/socketio/**` + `hooks/__tests__/**`
+  (86 suites / 1734 tests) verte. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) :
+  `bun install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client && bun run
+  build` — sans quoi 1 suite échoue sur `@meeshy/shared/utils/languages` non résolu (échec d'environnement,
+  sans rapport avec le diff ; vert une fois `dist/` construit). `npx tsc --noEmit` sur `apps/web` : 0 erreur
+  sur `ringtone.ts`.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague). Candidat mineur repéré cette vague, non corrigé : `orchestrator.service.ts`
+  `setCurrentUser()` arme un `setInterval` de reprise d'auth (3 tentatives, 200 ms) sans mémoriser le
+  handle — deux appels rapprochés à `setCurrentUser()` peuvent armer deux intervalles concurrents et donc
+  appeler `initializeConnection()` deux fois. Confiance moyenne, impact faible (la connexion est
+  idempotente côté `ensureConnection`), candidat pour la prochaine vague.
