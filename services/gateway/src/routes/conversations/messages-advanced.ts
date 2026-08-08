@@ -358,7 +358,7 @@ export function registerMessagesAdvancedRoutes(
                     const [sender, conversationInfo] = await Promise.all([
                       prisma.user.findUnique({
                         where: { id: userId },
-                        select: { username: true, avatar: true }
+                        select: { username: true, displayName: true, avatar: true }
                       }),
                       prisma.conversation.findUnique({
                         where: { id: conversationId },
@@ -378,8 +378,11 @@ export function registerMessagesAdvancedRoutes(
                           validationResult.validUserIds,
                           {
                             senderId: userId,
-                            senderUsername: sender.username,
-                            senderAvatar: sender.avatar || undefined,
+                            senderProfile: {
+                              username: sender.username,
+                              displayName: sender.displayName,
+                              avatar: sender.avatar,
+                            },
                             messageContent: processedContent,
                             conversationId,
                             messageId

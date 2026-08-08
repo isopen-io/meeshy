@@ -1,0 +1,677 @@
+/**
+ * `notifyMessageRecipients` — ce que TOUT message committé doit à ses
+ * DESTINATAIRES quand ils ne regardent pas : la notification (ligne DB, push
+ * APNs/FCM, événement in-app), quel que soit le tuyau d'arrivée.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+
+import {
+  notifyMessageRecipients,
+  resolveNotificationSender,
+} from '../../../services/messaging/messageNotificationFanOut';
+
+const CONV_ID = '507f1f77bcf86cd799439022';
+const MSG_ID = '507f1f77bcf86cd799439051';
+const SENDER_PART_ID = '507f1f77bcf86cd799439031';
+const SENDER_USER_ID = '507f1f77bcf86cd799439041';
+const PEER_USER_ID = '507f1f77bcf86cd799439042';
+const OTHER_USER_ID = '507f1f77bcf86cd799439043';
+
+type ParticipantRow = { userId: string | null; displayName: string; avatar: string | null } | null;
+type UserRow = { username: string; displayName: string | null; avatar: string | null } | null;
+
+function makePrisma(options: {
+  participant?: ParticipantRow;
+  user?: UserRow;
+  members?: string[];
+  conversation?: unknown;
+  attachments?: unknown[];
+  suppressed?: string[];
+  replyAuthorParticipantId?: string | null;
+  replyAuthorUserId?: string | null;
+} = {}) {
+  const members = options.members ?? [PEER_USER_ID];
+  const conversation =
+    options.conversation === undefined
+      ? {
+          title: 'Salon',
+          type: 'group',
+          participants: members.map((userId) => ({ userId })),
+        }
+      : options.conversation;
+
+  const participantFindUnique = jest.fn<any>(({ where }: any) => {
+    if (where.id === SENDER_PART_ID) return Promise.resolve(options.participant ?? null);
+    return Promise.resolve(
+      options.replyAuthorUserId === undefined
+        ? null
+        : { userId: options.replyAuthorUserId, displayName: 'Auteur', avatar: null }
+    );
+  });
+
+  return {
+    participant: { findUnique: participantFindUnique },
+    user: { findUnique: jest.fn<any>().mockResolvedValue(options.user ?? null) },
+    conversation: { findUnique: jest.fn<any>().mockResolvedValue(conversation) },
+    message: {
+      findUnique: jest
+        .fn<any>()
+        .mockResolvedValue(
+          options.replyAuthorParticipantId === undefined
+            ? null
+            : { senderId: options.replyAuthorParticipantId }
+        ),
+    },
+    messageAttachment: { findMany: jest.fn<any>().mockResolvedValue(options.attachments ?? []) },
+    userConversationPreferences: {
+      findMany: jest
+        .fn<any>()
+        .mockResolvedValue((options.suppressed ?? []).map((userId) => ({ userId }))),
+    },
+  };
+}
+
+function makeNotificationService() {
+  return {
+    createReplyNotification: jest.fn<any>().mockResolvedValue(null),
+    createMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
+    createMessageNotification: jest.fn<any>().mockResolvedValue(null),
+  };
+}
+
+function makeMessage(overrides: Record<string, unknown> = {}) {
+  return {
+    id: MSG_ID,
+    messageType: 'text',
+    replyToId: null,
+    isEncrypted: false,
+    encryptionMode: null,
+    isViewOnce: false,
+    isBlurred: false,
+    effectFlags: 0,
+    expiresAt: null,
+    createdAt: new Date('2026-08-08T10:00:00Z'),
+    encryptedContent: null,
+    ...overrides,
+  };
+}
+
+const registeredSender = {
+  participant: { userId: SENDER_USER_ID, displayName: 'Alice P', avatar: null },
+  user: { username: 'alice', displayName: 'Alice', avatar: 'a.png' },
+};
+
+describe('resolveNotificationSender — trois branches, aucune impasse', () => {
+  it('participant porteur d’un userId → acteur = utilisateur inscrit', async () => {
+    const prisma = makePrisma(registeredSender);
+
+    const identity = await resolveNotificationSender({
+      prisma: prisma as any,
+      senderParticipantId: SENDER_PART_ID,
+    });
+
+    expect(identity).toEqual({
+      actorId: SENDER_USER_ID,
+      isAnonymous: false,
+      profile: { username: 'alice', displayName: 'Alice', avatar: 'a.png' },
+    });
+  });
+
+  it('participant ANONYME (userId null) → acteur bâti sur le participant, jamais null', async () => {
+    const prisma = makePrisma({
+      participant: { userId: null, displayName: 'Invité curieux', avatar: 'anon.png' },
+    });
+
+    const identity = await resolveNotificationSender({
+      prisma: prisma as any,
+      senderParticipantId: SENDER_PART_ID,
+    });
+
+    expect(identity).toEqual({
+      actorId: SENDER_PART_ID,
+      isAnonymous: true,
+      profile: {
+        username: 'Invité curieux',
+        displayName: 'Invité curieux',
+        avatar: 'anon.png',
+      },
+    });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('aucun participant → l’id est retenté comme User.id (participant synthétique meeshy)', async () => {
+    const prisma = makePrisma({
+      participant: null,
+      user: { username: 'bob', displayName: null, avatar: null },
+    });
+
+    const identity = await resolveNotificationSender({
+      prisma: prisma as any,
+      senderParticipantId: SENDER_USER_ID,
+    });
+
+    expect(identity).toEqual({
+      actorId: SENDER_USER_ID,
+      isAnonymous: false,
+      profile: { username: 'bob', displayName: null, avatar: null },
+    });
+  });
+
+  it('ni participant ni utilisateur → null (rien à nommer)', async () => {
+    const prisma = makePrisma({ participant: null, user: null });
+
+    await expect(
+      resolveNotificationSender({ prisma: prisma as any, senderParticipantId: SENDER_PART_ID })
+    ).resolves.toBeNull();
+  });
+});
+
+describe('notifyMessageRecipients — l’éventail', () => {
+  it('notifie chaque membre inscrit sauf l’expéditeur', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [SENDER_USER_ID, PEER_USER_ID] });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(1);
+    expect(notificationService.createMessageNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientUserId: PEER_USER_ID,
+        senderId: SENDER_USER_ID,
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+        messagePreview: 'coucou',
+      })
+    );
+  });
+
+  it('un expéditeur ANONYME notifie quand même — le défaut que ce cycle ferme', async () => {
+    const prisma = makePrisma({
+      participant: { userId: null, displayName: 'Invité', avatar: null },
+      members: [PEER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'bonjour depuis un lien',
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientUserId: PEER_USER_ID,
+        senderId: SENDER_PART_ID,
+        senderProfile: { username: 'Invité', displayName: 'Invité', avatar: null },
+      })
+    );
+  });
+
+  it('passe le profil déjà résolu pour éviter une lecture User par destinataire', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'salut',
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(2);
+    for (const call of notificationService.createMessageNotification.mock.calls) {
+      expect((call[0] as any).senderProfile).toEqual({
+        username: 'alice',
+        displayName: 'Alice',
+        avatar: 'a.png',
+      });
+    }
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('écarte les destinataires en sourdine ou en « mentions seulement »', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+      suppressed: [OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'salut',
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(1);
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).recipientUserId
+    ).toBe(PEER_USER_ID);
+  });
+
+  it('une réponse notifie son auteur, qui sort de l’éventail régulier', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      replyAuthorParticipantId: '507f1f77bcf86cd799439060',
+      replyAuthorUserId: PEER_USER_ID,
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: '507f1f77bcf86cd799439070' }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ma réponse',
+    });
+
+    expect(notificationService.createReplyNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientUserId: PEER_USER_ID,
+        replierUserId: SENDER_USER_ID,
+        originalMessageId: '507f1f77bcf86cd799439070',
+        senderProfile: { username: 'alice', displayName: 'Alice', avatar: 'a.png' },
+      })
+    );
+    expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
+  });
+
+  it('les mentions partent en lot avec le profil, et sortent de l’éventail régulier', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '@peer regarde',
+      validatedMentionUserIds: [PEER_USER_ID],
+    });
+
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      [PEER_USER_ID],
+      expect.objectContaining({
+        senderId: SENDER_USER_ID,
+        senderProfile: { username: 'alice', displayName: 'Alice', avatar: 'a.png' },
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+      }),
+      [PEER_USER_ID, OTHER_USER_ID]
+    );
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(1);
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).recipientUserId
+    ).toBe(OTHER_USER_ID);
+  });
+
+  it('un message protégé ne fuit pas son contenu dans l’aperçu', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [PEER_USER_ID] });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ isViewOnce: true }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'secret à ne pas révéler',
+    });
+
+    const params = notificationService.createMessageNotification.mock.calls[0][0] as any;
+    expect(params.messagePreview).not.toContain('secret');
+    expect(params.notificationLocKey).toBeTruthy();
+  });
+
+  // `FanOutMessage.createdAt` est optionnel : les routes de lien passent un
+  // message structural, pas une ligne Prisma complète.
+  it('un message protégé sans createdAt ne fait pas tomber l’éventail', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [PEER_USER_ID] });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ isBlurred: true, createdAt: undefined, expiresAt: undefined }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'secret',
+    });
+
+    const params = notificationService.createMessageNotification.mock.calls[0][0] as any;
+    expect(params.messagePreview).not.toContain('secret');
+  });
+
+  it('la transcription d’un audio sert de corps de push quand elle existe', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      attachments: [
+        {
+          mimeType: 'audio/m4a',
+          fileName: 'voix.m4a',
+          fileSize: 1024,
+          duration: 3,
+          width: null,
+          height: null,
+          fileUrl: 'https://cdn/voix.m4a',
+          transcription: { text: 'bonjour tout le monde' },
+        },
+      ],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '',
+    });
+
+    const params = notificationService.createMessageNotification.mock.calls[0][0] as any;
+    expect(params.messagePreview).toBe('bonjour tout le monde');
+    expect(params.hasAttachments).toBe(true);
+    expect(params.firstAttachmentType).toBe('audio');
+    expect(params.firstAttachmentUrl).toBe('https://cdn/voix.m4a');
+  });
+
+  it('une transcription illisible retombe sur l’aperçu du message', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      attachments: [
+        {
+          mimeType: 'audio/m4a', fileName: 'v.m4a', fileSize: 1, duration: 1,
+          width: null, height: null, fileUrl: null,
+          transcription: { segments: [{ notText: 1 }] },
+        },
+      ],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'message vocal',
+    });
+
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).messagePreview
+    ).toBe('message vocal');
+  });
+
+  it('rend compte de l’éventail à son appelant, qui journalise dans son contexte', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+    const onFanOut = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '@peer regarde',
+      validatedMentionUserIds: [PEER_USER_ID],
+      onFanOut,
+    });
+
+    expect(onFanOut).toHaveBeenCalledWith({ mentions: 1, regular: 1, reply: false });
+  });
+
+  it('ne rend aucun compte quand l’éventail est abandonné', async () => {
+    const prisma = makePrisma({ participant: null, user: null });
+    const onFanOut = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: makeNotificationService(),
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+      onFanOut,
+    });
+
+    expect(onFanOut).not.toHaveBeenCalled();
+  });
+
+  it('sans service de notification, ne fait rien et ne lit rien', async () => {
+    const prisma = makePrisma(registeredSender);
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: null,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('expéditeur introuvable → aucun envoi, aucune exception', async () => {
+    const prisma = makePrisma({ participant: null, user: null });
+    const notificationService = makeNotificationService();
+
+    await expect(
+      notifyMessageRecipients({
+        prisma: prisma as any,
+        notificationService,
+        message: makeMessage(),
+        senderParticipantId: SENDER_PART_ID,
+        conversationId: CONV_ID,
+        processedContent: 'coucou',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
+  });
+
+  it('conversation introuvable → aucun envoi', async () => {
+    const prisma = makePrisma({ ...registeredSender, conversation: null });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
+  });
+
+  it('une panne de lecture est signalée à onError et jamais propagée', async () => {
+    const prisma = makePrisma(registeredSender);
+    prisma.conversation.findUnique.mockRejectedValue(new Error('mongo down'));
+    const notificationService = makeNotificationService();
+    const onError = jest.fn<any>();
+
+    await expect(
+      notifyMessageRecipients({
+        prisma: prisma as any,
+        notificationService,
+        message: makeMessage(),
+        senderParticipantId: SENDER_PART_ID,
+        conversationId: CONV_ID,
+        processedContent: 'coucou',
+        onError,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('un anonyme sans displayName reste nommable — chaîne vide, jamais null', async () => {
+    const prisma = makePrisma({
+      participant: { userId: null, displayName: null as unknown as string, avatar: null },
+      members: [PEER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).senderProfile
+    ).toEqual({ username: '', displayName: '', avatar: null });
+  });
+
+  it('une transcription en segments alimente aussi le corps du push', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      attachments: [
+        {
+          mimeType: 'audio/m4a', fileName: 'v.m4a', fileSize: 1, duration: 1,
+          width: null, height: null, fileUrl: null,
+          transcription: { segments: [{ text: 'salut' }, { text: 'toi' }, { notText: 1 }] },
+        },
+      ],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '',
+    });
+
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).messagePreview
+    ).toBe('salut toi');
+  });
+
+  it.each([
+    ['image/png', 'image'],
+    ['video/mp4', 'video'],
+    ['application/pdf', 'document'],
+    [null, 'document'],
+  ])('classe une pièce jointe %s en %s', async (mimeType, expected) => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      attachments: [{ mimeType, fileName: 'f', fileSize: 1, duration: null, width: null, height: null, fileUrl: null }],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'regarde',
+    });
+
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).firstAttachmentType
+    ).toBe(expected);
+  });
+
+  // Une réponse à un message d'ANONYME n'a personne à notifier : son auteur n'a
+  // pas de ligne `User`, donc pas de destinataire de notification possible.
+  it('une réponse à un auteur anonyme ne produit pas de notification de réponse', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      replyAuthorParticipantId: '507f1f77bcf86cd799439060',
+      replyAuthorUserId: null,
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: '507f1f77bcf86cd799439070' }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ma réponse',
+    });
+
+    expect(notificationService.createReplyNotification).not.toHaveBeenCalled();
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('un message répondu introuvable ne bloque pas l’éventail régulier', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [PEER_USER_ID] });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: '507f1f77bcf86cd799439070' }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ma réponse',
+    });
+
+    expect(notificationService.createReplyNotification).not.toHaveBeenCalled();
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('aucun destinataire éligible → aucune lecture de préférences', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [SENDER_USER_ID] });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
+    expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
+  });
+});
