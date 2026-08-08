@@ -129,29 +129,77 @@ l'auraient écarté aussi.
   rendue à la file une seconde fois, et pour la même raison mesurée : les deux clients insèrent un
   **handle**, jamais un nom d'affichage (web `MentionAutocomplete` → `onSelect(suggestion.username)`,
   iOS `FeedCommentsSheet` → `"@\(username) "`). Le cas ne se produit qu'en frappe manuelle. Coût non
-  nul : un post n'a pas de participants, l'audience équivalente demanderait deux requêtes de plus
-  sur un chemin d'écriture chaud. **Tête du prochain cycle si rien de plus grave n'apparaît** — deux
-  cycles de suite, quelque chose de plus grave est apparu.
+  nul : un post n'a pas de participants, l'audience équivalente (auteur + commentateurs + amis, cf.
+  `getUserSuggestionsForPost`) demanderait deux requêtes de plus sur un chemin d'écriture chaud.
+  **Tête du prochain cycle si rien de plus grave n'apparaît** — deux cycles de suite, quelque chose
+  de plus grave est apparu.
 - **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel à défaut `PUBLIC`** —
   le footgun que D2 vient de fermer sur les mentions reste ouvert là. Il n'a aujourd'hui qu'un seul
   appelant, qui passe bien le paramètre ; le rendre requis est mécanique et sans risque.
   **Candidat sérieux pour le prochain cycle.**
-- **Les `PostMention` périmées déjà écrites restent en base** (cycle 27, inchangé), ainsi que les
-  deux réparations qui attendent un accès MongoDB (`repair-mention-user-ids.ts`,
-  `repair-tracking-link-created-by.ts`). Action humaine — cette routine n'a aucun accès base.
-- **Aucune notification déjà poussée n'est rattrapable.** Le correctif ne vaut que pour les
-  mentions à venir ; les extraits partis vers des mentionnés hors audience sont arrivés.
-- **`MentionCreatedEventData.mentionedParticipantId`** reste un champ mort des deux côtés
-  (cycle 27, inchangé).
+- **Les commentaires n'ont pas de route d'édition** — `comments.ts` n'expose que création,
+  like/unlike et suppression. Il n'y a donc rien à réconcilier côté `CommentMention` aujourd'hui ;
+  le jour où une édition de commentaire apparaît, elle doit naître avec `reconcilePostMentions`
+  pour jumeau.
+- **Les deux réparations de base attendent une exécution avec accès base**
+  (`repair-mention-user-ids.ts`, `repair-tracking-link-created-by.ts`). À lancer SANS `--apply`
+  d'abord. Action humaine — cette routine n'a aucun accès MongoDB.
+- **Les `PostMention` périmées déjà écrites restent en base.** Les lignes de mentionnés retirés
+  avant le cycle 27 survivent. Réparable par le même patron que les deux scripts ci-dessus.
+- **Aucune notification déjà poussée n'est rattrapable.** Le correctif de ce cycle ne vaut que pour
+  les mentions à venir ; les extraits partis vers des mentionnés hors audience sont arrivés.
 - **`getMentionsForMessage` / `getRecentMentionsForUser` n'ont aucun consommateur d'écran** —
   l'inbox `/mentions` reste une capacité backend sans écran (cycle 27, inchangé).
 - **`MeeshySocketIOManager.getConversationParticipantsForMention`** est toujours un deuxième
   exemplaire du chargeur de participants (cycle 21, inchangé).
-- **`getLatestMessageSummary` résume le DERNIER message de la conversation**, pas celui qu'on vient
-  d'acquitter (cycle 19, inchangé).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
 - **`eslint` ne peut pas tourner sur le gateway** : aucun `eslint.config.js` depuis la migration
   ESLint v9 (`bun run lint` échoue immédiatement). Condition préexistante, non couverte par la CI
   — qui ne gate que sur `test:coverage`.
 - **La suppression de branche distante échoue depuis cette routine** (`git push --delete` répond
-  « Everything up-to-date » sans agir). À supprimer depuis l'interface GitHub.
+  « Everything up-to-date » sans agir). Les branches mergées s'accumulent côté remote — à supprimer
+  depuis l'interface GitHub.
+
+---
+
+# Cycle 25b — Addendum d'une session parallèle
+
+Deux sessions ont livré le cycle 25 en parallèle. Le refactor des liens de la PR #2650 est
+**strictement meilleur** : en réunissant les deux copies, il a trouvé que `createdBy` recevait un
+`Participant.id` là où la route `/tracking-links` attend un `User.id` pour AUTORISER l'accès. La
+seconde session s'aligne dessus et n'apporte que ce qui manquait — appliqué par-dessus, jamais à la
+place. (Leçon d'intégration du cycle 23 : comparer défaut par défaut, jamais « qui est arrivé en
+premier ».)
+
+Le cadrage du `@Display Name` social revient au cycle 26 ci-dessus, mieux étayé : les deux clients
+insèrent un **handle**, jamais un nom d'affichage. La note de cette session sur le sujet est donc
+retirée au profit de la sienne.
+
+## Champ mort retiré — `MentionCreatedEventData.mentionedParticipantId`
+
+Porté par le backlog depuis le cycle 24, vérifié et retiré. Les **trois** émetteurs de
+`mention:created` — envoi WS (`MessageHandler`), envoi REST/ZMQ (`MeeshySocketIOManager`), édition
+(`emitMentionCreated`) — l'omettent : il n'a jamais circulé sur le fil. Le SDK iOS le décodait dans
+`MentionCreatedEvent`, et rien ne lisait la propriété.
+
+Le test de décodage SDK garde la clé dans le JSON **et lui en ajoute une inconnue** : ce qui compte
+désormais n'est plus la valeur du champ mais le fait qu'une clé inconnue ne casse pas le décodage —
+donc qu'aucun client ne souffre d'une gateway qui l'enverrait encore.
+
+À ne pas confondre avec la colonne physique `Mention.mentionedParticipantId` (Prisma/Mongo), bien
+vivante et utilisée par les scripts de migration.
+
+## Écarté après enquête — `getLatestMessageSummary` n'est pas un défaut
+
+Le backlog le portait depuis le cycle 19 : « résume le DERNIER message de la conversation, pas
+celui qu'on vient d'acquitter ». **Ce n'en est pas un, et le "corriger" serait une régression.**
+
+iOS applique le `summary` via `bufferBatchDelivery(conversationId:event:)` — un lot au niveau
+**conversation**, jamais par message (`ConversationSocketHandler.swift:801`). Le contrat client est
+donc « état de livraison de la conversation, ancré sur son dernier message », ce que la méthode
+calcule exactement.
+
+Si le serveur résumait le message ACQUITTÉ, lire un vieux message #5 produirait un résumé « lu »
+que le client appliquerait **en lot à tous les messages**, y compris #7 non lu. Passer au
+par-message demanderait de plumber des reçus par message des deux côtés client : chantier de
+contrat, pas correctif. Retiré du backlog comme défaut.
