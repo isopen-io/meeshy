@@ -87,6 +87,21 @@ export interface WriteConversationPreferencesParams {
 }
 
 /**
+ * Why a write was refused. Both ids a caller supplies name rows this user may
+ * not be entitled to, and the two cases warrant different answers: not being in
+ * a conversation is a permission fact the caller already knows, while a
+ * category id that is not theirs must not be confirmed to exist at all.
+ */
+export type ConversationPreferencesScopeReason = 'not-a-participant' | 'category-not-owned';
+
+export class ConversationPreferencesScopeError extends Error {
+  constructor(readonly reason: ConversationPreferencesScopeReason) {
+    super(reason);
+    this.name = 'ConversationPreferencesScopeError';
+  }
+}
+
+/**
  * Upsert the row, bump its version, broadcast the new snapshot, return the row
  * (with `category` included, which the PUT route echoes back to the caller).
  *
@@ -95,11 +110,54 @@ export interface WriteConversationPreferencesParams {
  * `incoming.version <= local -> drop` against a snapshot that also starts at 0,
  * so a first event at version 0 would be indistinguishable from "nothing has
  * happened yet" and be discarded.
+ *
+ * Scope belongs here, not at the call sites, for the same reason the version
+ * bump does: the row is reachable only through this function, so this is the
+ * one place a future writer cannot forget. `reorderConversationPreferences`
+ * already filtered on membership; this half of the module did not, which is the
+ * asymmetry that made the gap visible.
+ *
+ * Both ids arrive from the caller and both are checked:
+ *
+ * - **Membership** — the write is an upsert, so an unscoped call lets any
+ *   authenticated caller mint rows against arbitrary conversation ids and make
+ *   the server broadcast `USER_PREFERENCES_UPDATED` for them. The predicate is
+ *   the one `GET /conversations` filters on and the three `user-deletions.ts`
+ *   routes already check, so nothing a client can see becomes unwritable.
+ * - **Category ownership** — `UserConversationCategory` is per-user and
+ *   private, and the row returned here carries the joined category into the
+ *   PUT's response body and into every later GET. Unchecked, a caller could
+ *   attach someone else's category and read back its name, colour and icon.
+ *   Every route in `me/preferences/categories.ts` scopes to `{ id, userId }`;
+ *   this was the one writer of `categoryId` that did not. `null` means
+ *   uncategorize and needs no lookup.
+ *
+ * The three `user-deletions.ts` callers keep their own pre-checks: they answer
+ * with a message of their own, and the check here can then only fire on a
+ * membership lost mid-request.
  */
 export async function writeConversationPreferences(
   fastify: FastifyInstance,
   { userId, conversationId, data }: WriteConversationPreferencesParams
 ) {
+  const membership = await fastify.prisma.participant.findFirst({
+    where: { userId, conversationId, isActive: true },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new ConversationPreferencesScopeError('not-a-participant');
+  }
+
+  if (data.categoryId != null) {
+    const category = await fastify.prisma.userConversationCategory.findFirst({
+      where: { id: data.categoryId, userId },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new ConversationPreferencesScopeError('category-not-owned');
+    }
+  }
+
   const row = await fastify.prisma.userConversationPreferences.upsert({
     where: { userId_conversationId: { userId, conversationId } },
     create: { userId, conversationId, ...data, version: 1 },

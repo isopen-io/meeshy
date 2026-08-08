@@ -74,6 +74,8 @@ type PrismaOpts = {
   /** Conversations the user is an active participant of; `null` = all of them. */
   participantIds?: string[] | null;
   participantsError?: Error | null;
+  /** Categories the user owns; `null` = all of them. */
+  ownedCategoryIds?: string[] | null;
 };
 
 function makePrisma({
@@ -87,12 +89,22 @@ function makePrisma({
   upsertError = null,
   participantIds = null,
   participantsError = null,
+  ownedCategoryIds = null,
 }: PrismaOpts = {}) {
   return {
-    // The batch reorder upserts, so it scopes the write to the conversations
-    // the user is actually in — an unscoped upsert would let any caller mint
-    // preference rows against arbitrary conversation ids.
+    // Every preference write upserts, so both the single PUT and the batch
+    // reorder scope themselves to the conversations the user is actually in —
+    // an unscoped upsert would let any caller mint preference rows against
+    // arbitrary conversation ids. `findFirst` answers the single write,
+    // `findMany` the batch.
     participant: {
+      findFirst: participantsError
+        ? jest.fn<() => Promise<unknown>>().mockRejectedValue(participantsError)
+        : jest.fn(async ({ where }: { where: { conversationId?: string } }) =>
+            participantIds === null || participantIds.includes(where?.conversationId as string)
+              ? { id: `participant-${where?.conversationId}` }
+              : null
+          ),
       findMany: participantsError
         ? jest.fn<() => Promise<unknown>>().mockRejectedValue(participantsError)
         : jest.fn(async ({ where }: { where: { conversationId?: { in?: string[] } } }) =>
@@ -100,6 +112,15 @@ function makePrisma({
               .filter((id) => participantIds === null || participantIds.includes(id))
               .map((conversationId) => ({ conversationId }))
           ),
+    },
+    // Category ownership is checked before `categoryId` is attached, since the
+    // row carries the joined category back to the caller. `null` = all of them.
+    userConversationCategory: {
+      findFirst: jest.fn(async ({ where }: { where: { id?: string } }) =>
+        ownedCategoryIds === null || ownedCategoryIds.includes(where?.id as string)
+          ? { id: where?.id }
+          : null
+      ),
     },
     userConversationPreferences: {
       findUnique: findUniqueError

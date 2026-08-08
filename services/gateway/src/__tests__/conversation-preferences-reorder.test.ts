@@ -50,12 +50,20 @@ const buildLivePrisma = (joined: string[] = [JOINED_CONV_ID, OTHER_JOINED_CONV_I
   return {
     rows,
     participant: {
+      findFirst: jest.fn(async ({ where }: any) =>
+        where?.userId === USER_ID && where?.isActive === true && joined.includes(where?.conversationId)
+          ? { id: `participant-${where.conversationId}` }
+          : null
+      ),
       findMany: jest.fn(async ({ where }: any) => {
         const wanted: string[] = where?.conversationId?.in ?? [];
         return wanted
           .filter((id) => joined.includes(id) && where.userId === USER_ID)
           .map((conversationId) => ({ conversationId }));
       }),
+    },
+    userConversationCategory: {
+      findFirst: jest.fn(async ({ where }: any) => ({ id: where?.id })),
     },
     userConversationPreferences: {
       findUnique: jest.fn(async ({ where }: any) => rows.get(key(where)) ?? null),
