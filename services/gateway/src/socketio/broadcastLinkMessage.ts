@@ -17,17 +17,34 @@ export interface LinkMessageManager {
     conversationId: string;
     senderId: string | null | undefined;
   }): Promise<void>;
+  autoDeliverToOnlineRecipients(
+    message: { id: string; senderId: string | null },
+    conversationId: string
+  ): Promise<void>;
 }
 
 /**
  * The single broadcaster for a message sent through a share link.
  *
- * A new message has to reach THREE audiences here:
+ * A new message has to reach THREE audiences here, plus the one signal it owes
+ * back to its own author:
  *
  *  1. participants connected right now → the `conversation:<id>` room emit;
  *  2. participants who are OFFLINE right now → the delivery queue, replayed as
  *     `link:message:new` by `_drainPendingMessages` on their next connection;
- *  3. every recipient's unread badge → `conversation:unread-updated`.
+ *  3. every recipient's unread badge → `conversation:unread-updated`;
+ *  4. the SENDER's own delivery checkmark → `read-status:updated`, emitted after
+ *     the online recipients have been marked `received`.
+ *
+ * (4) is the only obligation here whose beneficiary is the author rather than a
+ * recipient, and it is the one both send routes had no way of reaching: the
+ * implementation is a method of `MessageHandler` (it needs `io`,
+ * `connectedUsers`, the read-status and privacy services), which a route cannot
+ * see. Both nominal transports call it — the WS path through
+ * `broadcastNewMessage`, the REST/ZMQ path through
+ * `MeeshySocketIOManager._broadcastNewMessage` — so a link message was the one
+ * kind whose author watched a single checkmark that could never advance, no
+ * matter how many recipients were sitting in the conversation.
  *
  * Both share-link send routes open-coded (1) alone, so a message sent through a
  * link — the only send transport an anonymous participant has — simply never
@@ -103,6 +120,23 @@ export async function broadcastLinkMessage(params: {
       conversationId,
       senderId: senderParticipantId,
     })?.catch((error: unknown) => onError?.(error));
+  } catch (error) {
+    onError?.(error);
+  }
+
+  // Same fire-and-forget contract and the same two guards, for the same two
+  // reasons. The receipt reads participants, privacy preferences and the
+  // conversation summary before it emits — by far the heaviest of the four, and
+  // the least entitled to sit in front of the author's 201.
+  //
+  // `senderParticipantId` is passed through as the message's `senderId` rather
+  // than a `User.id`: `MessageHandler._isSender` matches EITHER representation,
+  // and the participant id is the only identity an anonymous author has.
+  try {
+    void manager.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId ?? null },
+      conversationId
+    )?.catch((error: unknown) => onError?.(error));
   } catch (error) {
     onError?.(error);
   }

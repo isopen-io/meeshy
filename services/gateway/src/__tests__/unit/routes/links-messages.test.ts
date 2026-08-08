@@ -193,6 +193,7 @@ function makeSocketIOHandler(hasManager = false) {
       emit: jest.fn(),
       enqueueOfflineLinkMessage: jest.fn(),
       emitUnreadCountsToRecipients: jest.fn(),
+      autoDeliverToOnlineRecipients: jest.fn(),
     };
   }
   const emit = jest.fn();
@@ -204,12 +205,22 @@ function makeSocketIOHandler(hasManager = false) {
   // Third audience: every recipient's unread badge. The room emit announces the
   // message, the queue replays it — neither moves the counter.
   const emitUnreadCountsToRecipients = jest.fn<any>().mockResolvedValue(undefined);
+  // Quatrième obligation, et la seule tournée vers l'EXPÉDITEUR : l'accusé de
+  // livraison. Sans elle, l'indicateur de l'auteur d'un message par lien reste
+  // sur « envoyé » à vie, même quand tous ses destinataires sont connectés.
+  const autoDeliverToOnlineRecipients = jest.fn<any>().mockResolvedValue(undefined);
   return {
-    getManager: () => ({ getIO: () => ({ to }), enqueueOfflineLinkMessage, emitUnreadCountsToRecipients }),
+    getManager: () => ({
+      getIO: () => ({ to }),
+      enqueueOfflineLinkMessage,
+      emitUnreadCountsToRecipients,
+      autoDeliverToOnlineRecipients,
+    }),
     to,
     emit,
     enqueueOfflineLinkMessage,
     emitUnreadCountsToRecipients,
+    autoDeliverToOnlineRecipients,
   };
 }
 
@@ -550,6 +561,58 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
       senderId: PART_ID,
     });
   });
+
+  // Les trois audiences précédentes servent les DESTINATAIRES. Celle-ci sert
+  // l'EXPÉDITEUR : `read-status:updated` est le seul signal qui fasse passer sa
+  // coche de « envoyé » à « remis ». Le chemin nominal l'émet depuis ses deux
+  // transports (`broadcastNewMessage` et `_broadcastNewMessage`) ; la route de
+  // lien n'a jamais eu de quoi l'atteindre, donc l'auteur d'un message par lien
+  // regardait une coche unique définitivement figée.
+  it('acks delivery to the sender for recipients who are online right now', () => {
+    expect(socketIOHandler.autoDeliverToOnlineRecipients).toHaveBeenCalledWith(
+      { id: MSG_ID, senderId: PART_ID },
+      CONV_ID
+    );
+  });
+});
+
+// Un accusé de livraison est un canal latéral : il ne doit ni rallonger le 201,
+// ni pouvoir le transformer en 500, et une promesse rejetée sans handler tue le
+// processus sous Node 22 (`--unhandled-rejections=throw`).
+describe('POST /links/:id/messages — anonymous: delivery receipt failures never reach the sender', () => {
+  it('still returns 201 when the receipt rejects', async () => {
+    const socketIOHandler = makeSocketIOHandler(true);
+    socketIOHandler.autoDeliverToOnlineRecipients.mockRejectedValue(new Error('read-status down'));
+    const app = await buildApp({ socketIOHandler });
+
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+
+    expect(res.statusCode).toBe(201);
+    await flushPostSaveEffects();
+    await app.close();
+  });
+
+  it('still returns 201 when the manager has no receipt method at all', async () => {
+    // Un manager d'une version antérieure, ou un double partiel : l'appel lève
+    // SYNCHRONEMENT, avant qu'aucune promesse n'existe.
+    const socketIOHandler = makeSocketIOHandler(true);
+    const manager = socketIOHandler.getManager() as unknown as Record<string, unknown>;
+    delete manager.autoDeliverToOnlineRecipients;
+    const app = await buildApp({
+      socketIOHandler: { ...socketIOHandler, getManager: () => manager },
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
 });
 
 // Le badge, la room et la file hors ligne ne parlent qu'à un client OUVERT.
@@ -853,6 +916,16 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
       conversationId: CONV_ID,
       senderId: PART_ID,
     });
+  });
+
+  // Et même argument pour l'accusé de livraison : une seule des deux routes
+  // faisant avancer la coche de son expéditeur serait l'asymétrie exacte que
+  // le point d'appel unique existe pour rendre inécrivable.
+  it('acks delivery to the sender for recipients who are online right now', () => {
+    expect(socketIOHandler.autoDeliverToOnlineRecipients).toHaveBeenCalledWith(
+      { id: MSG_ID, senderId: PART_ID },
+      CONV_ID
+    );
   });
 });
 

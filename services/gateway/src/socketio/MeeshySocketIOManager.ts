@@ -656,6 +656,29 @@ export class MeeshySocketIOManager {
     });
   }
 
+  /**
+   * Mark the message delivered for every recipient connected right now, so the
+   * SENDER's checkmark advances from "sent" to "delivered".
+   *
+   * Public wrapper for the same reason as the two above, but over the handler
+   * rather than a free unit: the implementation needs `io`, `connectedUsers`,
+   * the read-status service and the privacy service, which is why it lives on
+   * `MessageHandler` and why no route could ever call it. Both nominal
+   * transports already reach it — `broadcastNewMessage` on the WS path, and
+   * `_broadcastNewMessage` below on the REST/ZMQ one — so this wrapper closes
+   * the third and last transport rather than adding behavior.
+   *
+   * Delegating (instead of re-implementing for links) is the point: three
+   * transports emitting three subtly different receipts is exactly the drift a
+   * single shared implementation forbids.
+   */
+  async autoDeliverToOnlineRecipients(
+    message: { id: string; senderId: string | null },
+    conversationId: string
+  ): Promise<void> {
+    await this.messageHandler.autoDeliverToOnlineRecipients(message, conversationId);
+  }
+
   private async _enqueueForOfflineParticipants(params: OfflineParticipantQueueParams): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
