@@ -1,103 +1,94 @@
-# Cycle 25 — Deux copies d'un algorithme, et l'espace d'ids où elles divergeaient
+# Cycle 26 — Réparer les liens déjà écrits, et rendre les réparateurs exécutables
 
-Tête laissée par le cycle 24 :
-« **`MessageProcessor.processLinksInContent` est un deuxième exemplaire complet de
-`TrackingLinkService.processExplicitLinksInContent`** — mêmes quatre étapes, mêmes regex, même
-réutilisation de token, ~90 lignes chacun. Le chemin d'ENVOI passe par le premier, les deux chemins
-d'édition par le second. Deux copies d'un même algorithme ne peuvent pas rester d'accord : le
-correctif `$`-sequence (replacer fonction) n'a d'ailleurs été appliqué aux deux qu'après coup. »
+Tête laissée par le cycle 25 :
+« **Les `TrackingLink` déjà écrits portent des `Participant.id` dans `createdBy`.** Le correctif ne
+vaut que pour les liens à venir ; les anciens restent invisibles pour leur auteur. Un script de
+réparation est à écrire, sur le modèle de `repair-mention-user-ids.ts` — qui lui-même **n'a jamais
+été exécuté**. »
 
-Vérifié, et c'est bien le cas. En les réunissant, on découvre qu'elles n'étaient pas seulement
-redondantes : **elles ne remplissaient pas `TrackingLink.createdBy` depuis le même espace d'ids.**
+Les deux moitiés de cette phrase se sont révélées liées : en écrivant le nouveau script, on
+découvre pourquoi l'ancien n'a jamais tourné.
 
-## D1 — le lien créé à l'envoi n'appartenait à personne de réel
+## D1 — `repair-tracking-link-created-by.ts`
 
-`TrackingLink.createdBy` est un **`User.id`** — le schéma le dit (« Utilisateur qui a créé le lien
-(null si anonyme) ») et `routes/tracking-links/tracking.ts` le lit comme tel :
+Même forme que son aîné : classification par appartenance à `Participant` (les deux espaces d'ids
+sont disjoints, donc le classement est déterministe et le script idempotent), résolution des
+participants **par lots** de 500, et surtout **aucune écriture sans `--apply`** — un `--dry-run`
+oublié sur un script qui écrit par défaut est irréversible ; l'inverse ne coûte qu'un second
+lancement.
 
-| Ligne | Usage |
-|---|---|
-| `:535` | **autorisation** — `trackingLink.createdBy !== userId` ⇒ 403 |
-| `:601-608` | « mes liens » : compte, liste, statistiques |
-| `:703` | édition d'un lien, `where: { token, createdBy: userId }` |
+Une décision le sépare franchement de son aîné : **il ne supprime jamais rien.**
 
-Le chemin d'ENVOI y écrivait `data.senderId`, qui est un **`Participant.id`** (`Message.senderId`
-référence `Participant`). Conséquences pour un lien créé en tapant `[[url]]` dans un message :
+`repair-mention-user-ids.ts` supprime la ligne redondante quand une réécriture entre en collision
+avec l'unicité — une ligne `Mention` en double ne porte aucune information que l'autre n'ait pas.
+Un `TrackingLink`, si : son `token` **est une URL publique** (`/l/<token>`) possiblement déjà
+partagée, et `TrackingLinkClick` référence la ligne. La détruire casserait un lien vivant et
+perdrait son historique de clics. Une collision sur l'unicité applicative `(targetId, createdBy)`
+est donc **signalée et la ligne laissée intacte** : un lien mal attribué reste préférable à un lien
+mort.
 
-1. il n'apparaît **jamais** dans la liste de liens de son auteur, ni dans ses statistiques ;
-2. son auteur se voit **refuser** l'accès à son propre lien (`createdBy` non nul et ≠ son `User.id`) ;
-3. l'unicité applicative `(targetId, createdBy)` ne regroupe rien par partageur.
+Même retenue pour un participant **anonyme** (aucun `userId`) : remettre `createdBy` à `null` serait
+plus fidèle au schéma, mais détruirait la seule trace de provenance que la ligne porte, pour un gain
+nul — aucun `User.id` ne pouvant égaler un `Participant.id`, le lien est déjà sans propriétaire
+effectif.
 
-Les **cinq autres** écrivains de ce champ passent bien un `User.id` — les deux routes de lien de
-partage (`routes/links/messages.ts`, `undefined` pour l'anonyme), `PostService`,
-`PostCommentService`, et les deux chemins d'édition depuis le cycle 24. Un seul écrivain sur six
-était en désaccord, et c'était le chemin le plus emprunté.
+L'unicité `(targetId, createdBy)` n'est relevée que pour les liens à **cible interne** : l'index qui
+la porte est PARTIEL (cf. `schema.prisma`), et les liens `EXTERNAL` — ceux que produit précisément
+le chemin défectueux — ont `targetId: null`.
 
-Même forme que le cycle 22 (`Mention` keyée sur un `Participant.id` là où la permission raisonne en
-`User.id`) : deux espaces d'ids disjoints, une comparaison qui ne matche jamais, et un silence
-complet — rien ne lève, la ligne s'écrit, elle ne désigne simplement personne.
+## D2 — aucun des deux scripts ne pouvait s'exécuter
 
-## Le remède : résoudre une fois, et seulement si ça sert
-
-```ts
-const linkAuthorUserId = this.containsLinks(data.content)
-  ? await this.resolveLinkAuthorUserId(data.senderId)
-  : undefined;
+```
+$ npx tsx scripts/migrations/repair-mention-user-ids.ts
+Error: Cannot find module 'mongodb'
 ```
 
-- **Une seule résolution** pour les deux chemins de tracking du message (syntaxe explicite ET URLs
-  brutes de `metadata.trackingLinks`, qui portaient le même mauvais id).
-- **Payée seulement si le texte porte une URL.** `containsLinks` couvre les deux syntaxes
-  explicites autant que les URLs brutes — `[[https://…]]` contient une URL. Un message sans lien ne
-  produit aucun `TrackingLink`, donc aucun propriétaire à désigner : zéro requête.
-- **`undefined` pour l'anonyme comme pour une lecture en échec.** Un lien sans propriétaire vaut
-  mieux qu'un lien attribué à un id qui ne désigne aucun utilisateur — et c'est exactement ce que
-  le schéma prévoit. Même forme et même raison que `resolveSenderUserId` côté mentions.
+`mongodb` est déclaré par `services/gateway`, pas par la racine. La résolution CommonJS remonte
+depuis le FICHIER, pas depuis le répertoire courant : `scripts/migrations/` → `scripts/node_modules`
+→ `node_modules` racine → introuvable. Aucun `cd` ne rattrape ça. Les deux scripts de réparation
+échouaient donc à la première ligne, quel que soit l'environnement — ce qui explique sans mystère
+pourquoi `repair-mention-user-ids.ts` « n'a jamais été exécuté ».
 
-## D2 — l'algorithme, une fois
+`mongodb: ^7.5.0` (la version que gateway déclare déjà, donc aucune empreinte nouvelle dans le
+graphe) est ajouté aux devDependencies de la racine. Les deux scripts atteignent désormais leur
+garde :
 
-`MessageProcessor.processLinksInContent` perd ses ~90 lignes et devient une délégation à
-`processExplicitLinks`, l'unité que le cycle 24 avait créée pour les deux chemins d'édition. Elle
-est généralisée (plus rien d'« Edited » dans son nom ni dans ses paramètres) et exporte
-`hasTrackableLinkSyntax` pour que l'appelant puisse éviter ce que l'unité, elle, ne peut pas savoir
-inutile : la requête de résolution d'auteur.
+```
+$ npx tsx scripts/migrations/repair-tracking-link-created-by.ts
+No MongoDB URL found. Set MONGODB_URL or DATABASE_URL in .env
+$ npx tsx scripts/migrations/repair-mention-user-ids.ts
+No MongoDB URL found. Set MONGODB_URL or DATABASE_URL in .env
+```
 
-Le chemin d'envoi gagne au passage le **court-circuit** : un message sans `[[` ni `<` ne traverse
-plus l'aller-retour de protection markdown qu'il payait à chaque envoi.
+C'est exactement le comportement attendu sans base : le module se charge, le script démarre, et
+s'arrête sur l'absence d'URL.
 
-## Côté test — la couverture déménage, elle ne disparaît pas
-
-Les 13 tests d'algorithme de `MessageProcessor.test.ts` décrivaient le second exemplaire — et ne
-décrivaient l'exemplaire survivant nulle part. Quatre d'entre eux couvraient des comportements
-**absents** de la suite de `TrackingLinkService` : réutilisation d'un lien EXISTANT, token partagé
-entre les syntaxes `[[…]]` et `<…>`, repli sur l'URL brute quand le minting échoue pour `<url>`,
-texte sans syntaxe traçable. Ils vivent maintenant avec l'unique implémentation. Les quatre cas
-`$` étaient déjà couverts par `TrackingLinkService.dollarSequences.test.ts`.
-
-`MessageProcessor` garde ce qui lui appartient vraiment : la **délégation** (arguments transmis,
-résultat rendu, court-circuit, contrat jamais-lève) et la propriété du lien.
+`bun.lock` est mis à jour (7 lignes : la dépendance, plus deux versions de workspace que le fichier
+portait périmées). **`pnpm-lock.yaml` est laissé tel quel** : la CI installe pnpm avec
+`--no-frozen-lockfile`, et régénérer ce fichier ici produirait un diff massif sans rapport avec le
+changement, propice aux conflits avec les autres branches.
 
 ## Vérification
 
-```
-services/gateway : 602 suites / 15637 tests — tous verts
-tsc --noEmit     : propre
-```
+Aucun code de service n'est touché — le cycle livre un outil d'exploitation et une déclaration de
+dépendance. Les deux scripts se chargent et s'arrêtent proprement sur l'absence d'URL ; le typecheck
+gateway reste propre.
 
-Nouveaux tests : 5 sur la propriété du lien à l'envoi (`User.id` derrière le participant, URLs
-brutes au même nom, anonyme sans propriétaire, aucune résolution sans URL, résolution en panne qui
-n'empêche pas l'envoi), 3 sur la délégation, 4 déménagés vers `TrackingLinkService.test.ts`.
+**Ce script n'a pas de test unitaire**, comme son aîné : sa logique n'existe qu'en présence d'un
+MongoDB, et cette routine n'a aucun accès base. C'est un choix assumé, pas un oubli — la garde qui
+en tient lieu est le refus d'écrire sans `--apply`, doublé d'un rapport de comptage à relire avant
+de l'accorder.
 
 ## Reste ouvert après ce cycle
 
-- **Les `TrackingLink` déjà écrits portent des `Participant.id` dans `createdBy`.** Le correctif ne
-  vaut que pour les liens à venir ; les anciens restent invisibles pour leur auteur. Un script de
-  réparation (jointure `Participant.id → userId`) est à écrire, sur le modèle de
-  `repair-mention-user-ids.ts` — qui lui-même **n'a jamais été exécuté**, faute d'accès base depuis
-  cette routine. **Tête du prochain cycle.**
+- **Les deux réparations attendent une exécution avec accès base.** À lancer SANS `--apply`
+  d'abord, sur `MONGODB_URL`, et à relire : `Rewritten to User.id` donne l'ampleur, `Collisions` et
+  `Anonymous` les cas laissés intacts. **Tête du prochain cycle si un accès base devient
+  disponible ; sinon, c'est une action humaine.**
 - **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
   édition de post) et `routes/posts/comments.ts` : un `@John Doe` dans un post ou un commentaire ne
-  nomme personne. Cadrage affiné dans l'addendum ci-dessous — chantier de contrat multi-surface.
+  nomme personne. **Tête du prochain cycle à défaut d'accès base** — cadrage affiné dans
+  l'addendum ci-dessous : c'est un chantier de contrat multi-surface, pas un correctif gateway.
 - **`getMentionsForMessage` et `getRecentMentionsForUser` n'ont aucun consommateur d'écran** —
   l'inbox `/mentions` reste une capacité backend sans écran.
 - **`MeeshySocketIOManager.getConversationParticipantsForMention` est toujours un deuxième
@@ -105,7 +96,7 @@ n'empêche pas l'envoi), 3 sur la délégation, 4 déménagés vers `TrackingLin
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
 - **La suppression de la branche distante échoue depuis cette routine** : `git push --delete`
   répond « Everything up-to-date » sans agir (réessayé 4 fois). Les branches mergées des cycles
-  s'accumulent côté remote.
+  s'accumulent côté remote — à supprimer depuis l'interface GitHub.
 
 ---
 

@@ -4616,3 +4616,106 @@ APRÈS ce merge, pas contre l'état constaté au moment où ce fix a été comme
   une vague dédiée) ; dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
   `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
   trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable).
+
+## Vague 72 — `VideoStream` latchait l'overlay « Disconnected » : plus jamais d'écran figé après un rejoin same-session (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Reprise via audit dédié (subagent) du périmètre web/gateway uniquement — aucune toolchain Swift/Gradle
+disponible dans ce sandbox, items iOS/Android restent hors d'atteinte (cf. Vagues 64-71 ci-dessus). Vérifié
+en tête de cycle qu'aucune session concurrente n'avait déjà touché `VideoStream.tsx` (fichier absent de
+toutes les Vagues précédentes, `git log` propre).
+
+- **Root cause confirmée par lecture directe** : `VideoCallInterface.tsx` (handler `handleParticipantLeft`,
+  ~L497-568) préserve délibérément l'instance `VideoStream` d'un pair à travers un rejoin same-session
+  (coupure réseau, reload d'onglet) survenant dans la fenêtre de grâce de 2 s — commentaire explicite en
+  tête d'effet : le `peerConnection` capturé au moment du leave (`connectionAtLeave`) est comparé à celui du
+  store au moment du cleanup différé ; s'il a changé (nouvelle connexion déjà enregistrée sous le même
+  `participantId`), la prop `isDisconnected` de `VideoStream` retombe à `false` **sur la même instance**
+  (clé stable = `participantId`, jamais démontée). Mais `VideoStream.tsx` (`showDisconnected`, state local)
+  ne faisait QUE passer à `true` sur `isDisconnected → true` — jamais réinitialisé à `false` dans le sens
+  inverse. Résultat : après n'importe quelle coupure transitoire suivie d'un rejoin dans la fenêtre de 2 s,
+  la vidéo du pair restait masquée derrière l'overlay « Disconnected » (`hidden` sur `<video>`, overlay
+  rouge pulsant affiché) pour le reste de l'appel, alors même que la connexion était pleinement rétablie —
+  défaisant silencieusement la logique de préservation soigneusement construite côté parent.
+  `VideoStream.tsx` n'avait AUCUNE couverture de test avant ce fix (aucun `VideoStream.test.tsx` dans le
+  repo), ce qui explique qu'il ait échappé à ~69 vagues d'audit précédentes, concentrées sur les couches
+  gateway/store.
+- **Fix** : l'effet de gestion de déconnexion (`useEffect([isDisconnected, onRemove])`) réinitialise
+  désormais `showDisconnected` à `false` dans la branche `else` (⇒ `isDisconnected === false`) au lieu de ne
+  rien faire. Le cleanup de l'effet (déjà présent, exécuté à chaque re-render avant la nouvelle branche)
+  annule déjà le `setTimeout` d'`onRemove` en attente — aucun changement nécessaire de ce côté, le rejoin
+  dans la fenêtre de grâce annule donc aussi la suppression programmée sans code additionnel.
+- **Tests** (TDD, RED confirmé avant fix — 2/5 échouaient : overlay encore affiché après retour à
+  `isDisconnected=false`, `<video>` encore `hidden`) : nouveau fichier
+  `apps/web/__tests__/components/video-calls/VideoStream.test.tsx` (5 tests) — overlay affiché pendant la
+  déconnexion, overlay disparaît au retour à `false`, `<video>` redevient visible au retour à `false`,
+  `onRemove` programmé annulé par un rejoin dans la fenêtre de 2 s, `onRemove` toujours déclenché après 2 s
+  si le pair reste parti. Mock `useI18n` (`t` = identité), même patron que
+  `DraggableParticipantOverlay.test.tsx`/`LocalVideoTile.test.tsx`.
+- **Vérification** : suite `video-calls|video-call|use-webrtc|use-call` complète (36 suites / 296 tests)
+  verte. `packages/shared && npx prisma generate --generator client && bun run build` (prérequis CLAUDE.md,
+  sandbox sans `node_modules` au démarrage — `bun install --ignore-scripts` requis, `grpc-tools` échoue son
+  postinstall binaire réseau mais n'est pas un prérequis des tests gateway/web touchés). `npx tsc --noEmit`
+  sur `apps/web` : 0 nouvelle erreur imputable au diff (1187 erreurs pré-existantes du sandbox, aucune sur
+  `VideoStream.tsx` ni son test). `eslint` : erreur de config circulaire pré-existante du sandbox, déjà
+  documentée Vagues 65/67/68/69 — non bloquant, limitation d'environnement connue.
+- **Livré** : PR #2644 (`claude/upbeat-dirac-1ulg4y`), mergée sur `main` (`c9c824ab`) après CI verte
+  (Security + Quality bun), sans conflit avec les Vagues 70/71 mergées en parallèle le même jour (fichiers
+  disjoints : `VideoStream.tsx` vs `use-audio-effects.ts`/Android).
+- **Reste ouvert** (reconduit) : le bug de non-réinitialisation sur swap de `inputStream` (Vague 71) ; dead
+  code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 (spec
+  prête, non corrigées faute de toolchain vérifiable). Aucune nouvelle piste web/gateway identifiée cette
+  vague au-delà du fix livré — l'audit dédié (grep exhaustif + lecture directe de
+  `CallEventsHandler.ts`/`CallService.ts`/`CallCleanupService.ts`/`callHistory.ts`/
+  `callAnalyticsAggregate.ts`/`call-push-mirroring.ts`/`callEndedFanout.ts`/`call-session-response.ts`/
+  `call-schemas.ts`/`routes/calls.ts` + hooks/composants web moins fréquemment cités) n'a rien trouvé
+  d'autre à ce niveau de maturité.
+
+## Vague 73 — `use-audio-effects`: le pipeline audio ne se réinitialise jamais sur un swap d'`inputStream` (2026-08-08)
+
+Point d'entrée : reprise directe du bug laissé « reste ouvert » à la Vague 71 ci-dessus (corrigé en parallèle, indépendamment, par une session concurrente ; les deux PRs touchaient `tasks/calls-fonctionnel-todo.md` au même point d'ancrage — renumérotée Vague 73 au merge pour garder la séquence continue, aucun changement de fond). Backlog Android
+(Vague 70) et iOS (`CallManager.swift`, `actor CallEventQueue`) toujours bloqués faute de toolchain
+vérifiable dans ce sandbox — reconfirmé cette vague (`./gradlew :feature:calls:help` échoue toujours à
+résoudre `com.android.application:8.7.3` via `dl.google.com`, aucun `xcodebuild`/`swift` disponible) — donc
+nouvelle cible : le bug web déjà diagnostiqué.
+
+- **Root cause confirmée par lecture directe** : l'effet de montage (`use-audio-effects.ts:266-284`, deps
+  `[inputStream]`) gère à la fois le teardown de l'ancien pipeline (cleanup) ET l'initialisation du nouveau
+  (corps de l'effet) à chaque changement d'`inputStream`. Son cleanup appelait `setIsInitialized(false)` —
+  une mise à jour d'état React, donc asynchrone/différée à un futur rendu — puis, dans le MÊME flush
+  d'effets, le corps du MÊME effet (nouvelle instance) s'exécutait immédiatement après en lisant la
+  variable d'état `isInitialized` capturée par la closure du dernier rendu COMPLET, c'est-à-dire encore
+  `true` (la mise à jour du cleanup n'a pas encore été commitée). La garde `if (inputStream &&
+  !isInitialized)` échouait donc systématiquement juste après un swap de stream, et `initializeAudioPipeline`
+  elle-même regardait la même closure périmée (`isInitialized` dans ses deps `useCallback`) — double
+  verrou stale. Résultat : `inputNodeRef`/`mediaStreamDestinationRef` sont bien nettoyés et remis à `null`,
+  mais plus jamais reconstruits pour le nouveau stream — un swap de source micro/caméra en cours d'appel
+  routait silencieusement vers un pipeline audio mort pour le reste de l'appel (aucun crash, aucun log
+  d'erreur — juste plus aucun effet audio appliqué au flux réellement envoyé).
+- **Fix** : nouveau `isInitializedRef` (ref, mutation synchrone) tenu en miroir de l'état `isInitialized`
+  (qui reste nécessaire pour les autres effets qui doivent re-render sur ce changement, ex. lignes 284/293).
+  Le cleanup met `isInitializedRef.current = false` de façon synchrone AVANT que le corps de l'effet suivant
+  ne s'exécute dans le même flush ; `initializeAudioPipeline` et la garde de montage lisent désormais cette
+  ref plutôt que l'état. Bug adjacent corrigé dans la même passe : `previouslyEnabledTypesRef` (tracking
+  Vague 71) n'était jamais réinitialisée sur un swap d'`inputStream` — un effet resté `enabled` à travers le
+  swap aurait fait lire `wasEnabled === isEnabled` comme `true` par `rebuildAudioGraph()` pour un processor
+  pourtant flambant neuf (recréé après le `processorsRef.current.clear()` du même cleanup), lui faisant
+  sauter son cycle de vie complet (`setActive(true)` jamais appelé) — même classe de bug que celui fermé à
+  la Vague 71, déclenché par le même swap ; fix : `previouslyEnabledTypesRef.current = new Set()` dans le
+  même cleanup.
+- **Tests** (TDD, RED confirmé avant fix — l'assertion sur le second appel à `createMediaStreamSource`
+  échouait, 1 reçu au lieu de 2) : nouveau fichier
+  `apps/web/hooks/__tests__/use-audio-effects-input-stream.test.ts` — rerender du hook avec un second
+  `MediaStream`, vérifie que `createMediaStreamSource` est rappelé avec le nouveau stream et que
+  `onOutputStreamReady` est notifié une seconde fois.
+- **Vérification** : `hooks/__tests__/use-audio-effects*.test.ts` (2 suites / 6 tests) vert ; suite complète
+  `hooks/` + `utils/__tests__/audio-effects.test.ts` + `components/video-calls/**` (128 suites / 2295 tests,
+  2295 passed + 2 skips pré-existants sans rapport) verte. `packages/shared && npx prisma generate && bun
+  run build` (prérequis CLAUDE.md) sans erreur. `npx tsc --noEmit` sur `apps/web` : 0 nouvelle erreur
+  imputable à `use-audio-effects.ts`. `eslint` : même échec sandbox-only de config circulaire que documenté
+  aux vagues précédentes (indépendant de ce diff).
+- **Reste ouvert** : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague).
