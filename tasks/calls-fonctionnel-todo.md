@@ -4305,3 +4305,60 @@ sécurité `call:join`.
   prête pour une vague dédiée avec mock `AnalyserNode`) ; `useVideoFilters.ts` dead code (candidat nettoyage) ;
   items iOS des Vagues 61-64 (sérialisation `switchCamera`, god-object `CallManager.swift`) toujours bloqués
   sur l'absence de toolchain Swift dans ce sandbox.
+
+## Vague 67 — exécution de la spec `VoiceCoderProcessor` : le rAF de pitch-detection s'arrête réellement au toggle off (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Suite immédiate des
+Vagues 65/66 (mergées cette session — Vague 65 web `BackSoundProcessor`, Vague 66 iOS `cameraSwitchTask`),
+même session. Reprise directe de la spec laissée « prête » par la Vague 65 : `VoiceCoderProcessor` (auto-tune)
+laisse tourner sa boucle `requestAnimationFrame` de détection de pitch (analyse FFT par frame) après que
+l'utilisateur a désactivé l'effet — coût CPU/batterie continu sans bénéfice audible pour le reste de l'appel.
+
+- **Root cause confirmée par lecture directe** : `disconnect()` ne coupait QUE `outputNode.disconnect()`,
+  jamais `stopPitchDetection()` (réservé à `destroy()`, appelé seulement au démontage du hook/fin d'appel).
+  Mais le vrai piège n'était pas seulement cet oubli : `rebuildAudioGraph()` (`hooks/use-audio-effects.ts`)
+  appelle `processor.disconnect()` sur **tous** les processors à **chaque** changement de `effectsState` —
+  y compris quand un effet complètement différent est togglé — puis ne reconnecte que les processors des
+  effets encore activés via un câblage **manuel** des nœuds Tone internes (`currentNode.connect(processor.inputNode)`),
+  qui **contourne** la méthode `processor.connect()` de l'interface `AudioEffectProcessor`. Confirmé par grep
+  exhaustif : `processor.connect(` n'est appelé **nulle part** dans le hook. Conséquence : un simple
+  `disconnect()`→`stopPitchDetection()` n'aurait fait qu'introduire une régression pire — un `VoiceCoderProcessor`
+  réactivé après avoir été désactivé une fois resterait figé (`pitchShift.pitch` bloqué à sa dernière valeur),
+  puisqu'aucun signal de reconnexion n'existe dans ce chemin pour relancer la détection.
+- **Fix** : nouvelle méthode `setActive(active: boolean)` sur `VoiceCoderProcessor` — source de vérité
+  explicite indépendante du câblage du graphe, gardée par `animationFrame === null`/`!== null` pour être
+  idempotente (un double `setActive(false)` ou double `setActive(true)` ne relance jamais une seconde chaîne
+  rAF concurrente). `rebuildAudioGraph()` l'appelle désormais sur **chaque** processor après le calcul de
+  `enabledEffects`, avec l'état d'activation réel de CET effet précis (pas un simple écho du `disconnect()`
+  global) — cast `as AudioEffectProcessor & { setActive?: ... }` avec appel optionnel, même patron déjà
+  utilisé dans ce hook pour les méthodes spécifiques à `BackSoundProcessor` (`loadSound`/`play`/`stop`),
+  donc aucun changement à l'interface partagée `AudioEffectProcessor` ni aux 3 autres classes de processor.
+  `disconnect()` appelle aussi `stopPitchDetection()` en plus de `outputNode.disconnect()` : invariant
+  défensif (« disconnect ne laisse jamais de travail de fond en suspens »), sans incidence sur la correction
+  ci-dessus puisque `setActive(true)` — appelé juste après dans le même rebuild pour un effet resté activé —
+  relance immédiatement une détection fraîche (`animationFrame === null` après le stop).
+- **Tests** (TDD, RED confirmé avant fix — `git stash` du seul code source, tests laissés en place — 5 échecs
+  observés : 3 `processor.setActive is not a function`, 1 assertion `disconnect()` insatisfaite, GREEN après
+  `git stash pop`) : nouveau describe `VoiceCoderProcessor.setActive` dans `audio-effects.test.ts` (7 tests) —
+  démarrage à la construction, arrêt sur `setActive(false)`, idempotence des deux sens, reprise sur
+  `setActive(true)`, et `disconnect()` qui coupe aussi la boucle. Nécessitait un mock `AnalyserNode`/
+  `AudioContext` que ce sandbox n'avait jamais eu (constructeur de `VoiceCoderProcessor` crée
+  `Tone.context.rawContext.createAnalyser()` avant même le routing) — étendu `__mocks__/tone.js`
+  (`context.rawContext.createAnalyser`, `context.sampleRate`, `Chorus`, `CrossFade`, `disconnect` sur
+  `Gain`/`PitchShift`, même patron self-référençant que le mock `Player` de la Vague 65) et `__mocks__/pitchy.js`
+  (`PitchDetector.forFloat32Array`, absent du mock alors que le code de production l'appelle — sans cet ajout
+  `VoiceCoderProcessor` n'était tout simplement pas instanciable en test, ce qui explique l'absence totale de
+  couverture sur cette classe jusqu'ici).
+- **Vérification** : suite `utils/` complète (52 suites / 1281 tests) verte après `packages/shared && bun run build`
+  (requis pour `__tests__/utils/user-language-preferences.test.ts`, sans rapport avec ce diff — non buildé au
+  démarrage de cette session). `tsc --noEmit` : 0 nouvelle erreur sur les 5 fichiers touchés (la seule erreur
+  préexistante du repo, `components/video-calls/audio-effects/hooks/useAudioEffects.ts:41`, est un fichier
+  distinct jamais touché par ce diff). `next lint`/`eslint` cassent dans ce sandbox avec l'erreur de config
+  circulaire déjà documentée en Vague 65 — non bloquant, limitation d'environnement connue.
+- **Reste ouvert** : `useVideoFilters.ts` dead code (candidat nettoyage, Vague 65) ; dead code / god-object
+  `CallManager.swift` (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+  `reportNewIncomingCall` failure handler UI-only (Vague 63/64) ; `rebuildAudioGraph()` refait le câblage
+  complet de TOUS les processors à chaque changement d'état de N'IMPORTE QUEL effet — fonctionnellement
+  correct (chaque `disconnect()`+reconstruction est idempotent) mais coûte un aller-retour stop/redémarrage
+  de la détection de pitch à chaque toggle d'un effet non lié pendant que voice-coder reste actif ; pas un bug,
+  candidat d'optimisation mineure pour une vague dédiée si mesuré comme significatif en pratique.
