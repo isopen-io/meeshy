@@ -22,7 +22,7 @@ export interface MentionTargetMessage {
  * délégués générés portent des surcharges que rien de recopié à la main ne
  * satisfait.
  */
-export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message'>;
+export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message' | 'mention'>;
 
 /**
  * Les quatre méthodes de `MentionService` que la résolution appelle, en
@@ -115,15 +115,7 @@ async function loadMentionParticipants(
  * donc y laisser un mentionné rejeté surlignerait quelqu'un qui n'a reçu ni
  * ligne `Mention` ni notification.
  */
-export async function resolveMessageMentions(params: {
-  prisma: MentionPrisma;
-  mentionService: MentionResolver | null | undefined;
-  message: MentionTargetMessage;
-  content: string;
-  /** Mentions déjà désignées par le client, en `User.id` — court-circuite l'extraction. */
-  explicitMentionedUserIds?: readonly string[];
-  onError?: (error: unknown) => void;
-}): Promise<ResolvedMentions> {
+export async function resolveMessageMentions(params: MentionResolutionParams): Promise<ResolvedMentions> {
   const { prisma, mentionService, message, content, onError } = params;
   const explicit = params.explicitMentionedUserIds ?? [];
 
@@ -131,54 +123,131 @@ export async function resolveMessageMentions(params: {
   if (explicit.length === 0 && !content.includes('@')) return EMPTY;
 
   try {
-    const usernameByUserId = new Map<string, string>();
-    let candidateUserIds: string[] = [];
+    const resolved = await computeValidatedMentions(params, mentionService, explicit);
+    if (resolved.validatedUserIds.length === 0) return EMPTY;
 
-    if (explicit.length > 0) {
-      candidateUserIds = Array.from(explicit);
-    } else {
-      const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
-      const extracted = mentionService.extractMentionsWithParticipants(content, participants);
-      if (extracted.length === 0) return EMPTY;
-
-      const userMap = await mentionService.resolveUsernames(extracted);
-      for (const [username, user] of userMap.entries()) {
-        usernameByUserId.set(user.id, username);
-      }
-      candidateUserIds = Array.from(usernameByUserId.keys());
-    }
-
-    if (candidateUserIds.length === 0) return EMPTY;
-
-    const { validUserIds } = await mentionService.validateMentionPermissions(
-      message.conversationId,
-      candidateUserIds,
-      message.senderId
-    );
-    if (validUserIds.length === 0) return EMPTY;
-
-    await mentionService.createMentions(message.id, validUserIds);
-
-    if (explicit.length > 0) {
-      const users = await prisma.user.findMany({
-        where: { id: { in: validUserIds } },
-        select: { id: true, username: true },
-      });
-      for (const user of users) usernameByUserId.set(user.id, user.username);
-    }
-
-    const validatedUsernames = validUserIds
-      .map((id) => usernameByUserId.get(id))
-      .filter((username): username is string => username !== undefined);
-
+    await mentionService.createMentions(message.id, [...resolved.validatedUserIds]);
     await prisma.message.update({
       where: { id: message.id },
-      data: { validatedMentions: validatedUsernames },
+      data: { validatedMentions: [...resolved.validatedUsernames] },
     });
 
-    return { validatedUserIds: validUserIds, validatedUsernames };
+    return resolved;
   } catch (error) {
     onError?.(error);
     return EMPTY;
   }
+}
+
+/**
+ * La même résolution, mais pour un message qui en portait DÉJÀ : l'édition.
+ *
+ * Deux différences avec `resolveMessageMentions`, et les deux tiennent au fait
+ * que l'ancien lot doit disparaître :
+ *
+ *  1. **Les lignes `Mention` existantes sont purgées d'abord.** Un `@alice`
+ *     retiré du texte doit sortir de l'inbox `/mentions` d'alice.
+ *  2. **`validatedMentions` est TOUJOURS réécrit, même vide.** D'où l'absence
+ *     de court-circuit : un contenu édité qui ne porte plus aucun `@` doit
+ *     effacer le champ, pas le laisser tel quel. C'est exactement l'inverse du
+ *     chemin de création, où ne rien écrire est la bonne réponse.
+ *
+ * Ce qu'elle corrige : le chemin d'édition extrayait avec `extractMentions`
+ * (handles bruts seulement) là où la création extrait avec
+ * `extractMentionsWithParticipants` (qui résout aussi `@Display Name`). Éditer
+ * un message contenant `@John Doe` DÉTRUISAIT donc la mention — ligne
+ * supprimée, champ remis à `[]` — alors que rien n'avait changé pour elle. Deux
+ * extracteurs pour un même champ ne peuvent pas rester d'accord.
+ */
+export async function replaceMessageMentions(params: MentionResolutionParams): Promise<ResolvedMentions> {
+  const { prisma, mentionService, message, onError } = params;
+  const explicit = params.explicitMentionedUserIds ?? [];
+
+  try {
+    await prisma.mention.deleteMany({ where: { messageId: message.id } });
+
+    const resolved = mentionService
+      ? await computeValidatedMentions(params, mentionService, explicit)
+      : EMPTY;
+
+    if (mentionService && resolved.validatedUserIds.length > 0) {
+      await mentionService.createMentions(message.id, [...resolved.validatedUserIds]);
+    }
+
+    await prisma.message.update({
+      where: { id: message.id },
+      data: { validatedMentions: [...resolved.validatedUsernames] },
+    });
+
+    return resolved;
+  } catch (error) {
+    onError?.(error);
+    await prisma.message
+      .update({ where: { id: message.id }, data: { validatedMentions: [] } })
+      .catch((clearError: unknown) => onError?.(clearError));
+    return EMPTY;
+  }
+}
+
+interface MentionResolutionParams {
+  prisma: MentionPrisma;
+  mentionService: MentionResolver | null | undefined;
+  message: MentionTargetMessage;
+  content: string;
+  /** Mentions déjà désignées par le client, en `User.id` — court-circuite l'extraction. */
+  explicitMentionedUserIds?: readonly string[];
+  onError?: (error: unknown) => void;
+}
+
+/**
+ * Le cœur commun : de quoi le contenu parle, qui a le droit d'être nommé.
+ * N'écrit RIEN — les deux exports décident de ce qu'ils persistent, parce que
+ * c'est précisément là qu'ils diffèrent.
+ */
+async function computeValidatedMentions(
+  params: MentionResolutionParams,
+  mentionService: MentionResolver,
+  explicit: readonly string[]
+): Promise<ResolvedMentions> {
+  const { prisma, message, content, onError } = params;
+
+  const usernameByUserId = new Map<string, string>();
+  let candidateUserIds: string[] = [];
+
+  if (explicit.length > 0) {
+    candidateUserIds = Array.from(explicit);
+  } else {
+    const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
+    const extracted = mentionService.extractMentionsWithParticipants(content, participants);
+    if (extracted.length === 0) return EMPTY;
+
+    const userMap = await mentionService.resolveUsernames(extracted);
+    for (const [username, user] of userMap.entries()) {
+      usernameByUserId.set(user.id, username);
+    }
+    candidateUserIds = Array.from(usernameByUserId.keys());
+  }
+
+  if (candidateUserIds.length === 0) return EMPTY;
+
+  const { validUserIds } = await mentionService.validateMentionPermissions(
+    message.conversationId,
+    candidateUserIds,
+    message.senderId
+  );
+  if (validUserIds.length === 0) return EMPTY;
+
+  if (explicit.length > 0) {
+    const users = await prisma.user.findMany({
+      where: { id: { in: validUserIds } },
+      select: { id: true, username: true },
+    });
+    for (const user of users) usernameByUserId.set(user.id, user.username);
+  }
+
+  const validatedUsernames = validUserIds
+    .map((id) => usernameByUserId.get(id))
+    .filter((username): username is string => username !== undefined);
+
+  return { validatedUserIds: validUserIds, validatedUsernames };
 }

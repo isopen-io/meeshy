@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { resolveMessageMentions } from '../../../../services/messaging/messageMentions';
+import { resolveMessageMentions, replaceMessageMentions } from '../../../../services/messaging/messageMentions';
 
 const MESSAGE = { id: 'msg-1', conversationId: 'conv-1', senderId: 'part-1' };
 
@@ -20,6 +20,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: { update: jest.fn<any>().mockResolvedValue(undefined) },
+    mention: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     ...overrides,
   } as any;
 }
@@ -220,5 +221,124 @@ describe('resolveMessageMentions — dégradations', () => {
     await expect(
       resolveMessageMentions({ prisma, mentionService: makeMentionService(), message: MESSAGE, content: 'salut @alice' })
     ).resolves.toEqual({ validatedUserIds: [], validatedUsernames: [] });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// `replaceMessageMentions` — l'édition. L'ancien lot doit disparaître, donc PAS
+// de court-circuit : un contenu édité qui ne porte plus aucun `@` doit effacer
+// le champ, pas le laisser tel quel.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('replaceMessageMentions', () => {
+  it('purge les anciennes lignes Mention avant de recomposer le lot', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+
+    await replaceMessageMentions({ prisma, mentionService, message: MESSAGE, content: 'salut @alice' });
+
+    expect(prisma.mention.deleteMany).toHaveBeenCalledWith({ where: { messageId: 'msg-1' } });
+    expect(mentionService.createMentions).toHaveBeenCalledWith('msg-1', ['u-alice']);
+  });
+
+  // Le défaut que cette unité corrige : le chemin d'édition extrayait les
+  // handles bruts seulement, donc éditer un message contenant `@John Doe`
+  // détruisait la mention que la création avait validée.
+  it('résout les mentions par nom d’affichage, comme le chemin de création', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { userId: 'u-john', displayName: 'John Doe', user: { id: 'u-john', username: 'john', displayName: 'John Doe' } },
+        ]),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentionsWithParticipants: jest.fn<any>().mockReturnValue(['john']),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map([['john', { id: 'u-john', username: 'john' }]])),
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: ['u-john'] }),
+    });
+
+    const result = await replaceMessageMentions({
+      prisma, mentionService, message: MESSAGE, content: 'salut @John Doe, corrigé',
+    });
+
+    expect(mentionService.extractMentionsWithParticipants).toHaveBeenCalledWith(
+      'salut @John Doe, corrigé',
+      [{ userId: 'u-john', username: 'john', displayName: 'John Doe' }]
+    );
+    expect(result.validatedUsernames).toEqual(['john']);
+    expect(prisma.message.update).toHaveBeenCalledWith({
+      where: { id: 'msg-1' },
+      data: { validatedMentions: ['john'] },
+    });
+  });
+
+  // Le contraire exact du chemin de création, où ne rien écrire est la bonne
+  // réponse : ici le champ portait un lot qui n'est plus vrai.
+  it('efface le champ quand le contenu édité ne porte plus aucune mention', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      extractMentionsWithParticipants: jest.fn<any>().mockReturnValue([]),
+    });
+
+    const result = await replaceMessageMentions({
+      prisma, mentionService, message: MESSAGE, content: 'plus de mention ici',
+    });
+
+    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(prisma.mention.deleteMany).toHaveBeenCalled();
+    expect(prisma.message.update).toHaveBeenCalledWith({
+      where: { id: 'msg-1' },
+      data: { validatedMentions: [] },
+    });
+    expect(mentionService.createMentions).not.toHaveBeenCalled();
+  });
+
+  it('efface le champ quand aucun service de mentions n’est câblé', async () => {
+    const prisma = makePrisma();
+
+    const result = await replaceMessageMentions({
+      prisma, mentionService: null, message: MESSAGE, content: 'salut @alice',
+    });
+
+    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(prisma.message.update).toHaveBeenCalledWith({
+      where: { id: 'msg-1' },
+      data: { validatedMentions: [] },
+    });
+  });
+
+  // Laisser un lot périmé serait pire que le vider : les lignes `Mention` ont
+  // déjà été purgées, donc le champ décrirait des mentions qui n'existent plus.
+  it('vide le champ et signale quand la résolution échoue', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      resolveUsernames: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+    });
+    const onError = jest.fn();
+
+    const result = await replaceMessageMentions({
+      prisma, mentionService, message: MESSAGE, content: 'salut @alice', onError,
+    });
+
+    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(prisma.message.update).toHaveBeenLastCalledWith({
+      where: { id: 'msg-1' },
+      data: { validatedMentions: [] },
+    });
+  });
+
+  it('ne lève jamais quand même l’effacement de secours échoue', async () => {
+    const prisma = makePrisma({
+      mention: { deleteMany: jest.fn<any>().mockRejectedValue(new Error('down')) },
+      message: { update: jest.fn<any>().mockRejectedValue(new Error('down too')) },
+    });
+    const onError = jest.fn();
+
+    await expect(
+      replaceMessageMentions({ prisma, mentionService: makeMentionService(), message: MESSAGE, content: 'salut @alice', onError })
+    ).resolves.toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(onError).toHaveBeenCalledTimes(2);
   });
 });
