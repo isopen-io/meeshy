@@ -4400,3 +4400,58 @@ revérifie, elle ne se recopie pas »).
   `rebuildAudioGraph()` re-câblage complet à chaque toggle d'effet (optimisation mineure, Vague 67) ;
   items iOS bloqués sur l'absence de toolchain Swift dans ce sandbox (sérialisation `switchCamera` déjà
   fermée en Vague 66, reste le god-object et l'ADR `CallEventQueue`).
+
+## Vague 69 — `VoiceCoderProcessor.disconnect()` ne coupe plus la détection de pitch : fin du churn stop/redémarrage à chaque toggle d'effet non lié (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise du candidat
+d'optimisation mineure laissé ouvert par la Vague 67/68 (« `rebuildAudioGraph()` re-câblage complet à
+chaque toggle d'effet ... coûte un aller-retour stop/redémarrage de la détection de pitch à chaque toggle
+d'un effet non lié pendant que voice-coder reste actif »), mesuré cette vague plutôt que reporté une
+troisième fois.
+
+- **Root cause confirmée par lecture directe** : `rebuildAudioGraph()` (`hooks/use-audio-effects.ts`)
+  exécute, sur **chaque** changement de `effectsState` (n'importe quel effet, pas seulement voice-coder) :
+  `processorsRef.current.forEach(p => p.disconnect())` PUIS, dans la même fonction, immédiatement après,
+  `processorsRef.current.forEach((p, type) => p.setActive?.(enabledEffects.some(e => e.type === type)))`
+  sur **tous** les processors. Depuis la Vague 67, `VoiceCoderProcessor.disconnect()` appelait
+  `stopPitchDetection()` en plus de `outputNode.disconnect()` (ajouté comme « invariant défensif »). Séquence
+  concrète quand `backSound` est togglé alors que `voiceCoder` reste actif : `disconnect()` de TOUS les
+  processors annule la boucle rAF de voice-coder (`cancelAnimationFrame` + `animationFrame = null`) → juste
+  après, `setActive(true)` est rappelé pour voice-coder (toujours dans `enabledEffects`) → comme
+  `animationFrame === null`, `startPitchDetection()` redémarre une boucle **neuve**. Sur un appel où
+  l'utilisateur bascule plusieurs effets (fond sonore, baby/demon voice) pendant que l'auto-tune reste actif,
+  chaque toggle non lié annule et reprogramme la chaîne rAF de détection de pitch, avec une frame de
+  correction perdue à chaque fois — exactement le churn que l'« invariant défensif » de la Vague 67 était
+  censé prévenir dans l'autre sens (fuite) mais réintroduisait dans celui-ci (churn).
+- **Fix** : `disconnect()` ne fait plus que `this.outputNode.disconnect()` — pur détachement du graphe audio,
+  aucun effet de bord sur le travail de fond. `setActive()` reste l'unique autorité sur le
+  démarrage/arrêt de la boucle (déjà idempotent depuis la Vague 67 via la garde `animationFrame === null`),
+  et `rebuildAudioGraph()` l'appelle systématiquement pour tous les processors juste après le
+  `disconnect()` global — donc `setActive(true)` sur un processor resté actif redevient un no-op réel (plus
+  de redémarrage), tandis que `setActive(false)` continue de tout arrêter correctement quand l'effet est
+  réellement désactivé. `destroy()` n'est pas affecté : il appelle déjà `stopPitchDetection()` explicitement
+  AVANT `disconnect()`, donc son comportement d'arrêt définitif à la destruction du hook est inchangé.
+  Seul appelant de `processor.disconnect()` dans tout le repo (vérifié par grep — `AudioEffectProcessor`
+  n'est référencé nulle part hors de `use-audio-effects.ts`/`audio-effects.ts`) : `rebuildAudioGraph()`,
+  toujours suivi du `setActive()` de tous les processors dans le même appel — aucun autre chemin ne pouvait
+  compter sur l'ancien comportement de `disconnect()` pour arrêter la boucle.
+- **Tests** (TDD, RED confirmé avant fix — 2 échecs observés sur les assertions `cafSpy`/`rafSpy` avant le
+  retrait de `stopPitchDetection()` de `disconnect()`, GREEN après) : le test existant « disconnect()
+  (called on every graph rebuild) also stops the loop » de la Vague 67 est remplacé par son inverse —
+  `disconnect()` seul ne stoppe plus la boucle — et deux tests ajoutés : régression bout-en-bout de la
+  séquence exacte de `rebuildAudioGraph()` (`disconnect()` puis `setActive(true)` sur un processor resté
+  actif ⇒ ni `cancelAnimationFrame` ni un second `requestAnimationFrame` ne sont appelés, la boucle continue
+  sans interruption) et confirmation explicite que `destroy()` arrête toujours la boucle (`stopPitchDetection()`
+  appelé avant `disconnect()`, comportement inchangé).
+- **Vérification de non-régression** : suite `utils/__tests__/audio-effects.test.ts` (17 tests, 2 nouveaux
+  + 1 inversé) verte. Suite calling-stack complète (`--testPathPatterns="use-audio-effects|video-calls|call"`,
+  41 suites / 369 tests) verte — aucune régression sur `CallManager`, `VideoCallInterface`,
+  `use-call-quality`, `AudioEffectsPanel`, etc. `packages/shared && bun run build` (prérequis CLAUDE.md)
+  sans erreur. `tsc --noEmit` sur `apps/web` : 0 nouvelle erreur imputable à ce diff — la seule erreur
+  touchant un fichier `audio-effects` dans la sortie complète (`components/video-calls/audio-effects/hooks/useAudioEffects.ts:41`)
+  est le fichier distinct pré-existant déjà documenté en Vague 67/68, non touché par ce diff.
+  `next lint`/`eslint` : erreur de config circulaire pré-existante de ce sandbox, non liée à ce diff
+  (déjà documentée Vagues 65/67/68).
+- **Reste ouvert** : dead code / god-object `CallManager.swift` (~5770 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; busy-path `reportNewIncomingCall` failure handler UI-only (Vague 63/64) ; items iOS
+  bloqués sur l'absence de toolchain Swift dans ce sandbox.

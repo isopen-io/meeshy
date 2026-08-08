@@ -83,9 +83,14 @@ describe('BackSoundProcessor.loadSound', () => {
  * use-audio-effects.ts calls `disconnect()` on every processor on EVERY
  * effect toggle — including toggling a *different* effect — so disconnect()
  * alone can't tell this processor whether IT specifically remains enabled.
- * `setActive()` is the explicit signal the hook uses instead: without it, the
- * rAF loop kept running indefinitely after the user turned voice-coder off —
- * pure CPU/battery cost for the rest of the call with no audible effect.
+ * `setActive()` is the explicit signal the hook uses instead, and the SOLE
+ * authority over starting/stopping the loop: without it, the rAF loop kept
+ * running indefinitely after the user turned voice-coder off — pure
+ * CPU/battery cost for the rest of the call with no audible effect. And if
+ * disconnect() *also* stopped the loop as a defensive measure, every rebuild
+ * triggered by an unrelated effect toggle would cancel and immediately
+ * reschedule a fresh rAF chain for a voice-coder that never actually turned
+ * off — the opposite failure mode, churn instead of a leak.
  */
 describe('VoiceCoderProcessor.setActive', () => {
   const params: VoiceCoderParams = {
@@ -157,10 +162,41 @@ describe('VoiceCoderProcessor.setActive', () => {
     expect(rafSpy).not.toHaveBeenCalled();
   });
 
-  it('disconnect() (called on every graph rebuild) also stops the loop', () => {
+  it('disconnect() alone does not stop the loop — setActive is the sole authority', () => {
+    // disconnect() only tears down the audio-graph connection (outputNode).
+    // Stopping the background rAF work is setActive(false)'s job exclusively,
+    // so a bare disconnect() (e.g. as the first half of a rebuild that will
+    // reconnect this same processor) must never touch it.
     const processor = new VoiceCoderProcessor(params);
 
     processor.disconnect();
+
+    expect(cafSpy).not.toHaveBeenCalled();
+  });
+
+  it('rebuilding the graph for an unrelated effect leaves an active loop uninterrupted', () => {
+    // This is the exact sequence use-audio-effects.ts's rebuildAudioGraph()
+    // runs on EVERY effect toggle, including toggling a different effect
+    // while voice-coder stays enabled: disconnect() all processors, then
+    // setActive(enabled) all processors. Regression coverage for the churn
+    // this used to cause: disconnect() stopped the loop, then setActive(true)
+    // immediately restarted it — cancelling and rescheduling a fresh rAF
+    // chain (plus a frame of dropped pitch correction) on every unrelated
+    // toggle for as long as voice-coder stayed on.
+    const processor = new VoiceCoderProcessor(params);
+    rafSpy.mockClear();
+
+    processor.disconnect();
+    processor.setActive(true);
+
+    expect(cafSpy).not.toHaveBeenCalled();
+    expect(rafSpy).not.toHaveBeenCalled();
+  });
+
+  it('destroy() still stops the loop (it calls stopPitchDetection explicitly, ahead of disconnect())', () => {
+    const processor = new VoiceCoderProcessor(params);
+
+    processor.destroy();
 
     expect(cafSpy).toHaveBeenCalledTimes(1);
   });
