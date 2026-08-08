@@ -298,7 +298,7 @@ export function registerMessagesAdvancedRoutes(
       const editedMentions = await replaceMessageMentions({
         prisma,
         mentionService: fastify.mentionService,
-        message: { id: messageId, conversationId, senderId: userId },
+        message: { id: messageId, conversationId, senderId: existingMessage.senderId },
         content: processedContent,
         onError: (err) => logger.error('Edit - Error processing mentions', err)
       });

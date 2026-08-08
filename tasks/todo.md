@@ -1,168 +1,208 @@
-# Cycle 21 — Éditer un message détruisait ses mentions par nom d'affichage
+# Cycle 22 — Une mention nomme un utilisateur, et tout le sous-système doit le dire
 
-Suivi direct du premier point laissé ouvert par le cycle 20 :
-« **Le chemin d'édition est un quatrième écrivain de `validatedMentions`, et il extrait moins
-bien.** `messages-advanced.ts` appelle `extractMentions` (handles bruts) là où la création appelle
-`extractMentionsWithParticipants` (qui résout aussi `@Display Name`). Conséquence : éditer un
-message qui contenait `@John Doe` **efface** la mention. »
+Suivi du point laissé ouvert par le cycle 21 :
+« **`validateMentionPermissions` reçoit un `Participant.id` à la création et un `User.id` à
+l'édition.** […] la comparaison ne sert que dans la branche `direct` […] — à trancher dans un
+cycle dédié, avec les tests des deux chemins. »
 
-Vérifié : réel, et la destruction est totale — pas une dégradation d'affichage. Le trou est aussi
-plus large que le point noté : trois défauts distincts vivaient dans le même bloc, et deux d'entre
-eux sont causés par le remède que le cycle 20 prescrivait.
+Vérifié, et la note était en dessous de la vérité. Les deux chemins passent aujourd'hui un
+`Participant.id` (l'édition transmet `existingMessage.senderId`, qui est un `Participant.id` :
+`Message.sender` est une relation vers `Participant`). Il n'y a donc plus de divergence entre
+create et edit — mais **les deux se trompent d'espace d'identifiants**, et la même confusion
+traverse le modèle `Mention` tout entier.
 
-> **Note d'intégration.** Ce cycle a été traité en parallèle par deux sessions. La première
-> (PR #2640) a livré `replaceMessageMentions` + `computeValidatedMentions` et corrigé D1. La
-> seconde a corrigé D1, D2 et D3. Ce document décrit l'état APRÈS réconciliation manuelle :
-> l'API de la première (deux exports nommés, cœur commun sans écriture) porte les correctifs de
-> la seconde. Rien n'a été écrasé.
+## La racine — une colonne, deux espaces d'identifiants
 
-## D1 (racine) — deux extracteurs pour un seul champ
+`Mention.mentionedParticipantId` est **déclarée** comme une relation vers `Participant` :
 
-La route d'édition commençait par **purger** les lignes `Mention` du message
-(`prisma.mention.deleteMany`), puis ré-extrayait. Si la ré-extraction rendait moins que
-l'originale, la différence était perdue définitivement :
+```prisma
+mentionedParticipant Participant @relation(fields: [mentionedParticipantId], references: [id], onDelete: Cascade)
+```
 
-| | création / lien | édition (avant ce cycle) |
+Or **tout** ce qui écrit et lit cette colonne y met un `User.id` :
+
+| site | ce qu'il fait | espace écrit/lu |
 |---|---|---|
-| extracteur | `extractMentionsWithParticipants` | `extractMentions` |
-| `@john` | reconnu | reconnu |
-| `@John Doe` | reconnu (résolu vers `john`) | **ignoré** |
+| `MentionService.createMentions` | `mentionedParticipantId: userId` | `User.id` |
+| `MentionService.getRecentMentionsForUser` | `where: { mentionedParticipantId: userId }` | `User.id` |
+| `MentionService.getMentionsForMessage` | `include: { mentionedParticipant: { user } }` | `Participant.id` |
+| `scripts/migrations/migrate-to-participant-model.ts` | réécrit `mentionedUserId` → `mentionedParticipantId` | `Participant.id` |
 
-Corriger une faute de frappe dans un message qui nommait quelqu'un par son nom d'affichage
-supprimait donc sa ligne `Mention` (il sort de l'inbox `/mentions`) et remettait
-`validatedMentions` à `[]` (le web cesse de surligner, et `staleTime: Infinity` ne relit jamais).
-Rien dans le texte n'avait changé pour elle. Deux extracteurs pour un même champ ne peuvent pas
-rester d'accord : c'est la dérive qu'une source unique existe pour rendre inécrivable.
+L'écrivain et l'inbox sont d'accord entre eux (en `User.id`), donc la fonctionnalité principale
+marche — et masque les trois qui ne le sont pas.
 
-## D2 — purger-puis-recréer réécrit `mentionedAt` des mentions QUI N'ONT PAS BOUGÉ
+## Ce que la confusion casse aujourd'hui
 
-`Mention.mentionedAt` est l'axe de tri de l'inbox (`@@index([mentionedParticipantId,
-mentionedAt(sort: Desc)])`). Purger puis recréer donne à chaque mentionné restant un `mentionedAt`
-neuf : une mention d'il y a trois jours remonte en tête parce que l'auteur a corrigé une faute de
-frappe. Rien n'a changé pour ce mentionné.
+**D1 — `GET /mentions/message/:messageId` renvoie `[]` pour tout message.**
+`getMentionsForMessage` joint la relation `mentionedParticipant`, donc cherche un `Participant`
+dont l'`id` vaut un `User.id` : la jointure ne résout jamais, `filter(Boolean)` vide la liste.
+La route existe, est authentifiée, vérifie l'accès au message — et rend toujours un tableau vide.
+Elle rebaptise même le résultat `mentionedUserId` / `mentionedUser` en sortie : le contrat
+d'API est déjà côté utilisateur. Seule la déclaration de la colonne dit autre chose.
 
-## D3 — chaque édition re-notifiait TOUS les mentionnés
+**D2 — `onDelete: Cascade` ne se déclenche jamais.** La cascade est armée depuis `Participant` ;
+aucune ligne `Mention` écrite par le code actuel n'est atteignable depuis un `Participant`.
+Supprimer un utilisateur laisse donc derrière lui les lignes qui le nomment. À l'inverse, si la
+cascade fonctionnait telle qu'elle est déclarée, retirer un membre d'une conversation
+**effacerait l'historique de l'avoir mentionné** — ce qui n'est pas ce qu'une mention veut dire.
 
-`createMentionNotificationsBatch(validatedUserIds, …)` partait sur l'ensemble complet à chaque
-édition. Dix corrections successives = dix pushes à quelqu'un qui était déjà nommé au premier
-envoi. Une mention doit notifier une fois. (Le commentaire de la route affirmait déjà « seul un
-nouveau mentionné apprend quelque chose » ; le lot passé était l'ensemble entier — une intention
-qui n'était pas dans le code.)
+**D3 — la règle « on ne se mentionne pas soi-même » ne se déclenche jamais en conversation
+directe.** `validateMentionPermissions` compare `userId !== senderId` où les `userId` viennent de
+`Participant.userId` (des `User.id`) et où `senderId` est le `Message.senderId` reçu des appelants
+(un `Participant.id`). Deux espaces disjoints : l'inégalité est toujours vraie. `@moi-même` dans
+un DM produit donc une ligne `Mention` dans sa propre inbox et son propre nom dans
+`validatedMentions` (le web se surligne soi-même). La notification, elle, est déjà bloquée en aval
+par `createMentionNotificationsBatch` (`userId === commonData.senderId`), qui compare, lui, deux
+`User.id` — la preuve que l'espace attendu est bien `User.id`.
 
-## D4 (même bloc) — 150 lignes en double, et leurs quatre chemins d'effacement
+**D4 — le classement admin `mentions_received` replie par un chemin mort.**
+`foldParticipantCountsToUsers` cherche un `Participant` par ces ids, ne trouve rien, retombe sur
+la clé brute — qui se trouve être le bon `User.id`. Juste par accident, avec une requête inutile
+par classement et un commentaire qui affirme le contraire de la réalité.
 
-Le bloc d'édition ré-implémentait la résolution entière avec **quatre** branches distinctes
-écrivant `validatedMentions: []` : aucun utilisateur trouvé, aucune mention extraite, service
-absent, exception. Les deux dernières sont destructrices sur simple panne — et les lignes étaient
-déjà purgées avant.
+**D5 — les lignes migrées sont invisibles.** `migrate-to-participant-model.ts` a réécrit les
+`mentionedUserId` historiques en `mentionedParticipantId` (`$set` + `$unset`). Ces lignes-là
+portent un vrai `Participant.id` ; l'inbox les cherche par `User.id` et ne les voit plus. La
+colonne mélange donc bel et bien les deux espaces.
 
-D2 et D3 ont la même racine : l'édition traitait la mise à jour comme une **re-création** alors
-que c'est une **réconciliation**.
+## La direction — converger vers `User`, pas vers `Participant`
+
+Trois raisons, dans cet ordre :
+
+1. **Ses deux frères le font déjà.** `CommentMention` et `PostMention`, tous deux plus récents,
+   portent `mentionedUserId String` + `mentionedUser User @relation(...)`. `Mention` est le seul
+   des trois à parler participant.
+2. **Une mention nomme une personne, pas une adhésion.** Elle doit survivre au départ de celle
+   qui est nommée. C'est aussi ce que dit l'index existant, dont le commentaire est
+   `// User's mention inbox sorted by time`.
+3. **C'est ce que le code fait déjà.** L'écrivain et l'inbox sont en `User.id` ; converger vers
+   `User` ne déplace aucune donnée pour la ligne moyenne, là où converger vers `Participant`
+   demanderait de réécrire écrivain, inbox, et toutes les lignes écrites depuis la migration.
+
+Le nom **physique** de la colonne est conservé via `@map("mentionedParticipantId")` : le renommage
+est un renommage de *type*, pas de données. Seules les lignes de D5 demandent une réparation.
 
 ## Plan
 
-- [x] `replaceMessageMentions` dans `services/messaging/messageMentions.ts` — même cœur que
-      `resolveMessageMentions`, deux exports nommés plutôt qu'un drapeau
-- [x] Le cœur commun (`computeValidatedMentions`) n'écrit rien : les deux exports décident de ce
-      qu'ils persistent, parce que c'est exactement là qu'ils diffèrent
-- [x] `replaceMessageMentions` RÉCONCILIE : lit l'ensemble précédent, ne supprime que les
-      partants, ne crée que les entrants — `mentionedAt` des inchangés préservé (D2)
-- [x] `ResolvedMentions.newlyMentionedUserIds` — l'éventail de notifications n'a plus à deviner
-      qui est nouveau (D3)
-- [x] Service absent ou exception ⇒ **on ne touche à rien** ; tout écrit vit dans le chemin de
-      succès (D4)
-- [x] `ResolvedMentions.reconciled` distingue « établi vide » de « rien établi », et la route
-      garde son payload en conséquence
-- [x] La route d'édition délègue ; sa notification reste locale et ne part qu'aux entrants
-- [x] Tests vus ROUGES avant le correctif
+- [x] Schéma : `mentionedUserId String @map("mentionedParticipantId")`, relation `mentionedUser`
+      vers `User`, backref déplacée de `Participant.mentions` vers `User.messageMentions`
+- [x] `MentionService` : les trois sites (`createMentions`, `getMentionsForMessage`,
+      `getRecentMentionsForUser`) parlent `mentionedUserId` / `mentionedUser`
+- [x] `system-rankings` : `mentions_received` n'est plus replié par participant, et le commentaire
+      cesse de compter `Mention` parmi les colonnes participant
+- [x] D3 : la résolution du `User.id` de l'expéditeur vit DANS `messageMentions`, une fois, pas
+      chez ses quatre appelants — ils tiennent tous un `Participant.id` et rien d'autre
+- [x] `scripts/migrations/repair-mention-user-ids.ts` : idempotent, écriture sur `--apply`,
+      reconvertit les lignes de D5
+- [x] Tests vus ROUGE avant correctif sur D1, D3, D4 et sur les deux écritures (7 rouges)
 
 ## Revue
 
-### Pourquoi deux exports plutôt qu'un drapeau
+### Pourquoi le `@map` plutôt qu'un vrai renommage
 
-`resolveMessageMentions(…, { replace: true })` aurait été un paramètre qu'un appelant peut
-oublier — et l'oublier, sur l'édition, laisse un `validatedMentions` périmé décrivant des lignes
-`Mention` déjà supprimées. Deux noms au point d'appel disent laquelle des deux sémantiques on
-demande, et aucune des deux n'a de valeur par défaut à deviner.
+Renommer physiquement la colonne aurait demandé un `$rename` sur TOUTES les lignes pour ne rien
+gagner : le nom logique est ce que le code lit, le nom physique ne se voit que depuis Mongo. Le
+`@map` fait du correctif un changement de TYPE — la seule donnée qui bouge est celle qui était
+déjà fausse (D5). C'est aussi ce qui rend le déploiement ordonnable librement : l'ancien et le
+nouveau code lisent la même colonne, et seules les lignes participant restent invisibles jusqu'à
+la réparation — exactement comme avant ce cycle.
 
-### L'absence de court-circuit EST le contrat de la variante
+### La traduction d'espace vit dans l'unité, pas chez les appelants
 
-`resolveMessageMentions` ne touche à rien quand le contenu ne porte pas de `@` : ne rien écrire
-est la bonne réponse à la création. `replaceMessageMentions` doit faire exactement l'inverse — un
-contenu édité qui ne porte PLUS de `@` doit effacer le champ. La garde n'est donc pas une
-optimisation qu'on aurait oublié de reporter : c'est ce qui distingue les deux unités.
+Les quatre appelants (`MessageProcessor`, les deux routes de lien, l'édition) ne tiennent qu'un
+`Participant.id` : c'est ce que `Message.senderId` référence, et `handleMessage` ne reçoit rien
+d'autre. Leur demander à chacun de résoudre l'utilisateur aurait été quatre occasions de
+diverger — la dérive même que ce module a été créé pour rendre inécrivable au cycle 20. La
+résolution est donc unique, placée APRÈS la garde `candidateUserIds.length === 0` pour n'être
+payée que par les messages qui nomment réellement quelqu'un, et elle avale ses erreurs comme le
+reste de l'unité : une mention perdue ne doit pas transformer un envoi réussi en 500.
 
-### Réconcilier, pas re-créer
+Le sens du repli en cas d'échec est choisi : `null` laisse passer une auto-mention, jamais ne
+rejette un tiers. Perdre une garde de confort vaut mieux que perdre une mention légitime.
 
-Le remède prescrit par le cycle 20 était « une variante *remplacement* (purge des lignes
-existantes + écriture même vide) ». Écrit tel quel, il corrige D1 et pétrifie D2 et D3 — la purge
-EST ce qui réécrit `mentionedAt`, et c'est elle qui détruit l'ensemble précédent, rendant « qui
-est nouveau ? » insoluble. Lire cet ensemble coûte une requête sur un chemin qui en fait déjà
-cinq, et les trois défauts tombent ensemble : les partants partent, les restants ne bougent pas,
-les entrants sont exactement le lot à notifier.
+### Ce que le test rouge d'un autre fichier a confirmé
+
+`links-messages.test.ts` affirmait `validateMentionPermissions(CONV_ID, [PEER], PART_ID)` sous le
+titre « against the conversation and **the anonymous sender** ». Le test décrivait donc déjà
+l'intention — un expéditeur anonyme — tout en asseyant un `Participant.id` dans un champ comparé à
+des `User.id`. Il passe maintenant à `null`, et son pendant inscrit (ajouté par ce cycle) prouve
+le cas positif : `Participant.id` → `User.id` effectivement résolu.
+
+### Trois confirmations indépendantes de l'espace attendu
+
+Rien ici ne repose sur une interprétation : `createMentionNotificationsBatch` filtre déjà
+`userId === commonData.senderId` avec deux `User.id` ; l'émission `mention:created` de
+`MessageHandler` garde `targetUserId !== senderUserId` et son commentaire dit explicitement « the
+sender's User.id » ; et la route `/mentions/messages/:id` rebaptise sa sortie `mentionedUserId` /
+`mentionedUser`. Le seul endroit qui disait « participant » était la déclaration de la colonne.
+
+## Cycle 21 (complément, PR #2641) — une édition RÉCONCILIE ses mentions
+
+Le cycle 21 a été livré par deux sessions en parallèle. La PR #2640 a corrigé le défaut
+d'extraction (`extractMentions` → `extractMentionsWithParticipants`) et posé l'API que ce cycle-ci
+prolonge : deux exports nommés sur un cœur commun sans écriture. La PR #2641 traite les trois
+défauts restants du même bloc, tous causés par la **purge en bloc** que le remède prescrit par le
+cycle 20 impliquait :
+
+| # | Défaut | Effet observable |
+|---|---|---|
+| D2 | purger-recréer réécrit `mentionedAt` des mentionnés **inchangés** | c'est l'axe de tri de l'inbox (`@@index([mentionedUserId, mentionedAt(sort: Desc)])`) : une mention de trois jours remonte en tête parce que l'auteur a corrigé une faute de frappe |
+| D3 | la purge détruit l'ensemble précédent, donc « qui est nouveau ? » devient insoluble | chaque édition renotifiait TOUS les mentionnés — dix corrections, dix pushes. Le commentaire de la route affirmait déjà l'inverse : l'intention était écrite, pas implémentée |
+| D4 | la purge précède la résolution, et le `catch` réécrit `[]` | service absent ou exception transitoire ⇒ les mentions d'un texte qui les porte toujours sont détruites, et rien ne relit le texte après coup |
+
+`replaceMessageMentions` **réconcilie** : lit l'ensemble précédent, ne supprime que les partants,
+ne crée que les entrants. Les trois défauts tombent ensemble — les restants ne bougent pas (D2),
+les entrants sont exactement le lot à notifier (D3), et tout écrit vit dans le chemin de succès,
+donc une panne laisse la base telle qu'elle était (D4).
+
+`ResolvedMentions` porte deux champs de plus : `newlyMentionedUserIds` (le lot à notifier) et
+`reconciled`. Ce dernier distingue « établi vide » de « rien établi » — sans lui, l'appelant
+recopie le résultat vide dans sa réponse HTTP et sa diffusion socket, et rejoue **au niveau du
+payload** l'effacement que l'unité vient d'empêcher en base ; le web le cache
+(`staleTime: Infinity`) et la mention disparaît quand même.
 
 ### Détruire à l'aveugle n'est pas « best-effort »
 
-La version précédente préférait le champ vide au champ périmé, et son `catch` réécrivait `[]`.
-C'est le mauvais arbitrage quand le contenu, lui, est toujours là : une mention périmée surligne
-quelqu'un de trop le temps d'une édition ; une mention détruite ne revient jamais, parce que rien
-ne relit le texte pour la reconstruire. Le reste de l'unité tient déjà ce contrat (« Une mention
-perdue ne doit pas transformer un envoi réussi en 500 ») ; l'édition en était le seul écrivain à
-le rompre. La purge est passée dans le chemin de succès : une panne laisse la base telle qu'elle
-était, au lieu de la laisser à mi-chemin.
+Le code d'origine préférait le champ vide au champ périmé (`// Clear mentions on error to avoid
+stale data`). Mauvais arbitrage quand le contenu, lui, est toujours là : une mention périmée
+surligne quelqu'un de trop le temps d'une édition, une mention détruite ne revient jamais. Le
+reste de l'unité tenait déjà ce contrat ; l'édition en était le seul écrivain à le rompre.
 
-### Un correctif de persistance n'est fini qu'une fois le payload vérifié
+### Ce que ce cycle-ci a repris à #2641
 
-L'unité s'abstient désormais au lieu de détruire. Un appelant qui recopie mécaniquement son
-résultat vide dans sa réponse HTTP et sa diffusion socket rejoue l'effacement un étage plus haut,
-et le web le cache (`staleTime: Infinity`). D'où `reconciled` : « vide parce qu'établi vide » et
-« vide parce qu'on n'a rien pu établir » doivent être distinguables dans le type de retour, sans
-quoi aucun appelant ne peut faire la différence.
-
-### `senderId` attend un `User.id`, et la route d'édition en passe un
-
-`validateMentionPermissions` compare `senderId` aux `Participant.userId` de la conversation pour
-écarter l'auto-mention en `direct`. C'est donc un `User.id` qu'il attend. La route d'édition lui
-passe `userId` ; les chemins d'envoi passent un `Participant.id`, qui n'égale jamais un `User.id`.
-Le filtre anti-auto-mention ne filtre donc rien à l'envoi — défaut préexistant, sans autre effet.
-
-### `mentionedParticipantId` contient un `User.id`
-
-Sur TOUS les chemins : `createMentions` y écrit les `validUserIds`, et l'inbox
-(`getRecentMentionsForUser`) y compare un `userId`. Le nom du champ ment, la donnée est cohérente.
-Ce cycle s'aligne sur l'existant plutôt que d'ouvrir une migration.
+La PR #2641 avait corrigé D3-du-cycle-22 (l'espace d'identifiants du `senderId`) en passant un
+`User.id` depuis la route d'édition. Ce cycle tranche mieux : `resolveSenderUserId` fait la
+traduction DANS l'unité, une fois, et les quatre appelants passent uniformément le
+`Participant.id` qu'ils tiennent. La route d'édition est donc revenue à
+`existingMessage.senderId` — corriger chez l'appelant aurait laissé les trois autres se tromper.
 
 ### Reste ouvert après ce cycle
 
+- **`repair-mention-user-ids.ts` n'a pas été exécuté** — aucun accès base depuis cette routine.
+  À lancer sans `--apply` d'abord : le rapport dit combien de lignes D5 existent réellement en
+  production (peut-être zéro si la migration participant n'a jamais tourné là-bas).
+- **`MentionCreatedEventData.mentionedParticipantId` reste dans les types partagés** et n'est
+  peuplé par aucun émetteur ; le SDK iOS le décode. Champ mort des deux côtés, à retirer dans un
+  cycle qui touchera le contrat socket.
+- **`getMentionsForMessage` et `getRecentMentionsForUser` n'ont aucun consommateur d'écran.**
+  `apps/web/services/mentions.service.ts` expose bien `getMessageMentions` et `getUserMentions`,
+  mais seul `getSuggestions` est appelé par un composant. Les deux routes sont donc correctes et
+  inertes — l'inbox `/mentions` reste une capacité backend sans écran.
 - **`MessageHandler.handleMessageEdit` (édition par WebSocket) ne touche AUCUNE mention** —
-  vérifié dans ce cycle, tête du suivant. Il écrit `content`, `isEdited`, `editedAt`,
+  vérifié pendant le cycle 21, toujours vrai. Il écrit `content`, `isEdited`, `editedAt`,
   `translations: null` et s'arrête là : ni ligne `Mention`, ni `validatedMentions`. Éditer
-  « salut @alice » en « salut @bob » par socket laisse Alice mentionnée (ligne + champ) et ne
-  nomme jamais Bob. C'est le cinquième écrivain de la famille, et le seul qui n'écrit rien du
-  tout — `replaceMessageMentions` est exactement ce qu'il lui faut. Non fait ici :
-  `MessageHandler` ne reçoit pas `mentionService` dans ses `MessageHandlerDependencies`, donc le
-  câblage passe par le constructeur, `MeeshySocketIOManager` et tous les doubles de test — une
-  pièce distincte, pas une ligne de plus.
+  « salut @alice » en « salut @bob » par socket laisse Alice mentionnée et ne nomme jamais Bob.
+  C'est le cinquième écrivain de la famille, et le seul qui n'écrit rien du tout ;
+  `replaceMessageMentions` est exactement ce qu'il lui faut. Le câblage passe par
+  `MessageHandlerDependencies`, `MeeshySocketIOManager` et tous les doubles de test — une pièce
+  distincte, pas une ligne de plus. **Tête du prochain cycle.**
 - **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
   édition de post) et `routes/posts/comments.ts` appellent la variante handles-bruts : un
   `@John Doe` dans un post ou un commentaire ne nomme personne — jamais, pas seulement à
-  l'édition. Même défaut que D1, autre domaine ; `createPostMentions` / `createCommentMentions`
-  en sont les équivalents, et l'unité de ce cycle n'est pas réutilisable telle quelle (elle écrit
-  `Message.validatedMentions`). À instruire à part.
-- **`validateMentionPermissions` reçoit un `Participant.id` à la création et un `User.id` à
-  l'édition.** Voir la revue ci-dessus : c'est la création qui est du mauvais côté. Sans effet
-  observable au-delà de l'auto-mention en `direct`.
-- **`MeeshySocketIOManager.getConversationParticipantsForMention` est un deuxième exemplaire du
-  chargeur de participants** (celui de `MessageProcessor` a disparu au cycle 20). Même corps,
-  même `select`, aucun appelant commun pour l'instant.
-- **L'édition n'émet aucun `mention:created`** — pas plus qu'avant : le nouveau mentionné reçoit
-  bien sa notification (ligne `Notification` + push), mais aucun événement socket dédié.
-- **Une dérive `validatedMentions` non vide sans ligne `Mention` correspondante** peut subsister
-  sur des messages écrits AVANT le cycle 20 (qui persistait les mentionnés rejetés). Inerte à
-  l'affichage : `mentionsToLinks` ne surligne que les handles PRÉSENTS dans le texte.
+  l'édition. Même défaut que celui du cycle 21, autre domaine.
+- **`MeeshySocketIOManager.getConversationParticipantsForMention` est toujours un deuxième
+  exemplaire du chargeur de participants** (cycle 21, inchangé).
+- **L'édition n'émet toujours aucun `mention:created`** (cycle 21, inchangé).
 - **`getLatestMessageSummary` résume le DERNIER message de la conversation, pas celui qu'on vient
   d'acquitter** (cycle 19, inchangé).
-- **Aucun client iOS n'écoute `link:message:new`** — les conversations par lien restent une
-  fonctionnalité web (cycle 15).
-- **Les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio** (cycle 16).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.

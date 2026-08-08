@@ -6,9 +6,11 @@ import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
  * les routes de lien de partage ne construisent pas un `Message` Prisma
  * complet, et rien ici n'a besoin de plus que ces trois champs.
  *
- * `senderId` est un `Participant.id` sur les chemins d'envoi (socket, REST,
- * lien) — c'est ce que `validateMentionPermissions` reçoit déjà du chemin
- * nominal.
+ * `senderId` est un `Participant.id` — c'est ce que la colonne `Message.senderId`
+ * référence, et c'est donc tout ce que les quatre appelants tiennent. La
+ * validation des permissions, elle, raisonne en `User.id` ; la traduction entre
+ * les deux vit ICI (cf. `resolveSenderUserId`), une fois, plutôt que dans quatre
+ * appelants qui auraient chacun l'occasion de l'oublier.
  */
 export interface MentionTargetMessage {
   readonly id: string;
@@ -25,6 +27,36 @@ export interface MentionTargetMessage {
 export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message' | 'mention'>;
 
 /**
+ * L'identité UTILISATEUR derrière le participant expéditeur.
+ *
+ * `validateMentionPermissions` compare l'expéditeur aux `Participant.userId` des
+ * membres — donc à des `User.id`. Lui passer le `Participant.id` que porte
+ * `Message.senderId` compare deux espaces disjoints : l'inégalité est toujours
+ * vraie, et la règle « on ne se mentionne pas soi-même » d'une conversation
+ * directe ne se déclenche jamais.
+ *
+ * `null` pour un expéditeur anonyme (aucun `User.id`) comme pour une lecture en
+ * échec : dans les deux cas l'expéditeur n'est aucun des mentionnés, ce qui est
+ * la réponse sûre — au pire une auto-mention passe, jamais un tiers rejeté.
+ */
+async function resolveSenderUserId(
+  prisma: Pick<MentionPrisma, 'participant'>,
+  senderParticipantId: string,
+  onError?: (error: unknown) => void
+): Promise<string | null> {
+  try {
+    const participant = await prisma.participant.findUnique({
+      where: { id: senderParticipantId },
+      select: { userId: true },
+    });
+    return participant?.userId ?? null;
+  } catch (error) {
+    onError?.(error);
+    return null;
+  }
+}
+
+/**
  * Les quatre méthodes de `MentionService` que la résolution appelle, en
  * structural pour que le double de test soit trivial et pour qu'une route
  * n'ait pas à importer la classe entière.
@@ -35,7 +67,7 @@ export interface MentionResolver {
   validateMentionPermissions(
     conversationId: string,
     mentionedUserIds: string[],
-    senderId: string
+    senderId: string | null
   ): Promise<{ validUserIds: string[] }>;
   createMentions(messageId: string, mentionedUserIds: string[]): Promise<void>;
 }
@@ -181,7 +213,7 @@ export async function resolveMessageMentions(params: MentionResolutionParams): P
  *     réécrit, même vide : un contenu édité qui ne nomme plus personne doit
  *     effacer le champ, là où une création sans `@` ne doit rien écrire.
  *  2. **On ne purge PAS pour recréer.** `Mention.mentionedAt` est l'axe de tri
- *     de l'inbox (`@@index([mentionedParticipantId, mentionedAt(sort: Desc)])`).
+ *     de l'inbox (`@@index([mentionedUserId, mentionedAt(sort: Desc)])`).
  *     Supprimer puis recréer la ligne d'un mentionné INCHANGÉ lui donne un
  *     horodatage neuf : une mention de trois jours remonte en tête parce que
  *     l'auteur a corrigé une faute de frappe. Seuls les partants sont
@@ -223,9 +255,9 @@ export async function replaceMessageMentions(params: MentionResolutionParams): P
     const previousUserIds = (
       await prisma.mention.findMany({
         where: { messageId: message.id },
-        select: { mentionedParticipantId: true },
+        select: { mentionedUserId: true },
       })
-    ).map((row) => row.mentionedParticipantId);
+    ).map((row) => row.mentionedUserId);
 
     const resolved = await computeValidatedMentions(params, mentionService, explicit);
 
@@ -236,7 +268,7 @@ export async function replaceMessageMentions(params: MentionResolutionParams): P
 
     if (departedUserIds.length > 0) {
       await prisma.mention.deleteMany({
-        where: { messageId: message.id, mentionedParticipantId: { in: departedUserIds } },
+        where: { messageId: message.id, mentionedUserId: { in: departedUserIds } },
       });
     }
 
@@ -296,10 +328,12 @@ async function computeValidatedMentions(
 
   if (candidateUserIds.length === 0) return NOTHING;
 
+  const senderUserId = await resolveSenderUserId(prisma, message.senderId, onError);
+
   const { validUserIds } = await mentionService.validateMentionPermissions(
     message.conversationId,
     candidateUserIds,
-    message.senderId
+    senderUserId
   );
   if (validUserIds.length === 0) return NOTHING;
 
