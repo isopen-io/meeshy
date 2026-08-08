@@ -71,7 +71,9 @@ type PrismaOpts = {
   findManyError?: Error | null;
   findUniqueError?: Error | null;
   upsertError?: Error | null;
-  updateManyError?: Error | null;
+  /** Conversations the user is an active participant of; `null` = all of them. */
+  participantIds?: string[] | null;
+  participantsError?: Error | null;
 };
 
 function makePrisma({
@@ -83,9 +85,22 @@ function makePrisma({
   findManyError = null,
   findUniqueError = null,
   upsertError = null,
-  updateManyError = null,
+  participantIds = null,
+  participantsError = null,
 }: PrismaOpts = {}) {
   return {
+    // The batch reorder upserts, so it scopes the write to the conversations
+    // the user is actually in — an unscoped upsert would let any caller mint
+    // preference rows against arbitrary conversation ids.
+    participant: {
+      findMany: participantsError
+        ? jest.fn<() => Promise<unknown>>().mockRejectedValue(participantsError)
+        : jest.fn(async ({ where }: { where: { conversationId?: { in?: string[] } } }) =>
+            (where?.conversationId?.in ?? [])
+              .filter((id) => participantIds === null || participantIds.includes(id))
+              .map((conversationId) => ({ conversationId }))
+          ),
+    },
     userConversationPreferences: {
       findUnique: findUniqueError
         ? jest.fn().mockRejectedValue(findUniqueError)
@@ -103,9 +118,6 @@ function makePrisma({
       update: resetError
         ? jest.fn().mockRejectedValue(resetError)
         : jest.fn().mockResolvedValue({ version: (findUniqueResult?.version ?? 0) + 1 }),
-      updateMany: updateManyError
-        ? jest.fn().mockRejectedValue(updateManyError)
-        : jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
 }
@@ -422,7 +434,7 @@ describe('POST /user-preferences/reorder', () => {
     expect(body.data.message).toMatch(/reorder/i);
   });
 
-  it('updates each conversation independently via updateMany', async () => {
+  it('upserts each conversation independently, scoped to the caller', async () => {
     const prisma = makePrisma();
     const appCustom = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     appCustom.decorate('prisma', prisma as unknown);
@@ -440,10 +452,11 @@ describe('POST /user-preferences/reorder', () => {
       headers: AUTH,
       payload: { updates: [{ conversationId: CONV_ID, orderInCategory: 2 }] },
     });
-    const updateManyCalls = (prisma.userConversationPreferences.updateMany as ReturnType<typeof jest.fn>).mock.calls;
-    expect(updateManyCalls).toHaveLength(1);
-    expect(updateManyCalls[0][0].where.userId).toBe(USER_ID);
-    expect(updateManyCalls[0][0].data.orderInCategory).toBe(2);
+    const upsertCalls = (prisma.userConversationPreferences.upsert as ReturnType<typeof jest.fn>).mock.calls;
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0][0].where.userId_conversationId).toEqual({ userId: USER_ID, conversationId: CONV_ID });
+    expect(upsertCalls[0][0].update.orderInCategory).toBe(2);
+    expect(upsertCalls[0][0].create.orderInCategory).toBe(2);
     await appCustom.close();
   });
 
@@ -470,7 +483,7 @@ describe('POST /user-preferences/reorder', () => {
   });
 
   it('returns 500 on db error', async () => {
-    const appErr = await buildApp({ updateManyError: new Error('db crash') });
+    const appErr = await buildApp({ participantsError: new Error('db crash') });
     const res = await appErr.inject({
       method: 'POST',
       url: '/user-preferences/reorder',

@@ -571,3 +571,71 @@ Hors périmètre, constaté : `ConversationStore.dispatchPreferencesUpdate` (iOS
 traite `.setClearHistoryBefore` comme un succès local sans appeler la route
 (« until the server endpoint is wired ») alors que `POST /clear-history` existe
 depuis longtemps — dette iOS, non vérifiable sans Xcode dans cet environnement.
+
+---
+
+# Réordonnancement des conversations — la route qui promettait sans écrire (2026-08-08)
+
+Suivi direct de la liste ouverte laissée par le cycle 11 et reconduite par le
+cycle 12 : « `POST /user-preferences/reorder` est un no-op silencieux sans ligne
+existante (`updateMany`), alors que le client applique l'ordre de façon optimiste
+et reçoit un `200`. À confirmer : une conversation réordonnée a-t-elle toujours
+une ligne ? » — **confirmé, et la réponse est non.**
+
+## Constats
+
+### D1 (racine) — `updateMany` ne matche rien, et ne le dit pas
+La ligne `UserConversationPreferences` n'existe qu'à partir du premier
+épinglage / sourdine / renommage / catégorisation. Avant cela, l'écriture matche
+zéro document, sans erreur ni 404, et le `count` retourné n'est pas lu. La route
+répondait `200` et diffusait `USER_PREFERENCES_REORDERED` dans tous les cas.
+
+### D2 (portée) — les deux clients commitent sur ce `200`
+iOS `ConversationStore.reorderConversations` ne restaure son instantané que sur
+erreur ; web `UserPreferencesService.reorderInCategory` se contente d'invalider
+son cache. Tous les appareils affichaient donc — **de façon cohérente entre
+eux**, ce qui rend le défaut d'autant plus dur à soupçonner — un ordre que le
+serveur ne détenait pas, jusqu'au prochain refetch complet.
+
+### D3 — dernier écrivain hors du module d'écriture unique
+Le cycle 12 avait créé `conversationPreferencesSync` pour qu'aucun écrivain de
+cette ligne n'honore le contrat à moitié. Le réordonnancement était le seul
+`prisma.userConversationPreferences.*` restant dehors.
+
+### D4 (pourquoi ça a survécu) — mock figé, et un test qui assertait le défaut
+`updateMany: jest.fn(async () => ({ count: n }))` rend « écrit » et « pas
+écrit » indiscernables. Le test le plus proche s'appelait *updates each
+conversation independently **via updateMany*** et vérifiait l'appel lui-même.
+Troisième récidive de la racine des cycles 10 et 11.
+
+### D5 (corollaire du correctif) — l'`upsert` ouvre ce que le no-op fermait
+Aucune route de préférences ne vérifie l'appartenance (le `PUT` non plus). Sans
+garde, un `upsert` laisserait tout appelant authentifié créer des lignes contre
+des ids arbitraires. Le lot est restreint aux conversations dont l'appelant est
+participant **actif** — même filtre que `GET /conversations`.
+
+## Plan
+- [x] T1 — RED : 7 tests de comportement lus via l'API publique (`GET`), pas via les mocks
+- [x] T2 — GREEN : `reorderConversationPreferences` dans le module d'écriture unique (upsert + filtre d'appartenance + déduplication)
+- [x] T3 — la diffusion ne transporte que les mises à jour réellement écrites
+- [x] T4 — réécriture des 2 tests couplés à `updateMany` ; mocks `participant` ajoutés aux 2 harnais existants
+- [x] T5 — gates : suite gateway complète + `tsc --noEmit` propre
+- [x] T6 — changeset + CHANGELOG + lessons + audit
+
+## Revue
+Le correctif n'est pas de lire le `count` : `count === 0` ne distingue pas
+« pas de ligne » de « ligne déjà à cette position ». Il consiste à écrire ce que
+la route prétend écrire, puis à **ne diffuser que ce qui l'a été**. C'est cette
+seconde moitié qui porte l'invariant — tant que le payload diffusé était recopié
+du body de la requête, aucune divergence entre promesse et persistance ne pouvait
+apparaître.
+
+`version` n'est délibérément pas incrémenté : `USER_PREFERENCES_REORDERED` ne
+porte pas de version et iOS `applyRemoteReorder` l'applique sans garde. Un
+incrément ici avancerait un compteur qu'aucune diffusion ne transporte — la
+demi-obligation exacte que le docstring du module condamne — et coûterait un
+`USER_PREFERENCES_UPDATED` par ligne déplacée au lieu d'un événement par
+glisser-déposer.
+
+Vérification par mutation : 7 des 9 tests vus ROUGES avant le correctif. Les 2
+verts avant et après sont les verrous (`version` inchangé, `200` sur lot vide).

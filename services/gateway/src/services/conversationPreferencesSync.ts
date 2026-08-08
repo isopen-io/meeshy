@@ -17,6 +17,11 @@
  * (`deletedForUserAt`, `clearHistoryBefore`) that `ConversationPreferencesPayload`
  * declares and the iOS `ConversationStoreSocketBridge` already maps onto
  * `userState`.
+ *
+ * The batch reorder (`reorderConversationPreferences`) is the one write that
+ * legitimately skips (2): order is broadcast by `USER_PREFERENCES_REORDERED`,
+ * which carries no version. It still owes (1) and (3), and it owed neither —
+ * see its own comment.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -24,6 +29,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   ConversationPreferencesPayload,
   UserPreferencesConversationUpdatedEventData,
+  UserPreferencesReorderedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 
@@ -111,4 +117,80 @@ export async function writeConversationPreferences(
   broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
 
   return row;
+}
+
+export interface ConversationOrderUpdate {
+  readonly conversationId: string;
+  readonly orderInCategory: number;
+}
+
+export interface ReorderConversationPreferencesParams {
+  readonly userId: string;
+  readonly updates: readonly ConversationOrderUpdate[];
+}
+
+/**
+ * Batch drag-reorder. Persists `orderInCategory` for every conversation the
+ * user is actually in, then broadcasts **one** `USER_PREFERENCES_REORDERED`
+ * describing exactly what was written. Returns those same updates.
+ *
+ * Two departures from `writeConversationPreferences`, both deliberate:
+ *
+ * - **No version bump.** Order sits outside the versioned path:
+ *   `USER_PREFERENCES_REORDERED` carries no version and iOS `applyRemoteReorder`
+ *   applies it ungated. Incrementing here would advance a counter that no
+ *   broadcast delivers — the half-contract this module exists to prevent — and
+ *   would cost one `USER_PREFERENCES_UPDATED` per dragged row instead of one
+ *   event per drag.
+ * - **A membership filter.** The write is an upsert, so an unscoped batch would
+ *   let any authenticated caller mint preference rows against arbitrary
+ *   conversation ids. `updateMany` used to absorb that for the wrong reason: it
+ *   matched nothing, for anybody.
+ *
+ * Updates are de-duplicated last-wins; two concurrent upserts on the same
+ * unique key race.
+ */
+export async function reorderConversationPreferences(
+  fastify: FastifyInstance,
+  { userId, updates }: ReorderConversationPreferencesParams
+): Promise<ConversationOrderUpdate[]> {
+  const deduped = [...new Map(updates.map((u) => [u.conversationId, u])).values()];
+  if (deduped.length === 0) return [];
+
+  const memberships = await fastify.prisma.participant.findMany({
+    where: {
+      userId,
+      conversationId: { in: deduped.map((u) => u.conversationId) },
+      isActive: true,
+    },
+    select: { conversationId: true },
+  });
+  const joined = new Set(memberships.map((m: { conversationId: string }) => m.conversationId));
+  const applicable = deduped.filter((u) => joined.has(u.conversationId));
+  if (applicable.length === 0) return [];
+
+  await Promise.all(
+    applicable.map((update) =>
+      fastify.prisma.userConversationPreferences.upsert({
+        where: { userId_conversationId: { userId, conversationId: update.conversationId } },
+        create: {
+          userId,
+          conversationId: update.conversationId,
+          orderInCategory: update.orderInCategory,
+        },
+        update: { orderInCategory: update.orderInCategory },
+      })
+    )
+  );
+
+  const eventPayload: UserPreferencesReorderedEventData = {
+    userId,
+    updates: applicable.map((u) => ({
+      conversationId: u.conversationId,
+      orderInCategory: u.orderInCategory,
+    })),
+  };
+  broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, eventPayload);
+
+  return applicable;
 }
