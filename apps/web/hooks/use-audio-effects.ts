@@ -68,6 +68,15 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
   const mediaStreamDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const processorsRef = useRef<Map<AudioEffectType, AudioEffectProcessor>>(new Map());
   const previouslyEnabledTypesRef = useRef<Set<AudioEffectType>>(new Set());
+  // Mirrors `isInitialized` synchronously. The mount effect below tears down
+  // and re-initializes the pipeline in one flush whenever `inputStream`
+  // changes: its cleanup (old closure) runs immediately before its setup
+  // (closure captured at the last render) within the same commit, so a state
+  // update made in the cleanup is not yet visible to that setup body — only
+  // a ref mutation is. Without this, swapping `inputStream` mid-call (e.g.
+  // changing mic/camera source) tears the old pipeline down but never
+  // rebuilds one for the new stream.
+  const isInitializedRef = useRef(false);
 
   const [outputStream, setOutputStream] = useState<MediaStream | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -81,7 +90,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
   });
 
   const initializeAudioPipeline = useCallback(async () => {
-    if (!inputStream || isInitialized) return;
+    if (!inputStream || isInitializedRef.current) return;
 
     try {
       const { tone: Tone } = await loadAudioModules();
@@ -121,12 +130,13 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       const newOutputStream = mediaStreamDestinationRef.current.stream;
       setOutputStream(newOutputStream);
       onOutputStreamReady?.(newOutputStream);
+      isInitializedRef.current = true;
       setIsInitialized(true);
       logger.info('[useAudioEffects]', 'Audio pipeline initialized');
     } catch (error) {
       logger.error('[useAudioEffects]', 'Failed to initialize audio pipeline', { error });
     }
-  }, [inputStream, onOutputStreamReady, isInitialized]);
+  }, [inputStream, onOutputStreamReady]);
 
   const rebuildAudioGraph = useCallback(() => {
     if (!inputNodeRef.current || !mediaStreamDestinationRef.current) return;
@@ -264,7 +274,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
   );
 
   useEffect(() => {
-    if (inputStream && !isInitialized) {
+    if (inputStream && !isInitializedRef.current) {
       initializeAudioPipeline();
     }
 
@@ -276,7 +286,11 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       }
       processorsRef.current.forEach((processor) => processor.destroy());
       processorsRef.current.clear();
-      if (inputStream) setIsInitialized(false);
+      previouslyEnabledTypesRef.current = new Set();
+      if (inputStream) {
+        isInitializedRef.current = false;
+        setIsInitialized(false);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputStream]);
