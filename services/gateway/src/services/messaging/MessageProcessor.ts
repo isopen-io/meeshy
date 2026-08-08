@@ -10,7 +10,12 @@ import type { MessageRequest } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
-import { NotificationService, protectedPreview } from '../notifications/NotificationService';
+import { NotificationService } from '../notifications/NotificationService';
+import {
+  notifyMessageRecipients,
+  type FanOutPrisma,
+  type MessageNotificationTarget,
+} from './messageNotificationFanOut';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
@@ -964,7 +969,13 @@ export class MessageProcessor {
   }
 
   /**
-   * Déclenche les notifications pour tous les types de destinataires
+   * Déclenche les notifications pour tous les types de destinataires.
+   *
+   * Délègue à `notifyMessageRecipients` : le corps vivait ici, `private` sous
+   * `handleMentionsAndNotifications` (elle-même `private`), donc inatteignable
+   * par tout écrivain hors de cette classe. Les deux routes de lien de partage
+   * contournent `MessagingService` en entier — un message envoyé par lien ne
+   * produisait ni push, ni notification in-app, ni ligne `Notification`.
    */
   private async triggerAllNotifications(
     message: Message,
@@ -972,197 +983,19 @@ export class MessageProcessor {
     processedContent: string,
     validatedMentionUserIds: string[]
   ): Promise<void> {
-    if (!this.notificationService) return;
-
-    try {
-      // Sanitize notification preview for protected messages.
-      // The body is now a compact icon-only string (e.g. "👁️ 🎵" for a
-      // view-once audio, "🔥 💬 5min" for a 5-minute ephemeral text) so the
-      // recipient instantly sees WHAT KIND of protected payload landed
-      // without the content itself leaking. `protectedPreview()` encodes
-      // the precedence ephemeral > view-once > blurred > encrypted and
-      // returns the matching `notificationLocKey` for the iOS NSE fallback
-      // path (only consumed when E2EE decryption fails — emojis don't
-      // need locale-side localisation).
-      const protectedOverride = protectedPreview({
-        messageType: message.messageType,
-        isEncrypted: message.isEncrypted || message.encryptionMode === 'e2ee',
-        isViewOnce: message.isViewOnce,
-        isBlurred: message.isBlurred,
-        effectFlags: message.effectFlags,
-        expiresAt: message.expiresAt as Date | null | undefined,
-        createdAt: message.createdAt as Date | null | undefined,
-      });
-      const notificationPreview = protectedOverride?.preview ?? processedContent;
-      const notificationLocKey = protectedOverride?.locKey;
-      // 1. Résoudre le senderId en userId
-      let senderUserId = data.senderId;
-      const senderParticipant = await this.prisma.participant.findUnique({
-        where: { id: data.senderId },
-        select: { userId: true }
-      });
-      if (senderParticipant?.userId) {
-        senderUserId = senderParticipant.userId;
-      }
-
-      // 2. Charger les infos de l'expéditeur et de la conversation
-      const [sender, conversation] = await Promise.all([
-        this.prisma.user.findUnique({
-          where: { id: senderUserId },
-          select: { username: true, displayName: true, avatar: true }
-        }),
-        this.prisma.conversation.findUnique({
-          where: { id: data.conversationId },
-          select: {
-            title: true,
-            type: true,
-            participants: {
-              where: { isActive: true, type: 'user' },
-              select: { userId: true }
-            }
-          }
-        })
-      ]);
-
-      if (!sender || !conversation) return;
-
-      const memberIds = conversation.participants
-        .map(p => p.userId)
-        .filter((id): id is string => id !== null);
-
-      // 3. Déterminer l'auteur du message original pour les réponses
-      let originalMessageAuthorUserId: string | null = null;
-      if (message.replyToId) {
-        const originalMessage = await this.prisma.message.findUnique({
-          where: { id: message.replyToId },
-          select: { senderId: true }
-        });
-        if (originalMessage?.senderId) {
-          const originalAuthorPart = await this.prisma.participant.findUnique({
-            where: { id: originalMessage.senderId },
-            select: { userId: true }
-          });
-          originalMessageAuthorUserId = originalAuthorPart?.userId || null;
-        }
-      }
-
-      // 4. Préparer les infos d'attachments
-      // Phase A — fileUrl + transcription added to the select so iOS rich-push
-      // can attach the media inline (audio waveform, image preview, video thumb)
-      // and use the transcription as the body for audio messages when available.
-      const attachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: message.id },
-        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true, fileUrl: true, transcription: true }
-      });
-
-      const first = attachments[0];
-      const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio' | 'document' =>
-        mimeType?.startsWith('image/') ? 'image' :
-        mimeType?.startsWith('video/') ? 'video' :
-        mimeType?.startsWith('audio/') ? 'audio' : 'document';
-      const attachmentInfo = {
-        hasAttachments: attachments.length > 0,
-        attachmentCount: attachments.length,
-        firstAttachmentType: attachmentTypeOf(first?.mimeType),
-        attachments: attachments.map(att => ({
-          type: attachmentTypeOf(att.mimeType),
-          filename: att.fileName,
-        })),
-        firstAttachmentFilename: first?.fileName,
-        firstAttachmentFileSize: first?.fileSize,
-        firstAttachmentDuration: first?.duration,
-        firstAttachmentWidth: first?.width,
-        firstAttachmentHeight: first?.height,
-        // Phase A — rich-push fields propagated to APN payload via NotificationService.
-        firstAttachmentUrl: first?.fileUrl || undefined,
-        firstAttachmentMimeType: first?.mimeType || undefined,
-      };
-
-      // Phase A — if the first attachment is audio and already has a transcription
-      // (pre-transcribed upload path, or transcription already completed by the
-      // time the notification fan-out runs), use the transcript text as the
-      // push body so the recipient sees the content immediately on the lock
-      // screen — the audio file is still attached for inline playback.
-      const firstAttachmentTranscript =
-        first?.mimeType?.startsWith('audio/')
-          ? extractTranscriptionText(first as { transcription?: unknown })
-          : undefined;
-      const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
-
-      // 5. Notification de RÉPONSE (prioritaire sur message régulier)
-      if (originalMessageAuthorUserId &&
-          originalMessageAuthorUserId !== senderUserId &&
-          !validatedMentionUserIds.includes(originalMessageAuthorUserId)) {
-
-        await this.notificationService.createReplyNotification({
-          recipientUserId: originalMessageAuthorUserId,
-          replierUserId: senderUserId,
-          messageId: message.id,
-          conversationId: data.conversationId,
-          messagePreview: notificationPreview,
-          originalMessageId: message.replyToId!,
-        });
-      }
-
-      // 6. Notifications de MENTION (Batch)
-      if (validatedMentionUserIds.length > 0) {
-        await this.notificationService.createMentionNotificationsBatch(
-          validatedMentionUserIds,
-          {
-            senderId: senderUserId,
-            senderUsername: sender.displayName || sender.username,
-            senderAvatar: sender.avatar || undefined,
-            messageContent: notificationPreview,
-            conversationId: data.conversationId,
-            messageId: message.id,
-          },
-          memberIds
-        );
-      }
-
-      // 7. Notifications de MESSAGE RÉGULIER
-      const alreadyNotified = new Set([senderUserId, ...validatedMentionUserIds]);
-      if (originalMessageAuthorUserId) alreadyNotified.add(originalMessageAuthorUserId);
-
-      const candidateRegularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
-
-      // GW3 — single widened query: a candidate leaves the regular fan-out if
-      // they opted for mentions-only OR muted the conversation (both suppress
-      // new_message; mentions pierce the mute via the dedicated batch above).
-      const conversationPrefs = candidateRegularRecipients.length > 0
-        ? await this.prisma.userConversationPreferences.findMany({
-            where: {
-              conversationId: data.conversationId,
-              userId: { in: candidateRegularRecipients },
-              OR: [{ mentionsOnly: true }, { isMuted: true }],
-            },
-            select: { userId: true },
-          })
-        : [];
-
-      const suppressedUserIds = new Set(conversationPrefs.map(p => p.userId));
-      const regularRecipients = candidateRegularRecipients.filter(id => !suppressedUserIds.has(id));
-
-      if (regularRecipients.length > 0) {
-        await Promise.all(regularRecipients.map(recipientUserId =>
-          this.notificationService!.createMessageNotification({
-            recipientUserId,
-            senderId: senderUserId,
-            messageId: message.id,
-            conversationId: data.conversationId,
-            messagePreview: notificationPreviewForPush,
-            encryptedContent: message.encryptedContent || undefined,
-            notificationLocKey: notificationLocKey,
-            ...attachmentInfo as any
-          })
-        ));
-      }
-
-      logger.info(`[MessageProcessor] Notifications triggered for ${message.id}: ${validatedMentionUserIds.length} mentions, ${regularRecipients.length} messages, reply=${!!originalMessageAuthorUserId}`);
-
-    } catch (error) {
-      logger.error('[MessageProcessor] Error triggering notifications', error);
-    }
+    await notifyMessageRecipients({
+      prisma: this.prisma as unknown as FanOutPrisma,
+      notificationService: this.notificationService as unknown as MessageNotificationTarget | undefined,
+      message,
+      senderParticipantId: data.senderId,
+      conversationId: data.conversationId,
+      processedContent,
+      validatedMentionUserIds,
+      onError: (error) => logger.error('[MessageProcessor] Error triggering notifications', error),
+      onFanOut: ({ mentions, regular, reply }) => logger.info(
+        `[MessageProcessor] Notifications triggered for ${message.id}: ${mentions} mentions, ${regular} messages, reply=${reply}`
+      ),
+    });
   }
 
   /**
@@ -1227,26 +1060,4 @@ export class MessageProcessor {
       return null;
     }
   }
-}
-
-/**
- * Best-effort plain-text extraction from an AttachmentTranscription blob.
- * Returns undefined if the structure isn't recognized — caller falls back
- * to the original preview. Used to inline voice-message transcripts in the
- * push body for Phase A rich notifications (Communication Notifications iOS).
- */
-function extractTranscriptionText(att: { transcription?: unknown } | null | undefined): string | undefined {
-  if (!att?.transcription || typeof att.transcription !== 'object') return undefined;
-  const t = att.transcription as Record<string, unknown>;
-  if (typeof t.text === 'string' && t.text.trim().length > 0) return t.text.trim();
-  if (Array.isArray(t.segments)) {
-    const joined = t.segments
-      .map(seg => (typeof seg === 'object' && seg && typeof (seg as Record<string, unknown>).text === 'string'
-        ? (seg as Record<string, unknown>).text as string
-        : ''))
-      .join(' ')
-      .trim();
-    if (joined.length > 0) return joined;
-  }
-  return undefined;
 }

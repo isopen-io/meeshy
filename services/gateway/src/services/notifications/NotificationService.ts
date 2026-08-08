@@ -242,6 +242,30 @@ export function formatEphemeralDuration(
 }
 
 /**
+ * L'identité d'acteur qu'une notification affiche, résolue par l'APPELANT.
+ *
+ * Les trois créateurs ci-dessous rechargeaient l'expéditeur par
+ * `user.findUnique({ id: senderId })` et abandonnaient sur `null`. Deux
+ * conséquences, corrigées par ce paramètre :
+ *
+ *  - un participant ANONYME n'a pas de ligne `User` (`Participant.userId` est
+ *    nullable), donc la lecture rendait toujours `null` : un anonyme ne
+ *    notifiait personne, ni par lien de partage ni par le chemin socket. Son
+ *    `displayName`/`avatar` de participant est la seule identité qui existe —
+ *    et elle suffit à nommer une notification ;
+ *  - la lecture était refaite PAR DESTINATAIRE alors que l'appelant venait de
+ *    la faire une fois pour tout l'éventail.
+ *
+ * Optionnel : sans lui, le comportement historique (lecture + abandon sur
+ * absence) est conservé à l'identique pour tous les appelants existants.
+ */
+export type NotificationActorProfile = {
+  username: string;
+  displayName: string | null;
+  avatar: string | null;
+};
+
+/**
  * Builds the sanitised body for a protected message. Returns `null` when the
  * message is NOT protected (caller should keep the original text).
  *
@@ -1226,6 +1250,8 @@ export class NotificationService {
     firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
+    senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
     // Race-condition guard: between `MessageProcessor.handleMessage` and the
     // moment the notification actually fans out (sender lookup + conversation
@@ -1262,17 +1288,23 @@ export class NotificationService {
       return null;
     }
 
-    // Expéditeur + conversation : lectures indépendantes, en parallèle
-    const [sender, conversation] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.senderId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
+    // Expéditeur + conversation : lectures indépendantes, en parallèle. Un
+    // `senderProfile` fourni supprime la lecture `User` — elle est refaite ici
+    // une fois PAR DESTINATAIRE, et elle est vouée à l'échec pour un acteur
+    // anonyme (cf. `NotificationActorProfile`).
+    const [resolvedSender, conversation] = await Promise.all([
+      params.senderProfile
+        ? Promise.resolve(params.senderProfile)
+        : this.prisma.user.findUnique({
+            where: { id: params.senderId },
+            select: { username: true, displayName: true, avatar: true },
+          }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
       }),
     ]);
+    const sender = resolvedSender;
 
     if (!sender) {
       notificationLogger.warn('Sender not found for message notification', {
@@ -1375,6 +1407,8 @@ export class NotificationService {
     messageId: string;
     conversationId: string;
     messagePreview: string;
+    /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
+    senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1386,10 +1420,12 @@ export class NotificationService {
     }
 
     const [mentioner, conversation] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.mentionerUserId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
+      params.senderProfile
+        ? Promise.resolve(params.senderProfile)
+        : this.prisma.user.findUnique({
+            where: { id: params.mentionerUserId },
+            select: { username: true, displayName: true, avatar: true },
+          }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
@@ -1436,8 +1472,13 @@ export class NotificationService {
     mentionedUserIds: string[],
     commonData: {
       senderId: string;
-      senderUsername: string;
-      senderAvatar?: string;
+      /**
+       * Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. Elle
+       * remplace `senderUsername`/`senderAvatar`, qui traversaient cette API
+       * sans jamais être lus : `createMentionNotification` rechargeait
+       * l'utilisateur par destinataire, et abandonnait pour un acteur anonyme.
+       */
+      senderProfile?: NotificationActorProfile;
       messageContent: string;
       conversationId: string;
       messageId: string;
@@ -1465,6 +1506,7 @@ export class NotificationService {
           messageId: commonData.messageId,
           conversationId: commonData.conversationId,
           messagePreview: commonData.messageContent,
+          senderProfile: commonData.senderProfile,
         })
       )
     );
@@ -2617,6 +2659,8 @@ export class NotificationService {
     conversationId: string;
     messagePreview: string;
     originalMessageId?: string;
+    /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
+    senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -2630,10 +2674,12 @@ export class NotificationService {
     }
 
     const [replier, conversation] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.replierUserId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
+      params.senderProfile
+        ? Promise.resolve(params.senderProfile)
+        : this.prisma.user.findUnique({
+            where: { id: params.replierUserId },
+            select: { username: true, displayName: true, avatar: true },
+          }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true },

@@ -214,7 +214,6 @@ describe('NotificationService — mute applied to reaction/reply fan-out', () =>
         [AUTHOR_ID],
         {
           senderId: ACTOR_ID,
-          senderUsername: 'actor',
           messageContent: 'hello @you',
           conversationId: CONV_ID,
           messageId: MSG_ID,

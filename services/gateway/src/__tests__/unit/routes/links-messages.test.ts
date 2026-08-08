@@ -95,6 +95,7 @@ const CONV_ID = '507f1f77bcf86cd799439022';
 const PART_ID = '507f1f77bcf86cd799439033';
 const LINK_DB_ID = '507f1f77bcf86cd799439011';
 const MSG_ID = '507f1f77bcf86cd799439044';
+const PEER_USER_ID = '507f1f77bcf86cd799439055';
 const SESSION_TOKEN = 'anon_session_token';
 
 const mockShareLink = {
@@ -146,15 +147,38 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(mockAnonParticipant),
+      // Éventail de notifications : résolution de l'identité de l'expéditeur.
+      findUnique: jest.fn<any>().mockResolvedValue({
+        userId: null, displayName: 'anon', avatar: null,
+      }),
+    },
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue({
+        username: 'alice', displayName: 'Alice', avatar: null,
+      }),
     },
     message: {
       create: jest.fn<any>().mockResolvedValue(mockMessage),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue(undefined),
+      findUnique: jest.fn<any>().mockResolvedValue({
+        title: 'Test', type: 'group', participants: [{ userId: PEER_USER_ID }],
+      }),
     },
+    messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
     ...overrides,
   } as any;
+}
+
+function makeNotificationService() {
+  return {
+    createReplyNotification: jest.fn<any>().mockResolvedValue(null),
+    createMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
+    createMessageNotification: jest.fn<any>().mockResolvedValue(null),
+  };
 }
 
 function makeTranslationService() {
@@ -194,6 +218,7 @@ async function buildApp(opts: {
   socketIOHandler?: any;
   authContext?: any;
   translationService?: any;
+  notificationService?: any;
 } = {}): Promise<FastifyInstance> {
   const ctx = opts.authContext ?? mockAuthContext;
   mockAuthMiddleware.mockImplementation(async (req: any) => {
@@ -206,6 +231,10 @@ async function buildApp(opts: {
   app.decorate(
     'translationService',
     opts.translationService === null ? undefined : opts.translationService ?? makeTranslationService()
+  );
+  app.decorate(
+    'notificationService',
+    opts.notificationService === null ? undefined : opts.notificationService ?? makeNotificationService()
   );
   await registerMessageRoutes(app);
   await app.ready();
@@ -523,6 +552,86 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
   });
 });
 
+// Le badge, la room et la file hors ligne ne parlent qu'à un client OUVERT.
+// Un destinataire qui n'a pas l'application au premier plan n'apprend
+// l'existence du message que par une notification — push APNs/FCM, événement
+// in-app, ligne `Notification`. Le chemin de lien contournant
+// `MessagingService.handleMessage`, donc `MessageProcessor` en entier, aucune
+// des trois ne partait : silence complet, pas dégradation.
+describe('POST /links/:id/messages — anonymous: notification fan-out', () => {
+  let app: FastifyInstance;
+  let notificationService: ReturnType<typeof makeNotificationService>;
+
+  beforeAll(async () => {
+    notificationService = makeNotificationService();
+    app = await buildApp({ socketIOHandler: makeSocketIOHandler(true), notificationService });
+    await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('notifies every registered recipient of the conversation', () => {
+    expect(notificationService.createMessageNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientUserId: PEER_USER_ID,
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+      })
+    );
+  });
+
+  // L'expéditeur d'un lien de partage est ANONYME : il n'a pas de ligne `User`.
+  // Sans profil pré-résolu, `createMessageNotification` recharge l'expéditeur,
+  // ne trouve rien et abandonne — c'est exactement ce qui faisait taire tout
+  // l'éventail pour cette population.
+  it('names the anonymous author from its participant profile', () => {
+    const params = notificationService.createMessageNotification.mock.calls[0][0] as any;
+    expect(params.senderId).toBe(PART_ID);
+    expect(params.senderProfile).toEqual({ username: 'anon', displayName: 'anon', avatar: null });
+  });
+});
+
+describe('POST /links/:id/messages — anonymous: notification failures never reach the sender', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    const notificationService = makeNotificationService();
+    notificationService.createMessageNotification.mockRejectedValue(new Error('APNs down'));
+    app = await buildApp({ socketIOHandler: makeSocketIOHandler(true), notificationService });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('still returns 201 when the fan-out throws', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+    expect(res.statusCode).toBe(201);
+  });
+});
+
+describe('POST /links/:id/messages — anonymous: no notification service wired', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = await buildApp({ socketIOHandler: makeSocketIOHandler(true), notificationService: null });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('still returns 201', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+    expect(res.statusCode).toBe(201);
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: ZodError catch', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });
@@ -744,6 +853,40 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
       conversationId: CONV_ID,
       senderId: PART_ID,
     });
+  });
+});
+
+// Le jumeau authentifié devait le même silence à ses destinataires : aucun
+// push, aucune notification in-app, aucune ligne `Notification`. Ici
+// l'expéditeur EST un utilisateur inscrit — l'acteur vient de sa ligne `User`.
+describe('POST /links/:id/messages/auth — notification fan-out', () => {
+  let app: FastifyInstance;
+  let notificationService: ReturnType<typeof makeNotificationService>;
+
+  beforeAll(async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      userId: USER_ID, displayName: 'Alice', avatar: null,
+    });
+    notificationService = makeNotificationService();
+    app = await buildApp({ prisma, socketIOHandler: makeSocketIOHandler(true), notificationService });
+    await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
+    await flushPostSaveEffects();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('notifies every registered recipient, with the author resolved to their user', () => {
+    expect(notificationService.createMessageNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientUserId: PEER_USER_ID,
+        senderId: USER_ID,
+        senderProfile: { username: 'alice', displayName: 'Alice', avatar: null },
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+      })
+    );
   });
 });
 

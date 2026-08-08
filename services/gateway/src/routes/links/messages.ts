@@ -14,6 +14,7 @@ import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/locati
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
+import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -327,6 +328,24 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
       });
 
+      // Ce que ce message doit à ses destinataires quand ils ne REGARDENT pas :
+      // la notification. La room, la file hors ligne et la pastille ne parlent
+      // qu'à un client ouvert ; un destinataire qui n'a pas l'application au
+      // premier plan n'apprend l'existence du message que par un push APNs/FCM.
+      // Ce chemin contournant `MessageProcessor`, rien d'autre ne l'enverra.
+      // Fire-and-forget avec `.catch` explicite : un push raté ne doit ni
+      // allonger le 201 ni le transformer en 500, et une promesse rejetée sans
+      // handler tue le processus sous Node 22 (`--unhandled-rejections=throw`).
+      void notifyMessageRecipients({
+        prisma: fastify.prisma,
+        notificationService: fastify.notificationService,
+        message,
+        senderParticipantId: anonymousParticipant.id,
+        conversationId: participantShareLink.conversationId,
+        processedContent: message.content,
+        onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
+      }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
+
       // Émettre vers les DEUX audiences (room live + file hors ligne) — voir
       // `broadcastLinkMessage`. Même raison : rien d'autre ne rejouera ce
       // message à un participant déconnecté.
@@ -573,6 +592,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         originalLanguage,
         onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
       });
+
+      // Même éventail de notifications que le jumeau anonyme, pour la même
+      // raison : ce chemin contourne `MessageProcessor`, donc rien d'autre
+      // n'enverra le moindre push à un destinataire qui ne regarde pas.
+      void notifyMessageRecipients({
+        prisma: fastify.prisma,
+        notificationService: fastify.notificationService,
+        message,
+        senderParticipantId: participant.id,
+        conversationId: shareLink.conversationId,
+        processedContent: message.content,
+        onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
+      }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
 
       // Même diffuseur unique que le jumeau anonyme : les deux routes servent la
       // même conversation aux mêmes participants, une seule des deux couvrant
