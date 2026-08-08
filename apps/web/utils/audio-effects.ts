@@ -266,11 +266,36 @@ export class VoiceCoderProcessor implements AudioEffectProcessor {
     }
   }
 
+  /**
+   * Tracks whether THIS effect is currently part of the active audio graph.
+   * `disconnect()` alone can't be that signal: `rebuildAudioGraph()` calls it
+   * on every processor on EVERY effect toggle (including toggling a
+   * *different* effect), not only when voice-coder itself is turned off. Left
+   * unguarded, the FFT pitch-detection rAF loop kept running indefinitely
+   * after the user toggled voice-coder off — continuous analyser reads +
+   * pitch-detection math with no audible effect, pure CPU/battery waste for
+   * the rest of the call. The hook calls this with the effect's own enabled
+   * state after every rebuild.
+   */
+  setActive(active: boolean): void {
+    if (active) {
+      if (this.animationFrame === null) {
+        this.startPitchDetection();
+      }
+    } else {
+      this.stopPitchDetection();
+    }
+  }
+
   connect(destination: Tone.ToneAudioNode | AudioNode): void {
     this.outputNode.connect(destination as any);
   }
 
   disconnect(): void {
+    // Leaves no dangling background work behind: whoever reconnects this
+    // processor (via setActive(true)) gets a fresh detection loop rather than
+    // inheriting one that silently kept running underneath a torn-down graph.
+    this.stopPitchDetection();
     this.outputNode.disconnect();
   }
 
