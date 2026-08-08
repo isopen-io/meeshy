@@ -26,6 +26,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
+import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -1188,21 +1189,21 @@ export class MessageHandler {
       // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
       // `broadcastPayload` (same one peers receive live) so a replayed
       // message never leaks the sender's local optimistic id to another user.
-      if (this.deliveryQueue) {
-        for (const p of sharedParticipants) {
-          // Queue key mirrors the presence key convention: userId for
-          // registered users, participant id for anonymous (connectedUsers
-          // and ROOMS.user use the same key on the drain side).
-          const queueKey = p.userId ?? p.id;
-          if (this._isSender(p, message.senderId) || this.connectedUsers.has(queueKey)) continue;
-          this.deliveryQueue.enqueue(queueKey, {
-            messageId: message.id,
-            conversationId: normalizedId,
-            payload: broadcastPayload,
-            enqueuedAt: new Date().toISOString(),
-          }).catch((err) => handlerLogger.warn('Failed to enqueue message for offline user', { userId: queueKey, error: err }));
+      // Sender exclusion goes through BOTH identities, reproducing `_isSender`:
+      // this path's `senderId` is a Participant.id on the REST/ZMQ transport and
+      // a User.id on the WS transport, and the two id spaces never collide.
+      await enqueueForOfflineParticipants(
+        { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+        {
+          conversationId: normalizedId,
+          actorParticipantId: message.senderId,
+          actorUserId: message.senderId,
+          eventType: 'new',
+          messageId: message.id,
+          payload: broadcastPayload,
+          participants: sharedParticipants,
         }
-      }
+      );
 
       // Mettre à jour unread counts (re-uses the participant list already fetched above)
       await this._updateUnreadCounts(message, normalizedId, sharedParticipants);
@@ -1308,26 +1309,10 @@ export class MessageHandler {
     messageId: string,
     payload: Record<string, unknown>
   ): Promise<void> {
-    if (!this.deliveryQueue) return;
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true }
-      });
-      for (const p of participants) {
-        const queueKey = p.userId ?? p.id;
-        if (p.id === senderParticipantId || this.connectedUsers.has(queueKey)) continue;
-        this.deliveryQueue.enqueue(queueKey, {
-          messageId,
-          conversationId,
-          payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-        }).catch((err) => handlerLogger.warn('Failed to enqueue offline event', { userId: queueKey, eventType, error: err }));
-      }
-    } catch (err) {
-      handlerLogger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType, error: err });
-    }
+    await enqueueForOfflineParticipants(
+      { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+      { conversationId, actorParticipantId: senderParticipantId, eventType, messageId, payload }
+    );
   }
 
   /**

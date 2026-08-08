@@ -2077,6 +2077,24 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_UNPINNED, { messageId: 'msg-pin' });
     });
 
+    // A share-link message is a CREATION, but it is not `message:new`: the two
+    // are different wire events with different payload shapes, and a link
+    // message replayed as `message:new` would hand the client a `{ message }`
+    // envelope where it expects the message object itself.
+    it('routes link-message entries to LINK_MESSAGE_NEW, not MESSAGE_NEW', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { message: { id: 'msg-link', conversationId: 'conv-link' } }, eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-link', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
+        message: { id: 'msg-link', conversationId: 'conv-link' },
+      });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
     it('drains an anonymous identity (participant-id key) without emitting delivery receipts', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([

@@ -51,6 +51,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: { LINK_MESSAGE_NEW: 'link:message-new' },
+  ROOMS: { conversation: (id: string) => `conversation:${id}` },
 }));
 
 // Controllable parse mock
@@ -144,10 +145,21 @@ function makePrisma(overrides: Record<string, any> = {}) {
 }
 
 function makeSocketIOHandler(hasManager = false) {
-  if (!hasManager) return { getManager: () => null, to: jest.fn(), emit: jest.fn() };
+  if (!hasManager) {
+    return { getManager: () => null, to: jest.fn(), emit: jest.fn(), enqueueOfflineLinkMessage: jest.fn() };
+  }
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
-  return { getManager: () => ({ getIO: () => ({ to }) }), to, emit };
+  // The manager's offline-queue surface is part of what a link message send
+  // must exercise: the room emit only reaches CONNECTED sockets, so without
+  // this second call an offline participant never learns the message exists.
+  const enqueueOfflineLinkMessage = jest.fn<any>().mockResolvedValue(undefined);
+  return {
+    getManager: () => ({ getIO: () => ({ to }), enqueueOfflineLinkMessage }),
+    to,
+    emit,
+    enqueueOfflineLinkMessage,
+  };
 }
 
 async function buildApp(opts: {
@@ -439,6 +451,30 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
     const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
     expect(payload.message.senderId).toBe(PART_ID);
   });
+
+  // La room ne contient que des sockets CONNECTÉS. Sans cette seconde audience,
+  // un participant hors ligne à cet instant n'apprend jamais l'existence du
+  // message : `_drainPendingMessages` n'a rien à rejouer à sa reconnexion et le
+  // client web ne refetch pas (`staleTime: Infinity`).
+  it('queues the message for participants who are offline right now', () => {
+    expect(socketIOHandler.enqueueOfflineLinkMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONV_ID,
+        actorParticipantId: PART_ID,
+        messageId: MSG_ID,
+      })
+    );
+  });
+
+  // Le rejeu doit livrer EXACTEMENT ce que les pairs connectés ont reçu : même
+  // événement, même charge utile débarrassée du `clientMessageId`. Un rejeu
+  // porteur du cid fuiterait l'id optimiste de l'auteur chez un tiers.
+  it('queues the same peer payload the live room received, cid stripped', () => {
+    const [, live] = socketIOHandler.emit.mock.calls[0] as [string, unknown];
+    const [queued] = socketIOHandler.enqueueOfflineLinkMessage.mock.calls[0] as [{ payload: unknown }];
+    expect(queued.payload).toEqual(live);
+    expect((queued.payload as { message: Record<string, unknown> }).message).not.toHaveProperty('clientMessageId');
+  });
 });
 
 describe('POST /links/:id/messages — anonymous: ZodError catch', () => {
@@ -639,6 +675,20 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
     const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
     expect(payload.message.conversationId).toBe(CONV_ID);
     expect(payload.message.senderId).toBe(PART_ID);
+  });
+
+  // Même garantie hors ligne que le jumeau anonyme : les deux routes servent la
+  // même conversation aux mêmes participants, une seule des deux couvrant les
+  // pairs déconnectés serait exactement l'asymétrie que le point unique existe
+  // pour rendre inécrivable.
+  it('queues the message for participants who are offline right now', () => {
+    expect(socketIOHandler.enqueueOfflineLinkMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONV_ID,
+        actorParticipantId: PART_ID,
+        messageId: MSG_ID,
+      })
+    );
   });
 });
 
