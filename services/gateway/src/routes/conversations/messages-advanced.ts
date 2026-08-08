@@ -17,6 +17,8 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
+import { processEditedContentLinks } from '../../services/messaging/messageLinks';
+import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
@@ -207,29 +209,18 @@ export function registerMessagesAdvancedRoutes(
         return sendBadRequest(reply, 'Message content cannot be empty');
       }
 
-      // ÉTAPE: Traiter les liens [[url]] et <url> AVANT de sauvegarder le message
-      let processedContent = content.trim();
-        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
-
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
-        const { processedContent: contentWithLinks, trackingLinks } = await trackingLinkService.processExplicitLinksInContent({
-          content: content.trim(),
-          conversationId: conversationId,
-          messageId: messageId,
-          createdBy: userId
-        });
-        processedContent = contentWithLinks;
-        logger.info(`Edit - Processed content after links processedContent=${processedContent}`);
-
-        if (trackingLinks.length > 0) {
-          logger.info(`✅ ${trackingLinks.length} tracking link(s) created/reused in edited message`);
-        }
-      } catch (linkError) {
-        logger.error('Error processing tracking links in edit', linkError);
-        // Continue with unprocessed content if tracking links fail
-      }
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture. Le corps vivait ici, déplié — donc absent du chemin socket,
+      // qui est pourtant le transport d'édition PRIMAIRE et écrivait le texte
+      // brut. Un seul point d'appel, désormais, pour les deux transports.
+      const processedContent = await processEditedContentLinks({
+        trackingLinkService,
+        content: content.trim(),
+        conversationId,
+        messageId,
+        editorUserId: userId,
+        onError: (err) => logger.error('Error processing tracking links in edit', err),
+      });
 
       // Mettre à jour le message avec le contenu traité
       const updatedMessage = await prisma.message.update({
@@ -318,6 +309,21 @@ export function registerMessagesAdvancedRoutes(
       if (editedMentions.reconciled) {
         updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
       }
+
+      // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL. La diffusion
+      // qui suit ne fan qu'à `conversation:<id>` : quelqu'un que cette édition
+      // vient de nommer n'y est pas forcément. Ce transport est PRIMAIRE pour
+      // iOS (`PUT /messages/:id`) et n'émettait rien du tout.
+      emitMentionCreated({
+        io: socketIOHandler?.getManager()?.getIO(),
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId,
+        conversationId,
+        editorUserId: userId,
+        content: processedContent,
+        timestamp: updatedMessage.editedAt ?? new Date(),
+        onError: (err) => logger.error('Edit - mention:created fanout failed', err),
+      });
 
       // Déclencher la retraduction automatique du message modifié
       try {

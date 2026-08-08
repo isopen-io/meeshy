@@ -56,6 +56,9 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
+import { processEditedContentLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
+import { emitMentionCreated } from '../emitMentionCreated';
+import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
@@ -96,6 +99,14 @@ export interface MessageHandlerDependencies {
    * « rien établi »).
    */
   mentionService?: MentionResolver | null;
+  /**
+   * Optionnel pour le seul bénéfice des tests : sans injection, le handler en
+   * construit un sur son propre `prisma`. Le laisser à la charge du site de
+   * construction rejouerait le défaut qu'on corrige — un écrivain qui oublie
+   * de câbler, et l'édition socket réécrit du texte brut sans que rien ne le
+   * dise.
+   */
+  trackingLinkService?: ExplicitLinkProcessor | null;
 }
 
 export class MessageHandler {
@@ -114,6 +125,7 @@ export class MessageHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private deliveryQueue: RedisDeliveryQueue | null;
   private mentionService: MentionResolver | null;
+  private trackingLinkService: ExplicitLinkProcessor;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -153,6 +165,7 @@ export class MessageHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.deliveryQueue = deps.deliveryQueue ?? null;
     this.mentionService = deps.mentionService ?? null;
+    this.trackingLinkService = deps.trackingLinkService ?? new TrackingLinkService(deps.prisma);
   }
 
   /**
@@ -694,6 +707,21 @@ export class MessageHandler {
         return;
       }
 
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture, exactement comme à l'envoi. Ce chemin — le transport
+      // d'édition PRIMAIRE, celui qu'emploie le web — écrivait le texte BRUT :
+      // les crochets restaient en dur dans le message, pour toujours, alors que
+      // le même texte envoyé produit un lien traçable. Le contenu traité est
+      // ensuite le SEUL en circulation : base, mentions, retraduction, payload.
+      const editedContent = await processEditedContentLinks({
+        trackingLinkService: this.trackingLinkService,
+        content: validated.content.trim(),
+        conversationId: message.conversationId,
+        messageId: validated.messageId,
+        editorUserId: userId,
+        onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
+      });
+
       // Optimistic-concurrency guard: only write while the message is still
       // non-deleted. A `message:delete` landing between the read above and
       // this write would otherwise resurrect the row with edited content
@@ -702,7 +730,6 @@ export class MessageHandler {
       // already removed. Mirrors the guarded `updateMany` used by
       // handleMessageDelete's lastMessageAt recompute.
       const editedAt = new Date();
-      const editedContent = validated.content.trim();
       const editResult = await this.prisma.message.updateMany({
         where: { id: validated.messageId, deletedAt: null },
         data: {
@@ -748,7 +775,7 @@ export class MessageHandler {
       // Trigger async retranslation — fire-and-forget, non-blocking
       const retranslationPayload = {
         id: validated.messageId,
-        content: validated.content.trim(),
+        content: editedContent,
         originalLanguage: message.originalLanguage,
         conversationId: message.conversationId,
         senderId: message.senderId,
@@ -761,18 +788,16 @@ export class MessageHandler {
       // ROOMS.conversation(id), et `message:edited` ne fan que là. Parité avec
       // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
-      // La garde d'auto-mention reste : on ne se notifie pas soi-même.
-      for (const targetUserId of editedMentions.newlyMentionedUserIds) {
-        if (targetUserId === userId) continue;
-        this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
-          messageId: message.id,
-          conversationId: message.conversationId,
-          senderId: userId,
-          mentionedUserId: targetUserId,
-          content: editedContent,
-          timestamp: editedAt.toISOString(),
-        });
-      }
+      emitMentionCreated({
+        io: this.io,
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId: message.id,
+        conversationId: message.conversationId,
+        editorUserId: userId,
+        content: editedContent,
+        timestamp: editedAt,
+        onError: (err) => handlerLogger.warn('mention:created fanout (edit) failed', { messageId: validated.messageId, error: err }),
+      });
 
       // Attachments are unaffected by a content edit — carry over the ones
       // fetched pre-edit so clients that overwrite their cached message with
