@@ -287,6 +287,98 @@ export async function replaceMessageMentions(params: MentionResolutionParams): P
   }
 }
 
+/**
+ * Ce qu'une édition doit aux gens qu'elle vient de nommer : réconcilier les
+ * lignes `Mention` ET prévenir les seuls entrants.
+ *
+ * Les deux moitiés vont ensemble et n'ont de sens qu'ensemble —
+ * `newlyMentionedUserIds` n'existe que pour être notifié, et c'est la seule
+ * chose que `replaceMessageMentions` produit sans la consommer. Les laisser
+ * séparées, c'est ce qui a permis au chemin socket d'écrire le contenu édité
+ * sans jamais toucher une mention : `message:edit` est le transport d'édition
+ * PRIMAIRE, et il était le cinquième écrivain de la famille — le seul à n'en
+ * appeler aucune des deux. Éditer « salut @alice » en « salut @bob » par socket
+ * laissait Alice mentionnée en base et ne nommait jamais Bob, ni dans son inbox
+ * `/mentions`, ni par notification, ni dans le `validatedMentions` que le web
+ * relit pour surligner.
+ *
+ * Un seul point d'appel public, donc, plutôt que deux appels que le prochain
+ * écrivain aurait la même occasion d'oublier à moitié.
+ */
+export async function reconcileEditedMentions(params: EditedMentionParams): Promise<ResolvedMentions> {
+  const resolved = await replaceMessageMentions(params);
+  await notifyNewlyMentioned(params, resolved.newlyMentionedUserIds);
+  return resolved;
+}
+
+/**
+ * Le seul lot qu'un push doit atteindre après une édition : les ENTRANTS.
+ *
+ * Les destinataires du premier envoi ont déjà été prévenus ; renotifier
+ * l'ensemble complet ferait de dix corrections de frappe dix pushes pour
+ * quelqu'un nommé une seule fois.
+ *
+ * Best-effort, comme tout le reste de l'unité : une notification perdue ne doit
+ * pas défaire une réconciliation réussie. L'appel est donc APRÈS l'écriture, et
+ * son échec ne remonte pas — `reconciled` continue de décrire la base.
+ */
+async function notifyNewlyMentioned(
+  params: EditedMentionParams,
+  newlyMentionedUserIds: readonly string[]
+): Promise<void> {
+  const { prisma, notificationService, message, content, editorUserId, onError } = params;
+  if (newlyMentionedUserIds.length === 0 || !notificationService) return;
+
+  try {
+    const [sender, conversation] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: editorUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      prisma.conversation.findUnique({
+        where: { id: message.conversationId },
+        select: { participants: { where: { isActive: true }, select: { userId: true } } },
+      }),
+    ]);
+    if (!sender || !conversation) return;
+
+    await notificationService.createMentionNotificationsBatch(
+      [...newlyMentionedUserIds],
+      {
+        senderId: editorUserId,
+        senderProfile: sender,
+        messageContent: content,
+        conversationId: message.conversationId,
+        messageId: message.id,
+      },
+      conversation.participants
+        .map((participant) => participant.userId)
+        .filter((userId): userId is string => userId !== null)
+    );
+  } catch (error) {
+    onError?.(error);
+  }
+}
+
+/**
+ * Le seul créateur que la notification de mention appelle, en structural pour
+ * la même raison que `MentionResolver` : le double de test reste trivial et
+ * l'unité n'importe pas `NotificationService` en entier.
+ */
+export interface MentionNotifier {
+  createMentionNotificationsBatch(
+    mentionedUserIds: string[],
+    commonData: {
+      senderId: string;
+      senderProfile?: { username: string; displayName: string | null; avatar: string | null };
+      messageContent: string;
+      conversationId: string;
+      messageId: string;
+    },
+    memberIds: string[]
+  ): Promise<unknown>;
+}
+
 interface MentionResolutionParams {
   prisma: MentionPrisma;
   mentionService: MentionResolver | null | undefined;
@@ -295,6 +387,18 @@ interface MentionResolutionParams {
   /** Mentions déjà désignées par le client, en `User.id` — court-circuite l'extraction. */
   explicitMentionedUserIds?: readonly string[];
   onError?: (error: unknown) => void;
+}
+
+export interface EditedMentionParams extends MentionResolutionParams {
+  /** La liste des membres à notifier se lit sur la conversation. */
+  prisma: MentionPrisma & Pick<PrismaClient, 'conversation'>;
+  notificationService: MentionNotifier | null | undefined;
+  /**
+   * L'AUTEUR de l'édition, en `User.id`. C'est lui que la notification nomme,
+   * et c'est contre lui que `createMentionNotificationsBatch` filtre l'auto-
+   * mention — pas contre `message.senderId`, qui est un `Participant.id`.
+   */
+  editorUserId: string;
 }
 
 /**

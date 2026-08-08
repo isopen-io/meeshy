@@ -16,7 +16,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
-import { replaceMessageMentions } from '../../services/messaging/messageMentions';
+import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
@@ -295,11 +295,20 @@ export function registerMessagesAdvancedRoutes(
       // Éditer un message contenant `@John Doe` détruisait donc la mention que
       // la création avait validée. Deux extracteurs pour un même champ ne
       // peuvent pas rester d'accord ; il n'y en a plus qu'un.
-      const editedMentions = await replaceMessageMentions({
+      //
+      // La notification, elle, ne concerne QUE les ENTRANTS : les destinataires
+      // du premier envoi ont déjà été prévenus, et renotifier l'ensemble
+      // complet ferait de dix corrections de frappe dix pushes pour quelqu'un
+      // déjà nommé. Elle vivait ici, dépliée — donc absente du chemin socket,
+      // qui ne réconciliait rien du tout ; elle est désormais soudée à la
+      // réconciliation, dont elle consomme le seul produit non consommé.
+      const editedMentions = await reconcileEditedMentions({
         prisma,
         mentionService: fastify.mentionService,
+        notificationService: fastify.notificationService,
         message: { id: messageId, conversationId, senderId: existingMessage.senderId },
         content: processedContent,
+        editorUserId: userId,
         onError: (err) => logger.error('Edit - Error processing mentions', err)
       });
       // Recopier `validatedUsernames` SANS ce garde-fou rejouerait dans la
@@ -308,54 +317,6 @@ export function registerMessagesAdvancedRoutes(
       // porte déjà la valeur persistée, qui est la bonne.
       if (editedMentions.reconciled) {
         updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
-      }
-
-      // La notification de mention, elle, ne concerne QUE l'édition : pas
-      // d'éventail « réponse » ni « message régulier » — les destinataires ont
-      // déjà été prévenus à l'envoi. Seul un NOUVEAU mentionné apprend quelque
-      // chose : renotifier l'ensemble complet ferait de dix corrections de
-      // frappe dix pushes pour quelqu'un déjà nommé au premier envoi.
-      if (editedMentions.newlyMentionedUserIds.length > 0 && fastify.notificationService) {
-        try {
-          const [sender, conversationInfo] = await Promise.all([
-            prisma.user.findUnique({
-              where: { id: userId },
-              select: { username: true, displayName: true, avatar: true }
-            }),
-            prisma.conversation.findUnique({
-              where: { id: conversationId },
-              select: {
-                title: true,
-                type: true,
-                participants: { where: { isActive: true }, select: { userId: true } }
-              }
-            })
-          ]);
-
-          if (sender && conversationInfo) {
-            const memberIds = conversationInfo.participants
-              .map((m: { userId: string | null }) => m.userId)
-              .filter(Boolean);
-
-            await fastify.notificationService.createMentionNotificationsBatch(
-              [...editedMentions.newlyMentionedUserIds],
-              {
-                senderId: userId,
-                senderProfile: {
-                  username: sender.username,
-                  displayName: sender.displayName,
-                  avatar: sender.avatar,
-                },
-                messageContent: processedContent,
-                conversationId,
-                messageId
-              },
-              memberIds
-            );
-          }
-        } catch (notifError) {
-          logger.error('Erreur notifications mentions', notifError);
-        }
       }
 
       // Déclencher la retraduction automatique du message modifié

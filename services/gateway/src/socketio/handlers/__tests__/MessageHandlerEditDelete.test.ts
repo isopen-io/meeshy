@@ -127,13 +127,34 @@ function makeSocket(overrides: Partial<Socket> = {}): jest.Mocked<Socket> {
   } as unknown as jest.Mocked<Socket>;
 }
 
+/**
+ * Un double d'émission PAR SALON. Le précédent en partageait un seul pour tous
+ * les salons : « émis à `user:bob` » et « émis à `conversation:X` » y étaient
+ * indistinguables, donc toute assertion de ciblage passait par accident — y
+ * compris celles qui nommaient le mauvais salon.
+ */
 function makeIO(): jest.Mocked<SocketIOServer> {
-  const mockEmit = jest.fn();
-  const mockToResult = { emit: mockEmit, to: jest.fn().mockReturnThis(), except: jest.fn().mockReturnThis() };
+  const byRoom = new Map<string, { emit: jest.Mock; to: jest.Mock; except: jest.Mock }>();
   return {
-    to: jest.fn(() => mockToResult),
+    to: jest.fn((room: string) => {
+      const known = byRoom.get(room);
+      if (known) return known;
+      const target = { emit: jest.fn(), to: jest.fn(), except: jest.fn() };
+      target.to.mockReturnValue(target);
+      target.except.mockReturnValue(target);
+      byRoom.set(room, target);
+      return target;
+    }),
     sockets: { adapter: { rooms: new Map() } },
   } as unknown as jest.Mocked<SocketIOServer>;
+}
+
+/** Les `(event, payload)` réellement émis vers CE salon, et eux seuls. */
+function emitsTo(io: SocketIOServer, room: string): any[][] {
+  const ioToMock = io.to as unknown as jest.Mock<any>;
+  const call = ioToMock.mock.calls.findIndex((args: any[]) => args[0] === room);
+  if (call === -1) return [];
+  return (ioToMock.mock.results[call]?.value as any).emit.mock.calls;
 }
 
 function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<PrismaClient> {
@@ -156,6 +177,10 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
     user: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+    },
+    mention: {
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     post: { findUnique: jest.fn() },
     ...overrides,
@@ -468,13 +493,11 @@ describe('MessageHandler — handleMessageEdit', () => {
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
 
-    const ioToMock = (deps.io.to as jest.Mock<any>);
-    expect(ioToMock).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
-    const mockToResult = ioToMock.mock.results[0]?.value as any;
-    expect(mockToResult.emit).toHaveBeenCalledWith('message:edited', expect.objectContaining({
-      id: VALID_MSG_ID,
-      conversationId: VALID_CONV_ID,
-    }));
+    expect(deps.io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
+      'message:edited',
+      expect.objectContaining({ id: VALID_MSG_ID, conversationId: VALID_CONV_ID }),
+    ]);
   });
 
   it('fans conversation:updated to participant user rooms so list-screen viewers refresh the preview on edit', async () => {
@@ -488,15 +511,14 @@ describe('MessageHandler — handleMessageEdit', () => {
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
 
-    const ioToMock = (deps.io.to as jest.Mock<any>);
-    const targetedRooms = ioToMock.mock.calls.map((c: any[]) => c[0]);
-    expect(targetedRooms).toContain(`user:${USER_ID}`);
-    expect(targetedRooms).toContain('user:user-B');
-    const mockToResult = ioToMock.mock.results[0]?.value as any;
-    expect(mockToResult.emit).toHaveBeenCalledWith(
-      'conversation:updated',
-      expect.objectContaining({ conversationId: VALID_CONV_ID, lastMessageId: VALID_MSG_ID }),
-    );
+    // `conversation:updated` part vers les salons PERSONNELS, jamais vers le
+    // salon de conversation — c'est tout l'intérêt de l'éventail.
+    const preview = ['conversation:updated', expect.objectContaining({
+      conversationId: VALID_CONV_ID, lastMessageId: VALID_MSG_ID,
+    })];
+    expect(emitsTo(deps.io, `user:${USER_ID}`)).toContainEqual(preview);
+    expect(emitsTo(deps.io, 'user:user-B')).toContainEqual(preview);
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).not.toContainEqual(preview);
   });
 
   it('calls callback with success and messageId on success', async () => {
@@ -603,6 +625,226 @@ describe('MessageHandler — handleMessageEdit', () => {
       conversationId: VALID_CONV_ID,
       eventType: 'edited',
     }));
+  });
+});
+
+// ── handleMessageEdit : les gens que l'édition NOMME ────────────────────────
+//
+// `message:edit` est le transport d'édition PRIMAIRE, et il était le seul
+// écrivain de la famille à ne toucher AUCUNE mention : ni ligne `Mention`, ni
+// `validatedMentions`, ni notification. Éditer « salut @alice » en
+// « salut @bob » laissait Alice mentionnée en base et ne nommait jamais Bob.
+
+describe('MessageHandler — handleMessageEdit et les mentions', () => {
+  let handler: MessageHandler;
+  let deps: ReturnType<typeof makeDeps>;
+  let socket: jest.Mocked<Socket>;
+  let callback: jest.Mock<any>;
+  let notificationService: { createMentionNotificationsBatch: jest.Mock<any> };
+
+  function makeMentionService(overrides: Record<string, any> = {}) {
+    return {
+      extractMentionsWithParticipants: jest.fn<any>().mockReturnValue(['bob']),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(
+        new Map([['bob', { id: 'u-bob', username: 'bob' }]])
+      ),
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: ['u-bob'] }),
+      createMentions: jest.fn<any>().mockResolvedValue(undefined),
+      ...overrides,
+    } as any;
+  }
+
+  const emittedTo = (room: string) => emitsTo(deps.io, room);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
+    mockValidateSocketEvent.mockReturnValue({
+      success: true,
+      data: { messageId: VALID_MSG_ID, content: 'salut @bob' },
+    });
+    mockGetCacheStore.mockReturnValue({ get: mockCacheGet, set: mockCacheSet });
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+
+    notificationService = { createMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(1) };
+    deps = makeDeps({
+      mentionService: makeMentionService(),
+      notificationService: notificationService as any,
+    });
+    handler = new MessageHandler(deps);
+    socket = makeSocket();
+    callback = jest.fn();
+
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.mention.findMany as jest.Mock<any>).mockResolvedValue([{ mentionedUserId: 'u-alice' }]);
+    (deps.prisma.mention.deleteMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+    (deps.prisma.participant.findFirst as jest.Mock<any>).mockResolvedValue(null);
+    (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({
+      username: 'author', displayName: 'Author', avatar: null,
+    });
+    (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
+      participants: [{ userId: USER_ID }, { userId: 'u-bob' }, { userId: 'u-alice' }],
+    });
+  });
+
+  it('réconcilie les lignes Mention : le partant s’en va, l’entrant arrive', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @bob' }, callback);
+
+    expect(deps.prisma.mention.deleteMany).toHaveBeenCalledWith({
+      where: { messageId: VALID_MSG_ID, mentionedUserId: { in: ['u-alice'] } },
+    });
+    expect(deps.mentionService!.createMentions).toHaveBeenCalledWith(VALID_MSG_ID, ['u-bob']);
+  });
+
+  it('persiste validatedMentions et le porte dans le payload message:edited', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @bob' }, callback);
+
+    expect(deps.prisma.message.update).toHaveBeenCalledWith({
+      where: { id: VALID_MSG_ID },
+      data: { validatedMentions: ['bob'] },
+    });
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`)
+      .find((call) => call[0] === 'message:edited');
+    expect(edited?.[1]).toEqual(expect.objectContaining({ validatedMentions: ['bob'] }));
+  });
+
+  it('notifie le seul ENTRANT, jamais celui qui était déjà mentionné', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @bob' }, callback);
+
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      ['u-bob'],
+      expect.objectContaining({
+        senderId: USER_ID,
+        messageContent: 'salut @bob',
+        conversationId: VALID_CONV_ID,
+        messageId: VALID_MSG_ID,
+      }),
+      [USER_ID, 'u-bob', 'u-alice']
+    );
+  });
+
+  // `message:edited` ne fan qu'au salon de la conversation : quelqu'un que
+  // l'édition vient de nommer n'y est pas forcément.
+  it('émet mention:created dans le salon PERSONNEL de l’entrant', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @bob' }, callback);
+
+    const targetedRooms = (deps.io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]);
+    expect(targetedRooms).toContain('user:u-bob');
+    const mention = emittedTo('user:u-bob').find((call) => call[0] === 'mention:created');
+    expect(mention?.[1]).toEqual(expect.objectContaining({
+      messageId: VALID_MSG_ID,
+      conversationId: VALID_CONV_ID,
+      mentionedUserId: 'u-bob',
+      senderId: USER_ID,
+      content: 'salut @bob',
+    }));
+  });
+
+  it('ne se notifie pas soi-même quand l’auteur se nomme dans son édition', async () => {
+    deps = makeDeps({
+      mentionService: makeMentionService({
+        extractMentionsWithParticipants: jest.fn<any>().mockReturnValue(['author']),
+        resolveUsernames: jest.fn<any>().mockResolvedValue(
+          new Map([['author', { id: USER_ID, username: 'author' }]])
+        ),
+        validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [USER_ID] }),
+      }),
+      notificationService: notificationService as any,
+    });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.mention.findMany as jest.Mock<any>).mockResolvedValue([]);
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+    (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({
+      username: 'author', displayName: 'Author', avatar: null,
+    });
+    (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
+      participants: [{ userId: USER_ID }],
+    });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @author' }, callback);
+
+    expect(emittedTo(`user:${USER_ID}`).map((call) => call[0])).not.toContain('mention:created');
+    // L'édition, elle, a bien eu lieu et a bien été diffusée.
+    expect(emittedTo(`conversation:${VALID_CONV_ID}`).map((call) => call[0])).toContain('message:edited');
+  });
+
+  // Préserver une mention périmée vaut mieux que détruire une mention vivante :
+  // la première surligne quelqu'un de trop le temps d'une édition, la seconde
+  // ne revient jamais. Le payload doit taire le champ pour la même raison —
+  // les clients écrasent leur cache avec `{ ...cached, ...editedPayload }`.
+  it('n’efface RIEN — ni en base, ni dans le payload — quand la résolution échoue', async () => {
+    deps = makeDeps({
+      mentionService: makeMentionService({
+        resolveUsernames: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+      }),
+      notificationService: notificationService as any,
+    });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.mention.findMany as jest.Mock<any>).mockResolvedValue([{ mentionedUserId: 'u-alice' }]);
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @bob' }, callback);
+
+    expect(deps.prisma.mention.deleteMany).not.toHaveBeenCalled();
+    expect(deps.prisma.message.update).not.toHaveBeenCalled();
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`)
+      .find((call) => call[0] === 'message:edited');
+    expect(edited?.[1]).not.toHaveProperty('validatedMentions');
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  // Un texte édité qui ne nomme plus personne DOIT effacer le champ : c'est un
+  // vide ÉTABLI, pas un vide subi.
+  it('efface validatedMentions quand le texte édité ne nomme plus personne', async () => {
+    (deps.mentionService!.extractMentionsWithParticipants as jest.Mock<any>).mockReturnValue([]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'plus personne' }, callback);
+
+    expect(deps.prisma.mention.deleteMany).toHaveBeenCalledWith({
+      where: { messageId: VALID_MSG_ID, mentionedUserId: { in: ['u-alice'] } },
+    });
+    expect(deps.prisma.message.update).toHaveBeenCalledWith({
+      where: { id: VALID_MSG_ID },
+      data: { validatedMentions: [] },
+    });
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`)
+      .find((call) => call[0] === 'message:edited');
+    expect(edited?.[1]).toEqual(expect.objectContaining({ validatedMentions: [] }));
+  });
+
+  it('édite normalement sans service de mentions câblé', async () => {
+    deps = makeDeps({ notificationService: notificationService as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'salut @bob' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.mention.findMany).not.toHaveBeenCalled();
+    expect(notificationService.createMentionNotificationsBatch).not.toHaveBeenCalled();
   });
 });
 
@@ -847,13 +1089,11 @@ describe('MessageHandler — handleMessageDelete', () => {
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
-    const ioToMock = (deps.io.to as jest.Mock<any>);
-    expect(ioToMock).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
-    const mockToResult = ioToMock.mock.results[0]?.value as any;
-    expect(mockToResult.emit).toHaveBeenCalledWith('message:deleted', {
-      messageId: VALID_MSG_ID,
-      conversationId: VALID_CONV_ID,
-    });
+    expect(deps.io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
+      'message:deleted',
+      { messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID },
+    ]);
   });
 
   it('deletes attachments before soft-deleting message', async () => {
