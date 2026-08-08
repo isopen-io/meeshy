@@ -16,6 +16,7 @@ import {
   type FanOutPrisma,
   type MessageNotificationTarget,
 } from './messageNotificationFanOut';
+import { resolveMessageMentions } from './messageMentions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
@@ -889,14 +890,10 @@ export class MessageProcessor {
     processedContent: string
   ): Promise<void> {
     try {
-      // 1. Gérer les mentions en DB (validation + création)
-      // Short-circuit: skip all DB work when no @ in content and no explicit mentionedUserIds.
-      // This avoids participant lookup + username resolution queries for the majority of messages.
-      const hasPotentialMentions = (data.mentionedUserIds && data.mentionedUserIds.length > 0)
-        || processedContent.includes('@');
-      const validatedMentionUserIds = hasPotentialMentions
-        ? await this.processMentionsInDB(data, message, processedContent)
-        : [];
+      // 1. Gérer les mentions en DB (validation + création). Le court-circuit
+      // « pas de `@`, pas de requête » vit dans l'unité, pas ici : c'est une
+      // garde qu'un nouvel écrivain oublierait.
+      const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {
@@ -910,62 +907,40 @@ export class MessageProcessor {
   }
 
   /**
-   * Valide et crée les mentions en base de données
+   * Valide et crée les mentions en base de données.
+   *
+   * Délègue à `resolveMessageMentions` : le corps vivait ici, `private` sous
+   * `handleMentionsAndNotifications` (elle-même `private`), donc inatteignable
+   * par tout écrivain hors de cette classe. Les deux routes de lien de partage
+   * contournent `MessagingService` en entier — un `@alice` envoyé par lien ne
+   * produisait ni ligne `Mention`, ni `validatedMentions`, ni notification de
+   * mention.
+   *
+   * L'affectation en mémoire reste ici : ce sont les émetteurs socket de CETTE
+   * classe qui relisent `message.validatedMentions` pour peupler leur payload.
    */
   private async processMentionsInDB(
     data: { senderId: string; conversationId: string; mentionedUserIds?: readonly string[] },
     message: Message,
     processedContent: string
   ): Promise<string[]> {
-    try {
-      let mentionedUserIds: string[] = [];
-      let validatedUsernames: string[] = [];
+    const { validatedUserIds, validatedUsernames } = await resolveMessageMentions({
+      prisma: this.prisma,
+      mentionService: this.mentionService,
+      message: {
+        id: message.id,
+        conversationId: data.conversationId,
+        senderId: data.senderId
+      },
+      content: processedContent,
+      explicitMentionedUserIds: data.mentionedUserIds,
+      onError: (error) => logger.error('[MessageProcessor] Error processing mentions in DB', error)
+    });
 
-      if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
-        mentionedUserIds = Array.from(data.mentionedUserIds);
-      } else {
-        const participants = await this.getConversationParticipants(data.conversationId);
-        const mentionedUsernames = this.mentionService.extractMentionsWithParticipants(processedContent, participants);
-        if (mentionedUsernames.length > 0) {
-          const userMap = await this.mentionService.resolveUsernames(mentionedUsernames);
-          mentionedUserIds = Array.from(userMap.values()).map(user => user.id);
-          validatedUsernames = Array.from(userMap.keys());
-        }
-      }
-
-      if (mentionedUserIds.length > 0) {
-        const validationResult = await this.mentionService.validateMentionPermissions(
-          data.conversationId,
-          mentionedUserIds,
-          data.senderId
-        );
-
-        if (validationResult.validUserIds.length > 0) {
-          await this.mentionService.createMentions(message.id, validationResult.validUserIds);
-
-          let finalValidatedUsernames: string[] = validatedUsernames;
-          if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
-            const users = await this.prisma.user.findMany({
-              where: { id: { in: validationResult.validUserIds } },
-              select: { username: true }
-            });
-            finalValidatedUsernames = users.map(u => u.username);
-          }
-
-          await this.prisma.message.update({
-            where: { id: message.id },
-            data: { validatedMentions: finalValidatedUsernames }
-          });
-
-          (message as any).validatedMentions = finalValidatedUsernames;
-          return validationResult.validUserIds;
-        }
-      }
-      return [];
-    } catch (error) {
-      logger.error('[MessageProcessor] Error processing mentions in DB', error);
-      return [];
+    if (validatedUsernames.length > 0) {
+      (message as any).validatedMentions = [...validatedUsernames];
     }
+    return [...validatedUserIds];
   }
 
   /**
@@ -1010,36 +985,6 @@ export class MessageProcessor {
    */
   containsLinks(content: string): boolean {
     return /https?:\/\/[^\s]+/.test(content);
-  }
-
-  /**
-   * Récupère les participants actifs d'une conversation pour la résolution des mentions.
-   */
-  private async getConversationParticipants(
-    conversationId: string
-  ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true, type: 'user' },
-        select: {
-          userId: true,
-          displayName: true,
-          user: {
-            select: { id: true, username: true, displayName: true }
-          }
-        }
-      });
-
-      return participants
-        .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user !== null)
-        .map((p) => ({
-          userId: p.user.id,
-          username: p.user.username,
-          displayName: p.user.displayName ?? p.user.username,
-        }));
-    } catch {
-      return [];
-    }
   }
 
   /**
