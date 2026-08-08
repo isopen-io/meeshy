@@ -1053,10 +1053,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       substring-CI / no-match / selected-exclusion / trim; canCreate new / known / selected / blank; submit
       exact-select / first-of-colliding / create-trimmed / blank-None / re-select-selected / create-no-match.
       **Mutation (RED proof):** forcing the exact-match lookup to `null` fails **exactly** the 3 `Select`
-      tests (21 run, 3 failed, no collateral), restored after. **Follow-up:** the app-side `TagInputField` +
-      `CategoryPickerField` composables rendering these cores, the corpus hydration (`allTags` /
-      `allCategories` cache-first + revalidate) in a conversation-options ViewModel dispatching the
-      `Create`/`append` results to the repository, and the category expand/collapse list UI.
+      tests (21 run, 3 failed, no collateral), restored after.
+      **Category picker + create wired end-to-end** (slice `category-picker-create`, 2026-08-08). The
+      "move to category" long-press action (context-menu, already reading `state.categories` cache-first
+      via `CategoryRepository.categoriesStream()`) is now a real search-and-create picker instead of a
+      flat list: a `TextField` drives `ConversationCategoryPicker.resolve(categories, currentCategoryId,
+      query)` (the pure core shipped above), rendering the filtered `displayed` rows plus a "Create …" row
+      when `canCreate`. New write path: `PreferencesApi.createCategory` (`POST
+      me/preferences/categories`, mirrors iOS `PreferenceService.createCategory`) → `CategoryRepository
+      .create(name): NetworkResult<CategoryOption>` (posts, then appends the created option straight into
+      the snapshot store with a fresh sync stamp so it's selectable immediately, no round-trip through a
+      full revalidate) → `ConversationListViewModel.createCategoryAndAssign(id, name)` (blank-name inert;
+      on success reuses `reassignCategory`'s idempotency guard to assign; on failure surfaces
+      `errorMessage`, never assigns). **+6 behavioural tests:** `CategoryRepositoryTest` +3 (create posts
+      + appends to a warm cache; create on a cold cache; API failure leaves the snapshot untouched),
+      `ConversationListViewModelTest` +3 (create-then-assign; failure surfaces the error and never
+      assigns; blank name is inert). **Mutation (RED proof):** dropping the blank-name guard fails
+      **exactly** the blank-name test (36 run, 1 failed, no collateral), restored after. **Remaining
+      follow-up:** the `TagInputField` composable + `allTags` corpus hydration + a dedicated tags write
+      path (no wire field for conversation tags yet — `ApiConversation` doesn't carry `tags`), and the
+      category expand/collapse list UI (the section splitter already groups by category; the
+      expand/collapse *toggle* affordance itself is still unbuilt).
 - [x] Create direct/group conversation via user search; add participants —
       FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
       `UserRepository.searchUsers`), multi-sélection avec chips persistants

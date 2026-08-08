@@ -11,8 +11,10 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.model.ApiCategory
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.CreateCategoryBody
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesApi
 import org.junit.Test
 
@@ -31,12 +33,21 @@ class CategoryRepositoryTest {
 
     private class FakePreferencesApi(
         var response: ApiResponse<List<ApiCategory>>,
+        var createResponse: ApiResponse<ApiCategory> = ApiResponse(success = false, error = "not stubbed"),
     ) : PreferencesApi {
         var calls: Int = 0
+        var createCalls: Int = 0
+        var lastCreateBody: CreateCategoryBody? = null
 
         override suspend fun getCategories(limit: Int?): ApiResponse<List<ApiCategory>> {
             calls++
             return response
+        }
+
+        override suspend fun createCategory(body: CreateCategoryBody): ApiResponse<ApiCategory> {
+            createCalls++
+            lastCreateBody = body
+            return createResponse
         }
 
         override suspend fun updateNotification(body: NotificationPreferenceSyncBody) =
@@ -163,5 +174,62 @@ class CategoryRepositoryTest {
             CategoryOption(id = "a", name = "Alpha", order = 2),
         )
         assertThat(api.calls).isEqualTo(1)
+    }
+
+    // ── CategoryRepository.create ────────────────────────────────────────────
+
+    @Test
+    fun `create posts the trimmed name and appends the new category to a warm cache`() = runTest {
+        val api = FakePreferencesApi(
+            response = ok(),
+            createResponse = ApiResponse(success = true, data = wire("new", "Errands", order = 3)),
+        )
+        val store = InMemoryCategorySnapshotStore(
+            initial = listOf(CategoryOption(id = "work", name = "Work", order = 0)),
+            initialSyncedAt = 1L,
+        )
+
+        val result = repository(api, store, clock = FixedClock(5_000L)).create("Errands")
+
+        assertThat(result).isEqualTo(NetworkResult.Success(CategoryOption(id = "new", name = "Errands", order = 3)))
+        assertThat(api.lastCreateBody).isEqualTo(CreateCategoryBody(name = "Errands"))
+        assertThat(store.observe().first()).containsExactly(
+            CategoryOption(id = "work", name = "Work", order = 0),
+            CategoryOption(id = "new", name = "Errands", order = 3),
+        ).inOrder()
+        assertThat(store.lastSyncedAt().first()).isEqualTo(5_000L)
+    }
+
+    @Test
+    fun `create on a cold cache persists a catalogue of just the new category`() = runTest {
+        val api = FakePreferencesApi(
+            response = ok(),
+            createResponse = ApiResponse(success = true, data = wire("first", "Trips")),
+        )
+        val store = InMemoryCategorySnapshotStore()
+
+        val result = repository(api, store, clock = FixedClock(9L)).create("Trips")
+
+        assertThat(result.getOrNull()).isEqualTo(CategoryOption(id = "first", name = "Trips", order = null))
+        assertThat(store.observe().first()).containsExactly(CategoryOption(id = "first", name = "Trips"))
+    }
+
+    @Test
+    fun `create surfaces an API failure without touching the snapshot store`() = runTest {
+        val api = FakePreferencesApi(
+            response = ok(),
+            createResponse = ApiResponse(success = false, error = "duplicate name"),
+        )
+        val store = InMemoryCategorySnapshotStore(
+            initial = listOf(CategoryOption(id = "work", name = "Work", order = 0)),
+            initialSyncedAt = 1L,
+        )
+
+        val result = repository(api, store).create("Work")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("duplicate name")
+        assertThat(store.observe().first()).containsExactly(CategoryOption(id = "work", name = "Work", order = 0))
+        assertThat(store.lastSyncedAt().first()).isEqualTo(1L)
     }
 }

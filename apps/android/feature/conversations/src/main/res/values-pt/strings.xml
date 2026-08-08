@@ -44,6 +44,8 @@
     <string name="conversations_action_unarchive">Desarquivar</string>
     <string name="conversations_action_mark_read">Marcar como lida</string>
     <string name="conversations_action_move_to_category">Mover para uma categoria</string>
+    <string name="conversations_category_search_hint">Pesquisar ou criar uma categoria…</string>
+    <string name="conversations_action_create_category">Criar \"%1$s\"</string>
     <string name="conversations_action_discard_draft">Descartar rascunho</string>
     <string name="conversations_action_more">Mais ações</string>
     <string name="conversations_badge_pinned">Fixada</string>

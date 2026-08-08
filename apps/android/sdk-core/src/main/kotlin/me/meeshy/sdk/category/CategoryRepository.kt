@@ -1,6 +1,7 @@
 package me.meeshy.sdk.category
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
@@ -8,7 +9,11 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.CreateCategoryBody
+import me.meeshy.sdk.model.toOption
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesApi
+import me.meeshy.sdk.net.apiCall
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,4 +55,21 @@ class CategoryRepository @Inject constructor(
     suspend fun refresh() {
         cacheSource.revalidate()
     }
+
+    /**
+     * Creates a new category (the picker field's "create" affordance,
+     * [me.meeshy.sdk.model.CategorySubmit.Create]) and, on success, appends it to
+     * the cached catalogue with a fresh sync stamp — so the new category is
+     * immediately selectable from [categoriesStream] without waiting on a full
+     * background revalidation. A failure leaves the snapshot untouched.
+     */
+    suspend fun create(name: String): NetworkResult<CategoryOption> =
+        when (val result = apiCall { preferencesApi.createCategory(CreateCategoryBody(name = name)) }) {
+            is NetworkResult.Success -> {
+                val created = result.data.toOption()
+                store.save(store.observe().first().orEmpty() + created, clock.nowMillis())
+                NetworkResult.Success(created)
+            }
+            is NetworkResult.Failure -> result
+        }
 }

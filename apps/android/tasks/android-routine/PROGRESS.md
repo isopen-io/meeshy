@@ -1,5 +1,60 @@
 # Progress — state & what to do next
 
+> On 2026-08-08 the **conversation category picker + create** landed (slice `category-picker-create`,
+> feature-parity §B — "Conversation category create + expand/collapse", the *create* half; expand/collapse
+> and tags remain open). Two pure `:core:model` cores shipped 2026-07-26
+> (`ConversationCategoryPicker`/`ConversationTagAutocomplete`) had sat unconsumed for weeks — every
+> subsequent run's "Next slice" note kept recommending "the app-side `TagInputField` +
+> `CategoryPickerField` composables" as one bundle without anyone picking it up, most likely because it
+> reads as "build a whole conversation-preferences screen". Re-scoped to just the **category** half (tags
+> need a net-new wire field — `ApiConversation` carries no `tags` — out of scope for one slice) and wired
+> into the **already-shipped** long-press "move to category" dropdown instead of a new screen, this landed
+> as a normal-sized slice. **Added (production, all `apps/android`):** (1) `PreferencesApi.createCategory`
+> (`POST me/preferences/categories`, `core/network`) + `CreateCategoryBody(name)` (`core/model`) — mirrors
+> iOS `PreferenceService.createCategory`. (2) `CategoryRepository.create(name): NetworkResult<CategoryOption>`
+> (`sdk-core`) — posts, then **appends the created option straight into `CategorySnapshotStore`** with a
+> fresh sync stamp (`store.save(current + created, now)`) instead of triggering a background `refresh()`,
+> so the new category is selectable in the same frame the create call resolves; a failure leaves the
+> snapshot untouched. The gateway's `category:created` socket echo back to the creating device is a
+> harmless idempotent re-upsert (`UserCategoryCatalog.upsert` keys by id — traced, not assumed).
+> (3) `ConversationListViewModel.createCategoryAndAssign(id, name)` (`feature/conversations`) — blank name
+> is inert (mirrors `ConversationCategoryPicker.canCreate`'s guard, defends a stray caller); on success
+> reuses `reassignCategory(id, newId)` (a freshly created category can never equal the conversation's
+> current one, so the idempotency guard is a pure pass-through, and the outbox-flush scheduling
+> `runPrefMutation` already wires stays correct for free); on failure surfaces
+> `ConversationListUiState.errorMessage`, never assigns. (4) `ConversationContextMenu`'s "move to
+> category" section (`ConversationListScreen.kt`) reworked from a flat always-gated-on-non-empty list into
+> a `TextField`-driven search: `ConversationCategoryPicker.resolve(categories, currentCategoryId, query)`
+> (the pure core shipped 2026-07-26, now finally consumed) drives the filtered `displayed` rows plus a
+> "Create …" row when `canCreate`; the section is **always shown** (not gated on `categories.isNotEmpty()`)
+> so a user with zero categories can create their first one from here; the search-query `remember` is
+> keyed on the menu's own `expanded` boolean so it resets fresh on every reopen. Strings ×4 locales
+> (`conversations_category_search_hint`, `conversations_action_create_category`). **+6 behavioural tests:**
+> `CategoryRepositoryTest` +3 (create posts the trimmed name + appends to a warm cache; create on a cold
+> cache persists just the new category; API failure surfaces the error without touching the snapshot),
+> `ConversationListViewModelTest` +3 (create-then-assign end to end; failure surfaces the error and never
+> assigns; blank name is inert). **Mutation (RED proof):** dropping the blank-name guard fails **exactly**
+> the blank-name test (36 run in the suite, 1 failed, no collateral), restored after. **Gate:**
+> `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (full `assembleDebug` + all-module
+> `testDebugUnitTest`; targeted `:sdk-core:testDebugUnitTest --tests CategoryRepositoryTest` and
+> `:feature:conversations:testDebugUnitTest --tests ConversationListViewModelTest` both green
+> standalone too). Reviewer **PASS** (diff `apps/android` only — `core/model` [+1 new source],
+> `core/network` [+1 method], `sdk-core` [+1 method + 3 tests], `feature/conversations` [+1 VM method + UI
+> rework + 3 tests + 4× strings.xml], `tasks/feature-parity.md`; no production logic outside; **SDK
+> purity** — the pure picker core stays the single decision surface, `CategoryRepository.create` is
+> ordinary sdk-core repository plumbing alongside its sibling `categoriesStream`/`setCategoryOptimistic`,
+> the Compose section is exempt glue; **SSOT** — reuses `ConversationCategoryPicker`,
+> `CategoryRepository`, and `reassignCategory`'s guard, no reimplementation; **instant-app** — cache-first
+> `categoriesStream` unchanged, create writes through to the snapshot with no spinner; **UDF** — VM +
+> immutable `StateFlow`; no dead end — dismiss returns to a coherent conversation list; no coverage floor
+> lowered, no test weakened). **Next slice:** the `TagInputField` composable + `allTags` corpus hydration
+> (needs a new `tags` wire field on `ApiConversation` first — no gateway field exists to hydrate from yet,
+> scope that DTO addition before the UI), the category **expand/collapse** toggle on
+> `CollapsibleSection`/`ConversationSections` (the section splitter already groups by category; only the
+> collapse *affordance* is missing), OR the §C **inverted-list** message layout (bottom-anchored
+> `reverseLayout`) OR the paged **`OnboardingFlowView`** Compose scaffold (Auth) OR the tracked **Kover
+> 90% coverage-gate infra** — all still open per the last several runs' recurring recommendation.
+
 > On 2026-07-27 the **offline-pending hourglass** landed (slice `chat-offline-pending-hourglass`,
 > feature-parity §C Chat — the "offline hourglass" half of the Delivery-status line). A still-pending
 > outgoing bubble now shows a live **clock** while the device is online (the send is in flight) but a queue

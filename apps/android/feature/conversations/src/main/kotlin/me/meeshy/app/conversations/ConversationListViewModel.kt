@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.model.UserCategoryCatalog
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
@@ -67,7 +68,7 @@ class ConversationListViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
     private val starredStore: StarredMessagesStore,
-    categoryRepository: CategoryRepository,
+    private val categoryRepository: CategoryRepository,
     categorySocketManager: CategorySocketManager,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
@@ -252,6 +253,30 @@ class ConversationListViewModel @Inject constructor(
             CategoryReassignment.Unchanged -> Unit
             is CategoryReassignment.AssignTo ->
                 runPrefMutation { repository.setCategoryOptimistic(id, outcome.categoryId) }
+        }
+    }
+
+    /**
+     * Creates a new user category named [name] and assigns [id]'s conversation to
+     * it — the picker field's "create" affordance
+     * ([me.meeshy.sdk.model.CategorySubmit.Create]) driven end-to-end. A blank
+     * [name] is inert (mirrors [ConversationCategoryPicker]'s `canCreate` guard,
+     * which never offers the create row for a blank query, so this only defends
+     * against a stray caller). The new category surfaces reactively through
+     * [categoryRepository]'s stream once created; the assignment reuses
+     * [reassignCategory]'s idempotency guard so it can never no-op here (a
+     * freshly created category can never already be the conversation's current
+     * one). A create failure surfaces [ConversationListUiState.errorMessage]
+     * without touching the conversation's category.
+     */
+    fun createCategoryAndAssign(id: String, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            when (val result = categoryRepository.create(name)) {
+                is NetworkResult.Success -> reassignCategory(id, result.data.id)
+                is NetworkResult.Failure ->
+                    _state.update { it.copy(errorMessage = result.error.message) }
+            }
         }
     }
 
