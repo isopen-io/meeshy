@@ -136,9 +136,11 @@ Deux obligations destinataire restent absentes du chemin de lien, avec leurs fai
 
 - **`mention:created`** — ce n'est pas l'émission qui manque mais la DONNÉE. Les deux émetteurs
   nominaux lisent `message.validatedMentions` (`MeeshySocketIOManager.ts:2055`,
-  `MessageHandler._resolveMentionUserIds`), champ peuplé par `MessageValidator` que les routes
-  de lien ne font jamais tourner. Câbler l'émission seule n'émettrait rien : le correctif passe
-  par l'extraction des mentions au moment de l'insert, donc par le validateur.
+  `MessageHandler._resolveMentionUserIds`), champ écrit par le SEUL `MessageProcessor`
+  (`services/messaging/MessageProcessor.ts:952`) après extraction, résolution des usernames,
+  validation des permissions et création des lignes `Mention`. Les routes de lien ne font
+  jamais tourner ce processeur : câbler l'émission seule n'émettrait rien, le champ restant
+  vide. Le correctif passe par l'extraction des mentions au moment de l'insert.
 - **Accusé « delivered » automatique** — `MessageHandler.autoDeliverToOnlineRecipients` est
   publique et prend un `Message` Prisma complet, que les routes de lien ont en main. Le blocage
   est ailleurs : elle n'est atteignable que depuis `MessageHandler`, et `LinkMessageManager` ne
