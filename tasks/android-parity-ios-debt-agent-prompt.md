@@ -40,10 +40,14 @@ Mission double, sur **deux lanes strictement séparées** :
 2. Lis `CLAUDE.md` racine (TDD non négociable, Instant App Principles, SDK purity, Prisme
    Linguistique).
 3. **Lane Android** — lis dans l'ordre : `apps/android/tasks/android-routine/ROUTINE.md`
-   (la boucle complète y est déjà spécifiée), les **~200 dernières lignes** de
-   `apps/android/tasks/android-routine/PROGRESS.md` (fichier >1 Mo — ne JAMAIS le charger en
-   entier), `REVIEWER.md`, `TDD-COVERAGE.md`, `NOTES.md`, puis `apps/android/tasks/feature-parity.md`
-   pour la phase en cours.
+   (la boucle complète y est déjà spécifiée), puis `apps/android/tasks/android-routine/PROGRESS.md`
+   (fichier >1 Mo — ne JAMAIS le charger en entier). **Attention : PROGRESS.md est en
+   prepend/newest-first** — l'entrée la plus récente est en TÊTE de fichier, pas en queue. Lis les
+   **~200 PREMIÈRES lignes** (`head -200`), pas la fin. Vérifie ce fait toi-même (compare la date de
+   la 1ère et de la dernière entrée) avant de t'y fier aveuglément — convention observée le
+   2026-08-08, elle peut changer. Puis `REVIEWER.md`, `TDD-COVERAGE.md`, `NOTES.md` (**convention
+   inverse : append/oldest-first** — lis ses ~200 DERNIÈRES lignes, `tail -200`), puis
+   `apps/android/tasks/feature-parity.md` pour la phase en cours.
 4. **Lane iOS-dette** — lis `apps/ios/CLAUDE.md`, `packages/MeeshySDK/CLAUDE.md`,
    `apps/ios/CURRENT_QUALITY_REVIEW.md` (revue vivante, mise à jour périodiquement), et
    `tasks/ios-debt-routine-progress.md` s'il existe (sinon tu le crées au premier run — bootstrap,
@@ -150,12 +154,16 @@ Ces fichiers grossissent sans borne si rien ne les archive — `PROGRESS.md` fai
 14 228 lignes après 7 semaines de routine. Avant d'ajouter une nouvelle entrée à un fichier de
 suivi, vérifie sa taille (`wc -l`) :
 
-- `apps/android/tasks/android-routine/PROGRESS.md`, `NOTES.md`, et
-  `tasks/ios-debt-routine-progress.md` : si le fichier dépasse **~1500 lignes**, déplace tout sauf
-  les ~300 dernières lignes vers `<même-dossier>/<nom>-archive-<AAAA-MM>.md` (créé ou complété),
-  en laissant un lien en tête du fichier vivant vers l'archive la plus récente. L'archivage est un
-  **commit séparé et dédié** (`chore(tasks): archive <fichier>`), jamais mélangé à un commit de
-  slice/item.
+- **`PROGRESS.md`** (prepend/newest-first, cf. §Étape 0) : si le fichier dépasse **~1500 lignes**,
+  garde les **~300 PREMIÈRES lignes** (les plus récentes) et déplace le RESTE — la queue, la plus
+  ancienne — vers `apps/android/tasks/android-routine/PROGRESS-archive-<AAAA-MM>.md` (créé ou
+  complété), en laissant un lien en tête du fichier vivant vers l'archive.
+- **`NOTES.md`** (append/oldest-first) et **`tasks/ios-debt-routine-progress.md`** (même convention
+  par défaut — vérifie au premier archivage, ne suppose pas) : si le fichier dépasse ~1500 lignes,
+  garde les **~300 DERNIÈRES lignes** (les plus récentes) et déplace le DÉBUT — le plus ancien —
+  vers `<même-dossier>/<nom>-archive-<AAAA-MM>.md`, en laissant un lien en tête vers l'archive.
+- Dans les deux cas, l'archivage est un **commit séparé et dédié**
+  (`chore(tasks): archive <fichier>`), jamais mélangé à un commit de slice/item.
 - Ne touche jamais `apps/android/tasks/feature-parity.md` de cette façon — c'est un checklist
   d'état, pas un journal ; il ne grossit que par ajout de nouvelles capacités découvertes, à un
   rythme lent.
