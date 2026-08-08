@@ -1054,3 +1054,126 @@ client ne peut réordonner que des conversations qu'il voit.
   legacy `POST /api/conversations/:id/clear-history`).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une
   validation humaine (il change le comportement d'API publiques).
+
+---
+
+## Cycle 14 (2026-08-08) — les deux ids que le `PUT` de préférences ne vérifiait pas
+
+> **Collision de numérotation** — une autre session de la routine a mené en parallèle
+> un travail disjoint (rejeu hors ligne des réactions REST, PR #2626, mergée en
+> premier) qu'elle numérote aussi « cycle 14 », mais dans `tasks/todo.md` et
+> `tasks/lessons.md`, pas ici. Ce fichier garde sa propre séquence : « cycle 14 » y
+> désigne l'entrée ci-dessous. Les deux ne se recouvrent sur aucun fichier.
+
+Suivi direct des deux premiers points de la liste laissée ouverte par le cycle 13 :
+« `POST /user-preferences/reorder` n'a pas de `maxItems` » et « **aucune route de
+préférences ne vérifie l'appartenance** (le `PUT` peut créer une ligne contre un id
+arbitraire) ; l'asymétrie avec le réordonnancement est maintenant visible et mérite
+d'être résorbée ».
+
+Vérifié : réel, et **plus large que ce qui avait été relevé**. Le cycle 13 avait vu
+un id non vérifié dans ce `PUT`. Il y en a deux, et le second sort du périmètre de
+l'utilisateur.
+
+### D1 (racine, sécurité) — `categoryId` arbitraire ⇒ lecture inter-locataires
+
+`UserConversationCategory` est une table **par utilisateur** (`userId`, cf. schema).
+La route écrit le `categoryId` du corps tel quel, puis renvoie la ligne avec
+`include: { category: true }`. Le corps du `200` — **et toutes les lectures
+ultérieures**, `GET /user-preferences/conversations/:id` et la liste paginée faisant
+la même jointure — rendent donc `name`, `color` et `icon` de la catégorie d'un autre
+utilisateur.
+
+Ce n'est pas un écho de la requête : une fois la catégorie attachée, la fuite est
+**persistante** et se relit sans rejouer l'écriture. Les noms de catégorie sont des
+libellés personnels de classement de conversations — le test le nomme
+`'Divorce lawyer'` pour que la nature de la donnée reste lisible.
+
+Portée : tout appelant authentifié, contre n'importe quel ObjectId de catégorie.
+Pas d'écriture chez la victime (la ligne écrite est celle de l'attaquant), pas de
+fuite par socket (`toPreferencesPayload` ne transporte que `categoryId`, que
+l'attaquant détient déjà) — c'est une lecture, par la réponse REST.
+
+### D2 (même racine) — `conversationId` arbitraire ⇒ lignes hors périmètre
+
+L'écriture est un `upsert` : sans filtre, tout appelant authentifié crée des lignes
+de préférences contre des conversations dont il n'est pas membre, et fait diffuser
+`USER_PREFERENCES_UPDATED` pour elles. Les lignes sont inertes pour
+`GET /conversations` (qui joint sur `Participant`) mais **pas** pour
+`GET /user-preferences/conversations`, qui liste par `userId` seul.
+
+### D3 (pourquoi ça a survécu) — un écrivain sur quatre, hors du rang
+
+L'anomalie n'est pas qu'un contrôle manquait partout : c'est qu'il était présent
+**partout ailleurs**.
+
+| Écrivain | Appartenance | Possession de catégorie |
+|---|---|---|
+| `user-deletions.ts` × 3 (`delete-for-me`, `restore-for-me`, `clear-history`) | oui — `{ conversationId, userId, isActive: true }` | n/a |
+| `reorderConversationPreferences` (cycle 13) | oui — même prédicat, en lot | n/a |
+| `me/preferences/categories.ts` × 6 | n/a | oui — `{ id, userId }`, sous commentaire explicite |
+| **`PUT /user-preferences/conversations/:id`** | **non** | **non** |
+
+Un contrôle unanime chez tous les voisins est précisément ce qui le rend invisible
+chez le dernier : rien ne dépareille à la lecture d'un seul fichier.
+
+### D4 (corollaire) — le lot de réordonnancement n'était toujours pas borné
+
+Le filtre d'appartenance du cycle 13 borne les **écritures**, mais il s'applique
+après le parsing et la déduplication du lot. Un tableau non borné restait du
+travail gratuit à la demande.
+
+## Plan
+- [x] T1 — RED : `PUT` sur une conversation non rejointe → 403, aucune ligne, aucune diffusion (3 tests)
+- [x] T2 — RED : `PUT` avec la catégorie d'autrui → 404, nom absent du corps sérialisé, rien attaché (3 tests)
+- [x] T3 — verrous : chemin nominal, catégorie possédée, décatégorisation `null`, pas de lecture sans catégorie, lot à la borne (5 tests, verts avant ET après)
+- [x] T4 — RED : lot au-delà de la borne → 400 avant tout accès au store
+- [x] T5 — GREEN : les deux contrôles dans `writeConversationPreferences` + `ConversationPreferencesScopeError`
+- [x] T6 — mapping 403/404 dans la route, réponses déclarées au schéma, `maxItems: 200`
+- [x] T7 — les 3 harnais existants modélisent `Participant` et `UserConversationCategory`
+- [x] T8 — gates : suite gateway complète 591/591 (15 433 tests), `tsc --noEmit` propre
+- [x] T9 — changeset + CHANGELOG (section `🔒 Security`) + ce relevé
+
+## Revue
+
+Les deux contrôles vivent dans `writeConversationPreferences`, pas dans la route.
+C'est le même argument que celui qui a mis `version` et la diffusion dans ce module
+au cycle 12 : la ligne n'est atteignable que par cette fonction, donc c'est le seul
+endroit qu'un futur écrivain ne peut pas oublier. Les placer dans la route aurait
+reproduit exactement la configuration qui a produit le défaut — un contrôle correct
+répété en N endroits, dont l'un finit par manquer.
+
+Le choix des codes n'est pas cosmétique et suit ce que le dépôt a déjà tranché :
+`403` pour la non-appartenance, que l'appelant connaît déjà (et que les trois routes
+de `user-deletions.ts` renvoient), `404` pour une catégorie qui n'est pas la sienne,
+de sorte que la réponse **ne confirme pas son existence** — sans quoi le correctif
+troquerait une fuite de contenu contre un oracle d'énumération.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 7 tests ont été vus ROUGES
+avant le correctif, la fuite apparaissant littéralement dans le corps sérialisé
+(`"category":{"name":"Divorce lawyer",…}`). Les deux gardes sont indépendamment
+portantes **par construction du test** : les cas catégorie visent une conversation
+rejointe (la garde d'appartenance ne peut pas les faire passer) et les cas
+appartenance ne portent aucun `categoryId` (la garde de catégorie est court-circuitée
+par `!= null`). Les 5 verrous verts avant et après interdisent au correctif de
+rétrécir le chemin nominal — c'est leur rôle.
+
+Note d'outillage : les 10 tests tombés après le correctif étaient des harnais qui ne
+modélisaient pas `Participant` sur ce chemin, pas des régressions. Ils sont complétés
+plutôt que la requête pliée à leur forme (`findFirst` est ce qu'un contrôle unitaire
+doit émettre, et ce que `user-deletions.ts` émet déjà) : adapter le code de production
+à la forme d'un mock est la racine que les cycles 10, 11 et 13 ont chacun documentée.
+
+### Reste ouvert après ce cycle
+- **Le `GET` de préférences n'est pas restreint** : `GET /user-preferences/conversations/:id`
+  répond les défauts pour n'importe quel id, et la liste paginée renvoie toute ligne
+  portant le `userId` de l'appelant. Aucune fuite (la réponse ne contient que ce que
+  l'appelant a écrit, et D1/D2 ferment la seule voie d'écriture hors périmètre), donc
+  pas de défaut observable pour motiver un changement de contrat — relevé pour mémoire.
+- Le `PUT` ne valide pas `categoryId` comme ObjectId : un non-ObjectId atteint Prisma
+  et donne un 500 plutôt qu'un 400. Cosmétique de contrat, sans fuite.
+- Hérités du cycle 13, inchangés : scope **communauté** de `user:preferences-updated`
+  non routé côté iOS ; `ConversationStore.dispatchPreferencesUpdate` traite
+  `.setClearHistoryBefore` en succès purement local (aucun appelant applicatif).
+- L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation
+  humaine (il change le comportement d'API publiques).

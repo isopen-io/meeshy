@@ -14,7 +14,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
@@ -25,6 +25,7 @@ import { validatePagination } from '../utils/pagination';
 import {
   writeConversationPreferences,
   reorderConversationPreferences,
+  ConversationPreferencesScopeError,
   type ConversationPreferencesWrite,
 } from '../services/conversationPreferencesSync';
 
@@ -139,6 +140,12 @@ const reorderConversationsRequestSchema = {
   properties: {
     updates: {
       type: 'array',
+      // One drag-and-drop reorders a category the user can see. The membership
+      // filter already bounds the writes to conversations the caller is in, but
+      // it does so only after the batch has been parsed and de-duplicated, so an
+      // unbounded array is still work a caller can ask for for free. The bound
+      // is well past any real category.
+      maxItems: 200,
       items: {
         type: 'object',
         required: ['conversationId', 'orderInCategory'],
@@ -147,7 +154,7 @@ const reorderConversationsRequestSchema = {
           orderInCategory: { type: 'number', minimum: 0, description: 'New order value' }
         }
       },
-      description: 'Array of conversation reorder updates'
+      description: 'Array of conversation reorder updates (max 200)'
     }
   }
 } as const;
@@ -387,6 +394,8 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
             }
           },
           401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
           500: errorResponseSchema
         }
       }
@@ -426,6 +435,17 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           isDefault: false
         });
       } catch (error) {
+        // Both ids in this request name rows the caller may not be entitled to.
+        // Non-membership is stated plainly — the caller already knows whether
+        // they are in a conversation, and the sibling `user-deletions.ts` routes
+        // answer the same way. A category that is not theirs is reported as
+        // simply absent, matching every route in `me/preferences/categories.ts`,
+        // so the response cannot be used to probe another user's categories.
+        if (error instanceof ConversationPreferencesScopeError) {
+          return error.reason === 'not-a-participant'
+            ? sendForbidden(reply, 'Not a member of this conversation')
+            : sendNotFound(reply, 'Category not found');
+        }
         logError(fastify.log, 'Error upserting conversation preferences:', error);
         return sendInternalError(reply, 'Error updating preferences');
       }
@@ -531,6 +551,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         body: reorderConversationsRequestSchema,
         response: {
           200: successMessageResponseSchema,
+          400: errorResponseSchema,
           401: errorResponseSchema,
           500: errorResponseSchema
         }

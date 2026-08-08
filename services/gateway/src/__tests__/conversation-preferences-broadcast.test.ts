@@ -17,9 +17,13 @@ type EmitCall = { event: string; payload: unknown };
 
 const buildPrismaMock = () => ({
   participant: {
+    findFirst: jest.fn(async ({ where }: any) => ({ id: `participant-${where?.conversationId}` })),
     findMany: jest.fn(async ({ where }: any) =>
       ((where?.conversationId?.in ?? []) as string[]).map((conversationId) => ({ conversationId }))
     ),
+  },
+  userConversationCategory: {
+    findFirst: jest.fn(async ({ where }: any) => ({ id: where?.id })),
   },
   userConversationPreferences: {
     findUnique: jest.fn<any>(),
@@ -225,9 +229,13 @@ const buildLivePrisma = () => {
   return {
     rows,
     participant: {
+      findFirst: jest.fn(async ({ where }: any) => ({ id: `participant-${where?.conversationId}` })),
       findMany: jest.fn(async ({ where }: any) =>
         ((where?.conversationId?.in ?? []) as string[]).map((conversationId) => ({ conversationId }))
       ),
+    },
+    userConversationCategory: {
+      findFirst: jest.fn(async ({ where }: any) => ({ id: where?.id })),
     },
     userConversationPreferences: {
       findUnique: jest.fn(async ({ where }: any) => rows.get(key(where)) ?? null),
