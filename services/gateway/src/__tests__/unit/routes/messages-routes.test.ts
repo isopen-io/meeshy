@@ -222,6 +222,7 @@ const USER_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439044';
 const PART_ID = '507f1f77bcf86cd799439055';
 const OTHER_USER_ID = '507f1f77bcf86cd799439066';
+const ANON_PART_ID = '507f1f77bcf86cd799439077';
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 
@@ -270,7 +271,10 @@ const createMockFastify = () => {
   const routes: Record<string, Record<string, Function>> = {};
   const routeOpts: Record<string, Record<string, any>> = {};
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
+  // Chainable, like Socket.IO's real `BroadcastOperator`: the receipt fan-out
+  // chains one `.to()` per participant room so a socket in several of them gets
+  // a single copy.
+  const mockTo: jest.Mock = jest.fn(() => ({ to: mockTo, emit: mockEmit }));
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, enqueueOfflineMessageMutation: mockEnqueueOfflineMutation });
@@ -2455,27 +2459,39 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
 describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverage', () => {
   const getHandler_ = () => fastify._routes['POST']['/conversations/:id/mark-read'];
 
-  it('participant with userId=null: covers !p.userId continue branch in room-chaining loop', async () => {
+  // A participant with no `User` row used to be skipped outright by this
+  // fan-out, so an anonymous participant never learned that a peer had read
+  // anything. It is now addressed by the id its personal room is named after.
+  it('participant with userId=null: addressed by its participant id', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
-    // Participant with null userId → takes the `continue` branch (line 342)
-    prisma.participant.findMany.mockResolvedValue([{ userId: null }]);
+    prisma.participant.findMany.mockResolvedValue([{ id: ANON_PART_ID, userId: null }]);
     mockGetUnreadCount.mockResolvedValue(1);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    // emitter.emit still called (loop skipped the null-userId entry)
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
     expect(fastify._mockEmit).toHaveBeenCalledWith('read-status:updated', expect.anything());
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 1 });
   });
 
-  it('participant with real userId: covers loop body and catch when .to() is not chainable', async () => {
+  it('participant with real userId: addressed by its user id', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
-    // Non-null userId → loop body runs; emitter.to(userRoom) throws TypeError (mock not chainable)
-    // → broadcastReadStatus catch block (line 350) swallows the error
-    prisma.participant.findMany.mockResolvedValue([{ userId: OTHER_USER_ID }]);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: OTHER_USER_ID }]);
     mockGetUnreadCount.mockResolvedValue(4);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    // Handler still succeeds — broadcastReadStatus error is swallowed
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${OTHER_USER_ID}`);
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
+  });
+
+  // The receipt is a side channel: the read itself is already committed when it
+  // runs, so a broken emitter must not turn a successful mark-read into a 500.
+  it('a broadcast failure is swallowed and the response still succeeds', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: OTHER_USER_ID }]);
+    mockGetUnreadCount.mockResolvedValue(4);
+    fastify._mockTo.mockReturnValueOnce({ emit: fastify._mockEmit });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
   });
 });

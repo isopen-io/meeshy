@@ -28,6 +28,7 @@ import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
+import { emitToConversationParticipants } from '../emitToConversationParticipants';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -1439,19 +1440,20 @@ export class MessageHandler {
       summary
     };
 
-    const convRoom = ROOMS.conversation(conversationId);
-    let emitter: ReturnType<SocketIOServer['to']> = this.io.to(convRoom);
-    const seen = new Set<string>([convRoom]);
-    for (const p of participants) {
-      if (!p.userId) continue;
-      const userRoom = ROOMS.user(p.userId);
-      if (seen.has(userRoom)) continue;
-      seen.add(userRoom);
-      emitter = emitter.to(userRoom);
-    }
-    emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-    emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
-    handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
+    // Même clé de présence que le filtre ci-dessus, par la même unité que les
+    // deux routes d'accusé de lecture : la boucle que ceci remplace sautait tout
+    // participant sans ligne `User`, donc l'anonyme qui vient d'acquitter
+    // n'apprenait pas lui-même que la remise avait eu lieu — et un anonyme parti
+    // sur la liste des conversations, sorti de `conversation:<id>`, ne recevait
+    // plus rien du tout.
+    const rooms = emitToConversationParticipants({
+      io: this.io,
+      conversationId,
+      participants,
+      events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+      payload
+    });
+    handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms, deliveredCount: summary.deliveredCount });
   }
 
   /**
