@@ -13,6 +13,7 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
+import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -303,9 +304,32 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         place
       });
 
+      // Ce que ce message doit à sa conversation — bump de `lastMessageAt`,
+      // poussée au translator, statistiques de langue. Ce chemin CONTOURNE
+      // `MessagingService.handleMessage`, donc rien d'autre ne les exécutera :
+      // sans cet appel, le message reste en langue originale à vie (Prisme
+      // Linguistique éteint) et la conversation ne remonte jamais dans la liste
+      // triée serveur. L'avancement du curseur de lecture de l'auteur est le
+      // seul effet du chemin nominal délibérément absent — cf. le docstring de
+      // `runMessagePostSaveEffects`.
+      runMessagePostSaveEffects({
+        prisma: fastify.prisma,
+        translationService: fastify.translationService,
+        message: {
+          id: message.id,
+          conversationId: participantShareLink.conversationId,
+          senderId: anonymousParticipant.id,
+          content: message.content,
+          messageType: message.messageType,
+          replyToId: message.replyToId
+        },
+        originalLanguage,
+        onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
+      });
+
       // Émettre vers les DEUX audiences (room live + file hors ligne) — voir
-      // `broadcastLinkMessage`. Ce chemin CONTOURNE `MessagingService.handleMessage`,
-      // donc rien d'autre ne rejouera ce message à un participant déconnecté.
+      // `broadcastLinkMessage`. Même raison : rien d'autre ne rejouera ce
+      // message à un participant déconnecté.
       await broadcastLinkMessage({
         manager: fastify.socketIOHandler.getManager(),
         conversationId: participantShareLink.conversationId,
@@ -530,6 +554,24 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         conversationId: shareLink.conversationId,
         senderId: participant.id,
         place
+      });
+
+      // Mêmes obligations post-commit que le jumeau anonyme, par le même point
+      // d'appel unique : deux routes qui écrivent dans la même conversation ne
+      // peuvent pas en honorer des sous-ensembles différents.
+      runMessagePostSaveEffects({
+        prisma: fastify.prisma,
+        translationService: fastify.translationService,
+        message: {
+          id: message.id,
+          conversationId: shareLink.conversationId,
+          senderId: participant.id,
+          content: message.content,
+          messageType: message.messageType,
+          replyToId: message.replyToId
+        },
+        originalLanguage,
+        onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
       });
 
       // Même diffuseur unique que le jumeau anonyme : les deux routes servent la

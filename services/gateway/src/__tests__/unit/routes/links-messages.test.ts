@@ -54,6 +54,16 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   ROOMS: { conversation: (id: string) => `conversation:${id}` },
 }));
 
+// Post-save language stats: a real singleton driven by a mock prisma would only
+// exercise its own error path here. The route's obligation is that it FIRES,
+// which is what the double records.
+const mockUpdateOnNewMessage = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../services/ConversationStatsService', () => ({
+  conversationStatsService: {
+    updateOnNewMessage: (...a: any[]) => mockUpdateOnNewMessage(...a),
+  },
+}));
+
 // Controllable parse mock
 const mockParse = jest.fn<any>((body: any) => ({
   content: body?.content ?? 'Hello!',
@@ -140,8 +150,15 @@ function makePrisma(overrides: Record<string, any> = {}) {
     message: {
       create: jest.fn<any>().mockResolvedValue(mockMessage),
     },
+    conversation: {
+      update: jest.fn<any>().mockResolvedValue(undefined),
+    },
     ...overrides,
   } as any;
+}
+
+function makeTranslationService() {
+  return { handleNewMessage: jest.fn<any>().mockResolvedValue({ status: 'queued' }) };
 }
 
 function makeSocketIOHandler(hasManager = false) {
@@ -166,6 +183,7 @@ async function buildApp(opts: {
   prisma?: any;
   socketIOHandler?: any;
   authContext?: any;
+  translationService?: any;
 } = {}): Promise<FastifyInstance> {
   const ctx = opts.authContext ?? mockAuthContext;
   mockAuthMiddleware.mockImplementation(async (req: any) => {
@@ -175,10 +193,17 @@ async function buildApp(opts: {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', opts.prisma ?? makePrisma());
   app.decorate('socketIOHandler', opts.socketIOHandler ?? makeSocketIOHandler(false));
+  app.decorate(
+    'translationService',
+    opts.translationService === null ? undefined : opts.translationService ?? makeTranslationService()
+  );
   await registerMessageRoutes(app);
   await app.ready();
   return app;
 }
+
+/** Les effets post-commit sont fire-and-forget : ils se règlent après le 201. */
+const flushPostSaveEffects = () => new Promise((resolve) => setImmediate(resolve));
 
 const VALID_BODY = { content: 'Hello!', clientMessageId: CID };
 const ANON_HEADERS = { 'x-session-token': SESSION_TOKEN };
@@ -916,5 +941,124 @@ describe.each([
     const [, emitted] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
     const { clientMessageId: _authorOnly, ...sharedWithPeers } = messageBodyOf(res);
     expect(sharedWithPeers).toEqual(JSON.parse(JSON.stringify(emitted.message)));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Post-save obligations (cycle 16)
+//
+// Les deux routes contournent `MessagingService.handleMessage`, donc RIEN d'autre
+// n'exécute ce que tout message committé doit à sa conversation. Sans ces effets :
+//   • `Message.translations` reste vide À VIE — le Prisme Linguistique est éteint
+//     sur le seul transport d'envoi dont dispose un participant anonyme ;
+//   • `Conversation.lastMessageAt` reste périmé, donc `GET /conversations`
+//     (`orderBy: { lastMessageAt: 'desc' }` + curseur sur ce même champ) redescend
+//     au refetch la conversation que le client venait de remonter.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe.each([
+  {
+    label: 'anonymous',
+    url: `/links/${MSHY_ID}/messages`,
+    headers: ANON_HEADERS,
+    prisma: () => makePrisma(),
+  },
+  {
+    label: 'authenticated',
+    url: `/links/${MSHY_ID}/messages/auth`,
+    headers: {} as Record<string, string>,
+    prisma: () => {
+      const prisma = makePrisma();
+      prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
+      prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+      return prisma;
+    },
+  },
+])('post-save obligations — $label route', ({ url, headers, prisma: makeRoutePrisma }) => {
+  async function post(opts: { prisma?: any; translationService?: any; body?: Record<string, unknown> } = {}) {
+    const prisma = opts.prisma ?? makeRoutePrisma();
+    const translationService = opts.translationService ?? makeTranslationService();
+    const app = await buildApp({ prisma, translationService });
+    const res = await app.inject({ method: 'POST', url, headers, payload: { ...VALID_BODY, ...(opts.body ?? {}) } });
+    await flushPostSaveEffects();
+    await app.close();
+    return { res, prisma, translationService };
+  }
+
+  it('remonte la conversation : lastMessageAt est bumpé', async () => {
+    const { res, prisma } = await post();
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: CONV_ID },
+      data: { lastMessageAt: expect.any(Date) },
+    });
+  });
+
+  it('pousse le message au translator sous son id persisté', async () => {
+    const { translationService } = await post();
+    expect(translationService.handleNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID, senderId: PART_ID })
+    );
+  });
+
+  it('traduit le contenu STOCKÉ (URLs réécrites), pas le corps reçu', async () => {
+    mockProcessMessageLinks.mockResolvedValueOnce({
+      processedContent: 'Regarde https://mshy.link/t/tok',
+      trackingLinks: [],
+    });
+    const prisma = makeRoutePrisma();
+    prisma.message.create = jest.fn<any>().mockResolvedValue({
+      ...mockMessage,
+      content: 'Regarde https://mshy.link/t/tok',
+    });
+
+    const { translationService } = await post({
+      prisma,
+      body: { content: 'Regarde https://example.com/article' },
+    });
+
+    expect(translationService.handleNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Regarde https://mshy.link/t/tok' })
+    );
+  });
+
+  it('pousse la langue source NORMALISÉE, celle qui est persistée', async () => {
+    const { translationService } = await post({ body: { originalLanguage: 'pt-BR' } });
+    expect(translationService.handleNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ originalLanguage: 'pt' })
+    );
+  });
+
+  it('comptabilise le message dans les statistiques de langue', async () => {
+    mockUpdateOnNewMessage.mockClear();
+    await post({ body: { originalLanguage: 'de' } });
+    expect(mockUpdateOnNewMessage).toHaveBeenCalledWith(expect.anything(), CONV_ID, 'de', expect.any(Function));
+  });
+
+  it('rend quand même 201 quand le translator est en panne', async () => {
+    const { res, prisma } = await post({
+      translationService: { handleNewMessage: jest.fn<any>().mockRejectedValue(new Error('ZMQ down')) },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversation.update).toHaveBeenCalled();
+  });
+
+  it('rend quand même 201 quand le bump de conversation échoue', async () => {
+    const prisma = makeRoutePrisma();
+    prisma.conversation.update = jest.fn<any>().mockRejectedValue(new Error('mongo down'));
+    const { res, translationService } = await post({ prisma });
+    expect(res.statusCode).toBe(201);
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+  });
+
+  it('rend quand même 201 quand aucun service de traduction n\'est câblé', async () => {
+    const prisma = makeRoutePrisma();
+    const app = await buildApp({ prisma, translationService: null });
+    const res = await app.inject({ method: 'POST', url, headers, payload: VALID_BODY });
+    await flushPostSaveEffects();
+    await app.close();
+
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversation.update).toHaveBeenCalled();
   });
 });
