@@ -539,15 +539,15 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('processes mentions when mentionService is available', async () => {
-      const extractMock = jest.fn().mockReturnValue(['@alice']);
-      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice' }]]));
+      const extractMock = jest.fn().mockReturnValue(['alice']);
+      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]]));
       const validateMentionPermissions = jest.fn().mockResolvedValue({
         isValid: true,
         validUserIds: ['user-alice'],
       });
       const createMentions = jest.fn().mockResolvedValue(undefined);
       fastify.mentionService = {
-        extractMentions: extractMock,
+        extractMentionsWithParticipants: extractMock,
         resolveUsernames,
         validateMentionPermissions,
         createMentions,
@@ -571,6 +571,75 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(extractMock).toHaveBeenCalled();
       expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // Le chemin d'édition extrayait les handles BRUTS (`extractMentions`) là où
+    // la création extrait avec la liste des participants
+    // (`extractMentionsWithParticipants`, qui résout aussi `@Display Name`).
+    // Éditer un message contenant `@John Doe` DÉTRUISAIT donc la mention que la
+    // création avait validée : ligne `Mention` supprimée, champ remis à `[]`,
+    // alors que rien n'avait changé pour elle.
+    it('keeps a display-name mention alive across an edit', async () => {
+      const extractWithParticipants = jest.fn().mockReturnValue(['john']);
+      fastify.mentionService = {
+        extractMentionsWithParticipants: extractWithParticipants,
+        resolveUsernames: jest.fn().mockResolvedValue(new Map([['john', { id: 'user-john', username: 'john' }]])),
+        validateMentionPermissions: jest.fn().mockResolvedValue({ validUserIds: ['user-john'] }),
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      };
+      prisma.participant.findMany.mockResolvedValue([
+        { userId: 'user-john', displayName: 'John Doe', user: { id: 'user-john', username: 'john', displayName: 'John Doe' } },
+      ]);
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'Salut @John Doe, corrig\u00e9' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      // La r\u00e9solution porte sur le contenu APR\u00c8S traitement des liens de
+      // suivi, comme sur le chemin de cr\u00e9ation : c'est ce texte-l\u00e0 qui est
+      // persist\u00e9 et affich\u00e9.
+      expect(extractWithParticipants).toHaveBeenCalledWith(
+        'processed content',
+        [{ userId: 'user-john', username: 'john', displayName: 'John Doe' }]
+      );
+      expect(prisma.mention.deleteMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID } });
+      expect(fastify.mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, ['user-john']);
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ validatedMentions: ['john'] }),
+        })
+      );
+    });
+
+    // L'inverse : une mention retir\u00e9e du texte doit sortir du champ ET de
+    // l'inbox `/mentions` de celui qu'elle nommait.
+    it('clears the mention set when the edited content drops every mention', async () => {
+      fastify.mentionService = {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
+        resolveUsernames: jest.fn(),
+        validateMentionPermissions: jest.fn(),
+        createMentions: jest.fn(),
+      };
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'plus de mention' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      expect(prisma.mention.deleteMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID } });
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ validatedMentions: [] }),
+        })
+      );
+      expect(fastify.mentionService.createMentions).not.toHaveBeenCalled();
     });
 
     it('clears mentions when mentionService unavailable', async () => {
@@ -793,13 +862,13 @@ describe('registerMessagesAdvancedRoutes', () => {
 
     it('sends mention notifications when notificationService available', async () => {
       const extractMock = jest.fn().mockReturnValue(['alice']);
-      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice' }]]));
+      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]]));
       const validateMentionPermissions = jest.fn().mockResolvedValue({
         isValid: true,
         validUserIds: ['user-alice'],
       });
       const createMentions = jest.fn().mockResolvedValue(undefined);
-      fastify.mentionService = { extractMentions: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
+      fastify.mentionService = { extractMentionsWithParticipants: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
 
       const createBatchMock = jest.fn().mockResolvedValue(1);
       fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };
@@ -826,7 +895,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
     it('handles mention processing error gracefully', async () => {
       fastify.mentionService = {
-        extractMentions: jest.fn().mockImplementation(() => { throw new Error('mention error'); }),
+        extractMentionsWithParticipants: jest.fn().mockImplementation(() => { throw new Error('mention error'); }),
         resolveUsernames: jest.fn(),
         validateMentionPermissions: jest.fn(),
         createMentions: jest.fn(),
@@ -2491,13 +2560,13 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('sender or conversationInfo null - skips notification', async () => {
       // Covers branch 20: if (sender && conversationInfo) → false
       const extractMock = jest.fn().mockReturnValue(['alice']);
-      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice' }]]));
+      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]]));
       const validateMentionPermissions = jest.fn().mockResolvedValue({
         isValid: true,
         validUserIds: ['user-alice'],
       });
       const createMentions = jest.fn().mockResolvedValue(undefined);
-      fastify.mentionService = { extractMentions: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
+      fastify.mentionService = { extractMentionsWithParticipants: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
 
       const createBatchMock = jest.fn().mockResolvedValue(1);
       fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };

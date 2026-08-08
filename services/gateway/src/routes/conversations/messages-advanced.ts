@@ -16,6 +16,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { replaceMessageMentions } from '../../services/messaging/messageMentions';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
@@ -287,155 +288,66 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      logger.info('===== POST MESSAGE UPDATE - BEFORE MENTIONS =====');
-      logger.info(`Message updated successfully, ID messageId=${messageId}`);
-      // ÉTAPE: Traitement des mentions @username lors de l'édition
-      logger.info('===== STARTING MENTION PROCESSING BLOCK =====');
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        const mentionService = fastify.mentionService;
-        logger.info(`Edit - MentionService available !!mentionService=${!!mentionService}`);
+      // Ce que ce message doit à ceux qu'il NOMME, après édition : le lot de
+      // mentions doit être RECOMPOSÉ, pas complété. Le corps vivait ici, en
+      // double du chemin de création — et il extrayait moins bien : handles
+      // bruts seulement, là où la création résout aussi `@Display Name`.
+      // Éditer un message contenant `@John Doe` détruisait donc la mention que
+      // la création avait validée. Deux extracteurs pour un même champ ne
+      // peuvent pas rester d'accord ; il n'y en a plus qu'un.
+      const editedMentions = await replaceMessageMentions({
+        prisma,
+        mentionService: fastify.mentionService,
+        message: { id: messageId, conversationId, senderId: existingMessage.senderId },
+        content: processedContent,
+        onError: (err) => logger.error('Edit - Error processing mentions', err)
+      });
+      updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
 
-        if (mentionService) {
-          logger.info(`Edit - Processing mentions for edited message messageId=${messageId}`);
-
-          // Supprimer les anciennes mentions
-          await prisma.mention.deleteMany({
-            where: { messageId: messageId }
-          });
-
-          // Extraire les nouvelles mentions du contenu traité (avec tracking links déjà remplacés)
-          const mentionedUsernames = mentionService.extractMentions(processedContent);
-          logger.info(`Edit - Extracting mentions from processedContent=${processedContent}`);
-          logger.info('Edit - Mentions extracted:', mentionedUsernames);
-          logger.info(`Edit - Number of mentions: ${mentionedUsernames.length}`);
-
-          if (mentionedUsernames.length > 0) {
-            // Résoudre les usernames en utilisateurs réels
-            const userMap = await mentionService.resolveUsernames(mentionedUsernames);
-            logger.info(`UserMap size: ${userMap.size}`);
-            const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
-
-            if (mentionedUserIds.length > 0) {
-              // Valider les permissions de mention
-              const validationResult = await mentionService.validateMentionPermissions(
-                conversationId,
-                mentionedUserIds,
-                userId
-              );
-              logger.info(`Validation result: isValid=${validationResult.isValid}, validUserIdsCount=${validationResult.validUserIds.length}`);
-
-              if (validationResult.validUserIds.length > 0) {
-                // Créer les nouvelles entrées de mention
-                await mentionService.createMentions(
-                  messageId,
-                  validationResult.validUserIds
-                );
-
-                // Extraire les usernames validés
-                const validatedUsernames = Array.from(userMap.entries())
-                  .filter(([_, user]) => validationResult.validUserIds.includes(user.id))
-                  .map(([username, _]) => username);
-
-                logger.info('Mise à jour avec validatedMentions:', validatedUsernames);
-
-                // Mettre à jour le message avec les usernames validés
-                await prisma.message.update({
-                  where: { id: messageId },
-                  data: { validatedMentions: validatedUsernames }
-                });
-
-                // IMPORTANT: Mettre à jour l'objet en mémoire
-                updatedMessage.validatedMentions = validatedUsernames;
-
-                logger.info(`✅ ${validationResult.validUserIds.length} mention(s) mise(s) à jour`);
-                logger.info(`updatedMessage.validatedMentions =`, updatedMessage.validatedMentions);
-
-                // Déclencher les notifications de mention pour les utilisateurs mentionnés
-                const notificationService = fastify.notificationService;
-                if (notificationService) {
-                  try {
-                    const [sender, conversationInfo] = await Promise.all([
-                      prisma.user.findUnique({
-                        where: { id: userId },
-                        select: { username: true, displayName: true, avatar: true }
-                      }),
-                      prisma.conversation.findUnique({
-                        where: { id: conversationId },
-                        select: {
-                          title: true,
-                          type: true,
-                          participants: { where: { isActive: true }, select: { userId: true } }
-                        }
-                      })
-                    ]);
-
-                    if (sender && conversationInfo) {
-                      const memberIds = conversationInfo.participants.map((m: { userId: string | null }) => m.userId).filter(Boolean);
-
-                        // PERFORMANCE: Créer toutes les notifications de mention en batch
-                        const count = await notificationService.createMentionNotificationsBatch(
-                          validationResult.validUserIds,
-                          {
-                            senderId: userId,
-                            senderProfile: {
-                              username: sender.username,
-                              displayName: sender.displayName,
-                              avatar: sender.avatar,
-                            },
-                            messageContent: processedContent,
-                            conversationId,
-                            messageId
-                          },
-                          memberIds
-                        );
-                        logger.info(`📩 ${count} notifications de mention créées en batch`);
-                    }
-                  } catch (notifError) {
-                    logger.error('Erreur notifications mentions', notifError);
-                  }
-                }
-              }
-            } else {
-              logger.info('Aucun utilisateur trouvé pour les mentions');
-              // Mettre à jour avec un tableau vide
-              await prisma.message.update({
-                where: { id: messageId },
-                data: { validatedMentions: [] }
-              });
-              updatedMessage.validatedMentions = [];
-            }
-          } else {
-            logger.info('Aucune mention dans le message édité');
-            // Mettre à jour avec un tableau vide
-            await prisma.message.update({
-              where: { id: messageId },
-              data: { validatedMentions: [] }
-            });
-            updatedMessage.validatedMentions = [];
-          }
-        } else {
-          logger.warn('Edit - MentionService NOT AVAILABLE - mentions will not be processed!');
-          // Clear mentions if service not available
-          await prisma.message.update({
-            where: { id: messageId },
-            data: { validatedMentions: [] }
-          });
-          updatedMessage.validatedMentions = [];
-        }
-      } catch (mentionError) {
-        logger.error('Edit - Error processing mentions', mentionError);
-        logger.error('Edit - Stack trace', mentionError.stack);
-        // Ne pas faire échouer l'édition si les mentions échouent
-        // Clear mentions on error to avoid stale data
+      // La notification de mention, elle, ne concerne QUE l'édition : pas
+      // d'éventail « réponse » ni « message régulier » — les destinataires ont
+      // déjà été prévenus à l'envoi. Seul un nouveau mentionné apprend quelque
+      // chose.
+      if (editedMentions.validatedUserIds.length > 0 && fastify.notificationService) {
         try {
-          await prisma.message.update({
-            where: { id: messageId },
-            data: { validatedMentions: [] }
-          });
-          updatedMessage.validatedMentions = [];
-        } catch (e) {
-          logger.error('Edit - Error clearing mentions', e);
+          const [sender, conversationInfo] = await Promise.all([
+            prisma.user.findUnique({
+              where: { id: userId },
+              select: { username: true, displayName: true, avatar: true }
+            }),
+            prisma.conversation.findUnique({
+              where: { id: conversationId },
+              select: {
+                title: true,
+                type: true,
+                participants: { where: { isActive: true }, select: { userId: true } }
+              }
+            })
+          ]);
+
+          if (sender && conversationInfo) {
+            const memberIds = conversationInfo.participants
+              .map((m: { userId: string | null }) => m.userId)
+              .filter(Boolean);
+
+            await fastify.notificationService.createMentionNotificationsBatch(
+              [...editedMentions.validatedUserIds],
+              {
+                senderId: userId,
+                senderProfile: {
+                  username: sender.username,
+                  displayName: sender.displayName,
+                  avatar: sender.avatar,
+                },
+                messageContent: processedContent,
+                conversationId,
+                messageId
+              },
+              memberIds
+            );
+          }
+        } catch (notifError) {
+          logger.error('Erreur notifications mentions', notifError);
         }
       }
 
