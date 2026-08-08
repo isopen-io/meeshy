@@ -72,14 +72,43 @@ export interface MentionResolver {
   createMentions(messageId: string, mentionedUserIds: string[]): Promise<void>;
 }
 
-export interface ResolvedMentions {
-  /** `User.id` des mentionnés retenus — ce que l'éventail de notifications attend. */
+/** Ce que le cœur commun établit. Il n'écrit rien, donc il ne conclut rien. */
+interface ComputedMentions {
   readonly validatedUserIds: readonly string[];
-  /** Leurs `username`, tels que persistés dans `Message.validatedMentions`. */
   readonly validatedUsernames: readonly string[];
 }
 
-const EMPTY: ResolvedMentions = { validatedUserIds: [], validatedUsernames: [] };
+export interface ResolvedMentions extends ComputedMentions {
+  /**
+   * Ceux qui n'étaient PAS déjà mentionnés — le seul lot qu'une notification
+   * doit atteindre. À la création, c'est l'ensemble complet ; à l'édition, la
+   * différence avec les lignes `Mention` déjà en base.
+   *
+   * Sans lui, chaque édition renotifie tous les mentionnés : dix corrections de
+   * frappe valent dix pushes à quelqu'un déjà nommé au premier envoi.
+   */
+  readonly newlyMentionedUserIds: readonly string[];
+  /**
+   * `true` quand `validatedUsernames` DÉCRIT l'état du message — y compris
+   * lorsqu'il est vide parce que plus rien n'y est mentionné.
+   *
+   * `false` quand rien n'a pu être établi : service absent, ensemble précédent
+   * illisible, résolution en échec. La distinction n'est pas cosmétique — sans
+   * elle, un appelant qui recopie `validatedUsernames` dans sa réponse et dans
+   * sa diffusion socket rejoue au niveau du PAYLOAD l'effacement que l'unité
+   * vient d'empêcher en base : le client cache le vide (`staleTime: Infinity`
+   * côté web) et la mention disparaît quand même.
+   */
+  readonly reconciled: boolean;
+}
+
+const NOTHING: ComputedMentions = { validatedUserIds: [], validatedUsernames: [] };
+
+/** Rien à dire sur ce message : l'appelant garde ce que la base porte déjà. */
+const UNRESOLVED: ResolvedMentions = { ...NOTHING, newlyMentionedUserIds: [], reconciled: false };
+
+/** Établi, et vide : ce message ne nomme personne. */
+const NO_MENTIONS: ResolvedMentions = { ...UNRESOLVED, reconciled: true };
 
 /**
  * Les participants inscrits d'une conversation, sous la forme que le parseur de
@@ -151,12 +180,12 @@ export async function resolveMessageMentions(params: MentionResolutionParams): P
   const { prisma, mentionService, message, content, onError } = params;
   const explicit = params.explicitMentionedUserIds ?? [];
 
-  if (!mentionService) return EMPTY;
-  if (explicit.length === 0 && !content.includes('@')) return EMPTY;
+  if (!mentionService) return UNRESOLVED;
+  if (explicit.length === 0 && !content.includes('@')) return NO_MENTIONS;
 
   try {
     const resolved = await computeValidatedMentions(params, mentionService, explicit);
-    if (resolved.validatedUserIds.length === 0) return EMPTY;
+    if (resolved.validatedUserIds.length === 0) return NO_MENTIONS;
 
     await mentionService.createMentions(message.id, [...resolved.validatedUserIds]);
     await prisma.message.update({
@@ -164,60 +193,97 @@ export async function resolveMessageMentions(params: MentionResolutionParams): P
       data: { validatedMentions: [...resolved.validatedUsernames] },
     });
 
-    return resolved;
+    // Un message neuf ne portait aucune ligne `Mention` : tous ses mentionnés
+    // sont des entrants.
+    return { ...resolved, newlyMentionedUserIds: resolved.validatedUserIds, reconciled: true };
   } catch (error) {
     onError?.(error);
-    return EMPTY;
+    return UNRESOLVED;
   }
 }
 
 /**
  * La même résolution, mais pour un message qui en portait DÉJÀ : l'édition.
  *
- * Deux différences avec `resolveMessageMentions`, et les deux tiennent au fait
- * que l'ancien lot doit disparaître :
+ * Une édition n'est pas une re-création : elle RÉCONCILIE. Trois différences
+ * avec `resolveMessageMentions`, et chacune répare un défaut distinct du bloc
+ * qui vivait dans la route :
  *
- *  1. **Les lignes `Mention` existantes sont purgées d'abord.** Un `@alice`
- *     retiré du texte doit sortir de l'inbox `/mentions` d'alice.
- *  2. **`validatedMentions` est TOUJOURS réécrit, même vide.** D'où l'absence
- *     de court-circuit : un contenu édité qui ne porte plus aucun `@` doit
- *     effacer le champ, pas le laisser tel quel. C'est exactement l'inverse du
- *     chemin de création, où ne rien écrire est la bonne réponse.
+ *  1. **Pas de court-circuit « pas de `@` ».** `validatedMentions` est toujours
+ *     réécrit, même vide : un contenu édité qui ne nomme plus personne doit
+ *     effacer le champ, là où une création sans `@` ne doit rien écrire.
+ *  2. **On ne purge PAS pour recréer.** `Mention.mentionedAt` est l'axe de tri
+ *     de l'inbox (`@@index([mentionedUserId, mentionedAt(sort: Desc)])`).
+ *     Supprimer puis recréer la ligne d'un mentionné INCHANGÉ lui donne un
+ *     horodatage neuf : une mention de trois jours remonte en tête parce que
+ *     l'auteur a corrigé une faute de frappe. Seuls les partants sont
+ *     supprimés, seuls les entrants sont créés.
+ *  3. **`newlyMentionedUserIds` isole les entrants**, qui sont exactement le lot
+ *     à notifier. Une purge en bloc détruit l'ensemble précédent et rend la
+ *     question insoluble — c'est elle qui forçait à renotifier tout le monde.
  *
- * Ce qu'elle corrige : le chemin d'édition extrayait avec `extractMentions`
- * (handles bruts seulement) là où la création extrait avec
+ * Ce qu'elle corrige, côté extraction : la route extrayait avec
+ * `extractMentions` (handles bruts seulement) là où la création extrait avec
  * `extractMentionsWithParticipants` (qui résout aussi `@Display Name`). Éditer
  * un message contenant `@John Doe` DÉTRUISAIT donc la mention — ligne
- * supprimée, champ remis à `[]` — alors que rien n'avait changé pour elle. Deux
- * extracteurs pour un même champ ne peuvent pas rester d'accord.
+ * supprimée, champ remis à `[]` — alors que rien n'avait changé pour elle.
+ *
+ * Ce qu'elle corrige, côté panne : la route purgeait les lignes AVANT de tenter
+ * quoi que ce soit, et remettait `validatedMentions: []` sur service absent
+ * comme sur simple exception. Une panne transitoire détruisait des mentions que
+ * rien ne reconstruit — personne ne relit le texte après coup. Ici, tout écrit
+ * vit dans le chemin de succès : si l'ensemble précédent est illisible ou si la
+ * résolution lève, la base reste telle qu'elle était et `reconciled` vaut
+ * `false` pour que l'appelant n'efface pas non plus son payload. Préserver une
+ * mention périmée vaut mieux que détruire une mention vivante : la première
+ * surligne quelqu'un de trop le temps d'une édition, la seconde ne revient
+ * jamais.
  */
 export async function replaceMessageMentions(params: MentionResolutionParams): Promise<ResolvedMentions> {
   const { prisma, mentionService, message, onError } = params;
   const explicit = params.explicitMentionedUserIds ?? [];
 
+  // Sans service, rien n'est résolvable — donc rien n'est réconciliable. En
+  // conclure que le message ne nomme plus personne effacerait les mentions d'un
+  // texte qui les porte toujours.
+  if (!mentionService) return UNRESOLVED;
+
   try {
-    await prisma.mention.deleteMany({ where: { messageId: message.id } });
+    // L'ensemble précédent est la seule source de « qui est parti » et de « qui
+    // est nouveau ». Sa lecture est DANS le try : en échec, la réconciliation
+    // ne peut plus garantir qu'elle ne détruit rien, donc elle s'abstient.
+    const previousUserIds = (
+      await prisma.mention.findMany({
+        where: { messageId: message.id },
+        select: { mentionedUserId: true },
+      })
+    ).map((row) => row.mentionedUserId);
 
-    const resolved = mentionService
-      ? await computeValidatedMentions(params, mentionService, explicit)
-      : EMPTY;
+    const resolved = await computeValidatedMentions(params, mentionService, explicit);
 
-    if (mentionService && resolved.validatedUserIds.length > 0) {
-      await mentionService.createMentions(message.id, [...resolved.validatedUserIds]);
+    const previous = new Set(previousUserIds);
+    const retained = new Set(resolved.validatedUserIds);
+    const departedUserIds = previousUserIds.filter((id) => !retained.has(id));
+    const newlyMentionedUserIds = resolved.validatedUserIds.filter((id) => !previous.has(id));
+
+    if (departedUserIds.length > 0) {
+      await prisma.mention.deleteMany({
+        where: { messageId: message.id, mentionedUserId: { in: departedUserIds } },
+      });
     }
+
+    // La garde du lot vide appartient à `createMentions`, qui la porte déjà.
+    await mentionService.createMentions(message.id, newlyMentionedUserIds);
 
     await prisma.message.update({
       where: { id: message.id },
       data: { validatedMentions: [...resolved.validatedUsernames] },
     });
 
-    return resolved;
+    return { ...resolved, newlyMentionedUserIds, reconciled: true };
   } catch (error) {
     onError?.(error);
-    await prisma.message
-      .update({ where: { id: message.id }, data: { validatedMentions: [] } })
-      .catch((clearError: unknown) => onError?.(clearError));
-    return EMPTY;
+    return UNRESOLVED;
   }
 }
 
@@ -240,7 +306,7 @@ async function computeValidatedMentions(
   params: MentionResolutionParams,
   mentionService: MentionResolver,
   explicit: readonly string[]
-): Promise<ResolvedMentions> {
+): Promise<ComputedMentions> {
   const { prisma, message, content, onError } = params;
 
   const usernameByUserId = new Map<string, string>();
@@ -251,7 +317,7 @@ async function computeValidatedMentions(
   } else {
     const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
     const extracted = mentionService.extractMentionsWithParticipants(content, participants);
-    if (extracted.length === 0) return EMPTY;
+    if (extracted.length === 0) return NOTHING;
 
     const userMap = await mentionService.resolveUsernames(extracted);
     for (const [username, user] of userMap.entries()) {
@@ -260,7 +326,7 @@ async function computeValidatedMentions(
     candidateUserIds = Array.from(usernameByUserId.keys());
   }
 
-  if (candidateUserIds.length === 0) return EMPTY;
+  if (candidateUserIds.length === 0) return NOTHING;
 
   const senderUserId = await resolveSenderUserId(prisma, message.senderId, onError);
 
@@ -269,7 +335,7 @@ async function computeValidatedMentions(
     candidateUserIds,
     senderUserId
   );
-  if (validUserIds.length === 0) return EMPTY;
+  if (validUserIds.length === 0) return NOTHING;
 
   if (explicit.length > 0) {
     const users = await prisma.user.findMany({

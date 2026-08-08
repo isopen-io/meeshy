@@ -21,7 +21,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: { update: jest.fn<any>().mockResolvedValue(undefined) },
-    mention: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    mention: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   } as any;
 }
@@ -47,7 +50,7 @@ describe('resolveMessageMentions — court-circuit', () => {
       prisma, mentionService, message: MESSAGE, content: 'bonjour tout le monde',
     });
 
-    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: true });
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
     expect(mentionService.extractMentionsWithParticipants).not.toHaveBeenCalled();
     expect(prisma.message.update).not.toHaveBeenCalled();
@@ -78,7 +81,7 @@ describe('resolveMessageMentions — court-circuit', () => {
       prisma, mentionService: undefined, message: MESSAGE, content: 'salut @alice',
     });
 
-    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: false });
     expect(prisma.message.update).not.toHaveBeenCalled();
   });
 });
@@ -97,7 +100,12 @@ describe('resolveMessageMentions — chemin nominal', () => {
       where: { id: 'msg-1' },
       data: { validatedMentions: ['alice'] },
     });
-    expect(result).toEqual({ validatedUserIds: ['u-alice'], validatedUsernames: ['alice'] });
+    expect(result).toEqual({
+      validatedUserIds: ['u-alice'],
+      validatedUsernames: ['alice'],
+      newlyMentionedUserIds: ['u-alice'],
+      reconciled: true,
+    });
   });
 
   // Le parseur résout `@Display Name` autant que `@handle` : sans la liste des
@@ -252,7 +260,7 @@ describe('resolveMessageMentions — dégradations', () => {
       prisma, mentionService, message: MESSAGE, content: 'salut @alice', onError,
     });
 
-    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: false });
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -263,7 +271,7 @@ describe('resolveMessageMentions — dégradations', () => {
 
     await expect(
       resolveMessageMentions({ prisma, mentionService: makeMentionService(), message: MESSAGE, content: 'salut @alice' })
-    ).resolves.toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    ).resolves.toEqual({ validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: false });
   });
 });
 
@@ -273,15 +281,57 @@ describe('resolveMessageMentions — dégradations', () => {
 // le champ, pas le laisser tel quel.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('replaceMessageMentions', () => {
-  it('purge les anciennes lignes Mention avant de recomposer le lot', async () => {
-    const prisma = makePrisma();
+describe('replaceMessageMentions — réconciliation', () => {
+  // Purger pour recréer donnerait un `mentionedAt` neuf aux mentionnés
+  // INCHANGÉS, or c'est l'axe de tri de l'inbox : une mention de trois jours
+  // remonterait en tête parce que l'auteur a corrigé une faute de frappe.
+  it('ne supprime que les partants et ne crée que les entrants', async () => {
+    const prisma = makePrisma({
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-alice' },
+          { mentionedUserId: 'u-bob' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentionsWithParticipants: jest.fn<any>().mockReturnValue(['alice', 'carol']),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map([
+        ['alice', { id: 'u-alice', username: 'alice' }],
+        ['carol', { id: 'u-carol', username: 'carol' }],
+      ])),
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: ['u-alice', 'u-carol'] }),
+    });
+
+    const result = await replaceMessageMentions({
+      prisma, mentionService, message: MESSAGE, content: 'salut @alice et @carol',
+    });
+
+    expect(prisma.mention.deleteMany).toHaveBeenCalledWith({
+      where: { messageId: 'msg-1', mentionedUserId: { in: ['u-bob'] } },
+    });
+    expect(mentionService.createMentions).toHaveBeenCalledWith('msg-1', ['u-carol']);
+    expect(result.newlyMentionedUserIds).toEqual(['u-carol']);
+  });
+
+  it('ne touche à aucune ligne quand l’ensemble des mentionnés est inchangé', async () => {
+    const prisma = makePrisma({
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-alice' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
     const mentionService = makeMentionService();
 
-    await replaceMessageMentions({ prisma, mentionService, message: MESSAGE, content: 'salut @alice' });
+    const result = await replaceMessageMentions({
+      prisma, mentionService, message: MESSAGE, content: 'salut @alice, typo corrigée',
+    });
 
-    expect(prisma.mention.deleteMany).toHaveBeenCalledWith({ where: { messageId: 'msg-1' } });
-    expect(mentionService.createMentions).toHaveBeenCalledWith('msg-1', ['u-alice']);
+    expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+    expect(mentionService.createMentions).toHaveBeenCalledWith('msg-1', []);
+    expect(result.newlyMentionedUserIds).toEqual([]);
+    expect(result.validatedUsernames).toEqual(['alice']);
   });
 
   // Le défaut que cette unité corrige : le chemin d'édition extrayait les
@@ -293,6 +343,10 @@ describe('replaceMessageMentions', () => {
         findMany: jest.fn<any>().mockResolvedValue([
           { userId: 'u-john', displayName: 'John Doe', user: { id: 'u-john', username: 'john', displayName: 'John Doe' } },
         ]),
+      },
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-john' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       },
     });
     const mentionService = makeMentionService({
@@ -310,6 +364,7 @@ describe('replaceMessageMentions', () => {
       [{ userId: 'u-john', username: 'john', displayName: 'John Doe' }]
     );
     expect(result.validatedUsernames).toEqual(['john']);
+    expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
     expect(prisma.message.update).toHaveBeenCalledWith({
       where: { id: 'msg-1' },
       data: { validatedMentions: ['john'] },
@@ -319,7 +374,12 @@ describe('replaceMessageMentions', () => {
   // Le contraire exact du chemin de création, où ne rien écrire est la bonne
   // réponse : ici le champ portait un lot qui n'est plus vrai.
   it('efface le champ quand le contenu édité ne porte plus aucune mention', async () => {
-    const prisma = makePrisma();
+    const prisma = makePrisma({
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-alice' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
     const mentionService = makeMentionService({
       extractMentionsWithParticipants: jest.fn<any>().mockReturnValue([]),
     });
@@ -328,33 +388,52 @@ describe('replaceMessageMentions', () => {
       prisma, mentionService, message: MESSAGE, content: 'plus de mention ici',
     });
 
-    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
-    expect(prisma.mention.deleteMany).toHaveBeenCalled();
+    expect(result).toEqual({
+      validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: true,
+    });
+    expect(prisma.mention.deleteMany).toHaveBeenCalledWith({
+      where: { messageId: 'msg-1', mentionedUserId: { in: ['u-alice'] } },
+    });
     expect(prisma.message.update).toHaveBeenCalledWith({
       where: { id: 'msg-1' },
       data: { validatedMentions: [] },
     });
-    expect(mentionService.createMentions).not.toHaveBeenCalled();
   });
+});
 
-  it('efface le champ quand aucun service de mentions n’est câblé', async () => {
-    const prisma = makePrisma();
+/**
+ * Le bloc remplacé purgeait les lignes AVANT de tenter quoi que ce soit, puis
+ * remettait `validatedMentions: []` sur service absent comme sur simple
+ * exception. Une panne transitoire détruisait donc des mentions que rien ne
+ * reconstruit — personne ne relit le texte après coup.
+ */
+describe('replaceMessageMentions — une panne ne détruit rien', () => {
+  it('préserve les mentions existantes quand aucun service n’est câblé', async () => {
+    const prisma = makePrisma({
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-alice' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
 
     const result = await replaceMessageMentions({
       prisma, mentionService: null, message: MESSAGE, content: 'salut @alice',
     });
 
-    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
-    expect(prisma.message.update).toHaveBeenCalledWith({
-      where: { id: 'msg-1' },
-      data: { validatedMentions: [] },
+    expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: false,
     });
   });
 
-  // Laisser un lot périmé serait pire que le vider : les lignes `Mention` ont
-  // déjà été purgées, donc le champ décrirait des mentions qui n'existent plus.
-  it('vide le champ et signale quand la résolution échoue', async () => {
-    const prisma = makePrisma();
+  it('préserve les mentions existantes quand la résolution échoue', async () => {
+    const prisma = makePrisma({
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-alice' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
     const mentionService = makeMentionService({
       resolveUsernames: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
     });
@@ -364,24 +443,43 @@ describe('replaceMessageMentions', () => {
       prisma, mentionService, message: MESSAGE, content: 'salut @alice', onError,
     });
 
-    expect(result).toEqual({ validatedUserIds: [], validatedUsernames: [] });
+    expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(result.reconciled).toBe(false);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(prisma.message.update).toHaveBeenLastCalledWith({
-      where: { id: 'msg-1' },
-      data: { validatedMentions: [] },
-    });
   });
 
-  it('ne lève jamais quand même l’effacement de secours échoue', async () => {
+  // La lecture de l'ensemble précédent est la SEULE source de « qui est
+  // nouveau » et de « qui est parti ». En échec, la réconciliation ne peut plus
+  // garantir qu'elle ne détruit rien : elle s'abstient.
+  it('s’abstient quand l’ensemble précédent est illisible', async () => {
     const prisma = makePrisma({
-      mention: { deleteMany: jest.fn<any>().mockRejectedValue(new Error('down')) },
-      message: { update: jest.fn<any>().mockRejectedValue(new Error('down too')) },
+      mention: {
+        findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
     });
     const onError = jest.fn();
 
+    const result = await replaceMessageMentions({
+      prisma, mentionService: makeMentionService(), message: MESSAGE, content: 'salut @alice', onError,
+    });
+
+    expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(result.reconciled).toBe(false);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('ne lève jamais, même sans onError fourni', async () => {
+    const prisma = makePrisma({
+      message: { update: jest.fn<any>().mockRejectedValue(new Error('down')) },
+    });
+
     await expect(
-      replaceMessageMentions({ prisma, mentionService: makeMentionService(), message: MESSAGE, content: 'salut @alice', onError })
-    ).resolves.toEqual({ validatedUserIds: [], validatedUsernames: [] });
-    expect(onError).toHaveBeenCalledTimes(2);
+      replaceMessageMentions({ prisma, mentionService: makeMentionService(), message: MESSAGE, content: 'salut @alice' })
+    ).resolves.toEqual({
+      validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: false,
+    });
   });
 });

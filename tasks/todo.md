@@ -136,6 +136,46 @@ Rien ici ne repose sur une interprétation : `createMentionNotificationsBatch` f
 sender's User.id » ; et la route `/mentions/messages/:id` rebaptise sa sortie `mentionedUserId` /
 `mentionedUser`. Le seul endroit qui disait « participant » était la déclaration de la colonne.
 
+## Cycle 21 (complément, PR #2641) — une édition RÉCONCILIE ses mentions
+
+Le cycle 21 a été livré par deux sessions en parallèle. La PR #2640 a corrigé le défaut
+d'extraction (`extractMentions` → `extractMentionsWithParticipants`) et posé l'API que ce cycle-ci
+prolonge : deux exports nommés sur un cœur commun sans écriture. La PR #2641 traite les trois
+défauts restants du même bloc, tous causés par la **purge en bloc** que le remède prescrit par le
+cycle 20 impliquait :
+
+| # | Défaut | Effet observable |
+|---|---|---|
+| D2 | purger-recréer réécrit `mentionedAt` des mentionnés **inchangés** | c'est l'axe de tri de l'inbox (`@@index([mentionedUserId, mentionedAt(sort: Desc)])`) : une mention de trois jours remonte en tête parce que l'auteur a corrigé une faute de frappe |
+| D3 | la purge détruit l'ensemble précédent, donc « qui est nouveau ? » devient insoluble | chaque édition renotifiait TOUS les mentionnés — dix corrections, dix pushes. Le commentaire de la route affirmait déjà l'inverse : l'intention était écrite, pas implémentée |
+| D4 | la purge précède la résolution, et le `catch` réécrit `[]` | service absent ou exception transitoire ⇒ les mentions d'un texte qui les porte toujours sont détruites, et rien ne relit le texte après coup |
+
+`replaceMessageMentions` **réconcilie** : lit l'ensemble précédent, ne supprime que les partants,
+ne crée que les entrants. Les trois défauts tombent ensemble — les restants ne bougent pas (D2),
+les entrants sont exactement le lot à notifier (D3), et tout écrit vit dans le chemin de succès,
+donc une panne laisse la base telle qu'elle était (D4).
+
+`ResolvedMentions` porte deux champs de plus : `newlyMentionedUserIds` (le lot à notifier) et
+`reconciled`. Ce dernier distingue « établi vide » de « rien établi » — sans lui, l'appelant
+recopie le résultat vide dans sa réponse HTTP et sa diffusion socket, et rejoue **au niveau du
+payload** l'effacement que l'unité vient d'empêcher en base ; le web le cache
+(`staleTime: Infinity`) et la mention disparaît quand même.
+
+### Détruire à l'aveugle n'est pas « best-effort »
+
+Le code d'origine préférait le champ vide au champ périmé (`// Clear mentions on error to avoid
+stale data`). Mauvais arbitrage quand le contenu, lui, est toujours là : une mention périmée
+surligne quelqu'un de trop le temps d'une édition, une mention détruite ne revient jamais. Le
+reste de l'unité tenait déjà ce contrat ; l'édition en était le seul écrivain à le rompre.
+
+### Ce que ce cycle-ci a repris à #2641
+
+La PR #2641 avait corrigé D3-du-cycle-22 (l'espace d'identifiants du `senderId`) en passant un
+`User.id` depuis la route d'édition. Ce cycle tranche mieux : `resolveSenderUserId` fait la
+traduction DANS l'unité, une fois, et les quatre appelants passent uniformément le
+`Participant.id` qu'ils tiennent. La route d'édition est donc revenue à
+`existingMessage.senderId` — corriger chez l'appelant aurait laissé les trois autres se tromper.
+
 ### Reste ouvert après ce cycle
 
 - **`repair-mention-user-ids.ts` n'a pas été exécuté** — aucun accès base depuis cette routine.
@@ -148,6 +188,18 @@ sender's User.id » ; et la route `/mentions/messages/:id` rebaptise sa sortie `
   `apps/web/services/mentions.service.ts` expose bien `getMessageMentions` et `getUserMentions`,
   mais seul `getSuggestions` est appelé par un composant. Les deux routes sont donc correctes et
   inertes — l'inbox `/mentions` reste une capacité backend sans écran.
+- **`MessageHandler.handleMessageEdit` (édition par WebSocket) ne touche AUCUNE mention** —
+  vérifié pendant le cycle 21, toujours vrai. Il écrit `content`, `isEdited`, `editedAt`,
+  `translations: null` et s'arrête là : ni ligne `Mention`, ni `validatedMentions`. Éditer
+  « salut @alice » en « salut @bob » par socket laisse Alice mentionnée et ne nomme jamais Bob.
+  C'est le cinquième écrivain de la famille, et le seul qui n'écrit rien du tout ;
+  `replaceMessageMentions` est exactement ce qu'il lui faut. Le câblage passe par
+  `MessageHandlerDependencies`, `MeeshySocketIOManager` et tous les doubles de test — une pièce
+  distincte, pas une ligne de plus. **Tête du prochain cycle.**
+- **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
+  édition de post) et `routes/posts/comments.ts` appellent la variante handles-bruts : un
+  `@John Doe` dans un post ou un commentaire ne nomme personne — jamais, pas seulement à
+  l'édition. Même défaut que celui du cycle 21, autre domaine.
 - **`MeeshySocketIOManager.getConversationParticipantsForMention` est toujours un deuxième
   exemplaire du chargeur de participants** (cycle 21, inchangé).
 - **L'édition n'émet toujours aucun `mention:created`** (cycle 21, inchangé).

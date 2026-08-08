@@ -302,13 +302,20 @@ export function registerMessagesAdvancedRoutes(
         content: processedContent,
         onError: (err) => logger.error('Edit - Error processing mentions', err)
       });
-      updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
+      // Recopier `validatedUsernames` SANS ce garde-fou rejouerait dans la
+      // réponse et dans la diffusion socket l'effacement que l'unité vient
+      // d'empêcher en base : quand elle n'a rien pu établir, `updatedMessage`
+      // porte déjà la valeur persistée, qui est la bonne.
+      if (editedMentions.reconciled) {
+        updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
+      }
 
       // La notification de mention, elle, ne concerne QUE l'édition : pas
       // d'éventail « réponse » ni « message régulier » — les destinataires ont
-      // déjà été prévenus à l'envoi. Seul un nouveau mentionné apprend quelque
-      // chose.
-      if (editedMentions.validatedUserIds.length > 0 && fastify.notificationService) {
+      // déjà été prévenus à l'envoi. Seul un NOUVEAU mentionné apprend quelque
+      // chose : renotifier l'ensemble complet ferait de dix corrections de
+      // frappe dix pushes pour quelqu'un déjà nommé au premier envoi.
+      if (editedMentions.newlyMentionedUserIds.length > 0 && fastify.notificationService) {
         try {
           const [sender, conversationInfo] = await Promise.all([
             prisma.user.findUnique({
@@ -331,7 +338,7 @@ export function registerMessagesAdvancedRoutes(
               .filter(Boolean);
 
             await fastify.notificationService.createMentionNotificationsBatch(
-              [...editedMentions.validatedUserIds],
+              [...editedMentions.newlyMentionedUserIds],
               {
                 senderId: userId,
                 senderProfile: {
