@@ -97,16 +97,61 @@ n'empêche pas l'envoi), 3 sur la délégation, 4 déménagés vers `TrackingLin
   cette routine. **Tête du prochain cycle.**
 - **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
   édition de post) et `routes/posts/comments.ts` : un `@John Doe` dans un post ou un commentaire ne
-  nomme personne.
-- **`MentionCreatedEventData.mentionedParticipantId` reste dans les types partagés** et n'est peuplé
-  par aucun émetteur ; le SDK iOS le décode. Champ mort des deux côtés.
+  nomme personne. Cadrage affiné dans l'addendum ci-dessous — chantier de contrat multi-surface.
 - **`getMentionsForMessage` et `getRecentMentionsForUser` n'ont aucun consommateur d'écran** —
   l'inbox `/mentions` reste une capacité backend sans écran.
 - **`MeeshySocketIOManager.getConversationParticipantsForMention` est toujours un deuxième
   exemplaire du chargeur de participants** (cycle 21, inchangé).
-- **`getLatestMessageSummary` résume le DERNIER message de la conversation, pas celui qu'on vient
-  d'acquitter** (cycle 19, inchangé).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
 - **La suppression de la branche distante échoue depuis cette routine** : `git push --delete`
   répond « Everything up-to-date » sans agir (réessayé 4 fois). Les branches mergées des cycles
   s'accumulent côté remote.
+
+---
+
+# Cycle 25b — Addendum d'une session parallèle
+
+Deux sessions ont livré le cycle 25 en parallèle. Le refactor des liens ci-dessus (PR #2650) est
+**strictement meilleur** : il a trouvé, en réunissant les deux copies, que `createdBy` recevait un
+`Participant.id` là où la route `/tracking-links` attend un `User.id` pour AUTORISER l'accès. La
+seconde session s'aligne dessus et n'apporte que ce qui manquait — appliqué par-dessus, pas à la
+place. (Leçon d'intégration du cycle 23 : comparer défaut par défaut, jamais « qui est arrivé en
+premier ».)
+
+## Champ mort retiré — `MentionCreatedEventData.mentionedParticipantId`
+
+Porté par le backlog depuis le cycle 24, vérifié et retiré. Les **trois** émetteurs de
+`mention:created` — envoi WS (`MessageHandler`), envoi REST/ZMQ (`MeeshySocketIOManager`), édition
+(`emitMentionCreated`) — l'omettent : il n'a jamais circulé sur le fil. Le SDK iOS le décodait dans
+`MentionCreatedEvent`, et rien ne lisait la propriété.
+
+Le test de décodage SDK garde la clé dans le JSON **et lui en ajoute une inconnue** : ce qui compte
+désormais n'est plus la valeur du champ mais le fait qu'une clé inconnue ne casse pas le décodage —
+donc qu'aucun client ne souffre d'une gateway qui l'enverrait encore.
+
+À ne pas confondre avec la colonne physique `Mention.mentionedParticipantId` (Prisma/Mongo), bien
+vivante et utilisée par les scripts de migration.
+
+## Écarté après enquête — `getLatestMessageSummary` n'est pas un défaut
+
+Le backlog le portait depuis le cycle 19 : « résume le DERNIER message de la conversation, pas
+celui qu'on vient d'acquitter ». **Ce n'en est pas un, et le "corriger" serait une régression.**
+
+iOS applique le `summary` via `bufferBatchDelivery(conversationId:event:)` — un lot au niveau
+**conversation**, jamais par message (`ConversationSocketHandler.swift:801`). Le contrat client est
+donc « état de livraison de la conversation, ancré sur son dernier message », ce que la méthode
+calcule exactement.
+
+Si le serveur résumait le message ACQUITTÉ, lire un vieux message #5 produirait un résumé « lu »
+que le client appliquerait **en lot à tous les messages**, y compris #7 non lu. Passer au
+par-message demanderait de plumber des reçus par message des deux côtés client : chantier de
+contrat, pas correctif. Retiré du backlog comme défaut.
+
+## Nuance sur le domaine social
+
+`extractMentions` utilise bien la SSOT (`NAME_BOUNDARY_LEFT` + `MENTION_HANDLE_CHARS`) : la garde
+e-mail (`john@example.com` ne nomme pas `example`) et le tiret sont couverts. Le seul manque réel
+est le **display name à espaces** (`@John Doe`), qui exige un jeu de candidats — or un post n'a pas
+de liste de participants et `CreatePostSchema` ne porte aucun champ de mentions. Le combler
+demande que le composeur (web ET iOS) envoie les `userId` choisis à l'autocomplete :
+**chantier de contrat multi-surface, pas un correctif gateway.**

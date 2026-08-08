@@ -81,6 +81,12 @@ final class MessageSocketMiscEventTests: XCTestCase {
 
     // MARK: - MentionCreatedEvent
 
+    /// `mentionedParticipantId` reste dans le JSON alors que le type ne le
+    /// décode plus : aucun émetteur ne l'a jamais peuplé (les trois — envoi WS,
+    /// envoi REST/ZMQ, édition — l'omettent), et rien ne le lisait. Le garder
+    /// ICI prouve ce qui compte désormais : une clé inconnue dans le payload
+    /// n'empêche pas le décodage, donc retirer le champ ne casse aucun client
+    /// face à une gateway qui l'enverrait encore.
     func test_mentionCreatedEvent_allFields() throws {
         let json = """
         {
@@ -90,6 +96,7 @@ final class MessageSocketMiscEventTests: XCTestCase {
             "mentionedUserId": "u2",
             "mentionedParticipantId": "p2",
             "content": "Hey @bob check this out",
+            "unknownFutureField": true,
             "timestamp": "2026-04-09T10:00:00.000Z"
         }
         """.data(using: .utf8)!
@@ -99,7 +106,6 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.conversationId, "conv1")
         XCTAssertEqual(event.senderId, "u1")
         XCTAssertEqual(event.mentionedUserId, "u2")
-        XCTAssertEqual(event.mentionedParticipantId, "p2")
         XCTAssertEqual(event.content, "Hey @bob check this out")
         XCTAssertEqual(event.timestamp, "2026-04-09T10:00:00.000Z")
     }
@@ -113,7 +119,6 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.messageId, "msg2")
         XCTAssertNil(event.senderId)
         XCTAssertNil(event.mentionedUserId)
-        XCTAssertNil(event.mentionedParticipantId)
         XCTAssertNil(event.content)
         XCTAssertNil(event.timestamp)
     }

@@ -1845,6 +1845,25 @@ mockait `@meeshy/shared/types/socketio-events` en n'exportant QUE `ROOMS` → `C
   touche packages/shared.
 - tsc ne voit RIEN ici : le mock est un objet runtime. Seule l'exécution des suites attrape ce trou.
 
+**Corollaire (2026-08-08, cycle 25) — la règle vaut aussi pour un service INTERNE, et une
+délégation la déclenche.** Collapser une copie d'algorithme en délégation fait appeler, depuis ce
+chemin, une méthode que personne n'y appelait : aucun double du service ne l'expose. Le piège est
+silencieux par construction quand l'appelant est best-effort — la méthode absente vaut `undefined`,
+l'appel lève, le catch avale, le contenu ressort brut. Rien ne casse bruyamment ; seule une
+assertion « l'accès base a-t-il eu lieu » échoue. DEUX fichiers doublaient ici le même
+`TrackingLinkService` (`MessageProcessor.test.ts` ET `MessagingService.test.ts`) ; corriger le
+premier a suffi à verdir la suite CIBLÉE, et seule la suite COMPLÈTE (~3 min) a sorti les 2 échecs
+du second. Ne jamais conclure une délégation sur une suite ciblée.
+
+**Corollaire — face au `undefined`, doubler l'algorithme est le mauvais remède.** La tentation est
+d'ajouter un `jest.fn()` renvoyant un résultat plausible : cela produit un TROISIÈME exemplaire de
+ce qu'on vient de dédupliquer. Deux issues correctes, selon ce que le test décrit : monter la VRAIE
+méthode (`jest.requireActual(...).Klass.prototype.method`) sur un objet dont seuls les accès base
+restent doublés — les tests exercent alors l'algorithme partagé ; ou bien assumer que le test ne
+décrit plus que la DÉLÉGATION, le doubler par une identité, et déménager la couverture de
+l'algorithme vers la suite de son propriétaire. Ce qu'il ne faut pas, c'est un double qui
+RÉIMPLÉMENTE.
+
 ## 2026-07-11 — Item d'audit partagé entre sessions : vérifier les WORKTREES avant de développer
 
 En soldant « listeners #5 » de l'audit appels, j'ai réimplémenté (`62b111b80`) une feature déjà

@@ -906,7 +906,6 @@ public struct MentionCreatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let senderId: String?
     public let mentionedUserId: String?
-    public let mentionedParticipantId: String?
     public let content: String?
     public let timestamp: String?
 }
