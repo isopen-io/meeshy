@@ -186,7 +186,10 @@ export function registerCommentRoutes(
       // répondre à un commentaire EN mentionnant son auteur lui envoyait DEUX
       // notifications (user_mentioned + comment_reply) au lieu de la seule mention.
       let mentionedUserIds: string[] = [];
-      if (parsed.data.content && notifService) {
+      // `post` conditionne le lot : c'est lui qui porte l'audience. Sans lui, on
+      // ne peut pas établir qui a le droit d'être prévenu — donc on ne prévient
+      // personne, plutôt que de pousser un extrait à l'aveugle.
+      if (parsed.data.content && notifService && post) {
         const mentionedUsernames = mentionService.extractMentions(parsed.data.content);
         if (mentionedUsernames.length > 0) {
           const resolvedUsers = await mentionService.resolveUsernames(mentionedUsernames);
@@ -204,6 +207,13 @@ export function registerCommentRoutes(
               commentExcerpt: parsed.data.content?.slice(0, 100),
               // Discriminant d'entité → surface ouverte au tap côté client.
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
+              // Un commentaire n'a pas d'audience propre : il hérite de celle du
+              // post. Sans ce passage, nommer quelqu'un hors audience lui
+              // poussait un extrait du commentaire — donc du fil d'un post qu'il
+              // n'a pas le droit d'ouvrir.
+              postAuthorId: post.authorId,
+              visibility: post.visibility,
+              visibilityUserIds: post.visibilityUserIds ?? [],
             }).catch(err => fastify.log.error(`comment mention notification failed: ${err}`));
           }
         }

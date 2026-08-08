@@ -13,6 +13,21 @@ export interface MentionTargetPost {
   readonly authorId: string;
   /** Discriminant d'entité → surface ouverte au tap côté client. */
   readonly type?: PostMentionType;
+  /**
+   * `Post.visibility`, transmise telle quelle au lot de notification qui décide
+   * qui a le droit d'être prévenu. Requise, et non optionnelle par défaut
+   * `PUBLIC` : une garde de confidentialité qu'on peut désarmer en oubliant un
+   * champ n'est pas une garde.
+   *
+   * Elle ne filtre PAS les lignes `PostMention` — celles-ci consignent un FAIT
+   * sur le texte (« ce post nomme Carol »), vrai quelle que soit l'audience, et
+   * l'affinité de recommandation qui les lit (`PostFeedService.getMentionsByPost`)
+   * ne classe que des candidats déjà filtrés par le feed. Seule la LIVRAISON
+   * est conditionnée.
+   */
+  readonly visibility: string | null | undefined;
+  /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
+  readonly visibilityUserIds?: readonly string[];
 }
 
 export type PostMentionType = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
@@ -45,6 +60,8 @@ export interface PostMentionNotifier {
     mentionedUserIds: string[];
     postExcerpt?: string;
     postType?: PostMentionType;
+    visibility: string | null | undefined;
+    visibilityUserIds?: readonly string[];
   }): Promise<unknown>;
 }
 
@@ -237,6 +254,8 @@ function notifyNewlyMentioned(
       mentionedUserIds: [...newlyMentionedUserIds],
       postExcerpt: content?.slice(0, EXCERPT_LENGTH),
       postType: post.type,
+      visibility: post.visibility,
+      visibilityUserIds: post.visibilityUserIds,
     })
     .catch((error: unknown) => onError?.(error));
 }

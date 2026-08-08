@@ -155,7 +155,9 @@ describe('batch — langue par destinataire', () => {
     const { svc, created } = makeContentHarness({
       a: { systemLanguage: 'en' }, b: { systemLanguage: 'de' }, x: { displayName: 'X' },
     });
-    await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'] });
+    // Audience PUBLIC : ce cas porte sur la LANGUE du contenu, pas sur le droit
+    // de voir. Un post public admet tout le monde, la garde est un no-op ici.
+    await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'], visibility: 'PUBLIC' });
     const byUser = new Map(created.map((d: any) => [d.userId, d.content]));
     expect(byUser.get('a')).toBe('mentioned you');
     expect(byUser.get('b')).toBe('hat dich erwähnt');

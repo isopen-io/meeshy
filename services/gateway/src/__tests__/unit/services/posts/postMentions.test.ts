@@ -13,7 +13,12 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { resolvePostMentions, reconcilePostMentions } from '../../../../services/posts/postMentions';
 
-const POST = { id: 'post-1', authorId: 'u-author', type: 'POST' as const };
+// `visibility` voyage jusqu'au lot de notification, qui décide qui a le droit
+// d'être prévenu. PUBLIC ici : ces cas portent sur la RÉCONCILIATION des lignes
+// `PostMention` (partants, entrants, panne), pas sur l'audience — le filtrage
+// est verrouillé par `postAudience.test.ts` et
+// `NotificationService.mentionaudience.test.ts`.
+const POST = { id: 'post-1', authorId: 'u-author', type: 'POST' as const, visibility: 'PUBLIC' };
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
@@ -321,7 +326,7 @@ describe('reconcilePostMentions — édition', () => {
 
     await reconcilePostMentions({
       prisma: makePrisma(), mentionService: makeMentionService(), notificationService,
-      post: { id: 'post-1', authorId: 'u-author', type: 'REEL' }, content: 'salut @alice',
+      post: { id: 'post-1', authorId: 'u-author', type: 'REEL', visibility: 'PUBLIC' }, content: 'salut @alice',
     });
 
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
