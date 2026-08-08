@@ -848,6 +848,123 @@ describe('MessageHandler — handleMessageEdit et les mentions', () => {
   });
 });
 
+// ── handleMessageEdit et les liens traçables ───────────────────────────────
+
+/**
+ * `message:edit` est le transport d'édition PRIMAIRE (le web y émet
+ * `CLIENT_EVENTS.MESSAGE_EDIT`) et il écrivait le texte BRUT : coller
+ * `[[https://example.com]]` dans une édition laissait les crochets en dur, pour
+ * toujours, alors que le même texte à l'envoi produit un `m+<token>`.
+ */
+describe('MessageHandler — handleMessageEdit et les liens traçables', () => {
+  let handler: MessageHandler;
+  let deps: ReturnType<typeof makeDeps>;
+  let socket: jest.Mocked<Socket>;
+  let callback: jest.Mock<any>;
+  let trackingLinkService: { processExplicitLinksInContent: jest.Mock<any> };
+
+  const RAW = 'regarde [[https://example.com]]';
+  const TRACKED = 'regarde m+abc123';
+
+  const emittedTo = (room: string) => emitsTo(deps.io, room);
+
+  function setup(overrides: Record<string, unknown> = {}) {
+    deps = makeDeps({ trackingLinkService, ...overrides });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: { messageId: VALID_MSG_ID, content: RAW } });
+    mockGetCacheStore.mockReturnValue({ get: mockCacheGet, set: mockCacheSet });
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+
+    trackingLinkService = {
+      processExplicitLinksInContent: jest.fn<any>().mockResolvedValue({
+        processedContent: TRACKED,
+        trackingLinks: [{ token: 'abc123' }],
+      }),
+    };
+    setup();
+    socket = makeSocket();
+    callback = jest.fn();
+
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+  });
+
+  it('persiste le contenu TRAITÉ, pas le texte brut collé par l’auteur', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: RAW }, callback);
+
+    expect(trackingLinkService.processExplicitLinksInContent).toHaveBeenCalledWith({
+      content: RAW,
+      conversationId: VALID_CONV_ID,
+      messageId: VALID_MSG_ID,
+      createdBy: USER_ID,
+    });
+    expect(deps.prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: TRACKED }),
+    }));
+  });
+
+  // Un payload qui diffère de la base ferait afficher aux clients un texte que
+  // le serveur ne porte pas : le prochain chargement le contredirait.
+  it('diffuse le contenu TRAITÉ dans message:edited', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: RAW }, callback);
+
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`).find((call) => call[0] === 'message:edited');
+    expect(edited?.[1]).toEqual(expect.objectContaining({ content: TRACKED }));
+  });
+
+  // Retraduire le texte brut traduirait des crochets et une URL qui ne sont
+  // plus dans le message — et écraserait la traduction du contenu réel.
+  it('retraduit le contenu TRAITÉ', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: RAW }, callback);
+
+    expect(deps.translationService.retranslateMessageAsync).toHaveBeenCalledWith(
+      VALID_MSG_ID,
+      expect.objectContaining({ content: TRACKED }),
+    );
+  });
+
+  // Un lien perdu ne doit pas transformer une édition réussie en erreur : le
+  // texte original est écrit et l'édition aboutit.
+  it('écrit le contenu original et aboutit quand le traitement des liens lève', async () => {
+    trackingLinkService.processExplicitLinksInContent.mockRejectedValue(new Error('tracking store down'));
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: RAW }, callback);
+
+    expect(deps.prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: RAW }),
+    }));
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('ne touche PAS le service quand le texte édité ne porte aucune syntaxe traçable', async () => {
+    mockValidateSocketEvent.mockReturnValue({
+      success: true,
+      data: { messageId: VALID_MSG_ID, content: 'juste du texte https://example.com' },
+    });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'juste du texte https://example.com' }, callback);
+
+    expect(trackingLinkService.processExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(deps.prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: 'juste du texte https://example.com' }),
+    }));
+  });
+});
+
 // ── handleMessageDelete ────────────────────────────────────────────────────
 
 describe('MessageHandler — handleMessageDelete', () => {
