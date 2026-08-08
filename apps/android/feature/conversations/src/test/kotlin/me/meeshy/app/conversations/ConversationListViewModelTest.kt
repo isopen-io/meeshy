@@ -554,6 +554,62 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun create_category_and_assign_creates_then_assigns_the_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.setCategoryOptimistic("c1", "new-id") } returns true
+        val categoryRepository = categoryRepo()
+        val created = me.meeshy.sdk.model.CategoryOption(id = "new-id", name = "Errands", order = 3)
+        coEvery { categoryRepository.create("Errands") } returns
+            me.meeshy.sdk.net.NetworkResult.Success(created)
+        val vm = viewModel(repo, categoryRepository = categoryRepository)
+        advanceUntilIdle()
+
+        vm.createCategoryAndAssign("c1", "Errands")
+        advanceUntilIdle()
+
+        coVerify { categoryRepository.create("Errands") }
+        coVerify { repo.setCategoryOptimistic("c1", "new-id") }
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun create_category_and_assign_surfaces_the_error_and_never_assigns_on_failure() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        val categoryRepository = categoryRepo()
+        coEvery { categoryRepository.create("Errands") } returns
+            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "duplicate name"))
+        val vm = viewModel(repo, categoryRepository = categoryRepository)
+        advanceUntilIdle()
+
+        vm.createCategoryAndAssign("c1", "Errands")
+        advanceUntilIdle()
+
+        coVerify { categoryRepository.create("Errands") }
+        coVerify(exactly = 0) { repo.setCategoryOptimistic(any(), any()) }
+        assertThat(vm.state.value.errorMessage).isEqualTo("duplicate name")
+    }
+
+    @Test
+    fun create_category_and_assign_is_inert_on_a_blank_name() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        val categoryRepository = categoryRepo()
+        val vm = viewModel(repo, categoryRepository = categoryRepository)
+        advanceUntilIdle()
+
+        vm.createCategoryAndAssign("c1", "   ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { categoryRepository.create(any()) }
+        coVerify(exactly = 0) { repo.setCategoryOptimistic(any(), any()) }
+    }
+
+    @Test
     fun toggle_pin_unpins_an_already_pinned_conversation() = runTest(dispatcher) {
         val pinned = ApiConversation(
             id = "c1",

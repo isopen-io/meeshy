@@ -20,8 +20,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -75,6 +75,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
@@ -179,6 +180,7 @@ fun ConversationListScreen(
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
                                 onAssignCategory = { viewModel.reassignCategory(conversation.id, it) },
+                                onCreateCategory = { viewModel.createCategoryAndAssign(conversation.id, it) },
                             )
                         }
                         // Sections (parity iOS): Épingles first, then Mes conversations.
@@ -313,6 +315,7 @@ private fun ConversationRow(
     onMarkRead: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
+    onCreateCategory: (String) -> Unit,
 ) {
     val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
@@ -358,6 +361,7 @@ private fun ConversationRow(
             onMarkRead = onMarkRead,
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
+            onCreateCategory = onCreateCategory,
         )
     }
 }
@@ -401,6 +405,7 @@ private fun ConversationRowContent(
     onMarkRead: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
+    onCreateCategory: (String) -> Unit,
 ) {
     val title = conversation.displayTitle(currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
@@ -530,6 +535,7 @@ private fun ConversationRowContent(
             onMarkRead = onMarkRead,
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
+            onCreateCategory = onCreateCategory,
         )
     }
 }
@@ -551,6 +557,7 @@ private fun ConversationContextMenu(
     onMarkRead: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
+    onCreateCategory: (String) -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
@@ -608,34 +615,60 @@ private fun ConversationContextMenu(
             leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
             onClick = { onToggleArchive(); onDismiss() },
         )
-        // Move-to-category (parity iOS `setCategory`): one item per user category,
-        // the row's current category checked. Idempotency is enforced by the
-        // ConversationCategoryReassignment SSOT in the ViewModel, so re-selecting the
-        // current category is a harmless no-op.
-        if (categories.isNotEmpty()) {
-            HorizontalDivider()
-            Text(
-                text = stringResource(R.string.conversations_action_move_to_category),
-                style = MaterialTheme.typography.labelSmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.padding(
-                    horizontal = MeeshySpacing.md,
-                    vertical = MeeshySpacing.xs,
-                ),
+        // Move-to-category / create-category (parity iOS `CategoryPickerField` +
+        // `ConversationOptionsViewModel.setCategory`/`createCategoryAndSelect`): a
+        // search field filters the pure ConversationCategoryPicker SSOT's displayed
+        // list (every category but the current one), and a "Create …" row appears
+        // whenever the trimmed query matches no known category name. Always shown
+        // (not gated on a non-empty catalogue) so a user with zero categories can
+        // create their first one from here. Idempotency on selecting an existing
+        // category is enforced by ConversationCategoryReassignment in the ViewModel.
+        var categoryQuery by remember(expanded) { mutableStateOf("") }
+        val picker = ConversationCategoryPicker.resolve(categories, currentCategoryId, categoryQuery)
+        HorizontalDivider()
+        Text(
+            text = stringResource(R.string.conversations_action_move_to_category),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+        )
+        TextField(
+            value = categoryQuery,
+            onValueChange = { categoryQuery = it },
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.conversations_category_search_hint)) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            colors = TextFieldDefaults.colors(
+                unfocusedContainerColor = MeeshyTheme.tokens.backgroundTertiary,
+                focusedContainerColor = MeeshyTheme.tokens.backgroundTertiary,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        )
+        if (picker.canCreate) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.conversations_action_create_category,
+                            categoryQuery.trim(),
+                        ),
+                    )
+                },
+                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                onClick = { onCreateCategory(categoryQuery.trim()); onDismiss() },
             )
-            categories.forEach { category ->
-                DropdownMenuItem(
-                    text = { Text(category.name) },
-                    leadingIcon = {
-                        Icon(
-                            if (category.id == currentCategoryId) Icons.Filled.Check
-                            else Icons.Filled.Folder,
-                            contentDescription = null,
-                        )
-                    },
-                    onClick = { onAssignCategory(category.id); onDismiss() },
-                )
-            }
+        }
+        picker.displayed.forEach { category ->
+            DropdownMenuItem(
+                text = { Text(category.name) },
+                leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                onClick = { onAssignCategory(category.id); onDismiss() },
+            )
         }
     }
 }

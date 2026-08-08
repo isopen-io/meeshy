@@ -3084,3 +3084,31 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` timed out at 15s (real DataStore on a temp
   file, `StateFlow.first()`); it passes in ~6s in isolation. Not caused by an `apps/android` diff — if
   a full `check` reddens only on this test, re-run it isolated before treating the gate as failed.
+
+## Slice `category-picker-create` (2026-08-08)
+- **A pure decision core sitting unused for weeks is a strong "next slice" signal — verify what's
+  actually still missing before assuming the whole follow-up is one slice.** `ConversationCategoryPicker`
+  (resolve/canCreate/submit) shipped 2026-07-26 with a "TagInputField + CategoryPickerField composables"
+  follow-up that got recommended in every subsequent run's "Next slice" note without being picked, likely
+  because it reads as one large "build a whole preferences screen" slice. Re-scoping to just the
+  **category** half (tags need a net-new wire field, `ApiConversation` has none — out of scope) and
+  wiring it into the **already-shipped** long-press "move to category" dropdown (instead of a new screen)
+  turned it into a normal-sized slice: one new Retrofit method, one repository method, one ViewModel
+  method, and a Composable rework of an existing menu section.
+- **A cache-first repository's "create" write should self-serve the snapshot, not just trigger a
+  revalidate.** `CategoryRepository.create` appends the POST response straight into
+  `CategorySnapshotStore` (`store.save(current + created, now)`) rather than calling `refresh()`
+  afterward — the new category is selectable in the *same* frame the create call resolves, no extra
+  network round-trip. The later `category:created` socket echo the gateway broadcasts to the creating
+  device is a harmless idempotent re-upsert (`UserCategoryCatalog.upsert` keys by id), confirmed by
+  reading `CategoryEvent`/`UserCategoryCatalog.upsert` before relying on it — don't assume idempotency,
+  trace the fold.
+- **Reuse the existing reassignment guard instead of re-deriving "is this a no-op".** A freshly created
+  category can never equal the conversation's current category id, so
+  `createCategoryAndAssign` calls straight into `reassignCategory(id, newId)` rather than
+  `repository.setCategoryOptimistic` directly — one idempotency rule, one place, and the outbox-flush
+  scheduling that `runPrefMutation` already wires stays correct for free.
+- **`remember(expanded) { mutableStateOf("") }` resets ephemeral menu-local state on every reopen.**
+  Keying the search-query `remember` on the `DropdownMenu`'s own `expanded` boolean gives a fresh state
+  instance each time the menu transitions to visible, without needing an explicit `LaunchedEffect` reset —
+  cheaper than threading a reset callback through `onDismiss`.

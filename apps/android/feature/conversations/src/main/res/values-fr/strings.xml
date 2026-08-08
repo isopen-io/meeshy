@@ -44,6 +44,8 @@
     <string name="conversations_action_unarchive">Désarchiver</string>
     <string name="conversations_action_mark_read">Marquer comme lu</string>
     <string name="conversations_action_move_to_category">Déplacer vers une catégorie</string>
+    <string name="conversations_category_search_hint">Rechercher ou créer une catégorie…</string>
+    <string name="conversations_action_create_category">Créer « %1$s »</string>
     <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
     <string name="conversations_action_more">Plus d\'actions</string>
     <string name="conversations_badge_pinned">Épinglée</string>
