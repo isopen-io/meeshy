@@ -253,71 +253,62 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     return unsubscribe;
   }, [peerConnectionsCount]);
 
-  // Apply audio effects to outgoing stream
-  // Replace audio tracks in all peer connections when processed audio stream changes or new connections are added
+  // Route outgoing audio through the processed (effects) track while any
+  // effect is enabled, and through the raw microphone track otherwise.
+  // Deliberately a single effect with NO cleanup: an effect's cleanup runs
+  // with the closure captured at the render that scheduled it — i.e. always
+  // the PREVIOUS value of `audioEffectsActive`, never the one that triggered
+  // the re-run. A prior version branched on `!audioEffectsActive` inside the
+  // cleanup to decide whether to restore the raw track, which read that
+  // stale value: turning effects OFF left the processed track on the wire
+  // (restore silently skipped), and turning them ON briefly restored the raw
+  // track before the processed one landed (audible blip). Picking the
+  // target track directly in the effect body — which always sees the
+  // CURRENT render's values — sidesteps the whole class of bug, and also
+  // means a new participant (peerConnectionsCount change) is naturally
+  // wired to whatever's currently playing rather than always the processed
+  // stream regardless of `audioEffectsActive`.
   useEffect(() => {
-    if (!processedAudioStream || !localStream) return;
+    if (!localStream) return;
 
     const peerConnections = useCallStore.getState().peerConnections;
     if (peerConnections.size === 0) {
-      logger.debug('[VideoCallInterface]', 'No peer connections yet, audio effects will be applied when connections are created');
+      logger.debug('[VideoCallInterface]', 'No peer connections yet, audio routing will be applied when connections are created');
       return;
     }
 
-    // Get the processed audio track
-    const processedAudioTracks = processedAudioStream.getAudioTracks();
-    if (processedAudioTracks.length === 0) {
-      logger.warn('[VideoCallInterface]', 'No audio tracks in processed stream');
+    const targetStream = audioEffectsActive ? processedAudioStream : localStream;
+    const targetTracks = targetStream?.getAudioTracks() ?? [];
+    if (targetTracks.length === 0) {
+      logger.warn('[VideoCallInterface]', 'No audio tracks available to route', { audioEffectsActive });
       return;
     }
 
-    const newAudioTrack = processedAudioTracks[0];
-    logger.info('[VideoCallInterface]', 'Replacing audio tracks in peer connections with processed audio', {
+    const targetTrack = targetTracks[0];
+    logger.info('[VideoCallInterface]', 'Routing outgoing audio track', {
       audioEffectsActive,
-      trackId: newAudioTrack.id,
+      trackId: targetTrack.id,
       peerConnectionsCount
     });
 
-    // Replace audio track in all peer connections
     peerConnections.forEach((peerConnection, participantId) => {
       const senders = peerConnection.getSenders();
       const audioSender = senders.find(sender => sender.track?.kind === 'audio');
 
-      if (audioSender) {
-        audioSender.replaceTrack(newAudioTrack)
-          .then(() => {
-            logger.debug('[VideoCallInterface]', 'Audio track replaced successfully', { participantId });
-          })
-          .catch((error) => {
-            logger.error('[VideoCallInterface]', 'Failed to replace audio track', { participantId, error });
-          });
-      } else {
+      if (!audioSender) {
         logger.warn('[VideoCallInterface]', 'No audio sender found for participant', { participantId });
+        return;
       }
+      if (audioSender.track?.id === targetTrack.id) return;
+
+      audioSender.replaceTrack(targetTrack)
+        .then(() => {
+          logger.debug('[VideoCallInterface]', 'Audio track replaced successfully', { participantId });
+        })
+        .catch((error) => {
+          logger.error('[VideoCallInterface]', 'Failed to replace audio track', { participantId, error });
+        });
     });
-
-    // Cleanup: when effect is disabled or component unmounts, restore original audio
-    return () => {
-      if (!audioEffectsActive && localStream) {
-        const originalAudioTracks = localStream.getAudioTracks();
-        if (originalAudioTracks.length > 0) {
-          const originalAudioTrack = originalAudioTracks[0];
-          logger.info('[VideoCallInterface]', 'Restoring original audio track');
-
-          peerConnections.forEach((peerConnection, participantId) => {
-            const senders = peerConnection.getSenders();
-            const audioSender = senders.find(sender => sender.track?.kind === 'audio');
-
-            if (audioSender) {
-              audioSender.replaceTrack(originalAudioTrack)
-                .catch((error) => {
-                  logger.error('[VideoCallInterface]', 'Failed to restore original audio track', { participantId, error });
-                });
-            }
-          });
-        }
-      }
-    };
   }, [processedAudioStream, localStream, audioEffectsActive, peerConnectionsCount]);
 
   // Cleanup on unmount and page unload

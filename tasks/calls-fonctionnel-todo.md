@@ -4719,3 +4719,60 @@ nouvelle cible : le bug web déjà diagnostiqué.
   `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
   trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
   cette vague).
+
+## Vague 74 — `VideoCallInterface`: le routage audio effets/brut dépendait d'une closure de cleanup périmée, jamais couverte par un test (2026-08-08)
+
+Point d'entrée : après avoir fusionné à la main les deux PRs concurrentes laissées ouvertes par le cycle
+précédent (#2647 docs Vague 72, #2648 fix Vague 73 — conflit sur le même point d'ancrage de
+`tasks/calls-fonctionnel-todo.md`, résolu en conservant les deux entrées et en renumérotant la seconde),
+audit dédié (subagent, lecture directe) du périmètre web/gateway restant. Backlog Android (Vague 70) et iOS
+(`CallManager.swift`, `actor CallEventQueue`, `reportNewIncomingCall`) toujours hors d'atteinte faute de
+toolchain dans ce sandbox — reconfirmé.
+
+- **Root cause confirmée par lecture directe** : `VideoCallInterface.tsx` (effet de routage audio, alors
+  L258-321) réappliquait inconditionnellement `processedAudioStream` à tous les senders à chaque changement
+  de `processedAudioStream`/`localStream`/`audioEffectsActive`/`peerConnectionsCount`, puis tentait de
+  restaurer la piste brute dans le CLEANUP de ce même effet via `if (!audioEffectsActive && localStream)`.
+  Or le cleanup d'un effet React s'exécute avec la closure capturée au rendu qui l'a programmé — donc
+  toujours l'ANCIENNE valeur de `audioEffectsActive`, jamais celle qui vient de déclencher le re-render :
+  activer un effet (`false→true`) faisait lire `audioEffectsActive=false` au cleanup → restauration
+  parasite de la piste brute juste avant que le nouveau corps d'effet ne réapplique la piste traitée (glitch
+  audio audible) ; désactiver un effet (`true→false`) faisait lire `audioEffectsActive=true` au cleanup →
+  la restauration attendue ne se déclenchait JAMAIS, laissant la piste traitée active indéfiniment après
+  désactivation. Un changement non lié de `peerConnectionsCount` (un participant rejoint/quitte un appel de
+  groupe) déclenchait le même cleanup périmé et pouvait re-router à tort les pairs déjà connectés. Fichier
+  jamais couvert par un test exerçant ces transitions (`VideoCallInterface.test.tsx` existait mais aucun cas
+  ne touchait `audioEffectsActive`/`replaceTrack` sur la piste audio), ce qui explique qu'il ait échappé aux
+  73 vagues précédentes.
+- **Fix** : effet unique sans cleanup — la piste cible (`processedAudioStream` si un effet est actif,
+  `localStream` sinon) est calculée directement dans le corps de l'effet, qui voit toujours les valeurs du
+  rendu COURANT (jamais périmées). Un garde-fou supplémentaire (`audioSender.track?.id === targetTrack.id`)
+  évite un `replaceTrack` redondant quand le sender porte déjà la bonne piste (ex. montage initial, pair déjà
+  correctement routé). Élimine toute la classe de bug sans réintroduire de dépendance à l'ordre
+  cleanup/setup.
+- **Tests** (TDD, RED confirmé avant fix — 3 nouveaux tests échouaient) : nouveau describe
+  `VideoCallInterface.test.tsx` → « audio effects track routing » (3 tests) — route via la piste brute
+  quand aucun effet n'est actif, bascule brute→traitée à l'activation, restaure traitée→brute à la
+  désactivation. Mock `useAudioEffects` rendu contrôlable par test (`useAudioEffectsMock.mockReturnValue`,
+  même patron que `useAdaptiveDegradationMock` déjà présent dans ce fichier). Effet de bord découvert en
+  cours de RED : deux tests préexistants du bloc `handleSwitchCamera` utilisaient un `localStream` sans
+  `getAudioTracks`, qui plantait désormais sur la branche audio du nouvel effet (le code fixé lit
+  légitimement `localStream.getAudioTracks()` quand les effets sont inactifs, alors que l'ancien bug ne le
+  faisait qu'au cleanup) — fixtures corrigées (`getAudioTracks: () => []`), pas de changement de
+  comportement testé.
+- **Vérification** : `VideoCallInterface.test.tsx` (19 tests) vert ; suite complète `hooks/` +
+  `utils/__tests__/audio-effects.test.ts` + `components/video-calls/**` (128 suites / 2298 tests, 2296
+  passed + 2 skips pré-existants sans rapport) verte. `packages/shared && npx prisma generate --generator
+  client && bun run build` (prérequis CLAUDE.md, sandbox sans `node_modules` au démarrage — `bun install
+  --ignore-scripts` requis) sans erreur. `npx tsc --noEmit` sur `apps/web` : 0 nouvelle erreur imputable au
+  diff (les 11 erreurs restantes sur `VideoCallInterface.tsx` sont toutes préexistantes, pattern
+  `(socket as unknown).emit(...)` déjà présent ailleurs dans le fichier).
+- **Note complémentaire (spec, non corrigée cette vague)** : `apps/web/utils/ringtone.ts` (`playRingPattern`,
+  L216-251) programme sa propre ré-invocation via un `setTimeout` récursif jamais stocké/annulé par `stop()`
+  — sur deux sessions de sonnerie rapprochées (< 2.3 s, ex. deux appels entrants consécutifs) sur le
+  singleton `getRingtone()`, un timeout périmé peut ré-armer un second cycle de sonnerie par-dessus le
+  nouveau (glitch audio, pas de crash). Confiance moyenne, cosmétique, candidat pour la prochaine vague.
+- **Reste ouvert** : le glitch `ringtone.ts` ci-dessus ; dead code / god-object `CallManager.swift` iOS
+  (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only
+  (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain
+  vérifiable, reconfirmé cette vague).
