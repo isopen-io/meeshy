@@ -284,6 +284,7 @@ model User {
   postComments       PostComment[]     @relation("UserPostComments")
   commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
   postReactionsAuthored PostReaction[] @relation("UserPostReactionsAuthored")
+  messageMentions    Mention[]         @relation("UserMessageMentions")
   commentMentions    CommentMention[]  @relation("UserCommentMentions")
   postMentions       PostMention[]     @relation("UserPostMentions")
   postViews          PostView[]        @relation("UserPostViews")
@@ -534,7 +535,6 @@ model Participant {
   reactions               Reaction[]
   statusEntries           MessageStatusEntry[]
   readCursors             ConversationReadCursor[]
-  mentions                Mention[]
   callParticipations      CallParticipant[]
   attachmentStatusEntries AttachmentStatusEntry[]
   attachmentReactions     AttachmentReaction[]
@@ -1233,21 +1233,38 @@ model PostReaction {
   @@index([userId, postId])
 }
 
-/// Mention d'un participant dans un message
+/// Mention d'un utilisateur dans un message — jumeau de `CommentMention` et
+/// `PostMention`, et keyé comme eux sur `User`.
+///
+/// Une mention nomme une PERSONNE, pas une adhésion à une conversation : elle
+/// doit survivre au départ de celle qui est nommée, et l'inbox `/mentions/me`
+/// la lit transversalement à toutes les conversations (un utilisateur possède
+/// un `Participant` par conversation — keyer là-dessus imposerait une jointure
+/// à chaque lecture, et une cascade qui effacerait l'historique au retrait d'un
+/// membre).
 model Mention {
   id                   String   @id @default(auto()) @map("_id") @db.ObjectId
   messageId            String   @db.ObjectId
-  mentionedParticipantId String @db.ObjectId
+  /// `User.id` de la personne nommée.
+  ///
+  /// Le nom PHYSIQUE de la colonne reste `mentionedParticipantId` : ce champ a
+  /// été déclaré comme une relation vers `Participant` alors qu'écrivains et
+  /// lecteurs y ont toujours mis un `User.id`. Le `@map` corrige le TYPE sans
+  /// déplacer une seule donnée. Les lignes réécrites en `Participant.id` par
+  /// `scripts/migrations/migrate-to-participant-model.ts` — invisibles depuis
+  /// l'inbox depuis lors — sont reconverties par
+  /// `scripts/migrations/repair-mention-user-ids.ts`.
+  mentionedUserId      String   @map("mentionedParticipantId") @db.ObjectId
   mentionedAt          DateTime @default(now())
 
-  message              Message     @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
-  mentionedParticipant Participant @relation(fields: [mentionedParticipantId], references: [id], onDelete: Cascade)
+  message              Message @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedUser        User    @relation("UserMessageMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, mentionedParticipantId], name: "message_participant_mention_unique")
+  @@unique([messageId, mentionedUserId], name: "message_user_mention_unique")
   @@index([messageId])
-  @@index([mentionedParticipantId])
+  @@index([mentionedUserId])
   @@index([mentionedAt])
-  @@index([mentionedParticipantId, mentionedAt(sort: Desc)]) // User's mention inbox sorted by time
+  @@index([mentionedUserId, mentionedAt(sort: Desc)]) // User's mention inbox sorted by time
 }
 
 /// Demande d'amitié entre utilisateurs

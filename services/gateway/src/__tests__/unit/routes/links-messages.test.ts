@@ -1396,9 +1396,14 @@ describe('POST /links/:id/messages — anonymous: mentions', () => {
     expect(body.data.message.validatedMentions).toEqual(['bob']);
   });
 
-  it('validates the mention against the conversation and the anonymous sender', () => {
+  // La validation compare l'expéditeur aux `Participant.userId` des membres,
+  // donc à des `User.id`. Un participant de lien ANONYME n'en possède aucun :
+  // `null` dit qu'il n'est aucun des mentionnés. Lui passer son `Participant.id`
+  // comparait deux espaces disjoints — une inégalité toujours vraie, donc une
+  // règle d'auto-mention qui ne se déclenchait jamais.
+  it('validates the mention against the conversation, with no user identity for an anonymous sender', () => {
     expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith(
-      CONV_ID, [PEER_USER_ID], PART_ID
+      CONV_ID, [PEER_USER_ID], null
     );
   });
 
@@ -1532,6 +1537,19 @@ describe('POST /links/:id/messages/auth — mentions', () => {
       [PEER_USER_ID],
       expect.objectContaining({ senderId: USER_ID, conversationId: CONV_ID, messageId: MSG_ID }),
       [PEER_USER_ID]
+    );
+  });
+
+  // Le pendant du cas anonyme : un expéditeur INSCRIT possède un `User.id`, et
+  // c'est lui — pas son `Participant.id` — que la validation doit recevoir, dans
+  // le même espace que les mentionnés qu'elle lui compare.
+  it('validates the mention against the sender USER identity behind the participant', () => {
+    expect(prisma.participant.findUnique).toHaveBeenCalledWith({
+      where: { id: PART_ID },
+      select: { userId: true },
+    });
+    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith(
+      CONV_ID, [PEER_USER_ID], USER_ID
     );
   });
 });

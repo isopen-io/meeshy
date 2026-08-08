@@ -17,6 +17,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([
         { userId: 'u-alice', displayName: 'Alice', user: { id: 'u-alice', username: 'alice', displayName: 'Alice' } },
       ]),
+      findUnique: jest.fn<any>().mockResolvedValue({ userId: 'u-sender' }),
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: { update: jest.fn<any>().mockResolvedValue(undefined) },
@@ -113,13 +114,55 @@ describe('resolveMessageMentions — chemin nominal', () => {
     );
   });
 
-  it('valide les permissions contre la conversation et l’expéditeur du message', async () => {
+  // `message.senderId` est un `Participant.id` (c'est ce que la colonne
+  // `Message.senderId` référence), mais la validation compare l'expéditeur aux
+  // `Participant.userId` des membres — donc à des `User.id`. Lui passer le
+  // `Participant.id` compare deux espaces disjoints : la règle « on ne se
+  // mentionne pas soi-même » d'une conversation directe ne se déclenche jamais.
+  it('valide les permissions contre l’identité UTILISATEUR de l’expéditeur, pas son participant', async () => {
     const prisma = makePrisma();
     const mentionService = makeMentionService();
 
     await resolveMessageMentions({ prisma, mentionService, message: MESSAGE, content: 'salut @alice' });
 
-    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith('conv-1', ['u-alice'], 'part-1');
+    expect(prisma.participant.findUnique).toHaveBeenCalledWith({
+      where: { id: 'part-1' },
+      select: { userId: true },
+    });
+    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith('conv-1', ['u-alice'], 'u-sender');
+  });
+
+  // Un expéditeur anonyme n'a aucun `User.id` : il ne peut être personne des
+  // mentionnés, et la validation doit le savoir plutôt que de recevoir un id
+  // d'un autre espace qui ne correspondra jamais par hasard.
+  it('passe null quand l’expéditeur est anonyme', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { userId: 'u-alice', displayName: 'Alice', user: { id: 'u-alice', username: 'alice', displayName: 'Alice' } },
+        ]),
+        findUnique: jest.fn<any>().mockResolvedValue({ userId: null }),
+      },
+    });
+    const mentionService = makeMentionService();
+
+    await resolveMessageMentions({ prisma, mentionService, message: MESSAGE, content: 'salut @alice' });
+
+    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith('conv-1', ['u-alice'], null);
+  });
+
+  // La résolution est une requête de plus : elle ne doit être payée que par les
+  // messages qui nomment réellement quelqu'un.
+  it('ne résout pas l’expéditeur quand l’extraction ne retient personne', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      extractMentionsWithParticipants: jest.fn<any>().mockReturnValue([]),
+    });
+
+    await resolveMessageMentions({ prisma, mentionService, message: MESSAGE, content: 'salut @fantome' });
+
+    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+    expect(mentionService.validateMentionPermissions).not.toHaveBeenCalled();
   });
 
   // `validatedMentions` est ce dont le client se sert pour SURLIGNER. Y laisser
