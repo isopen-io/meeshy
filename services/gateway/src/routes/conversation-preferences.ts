@@ -19,14 +19,12 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type {
-  UserPreferencesConversationUpdatedEventData,
-  UserPreferencesReorderedEventData,
-} from '@meeshy/shared/types/socketio-events';
+import type { UserPreferencesConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { validatePagination } from '../utils/pagination';
 import {
   writeConversationPreferences,
+  reorderConversationPreferences,
   type ConversationPreferencesWrite,
 } from '../services/conversationPreferencesSync';
 
@@ -548,29 +546,11 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { updates } = request.body;
 
-        // Batch update
-        await Promise.all(
-          updates.map(update =>
-            fastify.prisma.userConversationPreferences.updateMany({
-              where: {
-                userId,
-                conversationId: update.conversationId
-              },
-              data: {
-                orderInCategory: update.orderInCategory
-              }
-            })
-          )
-        );
-
-        const reorderPayload: UserPreferencesReorderedEventData = {
-          userId,
-          updates: updates.map(u => ({
-            conversationId: u.conversationId,
-            orderInCategory: u.orderInCategory,
-          })),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, reorderPayload);
+        // Persist first, broadcast what was persisted. The previous `updateMany`
+        // matched nothing whenever the user had never customized the
+        // conversation, yet the route still answered 200 and told every device
+        // to move the row — an order no refetch could ever confirm.
+        await reorderConversationPreferences(fastify, { userId, updates });
 
         return sendSuccess(reply, { message: 'Conversations reordered successfully' });
       } catch (error) {
