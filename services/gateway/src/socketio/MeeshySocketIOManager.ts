@@ -33,6 +33,7 @@ import { AttachmentService } from '../services/attachments';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
+import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -82,6 +83,7 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
+  if (eventType === 'link-message') return SERVER_EVENTS.LINK_MESSAGE_NEW;
   return SERVER_EVENTS.MESSAGE_NEW;
 }
 
@@ -588,27 +590,44 @@ export class MeeshySocketIOManager {
     messageId: string;
     payload: Record<string, unknown>;
   }): Promise<void> {
-    if (!this.deliveryQueue) return;
-    const { conversationId, actorUserId, eventType, messageId, payload } = params;
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true }
-      });
-      for (const p of participants) {
-        const queueKey = p.userId ?? p.id;
-        if ((actorUserId && p.userId === actorUserId) || this.connectedUsers.has(queueKey)) continue;
-        this.deliveryQueue.enqueue(queueKey, {
-          messageId,
-          conversationId,
-          payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-        }).catch((err) => logger.warn('Failed to enqueue offline message mutation', { userId: queueKey, eventType, error: err }));
-      }
-    } catch (err) {
-      logger.warn('Failed to fetch participants for offline mutation enqueue', { conversationId, eventType, error: err });
-    }
+    await this._enqueueForOfflineParticipants(params);
+  }
+
+  /**
+   * Queue a share-link message for every OFFLINE conversation participant.
+   *
+   * `POST /links/:id/messages` and its authenticated twin bypass
+   * `MessagingService.handleMessage` and announce the message with a single
+   * `io.to(conversation:<id>).emit(LINK_MESSAGE_NEW)`. That room holds
+   * CONNECTED sockets only, so before this existed a message sent through a
+   * share link was never replayed to a participant who happened to be offline —
+   * the same failure the queue closes for `message:new` on both the socket and
+   * the nominal REST send paths. The share link is the PRIMARY (and only) send
+   * transport for anonymous participants, so this was the most severe class of
+   * event the gap could still swallow: a whole message, not a stale counter.
+   *
+   * The actor is excluded by participant id — an anonymous author has no
+   * `User.id` at all, which is precisely why this cannot reuse the userId-keyed
+   * exclusion of `enqueueOfflineMessageMutation` above.
+   *
+   * `payload` must be the peer-facing (cid-stripped) body, identical to the
+   * live emit: a replay carrying the author's `clientMessageId` would leak
+   * their local optimistic id into another user's id space.
+   */
+  async enqueueOfflineLinkMessage(params: {
+    conversationId: string;
+    actorParticipantId: string | null | undefined;
+    messageId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
+  }
+
+  private async _enqueueForOfflineParticipants(params: OfflineParticipantQueueParams): Promise<void> {
+    await enqueueForOfflineParticipants(
+      { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+      params
+    );
   }
 
   /**

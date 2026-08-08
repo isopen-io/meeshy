@@ -1,8 +1,7 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
-import { enhancedLogger } from '../utils/logger-enhanced.js';
-
-const logger = enhancedLogger.child({ module: 'reactionOfflineQueue' });
+import {
+  enqueueForOfflineParticipants,
+  type OfflineParticipantQueueDeps,
+} from './offlineParticipantQueue';
 
 export type ReactionEventType = 'reaction-added' | 'reaction-removed';
 
@@ -10,11 +9,7 @@ export type ReactionEventType = 'reaction-added' | 'reaction-removed';
  * The collaborators the enqueue needs, kept structural so the socket handler,
  * the manager and test doubles can all supply them without importing each other.
  */
-export interface ReactionOfflineQueueDeps {
-  deliveryQueue: { enqueue(userId: string, entry: QueuedMessagePayload): Promise<void> } | null | undefined;
-  prisma: Pick<PrismaClient, 'participant'>;
-  connectedUsers: { has(key: string): boolean };
-}
+export type ReactionOfflineQueueDeps = OfflineParticipantQueueDeps;
 
 export interface ReactionOfflineQueueParams {
   conversationId: string;
@@ -43,55 +38,31 @@ export interface ReactionOfflineQueueParams {
  * mobile client and every reaction sent from an iPhone was lost for offline
  * peers. One implementation means a sixth transport cannot reopen the gap.
  *
- * The actor is excluded by participant id (Leçon 78: exclude on the CALLER's
- * identity, never on message content) and every online peer is skipped since
- * they already received the live broadcast.
+ * The fan-out itself — active participants, actor excluded by participant id
+ * (Leçon 78: exclude on the CALLER's identity, never on message content),
+ * online peers skipped, never throws — is `enqueueForOfflineParticipants`,
+ * shared with every other event family. What remains reaction-SPECIFIC, and the
+ * only reason this wrapper exists, is the dedup key.
  *
  * `dedupKey` scopes the delivery-queue dedup to (messageId, reactor, emoji)
  * instead of the default messageId — `RedisDeliveryQueue`'s default dedup
  * identity is (messageId, eventType), which would otherwise collapse two
  * different reactors' 'reaction-added' events on the same message into one,
- * silently dropping every reactor after the first for an offline peer.
- *
- * Best-effort side channel — never throws and never rejects. The reaction has
- * already been committed by the time this runs; a queue failure must not turn a
- * successful reaction into a 500 or flip an already-sent ACK to failure.
+ * silently dropping every reactor after the first for an offline peer. It
+ * belongs here rather than at the call sites so no transport can enqueue a
+ * reaction without it.
  */
 export async function enqueueOfflineReactionEvent(
   deps: ReactionOfflineQueueDeps,
   params: ReactionOfflineQueueParams
 ): Promise<void> {
-  const { deliveryQueue, prisma, connectedUsers } = deps;
-  if (!deliveryQueue) return;
-
   const { conversationId, actorParticipantId, eventType, messageId, emoji, payload } = params;
-  try {
-    const participants = await prisma.participant.findMany({
-      where: { conversationId, isActive: true },
-      select: { id: true, userId: true },
-    });
-    const dedupKey = `${messageId}:${actorParticipantId ?? 'unknown'}:${emoji}`;
-    for (const p of participants) {
-      const queueKey = p.userId ?? p.id;
-      if (p.id === actorParticipantId || connectedUsers.has(queueKey)) continue;
-      deliveryQueue
-        .enqueue(queueKey, {
-          messageId,
-          conversationId,
-          payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-          dedupKey,
-        })
-        .catch((err: unknown) =>
-          logger.warn('Failed to enqueue offline reaction event', { userId: queueKey, eventType, error: err })
-        );
-    }
-  } catch (err) {
-    logger.warn('Failed to fetch participants for offline reaction enqueue', {
-      conversationId,
-      eventType,
-      error: err,
-    });
-  }
+  await enqueueForOfflineParticipants(deps, {
+    conversationId,
+    actorParticipantId,
+    eventType,
+    messageId,
+    payload,
+    dedupKey: `${messageId}:${actorParticipantId ?? 'unknown'}:${emoji}`,
+  });
 }

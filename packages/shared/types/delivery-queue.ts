@@ -23,7 +23,15 @@ export type QueuedMessagePayload = {
    * peer's pin state converges on reconnect — like edits/deletes, at most one
    * relevant transition per message per event type, so messageId+eventType
    * dedup is correct and no finer dedupKey is needed; never a delivery
-   * receipt. */
+   * receipt.
+   * 'link-message' replays LINK_MESSAGE_NEW for a message sent through a share
+   * link. It is a CREATION like 'new', not a mutation, but it keeps its own
+   * eventType because the two are different wire events carrying different
+   * payload shapes: `message:new` sends the message object, `link:message:new`
+   * wraps it as `{ message }`. messageId dedup is correct (one creation per
+   * message) and it carries no delivery receipt — the share-link send path
+   * creates no read-status rows, so a receipt on drain alone would claim a
+   * delivery the rest of the pipeline never tracked. */
   readonly eventType?:
     | 'new'
     | 'edited'
@@ -33,7 +41,8 @@ export type QueuedMessagePayload = {
     | 'attachment-reaction-added'
     | 'attachment-reaction-removed'
     | 'pinned'
-    | 'unpinned';
+    | 'unpinned'
+    | 'link-message';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:

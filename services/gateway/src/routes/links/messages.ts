@@ -9,10 +9,10 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
+import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -303,13 +303,17 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         place
       });
 
-      // Émettre l'événement WebSocket
-      const socketIOManager = fastify.socketIOHandler.getManager();
-      if (socketIOManager) {
-        socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: stripClientMessageId(payload)
-        });
-      }
+      // Émettre vers les DEUX audiences (room live + file hors ligne) — voir
+      // `broadcastLinkMessage`. Ce chemin CONTOURNE `MessagingService.handleMessage`,
+      // donc rien d'autre ne rejouera ce message à un participant déconnecté.
+      await broadcastLinkMessage({
+        manager: fastify.socketIOHandler.getManager(),
+        conversationId: participantShareLink.conversationId,
+        senderParticipantId: anonymousParticipant.id,
+        messageId: message.id,
+        payload: { message: stripClientMessageId(payload) },
+        onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
+      });
 
       return sendSuccess(reply, {
         messageId: message.id,
@@ -528,13 +532,18 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         place
       });
 
-      // Émettre l'événement WebSocket
-      const socketIOManager = fastify.socketIOHandler.getManager();
-      if (socketIOManager) {
-        socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: stripClientMessageId(payload)
-        });
-      }
+      // Même diffuseur unique que le jumeau anonyme : les deux routes servent la
+      // même conversation aux mêmes participants, une seule des deux couvrant
+      // les pairs déconnectés serait exactement l'asymétrie que ce point unique
+      // rend inécrivable.
+      await broadcastLinkMessage({
+        manager: fastify.socketIOHandler.getManager(),
+        conversationId: shareLink.conversationId,
+        senderParticipantId: participant.id,
+        messageId: message.id,
+        payload: { message: stripClientMessageId(payload) },
+        onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
+      });
 
       return sendSuccess(reply, {
         messageId: message.id,
