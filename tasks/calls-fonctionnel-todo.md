@@ -4828,3 +4828,90 @@ toolchain dans ce sandbox — reconfirmé.
   handle — deux appels rapprochés à `setCurrentUser()` peuvent armer deux intervalles concurrents et donc
   appeler `initializeConnection()` deux fois. Confiance moyenne, impact faible (la connexion est
   idempotente côté `ensureConnection`), candidat pour la prochaine vague.
+
+## Vague 76 — XSS stocké via les liens de suivi, et open redirect (CWE-601) dans le flux d'authentification (2026-08-08)
+
+Point d'entrée : audit systématique des fichiers du périmètre web SANS AUCUN test (la Vague 75 venait de
+montrer qu'un fichier non couvert peut traverser 74 vagues d'audit). 13 fichiers de `apps/web/utils/`
+étaient dans ce cas ; `safe-redirect.ts` — un module dont l'unique raison d'être est de bloquer les
+redirections ouvertes — en faisait partie. Deux vulnérabilités distinctes, vérifiées de bout en bout.
+
+### Trouvaille 1 — XSS stocké via `originalUrl` d'un lien de suivi (sévérité HAUTE)
+
+- **Chaîne d'exploitation confirmée** : (1) `POST /api/v1/tracking-links` valide `originalUrl` avec
+  `z.url('URL invalide')` — or `z.url()` demande seulement que la valeur PARSE : `javascript:alert(1)`,
+  `data:text/html,...`, `file:///etc/passwd` sont tous ACCEPTÉS (vérifié en exécutant le schéma).
+  L'authentification est optionnelle sur cette route tant qu'on ne rattache pas le lien à une conversation,
+  donc même un appelant anonyme peut forger la charge. (2) L'attaquant partage le lien `mshy://TOKEN` dans
+  une conversation. (3) Au clic, `components/chat/message-with-links.tsx` (L58-61 et L219-222) et
+  `components/messages/MarkdownMessage.tsx` (L98-100) passaient `result.originalUrl` DIRECTEMENT à
+  `window.open(...)` puis à `window.location.href` — sans aucune validation de schéma. Résultat :
+  exécution de JavaScript arbitraire sur l'origine `meeshy.me`, dans la session de la victime, avec accès
+  au token d'authentification en stockage local.
+- **Pourquoi ça a échappé aux vagues précédentes** : la page de redirection dédiée `app/l/[token]/page.tsx`
+  valide BIEN, via `safeExternalUrl` — l'équipe connaissait donc le garde-fou. Ce sont les trois chemins de
+  clic *dans le fil de messages* qui ré-implémentaient chacun la même danse « ouvrir un onglet, sinon
+  naviguer » en oubliant la validation. Trois copies, un seul garde-fou, et aucun test sur les trois copies.
+- **Fix, deux couches** :
+  - *Client* : nouveau `openExternalUrl()` dans `apps/web/utils/safe-redirect.ts` — valide via
+    `safeExternalUrl` PUIS navigue (onglet, repli même onglet), et retourne `false` si la destination est
+    refusée pour que l'appelant retombe sur le lien de suivi. Les trois sites appellent désormais ce
+    helper : la triplication disparaît en même temps que la faille, et le prochain point d'appel ne peut
+    plus oublier le contrôle. Les six chemins de REPLI (échec d'enregistrement du clic, exception réseau)
+    ré-implémentaient la même danse et passent aussi par le helper : plus une seule occurrence de
+    `window.open` / `location.href` brute dans les deux fichiers, et les URLs de repli — jusqu'ici
+    ouvertes sans contrôle elles non plus — sont validées au même titre.
+  - *Gateway* : nouveau `isHttpUrl()` + `httpUrlSchema` dans `packages/shared/utils/validation.ts`
+    (source de vérité TS de la règle « URL sortante sûre », conformément au principe Single Source of
+    Truth). `createTrackingLinkSchema.originalUrl` l'utilise à la place de `z.url()`. La route d'ÉDITION
+    (`routes/tracking-links/creation.ts`) validait avec un `new URL()` nu — qui parse `javascript:` tout
+    aussi volontiers — et rouvrait donc le vecteur que la création aurait interdit : elle partage
+    maintenant le même prédicat.
+
+### Trouvaille 2 — open redirect (CWE-601) dans magic-link et 2FA (sévérité MOYENNE)
+
+- **Root cause** : `safeInternalPath()` rejetait `//evil.example` et `/\evil.example` par inspection de
+  préfixe, mais le parseur d'URL SUPPRIME tabulation, LF et CR de l'entrée AVANT de la résoudre (WHATWG
+  URL, « basic URL parser »). La chaîne inspectée par le garde-fou n'est donc pas celle que le navigateur
+  résout : `/\t/evil.example` passe le contrôle comme un chemin banal et atteint le réseau comme
+  `//evil.example` — relatif au protocole, hors origine. Vérifié contre le parseur WHATWG :
+  `new URL("/\t/evil.example", "https://meeshy.me").origin === "https://evil.example"`.
+- **Sinks réels** : `app/auth/verify-2fa/page.tsx` L191 et `app/auth/magic-link/validate/page.tsx` L100,
+  tous deux `window.location.href = safeInternalPath(returnUrl, '/dashboard')`, où `returnUrl` sort d'un
+  paramètre de query. Un lien `?returnUrl=/%09/evil.example` envoie donc l'utilisateur chez l'attaquant
+  APRÈS authentification réussie — phishing post-auth depuis une origine de confiance.
+- **Fix** : rejet de tout caractère de contrôle C0 et DEL (plage `U+0000-U+001F` plus `U+007F`) AVANT les
+  contrôles de préfixe — ceux-ci n'ont de sens que si la chaîne qu'ils inspectent est celle que le
+  navigateur résoudra. Refuser toute la plage plutôt que les trois caractères connus évite que le
+  garde-fou dépende de la liste exacte de code points qu'un parseur donné laisse tomber.
+
+- **Tests** (TDD, RED confirmé avant chaque fix) : nouveau `apps/web/__tests__/utils/safe-redirect.test.ts`
+  (17 tests) — 4 en RED prouvaient l'open redirect (tabulation, LF, CR, plus un test de propriété
+  « ne retourne jamais un chemin que le navigateur résoudrait hors origine ») ; les cas `openExternalUrl`
+  couvrent le refus de `javascript:`/`data:`/`file:`/`vbscript:` aux deux sinks. Nouveau
+  `services/gateway/src/__tests__/unit/routes/tracking-links/schema-url-scheme.test.ts` (22 tests) —
+  RED établi en exécutant `z.url().safeParse('javascript:alert(1)')` qui retournait ACCEPTED. Note
+  d'infra : jsdom garde `window.location` en propriété propre non-inscriptible (le helper de
+  `jest.setup.js` qui redéfinit l'accesseur sur le PROTOTYPE est masqué par elle), donc une affectation à
+  `location.href` n'est pas observable depuis un test ; les assertions portent sur `window.open` et sur la
+  valeur de retour — le garde-fou étant un `return` anticipé unique placé AVANT les deux sinks, prouver
+  qu'une destination hostile n'atteint pas `window.open` prouve qu'elle n'atteint pas `location.href` non
+  plus.
+- **Vérification** : `apps/web` 243 suites / 5299 tests (5290 passed, 9 skips préexistants) verte ;
+  gateway liens de suivi 9 suites / 216 tests verte ; `packages/shared` 49 fichiers / 1462 tests verte.
+  `npx tsc --noEmit` sur `apps/web` : 37 erreurs sur les fichiers touchés — exactement le compte de
+  référence mesuré sur le code non modifié (toutes préexistantes, patrons `unknown` de react-markdown),
+  0 sur `safe-redirect.ts`.
+- **Suites identifiées, NON corrigées cette vague** (périmètre volontairement limité au sink de
+  navigation, le seul exploitable en exécution de script) : `z.url()` reste utilisé pour
+  `admin-user.avatar`/`banner`, `posts/types.audioUrl`, `notification-schemas.senderAvatar` et
+  `admin/agent.baseUrl`. Les quatre premiers alimentent des `<img src>`/lecteurs audio (un `javascript:`
+  n'y exécute rien sur les navigateurs modernes) ; `agent.baseUrl` est une cible de fetch côté serveur
+  réservée aux admins — angle SSRF plutôt que XSS, à traiter séparément. `updateAvatarSchema` de
+  `packages/shared/utils/validation.ts` a déjà, lui, un refine http(s) explicite : à généraliser via
+  `httpUrlSchema` dans une prochaine vague.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; le double `setInterval` de `setCurrentUser()` repéré Vague 75
+  (impact faible confirmé cette vague : `initializeConnection()` est idempotent, gardé par
+  `listenersAttachedSocket`).
