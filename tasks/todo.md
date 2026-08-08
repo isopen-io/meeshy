@@ -104,6 +104,16 @@ la clé du message — donc des traductions désalignées de leur original. Mêm
 c'est la seule qui donne le bon `LANGUAGE_MAPPINGS` côté NLLB. Deux tests verrouillent
 chacun des deux points, parce qu'ils sont invisibles à la lecture du site d'appel.
 
+### L'extraction créait un littéral jumeau — supprimé dans la foulée
+
+Avant ce cycle, la charge utile envoyée au translator n'existait qu'à UN endroit
+(`MessagingService.queueTranslation`). L'unité partagée en aurait ajouté un second, et
+`queueTranslation` reste nécessaire pour la re-poussée d'un doublon dont le blob
+`translations` est vide (translator down au premier insert) : deux littéraux qui doivent
+rester synchrones, soit exactement la classe de divergence que ce cycle corrige. Les deux
+appellent donc `queueMessageTranslation`, exportée par la même unité. Un correctif qui
+laisse derrière lui la forme du défaut qu'il corrige n'en est pas un.
+
 ### Fire-and-forget, par parité et non par négligence
 
 L'unité ne rend rien et n'attend rien, comme `runPostSaveSideEffects` : les trois effets

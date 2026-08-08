@@ -14,7 +14,7 @@ import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
-import { runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -401,14 +401,10 @@ export class MessagingService {
       };
     }
     try {
-      await this.translationService.handleNewMessage({
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        content: message.content,
-        originalLanguage,
-        messageType: message.messageType,
-        replyToId: message.replyToId
+      await queueMessageTranslation({
+        translationService: this.translationService,
+        message,
+        originalLanguage
       });
 
       return {

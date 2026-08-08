@@ -35,6 +35,32 @@ export interface PostSaveTranslationQueue {
 export type PostSaveEffect = 'lastMessageAt' | 'translation' | 'stats';
 
 /**
+ * La poussée d'un message au translator, sous la forme que le service attend.
+ *
+ * Extraite parce qu'elle a DEUX appelants : les effets post-commit ci-dessous,
+ * et la re-poussée d'un doublon dont le blob `translations` est resté vide
+ * (`MessagingService.queueTranslation`, translator down au premier insert). Deux
+ * littéraux jumeaux dériveraient en silence — un champ ajouté ici et pas là
+ * traduirait le doublon avec un contexte amputé.
+ */
+export function queueMessageTranslation(params: {
+  translationService: PostSaveTranslationQueue;
+  message: PostSaveMessage;
+  originalLanguage: string;
+}): Promise<unknown> {
+  const { translationService, message, originalLanguage } = params;
+  return translationService.handleNewMessage({
+    id: message.id,
+    conversationId: message.conversationId,
+    senderId: message.senderId,
+    content: message.content,
+    originalLanguage,
+    messageType: message.messageType,
+    replyToId: message.replyToId ?? null,
+  });
+}
+
+/**
  * Ce que TOUT message committé doit à sa conversation, quel que soit le tuyau
  * par lequel il est arrivé.
  *
@@ -106,17 +132,7 @@ export function runMessagePostSaveEffects(params: {
 
   if (translationService) {
     void Promise.resolve()
-      .then(() =>
-        translationService.handleNewMessage({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          content: message.content,
-          originalLanguage,
-          messageType: message.messageType,
-          replyToId: message.replyToId ?? null,
-        })
-      )
+      .then(() => queueMessageTranslation({ translationService, message, originalLanguage }))
       .catch(report('translation'));
   }
 
