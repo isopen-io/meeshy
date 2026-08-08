@@ -526,29 +526,37 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { conversationId } = request.params;
 
-        // Read the existing version BEFORE deletion so we can broadcast a
-        // strictly-greater version. Otherwise clients applying the documented
-        // `incoming.version <= local -> drop` rule would silently discard
-        // every reset for users with any prior pin/mute history.
-        const existing = await fastify.prisma.userConversationPreferences.findUnique({
-          where: { userId_conversationId: { userId, conversationId } },
-          select: { version: true },
-        });
-        const resetVersion = (existing?.version ?? 0) + 1;
-
-        await fastify.prisma.userConversationPreferences.delete({
+        // A reset restores the preference columns to their defaults; it does
+        // NOT drop the row. `version` is the monotonic sequence every client
+        // gates on (`incoming.version <= local -> drop`), and it lives on the
+        // row: deleting the row restarts the sequence at 1 on the next upsert,
+        // so the first pin/mute made after a reset carried a version BELOW the
+        // reset the other devices had just stored — they dropped it, and every
+        // later change with it, until an unrelated full refetch. Resetting in
+        // place keeps the counter strictly increasing across the reset, which
+        // is what the schema promises ("Monotonic version for
+        // optimistic-concurrency resolution"). The single `update` also makes
+        // the version advance atomic, where the previous read-then-write could
+        // interleave with a concurrent upsert. Absent row still yields P2025 →
+        // 404, unchanged.
+        const resetRow = await fastify.prisma.userConversationPreferences.update({
           where: {
             userId_conversationId: {
               userId,
               conversationId
             }
-          }
+          },
+          data: {
+            ...CONVERSATION_PREFERENCES_DEFAULTS,
+            version: { increment: 1 },
+          },
+          select: { version: true },
         });
 
         const resetPayload: UserPreferencesConversationUpdatedEventData = {
           userId,
           conversationId,
-          version: resetVersion,
+          version: resetRow.version,
           reset: true,
           preferences: null,
         };

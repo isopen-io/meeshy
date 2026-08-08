@@ -743,3 +743,110 @@ Non traité, relevé pour un cycle suivant :
   Une session ouverte sur une autre route ne vide jamais sa file — à confirmer
   avant d'en faire un défaut.
 - `sendMessageBodySchema` et iOS/`link:message:new` : inchangés depuis le cycle 8.
+
+## Cycle 11 — la remise à zéro qui rembobinait le compteur de synchronisation
+
+Phase 2 (versioning d'événements / résolution de conflits), sur l'état
+per-utilisateur d'une conversation — surface non défrichée par les cycles 2 à 10.
+
+### D1 (racine) — le compteur monotone vit sur la ligne, et le reset supprime la ligne
+
+`UserConversationPreferences.version` est déclaré **monotone** par le schema
+Prisma lui-même : « Monotonic version for optimistic-concurrency resolution […]
+clients drop incoming payloads whose `version` is <= their local snapshot ». Le
+SDK iOS applique la règle à la lettre (`ConversationStore.applyRemote` :
+`event.version <= conv.userState.version → return`, le `reset` **conservant** la
+version reçue).
+
+`DELETE /user-preferences/conversations/:id` diffusait un reset porteur de
+`version = ligne.version + 1`, **puis supprimait la ligne**. Le `PUT` suivant
+retombait donc dans la branche `create` de son `upsert` et repartait à
+`version: 1` — sous le plancher que les autres appareils venaient d'enregistrer.
+Après une remise à zéro, le premier épinglage/sourdine/archivage était appliqué
+**localement seulement** ; les autres sessions le jetaient, et tous les suivants
+avec lui (chaque version restant sous le plancher), jusqu'à un refetch complet
+fortuit. Divergence **permanente**, pas différée.
+
+### D2 (pourquoi ça a survécu) — une paire dont un seul sens a été audité
+
+Le commentaire de la branche `create` nomme exactement l'invariant… dans l'autre
+sens : `version: 1` y est justifié pour que le payload de reset (qui porte
+`version = existante + 1`) ne soit jamais pris pour un « create no-op » périmé.
+L'auteur a donc raisonné sur create → delete, jamais sur delete → create — les
+deux sens d'une même paire, un seul vérifié (récidive de la leçon 84 : toute
+transition a une inverse, auditer les DEUX).
+
+### D3 (pourquoi les tests ne pouvaient pas le voir) — des mocks figés rejouent la version du test
+
+Les deux tests d'émission du DELETE stubbaient `findUnique → { version: 7 }` et
+`delete → {}`. Contre des résolutions figées, la version émise est celle que
+l'auteur du test a codée en dur : la monotonie est une propriété d'une
+**séquence** de requêtes, structurellement inobservable sur des mocks qui
+n'appliquent pas leurs écritures. Le troisième test — « DELETE sur une
+conversation jamais personnalisée émet quand même version >= 1 » — était en
+outre fictif : sans ligne, `delete` lève P2025 et la route répond 404, jamais 200.
+
+### D4 (corollaire) — l'instantané par défaut était incomplet
+
+`CONVERSATION_PREFERENCES_DEFAULTS` omettait `mentionsOnly` et
+`clearHistoryBefore`, deux colonnes pourtant présentes dans le payload diffusé
+(`ConversationPreferencesPayload`) et dans le modèle. Un reset écrit à partir de
+cette constante aurait laissé `mentionsOnly: true` en base pendant que les
+clients appliquaient `false`.
+
+## Plan
+- [x] T1 — RED : double de store **vivant** (applique ses écritures) + séquence épingle → sourdine → reset → ré-épingle
+- [x] T2 — RED : les colonnes de préférence reviennent aux défauts après reset
+- [x] T3 — GREEN : le reset restaure les défauts **en place** avec `version: { increment: 1 }` (écriture atomique unique)
+- [x] T4 — D4 : `mentionsOnly` + `clearHistoryBefore` ajoutés à la constante de défauts
+- [x] T5 — réécriture des 2 tests d'émission figés sur le store vivant, suppression du cas fictif
+- [x] T6 — gates : suite gateway complète + `tsc --noEmit` propre
+- [x] T7 — changeset + CHANGELOG
+
+## Revue
+
+Le correctif ne consiste pas à choisir une plus grande valeur de départ pour le
+`create` (aucune valeur ne peut être supérieure à un plancher que le serveur a
+justement oublié) : il consiste à **cesser de détruire l'état de protocole**.
+`version` n'est pas une préférence utilisateur — c'est la séquence de diffusion.
+Une remise à zéro remet à zéro les préférences ; elle n'a aucune raison de
+rembobiner le compteur qui garantit que la remise à zéro elle-même sera vue.
+
+L'écriture unique (`update` avec `{ increment: 1 }`) remplace un
+`findUnique` puis `delete` : la course lecture-puis-écriture de l'ancien chemin
+(un `upsert` concurrent pouvait s'intercaler entre les deux) disparaît sans
+coût. Contrat REST inchangé : ligne absente → P2025 → 404, comme avant.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 3 tests de comportement
+ont été vus ROUGES avant le correctif — `1` émis après un reset à `3`, et la
+ligne introuvable après le reset. Le test « 404 sur une conversation sans
+préférences » était vert avant ET après : c'est son rôle, il verrouille le
+contrat qu'on ne voulait pas changer.
+
+Non retenu : faire du DELETE une opération idempotente (200 sur une ligne
+absente). Ce serait plus RESTful, mais c'est un changement de contrat public
+sans défaut observable pour le motiver.
+
+Non traité, relevé pour un cycle suivant :
+- **`routes/user-deletions.ts` écrit deux colonnes versionnées sans version ni
+  diffusion.** `delete-for-me`, `restore-for-me` et `clear-history` mutent
+  `deletedForUserAt` / `clearHistoryBefore` — tous deux membres de
+  `ConversationPreferencesPayload` et appliqués par `ConversationStore.applyRemote`
+  — sans incrémenter `version` ni émettre `USER_PREFERENCES_UPDATED`. Les autres
+  appareils ne convergent qu'au prochain changement de préférence ou refetch.
+  Atténuation : ces routes sont montées sous `/api/...` (préfixe vide) alors que
+  les clients appellent la variante `/api/v1/conversations/:id/delete-for-me`
+  (`routes/conversations/delete-for-me.ts`), qui s'appuie sur
+  `Participant.deletedForMe` et diffuse bien `conversation:deleted`. **Deux
+  implémentations du même geste produit, sur deux colonnes différentes** — à
+  arbitrer (supprimer la legacy ou la brancher) avant de corriger.
+- **Le scope communauté de `user:preferences-updated` n'est pas routé côté iOS.**
+  Le gateway émet trois formes sous ce nom (catégorie, conversation, communauté)
+  mais `MessageSocketManager` ne discrimine que deux branches (`conversationId`
+  présent → conversation, sinon → catégorie) : un payload communauté échoue au
+  décodage et est droppé. Sans conséquence tant qu'iOS n'affiche pas les
+  préférences de communauté — à traiter avec cette fonctionnalité.
+- **`POST /user-preferences/reorder` est un no-op silencieux sans ligne
+  existante** (`updateMany`), alors que le client applique l'ordre de façon
+  optimiste et reçoit un 200. À confirmer : une conversation réordonnée a-t-elle
+  toujours une ligne (elle en a une dès qu'elle est catégorisée) ?
