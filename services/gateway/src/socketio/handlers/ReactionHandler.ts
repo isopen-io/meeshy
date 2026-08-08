@@ -18,6 +18,7 @@ import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../valid
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
+import { enqueueOfflineReactionEvent, type ReactionEventType } from '../reactionOfflineQueue';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -517,52 +518,25 @@ export class ReactionHandler {
   /**
    * Offline delivery queue for reaction add/remove — mirrors
    * `MessageHandler._enqueueOfflineEventForParticipants` for edits/deletes.
-   * Without this a reaction toggled while a participant is offline is only
-   * broadcast to the live conversation room, so the offline peer's cached
-   * reaction counts stay stale until an unrelated full refetch. On reconnect
-   * `MeeshySocketIOManager._drainedEventName` replays the queued entry as
-   * REACTION_ADDED / REACTION_REMOVED with the same payload as the live emit.
    *
-   * The actor is excluded by participant id (Leçon 78: exclude on the CALLER's
-   * identity, never on message content) and every online peer is skipped since
-   * they already received the live broadcast.
-   *
-   * `dedupKey` scopes the delivery-queue dedup to (messageId, reactor, emoji)
-   * instead of the default messageId — RedisDeliveryQueue's default dedup is
-   * (messageId, eventType), which would otherwise collapse two different
-   * reactors' 'reaction-added' events on the same message into one, silently
-   * dropping every reactor after the first for an offline peer.
+   * Delegates to `enqueueOfflineReactionEvent`, the single implementation now
+   * also used by the REST reaction routes and the agent reaction path (via
+   * `broadcastReactionMutation` / `MeeshySocketIOManager`). This handler used to
+   * own the only copy, which is exactly why the other five reaction writers
+   * could ship without the offline audience and nothing signalled it.
    */
   private async _enqueueOfflineReactionEvent(
     conversationId: string,
     actorParticipantId: string | null | undefined,
-    eventType: 'reaction-added' | 'reaction-removed',
+    eventType: ReactionEventType,
     messageId: string,
     emoji: string,
     payload: Record<string, unknown>
   ): Promise<void> {
-    if (!this.deliveryQueue) return;
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true }
-      });
-      const dedupKey = `${messageId}:${actorParticipantId ?? 'unknown'}:${emoji}`;
-      for (const p of participants) {
-        const queueKey = p.userId ?? p.id;
-        if (p.id === actorParticipantId || this.connectedUsers.has(queueKey)) continue;
-        this.deliveryQueue.enqueue(queueKey, {
-          messageId,
-          conversationId,
-          payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-          dedupKey,
-        }).catch((err) => logger.warn('Failed to enqueue offline reaction event', { userId: queueKey, eventType, error: err }));
-      }
-    } catch (err) {
-      logger.warn('Failed to fetch participants for offline reaction enqueue', { conversationId, eventType, error: err });
-    }
+    await enqueueOfflineReactionEvent(
+      { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+      { conversationId, actorParticipantId, eventType, messageId, emoji, payload }
+    );
   }
 
   /**

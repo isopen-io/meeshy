@@ -32,6 +32,7 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
+import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -608,6 +609,25 @@ export class MeeshySocketIOManager {
     } catch (err) {
       logger.warn('Failed to fetch participants for offline mutation enqueue', { conversationId, eventType, error: err });
     }
+  }
+
+  /**
+   * Queue a reaction toggle for every OFFLINE conversation participant so their
+   * state converges on reconnect — the REST-side counterpart of the guarantee
+   * `ReactionHandler` gives the socket `reaction:add` / `reaction:remove` path,
+   * and the reaction sibling of `enqueueOfflineMessageMutation` above.
+   *
+   * Delegates to the single shared implementation so the socket handler, the
+   * REST routes (via `broadcastReactionMutation`) and the agent reaction path
+   * cannot drift — in particular on the finer (messageId, reactor, emoji) dedup
+   * identity, without which two reactors on one message collapse into a single
+   * queued entry.
+   */
+  async enqueueOfflineReactionMutation(params: ReactionOfflineQueueParams): Promise<void> {
+    await enqueueOfflineReactionEvent(
+      { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+      params
+    );
   }
 
   /**
@@ -2606,8 +2626,27 @@ export class MeeshySocketIOManager {
             reaction.asUserId
           );
           this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+          void this.enqueueOfflineReactionMutation({
+            conversationId: normalizedConversationId,
+            actorParticipantId: participant.id,
+            eventType: 'reaction-removed',
+            messageId: reaction.targetMessageId,
+            emoji: removedEmoji,
+            payload: removeEvent as unknown as Record<string, unknown>,
+          });
         }
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+        // An agent's reaction is a reaction like any other: without this the
+        // room emit is its only audience and the toggle is lost for every
+        // participant offline at that instant.
+        void this.enqueueOfflineReactionMutation({
+          conversationId: normalizedConversationId,
+          actorParticipantId: participant.id,
+          eventType: 'reaction-added',
+          messageId: reaction.targetMessageId,
+          emoji: reaction.emoji,
+          payload: updateEvent as unknown as Record<string, unknown>,
+        });
 
         const authorParticipant = message.senderId
           ? await this.prisma.participant.findUnique({
