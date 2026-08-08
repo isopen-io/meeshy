@@ -67,6 +67,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
   const inputNodeRef = useRef<ToneTypes.ToneAudioNode | null>(null);
   const mediaStreamDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const processorsRef = useRef<Map<AudioEffectType, AudioEffectProcessor>>(new Map());
+  const previouslyEnabledTypesRef = useRef<Set<AudioEffectType>>(new Set());
 
   const [outputStream, setOutputStream] = useState<MediaStream | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -133,20 +134,34 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
     logger.debug('[useAudioEffects]', 'Rebuilding audio graph');
 
     (inputNodeRef.current as any).disconnect();
-    processorsRef.current.forEach((processor) => processor.disconnect());
 
     const enabledEffects = Object.values(effectsState).filter((effect) => effect.enabled);
+    const enabledTypes = new Set(enabledEffects.map((effect) => effect.type));
+    const previouslyEnabledTypes = previouslyEnabledTypesRef.current;
 
-    // Some processors run continuous background work while active (e.g.
-    // VoiceCoderProcessor's pitch-detection rAF loop). disconnect() above
-    // fires on every rebuild regardless of which effect toggled, so it can't
-    // tell a processor whether IT specifically is still enabled — only this
-    // per-effect enabled check can.
+    // A processor's chain POSITION can shift even when its own enabled bit
+    // didn't (an unrelated neighbor toggling moves what it connects to), so
+    // the Web Audio graph edges are always rebuilt below. But the processor's
+    // OWN lifecycle — disconnect()'s side effects (BackSoundProcessor stops
+    // playback) and setActive() — must only fire when its OWN enabled bit
+    // actually flips. Otherwise every unrelated toggle (or even a params-only
+    // update, which also produces a new effectsState reference) forces every
+    // still-enabled processor through a pointless stop/restart cycle of
+    // background work it never stopped needing.
     processorsRef.current.forEach((processor, type) => {
+      const wasEnabled = previouslyEnabledTypes.has(type);
+      const isEnabled = enabledTypes.has(type);
+      if (wasEnabled === isEnabled) {
+        (processor.outputNode as any).disconnect();
+        return;
+      }
+      processor.disconnect();
       (processor as AudioEffectProcessor & { setActive?: (active: boolean) => void }).setActive?.(
-        enabledEffects.some((effect) => effect.type === type)
+        isEnabled
       );
     });
+
+    previouslyEnabledTypesRef.current = enabledTypes;
 
     if (enabledEffects.length === 0) {
       (inputNodeRef.current as any).connect(mediaStreamDestinationRef.current);
