@@ -4671,3 +4671,51 @@ toutes les Vagues précédentes, `git log` propre).
   `callAnalyticsAggregate.ts`/`call-push-mirroring.ts`/`callEndedFanout.ts`/`call-session-response.ts`/
   `call-schemas.ts`/`routes/calls.ts` + hooks/composants web moins fréquemment cités) n'a rien trouvé
   d'autre à ce niveau de maturité.
+
+## Vague 73 — `use-audio-effects`: le pipeline audio ne se réinitialise jamais sur un swap d'`inputStream` (2026-08-08)
+
+Point d'entrée : reprise directe du bug laissé « reste ouvert » à la Vague 71 ci-dessus (corrigé en parallèle, indépendamment, par une session concurrente ; les deux PRs touchaient `tasks/calls-fonctionnel-todo.md` au même point d'ancrage — renumérotée Vague 73 au merge pour garder la séquence continue, aucun changement de fond). Backlog Android
+(Vague 70) et iOS (`CallManager.swift`, `actor CallEventQueue`) toujours bloqués faute de toolchain
+vérifiable dans ce sandbox — reconfirmé cette vague (`./gradlew :feature:calls:help` échoue toujours à
+résoudre `com.android.application:8.7.3` via `dl.google.com`, aucun `xcodebuild`/`swift` disponible) — donc
+nouvelle cible : le bug web déjà diagnostiqué.
+
+- **Root cause confirmée par lecture directe** : l'effet de montage (`use-audio-effects.ts:266-284`, deps
+  `[inputStream]`) gère à la fois le teardown de l'ancien pipeline (cleanup) ET l'initialisation du nouveau
+  (corps de l'effet) à chaque changement d'`inputStream`. Son cleanup appelait `setIsInitialized(false)` —
+  une mise à jour d'état React, donc asynchrone/différée à un futur rendu — puis, dans le MÊME flush
+  d'effets, le corps du MÊME effet (nouvelle instance) s'exécutait immédiatement après en lisant la
+  variable d'état `isInitialized` capturée par la closure du dernier rendu COMPLET, c'est-à-dire encore
+  `true` (la mise à jour du cleanup n'a pas encore été commitée). La garde `if (inputStream &&
+  !isInitialized)` échouait donc systématiquement juste après un swap de stream, et `initializeAudioPipeline`
+  elle-même regardait la même closure périmée (`isInitialized` dans ses deps `useCallback`) — double
+  verrou stale. Résultat : `inputNodeRef`/`mediaStreamDestinationRef` sont bien nettoyés et remis à `null`,
+  mais plus jamais reconstruits pour le nouveau stream — un swap de source micro/caméra en cours d'appel
+  routait silencieusement vers un pipeline audio mort pour le reste de l'appel (aucun crash, aucun log
+  d'erreur — juste plus aucun effet audio appliqué au flux réellement envoyé).
+- **Fix** : nouveau `isInitializedRef` (ref, mutation synchrone) tenu en miroir de l'état `isInitialized`
+  (qui reste nécessaire pour les autres effets qui doivent re-render sur ce changement, ex. lignes 284/293).
+  Le cleanup met `isInitializedRef.current = false` de façon synchrone AVANT que le corps de l'effet suivant
+  ne s'exécute dans le même flush ; `initializeAudioPipeline` et la garde de montage lisent désormais cette
+  ref plutôt que l'état. Bug adjacent corrigé dans la même passe : `previouslyEnabledTypesRef` (tracking
+  Vague 71) n'était jamais réinitialisée sur un swap d'`inputStream` — un effet resté `enabled` à travers le
+  swap aurait fait lire `wasEnabled === isEnabled` comme `true` par `rebuildAudioGraph()` pour un processor
+  pourtant flambant neuf (recréé après le `processorsRef.current.clear()` du même cleanup), lui faisant
+  sauter son cycle de vie complet (`setActive(true)` jamais appelé) — même classe de bug que celui fermé à
+  la Vague 71, déclenché par le même swap ; fix : `previouslyEnabledTypesRef.current = new Set()` dans le
+  même cleanup.
+- **Tests** (TDD, RED confirmé avant fix — l'assertion sur le second appel à `createMediaStreamSource`
+  échouait, 1 reçu au lieu de 2) : nouveau fichier
+  `apps/web/hooks/__tests__/use-audio-effects-input-stream.test.ts` — rerender du hook avec un second
+  `MediaStream`, vérifie que `createMediaStreamSource` est rappelé avec le nouveau stream et que
+  `onOutputStreamReady` est notifié une seconde fois.
+- **Vérification** : `hooks/__tests__/use-audio-effects*.test.ts` (2 suites / 6 tests) vert ; suite complète
+  `hooks/` + `utils/__tests__/audio-effects.test.ts` + `components/video-calls/**` (128 suites / 2295 tests,
+  2295 passed + 2 skips pré-existants sans rapport) verte. `packages/shared && npx prisma generate && bun
+  run build` (prérequis CLAUDE.md) sans erreur. `npx tsc --noEmit` sur `apps/web` : 0 nouvelle erreur
+  imputable à `use-audio-effects.ts`. `eslint` : même échec sandbox-only de config circulaire que documenté
+  aux vagues précédentes (indépendant de ce diff).
+- **Reste ouvert** : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague).
