@@ -186,6 +186,11 @@ describe('POST /posts — friend content fan-out uses fastify.notificationServic
         postId: POST_ID,
         posterId: USER_ID,
         mentionedUserIds: [FRIEND_ID],
+        // L'audience du post PERSISTÉ voyage jusqu'au lot, qui décide seul qui a
+        // le droit d'être prévenu. Sans elle, nommer quelqu'un hors audience lui
+        // poussait un extrait du contenu sur son écran verrouillé.
+        visibility: 'FRIENDS',
+        visibilityUserIds: [FRIEND_ID],
       })
     );
     expect(notificationService.createFriendContentNotificationsBatch).toHaveBeenCalledWith(
@@ -228,6 +233,39 @@ describe('PUT /posts/:postId — edit mentions use fastify.notificationService',
         postId: POST_ID,
         posterId: USER_ID,
         mentionedUserIds: [FRIEND_ID],
+      })
+    );
+
+    await app.close();
+  });
+
+  // Restreindre la visibilité ET nommer quelqu'un dans la MÊME requête doit
+  // appliquer la NOUVELLE règle : c'est le document rendu par `updatePost` qui
+  // porte l'audience, pas celui d'avant l'édition. Sinon on notifierait selon
+  // une audience que l'auteur vient précisément de retirer.
+  it('transmet l’audience APRÈS édition, pas celle d’avant', async () => {
+    const { app, notificationService } = await buildApp();
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: FRIEND_ID }]]));
+    mockUpdatePost.mockResolvedValue({
+      id: POST_ID,
+      content: 'Edited @bob',
+      type: 'POST',
+      visibility: 'ONLY',
+      visibilityUserIds: [USER_ID],
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/posts/${POST_ID}`,
+      payload: { content: 'Edited @bob', visibility: 'ONLY', visibilityUserIds: [USER_ID] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visibility: 'ONLY',
+        visibilityUserIds: [USER_ID],
       })
     );
 

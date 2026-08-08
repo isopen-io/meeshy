@@ -798,10 +798,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     const POST_ID_2 = 'cccccccccccccccccccccccc';
     const COMMENT_ID_2 = 'dddddddddddddddddddddddd';
 
+    // Audience PUBLIC : ces cas portent sur le contenu, la priorité, le débit et
+    // l'auto-mention, pas sur le droit de voir. Un post public admet tout le
+    // monde, donc la garde d'audience y est un no-op — le filtrage lui-même est
+    // verrouillé par `NotificationService.mentionaudience.test.ts`.
     const baseCommentMentionParams = {
       commentId: COMMENT_ID_2,
       postId: POST_ID_2,
       commenterId: COMMENTER_ID,
+      postAuthorId: AUTHOR_ID,
+      visibility: 'PUBLIC',
       mentionedUserIds: [ALICE_ID, BOB_ID],
       commentExcerpt: 'Hey @alice and @bob check this out!',
     };
@@ -1138,6 +1144,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID, BOB_ID],
         postExcerpt: 'Check this out @alice @bob',
       });
@@ -1164,6 +1171,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [POSTER_ID, ALICE_ID, BOB_ID],
         postExcerpt: 'Check this out @alice @bob',
       });
@@ -1184,6 +1192,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
         postExcerpt: 'Check this out @alice',
       });
@@ -1203,6 +1212,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1221,6 +1231,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [POSTER_ID, ALICE_ID],
       });
 
@@ -1239,6 +1250,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1251,6 +1263,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [],
       });
 
@@ -1264,6 +1277,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1280,6 +1294,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         await service.createPostMentionNotificationsBatch({
           postId: P2_POST_ID,
           posterId: POSTER_ID,
+        visibility: 'PUBLIC',
           mentionedUserIds: [ALICE_ID],
         });
       }
@@ -1290,6 +1305,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 

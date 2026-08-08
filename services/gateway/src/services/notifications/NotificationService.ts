@@ -38,6 +38,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
+import { filterPostAudience } from '../posts/postAudience';
 
 function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
@@ -2007,6 +2008,20 @@ export class NotificationService {
      * commentaire d'un réel ouvre le détail de post plat. Défaut POST.
      */
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /**
+     * Auteur du POST commenté — le sommet du graphe qui définit l'audience.
+     * C'est bien lui et non le commentateur : l'auteur seul a choisi qui peut
+     * voir. Requis, pour qu'aucun appelant ne puisse rouvrir la fuite par
+     * omission.
+     */
+    postAuthorId: string;
+    /**
+     * Visibilité du POST commenté. Un commentaire n'a pas d'audience propre :
+     * il hérite de celle du post. Requis — cf. `postAuthorId`.
+     */
+    visibility: string | null | undefined;
+    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
+    visibilityUserIds?: readonly string[];
   }): Promise<void> {
     if (params.mentionedUserIds.length === 0) return;
 
@@ -2017,10 +2032,23 @@ export class NotificationService {
 
     if (!commenter) return;
 
+    // Nommer quelqu'un ne lui donne pas le droit de voir : un mentionné hors
+    // audience ne reçoit rien. Sans ce filtre, l'extrait du commentaire — donc
+    // du contenu d'un post restreint — atterrissait sur son écran verrouillé,
+    // avec un lien de tap vers un post qui le refuserait.
+    const audience = await filterPostAudience({
+      prisma: this.prisma,
+      authorId: params.postAuthorId,
+      visibility: params.visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: params.mentionedUserIds,
+    });
+    if (audience.length === 0) return;
+
     const content = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
-    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
+    const langs = await this.resolveRecipientLangs(audience);
 
     const actorInfo = {
       id: params.commenterId,
@@ -2031,7 +2059,7 @@ export class NotificationService {
 
     const tasks: Array<Promise<unknown>> = [];
 
-    for (const userId of params.mentionedUserIds) {
+    for (const userId of audience) {
       if (userId === params.commenterId) continue;
 
       if (!this.shouldCreateMentionNotification(params.commenterId, userId)) {
@@ -2092,6 +2120,13 @@ export class NotificationService {
      * post). Défaut POST.
      */
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /**
+     * `Post.visibility`. Requis — la garde d'audience ne doit pas pouvoir être
+     * désarmée par simple omission d'un paramètre optionnel.
+     */
+    visibility: string | null | undefined;
+    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
+    visibilityUserIds?: readonly string[];
   }): Promise<void> {
     if (params.mentionedUserIds.length === 0) return;
 
@@ -2102,10 +2137,22 @@ export class NotificationService {
 
     if (!poster) return;
 
+    // Nommer quelqu'un ne lui donne pas le droit de voir. Cf. le lot des
+    // commentaires : l'extrait du post partait tel quel vers un mentionné hors
+    // audience.
+    const audience = await filterPostAudience({
+      prisma: this.prisma,
+      authorId: params.posterId,
+      visibility: params.visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: params.mentionedUserIds,
+    });
+    if (audience.length === 0) return;
+
     const excerpt = params.postExcerpt
       ? this.truncateMessage(params.postExcerpt)
       : '';
-    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
+    const langs = await this.resolveRecipientLangs(audience);
 
     const actorInfo = {
       id: params.posterId,
@@ -2116,7 +2163,7 @@ export class NotificationService {
 
     const tasks: Array<Promise<unknown>> = [];
 
-    for (const userId of params.mentionedUserIds) {
+    for (const userId of audience) {
       if (userId === params.posterId) continue;
 
       if (!this.shouldCreateMentionNotification(params.posterId, userId)) {

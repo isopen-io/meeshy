@@ -165,6 +165,10 @@ export function registerCoreRoutes(
           authorId: authContext.registeredUser.id,
           // Discriminant d'entité → surface ouverte au tap côté client.
           type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+          // Audience du post — décide qui, parmi les nommés, a le droit d'être
+          // prévenu. Un mentionné hors audience recevait l'extrait du contenu.
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
         },
         content: postContent,
         onError: (err: unknown) => {
@@ -312,6 +316,11 @@ export function registerCoreRoutes(
           authorId: authContext.registeredUser.id,
           // Discriminant d'entité → surface ouverte au tap côté client.
           type: (post as any).type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
+          // Audience APRÈS édition : `post` est le document rendu par
+          // `updatePost`, donc restreindre la visibilité d'un post et y ajouter
+          // une mention dans la même requête applique bien la NOUVELLE règle.
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
         },
         content: editedContent,
         onError: (err: unknown) => {
