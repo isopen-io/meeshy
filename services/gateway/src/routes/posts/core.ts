@@ -8,6 +8,7 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
+import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
 import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -145,8 +146,6 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, [postContent])
         : [];
 
-      let mentionedUserIdsForDedup: string[] = [];
-
       // GW1 — use the DECORATED instance (wired push+socket+email by
       // server.ts), never a bare local NotificationService: a bare instance
       // persists notifications but silently drops every push and socket emit
@@ -155,34 +154,26 @@ export function registerCoreRoutes(
       // SocketIOManager init; standalone harnesses may not have it).
       const notifService = fastify.notificationService;
 
-      // Persist and notify post-body mentions (fire-and-forget)
-      if (postContent) {
-        const usernames = mentionService.extractMentions(postContent);
-        if (usernames.length > 0) {
-          const usernameMap = await mentionService.resolveUsernames(usernames);
-          const mentionedUserIds = Array.from(usernameMap.values()).map((u) => u.id);
-          if (mentionedUserIds.length > 0) {
-            mentionedUserIdsForDedup = mentionedUserIds;
-            const postId = (post as any).id as string;
-            const posterId = authContext.registeredUser.id;
-            mentionService.createPostMentions(postId, mentionedUserIds).catch((err: unknown) => {
-              fastify.log.error(`[POST /posts] post mention persist failed: ${err}`);
-            });
-            if (notifService) {
-              notifService.createPostMentionNotificationsBatch({
-                postId,
-                posterId,
-                mentionedUserIds,
-                postExcerpt: postContent.slice(0, 100),
-                // Discriminant d'entité → surface ouverte au tap côté client.
-                postType: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-              }).catch((err: unknown) => {
-                fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
-              });
-            }
-          }
-        }
-      }
+      // Persist and notify post-body mentions. Single entry point shared with
+      // the edit path (services/posts/postMentions.ts) — never throws.
+      const createdMentions = await resolvePostMentions({
+        prisma,
+        mentionService,
+        notificationService: notifService,
+        post: {
+          id: (post as any).id as string,
+          authorId: authContext.registeredUser.id,
+          // Discriminant d'entité → surface ouverte au tap côté client.
+          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+        },
+        content: postContent,
+        onError: (err: unknown) => {
+          fastify.log.error(`[POST /posts] post mention reconcile failed: ${err}`);
+        },
+      });
+      // L'éventail vers les amis exclut les mentionnés : `user_mentioned` prime
+      // sur `friend_new_post`, sinon un ami nommé reçoit les deux.
+      const mentionedUserIdsForDedup = [...createdMentions.mentionedUserIds];
 
       if (postContent) {
         const hashtags = hashtagService.extractHashtags(postContent);
@@ -308,34 +299,25 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, updateContentStrings)
         : [];
 
-      // Persist and notify post-body mentions on edit (re-fires all; idempotent via P2002 swallow)
+      // Une édition RÉCONCILIE : elle retire les lignes des partants et ne
+      // prévient que les entrants. Le bloc qui vivait ici recréait sans jamais
+      // supprimer, et renotifiait tout le monde à chaque édition.
       const editedContent = (post as any).content as string | undefined;
-      if (editedContent) {
-        const editUsernames = mentionService.extractMentions(editedContent);
-        if (editUsernames.length > 0) {
-          const editUsernameMap = await mentionService.resolveUsernames(editUsernames);
-          const editMentionedUserIds = Array.from(editUsernameMap.values()).map((u) => u.id);
-          if (editMentionedUserIds.length > 0) {
-            const editPosterId = authContext.registeredUser.id;
-            mentionService.createPostMentions(postId, editMentionedUserIds).catch((err: unknown) => {
-              fastify.log.error(`[PUT /posts/:postId] post mention persist failed: ${err}`);
-            });
-            const notifService = fastify.notificationService;
-            if (notifService) {
-              notifService.createPostMentionNotificationsBatch({
-                postId,
-                posterId: editPosterId,
-                mentionedUserIds: editMentionedUserIds,
-                postExcerpt: editedContent.slice(0, 100),
-                // Discriminant d'entité → surface ouverte au tap côté client.
-                postType: (post as any).type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
-              }).catch((err: unknown) => {
-                fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
-              });
-            }
-          }
-        }
-      }
+      await reconcilePostMentions({
+        prisma,
+        mentionService,
+        notificationService: fastify.notificationService,
+        post: {
+          id: postId,
+          authorId: authContext.registeredUser.id,
+          // Discriminant d'entité → surface ouverte au tap côté client.
+          type: (post as any).type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
+        },
+        content: editedContent,
+        onError: (err: unknown) => {
+          fastify.log.error(`[PUT /posts/:postId] post mention reconcile failed: ${err}`);
+        },
+      });
 
       {
         const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];

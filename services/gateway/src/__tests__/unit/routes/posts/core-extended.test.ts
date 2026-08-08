@@ -59,6 +59,9 @@ jest.mock('../../../../services/MentionService', () => ({
   })),
 }));
 
+const mockPostMentionFindMany = jest.fn<any>().mockResolvedValue([]);
+const mockPostMentionDeleteMany = jest.fn<any>().mockResolvedValue({ count: 0 });
+
 // GW1 — the routes consume the DECORATED fastify.notificationService (wired
 // instance), not a locally constructed NotificationService: mocks are injected
 // via app.decorate in buildApp below.
@@ -122,7 +125,15 @@ async function buildApp(opts: {
   socialEvents?: ReturnType<typeof makeSocialEvents>;
 } = {}): Promise<{ app: FastifyInstance; socialEvents?: ReturnType<typeof makeSocialEvents> }> {
   const app = Fastify({ logger: false });
-  const prisma = {} as any;
+  // `postMention` est lu par la réconciliation d'édition
+  // (services/posts/postMentions.ts) : sans délégué, elle s'abstient de tout
+  // écrire — ce qui est le comportement voulu, mais pas ce que ces cas testent.
+  const prisma = {
+    postMention: {
+      findMany: (...args: any[]) => mockPostMentionFindMany(...args),
+      deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),
+    },
+  } as any;
   const requiredAuth = makeAuth(true);
 
   const se = opts.withSocialEvents ? (opts.socialEvents ?? makeSocialEvents()) : undefined;
@@ -294,11 +305,19 @@ describe('POST /posts — with @mentions in content', () => {
   beforeAll(async () => {
     mockExtractMentions.mockReturnValue(['bob', 'carol']);
     mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }], ['carol', { id: 'user-carol' }]]));
+    // Le contenu PERSISTÉ est celui que la résolution lit — un post rendu sans
+    // `@` court-circuite désormais, sans requête ni extraction.
+    mockCreatePost.mockResolvedValue({
+      id: 'post-001', content: 'Hello @bob and @carol', type: 'POST', visibility: 'PUBLIC', createdAt: new Date(),
+    });
     ({ app } = await buildApp());
   });
   afterAll(async () => {
     mockExtractMentions.mockReturnValue([]);
     mockResolveUsernames.mockResolvedValue(new Map());
+    mockCreatePost.mockResolvedValue({
+      id: 'post-001', content: 'Hello', type: 'POST', visibility: 'PUBLIC', createdAt: new Date(),
+    });
     await app.close();
   });
 
@@ -347,7 +366,7 @@ describe('GET /posts/:postId — with embedded comments', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
     expect(res.statusCode).toBe(200);
     expect(mockResolveMentionedUsers).toHaveBeenCalledWith(
-      {},
+      expect.anything(),
       expect.arrayContaining(['Post content', '@alice check this', 'No mentions here'])
     );
   });
@@ -387,7 +406,7 @@ describe('PUT /posts/:postId — updated post with comments', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockResolveMentionedUsers).toHaveBeenCalledWith(
-      {},
+      expect.anything(),
       expect.arrayContaining(['Updated @alice content', '@bob replied'])
     );
   });
