@@ -69,6 +69,16 @@ export class MessageProcessor {
    * - Règle 2: URLs brutes → Aucun tracking automatique
    * - Règle 3: [[url]] → Force le tracking → m+token
    * - Règle 4: <url> → Force le tracking → m+token
+   *
+   * L'algorithme lui-même vit dans `TrackingLinkService` — il vivait ICI AUSSI,
+   * recopié ligne pour ligne (protection markdown, réutilisation de token,
+   * repli sur l'URL nue en cas d'échec, réparation des séquences `$`). Deux
+   * exemplaires d'une même règle ne peuvent pas rester d'accord, et c'est cette
+   * dispersion qui a permis au chemin d'édition socket de n'en appeler AUCUN :
+   * il n'y avait pas d'endroit évident à appeler. Il n'y a plus qu'une règle.
+   *
+   * Le `try` reste : `saveMessage` ne doit pas échouer parce qu'un lien n'a pas
+   * pu être tracé. Le service, lui, ne se protège que lien par lien.
    */
   async processLinksInContent(
     content: string,
@@ -77,111 +87,12 @@ export class MessageProcessor {
     messageId?: string
   ): Promise<string> {
     try {
-      let processedContent = content;
-      const protectedItems: Array<{ placeholder: string; original: string }> = [];
-      let placeholderCounter = 0;
-
-      // Track URLs already processed in this message to reuse tokens for identical URLs
-      const urlTokenMap = new Map<string, string>();
-
-      // ÉTAPE 1: Protéger les liens markdown [texte](url) - Règle 1
-      const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(([^)]+)\)/g;
-      processedContent = processedContent.replace(MARKDOWN_LINK_REGEX, (match) => {
-        const placeholder = `__PROTECTED_MD_${placeholderCounter++}__`;
-        protectedItems.push({ placeholder, original: match });
-        return placeholder;
+      const { processedContent } = await this.trackingLinkService.processExplicitLinksInContent({
+        content,
+        conversationId,
+        messageId,
+        createdBy: senderId,
       });
-
-      // ÉTAPE 2: Traiter [[url]] - Règle 3: Force le tracking
-      const DOUBLE_BRACKET_REGEX = /\[\[(https?:\/\/[^\]]+)\]\]/gi;
-      const doubleBracketMatches = [...processedContent.matchAll(DOUBLE_BRACKET_REGEX)];
-
-      for (const match of doubleBracketMatches) {
-        const fullMatch = match[0];
-        const url = match[1];
-
-        try {
-          let token: string;
-
-          if (urlTokenMap.has(url)) {
-            token = urlTokenMap.get(url)!;
-            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
-          } else {
-            let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
-              url,
-              conversationId
-            );
-
-            if (!trackingLink) {
-              trackingLink = await this.trackingLinkService.createTrackingLink({
-                originalUrl: url,
-                conversationId,
-                createdBy: senderId,
-                messageId
-              });
-            }
-
-            token = trackingLink.token;
-            urlTokenMap.set(url, token);
-          }
-
-          const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
-        } catch (linkError) {
-          logger.error(`[MessageProcessor] Error processing [[url]]:`, linkError);
-          processedContent = processedContent.replace(fullMatch, () => url);
-        }
-      }
-
-      // ÉTAPE 3: Traiter <url> - Règle 4: Force le tracking
-      const ANGLE_BRACKET_REGEX = /<(https?:\/\/[^>]+)>/gi;
-      const angleBracketMatches = [...processedContent.matchAll(ANGLE_BRACKET_REGEX)];
-
-      for (const match of angleBracketMatches) {
-        const fullMatch = match[0];
-        const url = match[1];
-
-        try {
-          let token: string;
-
-          if (urlTokenMap.has(url)) {
-            token = urlTokenMap.get(url)!;
-            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
-          } else {
-            let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
-              url,
-              conversationId
-            );
-
-            if (!trackingLink) {
-              trackingLink = await this.trackingLinkService.createTrackingLink({
-                originalUrl: url,
-                conversationId,
-                createdBy: senderId,
-                messageId
-              });
-            }
-
-            token = trackingLink.token;
-            urlTokenMap.set(url, token);
-          }
-
-          const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
-        } catch (linkError) {
-          logger.error(`[MessageProcessor] Error processing <url>:`, linkError);
-          processedContent = processedContent.replace(fullMatch, () => url);
-        }
-      }
-
-      // ÉTAPE 4: Restaurer les liens markdown protégés.
-      // Function replacer (not a string) so `$`-sequences the user typed inside
-      // the link (`$$`, `$&`, `` $` ``, `$'`) are reinstated verbatim instead of
-      // being interpreted by String.prototype.replace substitution rules.
-      for (const { placeholder, original } of protectedItems) {
-        processedContent = processedContent.replace(placeholder, () => original);
-      }
-
       return processedContent;
     } catch (error) {
       logger.error('[MessageProcessor] Error processing links', error);

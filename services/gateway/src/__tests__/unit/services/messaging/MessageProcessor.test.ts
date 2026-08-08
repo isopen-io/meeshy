@@ -25,11 +25,22 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
+// `processExplicitLinksInContent` PORTE l'algorithme de réécriture `[[url]]` /
+// `<url>` → `m+<token>`. Il en existait un second exemplaire, recopié dans
+// `MessageProcessor.processLinksInContent` — c'est lui que ces tests
+// exerçaient. Il n'y a plus qu'une règle, testée là où elle vit
+// (`TrackingLinkService.test.ts`, `TrackingLinkService.dollarSequences.test.ts`,
+// séquences `$` comprises) ; ici on vérifie la DÉLÉGATION et le garde-fou qui
+// empêche une panne de tracking de faire échouer un envoi.
+const mockProcessExplicitLinksInContent = jest.fn(
+  async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+) as jest.Mock<any>;
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: (...a: any[]) => mockFindExistingTrackingLink(...a),
     createTrackingLink: (...a: any[]) => mockCreateTrackingLink(...a),
     collectContentTrackingLinks: (...a: any[]) => mockCollectContentTrackingLinks(...a),
+    processExplicitLinksInContent: (...a: any[]) => mockProcessExplicitLinksInContent(...a),
   })),
 }));
 
@@ -222,105 +233,36 @@ describe('MessageProcessor.processLinksInContent', () => {
   let processor: MessageProcessor;
 
   beforeEach(() => {
-    mockFindExistingTrackingLink.mockReset();
-    mockCreateTrackingLink.mockReset();
+    mockProcessExplicitLinksInContent.mockReset();
+    mockProcessExplicitLinksInContent.mockImplementation(
+      async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+    );
     processor = makeProcessor();
   });
 
-  it('returns content unchanged when no special patterns', async () => {
-    const result = await processor.processLinksInContent('Plain text with no URL', CONV_ID);
-    expect(result).toBe('Plain text with no URL');
-  });
-
-  it('protects markdown links — not converted to tracking (Rule 1)', async () => {
-    const content = 'See [docs](https://example.com) here';
-    const result = await processor.processLinksInContent(content, CONV_ID);
-    expect(result).toContain('[docs](https://example.com)');
-    expect(mockCreateTrackingLink).not.toHaveBeenCalled();
-  });
-
-  it('converts [[url]] to m+token via createTrackingLink (Rule 3)', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'abc123' });
-    const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID, SENDER_ID);
-    expect(result).toBe('m+abc123');
-    expect(mockCreateTrackingLink).toHaveBeenCalledTimes(1);
-  });
-
-  it('reuses existing tracking link for [[url]]', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue({ token: 'existing-tok' });
+  it('returns the content the tracking service rewrote', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+abc123', trackingLinks: [] });
     const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID);
-    expect(result).toBe('m+existing-tok');
-    expect(mockCreateTrackingLink).not.toHaveBeenCalled();
+    expect(result).toBe('m+abc123');
   });
 
-  it('reuses token for duplicate [[url]] in the same message', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'tok-1' });
-    const result = await processor.processLinksInContent('[[https://example.com]] and [[https://example.com]]', CONV_ID);
-    expect(mockCreateTrackingLink).toHaveBeenCalledTimes(1);
-    expect(result).toBe('m+tok-1 and m+tok-1');
+  it('hands the tracking service the conversation, the sender and the message', async () => {
+    await processor.processLinksInContent('texte', CONV_ID, SENDER_ID, 'msg-1');
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith({
+      content: 'texte',
+      conversationId: CONV_ID,
+      messageId: 'msg-1',
+      createdBy: SENDER_ID,
+    });
   });
 
-  it('converts <url> to m+token (Rule 4)', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'angle-tok' });
-    const result = await processor.processLinksInContent('<https://example.com/angle>', CONV_ID);
-    expect(result).toBe('m+angle-tok');
-  });
-
-  it('reuses token for duplicate <url> that also appeared as [[url]]', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'shared-tok' });
-    const result = await processor.processLinksInContent('[[https://same.com]] and <https://same.com>', CONV_ID);
-    expect(mockCreateTrackingLink).toHaveBeenCalledTimes(1);
-    expect(result).toBe('m+shared-tok and m+shared-tok');
-  });
-
-  it('falls back to raw URL when createTrackingLink throws for [[url]]', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockRejectedValue(new Error('DB error'));
+  it('keeps the original content when the tracking service throws', async () => {
+    // Le garde-fou qui appartient à CE niveau : `saveMessage` ne doit pas
+    // échouer parce qu'un lien n'a pas pu être tracé. Le service, lui, se
+    // protège lien par lien.
+    mockProcessExplicitLinksInContent.mockRejectedValue(new Error('tracking down'));
     const result = await processor.processLinksInContent('[[https://example.com/err]]', CONV_ID);
-    expect(result).toBe('https://example.com/err');
-  });
-
-  it('falls back to raw URL when createTrackingLink throws for <url>', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockRejectedValue(new Error('DB error'));
-    const result = await processor.processLinksInContent('<https://example.com/err>', CONV_ID);
-    expect(result).toBe('https://example.com/err');
-  });
-
-  // Content-integrity: ÉTAPE 4 restores protected markdown links via
-  // String.prototype.replace with the raw link as the *replacement* argument.
-  // JS interprets `$$`, `$&`, `` $` ``, `$'` in a replacement string, so any
-  // `$`-sequence the user typed inside the link is mangled before the message
-  // is persisted and broadcast. The restore must reinstate the original text
-  // byte-for-byte.
-  it('preserves $$ inside a markdown link verbatim (no $-collapse)', async () => {
-    const content = '[$$ deal](https://example.com/promo)';
-    const result = await processor.processLinksInContent(content, CONV_ID);
-    expect(result).toBe(content);
-  });
-
-  it('does not leak the internal sentinel when a markdown link contains $&', async () => {
-    const content = '[a$&b](https://example.com)';
-    const result = await processor.processLinksInContent(content, CONV_ID);
-    expect(result).toBe(content);
-    expect(result).not.toContain('__PROTECTED_MD_');
-  });
-
-  it("preserves $' and $` sequences inside a markdown link", async () => {
-    const content = "[x$'y$`z](https://example.com)";
-    const result = await processor.processLinksInContent(content, CONV_ID);
-    expect(result).toBe(content);
-  });
-
-  it('preserves $-bearing URLs on the tracking fallback path (<url>)', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockRejectedValue(new Error('DB error'));
-    const result = await processor.processLinksInContent('<https://example.com/pay?amt=$5&ref=$&x>', CONV_ID);
-    expect(result).toBe('https://example.com/pay?amt=$5&ref=$&x');
+    expect(result).toBe('[[https://example.com/err]]');
   });
 });
 
@@ -615,8 +557,7 @@ describe('MessageProcessor.saveMessage', () => {
   });
 
   it('updates tracking link messageIds when [[url]] was processed', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'tok-abc' });
+    mockProcessExplicitLinksInContent.mockResolvedValueOnce({ processedContent: 'm+tok-abc', trackingLinks: [] });
     await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
     expect(tlUpdateMany).toHaveBeenCalled();
   });

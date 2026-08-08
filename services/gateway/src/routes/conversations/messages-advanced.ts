@@ -17,6 +17,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
+import { reconcileEditedLinks, mergeTrackingLinksIntoMetadata } from '../../services/messaging/messageLinks';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
@@ -207,29 +208,29 @@ export function registerMessagesAdvancedRoutes(
         return sendBadRequest(reply, 'Message content cannot be empty');
       }
 
-      // ÉTAPE: Traiter les liens [[url]] et <url> AVANT de sauvegarder le message
-      let processedContent = content.trim();
-        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
+      // Ce que ce message doit à ses LIENS, après édition. La réécriture
+      // `[[url]]` / `<url>` → `m+<token>` vivait ici, dépliée — donc absente du
+      // chemin socket, qui est le transport d'édition PRIMAIRE et persistait les
+      // crochets en toutes lettres. Et la seconde moitié, le mapping des URLs
+      // BRUTES (`metadata.trackingLinks`), n'était recomposée NI ici NI là : elle
+      // n'existait qu'à la création. Les deux sont désormais soudées dans une
+      // unité que les deux écrivains appellent.
+      const editedLinks = await reconcileEditedLinks({
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId },
+        content: content.trim(),
+        editorUserId: userId,
+        onError: (err) => logger.error('Edit - Error processing tracking links', err),
+      });
+      const processedContent = editedLinks.processedContent;
 
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
-        const { processedContent: contentWithLinks, trackingLinks } = await trackingLinkService.processExplicitLinksInContent({
-          content: content.trim(),
-          conversationId: conversationId,
-          messageId: messageId,
-          createdBy: userId
-        });
-        processedContent = contentWithLinks;
-        logger.info(`Edit - Processed content after links processedContent=${processedContent}`);
-
-        if (trackingLinks.length > 0) {
-          logger.info(`✅ ${trackingLinks.length} tracking link(s) created/reused in edited message`);
-        }
-      } catch (linkError) {
-        logger.error('Error processing tracking links in edit', linkError);
-        // Continue with unprocessed content if tracking links fail
-      }
+      // `metadata` est un blob PARTAGÉ (`postReplyTo`, `location`) : fusion, pas
+      // affectation. Et il n'est réécrit que si la réconciliation a établi
+      // quelque chose — y compris l'ensemble vide, qui dit « ce texte ne porte
+      // plus d'URL ». Sur panne, la base garde le mapping qu'elle avait.
+      const nextMetadata = editedLinks.reconciled
+        ? mergeTrackingLinksIntoMetadata(existingMessage.metadata, editedLinks.trackingLinks)
+        : undefined;
 
       // Mettre à jour le message avec le contenu traité
       const updatedMessage = await prisma.message.update({
@@ -238,7 +239,8 @@ export function registerMessagesAdvancedRoutes(
           content: processedContent,
           originalLanguage,
           isEdited: true,
-          editedAt: new Date()
+          editedAt: new Date(),
+          ...(editedLinks.reconciled ? { metadata: nextMetadata } : {})
         },
         include: {
           sender: {

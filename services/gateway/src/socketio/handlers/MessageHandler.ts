@@ -56,6 +56,12 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
+import {
+  reconcileEditedLinks,
+  mergeTrackingLinksIntoMetadata,
+  type LinkReconciler,
+} from '../../services/messaging/messageLinks';
+import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
@@ -96,6 +102,14 @@ export interface MessageHandlerDependencies {
    * « rien établi »).
    */
   mentionService?: MentionResolver | null;
+  /**
+   * Le traitement des liens d'un message édité. Contrairement à
+   * `mentionService`, l'absence n'est PAS un mode de fonctionnement : le
+   * handler en fabrique un depuis `prisma` quand l'appelant n'en fournit pas.
+   * Ce dépôt n'a besoin que d'un `PrismaClient`, et l'oubli de câblage est
+   * précisément le défaut que ce chemin vient de payer six fois.
+   */
+  linkService?: LinkReconciler | null;
 }
 
 export class MessageHandler {
@@ -114,6 +128,7 @@ export class MessageHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private deliveryQueue: RedisDeliveryQueue | null;
   private mentionService: MentionResolver | null;
+  private linkService: LinkReconciler;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -153,6 +168,7 @@ export class MessageHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.deliveryQueue = deps.deliveryQueue ?? null;
     this.mentionService = deps.mentionService ?? null;
+    this.linkService = deps.linkService ?? new TrackingLinkService(deps.prisma);
   }
 
   /**
@@ -645,6 +661,11 @@ export class MessageHandler {
           content: true,
           originalLanguage: true,
           createdAt: true,
+          // `metadata` porte le mapping `trackingLinks` que l'édition recompose,
+          // mais aussi `postReplyTo` (snapshot GELÉ d'un post cité, irrécupérable
+          // après expiration) et `location`. Il est lu pour être fusionné, jamais
+          // écrasé — cf. `mergeTrackingLinksIntoMetadata`.
+          metadata: true,
           sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
           attachments: { select: attachmentMediaSelect },
         },
@@ -702,7 +723,35 @@ export class MessageHandler {
       // already removed. Mirrors the guarded `updateMany` used by
       // handleMessageDelete's lastMessageAt recompute.
       const editedAt = new Date();
-      const editedContent = validated.content.trim();
+
+      // Ce que ce message doit à ses LIENS, après édition. Ce chemin n'en tenait
+      // aucune moitié : coller `[[https://…]]` ou `<https://…>` par socket
+      // persistait les crochets en toutes lettres — définitivement — là où le
+      // même geste par REST créait le lien de tracking. Et le mapping des URLs
+      // BRUTES (`metadata.trackingLinks`, lu par le client pour router le clic
+      // vers `/l/<token>`) n'était recomposé par AUCUN des deux chemins : il
+      // n'existait qu'à la création. Une URL ajoutée par édition restait
+      // intraçable pour toujours ; une URL remplacée laissait en base le token
+      // de celle que le texte ne contient plus.
+      //
+      // Avant l'écriture, parce que c'est le contenu RÉÉCRIT qui se persiste.
+      const editedLinks = await reconcileEditedLinks({
+        linkService: this.linkService,
+        message: { id: message.id, conversationId: message.conversationId },
+        content: validated.content.trim(),
+        editorUserId: userId,
+        onError: (err) => handlerLogger.warn('link reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
+      });
+      const editedContent = editedLinks.processedContent;
+
+      // `metadata` n'est réécrit que si la réconciliation a ÉTABLI quelque chose
+      // — y compris l'ensemble vide, qui dit « ce texte ne porte plus d'URL ».
+      // Le poser sur une panne transitoire effacerait un mapping vivant, et un
+      // lien de tracking effacé ne revient jamais.
+      const nextMetadata = editedLinks.reconciled
+        ? mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks)
+        : undefined;
+
       const editResult = await this.prisma.message.updateMany({
         where: { id: validated.messageId, deletedAt: null },
         data: {
@@ -710,6 +759,7 @@ export class MessageHandler {
           isEdited: true,
           editedAt,
           translations: null,
+          ...(editedLinks.reconciled ? { metadata: nextMetadata } : {}),
         },
       });
 
@@ -746,9 +796,13 @@ export class MessageHandler {
       };
 
       // Trigger async retranslation — fire-and-forget, non-blocking
+      // Le contenu RÉÉCRIT, pas celui reçu : traduire `[[https://…]]` alors que
+      // la base porte `m+<token>` produirait des traductions qui ne
+      // correspondent à aucun texte affiché. Parité avec REST, qui retraduit
+      // déjà depuis `processedContent`.
       const retranslationPayload = {
         id: validated.messageId,
-        content: validated.content.trim(),
+        content: editedContent,
         originalLanguage: message.originalLanguage,
         conversationId: message.conversationId,
         senderId: message.senderId,
@@ -784,11 +838,15 @@ export class MessageHandler {
       // payload l'effacement que l'unité vient d'empêcher en base : les clients
       // écrasent leur message caché avec `{ ...cached, ...editedPayload }`, et
       // un `[]` venu d'une panne transitoire effacerait un surlignage vivant.
+      // `trackingLinks` suit la même règle et pour la même raison : hissé
+      // top-level (miroir de `broadcastNewMessage` — le payload n'embarque pas
+      // `metadata`), et seulement si la réconciliation a établi le mapping.
       const editedPayload = {
         ...updatedMessage,
         conversationId: message.conversationId,
         translations: [],
         ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
+        ...(editedLinks.reconciled ? { trackingLinks: editedLinks.trackingLinks.map((link) => ({ ...link })) } : {}),
         attachments: this._serializeAttachmentsField(message as unknown as Message),
       };
 

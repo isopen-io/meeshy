@@ -1,109 +1,117 @@
-# Cycle 23 — Le cinquième écrivain : `message:edit` ne nommait personne
+# Cycle 24 — Le sixième écrivain : éditer par socket écrivait du texte brut là où REST créait un lien
 
-Tête laissée par le cycle 22 :
-« **`MessageHandler.handleMessageEdit` (édition par WebSocket) ne touche AUCUNE mention.**
-Il écrit `content`, `isEdited`, `editedAt`, `translations: null` et s'arrête là : ni ligne
-`Mention`, ni `validatedMentions`. Éditer « salut @alice » en « salut @bob » par socket laisse
-Alice mentionnée et ne nomme jamais Bob. C'est le cinquième écrivain de la famille, et le seul
-qui n'écrit rien du tout. »
+Tête laissée par le cycle 23 :
+« **`MessageHandler.handleMessageEdit` ne repasse toujours pas par le traitement des liens
+`[[url]]` / `<url>`** que la route REST applique avant de sauver
+(`trackingLinkService.processExplicitLinksInContent`). Éditer un message par socket pour y coller
+un lien traçable écrit le texte brut ; par REST, le même geste crée le lien. Sixième asymétrie du
+même handler, et la seule qui reste sur le contenu lui-même. »
 
-Vérifié, et c'est bien le cas — sur le transport d'édition **PRIMAIRE**. Le handler porte déjà
-la parité stricte avec REST sur la fenêtre de 24 h, sur la garde anti-suppression concurrente, sur
-le report des pièces jointes et sur l'éventail `conversation:updated`. La seule chose qu'il n'avait
-jamais reprise à REST, c'est ce que le message doit aux gens qu'il nomme.
+Vérifié, et c'est bien le cas. Mais la prescription décrivait le symptôme, pas le bloc : en allant
+lire ce que REST fait *vraiment* de ses liens, on trouve que l'obligation a **deux moitiés**, que
+REST n'en tient qu'une, et que la seconde n'est tenue par **personne** à l'édition.
 
-## Ce que l'édition socket cassait
+## Les deux moitiés
+
+Un message porte deux choses différentes à propos de ses URLs, et le chemin de CRÉATION
+(`MessageProcessor.saveMessage`) fait les deux :
+
+| | Ce que ça fait | Où c'est rangé |
+|---|---|---|
+| **Liens explicites** | `[[url]]` / `<url>` → `m+<token>` : l'utilisateur a demandé le tracking par sa syntaxe | dans le **contenu**, réécrit |
+| **URLs brutes** | mapping `url → token`, contenu INTACT : le client route le clic vers `/l/<token>` en gardant l'URL lisible et son aperçu vidéo | `metadata.trackingLinks` |
+
+À l'édition, avant ce cycle :
 
 | # | Défaut | Ce que l'utilisateur voyait |
 |---|---|---|
-| D1 | aucune ligne `Mention` créée | éditer un message pour y ajouter `@bob` ne mettait jamais Bob dans son inbox `/mentions` |
-| D2 | aucune ligne `Mention` supprimée | retirer `@alice` du texte la laissait mentionnée pour toujours — la ligne survit au mot qui l'a produite |
-| D3 | `validatedMentions` jamais réécrit | le web surligne depuis ce champ : le nom retiré restait surligné, le nom ajouté restait du texte brut |
-| D4 | aucune notification | personne n'apprenait jamais avoir été nommé par une édition |
-| D5 | aucun `mention:created` | même en ligne, un nouveau nommé hors du salon de conversation n'était averti par rien : `message:edited` ne fan qu'à `conversation:<id>` |
+| D1 | l'édition socket ne réécrivait AUCUN lien explicite | coller `[[https://…]]` par socket persistait les crochets en toutes lettres, définitivement ; le même geste par REST créait le lien |
+| D2 | **ni REST ni socket** ne recomposait `metadata.trackingLinks` | une URL brute ajoutée par édition restait intraçable **pour toujours** — le même texte, envoyé tel quel, aurait été tracé |
+| D3 | idem, à l'inverse | remplacer une URL laissait en base le token de celle que le texte ne contient plus, et le clic sur la nouvelle n'était jamais compté |
+| D4 | l'édition socket retraduisait depuis le texte REÇU | (conséquence de D1) les traductions auraient décrit un texte que la base ne porte pas |
+| D5 | l'algorithme de réécriture existait en **deux exemplaires** | `MessageProcessor.processLinksInContent` et `TrackingLinkService.processExplicitLinksInContent`, recopiés ligne pour ligne — protection markdown, réutilisation de token, repli sur l'URL nue, réparation des séquences `$` |
 
-## La forme du correctif — souder ce qui n'avait de sens qu'ensemble
+D5 explique D1 : il n'y avait pas d'endroit évident à appeler. Le chemin socket n'a pas « oublié »
+un appel, il n'avait aucun appel à faire qui soit manifestement le bon.
 
-Le cycle 22 avait livré `replaceMessageMentions` (la réconciliation) et la route REST gardait,
-dépliée à côté, la notification des entrants. Deux appels séparés, dont le second consomme le seul
-produit que le premier ne consomme pas (`newlyMentionedUserIds`). C'est exactement la forme qui
-permet à un écrivain d'en oublier une moitié — ou, ici, les deux.
+## La forme du correctif — souder, puis dédupliquer
 
-`reconcileEditedMentions` les soude en un point d'appel public unique :
+`reconcileEditedLinks` (`services/messaging/messageLinks.ts`) réunit les deux moitiés en un point
+d'appel public unique, exactement comme `reconcileEditedMentions` du cycle 23 :
 
 ```ts
-export async function reconcileEditedMentions(params: EditedMentionParams): Promise<ResolvedMentions> {
-  const resolved = await replaceMessageMentions(params);
-  await notifyNewlyMentioned(params, resolved.newlyMentionedUserIds);
-  return resolved;
-}
+const { processedContent } = await linkService.processExplicitLinksInContent({ … });
+const trackingLinks = await linkService.collectContentTrackingLinks({ content: processedContent, … });
+return { processedContent, trackingLinks, reconciled: true };
 ```
 
-Les deux appelants d'édition passent par là : la route REST (qui perd 45 lignes dépliées) et
-`MessageHandler.handleMessageEdit` (qui en gagne 10). Même contrat des deux côtés :
+**L'ordre n'est pas cosmétique** : le mapping des URLs brutes se calcule sur le contenu DÉJÀ
+réécrit, sinon une URL qui vient de devenir `m+<token>` serait recollectée comme si elle était
+encore brute et recevrait un second token.
 
-- **Seuls les ENTRANTS sont notifiés.** Renotifier l'ensemble ferait de dix corrections de frappe
-  dix pushes pour quelqu'un nommé au premier envoi.
-- **La notification est APRÈS l'écriture et son échec ne la défait pas.** `reconciled` continue de
-  décrire la base, qui a bel et bien été réconciliée.
-- **`editorUserId` est un `User.id`,** pas le `Participant.id` que porte `Message.senderId` — c'est
-  contre lui que `createMentionNotificationsBatch` filtre l'auto-mention (cf. cycle 22, D3).
+Les deux appelants d'édition passent par là — la route REST (qui perd son bloc `try/catch` déplié)
+et `MessageHandler.handleMessageEdit`. Et `MessageProcessor.processLinksInContent` délègue
+désormais à `TrackingLinkService` : **il n'y a plus qu'une règle**, testée là où elle vit.
 
-## `validatedMentions` dans le payload : établi vide ≠ rien établi
+## `metadata` : établi vide ≠ rien établi (et c'est un blob PARTAGÉ)
 
-Le handler ne recopie `validatedUsernames` dans `message:edited` que si `reconciled`. Poser le
-champ inconditionnellement rejouerait **au niveau du payload** l'effacement que l'unité vient
-d'empêcher en base : les clients écrasent leur message caché avec `{ ...cached, ...editedPayload }`,
-et un `[]` venu d'une panne transitoire effacerait un surlignage vivant. Le web cache avec
-`staleTime: Infinity` — la mention ne reviendrait pas.
+Deux gardes distinctes, pour deux dangers distincts :
 
-À l'inverse, un texte édité qui ne nomme plus personne **doit** produire `validatedMentions: []` :
-c'est un vide ÉTABLI. Les deux cas sont testés séparément, parce que rien dans le champ lui-même ne
-les distingue.
+1. **`metadata` n'est réécrit que si `reconciled`.** Un `[]` venu d'une panne transitoire effacerait
+   un mapping vivant — et un lien de tracking effacé ne revient jamais : personne ne relit le texte
+   après coup, et le clic part alors vers l'URL d'origine sans jamais être compté. À l'inverse, un
+   texte édité qui ne porte plus d'URL **doit** produire `metadata.trackingLinks` absent : c'est un
+   vide ÉTABLI. Les deux cas sont testés séparément, des deux côtés.
+2. **Fusion, jamais affectation.** `Message.metadata` porte aussi `postReplyTo` — un snapshot GELÉ
+   du post cité, irrécupérable une fois la story expirée — et `location`. Écrire
+   `{ trackingLinks }` par-dessus détruirait les deux. `mergeTrackingLinksIntoMetadata` lit, retire
+   la clé, la repose si elle a un contenu, et rend `null` quand il ne reste plus rien à ranger.
 
-## `mention:created` sur l'édition (D5)
-
-Émis aux entrants dans leur salon **personnel**, avec la garde d'auto-mention. Les `User.id` sont
-déjà résolus par la réconciliation, donc contrairement au chemin d'envoi
-(`broadcastNewMessage`, qui repart des usernames de `validatedMentions`), aucune requête de
-résolution n'est nécessaire. C'est le point resté ouvert depuis le cycle 21 — clos pour le chemin
-socket ; la route REST n'émet toujours rien (cf. « reste ouvert »).
+Le **contenu**, lui, est persisté dans tous les cas : l'édition de l'utilisateur n'est pas
+optionnelle, et une panne de tracking ne doit pas l'annuler. Sur échec, c'est le texte non réécrit.
 
 ## Ce que le cycle a aussi corrigé, côté test
 
-Le double d'`io` de `MessageHandlerEditDelete.test.ts` partageait **un seul** objet d'émission pour
-tous les salons : « émis à `user:bob` » et « émis à `conversation:X` » y étaient indistinguables.
-Toute assertion de ciblage y passait par accident — y compris celle qui affirmait que
-`conversation:updated` partait vers le salon de conversation, alors qu'il ne part qu'aux salons
-personnels. Le double est désormais **par salon** (`emitsTo(io, room)`), et l'assertion de
-l'éventail a été retournée dans le bon sens (`.not.toContainEqual` sur le salon de conversation).
+Deux doubles de `TrackingLinkService` ne stubaient que 3 méthodes et **inventaient donc le contrat**
+(`MessageProcessor.test.ts`, `conversation-messages-advanced.test.ts`). Ils ont échoué bruyamment
+dès que le code a appelé la vraie surface — ce qui est le bon comportement (cf. leçon du 2026-08-07).
+Ils reflètent désormais le contrat réel. Les 13 tests qui exerçaient l'exemplaire DUPLIQUÉ de
+l'algorithme dans `MessageProcessor` sont remplacés par 3 tests de délégation : l'algorithme a une
+seule maison, et un seul lieu de test (`TrackingLinkService.test.ts` +
+`TrackingLinkService.dollarSequences.test.ts`, séquences `$` comprises — le cas `<url>` qui n'y
+existait pas y a été ajouté).
 
 ## Vérification
 
 ```
-services/gateway : 600 suites / 15622 tests — tous verts
+services/gateway : 601 suites / 15640 tests — tous verts
 tsc --noEmit     : propre
 ```
 
-Nouveaux tests : 5 sur `reconcileEditedMentions` (entrants seuls, déjà-mentionné silencieux, rien
-établi ⇒ rien notifié, notification en panne ⇒ réconciliation acquise, sans notifier câblé), 7 sur
-le chemin socket (réconciliation des lignes, `validatedMentions` persisté + diffusé, notification
-du seul entrant, `mention:created` au salon personnel, auto-mention silencieuse, panne qui
-n'efface rien, vide établi qui efface).
+Nouveaux tests : 13 sur l'unité (`reconcileEditedLinks` × 8, `mergeTrackingLinksIntoMetadata` × 5),
+11 sur le chemin socket (contenu réécrit persisté + diffusé, retraduction depuis le texte réécrit,
+collecte sur le contenu réécrit, mapping d'une URL ajoutée, voisins de `metadata` préservés, vide
+établi qui efface, panne qui n'efface rien, hoist top-level, omission du champ sur panne), 4 sur la
+route REST (mapping minté et persisté, voisins préservés, vide établi, panne qui n'efface rien),
+1 sur le repli `$` du chemin `<url>`.
 
 ## Reste ouvert après ce cycle
 
-- **`MessageHandler.handleMessageEdit` ne repasse toujours pas par le traitement des liens
-  `[[url]]` / `<url>`** que la route REST applique avant de sauver (`trackingLinkService
-  .processExplicitLinksInContent`). Éditer un message par socket pour y coller un lien traçable
-  écrit le texte brut ; par REST, le même geste crée le lien. Sixième asymétrie du même handler,
-  et la seule qui reste sur le contenu lui-même. **Tête du prochain cycle.**
-- **L'édition REST n'émet toujours aucun `mention:created`** (cycle 21). Le chemin socket le fait
-  désormais ; REST n'a pas d'`io` sous la main dans cette route — le câblage passe par le
-  `fastify.socketIOManager`, une pièce distincte.
+- **`MessageHandler.handleMessageEdit` ne recalcule pas `conversationMessageStatsService
+  .onMessageEdited`** que REST appelle après édition. Septième asymétrie du même handler — la
+  dernière recensée, et elle porte sur les statistiques de conversation, pas sur le message.
+  **Tête du prochain cycle.**
+- **Le payload `message:edited` porte `trackingLinks: []` quand le texte n'en a plus.** Le décodeur
+  iOS (`MessageModels.swift`) ne retient le champ top-level que s'il est NON vide, puis retombe sur
+  `metadata.trackingLinks` — absent du payload d'édition. Un client qui fusionne
+  `{ ...cached, ...edited }` garde donc un mapping périmé jusqu'au prochain rechargement REST.
+  Inoffensif (l'URL n'est plus dans le texte, l'entrée est inerte), mais le contrat de décodage
+  mériterait de distinguer « champ absent » de « champ vide », comme le fait déjà le serveur.
+- **L'édition REST n'émet toujours aucun `mention:created`** (cycle 21). Le chemin socket le fait ;
+  REST n'a pas d'`io` sous la main — le câblage passe par `fastify.socketIOManager`.
 - **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
-  édition de post) et `routes/posts/comments.ts` : un `@John Doe` dans un post ou un commentaire ne
-  nomme personne — jamais, pas seulement à l'édition.
+  édition) et `routes/posts/comments.ts` : un `@John Doe` dans un post ou un commentaire ne nomme
+  personne — jamais, pas seulement à l'édition.
 - **`repair-mention-user-ids.ts` n'a jamais été exécuté** — aucun accès base depuis cette routine.
   À lancer sans `--apply` d'abord.
 - **`MentionCreatedEventData.mentionedParticipantId` reste dans les types partagés** et n'est peuplé

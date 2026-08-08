@@ -848,6 +848,190 @@ describe('MessageHandler — handleMessageEdit et les mentions', () => {
   });
 });
 
+// ── handleMessageEdit — ce que l'édition doit aux LIENS ─────────────────────
+//
+// Sixième asymétrie du même handler, et la seule qui portait sur le contenu
+// lui-même : REST réécrivait `[[url]]` / `<url>` en `m+<token>` avant de sauver,
+// le socket persistait les crochets en toutes lettres — définitivement. Et le
+// mapping des URLs BRUTES (`metadata.trackingLinks`, que le client lit pour
+// router le clic vers `/l/<token>`) n'était recomposé par AUCUN des deux : il
+// n'existait qu'à la création.
+describe('MessageHandler — handleMessageEdit (liens de tracking)', () => {
+  let handler: MessageHandler;
+  let deps: ReturnType<typeof makeDeps>;
+  let socket: jest.Mocked<Socket>;
+  let callback: jest.Mock<any>;
+  let linkService: {
+    processExplicitLinksInContent: jest.Mock<any>;
+    collectContentTrackingLinks: jest.Mock<any>;
+  };
+
+  const emittedTo = (room: string) => emitsTo(deps.io, room);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
+    mockValidateSocketEvent.mockReturnValue({
+      success: true,
+      data: { messageId: VALID_MSG_ID, content: 'voir [[https://b.com]]' },
+    });
+    mockGetCacheStore.mockReturnValue({ get: mockCacheGet, set: mockCacheSet });
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+
+    linkService = {
+      processExplicitLinksInContent: jest.fn<any>().mockResolvedValue({ processedContent: 'voir m+tokB' }),
+      collectContentTrackingLinks: jest.fn<any>().mockResolvedValue([]),
+    };
+    deps = makeDeps({ linkService: linkService as any });
+    handler = new MessageHandler(deps);
+    socket = makeSocket();
+    callback = jest.fn();
+
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+  });
+
+  const edit = (content = 'voir [[https://b.com]]') => {
+    // Le handler lit le contenu VALIDÉ, pas l'argument brut — le double de
+    // `validateSocketEvent` doit donc suivre, sinon le test croit éditer un
+    // texte que le code ne voit jamais.
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: { messageId: VALID_MSG_ID, content } });
+    return handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content }, callback);
+  };
+
+  const updateData = () => (deps.prisma.message.updateMany as jest.Mock<any>).mock.calls[0][0].data;
+
+  it('persiste le contenu RÉÉCRIT, pas les crochets tapés', async () => {
+    await edit();
+
+    expect(linkService.processExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'voir [[https://b.com]]',
+        conversationId: VALID_CONV_ID,
+        messageId: VALID_MSG_ID,
+        createdBy: USER_ID,
+      })
+    );
+    expect(updateData().content).toBe('voir m+tokB');
+  });
+
+  it('diffuse le contenu réécrit dans message:edited', async () => {
+    await edit();
+
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`).find((c) => c[0] === 'message:edited');
+    expect(edited?.[1]).toEqual(expect.objectContaining({ content: 'voir m+tokB' }));
+  });
+
+  it('retraduit depuis le contenu réécrit — pas depuis le texte reçu', async () => {
+    // Traduire `[[https://…]]` alors que la base porte `m+<token>` produirait
+    // des traductions qui ne correspondent à aucun texte affiché.
+    await edit();
+
+    expect(deps.translationService.retranslateMessageAsync).toHaveBeenCalledWith(
+      VALID_MSG_ID,
+      expect.objectContaining({ content: 'voir m+tokB' })
+    );
+  });
+
+  it('collecte le mapping des URLs brutes SUR le contenu réécrit', async () => {
+    // Sinon une URL qui vient de devenir `m+<token>` serait recollectée comme
+    // URL brute et recevrait un SECOND token.
+    await edit();
+
+    expect(linkService.collectContentTrackingLinks).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'voir m+tokB' })
+    );
+  });
+
+  it('persiste le mapping d’une URL ajoutée par l’édition', async () => {
+    linkService.collectContentTrackingLinks.mockResolvedValue([{ url: 'https://b.com', token: 'tokB' }]);
+
+    await edit();
+
+    expect(updateData().metadata).toEqual({ trackingLinks: [{ url: 'https://b.com', token: 'tokB' }] });
+  });
+
+  it('préserve les voisins du blob metadata', async () => {
+    // `postReplyTo` est un snapshot GELÉ, irrécupérable une fois la story
+    // expirée : l'écraser perdrait la citation.
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({ metadata: { postReplyTo: { id: 'post-1' }, location: { lat: 1 } } })
+    );
+    linkService.collectContentTrackingLinks.mockResolvedValue([{ url: 'https://b.com', token: 'tokB' }]);
+
+    await edit();
+
+    expect(updateData().metadata).toEqual({
+      postReplyTo: { id: 'post-1' },
+      location: { lat: 1 },
+      trackingLinks: [{ url: 'https://b.com', token: 'tokB' }],
+    });
+  });
+
+  it('efface le mapping quand le texte édité ne porte plus d’URL — vide ÉTABLI', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({ metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] } })
+    );
+    linkService.collectContentTrackingLinks.mockResolvedValue([]);
+
+    await edit('plus rien');
+
+    expect(updateData().metadata).toBeNull();
+  });
+
+  it('n’efface RIEN quand le traitement des liens échoue — vide NON établi', async () => {
+    // Un lien de tracking effacé ne revient jamais : personne ne relit le texte
+    // après coup, et le clic part alors sans jamais être compté.
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({ metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] } })
+    );
+    linkService.processExplicitLinksInContent.mockRejectedValue(new Error('tracking down'));
+
+    await edit('voir https://a.com');
+
+    expect(updateData()).not.toHaveProperty('metadata');
+    // L'édition de l'utilisateur, elle, est bien persistée.
+    expect(updateData().content).toBe('voir https://a.com');
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('hisse trackingLinks top-level dans message:edited quand il est établi', async () => {
+    // Miroir de `broadcastNewMessage` : le payload n'embarque pas `metadata`,
+    // donc sans ce hoist le destinataire ne verrait le lien tracé qu'après
+    // rechargement.
+    linkService.collectContentTrackingLinks.mockResolvedValue([{ url: 'https://b.com', token: 'tokB' }]);
+
+    await edit();
+
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`).find((c) => c[0] === 'message:edited');
+    expect(edited?.[1]).toEqual(
+      expect.objectContaining({ trackingLinks: [{ url: 'https://b.com', token: 'tokB' }] })
+    );
+  });
+
+  it('omet trackingLinks du payload quand rien n’a pu être établi', async () => {
+    // Même règle que `validatedMentions` : poser le champ rejouerait dans le
+    // payload l'effacement que l'unité vient d'empêcher en base — les clients
+    // écrasent leur message caché avec `{ ...cached, ...editedPayload }`.
+    linkService.processExplicitLinksInContent.mockRejectedValue(new Error('tracking down'));
+
+    await edit();
+
+    const edited = emittedTo(`conversation:${VALID_CONV_ID}`).find((c) => c[0] === 'message:edited');
+    expect(edited?.[1]).not.toHaveProperty('trackingLinks');
+  });
+});
+
 // ── handleMessageDelete ────────────────────────────────────────────────────
 
 describe('MessageHandler — handleMessageDelete', () => {
