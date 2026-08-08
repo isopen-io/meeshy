@@ -6,9 +6,13 @@ import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
  * les routes de lien de partage ne construisent pas un `Message` Prisma
  * complet, et rien ici n'a besoin de plus que ces trois champs.
  *
- * `senderId` est un `Participant.id` sur les chemins d'envoi (socket, REST,
- * lien) — c'est ce que `validateMentionPermissions` reçoit déjà du chemin
- * nominal.
+ * `senderId` alimente `validateMentionPermissions`, qui le compare aux
+ * `Participant.userId` de la conversation pour écarter l'auto-mention en
+ * `direct` : la valeur ATTENDUE est donc un `User.id`. Le chemin d'édition en
+ * passe un ; les chemins d'envoi (socket, REST, lien) passent un
+ * `Participant.id`, qui n'égale jamais un `User.id` — l'auto-mention y échappe
+ * au filtre. Défaut préexistant, sans autre effet (la comparaison ne sert
+ * qu'en `direct`), suivi hors de ce cycle.
  */
 export interface MentionTargetMessage {
   readonly id: string;
@@ -22,7 +26,26 @@ export interface MentionTargetMessage {
  * délégués générés portent des surcharges que rien de recopié à la main ne
  * satisfait.
  */
-export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message'>;
+export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message' | 'mention'>;
+
+/**
+ * `'create'` — le message vient de naître : il n'a aucune ligne `Mention`, et un
+ * contenu sans `@` n'a rien à écrire (le champ vaut déjà `[]`).
+ *
+ * `'replace'` — le message existait : l'ensemble de ses mentionnés doit être
+ * RÉCONCILIÉ avec son nouveau contenu. Trois différences, et chacune répare un
+ * défaut du chemin d'édition qu'il remplace :
+ *
+ * 1. Le court-circuit « pas de `@` » ne rend plus la main : retirer la dernière
+ *    mention d'un message doit la retirer pour de bon.
+ * 2. On ne purge PAS pour recréer. `Mention.mentionedAt` est l'axe de tri de
+ *    l'inbox : recréer la ligne d'un mentionné inchangé remonterait une mention
+ *    de trois jours en tête parce que l'auteur a corrigé une faute de frappe.
+ * 3. `newlyMentionedUserIds` isole les entrants, pour que dix corrections
+ *    successives n'envoient pas dix pushes à quelqu'un déjà nommé au premier
+ *    envoi.
+ */
+export type MentionResolutionMode = 'create' | 'replace';
 
 /**
  * Les quatre méthodes de `MentionService` que la résolution appelle, en
@@ -45,9 +68,36 @@ export interface ResolvedMentions {
   readonly validatedUserIds: readonly string[];
   /** Leurs `username`, tels que persistés dans `Message.validatedMentions`. */
   readonly validatedUsernames: readonly string[];
+  /**
+   * Ceux qui n'étaient PAS déjà mentionnés — le seul lot qu'une notification
+   * doit atteindre. En `'create'`, c'est l'ensemble complet ; en `'replace'`,
+   * la différence avec les lignes `Mention` déjà en base.
+   */
+  readonly newlyMentionedUserIds: readonly string[];
+  /**
+   * `true` quand `validatedUsernames` DÉCRIT l'état du message — y compris
+   * lorsqu'il est vide parce que plus rien n'y est mentionné.
+   *
+   * `false` quand l'unité n'a rien pu établir : service absent, ensemble
+   * précédent illisible, résolution en échec. La distinction n'est pas
+   * cosmétique — sans elle, un appelant qui recopie `validatedUsernames` dans
+   * sa réponse et dans sa diffusion socket rejoue au niveau du PAYLOAD
+   * l'effacement que cette unité vient d'empêcher en base : le client cache le
+   * vide (`staleTime: Infinity` côté web) et la mention disparaît quand même.
+   */
+  readonly reconciled: boolean;
 }
 
-const EMPTY: ResolvedMentions = { validatedUserIds: [], validatedUsernames: [] };
+/** Rien à dire sur ce message : l'appelant garde ce que la base porte déjà. */
+const UNRESOLVED: ResolvedMentions = {
+  validatedUserIds: [],
+  validatedUsernames: [],
+  newlyMentionedUserIds: [],
+  reconciled: false,
+};
+
+/** Établi, et vide : ce message ne nomme personne. */
+const NO_MENTIONS: ResolvedMentions = { ...UNRESOLVED, reconciled: true };
 
 /**
  * Les participants inscrits d'une conversation, sous la forme que le parseur de
@@ -122,15 +172,46 @@ export async function resolveMessageMentions(params: {
   content: string;
   /** Mentions déjà désignées par le client, en `User.id` — court-circuite l'extraction. */
   explicitMentionedUserIds?: readonly string[];
+  /** `'create'` (défaut) pour un message neuf, `'replace'` pour une édition. */
+  mode?: MentionResolutionMode;
   onError?: (error: unknown) => void;
 }): Promise<ResolvedMentions> {
   const { prisma, mentionService, message, content, onError } = params;
   const explicit = params.explicitMentionedUserIds ?? [];
+  const replacing = params.mode === 'replace';
 
-  if (!mentionService) return EMPTY;
-  if (explicit.length === 0 && !content.includes('@')) return EMPTY;
+  // Sans service, rien n'est résolvable — donc rien n'est réconciliable. Une
+  // édition ne DOIT PAS en conclure que le message ne nomme plus personne : le
+  // chemin qu'on remplace vidait `validatedMentions` à chaque édition tant que
+  // le service n'était pas câblé, et le texte, lui, nommait toujours quelqu'un.
+  if (!mentionService) return UNRESOLVED;
+  if (!replacing && explicit.length === 0 && !content.includes('@')) return NO_MENTIONS;
 
   try {
+    // L'ensemble précédent est la seule source de « qui est nouveau » et de
+    // « qui est parti ». Sa lecture est DANS le try : en échec, la
+    // réconciliation ne peut plus garantir qu'elle ne détruit rien, donc elle
+    // s'abstient entièrement plutôt que de purger à l'aveugle.
+    const previousUserIds = replacing
+      ? (await prisma.mention.findMany({
+          where: { messageId: message.id },
+          select: { mentionedParticipantId: true },
+        })).map((row) => row.mentionedParticipantId)
+      : [];
+
+    const clearAll = async (): Promise<ResolvedMentions> => {
+      if (previousUserIds.length > 0) {
+        await prisma.mention.deleteMany({ where: { messageId: message.id } });
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { validatedMentions: [] },
+        });
+      }
+      return NO_MENTIONS;
+    };
+
+    if (replacing && explicit.length === 0 && !content.includes('@')) return await clearAll();
+
     const usernameByUserId = new Map<string, string>();
     let candidateUserIds: string[] = [];
 
@@ -139,7 +220,7 @@ export async function resolveMessageMentions(params: {
     } else {
       const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
       const extracted = mentionService.extractMentionsWithParticipants(content, participants);
-      if (extracted.length === 0) return EMPTY;
+      if (extracted.length === 0) return replacing ? await clearAll() : NO_MENTIONS;
 
       const userMap = await mentionService.resolveUsernames(extracted);
       for (const [username, user] of userMap.entries()) {
@@ -148,16 +229,31 @@ export async function resolveMessageMentions(params: {
       candidateUserIds = Array.from(usernameByUserId.keys());
     }
 
-    if (candidateUserIds.length === 0) return EMPTY;
+    if (candidateUserIds.length === 0) return replacing ? await clearAll() : NO_MENTIONS;
 
     const { validUserIds } = await mentionService.validateMentionPermissions(
       message.conversationId,
       candidateUserIds,
       message.senderId
     );
-    if (validUserIds.length === 0) return EMPTY;
+    if (validUserIds.length === 0) return replacing ? await clearAll() : NO_MENTIONS;
 
-    await mentionService.createMentions(message.id, validUserIds);
+    // Réconciliation : les partants partent, les restants ne bougent pas, les
+    // entrants entrent. En `'create'`, `previousUserIds` est vide, donc les
+    // entrants sont l'ensemble complet et rien n'est supprimé — le chemin
+    // nominal du cycle 20, inchangé.
+    const previous = new Set(previousUserIds);
+    const retained = new Set(validUserIds);
+    const departedUserIds = previousUserIds.filter((id) => !retained.has(id));
+    const newlyMentionedUserIds = validUserIds.filter((id) => !previous.has(id));
+
+    if (departedUserIds.length > 0) {
+      await prisma.mention.deleteMany({
+        where: { messageId: message.id, mentionedParticipantId: { in: departedUserIds } },
+      });
+    }
+
+    await mentionService.createMentions(message.id, newlyMentionedUserIds);
 
     if (explicit.length > 0) {
       const users = await prisma.user.findMany({
@@ -176,9 +272,9 @@ export async function resolveMessageMentions(params: {
       data: { validatedMentions: validatedUsernames },
     });
 
-    return { validatedUserIds: validUserIds, validatedUsernames };
+    return { validatedUserIds: validUserIds, validatedUsernames, newlyMentionedUserIds, reconciled: true };
   } catch (error) {
     onError?.(error);
-    return EMPTY;
+    return UNRESOLVED;
   }
 }

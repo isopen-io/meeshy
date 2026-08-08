@@ -179,6 +179,7 @@ const makePrisma = (): any => ({
     findMany: jest.fn().mockResolvedValue([]),
   },
   mention: {
+    findMany: jest.fn().mockResolvedValue([]),
     deleteMany: jest.fn().mockResolvedValue({}),
   },
   reaction: {
@@ -539,20 +540,26 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('processes mentions when mentionService is available', async () => {
-      const extractMock = jest.fn().mockReturnValue(['@alice']);
-      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice' }]]));
+      const extractMock = jest.fn().mockReturnValue(['alice']);
+      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]]));
       const validateMentionPermissions = jest.fn().mockResolvedValue({
         isValid: true,
         validUserIds: ['user-alice'],
       });
       const createMentions = jest.fn().mockResolvedValue(undefined);
       fastify.mentionService = {
-        extractMentions: extractMock,
+        extractMentionsWithParticipants: extractMock,
         resolveUsernames,
         validateMentionPermissions,
         createMentions,
       };
 
+      // La résolution lit le contenu TRAITÉ (liens de tracking déjà substitués),
+      // pas le corps de la requête : c'est lui qui doit porter le `@`.
+      mockProcessExplicitLinksInContent.mockResolvedValue({
+        processedContent: 'Hello @alice',
+        trackingLinks: [],
+      });
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
@@ -569,32 +576,68 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(extractMock).toHaveBeenCalled();
+      expect(extractMock).toHaveBeenCalledWith('Hello @alice', expect.any(Array));
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
-    it('clears mentions when mentionService unavailable', async () => {
+    // Ce test verrouillait le défaut : sans service de mentions câblé, CHAQUE
+    // édition vidait `validatedMentions` et supprimait les lignes `Mention`
+    // d'un message dont le texte nommait toujours quelqu'un. Rien ne relit le
+    // texte après coup — la mention ne revenait jamais.
+    it('preserves mentions when mentionService unavailable', async () => {
       fastify.mentionService = null;
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
-        content: 'Hello',
-        validatedMentions: [],
+        content: 'Hello @alice',
+        validatedMentions: ['alice'],
         translations: null,
       });
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
-        body: { content: 'Hello' },
+        body: { content: 'Hello @alice' },
       });
       const reply = makeReply();
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(prisma.message.update).toHaveBeenCalledWith(
+      expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.message.update).not.toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ validatedMentions: [] }),
         })
+      );
+    });
+
+    // Préserver en base ne suffit pas : recopier le résultat vide de l'unité
+    // dans la réponse et dans la diffusion socket rejouerait l'effacement au
+    // niveau du PAYLOAD, et le web le cacherait (`staleTime: Infinity`).
+    it('keeps the persisted mentions in the response payload when resolution could not run', async () => {
+      fastify.mentionService = null;
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Hello @alice',
+        validatedMentions: ['alice'],
+        translations: null,
+      });
+      mockProcessExplicitLinksInContent.mockResolvedValue({
+        processedContent: 'Hello @alice',
+        trackingLinks: [],
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'Hello @alice' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ validatedMentions: ['alice'] })
       );
     });
 
@@ -793,19 +836,23 @@ describe('registerMessagesAdvancedRoutes', () => {
 
     it('sends mention notifications when notificationService available', async () => {
       const extractMock = jest.fn().mockReturnValue(['alice']);
-      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice' }]]));
+      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]]));
       const validateMentionPermissions = jest.fn().mockResolvedValue({
         isValid: true,
         validUserIds: ['user-alice'],
       });
       const createMentions = jest.fn().mockResolvedValue(undefined);
-      fastify.mentionService = { extractMentions: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
+      fastify.mentionService = { extractMentionsWithParticipants: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
 
       const createBatchMock = jest.fn().mockResolvedValue(1);
       fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };
 
+      mockProcessExplicitLinksInContent.mockResolvedValue({
+        processedContent: 'Hello @alice',
+        trackingLinks: [],
+      });
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
-      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'Hello alice', validatedMentions: ['alice'], translations: null });
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'Hello @alice', validatedMentions: ['alice'], translations: null });
       prisma.user.findUnique.mockResolvedValue({ username: 'creator', avatar: null });
       prisma.conversation.findUnique.mockResolvedValue({
         title: 'Test',
@@ -815,13 +862,64 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
-        body: { content: 'Hello alice' },
+        body: { content: 'Hello @alice' },
       });
       const reply = makeReply();
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(createBatchMock).toHaveBeenCalled();
+      // Alice n'était PAS déjà mentionnée (`mention.findMany` → []) : elle est
+      // entrante, donc notifiée. Une édition qui ne change pas l'ensemble des
+      // mentionnés ne renotifie personne.
+      expect(createBatchMock).toHaveBeenCalledWith(
+        ['user-alice'],
+        expect.objectContaining({ conversationId: CONV_ID, messageId: MSG_ID }),
+        expect.any(Array)
+      );
+    });
+
+    // D3 : le corps précédent renotifiait TOUS les mentionnés à chaque édition.
+    // Corriger une faute de frappe dans « salut @alice » repoussait un push à
+    // Alice, déjà nommée au premier envoi — dix corrections, dix pushes.
+    it('does not re-notify a mention that was already there', async () => {
+      const validateMentionPermissions = jest.fn().mockResolvedValue({
+        isValid: true,
+        validUserIds: ['user-alice'],
+      });
+      fastify.mentionService = {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue(['alice']),
+        resolveUsernames: jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]])),
+        validateMentionPermissions,
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const createBatchMock = jest.fn().mockResolvedValue(1);
+      fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };
+
+      // Alice était DÉJÀ mentionnée avant l'édition.
+      prisma.mention.findMany.mockResolvedValue([{ mentionedParticipantId: 'user-alice' }]);
+      mockProcessExplicitLinksInContent.mockResolvedValue({
+        processedContent: 'Hello @alice, typo corrigee',
+        trackingLinks: [],
+      });
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID, content: 'Hello @alice, typo corrigee', validatedMentions: ['alice'], translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'Hello @alice, typo corrigee' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(createBatchMock).not.toHaveBeenCalled();
+      // Sa ligne `Mention` n'est ni supprimée ni recréée : `mentionedAt` tient
+      // l'ordre de l'inbox, une correction de frappe ne doit pas l'y remonter.
+      expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+      expect(mockSendSuccess).toHaveBeenCalled();
     });
 
     it('handles mention processing error gracefully', async () => {
@@ -2070,14 +2168,21 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('resolveUsernames returns empty userMap - clears mentions', async () => {
-      const extractMock = jest.fn().mockReturnValue(['@unknown']);
+      const extractMock = jest.fn().mockReturnValue(['unknown']);
       const resolveUsernames = jest.fn().mockResolvedValue(new Map()); // empty map
       fastify.mentionService = {
-        extractMentions: extractMock,
+        extractMentionsWithParticipants: extractMock,
         resolveUsernames,
         validateMentionPermissions: jest.fn(),
         createMentions: jest.fn(),
       };
+      // L'effacement n'est observable que s'il y avait quelque chose à
+      // effacer : un message déjà sans mention n'a aucune écriture à subir.
+      prisma.mention.findMany.mockResolvedValueOnce([{ mentionedParticipantId: 'user-alice' }]);
+      mockProcessExplicitLinksInContent.mockResolvedValue({
+        processedContent: 'hello @unknown',
+        trackingLinks: [],
+      });
 
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
