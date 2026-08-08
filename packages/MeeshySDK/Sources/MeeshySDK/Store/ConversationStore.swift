@@ -15,7 +15,7 @@ public protocol ConversationPreferenceWriting: Sendable {
         request: UpdateConversationPreferencesRequest
     ) async throws -> APIConversationPreferences
 
-    /// Batch reorder (`POST /user-preferences/conversations/reorder`). Used by
+    /// Batch reorder (`POST /user-preferences/reorder`). Used by
     /// the Store's `reorderConversations` composite (drag-to-reorder).
     func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws
 }
