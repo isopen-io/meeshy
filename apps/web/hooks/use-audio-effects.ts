@@ -137,6 +137,17 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
 
     const enabledEffects = Object.values(effectsState).filter((effect) => effect.enabled);
 
+    // Some processors run continuous background work while active (e.g.
+    // VoiceCoderProcessor's pitch-detection rAF loop). disconnect() above
+    // fires on every rebuild regardless of which effect toggled, so it can't
+    // tell a processor whether IT specifically is still enabled — only this
+    // per-effect enabled check can.
+    processorsRef.current.forEach((processor, type) => {
+      (processor as AudioEffectProcessor & { setActive?: (active: boolean) => void }).setActive?.(
+        enabledEffects.some((effect) => effect.type === type)
+      );
+    });
+
     if (enabledEffects.length === 0) {
       (inputNodeRef.current as any).connect(mediaStreamDestinationRef.current);
       return;

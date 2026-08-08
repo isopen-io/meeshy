@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
-import { snapToScale, SCALES, BackSoundProcessor } from '../audio-effects';
-import type { BackSoundParams } from '@meeshy/shared/types/video-call';
+import { snapToScale, SCALES, BackSoundProcessor, VoiceCoderProcessor } from '../audio-effects';
+import type { BackSoundParams, VoiceCoderParams } from '@meeshy/shared/types/video-call';
 
 /**
  * snapToScale corrects a detected MIDI pitch to the nearest note of a musical
@@ -74,5 +74,94 @@ describe('BackSoundProcessor.loadSound', () => {
     const playerInstance = (Tone.Player as unknown as jest.Mock).mock.results[0].value;
     expect(playerInstance.connect).toHaveBeenCalledTimes(1);
     expect(playerInstance.connect).toHaveBeenCalledWith((processor as any).playerGain);
+  });
+});
+
+/**
+ * VoiceCoderProcessor runs a continuous requestAnimationFrame loop (FFT pitch
+ * detection + correction) while active. `rebuildAudioGraph()` in
+ * use-audio-effects.ts calls `disconnect()` on every processor on EVERY
+ * effect toggle — including toggling a *different* effect — so disconnect()
+ * alone can't tell this processor whether IT specifically remains enabled.
+ * `setActive()` is the explicit signal the hook uses instead: without it, the
+ * rAF loop kept running indefinitely after the user turned voice-coder off —
+ * pure CPU/battery cost for the rest of the call with no audible effect.
+ */
+describe('VoiceCoderProcessor.setActive', () => {
+  const params: VoiceCoderParams = {
+    pitch: 0,
+    harmonization: false,
+    strength: 50,
+    retuneSpeed: 50,
+    scale: 'chromatic',
+    key: 'C',
+    naturalVibrato: 0,
+  };
+
+  let rafSpy: jest.SpyInstance;
+  let cafSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    // requestAnimationFrame never needs to actually fire for this test: only
+    // whether the loop was (re)armed or torn down matters, not its output.
+    rafSpy = jest.spyOn(global, 'requestAnimationFrame').mockReturnValue(1 as unknown as number);
+    cafSpy = jest.spyOn(global, 'cancelAnimationFrame').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    rafSpy.mockRestore();
+    cafSpy.mockRestore();
+  });
+
+  it('starts the pitch-detection loop on construction', () => {
+    new VoiceCoderProcessor(params);
+    expect(rafSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the in-flight animation frame when deactivated', () => {
+    const processor = new VoiceCoderProcessor(params);
+
+    processor.setActive(false);
+
+    expect(cafSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not schedule a second loop for a redundant setActive(false)', () => {
+    const processor = new VoiceCoderProcessor(params);
+
+    processor.setActive(false);
+    processor.setActive(false);
+
+    expect(cafSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes the pitch-detection loop when reactivated', () => {
+    const processor = new VoiceCoderProcessor(params);
+    processor.setActive(false);
+    rafSpy.mockClear();
+
+    processor.setActive(true);
+
+    expect(rafSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not schedule a duplicate loop for a redundant setActive(true)', () => {
+    const processor = new VoiceCoderProcessor(params);
+    rafSpy.mockClear();
+
+    // Already active from construction — a second setActive(true) must not
+    // start a concurrent second rAF chain.
+    processor.setActive(true);
+
+    expect(rafSpy).not.toHaveBeenCalled();
+  });
+
+  it('disconnect() (called on every graph rebuild) also stops the loop', () => {
+    const processor = new VoiceCoderProcessor(params);
+
+    processor.disconnect();
+
+    expect(cafSpy).toHaveBeenCalledTimes(1);
   });
 });
