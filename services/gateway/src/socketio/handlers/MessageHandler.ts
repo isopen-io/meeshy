@@ -55,6 +55,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
+import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
@@ -88,6 +89,13 @@ export interface MessageHandlerDependencies {
   readStatusService: MessageReadStatusService;
   privacyPreferencesService: PrivacyPreferencesService;
   deliveryQueue?: RedisDeliveryQueue | null;
+  /**
+   * Optionnel : sans lui, une édition socket laisse les lignes `Mention`
+   * telles quelles plutôt que d'en déduire que le message ne nomme plus
+   * personne (cf. `reconcileEditedMentions`, qui distingue « établi vide » de
+   * « rien établi »).
+   */
+  mentionService?: MentionResolver | null;
 }
 
 export class MessageHandler {
@@ -105,6 +113,7 @@ export class MessageHandler {
   private readStatusService: MessageReadStatusService;
   private privacyPreferencesService: PrivacyPreferencesService;
   private deliveryQueue: RedisDeliveryQueue | null;
+  private mentionService: MentionResolver | null;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -143,6 +152,7 @@ export class MessageHandler {
     this.readStatusService = deps.readStatusService;
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.deliveryQueue = deps.deliveryQueue ?? null;
+    this.mentionService = deps.mentionService ?? null;
   }
 
   /**
@@ -692,10 +702,11 @@ export class MessageHandler {
       // already removed. Mirrors the guarded `updateMany` used by
       // handleMessageDelete's lastMessageAt recompute.
       const editedAt = new Date();
+      const editedContent = validated.content.trim();
       const editResult = await this.prisma.message.updateMany({
         where: { id: validated.messageId, deletedAt: null },
         data: {
-          content: validated.content.trim(),
+          content: editedContent,
           isEdited: true,
           editedAt,
           translations: null,
@@ -707,10 +718,27 @@ export class MessageHandler {
         return;
       }
 
+      // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
+      // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
+      // ni notification — alors qu'il est le transport d'édition PRIMAIRE.
+      // Éditer « salut @alice » en « salut @bob » laissait Alice mentionnée et
+      // ne nommait jamais Bob. Même unité que la route REST, aux mêmes
+      // conditions : la réconciliation ne détruit rien qu'elle n'ait pu lire,
+      // et seuls les ENTRANTS sont notifiés.
+      const editedMentions = await reconcileEditedMentions({
+        prisma: this.prisma,
+        mentionService: this.mentionService,
+        notificationService: this.notificationService,
+        message: { id: message.id, conversationId: message.conversationId, senderId: message.senderId },
+        content: editedContent,
+        editorUserId: userId,
+        onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
+      });
+
       const updatedMessage = {
         id: message.id,
         conversationId: message.conversationId,
-        content: validated.content.trim(),
+        content: editedContent,
         isEdited: true,
         editedAt,
         originalLanguage: message.originalLanguage,
@@ -728,14 +756,39 @@ export class MessageHandler {
       this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
+      // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL : quelqu'un
+      // que l'édition vient de nommer n'est pas forcément dans
+      // ROOMS.conversation(id), et `message:edited` ne fan que là. Parité avec
+      // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
+      // `User.id` sont déjà résolus — inutile de repasser par les usernames.
+      // La garde d'auto-mention reste : on ne se notifie pas soi-même.
+      for (const targetUserId of editedMentions.newlyMentionedUserIds) {
+        if (targetUserId === userId) continue;
+        this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+          messageId: message.id,
+          conversationId: message.conversationId,
+          senderId: userId,
+          mentionedUserId: targetUserId,
+          content: editedContent,
+          timestamp: editedAt.toISOString(),
+        });
+      }
+
       // Attachments are unaffected by a content edit — carry over the ones
       // fetched pre-edit so clients that overwrite their cached message with
       // this payload (`{ ...cached, ...editedPayload }`) do not lose the
       // photo/video/audio that was attached to the message being edited.
+      // `validatedMentions` n'est recopié que si la réconciliation a ÉTABLI
+      // quelque chose — y compris l'ensemble vide, qui dit « ce texte ne nomme
+      // plus personne ». Le poser inconditionnellement rejouerait dans le
+      // payload l'effacement que l'unité vient d'empêcher en base : les clients
+      // écrasent leur message caché avec `{ ...cached, ...editedPayload }`, et
+      // un `[]` venu d'une panne transitoire effacerait un surlignage vivant.
       const editedPayload = {
         ...updatedMessage,
         conversationId: message.conversationId,
         translations: [],
+        ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
         attachments: this._serializeAttachmentsField(message as unknown as Message),
       };
 

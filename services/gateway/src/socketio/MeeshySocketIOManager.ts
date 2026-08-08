@@ -359,6 +359,7 @@ export class MeeshySocketIOManager {
       attachmentService: new AttachmentService(prisma),
       readStatusService,
       privacyPreferencesService: this.privacyPreferencesService,
+      mentionService: this.mentionService,
     });
 
     this.statusHandler = new StatusHandler({

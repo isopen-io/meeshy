@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { resolveMessageMentions, replaceMessageMentions } from '../../../../services/messaging/messageMentions';
+import { resolveMessageMentions, replaceMessageMentions, reconcileEditedMentions } from '../../../../services/messaging/messageMentions';
 
 const MESSAGE = { id: 'msg-1', conversationId: 'conv-1', senderId: 'part-1' };
 
@@ -481,5 +481,129 @@ describe('replaceMessageMentions — une panne ne détruit rien', () => {
     ).resolves.toEqual({
       validatedUserIds: [], validatedUsernames: [], newlyMentionedUserIds: [], reconciled: false,
     });
+  });
+});
+
+/**
+ * `reconcileEditedMentions` — la réconciliation ET le push aux entrants, soudés.
+ *
+ * Les deux moitiés n'ont de sens qu'ensemble : `newlyMentionedUserIds` est le
+ * seul produit de la réconciliation que rien d'autre ne consomme. Les avoir
+ * laissées séparées, c'est ce qui a permis au chemin socket — le transport
+ * d'édition PRIMAIRE — de n'en appeler aucune des deux.
+ */
+describe('reconcileEditedMentions', () => {
+  function makeEditPrisma(overrides: Record<string, any> = {}) {
+    return makePrisma({
+      conversation: {
+        findUnique: jest.fn<any>().mockResolvedValue({
+          participants: [{ userId: 'u-alice' }, { userId: 'u-sender' }, { userId: null }],
+        }),
+      },
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        findUnique: jest.fn<any>().mockResolvedValue({
+          username: 'sender', displayName: 'Sender', avatar: null,
+        }),
+      },
+      ...overrides,
+    });
+  }
+
+  function makeNotifier() {
+    return { createMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(1) } as any;
+  }
+
+  it('réconcilie et ne notifie QUE les entrants', async () => {
+    const prisma = makeEditPrisma();
+    const notificationService = makeNotifier();
+
+    const result = await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    expect(result.reconciled).toBe(true);
+    expect(result.newlyMentionedUserIds).toEqual(['u-alice']);
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      ['u-alice'],
+      {
+        senderId: 'u-sender',
+        senderProfile: { username: 'sender', displayName: 'Sender', avatar: null },
+        messageContent: 'salut @alice',
+        conversationId: 'conv-1',
+        messageId: 'msg-1',
+      },
+      ['u-alice', 'u-sender']
+    );
+  });
+
+  // Dix corrections de frappe ne valent pas dix pushes à quelqu'un déjà nommé
+  // au premier envoi.
+  it('ne notifie personne quand le mentionné était DÉJÀ mentionné', async () => {
+    const prisma = makeEditPrisma({
+      mention: {
+        findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-alice' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
+    const notificationService = makeNotifier();
+
+    const result = await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice corrigé', editorUserId: 'u-sender',
+    });
+
+    expect(result.newlyMentionedUserIds).toEqual([]);
+    expect(notificationService.createMentionNotificationsBatch).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+  });
+
+  // Une réconciliation qui s'abstient n'a établi AUCUN entrant : notifier
+  // quiconque à partir de là serait inventer.
+  it('ne notifie personne quand rien n’a pu être établi', async () => {
+    const prisma = makeEditPrisma();
+    const notificationService = makeNotifier();
+
+    const result = await reconcileEditedMentions({
+      prisma, mentionService: null, notificationService,
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    expect(result.reconciled).toBe(false);
+    expect(notificationService.createMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
+
+  // Le push est APRÈS l'écriture, et son échec ne la défait pas : `reconciled`
+  // continue de décrire la base, qui a bel et bien été réconciliée.
+  it('garde la réconciliation acquise quand la notification échoue', async () => {
+    const prisma = makeEditPrisma();
+    const notificationService = {
+      createMentionNotificationsBatch: jest.fn<any>().mockRejectedValue(new Error('push down')),
+    } as any;
+    const onError = jest.fn();
+
+    const result = await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender', onError,
+    });
+
+    expect(result.reconciled).toBe(true);
+    expect(result.validatedUsernames).toEqual(['alice']);
+    expect(prisma.message.update).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('réconcilie sans service de notifications câblé', async () => {
+    const prisma = makeEditPrisma();
+
+    const result = await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService: null,
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    expect(result.reconciled).toBe(true);
+    expect(prisma.message.update).toHaveBeenCalled();
   });
 });
