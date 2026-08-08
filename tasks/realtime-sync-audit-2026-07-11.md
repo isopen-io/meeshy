@@ -850,3 +850,207 @@ Non traité, relevé pour un cycle suivant :
   existante** (`updateMany`), alors que le client applique l'ordre de façon
   optimiste et reçoit un 200. À confirmer : une conversation réordonnée a-t-elle
   toujours une ligne (elle en a une dès qu'elle est catégorisée) ?
+
+---
+
+## Cycle 12 (2026-08-08) — arbitrage « delete-for-me », demandé par le cycle 11
+
+Le cycle 11 avait laissé ouvert : « `routes/user-deletions.ts` écrit `deletedForUserAt`
+sans incrémenter `version` ni diffuser. C'est aussi une seconde implémentation du
+même geste produit que `routes/conversations/delete-for-me.ts`. Nécessite un
+arbitrage — supprimer le chemin legacy ou le câbler — avant d'être corrigé. »
+
+### Ce qui a été corrigé dans ce cycle
+Le contrat de synchronisation (incrément de `version` + diffusion `USER_PREFERENCES_UPDATED`)
+est désormais porté par un écrivain unique `writeConversationPreferences`, emprunté par
+les quatre sites de mise à jour de `UserConversationPreferences`. Voir `tasks/todo.md`
+(entrée 2026-08-08) et le CHANGELOG.
+
+### L'arbitrage, avec les faits qui le tranchent
+Les deux implémentations ne sont pas deux copies : ce sont **deux colonnes différentes**,
+et la paire supprimer/restaurer est câblée en travers.
+
+| | `routes/conversations/delete-for-me.ts` | `routes/user-deletions.ts` |
+|---|---|---|
+| URL | `/api/v1/conversations/:id/delete-for-me` (`API_PREFIX`) | `/api/conversations/:id/delete-for-me` (prefix `''`, `/api/` en dur) |
+| Écrit | `Participant.deletedForMe = now`, `isActive = false` | `UserConversationPreferences.deletedForUserAt` |
+| Transfert de propriété (creator) | oui | non |
+| Éviction des sockets de la room | oui | non |
+| Invalidation des caches participant | oui | non |
+| Diffusion | `conversation:deleted` → `user:<id>` | `user:preferences-updated` (depuis ce cycle) |
+| Appelé par un client | **oui** — iOS `ConversationService.deleteForMe` (`MeeshyConfig.defaultApiPath = "/api/v1"`) | **aucun** (ni iOS ni web) |
+
+**Le fait décisif : `GET /conversations` filtre sur `Participant.deletedForMe`
+(`core.ts`, clause `OR: [{ deletedForMe: null }, { deletedForMe: { isSet: false } }]`),
+jamais sur `deletedForUserAt`** — qu'il se contente de *sélectionner* et d'expédier au
+client (`conversationUserPreferencesSelect`). Conséquences :
+
+1. Le seul `delete-for-me` réellement emprunté n'écrit **jamais** `deletedForUserAt`.
+2. Or `POST /api/conversations/:id/restore-for-me` **lit** `deletedForUserAt` : après la
+   suppression que les clients effectuent vraiment, il répond invariablement
+   `400 "Conversation is not deleted"`. La restauration est **structurellement
+   impossible** — la paire supprimer/restaurer opère sur deux colonnes distinctes.
+3. Même racine pour `GET /api/user/deleted-conversations` : il interroge
+   `deletedForUserAt: { not: null }`, donc renvoie **toujours une liste vide**.
+
+C'est la leçon 84 (« toute transition d'état a une inverse : auditer les DEUX sens »)
+sous une forme plus dure : ici l'inverse n'est pas incomplète, elle vise une autre
+colonne que l'aller.
+
+### Recommandation
+`Participant.deletedForMe` est la source de vérité : c'est ce que la requête de liste
+filtre, ce que le client appelle, et le seul chemin qui fasse le travail complet
+(succession du créateur, éviction des sockets, invalidation des caches, diffusion
+`conversation:deleted`). `UserConversationPreferences.deletedForUserAt` en est une
+représentation seconde et plus faible, actionnable par le client seul.
+
+Trois suites possibles, par ordre de préférence :
+1. **Reconstruire `restore-for-me` contre `Participant.deletedForMe`** — remettre
+   `deletedForMe: null`, `isActive: true`, **rejoindre la room AVANT de diffuser**
+   (leçon 84 #3 : l'ordre porte le contrat), invalider les mêmes caches que l'aller ;
+   `GET /api/user/deleted-conversations` interroge la même colonne. Idem pour la trio
+   conversation de `user-deletions.ts`, qui doit alors déléguer au mécanisme unique.
+2. Retirer les trois routes conversation de `user-deletions.ts` et la colonne
+   `deletedForUserAt` si le produit ne veut pas de restauration.
+3. Statu quo — non recommandé : deux endpoints publics documentés qui ne peuvent pas
+   fonctionner ensemble.
+
+**Non fait dans ce cycle, délibérément.** (1) comme (2) changent le comportement
+observable d'API publiques (sémantique de restauration, ou retrait d'endpoints) sur la
+base d'un choix de colonne canonique qui est une décision produit. L'arbitrage demandé
+par le cycle 11 est ici tranché sur les faits ; l'exécution demande une validation
+humaine, pas une passe non surveillée.
+
+### Suivis du cycle 11 encore ouverts
+- Le scope **communauté** de `user:preferences-updated` n'est pas routé côté iOS
+  (`MessageSocketManager` ne discrimine que deux des trois formes émises).
+- `POST /user-preferences/reorder` est un no-op silencieux quand aucune ligne n'existe
+  (`updateMany`), alors que le client applique l'ordre optimistiquement et reçoit `200`.
+- Nouveau : `ConversationStore.dispatchPreferencesUpdate` (iOS) traite
+  `.setClearHistoryBefore` comme un succès purement local sans appeler la route
+  (« until the server endpoint is wired ») alors que `POST /clear-history` existe.
+
+---
+
+## Cycle 13 (2026-08-08) — le réordonnancement qui promettait sans écrire
+
+Suivi direct de la liste laissée ouverte par le cycle 11, reconduite par le cycle 12 :
+« `POST /user-preferences/reorder` est un no-op silencieux sans ligne existante
+(`updateMany`), alors que le client applique l'ordre de façon optimiste et reçoit
+un `200`. À confirmer : une conversation réordonnée a-t-elle toujours une ligne ? »
+
+**Confirmé, et la réponse est non.**
+
+### D1 (racine) — `updateMany` ne matche rien, et ne le dit pas
+
+```ts
+await Promise.all(updates.map(u =>
+  prisma.userConversationPreferences.updateMany({
+    where: { userId, conversationId: u.conversationId },
+    data: { orderInCategory: u.orderInCategory },
+  })));
+broadcastToUser(fastify, userId, USER_PREFERENCES_REORDERED, { userId, updates });
+return sendSuccess(reply, { message: 'Conversations reordered successfully' });
+```
+
+La ligne `UserConversationPreferences` n'existe qu'à partir du premier
+épinglage / sourdine / renommage / catégorisation. Avant cela, `updateMany`
+matche zéro document — sans erreur, sans 404, sans que le `count` retourné soit
+lu. La route répondait `200` et diffusait le nouvel ordre à `user:<id>` dans
+tous les cas.
+
+Les deux clients appliquent l'ordre **optimistiquement** et lisent ce `200`
+comme le commit : iOS `ConversationStore.reorderConversations` ne restaure son
+instantané que sur une erreur ; web `UserPreferencesService.reorderInCategory`
+se contente d'invalider son cache. Tous les appareils affichaient donc — de
+façon cohérente entre eux, ce qui rend le défaut d'autant plus difficile à
+soupçonner — un ordre que le serveur ne détenait pas, jusqu'à ce qu'un refetch
+complet (`GET /conversations`, `orderInCategory: null`) le fasse revenir en
+arrière.
+
+### D2 — le dernier écrivain hors du module d'écriture unique
+
+Le cycle 12 avait créé `conversationPreferencesSync.writeConversationPreferences`
+précisément pour qu'aucun écrivain de cette ligne ne puisse n'honorer qu'une
+partie du contrat. Le réordonnancement était le seul `prisma.userConversationPreferences.*`
+restant en dehors — et il n'honorait ni « persister », ni « diffuser ce qui a
+été persisté ».
+
+### D3 (pourquoi ça a survécu) — un mock figé, et un test qui assertait le défaut
+
+Les suites existantes stubbaient `updateMany: jest.fn(async () => ({ count: n }))`.
+Contre une résolution qui n'écrit rien, « la ligne a été écrite » et « rien n'a
+été écrit » produisent exactement les mêmes assertions : le défaut était
+structurellement inobservable — la même racine que les cycles 10 (store gelé) et
+11 (versions codées en dur).
+
+Pire, le test le plus proche s'appelait *updates each conversation independently
+**via updateMany*** et vérifiait l'appel à `updateMany` : il verrouillait
+l'implémentation défectueuse au lieu de la signaler. Réécrit en assertion de
+comportement.
+
+### D4 (corollaire du correctif) — passer à l'`upsert` ouvre ce que le no-op fermait
+
+Aucune des routes de préférences ne vérifie l'appartenance à la conversation
+(le `PUT` non plus). Tant que l'écriture était un `updateMany`, ça n'avait pas de
+conséquence : il ne matchait rien, pour personne. Un `upsert` non restreint,
+lui, laisserait tout appelant authentifié créer des lignes de préférences
+contre des ids de conversation arbitraires. Le lot est donc d'abord restreint
+aux conversations dont l'appelant est participant **actif** — le même filtre que
+`GET /conversations`.
+
+## Plan
+- [x] T1 — RED : ordre persisté pour une conversation sans ligne (lu via `GET`, pas via le mock)
+- [x] T2 — RED : réordonner ne perturbe pas les autres colonnes de la ligne
+- [x] T3 — RED : rien n'est écrit ni diffusé pour une conversation dont l'appelant n'est pas participant
+- [x] T4 — RED : la diffusion ne contient que ce qui a été écrit (lot mixte)
+- [x] T5 — RED : lot vide / entièrement inapplicable → aucune diffusion
+- [x] T6 — RED : ids répétés dans un lot → dernière position gagnante, un seul `upsert`
+- [x] T7 — verrou : `version` ne bouge pas (vert avant ET après — c'est son rôle)
+- [x] T8 — GREEN : `reorderConversationPreferences` dans le module d'écriture unique
+- [x] T9 — réécriture des 2 tests couplés à `updateMany`, mocks `participant` ajoutés
+- [x] T10 — gates : suite gateway complète + `tsc --noEmit` propre
+- [x] T11 — changeset + CHANGELOG
+
+## Revue
+
+Le correctif ne consiste pas à faire remonter un `count` pour le vérifier :
+`count === 0` ne distingue pas « pas de ligne » de « ligne déjà à cette
+position ». Il consiste à écrire ce que la route prétend écrire (`upsert`), puis
+à **ne diffuser que ce qui l'a été**. C'est cette seconde moitié qui porte
+l'invariant : tant que la diffusion décrivait l'intention plutôt que le
+résultat, la route pouvait mentir sans que rien ne le rende visible.
+
+`version` n'est délibérément pas incrémenté. `USER_PREFERENCES_REORDERED` ne
+porte pas de version et iOS `applyRemoteReorder` l'applique sans garde ;
+incrémenter ici avancerait un compteur qu'aucune diffusion ne transporte —
+exactement la demi-obligation que le docstring de `conversationPreferencesSync`
+condamne — et coûterait un `USER_PREFERENCES_UPDATED` par ligne déplacée au
+lieu d'un événement par glisser-déposer.
+
+Vérification par mutation (leçon 2026-07-31 #5) : 7 des 9 tests ont été vus
+ROUGES avant le correctif. Les 2 verts avant et après sont les verrous
+(`version` inchangé, `200` sur lot vide) — c'est leur rôle.
+
+Non retenu : répondre autre chose que `200` quand une partie du lot n'est pas
+applicable. Le schéma de réponse ne transporte qu'un message, et l'étendre est
+un changement de contrat public sans défaut observable pour le motiver — un
+client ne peut réordonner que des conversations qu'il voit.
+
+### Reste ouvert après ce cycle
+- **`POST /user-preferences/reorder` n'a pas de `maxItems`** : un lot non borné
+  produit autant d'`upsert` parallèles. Le filtre d'appartenance borne désormais
+  les écritures réelles au nombre de conversations de l'appelant, ce qui retire
+  l'essentiel du risque ; une borne explicite reste préférable.
+- **Aucune route de préférences ne vérifie l'appartenance** (le `PUT` peut créer
+  une ligne contre un id arbitraire). Les lignes ainsi créées sont inertes
+  (`GET /conversations` joint sur `Participant`), mais l'asymétrie avec le
+  réordonnancement est maintenant visible et mérite d'être résorbée.
+- Hérités du cycle 11, toujours ouverts : le scope **communauté** de
+  `user:preferences-updated` n'est pas routé côté iOS ; `ConversationStore.
+  dispatchPreferencesUpdate` traite `.setClearHistoryBefore` comme un succès
+  purement local (aucun appelant applicatif à ce jour — la colonne n'est
+  exposée par aucune route de préférences versionnée, seulement par la route
+  legacy `POST /api/conversations/:id/clear-history`).
+- L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une
+  validation humaine (il change le comportement d'API publiques).

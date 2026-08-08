@@ -19,42 +19,14 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type {
-  ConversationPreferencesPayload,
-  UserPreferencesConversationUpdatedEventData,
-  UserPreferencesReorderedEventData,
-} from '@meeshy/shared/types/socketio-events';
+import type { UserPreferencesConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { validatePagination } from '../utils/pagination';
-
-interface ConversationPrefRow {
-  isPinned: boolean;
-  isMuted: boolean;
-  mentionsOnly: boolean;
-  isArchived: boolean;
-  tags: string[];
-  categoryId: string | null;
-  orderInCategory: number | null;
-  customName: string | null;
-  reaction: string | null;
-  deletedForUserAt: Date | null;
-  clearHistoryBefore: Date | null;
-  version: number;
-}
-
-const toPreferencesPayload = (row: ConversationPrefRow): ConversationPreferencesPayload => ({
-  isPinned: row.isPinned,
-  isMuted: row.isMuted,
-  mentionsOnly: row.mentionsOnly,
-  isArchived: row.isArchived,
-  tags: row.tags ?? [],
-  categoryId: row.categoryId,
-  orderInCategory: row.orderInCategory,
-  customName: row.customName,
-  reaction: row.reaction,
-  deletedForUserAt: row.deletedForUserAt ? row.deletedForUserAt.toISOString() : null,
-  clearHistoryBefore: row.clearHistoryBefore ? row.clearHistoryBefore.toISOString() : null,
-});
+import {
+  writeConversationPreferences,
+  reorderConversationPreferences,
+  type ConversationPreferencesWrite,
+} from '../services/conversationPreferencesSync';
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -431,52 +403,23 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const data = request.body;
 
         // Prepare update data (filter undefined values)
-        const updateData: any = {};
-        if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
-        if (data.isMuted !== undefined) updateData.isMuted = data.isMuted;
-        if (data.mentionsOnly !== undefined) updateData.mentionsOnly = data.mentionsOnly;
-        if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
-        if (data.tags !== undefined) updateData.tags = data.tags;
-        if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
-        if (data.orderInCategory !== undefined) updateData.orderInCategory = data.orderInCategory;
-        if (data.customName !== undefined) updateData.customName = data.customName;
-        if (data.reaction !== undefined) updateData.reaction = data.reaction;
+        const updateData: ConversationPreferencesWrite = {
+          ...(data.isPinned !== undefined && { isPinned: data.isPinned }),
+          ...(data.isMuted !== undefined && { isMuted: data.isMuted }),
+          ...(data.mentionsOnly !== undefined && { mentionsOnly: data.mentionsOnly }),
+          ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
+          ...(data.tags !== undefined && { tags: data.tags }),
+          ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+          ...(data.orderInCategory !== undefined && { orderInCategory: data.orderInCategory }),
+          ...(data.customName !== undefined && { customName: data.customName }),
+          ...(data.reaction !== undefined && { reaction: data.reaction }),
+        };
 
-        const preferences = await fastify.prisma.userConversationPreferences.upsert({
-          where: {
-            userId_conversationId: {
-              userId,
-              conversationId
-            }
-          },
-          create: {
-            userId,
-            conversationId,
-            ...updateData,
-            // First-ever upsert starts at version 1 (not the schema default 0).
-            // This keeps every broadcast `version >= 1`, so the DELETE/reset
-            // payload (which carries version = existingRow.version + 1) is
-            // never misinterpreted as a stale "no-op create" event by clients
-            // applying the documented `incoming.version <= local -> drop` rule.
-            version: 1,
-          },
-          update: {
-            ...updateData,
-            version: { increment: 1 },
-          },
-          include: {
-            category: true
-          }
-        });
-
-        const eventPayload: UserPreferencesConversationUpdatedEventData = {
+        const preferences = await writeConversationPreferences(fastify, {
           userId,
           conversationId,
-          version: (preferences as unknown as ConversationPrefRow).version ?? 0,
-          reset: false,
-          preferences: toPreferencesPayload(preferences as unknown as ConversationPrefRow),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
+          data: updateData,
+        });
 
         return sendSuccess(reply, {
           ...preferences,
@@ -603,29 +546,11 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { updates } = request.body;
 
-        // Batch update
-        await Promise.all(
-          updates.map(update =>
-            fastify.prisma.userConversationPreferences.updateMany({
-              where: {
-                userId,
-                conversationId: update.conversationId
-              },
-              data: {
-                orderInCategory: update.orderInCategory
-              }
-            })
-          )
-        );
-
-        const reorderPayload: UserPreferencesReorderedEventData = {
-          userId,
-          updates: updates.map(u => ({
-            conversationId: u.conversationId,
-            orderInCategory: u.orderInCategory,
-          })),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, reorderPayload);
+        // Persist first, broadcast what was persisted. The previous `updateMany`
+        // matched nothing whenever the user had never customized the
+        // conversation, yet the route still answered 200 and told every device
+        // to move the row — an order no refetch could ever confirm.
+        await reorderConversationPreferences(fastify, { userId, updates });
 
         return sendSuccess(reply, { message: 'Conversations reordered successfully' });
       } catch (error) {

@@ -1,4 +1,6 @@
-import { snapToScale, SCALES } from '../audio-effects';
+import * as Tone from 'tone';
+import { snapToScale, SCALES, BackSoundProcessor } from '../audio-effects';
+import type { BackSoundParams } from '@meeshy/shared/types/video-call';
 
 /**
  * snapToScale corrects a detected MIDI pitch to the nearest note of a musical
@@ -32,5 +34,45 @@ describe('snapToScale', () => {
 
   it('applies transpose after snapping', () => {
     expect(snapToScale(71, SCALES.pentatonic, 2)).toBe(74);
+  });
+});
+
+/**
+ * BackSoundProcessor mixes a looping background track into the outgoing call
+ * audio. It must reach the peer through the effect chain (playerGain →
+ * outputNode) only — never the local speakers, or the user hears their own
+ * background track directly (and, on a speakerphone/laptop without
+ * headphones, the mic re-captures it into a second, echoed copy of the same
+ * outgoing stream).
+ */
+describe('BackSoundProcessor.loadSound', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const params: BackSoundParams = {
+    soundFile: 'ambience.mp3',
+    volume: 50,
+    loopMode: 'N_MINUTES',
+    loopValue: 5,
+  };
+
+  it('never routes the background player to the local audio destination', async () => {
+    const processor = new BackSoundProcessor(params);
+
+    await processor.loadSound('https://cdn.example.com/ambience.mp3');
+
+    const playerInstance = (Tone.Player as unknown as jest.Mock).mock.results[0].value;
+    expect(playerInstance.toDestination).not.toHaveBeenCalled();
+  });
+
+  it('connects the loaded player into the effect chain (playerGain)', async () => {
+    const processor = new BackSoundProcessor(params);
+
+    await processor.loadSound('https://cdn.example.com/ambience.mp3');
+
+    const playerInstance = (Tone.Player as unknown as jest.Mock).mock.results[0].value;
+    expect(playerInstance.connect).toHaveBeenCalledTimes(1);
+    expect(playerInstance.connect).toHaveBeenCalledWith((processor as any).playerGain);
   });
 });

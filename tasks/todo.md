@@ -493,3 +493,149 @@ enfilent déjà correctement, ne diffusent PAS d'aperçu de liste (un épinglage
 change pas le dernier message) et leur `eventType` n'est pas dans le couple
 edit/delete — les y forcer aurait été une uniformisation de façade qui change
 leur comportement observable sans test capable de le justifier.
+
+# Les trois écrivains de préférences hors `conversation-preferences.ts` ne synchronisaient rien (2026-08-08)
+
+## Demande
+Routine messaging autonome — cycle d'audit du cœur temps-réel. Env Linux, pas
+de Xcode : périmètre TS (gateway / shared / web).
+
+## Constats
+
+### D1 (racine) — un contrat à deux moitiés, appliqué par 2 écrivains sur 5
+`UserConversationPreferences` est une ligne **par utilisateur**. Toute écriture
+doit incrémenter `version` (schema : « Monotonic version […] clients drop
+incoming payloads whose `version` is <= their local snapshot ») **et** diffuser
+l'instantané sur `user:<id>`. Les deux ne valent que conjointes : une diffusion
+non versionnée est jetée par tous, un incrément non diffusé ne change rien.
+
+Cinq écrivains existent ; seuls `PUT` et `DELETE /user-preferences/conversations/:id`
+honoraient le contrat. `routes/user-deletions.ts` en porte trois qui
+n'honoraient **ni l'une ni l'autre** : `delete-for-me`, `restore-for-me`,
+`clear-history` — `upsert`/`update` bruts, aucun `version`, aucun `broadcastToUser`.
+
+### D2 (portée réelle) — les deux clients étaient déjà câblés, seul le serveur se taisait
+`ConversationPreferencesPayload` déclare `deletedForUserAt` et `clearHistoryBefore` ;
+`ConversationStoreSocketBridge.mapPreferences` (iOS) les mappe sur `userState` et
+`ConversationUserState.isVisible` en dépend ; le web écoute `USER_PREFERENCES_UPDATED`
+(`preferences-sync.service.ts`). Une conversation supprimée sur l'iPhone restait
+donc dans la liste de l'iPad, un historique vidé restait affiché ailleurs.
+
+### D3 (empreinte de l'oubli) — le commentaire de type nomme 2 écrivains sur 5
+`UserPreferencesConversationUpdatedEventData` est documenté « émis par
+`PUT/DELETE /user-preferences/conversations/:id` ». L'affirmation est vraie et
+incomplète — même signal que « les trois transports » pour cinq sites REST
+(leçon 2026-08-07 (3) #2).
+
+### D4 (pourquoi ça ne se rattrape pas) — le ricochet n'arrive jamais
+Une autre préférence changée sur la même conversation (épingler, sourdine)
+transporte l'état par ricochet, le payload étant un instantané complet. Mais on
+n'épingle pas une conversation qu'on vient de supprimer : pour le cas nominal,
+la divergence est permanente, pas différée.
+
+## Plan
+- [x] T1 — RED : 7 tests de diffusion multi-appareils sur les 3 routes (5 rouges)
+- [x] T2 — D1/D3 : écrivain unique `writeConversationPreferences` portant persister + incrémenter + diffuser ; `version` retiré du type d'écriture
+- [x] T3 — les 4 sites de mise à jour y passent (déduplication de `toPreferencesPayload`)
+- [x] T4 — vérification par mutation (retrait du seul incrément → 2 rouges) + suite gateway complète + tsc propre
+- [x] T5 — changeset + CHANGELOG + lessons
+
+## Revue
+Une seule racine (un contrat à deux moitiés appliqué par une minorité de ses
+écrivains), invisible dans tout diff isolé : il faut croiser le schema Prisma
+(qui énonce la monotonie), le type d'événement partagé (qui déclare les deux
+champs), le bridge socket iOS (qui prouve que le client les attend) et
+`user-deletions.ts` (qui les écrit sans rien émettre).
+
+Le correctif n'est pas de recopier « incrémente + diffuse » dans trois blocs de
+plus : c'est ce fractionnement qui a permis à trois écrivains de n'en appliquer
+aucune moitié sans que rien ne le signale. `writeConversationPreferences` nomme
+les trois obligations en un seul endroit, et exclut `version` de son type
+d'entrée — le compteur appartient au module, pas aux appelants.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 5 tests de diffusion ont
+été vus ROUGES avant le correctif, tous sur « aucune émission ». Le retrait du
+seul `version: { increment: 1 }` fait retomber 2 tests — les deux moitiés sont
+couvertes indépendamment. Le passage de `restore-for-me` de `update` à l'`upsert`
+du helper a fait virer au rouge un test EXISTANT (« 500 on database error during
+update ») dont le levier de mock désignait `update` : le levier a été recentré
+sur le chemin réellement emprunté et le knob devenu mort supprimé.
+
+Non retenu : faire passer le reset (`DELETE`) par le même helper. Il diffuse
+`reset: true` / `preferences: null` et restaure les colonnes aux défauts — une
+sémantique différente que le helper aurait dû accueillir par un drapeau, au
+prix d'une fonction qui fait deux choses. Il honore déjà les deux moitiés du
+contrat, ce qui est l'invariant qui importe.
+
+Hors périmètre, constaté : `ConversationStore.dispatchPreferencesUpdate` (iOS)
+traite `.setClearHistoryBefore` comme un succès local sans appeler la route
+(« until the server endpoint is wired ») alors que `POST /clear-history` existe
+depuis longtemps — dette iOS, non vérifiable sans Xcode dans cet environnement.
+
+---
+
+# Réordonnancement des conversations — la route qui promettait sans écrire (2026-08-08)
+
+Suivi direct de la liste ouverte laissée par le cycle 11 et reconduite par le
+cycle 12 : « `POST /user-preferences/reorder` est un no-op silencieux sans ligne
+existante (`updateMany`), alors que le client applique l'ordre de façon optimiste
+et reçoit un `200`. À confirmer : une conversation réordonnée a-t-elle toujours
+une ligne ? » — **confirmé, et la réponse est non.**
+
+## Constats
+
+### D1 (racine) — `updateMany` ne matche rien, et ne le dit pas
+La ligne `UserConversationPreferences` n'existe qu'à partir du premier
+épinglage / sourdine / renommage / catégorisation. Avant cela, l'écriture matche
+zéro document, sans erreur ni 404, et le `count` retourné n'est pas lu. La route
+répondait `200` et diffusait `USER_PREFERENCES_REORDERED` dans tous les cas.
+
+### D2 (portée) — les deux clients commitent sur ce `200`
+iOS `ConversationStore.reorderConversations` ne restaure son instantané que sur
+erreur ; web `UserPreferencesService.reorderInCategory` se contente d'invalider
+son cache. Tous les appareils affichaient donc — **de façon cohérente entre
+eux**, ce qui rend le défaut d'autant plus dur à soupçonner — un ordre que le
+serveur ne détenait pas, jusqu'au prochain refetch complet.
+
+### D3 — dernier écrivain hors du module d'écriture unique
+Le cycle 12 avait créé `conversationPreferencesSync` pour qu'aucun écrivain de
+cette ligne n'honore le contrat à moitié. Le réordonnancement était le seul
+`prisma.userConversationPreferences.*` restant dehors.
+
+### D4 (pourquoi ça a survécu) — mock figé, et un test qui assertait le défaut
+`updateMany: jest.fn(async () => ({ count: n }))` rend « écrit » et « pas
+écrit » indiscernables. Le test le plus proche s'appelait *updates each
+conversation independently **via updateMany*** et vérifiait l'appel lui-même.
+Troisième récidive de la racine des cycles 10 et 11.
+
+### D5 (corollaire du correctif) — l'`upsert` ouvre ce que le no-op fermait
+Aucune route de préférences ne vérifie l'appartenance (le `PUT` non plus). Sans
+garde, un `upsert` laisserait tout appelant authentifié créer des lignes contre
+des ids arbitraires. Le lot est restreint aux conversations dont l'appelant est
+participant **actif** — même filtre que `GET /conversations`.
+
+## Plan
+- [x] T1 — RED : 7 tests de comportement lus via l'API publique (`GET`), pas via les mocks
+- [x] T2 — GREEN : `reorderConversationPreferences` dans le module d'écriture unique (upsert + filtre d'appartenance + déduplication)
+- [x] T3 — la diffusion ne transporte que les mises à jour réellement écrites
+- [x] T4 — réécriture des 2 tests couplés à `updateMany` ; mocks `participant` ajoutés aux 2 harnais existants
+- [x] T5 — gates : suite gateway complète + `tsc --noEmit` propre
+- [x] T6 — changeset + CHANGELOG + lessons + audit
+
+## Revue
+Le correctif n'est pas de lire le `count` : `count === 0` ne distingue pas
+« pas de ligne » de « ligne déjà à cette position ». Il consiste à écrire ce que
+la route prétend écrire, puis à **ne diffuser que ce qui l'a été**. C'est cette
+seconde moitié qui porte l'invariant — tant que le payload diffusé était recopié
+du body de la requête, aucune divergence entre promesse et persistance ne pouvait
+apparaître.
+
+`version` n'est délibérément pas incrémenté : `USER_PREFERENCES_REORDERED` ne
+porte pas de version et iOS `applyRemoteReorder` l'applique sans garde. Un
+incrément ici avancerait un compteur qu'aucune diffusion ne transporte — la
+demi-obligation exacte que le docstring du module condamne — et coûterait un
+`USER_PREFERENCES_UPDATED` par ligne déplacée au lieu d'un événement par
+glisser-déposer.
+
+Vérification par mutation : 7 des 9 tests vus ROUGES avant le correctif. Les 2
+verts avant et après sont les verrous (`version` inchangé, `200` sur lot vide).

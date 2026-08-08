@@ -1,5 +1,58 @@
 # @meeshy/gateway
 
+## 1.22.4
+
+### Patch Changes
+
+- 9773739: `POST /user-preferences/reorder` répondait `200` et diffusait le nouvel ordre à
+  tous les appareils de l'utilisateur **sans rien écrire** dès que la conversation
+  n'avait pas encore de ligne de préférences : `updateMany` ne matche aucun
+  document, et n'en signale rien.
+
+  Les deux clients appliquent l'ordre de façon optimiste et prennent ce `200` pour
+  le commit (iOS `ConversationStore.reorderConversations`, web
+  `UserPreferencesService.reorderInCategory`). Tous les appareils affichaient donc
+  un ordre que le serveur ne détenait pas, jusqu'à ce qu'un refetch sans rapport le
+  fasse revenir en arrière.
+
+  La route était aussi le dernier écrivain de `UserConversationPreferences` hors
+  de `conversationPreferencesSync`. Le nouveau `reorderConversationPreferences` y
+  rentre : il `upsert` (donc crée la ligne manquante), restreint le lot aux
+  conversations dont l'utilisateur est participant actif — un `upsert` non
+  restreint laisserait n'importe quel appelant authentifié créer des lignes contre
+  des ids arbitraires, ce que `updateMany` absorbait pour la mauvaise raison — et
+  ne diffuse **que ce qui a été écrit**.
+
+  `version` n'est délibérément pas incrémenté : `USER_PREFERENCES_REORDERED` ne
+  porte pas de version et iOS `applyRemoteReorder` l'applique sans garde ;
+  l'incrémenter avancerait un compteur qu'aucune diffusion ne transporte.
+
+## 1.22.3
+
+### Patch Changes
+
+- c89044d: Supprimer/restaurer une conversation et vider son historique se propagent enfin aux autres appareils
+
+  `UserConversationPreferences` est une ligne **par utilisateur**, pas par
+  appareil : chacune de ses écritures doit incrémenter `version` (le schema la
+  déclare monotone, les clients jettent `incoming.version <= local`) **et**
+  diffuser l'instantané sur `user:<id>`. Les deux moitiés ne valent que
+  conjointes — un incrément que personne ne reçoit ne change rien, une diffusion
+  non versionnée est jetée par tous.
+
+  Trois écrivains vivaient hors de `conversation-preferences.ts` —
+  `DELETE /api/conversations/:id/delete-for-me`,
+  `POST /api/conversations/:id/restore-for-me`,
+  `POST /api/conversations/:id/clear-history` — et n'honoraient **ni l'une ni
+  l'autre**, alors qu'ils écrivent précisément les deux colonnes
+  (`deletedForUserAt`, `clearHistoryBefore`) que `ConversationPreferencesPayload`
+  déclare et que `ConversationStoreSocketBridge` (iOS) mappe déjà sur `userState`.
+
+  Un unique `writeConversationPreferences`
+  (`services/gateway/src/services/conversationPreferencesSync.ts`) porte désormais
+  les trois obligations en un seul endroit, et les quatre sites d'écriture y
+  passent — un cinquième ne peut plus n'en appliquer qu'une partie.
+
 ## 1.22.2
 
 ### Patch Changes

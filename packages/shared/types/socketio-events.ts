@@ -1108,9 +1108,16 @@ export interface UserPreferencesCategoryUpdatedEventData {
 }
 
 /**
- * Variante "préférences scope conversation" : émis par
- * `PUT/DELETE /user-preferences/conversations/:id`. Payload complet
- * incluant `version` pour la résolution optimistic vs socket.
+ * Variante "préférences scope conversation" : émis par TOUT écrivain de
+ * `UserConversationPreferences` — `PUT/DELETE /user-preferences/conversations/:id`
+ * ET les routes de suppression par utilisateur (`delete-for-me`,
+ * `restore-for-me`, `clear-history`), qui écrivent `deletedForUserAt` /
+ * `clearHistoryBefore`. La ligne étant par UTILISATEUR et non par appareil,
+ * un écrivain qui n'émet pas laisse les autres appareils sur un état périmé.
+ * Côté gateway, `writeConversationPreferences` est le point unique qui
+ * garantit l'incrément de `version` et cette diffusion.
+ *
+ * Payload complet incluant `version` pour la résolution optimistic vs socket.
  */
 export interface UserPreferencesConversationUpdatedEventData {
   readonly userId: string;

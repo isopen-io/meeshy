@@ -16,13 +16,17 @@ const TEST_CONV_ID = '507f1f77bcf86cd799439abc';
 type EmitCall = { event: string; payload: unknown };
 
 const buildPrismaMock = () => ({
+  participant: {
+    findMany: jest.fn(async ({ where }: any) =>
+      ((where?.conversationId?.in ?? []) as string[]).map((conversationId) => ({ conversationId }))
+    ),
+  },
   userConversationPreferences: {
     findUnique: jest.fn<any>(),
     findMany: jest.fn<any>(),
     count: jest.fn<any>(),
     upsert: jest.fn<any>(),
     delete: jest.fn<any>(),
-    updateMany: jest.fn<any>(),
   },
 });
 
@@ -172,7 +176,7 @@ describe('conversation-preferences routes — socket emissions (Phase 1 contract
   });
 
   it('POST /user-preferences/reorder emits USER_PREFERENCES_REORDERED with updates', async () => {
-    prisma.userConversationPreferences.updateMany.mockResolvedValue({ count: 1 } as any);
+    prisma.userConversationPreferences.upsert.mockImplementation((async ({ create }: any) => create) as any);
 
     const updates = [
       { conversationId: TEST_CONV_ID, orderInCategory: 0 },
@@ -220,6 +224,11 @@ const buildLivePrisma = () => {
 
   return {
     rows,
+    participant: {
+      findMany: jest.fn(async ({ where }: any) =>
+        ((where?.conversationId?.in ?? []) as string[]).map((conversationId) => ({ conversationId }))
+      ),
+    },
     userConversationPreferences: {
       findUnique: jest.fn(async ({ where }: any) => rows.get(key(where)) ?? null),
       findMany: jest.fn(async () => [...rows.values()]),
@@ -251,7 +260,6 @@ const buildLivePrisma = () => {
         rows.delete(k);
         return existing;
       }),
-      updateMany: jest.fn(async () => ({ count: rows.size })),
     },
   };
 };

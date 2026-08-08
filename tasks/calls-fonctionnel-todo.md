@@ -4195,7 +4195,7 @@ gap de sérialisation `switchCameraTask` déjà repéré en Vague 61/63.
   ci-dessus, prête pour exécution avec accès compilateur) ; busy-path `reportNewIncomingCall` failure
   handler ne nettoie pas `pendingIncomingCall`/`showCallWaitingBanner` (UI-only, faible, auto-corrigé).
 
-## Vague 65 — exécution de la spec caméra : cameraSwitchTask rejoint la chaîne bidirectionnelle (2026-08-08)
+## Vague 66 — exécution de la spec caméra : cameraSwitchTask rejoint la chaîne bidirectionnelle (2026-08-08)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
 de la spec laissée « prête » par la Vague 64 (`switchCamera()`/`selectCamera(id:)` non sérialisés contre
@@ -4241,3 +4241,67 @@ Toolchain Swift/Xcode toujours absente de ce sandbox Linux — implémentation p
 - **Reste ouvert** : dead code / god-object `CallManager.swift` (~5770 lignes après cette vague) ; ADR
   `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` failure handler ne nettoie pas
   `pendingIncomingCall`/`showCallWaitingBanner` (UI-only, faible, auto-corrigé — reconduit sans changement).
+
+## Vague 65 — `BackSoundProcessor` routait la musique de fond vers les haut-parleurs locaux en plus du mix sortant (2026-08-07)
+
+Point d'entrée : suite de la Vague 64, même session, sans toolchain Swift dans ce sandbox (confirmé à
+nouveau — `switch`/`xcodebuild` absents). Audit dédié (agent Explore, lecture seule) mandaté sur les zones
+web de la stack calling non encore couvertes par les vagues précédentes (signalisation gateway déjà
+blanchie en Vague 64) : `audio-effects/**` (voix FX), hooks de call web, TURN/ICE refresh, screen-share,
+sécurité `call:join`.
+
+- **[MOYEN, web, CONFIRMÉ PAR LECTURE DIRECTE, CORRIGÉ]** `BackSoundProcessor.loadSound()`
+  (`apps/web/utils/audio-effects.ts:512-518`, effet "Ambiance sonore" du carrousel d'effets audio d'appel)
+  construisait le lecteur de musique de fond avec `new Tone.Player({...}).toDestination()` **en plus** du
+  branchement légitime `this.player.connect(this.playerGain)` de la ligne suivante — `playerGain` étant
+  lui-même déjà branché vers `outputNode` → `mediaStreamDestination` (le flux sortant WebRTC réel).
+  `Tone.ToneAudioNode.toDestination()` branche vers `Tone.getDestination()`, c'est-à-dire les
+  haut-parleurs/écouteurs RÉELS de l'utilisateur, pas seulement le mix envoyé au pair — aucun autre
+  processor du fichier (VoiceCoder/BabyVoice/DemonVoice) ne fait ce double branchement.
+  **Scénario concret** : utilisateur en appel actif ouvre le carrousel d'effets, active "Ambiance sonore"
+  et choisit une piste — dès `play()`, la piste est audible directement depuis les haut-parleurs locaux de
+  l'utilisateur (pas seulement "envoyée au pair" comme l'UI le suggère). Sur tout appareil sans écouteurs
+  (haut-parleur du laptop/téléphone — le cas courant en appel vidéo), le micro re-capte ce même son de
+  haut-parleur et le remixe une seconde fois dans le même flux sortant (écho/comb-filtering par-dessus ce
+  que l'écho-cancellation de `getUserMedia` peut compenser), et l'utilisateur local entend une piste de fond
+  non désirée et non coupable par le mute micro pendant toute la durée de l'effet.
+  **Fix** : retrait du chaînage `.toDestination()` — ne conserver que
+  `this.player = new Tone.Player({...}); this.player.connect(this.playerGain);`. Diff d'une ligne,
+  commentaire ajouté expliquant pourquoi `.toDestination()` ne doit jamais être chaîné ici.
+  **Tests** : `apps/web/utils/__tests__/audio-effects.test.ts` → nouveau describe `BackSoundProcessor.loadSound`
+  (2 tests : `toDestination` jamais appelé sur le player chargé, `connect` appelé exactement une fois avec
+  `playerGain`). RED confirmé avant fix (1er test échoue avec le code bogué, `toDestination` appelé 1 fois),
+  GREEN après. Mock `apps/web/__mocks__/tone.js` étendu avec `Player` (instance chaînable auto-référencée,
+  même pattern que le vrai Tone.js où `toDestination()`/`connect()` retournent `this`), `loaded`, `start` —
+  seuls les 2 fichiers du repo import `'tone'` directement (`audio-effects.ts`, `use-audio-effects.ts`),
+  extension du mock partagé sans risque de régression ailleurs (vérifié par grep avant modification).
+  Suite `utils/` + `hooks/use-audio-effects` complète : 52 suites / 1229+53 tests verts (1 suite
+  préexistante en échec de configuration corrigée en cours de route en rebuildant `packages/shared`, sans
+  rapport avec ce fix). `tsc --noEmit` : les 3 erreurs qu'introduisait le premier jet du test (type
+  `LoopMode` incorrect, cast `jest.Mock` direct sur un type union) corrigées ; 0 erreur nouvelle sur les 3
+  fichiers touchés (reste des erreurs tsc du repo pré-existantes, sans rapport, non touchées par ce diff).
+  `next lint`/`eslint` cassent dans ce sandbox avec une erreur de config circulaire indépendante du diff
+  (confirmé en lançant sur des fichiers non touchés aussi) — non bloquant, connu comme limitation
+  d'environnement.
+- **Note secondaire (non corrigée)** : `VoiceCoderProcessor` (auto-tune) laisse tourner sa boucle
+  `requestAnimationFrame` de détection de pitch (analyse FFT par frame) après désactivation de l'effet —
+  `disconnect()` (appelé par `rebuildAudioGraph()` au toggle off) ne coupe que le graphe audio, jamais
+  `stopPitchDetection()` (réservé à `destroy()`, appelé seulement au démontage/fin d'appel). Coût CPU/
+  batterie continu sans bénéfice audible pour le reste de l'appel après un simple toggle off. Confirmé par
+  lecture directe des deux côtés (`audio-effects.ts` + `use-audio-effects.ts`) mais nécessite un mock
+  `AudioContext`/`AnalyserNode` plus lourd (constructeur crée `audioContext.createAnalyser()` avant même le
+  routing) — reporté à une vague dédiée pour ne pas mélanger deux fixes de nature différente dans le même
+  diff minimal.
+- `useVideoFilters.ts` (`apps/web/components/video-calls/hooks/`) : pipeline WebGL complet de filtres vidéo
+  (température/luminosité/contraste/saturation/exposition) sans AUCUN appelant en production (ni exporté
+  depuis `components/video-calls/index.ts`, ni importé nulle part) et sans cleanup d'effet — même forme que
+  `useWebRTC.ts` retiré en Vague 33. Candidat dead-code pour une future vague de nettoyage, pas de bug
+  actif tant que rien ne l'instancie — non touché cette vague.
+- **Nouveau constat** : TURN credential refresh + ICE restart web (`use-webrtc-p2p.ts`, `webrtc-service.ts`,
+  `use-call-quality.ts`, `use-active-peer-connection.ts`) relus intégralement, cohérents avec les fixes des
+  vagues précédentes (RC-1, refresh périodique 80% TTL, escalade disconnect-grace→ICE-restart) — rien trouvé.
+  Web n'a aucune implémentation de partage d'écran (`getDisplayMedia`) — item hors périmètre web tel quel.
+- **Reste ouvert** : `VoiceCoderProcessor` rAF de pitch-detection non arrêté au toggle off (spec ci-dessus,
+  prête pour une vague dédiée avec mock `AnalyserNode`) ; `useVideoFilters.ts` dead code (candidat nettoyage) ;
+  items iOS des Vagues 61-64 (sérialisation `switchCamera`, god-object `CallManager.swift`) toujours bloqués
+  sur l'absence de toolchain Swift dans ce sandbox.

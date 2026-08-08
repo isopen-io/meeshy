@@ -1,5 +1,43 @@
 # Lessons
 
+## Leçon 85 — un contrat à deux moitiés se vérifie sur TOUS ses écrivains, et une moitié sans l'autre est un no-op silencieux (2026-08-08, routine messaging)
+
+Audit ciblé du cœur temps-réel TS (env Linux, pas de Xcode). `UserConversationPreferences`
+est une ligne **par utilisateur** : chaque écriture doit incrémenter `version` (le schema la
+déclare monotone, les clients jettent `incoming.version <= local`) ET diffuser l'instantané
+sur `user:<id>`. Cinq écrivains existent ; les trois de `routes/user-deletions.ts`
+(`delete-for-me`, `restore-for-me`, `clear-history`) n'honoraient **aucune** des deux moitiés.
+Une conversation supprimée sur l'iPhone restait dans la liste de l'iPad, un historique vidé
+restait affiché ailleurs — et comme on n'épingle pas une conversation qu'on vient de
+supprimer, le ricochet par une autre préférence (le payload étant un instantané complet)
+n'arrivait jamais : divergence permanente, pas différée.
+
+**Leçons :**
+1. **Deux obligations qui ne valent que conjointes doivent vivre dans UNE fonction, et le
+   type d'entrée doit rendre la moitié oubliable inatteignable.** Diffuser sans incrémenter
+   émet un événement que tous les appareils jettent ; incrémenter sans diffuser avance un
+   compteur que personne ne reçoit — deux no-op silencieux, aucun log, aucune exception.
+   `writeConversationPreferences` porte les trois obligations (persister, incrémenter,
+   diffuser) et **exclut `version` de son type d'écriture** : le compteur appartient au
+   module, jamais à un appelant. Un helper qu'on peut appeler à moitié ne ferme pas le trou.
+2. **Le champ qu'un payload partagé déclare mais qu'aucun écrivain n'émet est un chemin
+   manquant, exactement comme un membre d'union sans appelant (leçon 2026-08-07 (3) #3).**
+   `ConversationPreferencesPayload` déclarait `deletedForUserAt`/`clearHistoryBefore`, iOS les
+   mappait déjà sur `userState` et le web écoutait l'événement : les DEUX clients étaient
+   câblés, seul le serveur se taisait. Règle : partir du type d'événement partagé et remonter
+   à tous ses producteurs, pas l'inverse.
+3. **Un commentaire qui ÉNUMÈRE les émetteurs d'un événement est une liste à vérifier, pas
+   une description.** « émis par `PUT/DELETE /user-preferences/conversations/:id` » nommait
+   deux écrivains sur cinq — vrai et incomplet, même signal que « les trois transports » pour
+   cinq sites REST. Une grep des écrivains du modèle Prisma (`.upsert|.update|.updateMany`)
+   coûte dix secondes et tranche.
+4. **Changer la méthode Prisma d'une route déplace le levier de ses mocks.** Passer
+   `restore-for-me` de `update` à l'`upsert` du helper a fait virer au rouge un test existant
+   dont le knob injectait l'erreur sur `update` : le test n'échouait plus parce que le chemin
+   testé n'existait plus. Un knob de mock nomme une méthode, pas une intention — après tout
+   changement de méthode, re-vérifier que le levier atteint encore le chemin réel (et
+   supprimer le knob devenu mort).
+
 ## Leçon 84 — toute transition d'état a une inverse : auditer les DEUX sens, et l'ORDRE de chacun (2026-08-07, routine messaging)
 
 Audit ciblé des 4 transitions d'appartenance à une conversation (env Linux, pas de Xcode).
@@ -2204,3 +2242,34 @@ tout diff isolé.
    déjà testé) transformait un succès en 500. C'est le test existant qui l'a attrapé, pas
    la relecture — extraire du code d'un try/catch impose de re-vérifier ce qui s'évaluait
    à l'intérieur.
+
+## 2026-08-08 — Une route qui diffuse son INTENTION plutôt que son RÉSULTAT peut mentir sans trace
+
+`POST /user-preferences/reorder` répondait `200` et diffusait le nouvel ordre à tous les
+appareils de l'utilisateur alors que son `updateMany` ne matchait aucun document (pas de
+ligne `UserConversationPreferences` tant que la conversation n'a jamais été personnalisée).
+
+**Leçons :**
+1. **`updateMany` est un no-op silencieux, pas une écriture.** Il ne lève pas, ne renvoie
+   pas 404, et son `count` n'est presque jamais lu. Chaque fois qu'un `updateMany` porte
+   une intention utilisateur (et non un nettoyage de masse), la question est : « que se
+   passe-t-il si la ligne n'existe pas encore ? ». Si la réponse est « le client croit que
+   si », c'est un `upsert`.
+2. **Diffuser l'entrée de la requête au lieu du résultat de l'écriture rend le mensonge
+   invisible.** `broadcast(..., { updates })` reprenait le body ; aucune divergence entre
+   ce qui était promis et ce qui était persisté ne pouvait apparaître. Règle : le payload
+   d'une diffusion se construit à partir de ce que la base a RENVOYÉ, jamais de ce que
+   l'appelant a DEMANDÉ. Corollaire du même invariant que la leçon 2026-08-07 #2.
+3. **Un `200` optimiste est un contrat, pas une politesse.** Les deux clients ne restaurent
+   leur instantané que sur erreur. Toute route qu'un client commite optimistement doit
+   répondre en erreur ce qu'elle n'a pas fait — sinon la divergence est cohérente entre
+   appareils, donc indétectable à l'usage, et ne se révèle qu'au refetch.
+4. **Passer d'`updateMany` à `upsert` transforme une absence d'autorisation inoffensive en
+   faille.** Aucune route de préférences ne vérifie l'appartenance ; tant que l'écriture
+   ne matchait rien, ça ne coûtait rien. Règle : tout changement qui rend une écriture
+   effective oblige à re-auditer les gardes que l'inefficacité masquait.
+5. **Un test dont le NOM cite l'implémentation (« via updateMany ») verrouille le défaut.**
+   Celui-ci assertait l'appel plutôt que l'effet, contre un mock qui n'écrit pas : « écrit »
+   et « pas écrit » y étaient indiscernables. Troisième récidive de la même racine
+   (cycle 10 store gelé, cycle 11 versions codées en dur) — le double doit APPLIQUER ses
+   écritures, et l'assertion passer par l'API publique de lecture.
