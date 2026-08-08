@@ -227,6 +227,14 @@ export const linkMessageSchema = {
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
     sender: { ...linkMessageSenderSchema },
+    // Le web surligne les mentions DEPUIS ce champ (`use-message-display`) :
+    // non nommé ici, il serait tronqué de la réponse 201 et l'auteur verrait
+    // son propre `@alice` en texte brut jusqu'au prochain rechargement.
+    validatedMentions: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Usernames whose mention passed validation'
+    },
     location: { ...sharedPlaceResponseSchema }
   }
 } as const;

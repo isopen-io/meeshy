@@ -15,6 +15,7 @@ import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.j
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
+import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -62,8 +63,14 @@ function buildLinkMessagePayload(params: {
   conversationId: string;
   senderId: string;
   place: SharedPlace | null;
+  /**
+   * Les usernames retenus par la validation de mentions. Le web surligne
+   * DEPUIS ce champ (`use-message-display`) : absent du payload, un `@alice`
+   * reconnu par le serveur reste du texte brut chez tous ses lecteurs.
+   */
+  validatedMentions: readonly string[];
 }) {
-  const { message, conversationId, senderId, place } = params;
+  const { message, conversationId, senderId, place, validatedMentions } = params;
   return {
     id: message.id,
     ...(message.clientMessageId ? { clientMessageId: message.clientMessageId } : {}),
@@ -83,6 +90,7 @@ function buildLinkMessagePayload(params: {
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
     sender: message.sender,
+    validatedMentions: [...validatedMentions],
     ...(place ? { location: place } : {})
   };
 }
@@ -298,11 +306,32 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // même contrat que le chemin nominal (messages.ts / MessageHandler).
       const place = sharedPlaceFromMetadata(message.metadata);
 
+      // Ce que ce message doit à ceux qu'il NOMME : une ligne `Mention`, un
+      // `Message.validatedMentions` à jour et le lot d'ids que l'éventail
+      // ci-dessous transforme en notification de mention. Ce chemin contournant
+      // `MessageProcessor`, rien d'autre ne le fera. Attendu — et non
+      // fire-and-forget — parce que ses DEUX sorties partent avec le message :
+      // les usernames dans le payload, les ids dans l'éventail. L'unité
+      // court-circuite d'elle-même un contenu sans `@`, qui ne coûte donc
+      // aucune requête.
+      const mentions = await resolveMessageMentions({
+        prisma: fastify.prisma,
+        mentionService: fastify.mentionService,
+        message: {
+          id: message.id,
+          conversationId: participantShareLink.conversationId,
+          senderId: anonymousParticipant.id
+        },
+        content: message.content,
+        onError: (err) => logError(fastify.log, 'Link message mention resolution failed:', err)
+      });
+
       const payload = buildLinkMessagePayload({
         message,
         conversationId: participantShareLink.conversationId,
         senderId: anonymousParticipant.id,
-        place
+        place,
+        validatedMentions: mentions.validatedUsernames
       });
 
       // Ce que ce message doit à sa conversation — bump de `lastMessageAt`,
@@ -343,6 +372,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         senderParticipantId: anonymousParticipant.id,
         conversationId: participantShareLink.conversationId,
         processedContent: message.content,
+        validatedMentionUserIds: mentions.validatedUserIds,
         onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
       }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
 
@@ -568,11 +598,27 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Lieu partagé : hisser `metadata.location` en top-level `location`.
       const place = sharedPlaceFromMetadata(message.metadata);
 
+      // Mêmes trois effets de mention que le jumeau anonyme, par le même point
+      // d'appel unique : deux routes qui écrivent dans la même conversation ne
+      // peuvent pas en honorer des sous-ensembles différents.
+      const mentions = await resolveMessageMentions({
+        prisma: fastify.prisma,
+        mentionService: fastify.mentionService,
+        message: {
+          id: message.id,
+          conversationId: shareLink.conversationId,
+          senderId: participant.id
+        },
+        content: message.content,
+        onError: (err) => logError(fastify.log, 'Link message mention resolution failed:', err)
+      });
+
       const payload = buildLinkMessagePayload({
         message,
         conversationId: shareLink.conversationId,
         senderId: participant.id,
-        place
+        place,
+        validatedMentions: mentions.validatedUsernames
       });
 
       // Mêmes obligations post-commit que le jumeau anonyme, par le même point
@@ -603,6 +649,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         senderParticipantId: participant.id,
         conversationId: shareLink.conversationId,
         processedContent: message.content,
+        validatedMentionUserIds: mentions.validatedUserIds,
         onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
       }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
 

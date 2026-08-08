@@ -160,6 +160,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     message: {
       create: jest.fn<any>().mockResolvedValue(mockMessage),
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      // Écriture de `validatedMentions` : la seule trace durable qu'un `@`
+      // envoyé par lien a été reconnu.
+      update: jest.fn<any>().mockResolvedValue(undefined),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue(undefined),
@@ -171,6 +174,23 @@ function makePrisma(overrides: Record<string, any> = {}) {
     userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
     ...overrides,
   } as any;
+}
+
+/**
+ * Le résolveur de mentions, sous la seule forme structurale que
+ * `resolveMessageMentions` consomme. Par défaut il reconnaît `@bob` et le
+ * résout vers le pair inscrit de la conversation.
+ */
+function makeMentionResolver(overrides: Record<string, any> = {}) {
+  return {
+    extractMentionsWithParticipants: jest.fn<any>().mockReturnValue(['bob']),
+    resolveUsernames: jest.fn<any>().mockResolvedValue(
+      new Map([['bob', { id: PEER_USER_ID, username: 'bob' }]])
+    ),
+    validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [PEER_USER_ID] }),
+    createMentions: jest.fn<any>().mockResolvedValue(undefined),
+    ...overrides,
+  };
 }
 
 function makeNotificationService() {
@@ -230,6 +250,7 @@ async function buildApp(opts: {
   authContext?: any;
   translationService?: any;
   notificationService?: any;
+  mentionService?: any;
 } = {}): Promise<FastifyInstance> {
   const ctx = opts.authContext ?? mockAuthContext;
   mockAuthMiddleware.mockImplementation(async (req: any) => {
@@ -246,6 +267,10 @@ async function buildApp(opts: {
   app.decorate(
     'notificationService',
     opts.notificationService === null ? undefined : opts.notificationService ?? makeNotificationService()
+  );
+  app.decorate(
+    'mentionService',
+    opts.mentionService === null ? undefined : opts.mentionService ?? makeMentionResolver()
   );
   await registerMessageRoutes(app);
   await app.ready();
@@ -1306,5 +1331,207 @@ describe.each([
 
     expect(res.statusCode).toBe(201);
     expect(prisma.conversation.update).toHaveBeenCalled();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Mentions — `Message.validatedMentions`, lignes `Mention`, notification dédiée
+//
+// Les deux routes de lien contournent `MessagingService.handleMessage`, donc
+// `MessageProcessor` en entier — et `processMentionsInDB` vivait sous DEUX
+// niveaux de `private` à l'intérieur. Un `@alice` envoyé par lien ne produisait
+// AUCUNE ligne `Mention` (absent de l'inbox `/mentions`), AUCUN
+// `validatedMentions` (le web surligne depuis ce champ : le texte restait brut,
+// à vie) et AUCUNE notification de mention — le mentionné ne recevait que la
+// notification « message régulier », muette pour qui a coché « mentions
+// seulement » ou mis la conversation en sourdine.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MENTION_MESSAGE = { ...mockMessage, content: 'salut @bob' };
+
+function makeMentionPrisma() {
+  const prisma = makePrisma();
+  prisma.message.create = jest.fn<any>().mockResolvedValue(MENTION_MESSAGE);
+  return prisma;
+}
+
+describe('POST /links/:id/messages — anonymous: mentions', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  let mentionService: ReturnType<typeof makeMentionResolver>;
+  let notificationService: ReturnType<typeof makeNotificationService>;
+  let body: any;
+
+  beforeAll(async () => {
+    prisma = makeMentionPrisma();
+    mentionService = makeMentionResolver();
+    notificationService = makeNotificationService();
+    app = await buildApp({
+      prisma, mentionService, notificationService,
+      socketIOHandler: makeSocketIOHandler(true),
+    });
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    body = res.json();
+    await flushPostSaveEffects();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('creates the Mention rows the /mentions inbox reads', () => {
+    expect(mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, [PEER_USER_ID]);
+  });
+
+  it('persists the validated usernames on the message', () => {
+    expect(prisma.message.update).toHaveBeenCalledWith({
+      where: { id: MSG_ID },
+      data: { validatedMentions: ['bob'] },
+    });
+  });
+
+  // Le schéma de réponse 201 ne laisse passer que ce qu'il NOMME : un champ
+  // ajouté au payload sans l'être au schéma est tronqué sans erreur ni log.
+  it('serves the validated mentions back to the author', () => {
+    expect(body.data.message.validatedMentions).toEqual(['bob']);
+  });
+
+  it('validates the mention against the conversation and the anonymous sender', () => {
+    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith(
+      CONV_ID, [PEER_USER_ID], PART_ID
+    );
+  });
+
+  // Une mention perce la sourdine ; la notification régulière, non. Le
+  // mentionné doit donc quitter l'éventail régulier pour le lot dédié.
+  it('notifies the mentioned recipient as a mention, not as a regular message', () => {
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      [PEER_USER_ID],
+      expect.objectContaining({ conversationId: CONV_ID, messageId: MSG_ID }),
+      [PEER_USER_ID]
+    );
+    expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /links/:id/messages — anonymous: a message without @ costs nothing', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  let mentionService: ReturnType<typeof makeMentionResolver>;
+
+  beforeAll(async () => {
+    prisma = makePrisma();
+    mentionService = makeMentionResolver();
+    app = await buildApp({ prisma, mentionService, socketIOHandler: makeSocketIOHandler(true) });
+    await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('skips every mention query when the content carries no @', () => {
+    expect(mentionService.extractMentionsWithParticipants).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /links/:id/messages — anonymous: no mention service wired', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = await buildApp({
+      prisma: makeMentionPrisma(), mentionService: null,
+      socketIOHandler: makeSocketIOHandler(true),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('still returns 201, with an empty mention set', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.message.validatedMentions).toEqual([]);
+  });
+});
+
+describe('POST /links/:id/messages — anonymous: mention failures never reach the sender', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = await buildApp({
+      prisma: makeMentionPrisma(),
+      mentionService: makeMentionResolver({
+        resolveUsernames: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+      }),
+      socketIOHandler: makeSocketIOHandler(true),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('still returns 201 when mention resolution throws', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.message.validatedMentions).toEqual([]);
+  });
+});
+
+// Le jumeau authentifié doit les mêmes trois effets, pour la même raison : deux
+// routes qui écrivent dans la même conversation ne peuvent pas en honorer des
+// sous-ensembles différents.
+describe('POST /links/:id/messages/auth — mentions', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  let mentionService: ReturnType<typeof makeMentionResolver>;
+  let notificationService: ReturnType<typeof makeNotificationService>;
+  let body: any;
+
+  beforeAll(async () => {
+    prisma = makeMentionPrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      userId: USER_ID, displayName: 'Alice', avatar: null,
+    });
+    mentionService = makeMentionResolver();
+    notificationService = makeNotificationService();
+    app = await buildApp({
+      prisma, mentionService, notificationService,
+      socketIOHandler: makeSocketIOHandler(true),
+    });
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY,
+    });
+    body = res.json();
+    await flushPostSaveEffects();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('creates the Mention rows and persists the validated usernames', () => {
+    expect(mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, [PEER_USER_ID]);
+    expect(prisma.message.update).toHaveBeenCalledWith({
+      where: { id: MSG_ID },
+      data: { validatedMentions: ['bob'] },
+    });
+  });
+
+  it('serves the validated mentions back to the author', () => {
+    expect(body.data.message.validatedMentions).toEqual(['bob']);
+  });
+
+  it('notifies the mentioned recipient as a mention', () => {
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      [PEER_USER_ID],
+      expect.objectContaining({ senderId: USER_ID, conversationId: CONV_ID, messageId: MSG_ID }),
+      [PEER_USER_ID]
+    );
   });
 });
