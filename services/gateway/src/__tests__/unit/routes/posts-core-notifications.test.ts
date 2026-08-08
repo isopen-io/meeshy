@@ -87,6 +87,21 @@ function makeDecoratedNotificationService() {
   };
 }
 
+// `postMention` est lu par la réconciliation d'édition
+// (services/posts/postMentions.ts) : sans délégué, elle s'abstient de tout
+// écrire — le comportement voulu, mais pas ce que ces cas testent.
+const mockPostMentionFindMany = jest.fn<any>().mockResolvedValue([]);
+const mockPostMentionDeleteMany = jest.fn<any>().mockResolvedValue({ count: 0 });
+
+function makePrisma() {
+  return {
+    postMention: {
+      findMany: (...args: any[]) => mockPostMentionFindMany(...args),
+      deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),
+    },
+  } as any;
+}
+
 async function buildApp(opts: { withNotificationService?: boolean } = {}) {
   const { withNotificationService = true } = opts;
   const app = Fastify({ logger: false });
@@ -94,7 +109,7 @@ async function buildApp(opts: { withNotificationService?: boolean } = {}) {
   if (withNotificationService) {
     app.decorate('notificationService', notificationService as any);
   }
-  registerCoreRoutes(app, {} as any, makeAuth());
+  registerCoreRoutes(app, makePrisma(), makeAuth());
   await app.ready();
   return { app, notificationService };
 }
@@ -115,6 +130,8 @@ beforeEach(() => {
   });
   mockExtractMentions.mockReset().mockReturnValue([]);
   mockResolveUsernames.mockReset().mockResolvedValue(new Map());
+  mockPostMentionFindMany.mockReset().mockResolvedValue([]);
+  mockPostMentionDeleteMany.mockReset().mockResolvedValue({ count: 0 });
 });
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -147,6 +164,15 @@ describe('POST /posts — friend content fan-out uses fastify.notificationServic
     const { app, notificationService } = await buildApp();
     mockExtractMentions.mockReturnValue(['bob']);
     mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: FRIEND_ID }]]));
+    // Le contenu PERSISTÉ est celui que la résolution lit.
+    mockCreatePost.mockResolvedValue({
+      id: POST_ID,
+      content: 'Hello @bob',
+      type: 'POST',
+      visibility: 'FRIENDS',
+      visibilityUserIds: [FRIEND_ID],
+      createdAt: new Date('2026-07-20T10:00:00.000Z'),
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -203,6 +229,53 @@ describe('PUT /posts/:postId — edit mentions use fastify.notificationService',
         posterId: USER_ID,
         mentionedUserIds: [FRIEND_ID],
       })
+    );
+
+    await app.close();
+  });
+
+  // Le défaut que cette route portait : la persistance était idempotente
+  // (P2002 avalé), la notification ne l'était pas. Corriger une faute de frappe
+  // repingeait tous les mentionnés — et changer la seule visibilité aussi.
+  it('ne renotifie pas un mentionné que le post nommait déjà', async () => {
+    const { app, notificationService } = await buildApp();
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: FRIEND_ID }]]));
+    mockPostMentionFindMany.mockResolvedValue([{ mentionedUserId: FRIEND_ID }]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/posts/${POST_ID}`,
+      payload: { content: 'Edited @bob' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(notificationService.createPostMentionNotificationsBatch).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  // Éditer « bravo @alice » en « bravo @bob » laissait Alice mentionnée à vie :
+  // la route créait sans jamais supprimer.
+  it('retire les lignes PostMention de ceux que le post ne nomme plus', async () => {
+    const DEPARTED_ID = '507f1f77bcf86cd799439044';
+    const { app, notificationService } = await buildApp();
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: FRIEND_ID }]]));
+    mockPostMentionFindMany.mockResolvedValue([{ mentionedUserId: DEPARTED_ID }]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/posts/${POST_ID}`,
+      payload: { content: 'Edited @bob' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPostMentionDeleteMany).toHaveBeenCalledWith({
+      where: { postId: POST_ID, mentionedUserId: { in: [DEPARTED_ID] } },
+    });
+    expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ mentionedUserIds: [FRIEND_ID] })
     );
 
     await app.close();
