@@ -4400,3 +4400,149 @@ revérifie, elle ne se recopie pas »).
   `rebuildAudioGraph()` re-câblage complet à chaque toggle d'effet (optimisation mineure, Vague 67) ;
   items iOS bloqués sur l'absence de toolchain Swift dans ce sandbox (sérialisation `switchCamera` déjà
   fermée en Vague 66, reste le god-object et l'ADR `CallEventQueue`).
+
+## Vague 69 — premier audit du calling Android : 6 trouvailles, AUCUNE corrigée (ni Gradle local, ni CI Android n'existent) (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Web/iOS étant audités
+en continu depuis les Vagues 25-68 sans terrain neuf évident cette session, premier passage de cette
+routine sur `apps/android/**` (`feature/calls`, `sdk-core/call`, `sdk-core/socket/CallSignalManager`).
+Contexte : `apps/android/tasks/webrtc-calls-plan.md` documente un moteur WebRTC construit en phases
+P1-P4 (signaling, `WebRtcEngine`, coordinateur, vidéo), P5 (test réel 2-appareils) jamais exécutable en
+sandbox. Audit dédié (agent Explore, lecture seule) mandaté sur les mêmes catégories que ce que cette
+routine traque côté iOS/web : races, thread-safety, fuites mémoire/ressources, glare, parité des
+transitions d'état (cf. Leçon 84), dead code.
+
+- **Tentative Gradle** : `./gradlew :feature:calls:testDebugUnitTest` échoue à la résolution du plugin
+  `com.android.application:8.7.3` — `dl.google.com` renvoie 403 sur le CONNECT à travers le proxy de ce
+  sandbox. Confirmé comme limitation réseau/environnement (pas un problème de code) : `java 21` et
+  `gradle`/`gradlew` sont fonctionnels, seule la résolution de dépendances Google Maven est bloquée.
+  **Aucun workflow `.github/workflows/*.yml` ne construit ou ne teste `apps/android` non plus** (seule
+  mention "android" du dossier `.github/workflows/` est un flag de nettoyage disque sans rapport dans
+  `docker.yml`) — un futur fix Android ne serait donc vérifié NI par ce sandbox NI par la CI de ce repo.
+  Conséquence directe : **aucune des 6 trouvailles ci-dessous n'a été corrigée cette vague**, exactement
+  la même discipline que les items iOS bloqués sans toolchain Swift (Vagues 61-64) — un correctif non
+  vérifiable par compilateur/tests sur du code déjà en production est un risque de régression silencieuse
+  supérieur à sa valeur. Spec de fix prête pour une vague future avec accès Android Studio/CI Android.
+
+1. **[ÉLEVÉ, confirmé par lecture directe]** `CallScreen.withMediaPermissions()`
+   (`apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt:103-110`) ne teste QUE
+   `RECORD_AUDIO` avant de lancer `action()` directement (sans passer par le launcher de permission), alors
+   que `requiredPermissions` inclut `CAMERA` pour un appel vidéo (`CallPermissions.required(isVideo)`).
+   Un utilisateur qui a déjà accordé le micro (typiquement après un premier appel audio) et démarre
+   ENSUITE un appel vidéo ne voit jamais la demande caméra : `action()` s'exécute immédiatement →
+   `WebRtcEngine.addLocalVideo()` → `capturer.startCapture()` lève un `SecurityException` non rattrapé
+   nulle part sur la chaîne (`viewModelScope` n'a pas de `CoroutineExceptionHandler`) → **crash** en plein
+   démarrage d'appel. Fix : gate sur `requiredPermissions.all { hasSelfPermission(context, it) }`, pas sur
+   `RECORD_AUDIO` seul — diff d'une ligne, mais untestable dans ce sandbox (Compose UI, pas de JVM unit
+   test existant sur ce fichier).
+2. **[ÉLEVÉ, confirmé par lecture directe]** `WebRtcEngine.addLocalVideo()`
+   (`apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/WebRtcEngine.kt:99-111`) n'assigne
+   `videoCapturer`/`videoSource`/`surfaceTextureHelper` qu'APRÈS `capturer.startCapture(...)`, qui peut
+   lever (le `SecurityException` de #1, mais aussi caméra déjà occupée, échec HAL). Si ça lève, les
+   variables locales `capturer`/`helper`/`source` ne sont jamais stockées dans les champs de l'instance ;
+   `close()` ne dispose que les champs → `SurfaceTextureHelper` (thread dédié + surface EGL) et le
+   capturer/la source restent orphelins. `WebRtcEngine` étant `@Singleton`, la fuite (thread + éventuel
+   verrou caméra partiel) survit à tout l'appel raté et peut faire échouer la TENTATIVE SUIVANTE (caméra
+   occupée) même après que la permission a été accordée. Fix : assigner les champs immédiatement après
+   chaque allocation, avant les appels qui peuvent lever.
+3. **[MOYEN-ÉLEVÉ, confirmé par lecture directe]** `WebRtcCallCoordinator.observe()`
+   (`apps/android/feature/calls/.../WebRtcCallCoordinator.kt:155-158`) — le collecteur
+   `incomingSignals.onEach { onRemoteSignal(it) }.launchIn(scope)` n'a AUCUNE frontière d'exception ; la
+   branche `"answer"` (lignes ~254-279) appelle `engine.setRemoteDescription(...)` sans comparer
+   `signal.negotiationId` au `negotiationId` courant du coordinateur (vérifié seulement côté `"offer"`).
+   `applyDescription()` rejette (`resumeWithException`) sur tout `onSetFailure` natif. Un `Flow.onEach` qui
+   lève termine DÉFINITIVEMENT le `launchIn(scope)` — plus aucun signal entrant n'est traité pour le reste
+   de l'appel, sans diagnostic visible. Scénario concret : deux `restartIceAndRenegotiate()` rapprochés sur
+   un lien instable (chacun bump `negotiationId` et ré-offre) → une réponse en retard du PREMIER restart
+   arrive après que le côté local a déjà avancé sa description locale vers le SECOND → collision d'état de
+   signalisation côté natif → exception → silence radio pour le reste de l'appel, précisément sur la
+   condition de lien instable que le restart ICE existe pour surmonter. Fix (deux volets indépendants) :
+   try/catch autour de `onRemoteSignal` (logguer + jeter la frame, ne jamais tuer le collecteur) + valider
+   `signal.negotiationId == negotiationId` avant d'appliquer une `"answer"`, même garde que celle qui existe
+   déjà pour `restartIceAndRenegotiate()` côté `isCaller`.
+4. **[MOYEN, confirmé par lecture directe]** `CallViewModel.onCleared()`
+   (`CallViewModel.kt:640-643`) ne fait QUE `toneController.release()` +
+   `telecomReporter.release()` — jamais `coordinator.end()`. `CallViewModel` est volontairement scopé à
+   l'Activity (documenté dans `MeeshyApp.kt`, pour survivre à la minimisation) : `onCleared()` ne se
+   déclenche donc PAS sur simple changement de config, mais s'exécute bien sur une recréation d'Activity
+   sans préservation d'état (mémoire faible, option développeur « Ne pas conserver les activités » pendant
+   un appel en arrière-plan). Dans ce cas le `WebRtcEngine` singleton garde `PeerConnection`, capture
+   caméra et `AudioManager.mode = MODE_IN_COMMUNICATION` ouverts, et le gateway n'apprend jamais `call:end`
+   — appel zombie côté device ET serveur jusqu'à l'appel suivant (auto-guérison via
+   `createConnection()`→`close()`) ou la mort du process. Fix : appeler `coordinator.end()` depuis
+   `onCleared()` si `callState.isActive`, miroir du teardown déjà fait dans `hangUp()`/`decline()`.
+5. **[MOYEN, confirmé par lecture directe]** `WebRtcEngine.close()` (`WebRtcEngine.kt:182-183`) appelle
+   `videoCapturer?.stopCapture()` de façon SYNCHRONE — documenté upstream comme bloquant jusqu'à l'arrêt
+   réel du thread de capture caméra (peut prendre plusieurs centaines de ms selon l'OEM). `close()` est
+   invoqué directement depuis `hangUp()`/`decline()`, câblés sur des `onClick` Compose — donc sur le thread
+   UI. Chaque raccroché d'un appel vidéo bloque potentiellement le thread principal. Fix : déporter
+   `engine.close()` (au moins la partie capture vidéo) sur `Dispatchers.Default`/IO.
+6. **[FAIBLE]** Dead code : `CallSignalManager.emitJoin`/`emitLeave` (`CallSignalManager.kt:221,224`) —
+   zéro site d'appel production, superseded par `emitJoinAwaitingAck` (le commentaire de `accept()` le dit
+   explicitement) — même famille que la Leçon 63 (« FIXED » documenté mais l'ancien code jamais retiré).
+   `participantLeft` (lignes 111-112) est émis mais n'a AUCUN collecteur dans `CallViewModel.init{}` — le
+   commentaire de doc sur ce champ décrit un comportement (« le consumer élague les médias du partant »)
+   qui n'existe pas dans ce code — probablement sans impact tant que l'app reste 1:1, mais le commentaire
+   sur-affirme.
+
+- **Vérifié propre (rien trouvé)** : hygiène des `Job` de tickers/watchdogs/budget (tous `?.cancel()`
+  avant réassignation) ; glare à la négociation initiale (seul le caller offre, restart ICE gated
+  `isCaller`) ; `CallStateMachine` (réducteur total, chaque phase a un `terminal(event)`, aucune asymétrie
+  façon Leçon 84 trouvée) ; `CallHistoryViewModel`/`CallToneController`/`TelecomCallReporter`/
+  `ScreenRecordingDetector`/`CallQualitySampler` (les deux derniers sont des stubs interimaires
+  explicitement documentés comme tels, pas du dead code) ; `WebRtcEngine.createConnection()` ferme
+  toujours l'ancienne connexion avant d'en ouvrir une nouvelle (pas de double-allocation possible).
+- **Reste ouvert** : les 6 trouvailles ci-dessus (spec prête, aucune corrigée — Android n'a ni toolchain
+  sandbox fonctionnel ni CI dans ce repo) ; dead code / god-object `CallManager.swift` iOS (~5770 lignes) ;
+  ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  `rebuildAudioGraph()` re-câblage complet à chaque toggle (Vague 67, corrigé ci-dessous, Vague 70).
+
+## Vague 70 — exécution de la spec `rebuildAudioGraph()` : lifecycle des processors sauté quand leur bit `enabled` ne bouge pas (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), même session que la
+Vague 69. Reprise directe de l'optimisation laissée « mineure, candidate » depuis la Vague 67 :
+`rebuildAudioGraph()` (`apps/web/hooks/use-audio-effects.ts`) rewire l'intégralité du graphe Web Audio à
+CHAQUE changement de `effectsState` — y compris un toggle sur un effet totalement différent, ou même un
+simple changement de paramètre (`updateEffectParams` produit aussi une nouvelle référence `effectsState`,
+qui redéclenche le même `useEffect`).
+
+- **Root cause confirmée** : la boucle appelait `processor.disconnect()` (méthode de cycle de vie complet)
+  et `processor.setActive?.(...)` sur TOUS les processors à chaque rebuild, sans jamais comparer l'état
+  `enabled` du processor à sa valeur précédente. Pour `VoiceCoderProcessor`, `disconnect()` appelle aussi
+  `stopPitchDetection()` (Vague 67) — un toggle non lié provoquait donc un cycle arrêt/redémarrage inutile
+  de sa boucle rAF de détection de pitch. Effet de bord jumeau non documenté jusqu'ici trouvé en cours de
+  route : le même `disconnect()` générique appelle aussi `.stop()` sur `BackSoundProcessor`, coupant la
+  musique de fond à chaque rebuild non lié.
+- **Fix** : nouveau `previouslyEnabledTypesRef: Set<AudioEffectType>` trackant les types activés au rebuild
+  précédent. Pour chaque processor existant : si son propre bit `enabled` n'a pas changé
+  (`wasEnabled === isEnabled`), on ne fait qu'un `processor.outputNode.disconnect()` brut (coupe seulement
+  l'arête sortante du graphe, sans effet de bord) pour permettre son re-câblage à sa nouvelle position dans
+  la chaîne — le `processor.disconnect()`/`setActive()` complet n'est PAS appelé. Seuls les processors dont
+  le bit a réellement basculé passent par le cycle de vie complet, préservant l'invariant de la Vague 67
+  (désactiver un processor le fait TOUJOURS taire complètement).
+  **Piège écarté** : la topologie du graphe (position dans la chaîne input→effet A→effet B→destination)
+  PEUT changer pour un processor dont le bit `enabled` n'a pas bougé, si un voisin bascule — donc les
+  arêtes du graphe sont TOUJOURS reconstruites (`outputNode.disconnect()` + reconnection dans la boucle qui
+  suit), seul le cycle de vie/travail de fond du processor est conditionné au changement de SON bit.
+- **Bug adjacent trouvé, volontairement non corrigé cette vague** : `previouslyEnabledTypesRef` a été
+  audité contre le cycle de vie de `processorsRef` (reset attendu quand `inputStream` change) — l'audit a
+  révélé que remplacer la référence `inputStream` du hook ne réinitialise en réalité JAMAIS le pipeline :
+  `initializeAudioPipeline()` lit une fermeture `isInitialized` périmée dans le MÊME effet de
+  cleanup/re-setup, donc le `setIsInitialized(false)` programmé ne déclenche jamais de chemin de réinit
+  fonctionnel. Bug réel (un swap de source micro/caméra en cours d'appel perdrait silencieusement le
+  pipeline d'effets) mais orthogonal à cette vague — reproduit par un test jetable (retiré du diff final),
+  noté en reste ouvert plutôt que mélangé à ce fix.
+- **Tests** (TDD, RED confirmé avant fix — 3/5 échouaient sur les comptages d'appels du code courant) :
+  nouveau fichier `apps/web/hooks/__tests__/use-audio-effects.test.ts` (5 tests) — pas de re-`disconnect()`/
+  `setActive()` sur un toggle non lié, pas de re-`setActive()` sur un changement de params seul, les arêtes
+  du graphe sont bien reconstruites même pour un processor inchangé, quiescence complète au passage
+  enabled→disabled, activation complète au passage disabled→enabled.
+- **Vérification** : suite `utils/__tests__/audio-effects.test.ts` + `components/video-calls/**` complète
+  (12 suites / 73 tests) verte, suite `utils/`+`hooks/` complète (167 suites / 3498 tests) verte (2 skips
+  pré-existants sans rapport). `packages/shared && npx prisma generate && bun run build` (prérequis
+  CLAUDE.md) sans erreur. `npx tsc --noEmit` sur `apps/web` : 0 nouvelle erreur imputable à
+  `use-audio-effects.ts` (diffé directement contre une baseline `git stash`).
+- **Reste ouvert** : le bug de non-réinitialisation sur swap de `inputStream` ci-dessus (spec à écrire pour
+  une vague dédiée) ; dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 69 (spec prête, non corrigées faute de toolchain vérifiable).
