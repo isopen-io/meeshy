@@ -840,7 +840,18 @@ export interface ReadStatusSummary {
 export interface ReadStatusUpdatedEventData {
   readonly conversationId: string;
   readonly participantId: string;
-  readonly userId: string;
+  /**
+   * `User.id` de l'acteur, ou `null` quand c'est un participant ANONYME — il
+   * n'a pas de ligne `User`, et `participantId` est alors sa seule identité.
+   * Le cas se produit sur l'accusé de livraison automatique d'une conversation
+   * ouverte par lien de partage, où les anonymes sont la population dominante.
+   *
+   * Un consommateur qui compare cette valeur à sa propre identité (synchro
+   * multi-appareils du curseur de lecture) n'a rien à changer : `null` ne
+   * correspond à personne, ce qui est le comportement voulu. `summary`, lui,
+   * est porté par `conversationId` seul et reste applicable.
+   */
+  readonly userId: string | null;
   readonly type: 'read' | 'received';
   readonly updatedAt: Date;
   readonly summary: ReadStatusSummary;

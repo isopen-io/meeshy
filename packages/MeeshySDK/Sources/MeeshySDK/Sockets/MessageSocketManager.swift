@@ -393,6 +393,12 @@ public struct ReadStatusSummary: Decodable, Sendable {
 public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let participantId: String
+    /// `User.id` of the actor, or `nil` when the actor is an ANONYMOUS
+    /// participant — they have no `User` row, so `participantId` is their only
+    /// identity. Expected on the automatic delivery receipt of a share-link
+    /// conversation, where anonymous participants are the dominant population.
+    /// Consumers comparing this against the current user (multi-device read
+    /// cursor sync) need no change: `nil` matches nobody, which is correct.
     public let userId: String?
     public let type: String
     public let updatedAt: Date

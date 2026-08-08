@@ -1334,6 +1334,26 @@ export class MessageHandler {
   }
 
   /**
+   * Clé sous laquelle `connectedUsers` indexe ce participant.
+   *
+   * `AuthHandler._registerUser` reçoit `user.id` pour un inscrit et
+   * `participant.id` pour un anonyme — la seule identité qu'un anonyme
+   * possède, n'ayant pas de ligne `User`. Une sonde de présence écrite
+   * `!!p.userId && connectedUsers.has(p.userId)` ne peut donc JAMAIS être
+   * vraie pour un anonyme : elle l'exclut par construction, pas par
+   * circonstance.
+   *
+   * Ce n'est pas neutre pour l'expéditeur : `getLatestMessageSummary` compte
+   * TOUT participant actif par `Participant.id` dans `totalMembers`. Un
+   * anonyme présent au dénominateur et inatteignable au numérateur rend
+   * « remis à tous » impossible pour la conversation entière — soit
+   * exactement la forme de toute conversation ouverte par lien de partage.
+   */
+  private _presenceKey(p: { id: string; userId: string | null }): string {
+    return p.userId ?? p.id;
+  }
+
+  /**
    * Marque un message comme "delivered" pour chaque destinataire en ligne
    * (ayant une socket active), respecte la préférence `showReadReceipts` de
    * chaque destinataire, puis émet UN seul `read-status:updated` consolidé
@@ -1341,14 +1361,22 @@ export class MessageHandler {
    * voie passer son indicateur à "delivered" sans devoir attendre une
    * action manuelle du destinataire.
    *
-   * Public: source unique partagée par les DEUX émetteurs de `message:new` —
-   * le chemin WS `message:send` (ci-dessus, `broadcastNewMessage`) ET le chemin
-   * REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`, qui délègue ici).
-   * Les deux instances partagent le même `io`/`connectedUsers`/services, donc
-   * le comportement est identique quel que soit le transport (parité receipt).
+   * Public: source unique partagée par les TROIS transports d'envoi — le chemin
+   * WS `message:send` (ci-dessus, `broadcastNewMessage`), le chemin REST/ZMQ
+   * (`MeeshySocketIOManager._broadcastNewMessage`, qui délègue ici) et les deux
+   * routes de lien de partage (via `broadcastLinkMessage`, qui passent par le
+   * relais public du manager). Toutes partagent le même `io`/`connectedUsers`
+   * et les mêmes services, donc le comportement est identique quel que soit le
+   * transport (parité receipt).
+   *
+   * Le paramètre est structural et minimal — les deux seuls champs lus — et non
+   * un `Message` Prisma : les routes de lien ne construisent pas d'entité
+   * complète, et demander ce dont on n'a pas besoin est précisément ce qui
+   * rendait cette unité inatteignable depuis une route. Même raison et même
+   * forme que `PostSaveMessage` (`services/messaging/messagePostSaveEffects.ts`).
    */
   async autoDeliverToOnlineRecipients(
-    message: Message,
+    message: { id: string; senderId: string | null },
     conversationId: string
   ): Promise<void> {
     const senderId = message.senderId;
@@ -1360,18 +1388,24 @@ export class MessageHandler {
     });
 
     const onlineRecipients = participants.filter(
-      (p): p is { id: string; userId: string } =>
-        !this._isSender(p, senderId) && !!p.userId && this.connectedUsers.has(p.userId)
+      (p) => !this._isSender(p, senderId) && this.connectedUsers.has(this._presenceKey(p))
     );
     handlerLogger.debug('auto-deliver', { conversationId, messageId: message.id, participants: participants.length, onlineRecipients: onlineRecipients.length });
     if (onlineRecipients.length === 0) return;
 
+    // Les préférences se lisent sous la MÊME clé que la présence : un anonyme
+    // n'a pas d'id utilisateur à interroger, et `getPreferencesForUsers` le
+    // sert par les défauts dès que `isAnonymous` est vrai. Le déclarer inscrit
+    // enverrait un `Participant.id` à `fetchManyFromDatabase` comme s'il
+    // s'agissait d'un `User.id` — une requête payée pour rien, dont le résultat
+    // vide serait mis en cache sous un id qui n'est pas un utilisateur.
     const preferences = await this.privacyPreferencesService.getPreferencesForUsers(
-      onlineRecipients.map((r) => ({ id: r.userId, isAnonymous: false }))
+      onlineRecipients.map((r) => ({ id: this._presenceKey(r), isAnonymous: !r.userId }))
     );
-    const allowedRecipients = onlineRecipients.filter(
-      (r) => preferences.get(r.userId)?.showReadReceipts
-    );
+    const allowedRecipients = onlineRecipients.filter((r) => {
+      const key = this._presenceKey(r);
+      return preferences.get(key)?.showReadReceipts;
+    });
 
     const results = await Promise.allSettled(
       allowedRecipients.map((r) =>

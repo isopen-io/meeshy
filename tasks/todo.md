@@ -1,160 +1,132 @@
-# Cycle 18 — Un message envoyé par lien de partage ne notifie personne, et un expéditeur anonyme ne notifie personne nulle part
+# Cycle 19 — La coche d'un message par lien ne bouge jamais, et l'accusé de livraison ne voit pas les anonymes
 
-## Constat
+Suivi direct du premier point laissé ouvert par le cycle 18 :
+« **Accusé "delivered" automatique** — `MessageHandler.autoDeliverToOnlineRecipients` est
+publique et prend un `Message` Prisma complet, que les routes de lien ont en main ; elle n'est
+atteignable que depuis `MessageHandler`, et `LinkMessageManager` ne l'expose pas. Conséquence
+observable : l'indicateur de l'expéditeur d'un message par lien ne passe jamais de "envoyé" à
+"remis". Noter que sa sélection de destinataires (`!!p.userId && connectedUsers.has(p.userId)`)
+exclut par construction les participants anonymes — le câblage devra décider si c'est voulu. »
 
-Le cycle 17 a fermé la pastille de non-lus sur le chemin de lien, en énumérant sur la clé
-« qu'est-ce que TOUT message committé doit à ses DESTINATAIRES ? ». Sa table listait six
-obligations. Elle en oubliait une, et c'est la plus lourde : **la notification**.
+Vérifié : réel, et la parenthèse était le vrai sujet. Câbler l'unité sans la corriger aurait
+produit un accusé qui, sur une conversation par lien, ne peut structurellement rien acquitter.
 
-| Obligation destinataire | Chemin WS | Chemin REST/ZMQ | Chemin lien |
-|---|---|---|---|
-| `message:new` / `link:message:new` (room live) | oui | oui | oui (cycle 15) |
-| File hors ligne (rejeu à la reconnexion) | oui | oui | oui (cycle 15) |
-| `conversation:unread-updated` (badge) | oui | oui | oui (cycle 17) |
-| **Notification (push APNs/FCM + in-app + ligne DB)** | oui | oui | **non** |
-| `conversation:updated` (aperçu + tri) | oui | oui | non — omission argumentée (cycle 15) |
-| `mention:created` | oui | oui | non — la DONNÉE manque (cycle 17) |
-| Accusé « delivered » auto | oui | oui | non — cf. Reste ouvert |
+## D1 (racine) — l'unité existe, publique, et aucune route ne peut l'appeler
 
-La leçon #1 du cycle 16 impose de relire un « reste ouvert » comme une hypothèse, jamais comme
-un inventaire. Appliquée à la table du cycle 17 elle-même, elle produit cette ligne : les cinq
-premières obligations sont des ÉVÉNEMENTS SOCKET, et l'énumération avait implicitement glissé
-de « ce que le message doit à ses destinataires » vers « ce que le manager Socket.IO émet ».
-La notification n'est pas un événement socket — c'est une ligne `Notification` en base, un push
-APNs/FCM et un événement in-app — donc elle est tombée hors du champ de vision.
+`autoDeliverToOnlineRecipients` marque le message `received` pour chaque destinataire connecté
+puis émet le `read-status:updated` consolidé — le SEUL signal qui fasse passer la coche de
+l'expéditeur de « envoyé » à « remis ». Elle est déjà `public` et déjà partagée par les deux
+transports nominaux (`broadcastNewMessage` côté WS, `_broadcastNewMessage` côté REST/ZMQ).
 
-## Diagnostic
+Mais c'est une **méthode de `MessageHandler`** : elle a besoin de `io`, `connectedUsers`, du
+service de statut de lecture et de celui de confidentialité. Une route n'en voit aucun.
+`public` ne veut pas dire atteignable — c'est la nuance que les cycles 15 à 18 documentaient
+sur des méthodes `private`, et qui se rejoue ici sur une méthode qui ne l'est pas.
 
-### D1 — un message envoyé par lien ne produit AUCUNE notification
+Portée : les deux routes de lien. Le lien de partage étant le seul transport d'envoi dont
+dispose un participant anonyme, tout ce trafic produisait une coche morte.
 
-`createMessageNotification` a exactement **un** appelant dans tout le service :
-`MessageProcessor.triggerAllNotifications` (`services/messaging/MessageProcessor.ts:1148`),
-`private`, atteinte uniquement par `handleMentionsAndNotifications` (`private`, `:881`),
-elle-même appelée par `MessageProcessor.saveMessage` (`:657`). Idem pour
-`createReplyNotification` et `createMentionNotificationsBatch`.
+## D2 (même famille, plus large) — la sonde de présence ne peut pas être vraie pour un anonyme
 
-Les deux routes de lien de partage (`routes/links/messages.ts`) contournent
-`MessagingService.handleMessage` — donc `MessageProcessor` en entier. Conséquence observable :
-un message envoyé par lien de partage ne déclenche **ni push, ni notification in-app, ni ligne
-`Notification`**. Un destinataire qui n'a pas l'application ouverte n'apprend jamais qu'il a
-reçu un message. C'est le silence complet, pas une dégradation.
-
-C'est la cinquième fois consécutive que la racine est la même — la formulation élargie de la
-leçon #5 du cycle 17 : **toute obligation destinataire qui n'a pas de nom appelable est
-inatteignable**. Ici elle est enfermée sous DEUX niveaux de `private`.
-
-### D2 — et l'éventail, même atteint, se tait pour un expéditeur ANONYME
-
-Extraire ne suffit pas : `triggerAllNotifications` sort en silence quand l'expéditeur n'a pas
-de ligne `User`.
-
-```ts
-let senderUserId = data.senderId;                       // un Participant.id
-const senderParticipant = await prisma.participant.findUnique({ where: { id: data.senderId } });
-if (senderParticipant?.userId) senderUserId = senderParticipant.userId;   // null pour un anonyme
-const [sender, conversation] = await Promise.all([
-  prisma.user.findUnique({ where: { id: senderUserId } }),               // → null
-  ...
-]);
-if (!sender || !conversation) return;                                    // ← tout s'arrête ici
+```
+!this._isSender(p, senderId) && !!p.userId && this.connectedUsers.has(p.userId)
 ```
 
-Un participant anonyme a `userId: null` (`schema.prisma:497`). `senderUserId` reste donc le
-`Participant.id`, et les espaces d'ObjectIds ne se recoupant jamais, la lecture `User` rend
-`null`. L'éventail entier — réponse, mentions, message régulier — est abandonné.
+`AuthHandler._registerUser` reçoit `user.id` pour un inscrit et **`participant.id` pour un
+anonyme** — la seule identité qu'il possède, n'ayant pas de ligne `User`. Le prédicat
+ci-dessus ne peut donc jamais être vrai pour un anonyme : exclusion par **construction**, pas
+par circonstance. Rien dans la lecture du prédicat ne le signale ; il faut aller lire sous
+quelle clé la carte a été remplie.
 
-Ce n'est pas un défaut du seul chemin de lien : **un anonyme qui envoie par le chemin nominal
-(socket `message:send`, sa session étant authentifiée par `X-Session-Token`) ne notifie déjà
-personne aujourd'hui.** Le défaut est en production, sur le chemin principal, pour toute la
-population que les liens de partage servent.
+Ce n'est pas neutre pour l'expéditeur. `getLatestMessageSummary` compte TOUT participant actif
+par `Participant.id` dans `totalMembers`. Un anonyme siégeant au dénominateur et inatteignable
+au numérateur rend « remis à tous » **impossible pour la conversation entière** — soit la forme
+de toute conversation ouverte par lien. Et le défaut vaut déjà sur le chemin nominal : un
+anonyme connecté par socket ne renvoyait aucun accusé en production.
 
-Le même verrou existe une couche plus bas, recopié trois fois :
-`createMessageNotification` (`:1278`), `createReplyNotification` (`:2643`) et
-`createMentionNotification` (`:1399`) refont chacune `user.findUnique(senderId)` et rendent
-`null` si rien. Trois copies de la même hypothèse « l'expéditeur est un utilisateur inscrit ».
+## D3 (corollaire) — les préférences se lisaient sous une clé qui n'existe pas
 
-### D3 — deux paramètres morts qui portaient déjà la réponse
-
-`createMentionNotificationsBatch` reçoit `senderUsername` et `senderAvatar`
-(`NotificationService.ts:1439-1440`) et **ne les lit jamais** : elle délègue à
-`createMentionNotification`, qui recharge l'utilisateur. L'information nécessaire à servir un
-acteur anonyme traversait déjà l'API — inutilisée.
+`getPreferencesForUsers([{ id, isAnonymous }])` sert les défauts sans requête dès que
+`isAnonymous`. L'appel déclarait `isAnonymous: false` pour tout le monde ; inclure les anonymes
+sans le corriger aurait envoyé un `Participant.id` à `fetchManyFromDatabase` comme s'il
+s'agissait d'un `User.id` — une requête payée pour rien, dont le vide serait mis en cache
+pendant 5 min sous un id qui n'est pas un utilisateur.
 
 ## Plan
-- [x] T1 — RED : `notifyMessageRecipients`, unité appelable de l'éventail de notifications
-- [x] T2 — RED : résolution d'identité expéditeur à trois branches (inscrit / anonyme / id déjà utilisateur)
-- [x] T3 — RED : `senderProfile` pré-résolu accepté par les trois créateurs de notification
-- [x] T4 — GREEN : `services/messaging/messageNotificationFanOut.ts`
-- [x] T5 — `MessageProcessor.triggerAllNotifications` délègue à l'unité
-- [x] T6 — les deux routes de lien appellent l'unité
-- [x] T7 — gates : suite gateway complète + `tsc --noEmit`
-- [x] T8 — changeset + CHANGELOG + lessons
-- [x] T9 — PR, CI vert, merge sur main
+- [x] T1 — RED : un anonyme connecté est marqué reçu (`markMessagesAsReceived` sur son `Participant.id`)
+- [x] T2 — RED : ses préférences sont résolues avec `isAnonymous: true`
+- [x] T3 — RED : la charge utile diffusée porte `userId: null`, et aucune user room n'est ciblée pour lui
+- [x] T4 — verrous : anonyme déconnecté hors du lot, expéditeur anonyme exclu de son propre accusé (verts avant ET après)
+- [x] T5 — GREEN : `_presenceKey` (= `userId ?? id`) pour la présence ET les préférences
+- [x] T6 — paramètre ramené à `{ id, senderId }` (les deux seuls champs lus)
+- [x] T7 — RED : les deux routes de lien acquittent la livraison (`links-messages.test.ts`)
+- [x] T8 — GREEN : quatrième obligation dans `broadcastLinkMessage` + relais public du manager
+- [x] T9 — verrous : les quatre canaux mutuellement indépendants, aucune panne ne quitte le 201
+- [x] T10 — `ReadStatusUpdatedEventData.userId: string | null` + note iOS
+- [x] T11 — gates : suite gateway 599/599 (15 570 tests), `tsc --noEmit` propre
+- [x] T12 — changeset + CHANGELOG + ce relevé
 
 ## Revue
 
-### La clé d'énumération avait glissé, et c'est ça qui a caché la notification
+### « Public » n'est pas « atteignable », et c'est une racine distincte de celle des cycles 15-18
 
-Le cycle 17 énumérait « ce que TOUT message doit à ses DESTINATAIRES » et sa table listait six
-lignes. Les six sont des **événements Socket.IO**. La clé annoncée était produit, la clé
-réellement appliquée était technique : « qu'est-ce que le manager Socket.IO émet ». La
-notification — ligne en base, push APNs/FCM, événement in-app — ne passe par aucun de ces
-émetteurs, donc elle n'était pas dans le champ de vision, et son absence ne pouvait pas se
-voir dans une table dont chaque ligne était un `SERVER_EVENTS.*`.
+Les quatre cycles précédents butaient sur des méthodes `private`. Celui-ci bute sur une méthode
+`public`, documentée comme « source unique partagée par les DEUX émetteurs ». Le mot *deux*
+était la trace du défaut : il y en a trois. Ce qui la rendait inatteignable n'est pas sa
+visibilité mais ses **dépendances** — elle vit sur l'objet qui détient `io` et `connectedUsers`,
+et une route ne détient ni l'un ni l'autre. Le remède n'est donc pas d'élargir une visibilité
+mais de poser un relais là où les dépendances existent déjà : un passe-plat public sur le
+manager, qui délègue au lieu de ré-implémenter. Trois transports qui émettraient chacun leur
+accusé dériveraient en silence — c'est exactement ce que le passe-plat interdit.
 
-C'est plus grave que les cinq autres réunies : la room, la file hors ligne et la pastille ne
-parlent qu'à un client **déjà ouvert**. La notification est le seul canal qui atteigne
-quelqu'un qui ne regarde pas.
+### Le paramètre était la moitié du verrou
 
-### Deux défauts, une racine — et le second n'apparaît qu'en essayant de corriger le premier
+L'unité demandait un `Message` Prisma complet et n'en lisait que `id` et `senderId`. Une route
+de lien ne construit pas cette entité : le contrat exigeait, pour être honoré, un objet que
+l'appelant légitime n'a pas. Ramené aux deux champs lus, il devient appelable par construction.
+Même forme et même raison que `PostSaveMessage` au cycle 16 — quand une unité est inatteignable,
+regarder ce qu'elle **exige** avant de regarder qui l'expose.
 
-Extraire l'éventail aurait réparé la seule route de lien AUTHENTIFIÉE. La route anonyme —
-celle qui porte tout le trafic pour lequel les liens de partage existent — serait restée
-muette, parce que l'éventail lui-même bute sur `if (!sender) return` dès que l'expéditeur n'a
-pas de ligne `User`. On ne le découvre pas en lisant le site d'appel : il faut lire le corps
-de ce qu'on s'apprête à rendre appelable. **Rendre une unité atteignable ne suffit pas si elle
-porte une hypothèse sur qui l'appelle.**
+### La parenthèse du cycle 18 valait plus que la ligne principale
 
-Et ce second défaut n'était pas un défaut du chemin de lien : il était déjà en production sur
-le chemin nominal. Un anonyme envoyant par socket ne notifiait personne. La correction
-dépasse donc largement la route qui l'a révélée.
+Le point ouvert nommait D1 et signalait D2 entre parenthèses, « le câblage devra décider si
+c'est voulu ». La décision se tranche seule dès qu'on regarde le dénominateur :
+`getLatestMessageSummary` compte les anonymes dans `totalMembers`. Les exclure du numérateur
+n'est pas un arbitrage produit, c'est une incohérence interne — le résumé promet un rapport
+dont il rend le numérateur inatteignable. Il n'y avait rien à décider, seulement à voir.
 
-### `senderProfile` n'est pas du plomberie, c'est la suppression de N lectures
+### `userId: null` n'est pas un élargissement de contrat, c'est une déclaration devenue vraie
 
-Les trois créateurs rechargeaient l'expéditeur par destinataire, alors que l'appelant venait
-de le résoudre une fois pour tout l'éventail. Le paramètre qui rend un acteur anonyme
-nommable est exactement celui qui supprime ces lectures — la correction de correctness et
-l'optimisation sont le même changement, ce qui est le signe qu'on a trouvé le bon endroit.
+Le type partagé annonçait `userId: string`. Aucun émetteur ne pouvait le garantir dès que
+l'acteur est anonyme — le champ était déjà nullable en fait, et seul le type l'ignorait. iOS le
+décode en `String?` depuis toujours et le web ne le lit pas : la déclaration rattrape la
+réalité, sans qu'un seul client ait à changer. Le gate `userId == currentUserId` de la synchro
+multi-appareils garde le bon comportement — `null` ne correspond à personne, ce qui est
+exactement ce qu'on veut d'un acteur qui n'est pas un utilisateur.
 
-### Deux paramètres morts portaient déjà la réponse
-
-`createMentionNotificationsBatch` recevait `senderUsername` et `senderAvatar` et ne les lisait
-jamais. L'information nécessaire à servir un acteur sans compte traversait l'API depuis
-toujours, inutilisée, pendant que la méthode appelée rechargeait l'utilisateur. Un paramètre
-mort n'est pas seulement du bruit : c'est parfois la trace d'une intention qu'une refonte a
-perdue en route.
+Vérification par mutation (leçon 2026-07-31 #5) : les 5 tests portants ont été vus ROUGES avant
+le correctif (3 sur l'unité, 2 sur les routes). Les verrous — anonyme déconnecté, expéditeur
+anonyme, résilience des quatre canaux — sont verts avant ET après : c'est leur rôle, interdire
+au correctif d'élargir le lot ou de raccourcir le chemin du 201.
 
 ### Reste ouvert après ce cycle
 
+- **`getLatestMessageSummary` résume le DERNIER message de la conversation, pas celui qu'on
+  vient d'acquitter.** L'accusé émis porte donc un `summary` qui décrit `latestMessage`, ce qui
+  est correct tant que le message acquitté EST le dernier — vrai sur les trois transports au
+  moment où l'accusé part. Deux envois quasi simultanés dans la même conversation peuvent
+  toutefois faire décrire au premier accusé le second message. Inchangé par ce cycle (le
+  chemin de lien hérite du comportement des deux transports nominaux), relevé pour mémoire.
+  À noter que la déduplication 2 s de `markMessagesAsReceived` ne joue aucun rôle ici : sa clé
+  inclut le `messageId` (`${participantId}:${conversationId}:received:${messageId}`), donc deux
+  messages distincts ne se masquent jamais.
 - **`mention:created` et les mentions du chemin de lien** — inchangé depuis le cycle 17 : ce
   n'est pas l'émission qui manque mais la DONNÉE. `Message.validatedMentions` n'est écrit que
-  par `MessageProcessor.processMentionsInDB` (`services/messaging/MessageProcessor.ts`) après
-  extraction, résolution des usernames, validation des permissions et création des lignes
-  `Mention`. L'unité de ce cycle accepte `validatedMentionUserIds` optionnel précisément pour
-  que le jour où l'extraction existera sur ce chemin, le câblage soit un argument et non une
-  réécriture.
-- **Accusé « delivered » automatique** — `MessageHandler.autoDeliverToOnlineRecipients` est
-  publique et prend un `Message` Prisma complet, que les routes de lien ont en main ; elle
-  n'est atteignable que depuis `MessageHandler`, et `LinkMessageManager` ne l'expose pas.
-  Conséquence observable inchangée : l'indicateur de l'expéditeur d'un message par lien ne
-  passe jamais de « envoyé » à « remis ». Noter que sa sélection de destinataires
-  (`!!p.userId && connectedUsers.has(p.userId)`) exclut par construction les participants
-  anonymes — le câblage devra décider si c'est voulu.
-- **`createMentionNotification` pour un acteur anonyme sur le chemin NOMINAL** — servi par ce
-  cycle (le lot transmet `senderProfile`), mais aucun appelant ne lui passe encore de mentions
-  émises par un anonyme, l'extraction ne tournant que sur `MessageProcessor`. Verrouillé par
-  test, pas encore exercé en production.
-- Aucun client iOS n'écoute `link:message:new` — les conversations par lien restent une
-  fonctionnalité web (hérité du cycle 15).
-- Les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio (hérité du cycle 16).
+  par `MessageProcessor.processMentionsInDB`. `notifyMessageRecipients` accepte déjà
+  `validatedMentionUserIds` pour que le câblage soit un argument le jour venu.
+- **Aucun client iOS n'écoute `link:message:new`** — les conversations par lien restent une
+  fonctionnalité web (hérité du cycle 15). L'accusé de ce cycle passe, lui, par
+  `read-status:updated`, que iOS écoute — donc la coche avance pour un auteur iOS dont le
+  message est parti par une route de lien.
+- **Les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio** (cycle 16).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
