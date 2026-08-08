@@ -34,6 +34,7 @@ import { attachmentMediaSelect } from '../services/attachments/attachmentInclude
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
+import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -621,6 +622,38 @@ export class MeeshySocketIOManager {
     payload: Record<string, unknown>;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
+  }
+
+  /**
+   * Push a fresh unread badge to every recipient of a message this manager did
+   * not broadcast itself — today the two share-link send routes, via
+   * `broadcastLinkMessage`.
+   *
+   * Those routes bypass both `MessagingService.handleMessage` and this
+   * manager's `_broadcastNewMessage`, where the badge fan-out used to live
+   * inline (and, on the socket transport, inside a `private` method of
+   * `MessageHandler`). Neither was reachable from a route, so a message sent
+   * through a share link — the only send transport an anonymous participant has
+   * — moved nobody's unread pill. The web `link:message:new` handler bumps the
+   * conversation's preview and ordering but NOT its counter, and the list runs
+   * on `staleTime: Infinity`, so the pill kept its previous value indefinitely.
+   *
+   * Public wrapper over the shared unit for the same reason
+   * `enqueueOfflineLinkMessage` is one: an obligation every writer owes its
+   * recipients cannot live behind `private`.
+   */
+  async emitUnreadCountsToRecipients(params: {
+    conversationId: string;
+    senderId: string | null | undefined;
+  }): Promise<void> {
+    await emitUnreadCountsToRecipients({
+      io: this.io,
+      prisma: this.prisma,
+      readStatusService: this.readStatusService,
+      conversationId: params.conversationId,
+      senderId: params.senderId,
+      onError: (error) => logger.warn('unread count update failed (link message)', { error }),
+    });
   }
 
   private async _enqueueForOfflineParticipants(params: OfflineParticipantQueueParams): Promise<void> {
@@ -2114,24 +2147,27 @@ export class MeeshySocketIOManager {
             this.io.to(ROOMS.user(p.userId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
           }
 
-          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process)
+          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
+          // Délégué à l'unité partagée par les trois transports d'envoi : la copie
+          // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
+          // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
+          // La liste déjà chargée lui est passée — pas de seconde requête.
           const participants = allParticipants.filter((p) => p.id !== senderId);
 
-          // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
-          const readStatusService = this.readStatusService;
-
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId);
+          await emitUnreadCountsToRecipients({
+            io: this.io,
+            prisma: this.prisma,
+            readStatusService: this.readStatusService,
+            conversationId: normalizedId,
+            senderId,
+            participants: allParticipants,
+            onError: (error) => logger.warn('unread count update failed', { error }),
+          });
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
-            const unreadCount = unreadCountMap.get(participant.id) ?? 0;
-
-            this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-              conversationId: normalizedId,
-              unreadCount
-            });
 
             // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
             // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
