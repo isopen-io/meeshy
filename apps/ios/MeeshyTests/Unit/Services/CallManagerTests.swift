@@ -6648,6 +6648,192 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             "signalOfferAnswerTask (so later renegotiations can chain onto it) and await it before returning."
         )
     }
+
+    // MARK: - cameraSwitchTask joins the renegotiation-serialization chain (privacy race fix)
+
+    /// Audit finding (Vague 65) — `switchCamera()`/`selectCamera(id:)` drive the SAME
+    /// `RTCCameraVideoCapturer` as `toggleVideo`/`handleHold`/`applySurvivalVideoSend`/the
+    /// thermal-critical downgrade via `stopCapture()`/`startCapture()`, but were never part
+    /// of this chain. Concretely: a video-toggle tap immediately followed by a camera flip
+    /// could let the flip's `startCapture()` finish AFTER a concurrent downgrade's
+    /// `stopCapture()`, leaving the camera physically on (LED lit, streaming) while
+    /// `isVideoEnabled == false` — a privacy regression, not just a UI desync. Fixed by
+    /// adding `cameraSwitchTask` to the bidirectional chain: `switchCamera()`/
+    /// `selectCamera(id:)` await the other five before actuating, and each of the ten
+    /// existing task-creation sites now also awaits `cameraSwitchTask`.
+    func test_cameraSwitchTask_propertyExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var cameraSwitchTask: Task<Void, Never>?"),
+            "CallManager must declare `cameraSwitchTask` to track switchCamera()/selectCamera(id:) so " +
+            "it can be chained with the other renegotiation/video-transition tasks."
+        )
+    }
+
+    func test_switchCamera_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func switchCamera() {", to: "func refreshAvailableCameras() {", in: try callManagerSource())
+        for expected in [
+            "await previousCameraSwitch?.value",
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "switchCamera() must \(expected) before actuating the camera switch — otherwise a video " +
+                "toggle/hold/survival/ICE-restart/renegotiation in flight can interleave stopCapture()/" +
+                "startCapture() on the same RTCCameraVideoCapturer."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("cameraSwitchTask = Task"),
+            "switchCamera() must track its work in cameraSwitchTask so later camera switches and other " +
+            "video-transition tasks can chain onto it."
+        )
+        XCTAssertTrue(
+            branch.contains("withCheckedContinuation"),
+            "switchCamera() must bridge webRTCService.switchCamera(completion:) via a continuation so " +
+            "cameraSwitchTask.value only resolves once the switch has actually completed, not merely once " +
+            "it has been enqueued."
+        )
+    }
+
+    func test_selectCamera_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func selectCamera(id: String) {", to: "func toggleTranscription() {", in: try callManagerSource())
+        for expected in [
+            "await previousCameraSwitch?.value",
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "selectCamera(id:) must \(expected) before actuating the camera switch — same rationale " +
+                "as switchCamera()."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("cameraSwitchTask = Task"),
+            "selectCamera(id:) must track its work in cameraSwitchTask."
+        )
+    }
+
+    func test_toggleVideo_awaitsCameraSwitchTask() throws {
+        let body = try body(from: "func toggleVideo() {", to: "func switchCamera() {", in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "toggleVideo must await the in-flight cameraSwitchTask before calling upgradeToVideo()/" +
+            "downgradeFromVideo() — both drive the same RTCCameraVideoCapturer as switchCamera()."
+        )
+    }
+
+    func test_handleHold_holdBranch_awaitsCameraSwitchTask() throws {
+        let fullBody = try body(from: "func handleHold(_ isOnHold: Bool) {", to: "func sendDTMF(digits: String) {", in: try callManagerSource())
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        XCTAssertTrue(
+            holdBranch.contains("await previousCameraSwitch?.value"),
+            "handleHold's hold branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_handleHold_unholdBranch_awaitsCameraSwitchTask() throws {
+        let fullBody = try body(from: "func handleHold(_ isOnHold: Bool) {", to: "func sendDTMF(digits: String) {", in: try callManagerSource())
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        XCTAssertTrue(
+            unholdBranch.contains("await previousCameraSwitch?.value"),
+            "handleHold's unhold branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_applySurvivalVideoSend_awaitsCameraSwitchTask() throws {
+        let body = try body(
+            from: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {",
+            to: "private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "applySurvivalVideoSend must await the in-flight cameraSwitchTask before actuating."
+        )
+    }
+
+    func test_thermalCritical_awaitsCameraSwitchTask() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "Thermal-critical video downgrade must await the in-flight cameraSwitchTask — it is a 6th " +
+            "site driving the same capturer, previously missed by an earlier audit's site enumeration."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsCameraSwitchTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "scheduleICERestart must await the in-flight cameraSwitchTask before calling performICERestart()."
+        )
+    }
+
+    func test_handleSignalOffer_connectingBranch_awaitsCameraSwitchTask() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connecting:", to: "case .connected, .reconnecting:")
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitchConnecting?.value"),
+            "handleSignalOffer's .connecting branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_handleSignalOffer_renegotiationBranch_awaitsCameraSwitchTask() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connected, .reconnecting:", to: "default:")
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitch?.value"),
+            "handleSignalOffer's mid-call renegotiation branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_answerCall_bufferedOfferBranch_awaitsCameraSwitchTask() throws {
+        let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitch?.value"),
+            "answerCall's buffered-offer branch must await the in-flight cameraSwitchTask before calling createAnswer()."
+        )
+    }
+
+    func test_answerCallReady_bufferedOfferBranch_awaitsCameraSwitchTask() throws {
+        let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitch?.value"),
+            "answerCallReady's buffered-offer branch must await the in-flight cameraSwitchTask before calling createAnswer()."
+        )
+    }
+
+    func test_endCallInternal_cancelsCameraSwitchTask() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("cameraSwitchTask?.cancel()") && source.contains("cameraSwitchTask = nil"),
+            "endCallInternal must cancel and nil cameraSwitchTask on teardown, matching the other " +
+            "renegotiation/video-transition tasks."
+        )
+    }
 }
 
 @MainActor
