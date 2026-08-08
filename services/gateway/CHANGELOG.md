@@ -1,5 +1,217 @@
 # @meeshy/gateway
 
+## 1.22.6
+
+### Patch Changes
+
+- 34fa613: `PUT /user-preferences/conversations/:conversationId` écrivait une ligne
+  `UserConversationPreferences` à partir de **deux identifiants fournis par
+  l'appelant**, sans vérifier ni l'un ni l'autre.
+
+  **Fuite inter-locataires (`categoryId`).** `UserConversationCategory` est une
+  table par utilisateur et privée. La route acceptait n'importe quel `categoryId`,
+  puis renvoyait la ligne avec `include: { category: true }` : le corps du `200` —
+  et toutes les lectures ultérieures, qui font la même jointure — rendaient le
+  `name`, la `color` et l'`icon` de la catégorie d'un **autre utilisateur**. Les
+  noms de catégorie sont des libellés écrits par l'utilisateur ; c'est une lecture
+  inter-locataires. Les six routes de `me/preferences/categories.ts` restreignent
+  pourtant chaque accès à `{ id, userId }` — ce `PUT` était le seul écrivain de
+  `categoryId` à ne pas le faire. Répond désormais `404 Category not found`, comme
+  ses routes sœurs, ce qui ne confirme pas l'existence de la catégorie.
+
+  **Écriture hors périmètre (`conversationId`).** L'écriture étant un `upsert`,
+  tout appelant authentifié pouvait créer des lignes de préférences contre des ids
+  de conversation arbitraires et faire diffuser `USER_PREFERENCES_UPDATED` pour
+  elles. Répond désormais `403 Not a member of this conversation`, avec le prédicat
+  déjà utilisé par `GET /conversations` et par les trois routes de
+  `user-deletions.ts` — aucun accès légitime n'est restreint.
+
+  Les deux contrôles vivent dans `writeConversationPreferences`, au même endroit
+  que l'incrément de `version` et la diffusion : la ligne n'est atteignable que par
+  cette fonction, donc c'est le seul endroit qu'un futur écrivain ne peut pas
+  oublier. `reorderConversationPreferences` filtrait déjà sur l'appartenance ;
+  c'est cette asymétrie qui a rendu le trou visible.
+
+  `POST /user-preferences/reorder` borne enfin son lot (`maxItems: 200`) : le
+  filtre d'appartenance ne s'applique qu'après le parsing et la déduplication.
+
+- 73fadd5: La coche d'un message envoyé par lien de partage passe enfin de « envoyé » à « remis » — et
+  un destinataire anonyme cesse d'être invisible à l'accusé de livraison, sur TOUS les chemins.
+
+  Deux défauts distincts, la même racine : une obligation dont la seule implémentation est
+  hors de portée de celui qui la doit.
+
+  **1. Aucune des deux routes de lien n'émettait d'accusé de livraison.**
+  `MessageHandler.autoDeliverToOnlineRecipients` marque le message `received` pour chaque
+  destinataire connecté, puis émet le `read-status:updated` consolidé qui fait avancer la coche
+  de l'expéditeur. Les deux transports nominaux l'atteignent — le chemin WS par
+  `broadcastNewMessage`, le chemin REST/ZMQ par `MeeshySocketIOManager._broadcastNewMessage` —
+  mais elle est une méthode de `MessageHandler` (elle a besoin de `io`, `connectedUsers`, du
+  service de statut de lecture et de celui de confidentialité), donc invisible depuis une
+  route. Les deux routes d'envoi par lien (`POST /links/:identifier/messages` et son jumeau
+  `/messages/auth`) contournant `MessagingService.handleMessage`, l'auteur d'un message par
+  lien regardait une coche unique **définitivement figée**, quel que soit le nombre de pairs
+  assis dans la conversation. Sixième cycle consécutif sur la même racine.
+
+  **2. L'accusé excluait les participants ANONYMES par construction, y compris sur le chemin
+  nominal.** La sonde de présence s'écrivait `!!p.userId && connectedUsers.has(p.userId)`. Or
+  `AuthHandler._registerUser` indexe un inscrit par `User.id` mais un anonyme par
+  `Participant.id` — la seule identité qu'il possède, n'ayant pas de ligne `User`. Ce prédicat
+  ne pouvait donc jamais être vrai pour un anonyme : exclusion par construction, pas par
+  circonstance. Et l'exclusion n'était pas neutre pour l'expéditeur : `getLatestMessageSummary`
+  compte TOUT participant actif par `Participant.id` dans `totalMembers`. Un anonyme présent au
+  dénominateur et inatteignable au numérateur rendait « remis à tous » **impossible pour la
+  conversation entière** — soit exactement la forme de toute conversation ouverte par lien.
+
+  Correctif : la présence et les préférences se lisent désormais sous une clé unique
+  (`_presenceKey` = `userId ?? id`), et les préférences sont demandées avec `isAnonymous`
+  correctement renseigné — ce qui sert les défauts sans requête plutôt que d'envoyer un
+  `Participant.id` à `fetchManyFromDatabase` comme s'il s'agissait d'un `User.id`. Le paramètre
+  de l'unité est ramené aux deux champs qu'elle lit (`{ id, senderId }`) au lieu d'un `Message`
+  Prisma complet : exiger ce dont on n'a pas besoin est précisément ce qui la rendait
+  inatteignable depuis une route. `broadcastLinkMessage` l'appelle comme quatrième obligation,
+  avec le même contrat best-effort que les trois autres (deux gardes, jamais dans le chemin du
+  201, jamais un 500) — via un relais public du manager, pour que les trois transports partagent
+  une seule implémentation plutôt que trois accusés subtilement différents.
+
+  Conséquence de contrat : `ReadStatusUpdatedEventData.userId` est déclaré `string | null`,
+  ce qu'il était déjà en fait pour un acteur anonyme. iOS le décodait déjà en `String?` et le
+  web ne le lit pas — aucun client n'a à changer, et un consommateur qui compare cette valeur à
+  sa propre identité (synchro multi-appareils du curseur) garde le bon comportement : `null` ne
+  correspond à personne.
+
+- 5ee49df: Un message envoyé par lien de partage notifie enfin ses destinataires — et un expéditeur
+  anonyme cesse d'être invisible partout.
+
+  Deux défauts distincts, la même racine.
+
+  **1. Le chemin de lien ne notifiait personne du tout.** `createMessageNotification`,
+  `createReplyNotification` et `createMentionNotificationsBatch` n'avaient qu'un appelant :
+  `MessageProcessor.triggerAllNotifications`, `private`, atteinte uniquement par
+  `handleMentionsAndNotifications` — `private` elle aussi. Les deux routes d'envoi par lien
+  (`POST /links/:identifier/messages` et son jumeau `/messages/auth`) contournent
+  `MessagingService.handleMessage`, donc `MessageProcessor` en entier : ni push APNs/FCM, ni
+  notification in-app, ni ligne `Notification`. Un destinataire qui n'avait pas l'application
+  au premier plan n'apprenait jamais qu'il avait reçu un message. Silence complet, pas une
+  dégradation. Cinquième cycle consécutif sur la même racine : une obligation destinataire sans
+  nom appelable est inatteignable.
+
+  **2. L'éventail se taisait pour tout expéditeur ANONYME, y compris sur le chemin nominal.**
+  `triggerAllNotifications` résolvait l'expéditeur par `user.findUnique({ id: senderId })` et
+  sortait en silence sur `null`. Un participant anonyme a `Participant.userId = null`, donc
+  `senderId` restait un `Participant.id` et la lecture ne rendait jamais rien : réponse,
+  mentions et messages réguliers étaient tous abandonnés. Le défaut valait aussi pour un
+  anonyme envoyant par socket `message:send` — il ne notifiait déjà personne en production. Le
+  même verrou était recopié une couche plus bas dans les trois créateurs de notification.
+
+  Correctif : une unité unique `notifyMessageRecipients`
+  (`services/messaging/messageNotificationFanOut.ts`), appelée par `MessageProcessor` comme par
+  les deux routes de lien. Sa résolution d'identité a trois branches et aucune impasse —
+  participant inscrit, participant anonyme (nommé par son `displayName`/`avatar`, la seule
+  identité qui existe pour lui), ou id déjà utilisateur (le participant synthétique de la
+  conversation globale `meeshy`). L'identité résolue descend jusqu'aux créateurs via
+  `senderProfile`, ce qui sert deux choses à la fois : nommer un acteur absent de `User`, et
+  supprimer une lecture `User` **par destinataire** sur le chemin le plus chaud du service.
+  `createMentionNotificationsBatch` voit ses paramètres `senderUsername`/`senderAvatar` —
+  qu'elle recevait sans jamais les lire — remplacés par ce profil.
+
+  Best-effort de bout en bout : l'unité ne lève jamais, reste hors du chemin de l'ACK, et une
+  panne de notification ne transforme pas un envoi réussi en 500.
+
+  Reste hors de portée et documenté : les mentions du chemin de lien, dont la donnée
+  (`Message.validatedMentions`) n'est écrite que par `MessageProcessor` — l'unité accepte donc
+  une liste de mentions vide sans que réponse ni message régulier n'en souffrent.
+
+- 72270e8: Un message envoyé par lien de partage est désormais traduit, et remonte sa conversation.
+
+  `POST /links/:identifier/messages` et son jumeau authentifié `/messages/auth` appelaient
+  `prisma.message.create` puis diffusaient — et c'était tout. Le chemin nominal
+  (`MessagingService.runPostSaveSideEffects`) exécute quatre écritures après le commit ; ces
+  deux routes contournent la classe entière, donc elles n'en exécutaient **aucune** :
+
+  - **Le Prisme Linguistique était éteint sur ce transport.** Le message n'était jamais poussé
+    au translator, et `Message.translations` n'est jamais rempli après coup (aucune
+    retraduction n'est déclenchée hors édition ou demande explicite). Un participant qui lit
+    français voyait donc indéfiniment en clair le message espagnol de l'anonyme assis dans la
+    même conversation — sur le seul transport d'envoi dont dispose un participant anonyme, et
+    celui qu'emprunte la conversation globale `meeshy`.
+  - **`Conversation.lastMessageAt` restait périmé.** `GET /conversations` trie dessus
+    (`orderBy: { lastMessageAt: 'desc' }`) et pagine par curseur sur ce même champ : une
+    conversation dont tout le trafic récent arrive par lien restait enterrée à sa position
+    d'avant. Le client web remontait bien la conversation depuis `link:message:new` — et le
+    prochain refetch la redescendait, le serveur n'ayant jamais enregistré le bump.
+  - Les statistiques de langue de la conversation n'étaient pas incrémentées.
+
+  Racine : l'obligation vivait dans une méthode `private` de `MessagingService`, donc
+  inatteignable par tout écrivain hors de cette classe — exactement la configuration qui avait
+  déjà produit les trous des cycles précédents. Correctif : une unité publique unique
+  `runMessagePostSaveEffects` (bump, poussée au translator, statistiques), appelée par le
+  chemin nominal ET par les deux routes de lien. Ce qui est poussé au translator est le
+  contenu **stocké** (URLs de tracking réécrites) sous la langue source **normalisée**, celle
+  qui est persistée. Le quatrième effet du chemin nominal — l'avancement du curseur de lecture
+  de l'auteur — reste délibérément hors de l'unité : il ne corrige aucun défaut observable (le
+  décompte de non-lus exclut déjà ses propres messages) et la route de lien authentifiée peut
+  porter un participant synthétique pour la conversation globale, sous lequel il créerait un
+  curseur orphelin.
+
+- 5647020: Un message envoyé par lien de partage atteint désormais les participants hors ligne.
+
+  `POST /links/:identifier/messages` et son jumeau authentifié `/messages/auth` créaient le
+  message puis l'annonçaient par une seule ligne :
+  `io.to(conversation:<id>).emit(LINK_MESSAGE_NEW)`. Cette room ne contient que les sockets
+  **connectées**. Aucun des deux chemins n'enfilait quoi que ce soit dans
+  `RedisDeliveryQueue`, donc un participant hors ligne à cet instant ne recevait rien à la
+  reconnexion — `_drainPendingMessages` n'avait rien à rejouer, et le client web ne refetch
+  pas (`staleTime: Infinity`). Le message n'apparaissait qu'au prochain refetch complet et
+  sans rapport de la conversation.
+
+  C'est la classe d'événement la plus grave à laquelle ce trou pouvait rester ouvert : pas un
+  compteur de réactions périmé mais un **message entier**, sur le seul transport d'envoi dont
+  dispose un participant anonyme.
+
+  Correctif : un diffuseur unique `broadcastLinkMessage` nommant les **deux** audiences
+  (room live + file hors ligne) par lequel passent les deux routes, un nouvel `eventType`
+  `'link-message'` rejoué en `link:message:new` par le drain, et — pour que la prochaine
+  famille d'événements soit un appel plutôt qu'une sixième copie — une implémentation unique
+  de la troisième audience (`offlineParticipantQueue`) à laquelle délèguent désormais les
+  cinq fan-out jusqu'ici recopiés dans `MessageHandler`, `MeeshySocketIOManager`,
+  `reactionOfflineQueue` et `AttachmentReactionHandler`.
+
+- 2588559: La pastille de non-lus bouge enfin quand un message arrive par lien de partage.
+
+  `conversation:unread-updated` est le seul signal live qui incrémente le compteur de non-lus
+  d'un destinataire. Les deux routes d'envoi par lien (`POST /links/:identifier/messages` et
+  son jumeau `/messages/auth`) ne l'émettaient pas : elles annoncent le message dans la room
+  puis l'enfilent pour les hors-ligne, et c'est tout.
+
+  Le handler web `link:message:new` remonte bien la conversation en tête de liste avec son
+  nouvel aperçu — mais il ne touche **pas** au compteur, et la liste tourne en
+  `staleTime: Infinity`. La conversation sautait donc en tête pendant que sa pastille
+  continuait d'afficher sa valeur d'avant : le badge ne devenait pas périmé, il mentait. Le
+  lien de partage étant le seul transport d'envoi d'un participant anonyme, tout ce trafic
+  produisait ce mensonge.
+
+  Racine, quatrième cycle consécutif sur la même : l'éventail destinataire existait en **deux**
+  implémentations — `MessageHandler._updateUnreadCounts` (`private`) et un bloc inline de
+  `MeeshySocketIOManager._broadcastNewMessage` — ne différant que par le prédicat d'exclusion de
+  l'expéditeur, c'est-à-dire par une valeur et non par un comportement. Aucune des deux n'était
+  atteignable depuis une route.
+
+  Correctif : une unité unique `emitUnreadCountsToRecipients` (`socketio/emitUnreadCountsToRecipients.ts`)
+  par laquelle passent désormais les trois transports d'envoi. Elle exclut l'auteur par ses
+  **deux** identités (`Participant.id` sur REST/ZMQ et lien, `User.id` sur WS — deux espaces
+  d'ObjectIds qui ne se recoupent jamais, donc élargir ne coûte aucun faux positif), adresse un
+  participant sans compte par son id de participant (la population même du transport lien), et
+  accepte une liste de participants préchargée pour ne pas ajouter d'aller-retour sur le chemin
+  le plus chaud du service. Best-effort : jamais dans le chemin de l'ACK, jamais un 500.
+
+  `conversation:updated` reste délibérément absent du chemin de lien, pour la raison inchangée
+  du cycle précédent — et c'est précisément l'argument qui ne tient PAS pour la pastille, que ce
+  handler n'applique jamais.
+
+- Updated dependencies [5647020]
+  - @meeshy/shared@1.8.7
+
 ## 1.22.5
 
 ### Patch Changes

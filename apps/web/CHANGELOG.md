@@ -1,5 +1,12 @@
 # @meeshy/web
 
+## 1.22.4
+
+### Patch Changes
+
+- Updated dependencies [5647020]
+  - @meeshy/shared@1.8.7
+
 ## 1.22.3
 
 ### Patch Changes
