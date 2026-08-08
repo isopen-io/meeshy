@@ -857,6 +857,20 @@ describe('MentionService', () => {
         expect(result.isValid).toBe(false);
         expect(result.validUserIds).not.toContain('user-outsider');
       });
+
+      // Un expéditeur anonyme n'a pas de `User.id` : il n'est aucun des
+      // mentionnés, donc la règle d'auto-mention ne le concerne pas — mais elle
+      // ne doit pas non plus rejeter son interlocuteur au passage.
+      it('should still allow mentioning the other participant for an anonymous sender', async () => {
+        const result = await service.validateMentionPermissions(
+          conversationId,
+          ['user-other'],
+          null
+        );
+
+        expect(result.isValid).toBe(true);
+        expect(result.validUserIds).toContain('user-other');
+      });
     });
 
     describe('Group conversations', () => {
@@ -1014,7 +1028,7 @@ describe('MentionService', () => {
       expect(prisma.mention.create).toHaveBeenCalledWith({
         data: {
           messageId,
-          mentionedParticipantId: userId,
+          mentionedUserId: userId,
         },
       });
     });
@@ -1057,32 +1071,32 @@ describe('MentionService', () => {
   // ==============================================
 
   describe('getMentionsForMessage', () => {
+    // Une ligne `Mention` désigne l'UTILISATEUR nommé. Passer par `Participant`
+    // pour l'atteindre, c'est traverser un espace d'identifiants que la colonne
+    // n'a jamais contenu : la jointure ne résout rien et la route
+    // `GET /mentions/message/:messageId` rend un tableau vide pour TOUT message.
     it('should retrieve mentions with user info', async () => {
       const mockMentions = [
         {
           id: 'mention-1',
-          mentionedParticipant: {
-            user: {
-              id: 'user-1',
-              username: 'john',
-              firstName: 'John',
-              lastName: 'Doe',
-              displayName: 'John Doe',
-              avatar: null,
-            },
+          mentionedUser: {
+            id: 'user-1',
+            username: 'john',
+            firstName: 'John',
+            lastName: 'Doe',
+            displayName: 'John Doe',
+            avatar: null,
           },
         },
         {
           id: 'mention-2',
-          mentionedParticipant: {
-            user: {
-              id: 'user-2',
-              username: 'jane',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              displayName: null,
-              avatar: null,
-            },
+          mentionedUser: {
+            id: 'user-2',
+            username: 'jane',
+            firstName: 'Jane',
+            lastName: 'Smith',
+            displayName: null,
+            avatar: null,
           },
         },
       ];
@@ -1112,18 +1126,14 @@ describe('MentionService', () => {
       expect(prisma.mention.findMany).toHaveBeenCalledWith({
         where: { messageId: 'msg-123' },
         include: {
-          mentionedParticipant: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  firstName: true,
-                  lastName: true,
-                  displayName: true,
-                  avatar: true,
-                },
-              },
+          mentionedUser: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              displayName: true,
+              avatar: true,
             },
           },
         },
@@ -1165,6 +1175,21 @@ describe('MentionService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].message.content).toBe('Hello @user1');
+    });
+
+    // L'inbox est une vue TRANSVERSE aux conversations : elle se lit par
+    // utilisateur, jamais par participant (un même utilisateur en possède un par
+    // conversation). C'est aussi ce que dit l'index dédié du schéma.
+    it('should filter on the mentioned user, not a participant', async () => {
+      prisma.mention.findMany.mockResolvedValue([]);
+
+      await service.getRecentMentionsForUser('user-1');
+
+      expect(prisma.mention.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { mentionedUserId: 'user-1' },
+        })
+      );
     });
 
     it('should use default limit of 50', async () => {

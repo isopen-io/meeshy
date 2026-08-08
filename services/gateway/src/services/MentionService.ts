@@ -717,14 +717,17 @@ export class MentionService {
    * Valide les permissions de mention selon le type de conversation
    *
    * @param conversationId - ID de la conversation
-   * @param mentionedUserIds - IDs des utilisateurs à mentionner
-   * @param senderId - ID de l'utilisateur qui envoie le message
+   * @param mentionedUserIds - `User.id` des utilisateurs à mentionner
+   * @param senderId - `User.id` de l'expéditeur — le MÊME espace que
+   *   `mentionedUserIds`, puisque la règle des conversations directes les
+   *   compare entre eux. `null` pour un expéditeur anonyme : il ne possède
+   *   aucun `User.id`, donc ne peut être aucun des mentionnés.
    * @returns Résultat de validation avec les userIds valides et invalides
    */
   async validateMentionPermissions(
     conversationId: string,
     mentionedUserIds: string[],
-    senderId: string
+    senderId: string | null
   ): Promise<MentionValidationResult> {
     if (mentionedUserIds.length === 0) {
       return {
@@ -851,7 +854,7 @@ export class MentionService {
         this.prisma.mention.create({
           data: {
             messageId,
-            mentionedParticipantId: userId
+            mentionedUserId: userId
           }
         }).catch((error: any) => {
           // Ignorer les erreurs de doublons (code P2002)
@@ -873,24 +876,20 @@ export class MentionService {
     const mentions = await this.prisma.mention.findMany({
       where: { messageId },
       include: {
-        mentionedParticipant: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
+        mentionedUser: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
           }
         }
       }
     });
 
-    return mentions.map(m => m.mentionedParticipant?.user).filter(Boolean) as User[];
+    return mentions.map(m => m.mentionedUser).filter(Boolean) as User[];
   }
 
   /**
@@ -903,7 +902,7 @@ export class MentionService {
   async getRecentMentionsForUser(userId: string, limit: number = 50) {
     const mentions = await this.prisma.mention.findMany({
       where: {
-        mentionedParticipantId: userId
+        mentionedUserId: userId
       },
       include: {
         message: {
