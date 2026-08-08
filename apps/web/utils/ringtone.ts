@@ -20,6 +20,7 @@ export class Ringtone {
   private isPlaying = false;
   private htmlAudio: HTMLAudioElement | null = null;
   private vibrationInterval: NodeJS.Timeout | null = null;
+  private ringPatternTimeout: NodeJS.Timeout | null = null;
   private useHTMLAudioFallback = false;
 
   constructor() {
@@ -177,6 +178,16 @@ export class Ringtone {
 
     this.isPlaying = false;
 
+    // Cancel any pending recursive ring-pattern timer. Without this, a
+    // timer scheduled by THIS session can still fire after stop() if a new
+    // session (play() called again) starts before the original 2.3s delay
+    // elapses — stacking an extra, unwanted ring cycle on top of the new
+    // session's own chain (audible doubled/overlapping tones).
+    if (this.ringPatternTimeout) {
+      clearTimeout(this.ringPatternTimeout);
+      this.ringPatternTimeout = null;
+    }
+
     // Stop vibration
     this.stopVibration();
 
@@ -240,8 +251,14 @@ export class Ringtone {
     osc2.stop(currentTime + 0.8);
     this.oscillators.push(osc2);
 
-    // Schedule next ring after 1.5 second pause
-    setTimeout(() => {
+    // Schedule next ring after 1.5 second pause. Cancel any timer already
+    // in flight first — at most one recursive timer may ever be pending, so
+    // a stale one from a session stop() raced against can never fire.
+    if (this.ringPatternTimeout) {
+      clearTimeout(this.ringPatternTimeout);
+    }
+    this.ringPatternTimeout = setTimeout(() => {
+      this.ringPatternTimeout = null;
       if (this.isPlaying) {
         // Clear old oscillators
         this.oscillators = [];

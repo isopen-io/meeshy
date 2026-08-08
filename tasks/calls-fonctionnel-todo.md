@@ -4776,3 +4776,52 @@ toolchain dans ce sandbox — reconfirmé.
   (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only
   (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain
   vérifiable, reconfirmé cette vague).
+
+## Vague 75 — `Ringtone.playRingPattern()` : le timer récursif de sonnerie survivait à `stop()` entre deux sessions rapprochées (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En
+tête de cycle, fusion de la seule PR précédente laissée ouverte par le cycle précédent (#2653, Vague 74 —
+CI verte, merge propre sans conflit contre `main`), conformément à la règle de la routine de toujours finir
+le développement précédent avant d'en commencer un nouveau. Backlog Android (Vague 70, reconfirmé bloqué
+cette vague — `gradle :feature:calls:help --offline` échoue toujours à résoudre `com.android.application:8.7.3`)
+et iOS (`CallManager.swift`, `actor CallEventQueue`, `reportNewIncomingCall`) toujours hors d'atteinte faute
+de toolchain dans ce sandbox. Cible choisie : le glitch `ringtone.ts` laissé en spec, non corrigé, à la fin
+de la Vague 74.
+
+- **Root cause confirmée par lecture directe** : `playRingPattern()` (`apps/web/utils/ringtone.ts`)
+  programme sa propre ré-invocation via un `setTimeout` récursif (délai 2300ms) dont l'id n'était jamais
+  stocké ni annulé par `stop()`. Le seul garde-fou au retour du timer était `if (this.isPlaying)` — un
+  booléen d'INSTANCE, pas de SESSION. Sur le singleton partagé `getRingtone()`, deux sessions de sonnerie
+  rapprochées (< 2.3s, ex. deux appels entrants consécutifs, ou un appel raccroché puis un second qui
+  arrive aussitôt) produisaient : session 1 programme son timer A puis `stop()` (qui ne l'annule pas) ;
+  session 2 démarre aussitôt, reprogramme son propre timer B. Au déclenchement du délai de 2.3s, timer A
+  (périmé) ET timer B (légitime) se déclenchent tous les deux, et TOUS DEUX lisent `this.isPlaying === true`
+  (état de session 2) — chacun relance `playRingPattern()`, créant DEUX cycles de sonnerie superposés au
+  lieu d'un seul (glitch audio, oscillateurs dupliqués).
+- **Fix** : nouveau champ `ringPatternTimeout: NodeJS.Timeout | null`, mis à jour à chaque programmation
+  (`playRingPattern()` annule tout timer déjà en vol avant d'en programmer un nouveau — au plus un timer
+  vivant à la fois) et purgé par `stop()` (`clearTimeout` + reset à `null`). Une session arrêtée ne peut
+  plus jamais laisser de timer fantôme survivre dans une session suivante.
+- **Tests** (TDD, RED confirmé avant fix — le test de layering échouait, 8 oscillateurs créés au lieu de 6
+  attendus, exactement le doublement prédit par le root cause) : nouveau fichier
+  `apps/web/__tests__/utils/ringtone.test.ts` (2 tests, `jest.useFakeTimers()` + mock `AudioContext` façon
+  `notification-sound.test.ts`) — aucun nouvel oscillateur créé après `stop()` même une fois le délai de
+  2.3s écoulé ; une session 2 démarrée dans la fenêtre de 2.3s d'une session 1 arrêtée ne produit qu'UN
+  cycle de sonnerie supplémentaire à l'échéance, pas deux. Fonction utilitaire du fichier renommée
+  `makeMockRingtoneAudioContext` (au lieu de `makeMockAudioContext`) pour éviter une collision de nom avec
+  la fonction homonyme, déjà existante, de `notification-sound.test.ts` — les deux fichiers de test sont
+  sans `import`/`export` de haut niveau donc TypeScript les vérifie en portée globale partagée
+  (`tsc --noEmit` confirmait `TS2393: Duplicate function implementation` avant le renommage).
+- **Vérification** : `__tests__/utils/ringtone.test.ts` (2 tests) vert ; suite complète
+  `__tests__/components/video-call/**` + `__tests__/components/video-calls/**` (28 suites / 129 tests)
+  verte (couvre `CallManager.doubleIncomingCall.test.tsx`, seul consommateur direct d'appels entrants
+  rapprochés) ; suite complète `hooks/` + `utils/__tests__/audio-effects.test.ts` +
+  `components/video-calls/**` (129 suites / 2300 tests, 2298 passed + 2 skips pré-existants sans rapport)
+  verte. `packages/shared && npx prisma generate --generator client && bun run build` (prérequis CLAUDE.md,
+  sandbox sans `node_modules` au démarrage — `bun install --ignore-scripts` requis) sans erreur.
+  `npx tsc --noEmit` sur `apps/web` : 0 nouvelle erreur imputable au diff. `eslint` : même échec
+  sandbox-only de config circulaire que documenté aux vagues précédentes (indépendant de ce diff).
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague).
