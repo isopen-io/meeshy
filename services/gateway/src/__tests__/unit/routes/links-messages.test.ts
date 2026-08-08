@@ -163,7 +163,13 @@ function makeTranslationService() {
 
 function makeSocketIOHandler(hasManager = false) {
   if (!hasManager) {
-    return { getManager: () => null, to: jest.fn(), emit: jest.fn(), enqueueOfflineLinkMessage: jest.fn() };
+    return {
+      getManager: () => null,
+      to: jest.fn(),
+      emit: jest.fn(),
+      enqueueOfflineLinkMessage: jest.fn(),
+      emitUnreadCountsToRecipients: jest.fn(),
+    };
   }
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
@@ -171,11 +177,15 @@ function makeSocketIOHandler(hasManager = false) {
   // must exercise: the room emit only reaches CONNECTED sockets, so without
   // this second call an offline participant never learns the message exists.
   const enqueueOfflineLinkMessage = jest.fn<any>().mockResolvedValue(undefined);
+  // Third audience: every recipient's unread badge. The room emit announces the
+  // message, the queue replays it — neither moves the counter.
+  const emitUnreadCountsToRecipients = jest.fn<any>().mockResolvedValue(undefined);
   return {
-    getManager: () => ({ getIO: () => ({ to }), enqueueOfflineLinkMessage }),
+    getManager: () => ({ getIO: () => ({ to }), enqueueOfflineLinkMessage, emitUnreadCountsToRecipients }),
     to,
     emit,
     enqueueOfflineLinkMessage,
+    emitUnreadCountsToRecipients,
   };
 }
 
@@ -500,6 +510,17 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
     expect(queued.payload).toEqual(live);
     expect((queued.payload as { message: Record<string, unknown> }).message).not.toHaveProperty('clientMessageId');
   });
+
+  // Le handler web `link:message:new` remonte la conversation et son aperçu,
+  // mais ne touche PAS au compteur — et la liste est en `staleTime: Infinity`.
+  // Sans ce troisième signal, la conversation saute en tête avec un nouvel
+  // aperçu pendant que sa pastille affiche encore sa valeur d'avant.
+  it('pushes a fresh unread badge to every recipient', () => {
+    expect(socketIOHandler.emitUnreadCountsToRecipients).toHaveBeenCalledWith({
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+    });
+  });
 });
 
 describe('POST /links/:id/messages — anonymous: ZodError catch', () => {
@@ -714,6 +735,15 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
         messageId: MSG_ID,
       })
     );
+  });
+
+  // Même argument que pour la file hors ligne : les deux routes servent la même
+  // conversation aux mêmes participants.
+  it('pushes a fresh unread badge to every recipient', () => {
+    expect(socketIOHandler.emitUnreadCountsToRecipients).toHaveBeenCalledWith({
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+    });
   });
 });
 

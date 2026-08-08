@@ -27,6 +27,7 @@ import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../ser
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
+import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -1623,49 +1624,32 @@ export class MessageHandler {
   }
 
   /**
-   * Met à jour les unread counts pour tous les participants
-   * Uses Participant model instead of ConversationMember
+   * Met à jour les unread counts pour tous les participants.
+   *
+   * Délègue à `emitUnreadCountsToRecipients` — l'unité partagée par les TROIS
+   * transports d'envoi (WS ici, REST/ZMQ via `MeeshySocketIOManager`, lien de
+   * partage via `broadcastLinkMessage`). L'implémentation vivait ici, dans un
+   * `private`, donc inatteignable par les routes de lien qui contournent cette
+   * classe : leur badge ne bougeait jamais.
+   *
+   * `preloadedParticipants` est transmis tel quel — `broadcastNewMessage` a déjà
+   * chargé cette liste pour la file hors ligne, et un second aller-retour sur le
+   * chemin le plus chaud du service n'est pas acceptable.
    */
   private async _updateUnreadCounts(
     message: Message,
     conversationId: string,
     preloadedParticipants?: { id: string; userId: string | null; joinedAt: Date }[]
   ): Promise<void> {
-    try {
-      const senderId = message.senderId;
-      if (!senderId) return;
-
-      // Reuse the participant list already fetched by the caller when available
-      // (avoids a second DB round-trip inside broadcastNewMessage). Fall back to
-      // a fresh query when called standalone (e.g. from _broadcastNewMessage).
-      const allParticipants = preloadedParticipants ?? await this.prisma.participant.findMany({
-        where: {
-          conversationId,
-          isActive: true,
-        },
-        select: { id: true, userId: true, joinedAt: true }
-      });
-      // Filter out the sender — unread counts are for recipients only
-      const participants = allParticipants.filter((p) => !this._isSender(p, senderId));
-
-      // Batch: 1 cursor query + 1 message fetch instead of 3N sequential queries.
-      // Each recipient's count excludes their OWN messages (handled inside the service).
-      const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
-        participants,
-        conversationId
-      );
-
-      await Promise.all(participants.map(async (participant) => {
-        const roomTarget = participant.userId ?? participant.id;
-        const unreadCount = unreadCounts.get(participant.id) ?? 0;
-        this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-          conversationId,
-          unreadCount
-        });
-      }));
-    } catch (error) {
-      handlerLogger.warn('unread count update failed', { error });
-    }
+    await emitUnreadCountsToRecipients({
+      io: this.io,
+      prisma: this.prisma,
+      readStatusService: this.readStatusService,
+      conversationId,
+      senderId: message.senderId,
+      participants: preloadedParticipants,
+      onError: (error) => handlerLogger.warn('unread count update failed', { error }),
+    });
   }
 
 
