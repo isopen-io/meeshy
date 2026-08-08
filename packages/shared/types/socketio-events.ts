@@ -1268,7 +1268,6 @@ export interface MentionCreatedEventData {
   readonly conversationId: string;
   readonly senderId: string;
   readonly mentionedUserId: string;
-  readonly mentionedParticipantId?: string;
   readonly content: string;
   readonly timestamp: string;
 }
