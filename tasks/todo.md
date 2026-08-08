@@ -111,11 +111,15 @@ au correctif d'élargir le lot ou de raccourcir le chemin du 201.
 
 ### Reste ouvert après ce cycle
 
-- **`markMessagesAsReceived` déduplique par `${userId}:${conversationId}:${type}` sur 2 s.**
-  L'accusé du chemin de lien passe désormais par le même cache, ce qui est voulu ; mais deux
-  messages par lien envoyés dans la même seconde vers la même conversation ne produisent qu'un
-  accusé. Sans conséquence observable (le second message est le `latestMessage` du résumé
-  suivant), relevé pour mémoire.
+- **`getLatestMessageSummary` résume le DERNIER message de la conversation, pas celui qu'on
+  vient d'acquitter.** L'accusé émis porte donc un `summary` qui décrit `latestMessage`, ce qui
+  est correct tant que le message acquitté EST le dernier — vrai sur les trois transports au
+  moment où l'accusé part. Deux envois quasi simultanés dans la même conversation peuvent
+  toutefois faire décrire au premier accusé le second message. Inchangé par ce cycle (le
+  chemin de lien hérite du comportement des deux transports nominaux), relevé pour mémoire.
+  À noter que la déduplication 2 s de `markMessagesAsReceived` ne joue aucun rôle ici : sa clé
+  inclut le `messageId` (`${participantId}:${conversationId}:received:${messageId}`), donc deux
+  messages distincts ne se masquent jamais.
 - **`mention:created` et les mentions du chemin de lien** — inchangé depuis le cycle 17 : ce
   n'est pas l'émission qui manque mais la DONNÉE. `Message.validatedMentions` n'est écrit que
   par `MessageProcessor.processMentionsInDB`. `notifyMessageRecipients` accepte déjà
