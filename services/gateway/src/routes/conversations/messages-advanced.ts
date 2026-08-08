@@ -17,8 +17,8 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
 import type {
   ConversationParams,
   EditMessageBody
@@ -1108,24 +1108,39 @@ export function registerMessagesAdvancedRoutes(
         );
 
         if (socketIOHandler) {
-          const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOHandler.getManager()?.getIO();
-          if (io) {
-            // Swap 1-réaction-par-user : l'ancien emoji part avant que le
-            // nouveau arrive (agrégations recalculées par event).
-            for (const removedEmoji of addResult.replacedEmojis) {
-              const removeEvent = await reactionService.createUpdateEvent(
-                messageId,
-                removedEmoji,
-                'remove',
-                currentParticipant.id,
-                conversationId,
-                userId,
-              );
-              io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
-            }
-            io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+          const manager = socketIOHandler.getManager?.();
+          // Swap 1-réaction-par-user : l'ancien emoji part avant que le
+          // nouveau arrive (agrégations recalculées par event).
+          for (const removedEmoji of addResult.replacedEmojis) {
+            const removeEvent = await reactionService.createUpdateEvent(
+              messageId,
+              removedEmoji,
+              'remove',
+              currentParticipant.id,
+              conversationId,
+              userId,
+            );
+            await broadcastReactionMutation({
+              manager,
+              conversationId,
+              actorParticipantId: currentParticipant.id,
+              eventType: 'reaction-removed',
+              messageId,
+              emoji: removedEmoji,
+              payload: removeEvent as unknown as Record<string, unknown>,
+              onError: (error) => logger.warn('[REACTION-REST] swap-removal broadcast failed', error),
+            });
           }
+          await broadcastReactionMutation({
+            manager,
+            conversationId,
+            actorParticipantId: currentParticipant.id,
+            eventType: 'reaction-added',
+            messageId,
+            emoji,
+            payload: updateEvent as unknown as Record<string, unknown>,
+            onError: (error) => logger.warn('[REACTION-REST] broadcast failed', error),
+          });
         }
       } catch (socketError) {
         logger.warn('[REACTION-REST] Error broadcasting reaction via Socket.IO', socketError);
@@ -1268,11 +1283,16 @@ export function registerMessagesAdvancedRoutes(
         );
 
         if (socketIOHandler) {
-          const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOHandler.getManager()?.getIO();
-          if (io) {
-            io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
-          }
+          await broadcastReactionMutation({
+            manager: socketIOHandler.getManager?.(),
+            conversationId,
+            actorParticipantId: currentParticipant.id,
+            eventType: 'reaction-removed',
+            messageId,
+            emoji,
+            payload: updateEvent as unknown as Record<string, unknown>,
+            onError: (error) => logger.warn('[REACTION-REST] removal broadcast failed', error),
+          });
         }
       } catch (socketError) {
         logger.warn('[REACTION-REST] Error broadcasting reaction removal via Socket.IO', socketError);
