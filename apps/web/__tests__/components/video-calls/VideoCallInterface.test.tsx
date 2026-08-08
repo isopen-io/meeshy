@@ -48,17 +48,18 @@ jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
 }));
 jest.mock('@/hooks/use-webrtc-p2p', () => ({ useWebRTCP2P: () => webrtc }));
+const useAudioEffectsMock = jest.fn(() => ({
+  outputStream: null as unknown,
+  effectsState: {} as Record<string, { enabled: boolean }>,
+  toggleEffect: jest.fn(),
+  updateEffectParams: jest.fn(),
+  loadPreset: jest.fn(),
+  currentPreset: null,
+  availableBackSounds: [],
+  availablePresets: [],
+}));
 jest.mock('@/hooks/use-audio-effects', () => ({
-  useAudioEffects: () => ({
-    outputStream: null,
-    effectsState: {},
-    toggleEffect: jest.fn(),
-    updateEffectParams: jest.fn(),
-    loadPreset: jest.fn(),
-    currentPreset: null,
-    availableBackSounds: [],
-    availablePresets: [],
-  }),
+  useAudioEffects: (...args: unknown[]) => useAudioEffectsMock(...(args as [])),
 }));
 jest.mock('@/hooks/use-call-quality', () => ({
   useCallQuality: () => ({ qualityStats: null }),
@@ -125,6 +126,16 @@ describe('VideoCallInterface (container)', () => {
       ],
     };
     useAdaptiveDegradationMock.mockReturnValue({ videoSuspended: false });
+    useAudioEffectsMock.mockReturnValue({
+      outputStream: null,
+      effectsState: {},
+      toggleEffect: jest.fn(),
+      updateEffectParams: jest.fn(),
+      loadPreset: jest.fn(),
+      currentPreset: null,
+      availableBackSounds: [],
+      availablePresets: [],
+    });
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(null);
   });
 
@@ -467,6 +478,7 @@ describe('VideoCallInterface (container)', () => {
       const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
       const localStream = {
         getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
         removeTrack: jest.fn(),
         addTrack: jest.fn(),
       };
@@ -498,6 +510,7 @@ describe('VideoCallInterface (container)', () => {
       const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
       const localStream = {
         getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
         removeTrack: jest.fn(),
         addTrack: jest.fn(),
       };
@@ -523,6 +536,126 @@ describe('VideoCallInterface (container)', () => {
       expect(videoTrack.stop).not.toHaveBeenCalled();
       expect(localStream.removeTrack).not.toHaveBeenCalled();
       expect(localStream.addTrack).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('audio effects track routing — sender must always carry the CURRENT audioEffectsActive choice', () => {
+    // React runs an outgoing effect's cleanup with the closure captured at
+    // the render that scheduled it, i.e. the PREVIOUS value of any
+    // dependency — never the value that triggered the re-run. The old
+    // implementation's cleanup branched on `!audioEffectsActive` to decide
+    // whether to restore the raw track, which means it always inspected the
+    // stale, pre-toggle value: turning effects OFF left the processed track
+    // on the wire (restore skipped), and turning them ON restored the raw
+    // track for one hop before the new processed track landed (audible
+    // blip). The fix must pick processed-vs-raw from the CURRENT render's
+    // value directly in the effect body, not from an inverted cleanup.
+    const originalTrack = { kind: 'audio', id: 'original' };
+    const processedTrack = { kind: 'audio', id: 'processed' };
+    // The sender's initial track (as wired by the WebRTC layer when the
+    // connection was created) is deliberately a third, distinct id — neither
+    // `originalTrack` nor `processedTrack` — so every assertion below is a
+    // real `replaceTrack` call driven by this effect, never a same-track
+    // no-op skip.
+    const senderInitialTrack = { kind: 'audio', id: 'sender-initial' };
+    let replaceTrack: jest.Mock;
+
+    beforeEach(() => {
+      replaceTrack = jest.fn().mockResolvedValue(undefined);
+      storeState.localStream = {
+        getAudioTracks: () => [originalTrack],
+      } as unknown as MediaStream;
+      storeState.peerConnections = new Map([
+        ['peer1', { getSenders: () => [{ track: senderInitialTrack, replaceTrack }] }],
+      ]) as unknown as typeof storeState.peerConnections;
+    });
+
+    afterEach(() => {
+      storeState.localStream = null;
+      storeState.peerConnections = new Map();
+    });
+
+    it('routes the sender through the RAW track (not the processed one) while no effect is enabled', async () => {
+      useAudioEffectsMock.mockReturnValue({
+        outputStream: { getAudioTracks: () => [processedTrack] } as unknown,
+        effectsState: { reverb: { enabled: false } },
+        toggleEffect: jest.fn(),
+        updateEffectParams: jest.fn(),
+        loadPreset: jest.fn(),
+        currentPreset: null,
+        availableBackSounds: [],
+        availablePresets: [],
+      });
+
+      render(<VideoCallInterface callId="call1" />);
+
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalled());
+      expect(replaceTrack).toHaveBeenCalledWith(originalTrack);
+      expect(replaceTrack).not.toHaveBeenCalledWith(processedTrack);
+    });
+
+    it('switches the sender from raw to processed the moment an effect is toggled on', async () => {
+      useAudioEffectsMock.mockReturnValue({
+        outputStream: { getAudioTracks: () => [processedTrack] } as unknown,
+        effectsState: { reverb: { enabled: false } },
+        toggleEffect: jest.fn(),
+        updateEffectParams: jest.fn(),
+        loadPreset: jest.fn(),
+        currentPreset: null,
+        availableBackSounds: [],
+        availablePresets: [],
+      });
+
+      const { rerender } = render(<VideoCallInterface callId="call1" />);
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalledWith(originalTrack));
+      replaceTrack.mockClear();
+
+      useAudioEffectsMock.mockReturnValue({
+        outputStream: { getAudioTracks: () => [processedTrack] } as unknown,
+        effectsState: { reverb: { enabled: true } },
+        toggleEffect: jest.fn(),
+        updateEffectParams: jest.fn(),
+        loadPreset: jest.fn(),
+        currentPreset: null,
+        availableBackSounds: [],
+        availablePresets: [],
+      });
+      rerender(<VideoCallInterface callId="call1" />);
+
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalledWith(processedTrack));
+      expect(replaceTrack).not.toHaveBeenCalledWith(originalTrack);
+    });
+
+    it('restores the raw track the moment the last enabled effect is toggled off', async () => {
+      useAudioEffectsMock.mockReturnValue({
+        outputStream: { getAudioTracks: () => [processedTrack] } as unknown,
+        effectsState: { reverb: { enabled: true } },
+        toggleEffect: jest.fn(),
+        updateEffectParams: jest.fn(),
+        loadPreset: jest.fn(),
+        currentPreset: null,
+        availableBackSounds: [],
+        availablePresets: [],
+      });
+
+      const { rerender } = render(<VideoCallInterface callId="call1" />);
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalledWith(processedTrack));
+      replaceTrack.mockClear();
+
+      useAudioEffectsMock.mockReturnValue({
+        outputStream: { getAudioTracks: () => [processedTrack] } as unknown,
+        effectsState: { reverb: { enabled: false } },
+        toggleEffect: jest.fn(),
+        updateEffectParams: jest.fn(),
+        loadPreset: jest.fn(),
+        currentPreset: null,
+        availableBackSounds: [],
+        availablePresets: [],
+      });
+      rerender(<VideoCallInterface callId="call1" />);
+
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalledWith(originalTrack));
+      expect(replaceTrack).not.toHaveBeenCalledWith(processedTrack);
     });
   });
 });
