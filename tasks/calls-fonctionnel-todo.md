@@ -4195,6 +4195,53 @@ gap de sérialisation `switchCameraTask` déjà repéré en Vague 61/63.
   ci-dessus, prête pour exécution avec accès compilateur) ; busy-path `reportNewIncomingCall` failure
   handler ne nettoie pas `pendingIncomingCall`/`showCallWaitingBanner` (UI-only, faible, auto-corrigé).
 
+## Vague 66 — exécution de la spec caméra : cameraSwitchTask rejoint la chaîne bidirectionnelle (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+de la spec laissée « prête » par la Vague 64 (`switchCamera()`/`selectCamera(id:)` non sérialisés contre
+la famille `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask`/`signalOfferAnswerTask`).
+Toolchain Swift/Xcode toujours absente de ce sandbox Linux — implémentation par lecture directe exhaustive
+(pas de subagent aveugle), verdict laissé au compilateur macOS de la CI « iOS Tests » au push.
+
+- **Découverte en cours de route** : la spec Vague 64 énumérait « 8 sites d'édition » (en réalité 9 dans
+  son propre détail : 1 toggleVideo + 2 handleHold + 1 survival + 1 ICE-restart + 4 signalOfferAnswerTask).
+  Un **10ᵉ site** existe et n'était listé nulle part : le handler `thermalStateDidChange` (downgrade vidéo
+  thermal-critique, CallManager.swift ~4787) assigne aussi `self.videoToggleTask = Task { … }` avec la
+  même famille de captures — oublié par l'énumération précédente. Sans ce site, la fermeture aurait été
+  incomplète (le flip caméra n'aurait pas attendu un downgrade thermal en vol, et réciproquement).
+  Confirmé par grep exhaustif des assignations `xxxTask = Task {` sur tout le fichier avant d'écrire le
+  moindre correctif — pas seulement les sites listés dans la doc.
+- **Implémentation** (10 sites + 2 nouveaux) :
+  1. `cameraSwitchTask: Task<Void, Never>?` (nouvelle propriété), doc-comment de `survivalVideoTask` mis à
+     jour (« cinq »→« six », `cameraSwitchTask` cité explicitement dans la liste canonique référencée par
+     tous les autres sites).
+  2. `switchCamera()` : capture les 5 autres + `previousCameraSwitch` (chaîné, PAS annulé — un double-flip
+     rapide doit s'appliquer deux fois dans l'ordre, pas perdre le premier), pont `withCheckedContinuation`
+     autour de `webRTCService.switchCamera(completion:)` pour que `cameraSwitchTask.value` ne résolve qu'à
+     la fin réelle du switch (pas à l'enqueue).
+  3. `selectCamera(id:)` : même schéma. `WebRTCService.switchToCamera(uniqueID:)` gagne un paramètre
+     `completion: ((Bool) -> Void)? = nil` (défaut nil, rétrocompatible) pour permettre le même pont.
+  4. Les 10 sites existants (toggleVideo, handleHold×2, applySurvivalVideoSend, scheduleICERestart,
+     signalOfferAnswerTask×4, thermalStateDidChange) capturent désormais aussi `previousCameraSwitch` et
+     l'attendent avant d'actuer — fermeture bidirectionnelle complète.
+  5. `endCallInternal` : `cameraSwitchTask?.cancel(); cameraSwitchTask = nil` ajouté au nettoyage.
+- **Vérification de non-régression sur la suite existante AVANT d'écrire un seul nouveau test** : la
+  suite `CallManagerRenegotiationSerializationTests`/`ToggleVideoCXUpdateTests`/etc. (source-guards très
+  denses, ancrés sur des marqueurs de signature exacts) a été relue site par site contre le diff — aucune
+  signature de fonction déplacée/modifiée (seul le corps grossit), donc tous les marqueurs `from:`/`to:`
+  existants restent valides. Une seule casse trouvée et corrigée : `WebRTCServiceTests
+  .test_switchToCamera_chainsOntoPreviousTask` ancrait sur la signature COMPLÈTE
+  `"func switchToCamera(uniqueID: String)"`, cassée par l'ajout du paramètre `completion:` — même piège
+  que celui déjà documenté et corrigé pour `switchCamera()` dans le commentaire du test voisin (ancrer sur
+  le nom + la parenthèse ouvrante, pas la liste de paramètres complète). Corrigé à l'identique.
+- **Tests ajoutés** : `CallManagerCameraSwitchSerializationTests` (17 tests, source-guard uniquement —
+  même contrainte que les Vagues 61-64, pas de toolchain pour exécuter) : propriété, capture+attente des
+  6 tâches dans `switchCamera()`/`selectCamera(id:)`, pont `withCheckedContinuation`, et attente de
+  `cameraSwitchTask` dans chacun des 10 sites existants (y compris le 10ᵉ site thermal découvert ici).
+- **Reste ouvert** : dead code / god-object `CallManager.swift` (~5770 lignes après cette vague) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` failure handler ne nettoie pas
+  `pendingIncomingCall`/`showCallWaitingBanner` (UI-only, faible, auto-corrigé — reconduit sans changement).
+
 ## Vague 65 — `BackSoundProcessor` routait la musique de fond vers les haut-parleurs locaux en plus du mix sortant (2026-08-07)
 
 Point d'entrée : suite de la Vague 64, même session, sans toolchain Swift dans ce sandbox (confirmé à

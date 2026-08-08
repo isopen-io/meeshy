@@ -597,13 +597,15 @@ final class CallManager: ObservableObject {
     private var holdVideoTask: Task<Void, Never>?
     /// Tracks the in-flight network-survival video suspend/resume Task (see
     /// `applySurvivalVideoSend`). `videoToggleTask`, `holdVideoTask`, `iceRestartTask`,
-    /// `signalOfferAnswerTask`, and this one all end up driving the peer connection's
-    /// local or remote description (directly, or via `performICERestart()`/
-    /// `createAnswer()`), which has no re-entrancy guard — a second concurrent call
-    /// re-enters `pc.offer(for:)`/`pc.answer(for:)`/`setLocalDescription` while the
-    /// first is still in flight and corrupts the perfect-negotiation glare guard.
-    /// Every one of the five chains onto the other four's `.value` before proceeding
-    /// so at most one renegotiation actuation ever runs at a time.
+    /// `signalOfferAnswerTask`, `cameraSwitchTask`, and this one all end up driving the
+    /// peer connection's local or remote description (directly, or via
+    /// `performICERestart()`/`createAnswer()`), or the shared `RTCCameraVideoCapturer`
+    /// (directly, or via `switchCamera()`), neither of which has a re-entrancy guard —
+    /// a second concurrent call re-enters `pc.offer(for:)`/`pc.answer(for:)`/
+    /// `setLocalDescription`, or interleaves `stopCapture()`/`startCapture()` on the
+    /// same capturer, while the first is still in flight.
+    /// Every one of the six chains onto the other five's `.value` before proceeding
+    /// so at most one renegotiation/camera actuation ever runs at a time.
     private var survivalVideoTask: Task<Bool, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
@@ -625,6 +627,19 @@ final class CallManager: ObservableObject {
     /// in-flight answer either, so the perfect-negotiation guard alone doesn't
     /// catch it. Part of the same chain now — see `survivalVideoTask`'s doc-comment.
     private var signalOfferAnswerTask: Task<Void, Never>?
+    /// Tracks the in-flight `switchCamera()`/`selectCamera(id:)` Task. Chained onto
+    /// (not cancelled) so a rapid flip→flip or flip→select serializes rather than
+    /// running two `RTCCameraVideoCapturer` actuations concurrently. Also part of the
+    /// `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask`/
+    /// `signalOfferAnswerTask` chain (see `survivalVideoTask`'s doc-comment) —
+    /// `switchCamera()`/`selectCamera(id:)` drive the SAME capturer via
+    /// `stopCapture()`/`startCapture()` as `toggleVideo`/`handleHold`/the thermal
+    /// downgrade do. Audit finding — without this, a video-toggle tap immediately
+    /// followed by a camera flip could let the flip's `startCapture()` finish AFTER a
+    /// concurrent downgrade's `stopCapture()`, leaving the camera physically on (LED
+    /// lit, streaming) while `isVideoEnabled == false` — a privacy regression, not
+    /// just a UI desync.
+    private var cameraSwitchTask: Task<Void, Never>?
     /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
     /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
     private var audioActivationFallbackTask: Task<Void, Never>?
@@ -1747,6 +1762,7 @@ final class CallManager: ObservableObject {
             let previousSurvivalConnecting = survivalVideoTask
             let previousICERestartConnecting = iceRestartTask
             let previousAnswerConnecting = signalOfferAnswerTask
+            let previousCameraSwitchConnecting = cameraSwitchTask
             signalOfferAnswerTask = Task { [weak self] in
                 // Serialize with every other in-flight video-transition/renegotiation
                 // path — see the doc-comment on `survivalVideoTask`.
@@ -1755,6 +1771,7 @@ final class CallManager: ObservableObject {
                 _ = await previousSurvivalConnecting?.value
                 await previousICERestartConnecting?.value
                 await previousAnswerConnecting?.value
+                await previousCameraSwitchConnecting?.value
                 guard let self else { return }
                 // Phase 2 fix — Bug 2: wait for local media transceivers before
                 // createAnswer (called concurrently with emitCallJoin).
@@ -1794,12 +1811,14 @@ final class CallManager: ObservableObject {
             let previousSurvival = survivalVideoTask
             let previousICERestart = iceRestartTask
             let previousAnswer = signalOfferAnswerTask
+            let previousCameraSwitch = cameraSwitchTask
             signalOfferAnswerTask = Task { [weak self] in
                 await previousToggle?.value
                 await previousHold?.value
                 _ = await previousSurvival?.value
                 await previousICERestart?.value
                 await previousAnswer?.value
+                await previousCameraSwitch?.value
                 guard let self else { return }
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
                     guard self.currentCallId == callId else { return }
@@ -1924,12 +1943,14 @@ final class CallManager: ObservableObject {
             let previousSurvival = survivalVideoTask
             let previousICERestart = iceRestartTask
             let previousAnswer = signalOfferAnswerTask
+            let previousCameraSwitch = cameraSwitchTask
             signalOfferAnswerTask = Task { [weak self] in
                 await previousToggle?.value
                 await previousHold?.value
                 _ = await previousSurvival?.value
                 await previousICERestart?.value
                 await previousAnswer?.value
+                await previousCameraSwitch?.value
                 guard let self else { return }
                 // Phase 2 fix — Bug 2: wait for local media transceivers
                 // (emitCallJoin is now decoupled from startLocalMedia).
@@ -2010,12 +2031,14 @@ final class CallManager: ObservableObject {
             let previousSurvival = survivalVideoTask
             let previousICERestart = iceRestartTask
             let previousAnswer = signalOfferAnswerTask
+            let previousCameraSwitch = cameraSwitchTask
             let answerTask = Task { [weak self] in
                 await previousToggle?.value
                 await previousHold?.value
                 _ = await previousSurvival?.value
                 await previousICERestart?.value
                 await previousAnswer?.value
+                await previousCameraSwitch?.value
                 guard let self else { return }
                 // Phase 2 fix — Bug 2: wait for local media transceivers before
                 // createAnswer. CallKit gives ample time for CXAnswerCallAction
@@ -2380,6 +2403,7 @@ final class CallManager: ObservableObject {
         let previousSurvival = survivalVideoTask
         let previousICERestart = iceRestartTask
         let previousAnswer = signalOfferAnswerTask
+        let previousCameraSwitch = cameraSwitchTask
         videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
@@ -2403,6 +2427,7 @@ final class CallManager: ObservableObject {
             await previousHold?.value
             _ = await previousSurvival?.value
             await previousAnswer?.value
+            await previousCameraSwitch?.value
             guard let self, !Task.isCancelled else { return }
             // Caméra jamais demandée : sans ce pré-flight, le prompt système
             // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
@@ -2498,8 +2523,31 @@ final class CallManager: ObservableObject {
         let previousFrontCamera = isUsingFrontCamera
         isUsingFrontCamera.toggle()
         HapticFeedback.light()
-        webRTCService.switchCamera { [weak self] success in
-            guard let self, !success else { return }
+
+        // Serialize with every other in-flight video-transition/renegotiation path
+        // — see the doc-comment on `cameraSwitchTask`/`survivalVideoTask`. Chained
+        // (not cancelled) onto the previous cameraSwitchTask so a rapid double-flip
+        // still applies both flips in order instead of dropping one.
+        let previousToggle = videoToggleTask
+        let previousHold = holdVideoTask
+        let previousSurvival = survivalVideoTask
+        let previousICERestart = iceRestartTask
+        let previousAnswer = signalOfferAnswerTask
+        let previousCameraSwitch = cameraSwitchTask
+        cameraSwitchTask = Task { @MainActor [weak self] in
+            await previousCameraSwitch?.value
+            await previousToggle?.value
+            await previousHold?.value
+            _ = await previousSurvival?.value
+            await previousICERestart?.value
+            await previousAnswer?.value
+            guard let self, !Task.isCancelled else { return }
+            let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                self.webRTCService.switchCamera { success in
+                    continuation.resume(returning: success)
+                }
+            }
+            guard !success else { return }
             self.isUsingFrontCamera = previousFrontCamera
         }
     }
@@ -2518,12 +2566,35 @@ final class CallManager: ObservableObject {
     func selectCamera(id: String) {
         guard id != selectedCameraId else { return }
         selectedCameraId = id
-        webRTCService.switchToCamera(uniqueID: id)
         if let cam = availableCameras.first(where: { $0.id == id }) {
             // §7.7 — only the front camera is mirrored; external/back are not.
             isUsingFrontCamera = (cam.facing == .front)
         }
         HapticFeedback.light()
+
+        // Serialize with every other in-flight video-transition/renegotiation path
+        // — see the doc-comment on `cameraSwitchTask`/`survivalVideoTask`. Same
+        // rationale as `switchCamera()`: this drives the same capturer.
+        let previousToggle = videoToggleTask
+        let previousHold = holdVideoTask
+        let previousSurvival = survivalVideoTask
+        let previousICERestart = iceRestartTask
+        let previousAnswer = signalOfferAnswerTask
+        let previousCameraSwitch = cameraSwitchTask
+        cameraSwitchTask = Task { @MainActor [weak self] in
+            await previousCameraSwitch?.value
+            await previousToggle?.value
+            await previousHold?.value
+            _ = await previousSurvival?.value
+            await previousICERestart?.value
+            await previousAnswer?.value
+            guard let self, !Task.isCancelled else { return }
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                self.webRTCService.switchToCamera(uniqueID: id) { _ in
+                    continuation.resume()
+                }
+            }
+        }
     }
 
     func toggleTranscription() {
@@ -3259,6 +3330,7 @@ final class CallManager: ObservableObject {
                 let previousSurvival = survivalVideoTask
                 let previousICERestart = iceRestartTask
                 let previousAnswer = signalOfferAnswerTask
+                let previousCameraSwitch = cameraSwitchTask
                 holdVideoTask = Task { [weak self] in
                     // Serialize with every other in-flight video-transition path
                     // (manual toggle, prior hold/unhold, survival suspend/resume,
@@ -3269,6 +3341,7 @@ final class CallManager: ObservableObject {
                     _ = await previousSurvival?.value
                     await previousICERestart?.value
                     await previousAnswer?.value
+                    await previousCameraSwitch?.value
                     guard let self, !Task.isCancelled else { return }
                     let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
                     guard !Task.isCancelled else { return }
@@ -3301,6 +3374,7 @@ final class CallManager: ObservableObject {
                     let previousSurvival = survivalVideoTask
                     let previousICERestart = iceRestartTask
                     let previousAnswer = signalOfferAnswerTask
+                    let previousCameraSwitch = cameraSwitchTask
                     holdVideoTask = Task { [weak self] in
                         // Serialize with every other in-flight video-transition path —
                         // see the doc-comment on `survivalVideoTask`.
@@ -3309,6 +3383,7 @@ final class CallManager: ObservableObject {
                         _ = await previousSurvival?.value
                         await previousICERestart?.value
                         await previousAnswer?.value
+                        await previousCameraSwitch?.value
                         guard let self, !Task.isCancelled else { return }
                         do {
                             let needsRenegotiation = try await self.webRTCService.upgradeToVideo()
@@ -3646,6 +3721,8 @@ final class CallManager: ObservableObject {
         iceRestartTask = nil
         signalOfferAnswerTask?.cancel()
         signalOfferAnswerTask = nil
+        cameraSwitchTask?.cancel()
+        cameraSwitchTask = nil
         audioActivationFallbackTask?.cancel()
         audioActivationFallbackTask = nil
         CallManager.callKitDidActivateFired = false
@@ -4783,6 +4860,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                     let previousSurvival = self.survivalVideoTask
                     let previousICERestart = self.iceRestartTask
                     let previousAnswer = self.signalOfferAnswerTask
+                    let previousCameraSwitch = self.cameraSwitchTask
                     self.videoToggleTask?.cancel()
                     self.videoToggleTask = Task { @MainActor [weak self] in
                         await previousToggle?.value
@@ -4790,6 +4868,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                         _ = await previousSurvival?.value
                         await previousICERestart?.value
                         await previousAnswer?.value
+                        await previousCameraSwitch?.value
                         guard let self, !Task.isCancelled else { return }
                         // §5.4 — use downgradeFromVideo (sets transceiver direction +
                         // stops capture) rather than enableVideo(false) (track.enabled
@@ -5203,6 +5282,7 @@ extension CallManager: WebRTCServiceDelegate {
         // offer answered concurrently with this restart's createOffer() hits the
         // same glare hazard. See the doc-comment on `survivalVideoTask`.
         let previousAnswer = signalOfferAnswerTask
+        let previousCameraSwitch = cameraSwitchTask
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
             await previousToggle?.value
@@ -5210,6 +5290,7 @@ extension CallManager: WebRTCServiceDelegate {
             _ = await previousSurvival?.value
             await previousICERestart?.value
             await previousAnswer?.value
+            await previousCameraSwitch?.value
             // Re-validate after the chained awaits: the call may have ended, or a
             // newer reconnect cycle may have already taken over, while this task
             // was waiting behind another renegotiation.
@@ -5649,6 +5730,7 @@ extension CallManager: VideoSurvivalActuating {
         let previousSurvival = survivalVideoTask
         let previousICERestart = iceRestartTask
         let previousAnswer = signalOfferAnswerTask
+        let previousCameraSwitch = cameraSwitchTask
         let task = Task<Bool, Never> { @MainActor [weak self] in
             // Serialize with every other in-flight video-transition path (manual
             // toggle, CallKit hold/unhold, ICE restart, peer-initiated renegotiation
@@ -5662,6 +5744,7 @@ extension CallManager: VideoSurvivalActuating {
             _ = await previousSurvival?.value
             await previousICERestart?.value
             await previousAnswer?.value
+            await previousCameraSwitch?.value
             guard let self, !Task.isCancelled else { return false }
             // Re-validate every guard: state may have changed while this transition
             // was queued behind a concurrent manual toggle or CallKit hold.
