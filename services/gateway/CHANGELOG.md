@@ -1,5 +1,91 @@
 # @meeshy/gateway
 
+## 1.22.2
+
+### Patch Changes
+
+- 00d7230: Le reset des préférences d'une conversation ne casse plus la monotonie de `version`
+
+  `DELETE /user-preferences/conversations/:id` diffusait un reset porteur de
+  `version = ligne.version + 1` **puis supprimait la ligne**. Le compteur vivant
+  sur la ligne, l'`upsert` suivant repartait à `version: 1` — en dessous du reset
+  que les autres appareils venaient d'enregistrer. Appliquant la règle documentée
+  `incoming.version <= local -> drop` (schema Prisma : « Monotonic version for
+  optimistic-concurrency resolution »), ils jetaient silencieusement ce premier
+  épinglage/sourdine/archivage post-reset, et tous les suivants avec lui, jusqu'à
+  un refetch complet sans rapport.
+
+  Le reset restaure désormais les colonnes de préférence à leurs valeurs par
+  défaut **en place**, en incrémentant `version` dans la même écriture atomique :
+  la séquence traverse le reset. `version` est un état de protocole, pas une
+  préférence utilisateur — un reset ne doit pas le rembobiner. Contrat REST
+  inchangé (P2025 → 404 sur une conversation sans ligne). `CONVERSATION_PREFERENCES_DEFAULTS`
+  gagne au passage `mentionsOnly` et `clearHistoryBefore`, qui manquaient à
+  l'instantané par défaut alors qu'ils font partie du payload diffusé.
+
+- 49a661d: Echo the clientMessageId back to a share-link message's author, and withhold it from its peers
+
+  The share-link send routes persist the `clientMessageId` the client sends
+  (`message.create` writes it) but never gave it back. Neither the 201 body nor
+  the `link:message:new` payload carried it, so an author had no way to tie the
+  server's message to the optimistic row already on screen: reconciliation by cid
+  is impossible when the cid never comes back, and the message renders twice.
+
+  The nominal `message:send` path settled this contract already (Phase 4 §6.2) and
+  splits it in two: the sender's payload keeps the cid so the by-cid promotion can
+  run; the peers' broadcast is stripped of it so a third party never learns the
+  sender's optimistic-id space. The share-link routes now follow the same rule
+  through the same helper — `buildLinkMessagePayload` builds the author's payload,
+  `stripClientMessageId` derives the peers'.
+
+  Consequently the 201 body and the socket payload are no longer byte-identical;
+  they are equal modulo `clientMessageId`, which is what the response-contract
+  test now asserts. `stripClientMessageId` became generic and type-preserving:
+  returning `Record<string, unknown>` re-widened every typed payload passing
+  through it, which is exactly what broke the typed `link:message:new` emit whose
+  contract requires `id`/`conversationId`/`senderId`.
+
+  Also declares `clientMessageId` in `sendMessageBodySchema`. Both routes read it
+  and the Zod schema requires it, but the published request contract omitted its
+  only mandatory field. Declared without `required`, so Zod stays the single
+  validator and the error body for a missing cid is unchanged.
+
+- 94e7074: Share-link send routes now return the whole message to its author, not a truncated shell
+
+  The 201 body of `POST /links/:identifier/messages` and `.../messages/auth` is
+  serialized by fast-json-stringify, which **silently drops every property the
+  response schema does not declare** — no error, no log, just an absent key. Both
+  schemas named five fields while the routes were building fifteen, so eleven were
+  truncated on every send: `conversationId`, `senderId`, `isEdited`, `editedAt`,
+  `deletedAt`, `replyToId`, `updatedAt`, the shared `location`, and most of the
+  sender.
+
+  The anonymous route was the worst case: it declared `sender: { type: 'null' }`,
+  so the participant it had just loaded from Prisma was serialized as literal
+  `null`. `use-anonymous-messages.ts` reads exactly that field to build the
+  author's own optimistic message, which therefore never had a sender. A location
+  shared through a share link came back with no location at all, and neither route
+  told the author which conversation its message belonged to — the same routing
+  gap the socket path closed one cycle earlier.
+
+  Root cause of the drift: each route built the message payload **twice**, once for
+  the `link:message:new` emit and once for the REST body. When `conversationId`
+  and `senderId` were added to the socket literal, the REST twin was left behind.
+  Both now derive from a single `buildLinkMessagePayload`, so the author and the
+  other participants receive the same object by construction, and one
+  `linkMessageSchema` declares that shape for both routes.
+
+  `sender` is a `Participant` (id, userId, displayName, avatar, type, language,
+  nested user), which is what the socket path has always delivered;
+  `messageSenderSchema` described a user shape a participant cannot satisfy and
+  only ever let the intersection through. The change is additive on the wire — no
+  previously present field was removed.
+
+- Updated dependencies [49a661d]
+- Updated dependencies [9b5921f]
+- Updated dependencies [94e7074]
+  - @meeshy/shared@1.8.6
+
 ## 1.22.1
 
 ### Patch Changes

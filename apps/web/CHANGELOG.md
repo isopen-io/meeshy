@@ -1,5 +1,98 @@
 # @meeshy/web
 
+## 1.22.3
+
+### Patch Changes
+
+- 49a661d: Route the anonymous sender's REST fallback to the share-link endpoint
+
+  When a `message:send` ack comes back as an error (not a timeout) and the socket
+  is still connected, `MessagingService` retries over REST. It always retried on
+  `POST /conversations/:id/messages`, which authenticates on a JWT. An anonymous
+  share-link participant has no JWT — only an `anon_*` session token — so that
+  retry answered 401 for every one of them: the recovery path could not recover
+  anything, and the message was lost with no second chance.
+
+  Their endpoint already existed (`POST /links/:identifier/messages`, authenticated
+  by `X-Session-Token`), and so did its client wrapper — `AnonymousChatService.sendMessage`,
+  reachable from nothing since its only caller was a dead hook. The fallback now
+  asks `anonymousChatService.canSendViaLink()` which pipe to take; registered
+  senders keep the conversations route unchanged.
+
+  Two things the wiring had to get right, or the fix would only trade a lost
+  message for a doubled one:
+
+  - The caller's `clientMessageId` travels with the request instead of the service
+    minting a fresh one. It is the only key that ties the server message back to
+    the optimistic row already on screen.
+  - `AnonymousChatService.sendMessage` now declares what the route actually
+    returns — `{ messageId, message }`, not `Message`. The old signature was a
+    lie its single caller papered over with a double cast reading both shapes.
+
+  `hooks/use-anonymous-messages.ts` is removed: nothing imported it, and it was
+  where that cast lived.
+
+- bc7707d: A failed message now actually spends its three retries instead of stopping after one
+
+  `useAutoRetryFailedMessages` advertises a budget of `MAX_RETRY_COUNT = 3`
+  automatic attempts, paced `RETRY_DELAY_MS` apart. It could only ever spend one.
+
+  The flush is an effect keyed on `[isReady, rearm]`. It takes a snapshot of the
+  queue, sweeps it once, and re-arms itself only when it stopped _early_ — a
+  readiness flap mid-flush. A sweep that ran to completion with messages still
+  queued re-armed nothing, and `isReady` was already `true`, so no dependency
+  would ever change again. On a connection that never drops, a message whose send
+  failed for a transient reason got exactly one retry and then sat in the failed
+  queue untouched: not delivered, not marked exhausted, `retryCount` stuck at 1,
+  its remaining budget unspendable. The only way to buy a second attempt was to
+  lose the connection and get it back — the one condition the feature exists to
+  survive without.
+
+  The same gap stranded work queued _behind_ an in-flight sweep: a message that
+  failed while the flush was running was not in that sweep's snapshot, and nothing
+  scheduled another one.
+
+  A sweep now also re-arms when it drained its snapshot but the store still owes
+  attempts. This cannot spin: every sweep increments `retryCount` for each message
+  it attempts, so each pass strictly shrinks the remaining budget and the
+  re-arm condition goes false after `MAX_RETRY_COUNT` passes at the latest —
+  termination is driven by the budget, not by wall time.
+
+  The existing suite could not see any of this: every test drove the hook with a
+  frozen store whose actions recorded calls without changing `failedMessages`, so
+  a second sweep was indistinguishable from no second sweep. The new tests use a
+  store that applies its updates the way the real zustand store does.
+
+- 9b5921f: Share-link messages now reach the web message cache in real time
+
+  `handleLinkMessageNew` opens on `if (!linkConvId) return` — and the gateway never
+  put a `conversationId` in the payload, so every `link:message:new` was dropped on
+  the first line. This is the ONLY event the two share-link REST routes emit (there
+  is no companion `message:new`), which means no message sent through a share link
+  — by an anonymous participant or a registered one — ever appeared live for anyone
+  else in the conversation. It surfaced only on a manual refresh, and with
+  `staleTime: Infinity`, often not even then.
+
+  The handler also now carries the `landedInCache` fallback `handleNewMessage`
+  documents: when no cache entry exists yet (initial fetch in flight, conversation
+  never opened this session) the updater bails out on `if (!old) return old` and the
+  message would be lost for good, since nothing re-reads the server. The query is
+  invalidated instead.
+
+- Propagate `LinkMessageNewEventData` through the socket pass-throughs
+
+  `messaging.service` types its `link:message:new` listeners with the shared
+  `LinkMessageNewEventData`, but the orchestrator and the socket facade re-declared
+  `{ message: Record<string, unknown> }` in their pure pass-throughs, re-widening the
+  type on the way to the handler. The payload contract now requires `id`,
+  `conversationId` and `senderId`; without this, that hardening stops at
+  `messaging.service` and never reaches the consumer that depends on it.
+
+- Updated dependencies [49a661d]
+- Updated dependencies [9b5921f]
+- Updated dependencies [94e7074]
+  - @meeshy/shared@1.8.6
+
 ## 1.22.2
 
 ### Patch Changes
