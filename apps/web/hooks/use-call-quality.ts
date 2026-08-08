@@ -73,14 +73,17 @@ export function useCallQuality({
   // removal below for why).
   const previousLevelRef = useRef<ConnectionQualityLevel | undefined>(undefined);
 
-  // Previous inbound cumulative byte counters + sample time, tracked outside
-  // React state so `bitrate` can be derived as a RATE (delta over elapsed time)
-  // rather than from the ever-growing cumulative `bytesReceived` counter. Reset
+  // Previous inbound cumulative byte/packet counters + sample time, tracked
+  // outside React state so `bitrate` AND `packetLoss` can both be derived as
+  // RATES (delta over the interval) rather than from the ever-growing
+  // cumulative `bytesReceived`/`packetsLost`/`packetsReceived` counters. Reset
   // to null whenever the peer connection changes so a rate is never computed
   // across two different calls (see the monitoring effect's cleanup).
   const previousInboundRef = useRef<{
     audioBytes: number;
     videoBytes: number;
+    packetsLost: number;
+    packetsReceived: number;
     timestamp: number;
   } | null>(null);
 
@@ -158,10 +161,27 @@ export function useCallQuality({
         }
       });
 
-      // Overall inbound packet-loss percentage across all streams
-      const totalPackets = totalPacketsLost + totalPacketsReceived;
+      // Packet loss is a per-INTERVAL rate: the delta of the monotonic
+      // `packetsLost`/`packetsReceived` counters since the previous sample —
+      // NOT the ratio of their cumulative totals, which only ever dilutes
+      // over a long call. A burst of loss occurring now reads as healthy once
+      // averaged against hours of prior good packets (cumulative ratio →
+      // ~0%), while a brief early hiccup keeps nudging the "quality" reading
+      // for the rest of the call even after the link fully recovers. Mirrors
+      // the bitrate delta fix directly below. The first sample has no
+      // predecessor, so its delta equals the raw totals (same value the old
+      // cumulative computation produced); a counter reset (renegotiation)
+      // yields a negative delta, clamped to 0.
+      const previousInbound = previousInboundRef.current;
+      const deltaPacketsLost = previousInbound
+        ? Math.max(0, totalPacketsLost - previousInbound.packetsLost)
+        : totalPacketsLost;
+      const deltaPacketsReceived = previousInbound
+        ? Math.max(0, totalPacketsReceived - previousInbound.packetsReceived)
+        : totalPacketsReceived;
+      const deltaPackets = deltaPacketsLost + deltaPacketsReceived;
       const packetLoss =
-        totalPackets > 0 ? (totalPacketsLost / totalPackets) * 100 : 0;
+        deltaPackets > 0 ? (deltaPacketsLost / deltaPackets) * 100 : 0;
 
       // Bitrate is a RATE: the delta of the monotonic `bytesReceived` counter
       // over the wall-clock interval between samples (report.timestamp, robust
@@ -170,7 +190,6 @@ export function useCallQuality({
       // the call's duration. The first sample has no predecessor, so its rate is
       // 0; a counter reset (renegotiation) yields a negative delta, clamped to 0.
       // Result unit is kbps: (bytes·8 bits) / (elapsed ms) = kbits/s.
-      const previousInbound = previousInboundRef.current;
       const elapsedMs = previousInbound ? sampleTimestamp - previousInbound.timestamp : 0;
       const bitrateKbps = (current: number, previous: number): number =>
         elapsedMs > 0 ? (Math.max(0, current - previous) * 8) / elapsedMs : 0;
@@ -183,6 +202,8 @@ export function useCallQuality({
       previousInboundRef.current = {
         audioBytes: audioBytesReceived,
         videoBytes: videoBytesReceived,
+        packetsLost: totalPacketsLost,
+        packetsReceived: totalPacketsReceived,
         timestamp: sampleTimestamp,
       };
 
