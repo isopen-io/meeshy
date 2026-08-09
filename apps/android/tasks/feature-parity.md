@@ -632,6 +632,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       types, no new files], `feature/auth` [+2 composables, ViewModel wiring, ×4 locale strings]).
       **Follow-up:** phone-ownership/recovery-hint (needs a new decision core), then EMAIL/IDENTITY/
       PASSWORD/LANGUAGE/PROFILE/RECAP field UI in turn per the `auth-onboarding-shell` decomposition.
+      **Slice 3 shipped** (`auth-email-step-fields`, 2026-08-09) — the EMAIL step's field UI. Re-proven
+      before picking: `RegistrationStepContent.implemented` held only `PSEUDO`/`PHONE`, and every decision
+      the step needed was **already shipped and tested** — `RegistrationFields.email`/`emailAvailable`,
+      `SignupAvailabilityPolicy.emailStepCanProceed`/`emailIntent`, `RegistrationStepGate`'s EMAIL arm, the
+      `RegistrationViewModel.onEmailChange`/`onEmailAvailability` setters, and the `emailInput` debounced
+      probe pipeline (all wired since `signup-availability-probe`, 2026-07-25) — this slice is the first
+      real UI consumer, exactly the `auth-phone-step-fields` shape one level simpler (single field, no
+      picker, no skip). New `feature/auth/RegistrationScreen.kt` `EmailStepBody` — header/subtitle, an
+      `OutlinedTextField` (`KeyboardType.Email`) bound to `state.fields.email`/`viewModel::onEmailChange`,
+      and the available/taken indicator mirroring `PseudoStepBody`'s pattern verbatim. **No skip
+      affordance** — iOS `StepEmailView` has none either (`RegistrationNavModel.showSkip` is PROFILE-only,
+      and `SignupAvailabilityPolicy.emailStepCanProceed` always requires a confirmed-available address, no
+      `skipEmail` escape hatch unlike PHONE's `skipPhone`) — verified by reading both the gate and the iOS
+      view before assuming a skip button belonged here. `RegistrationStepContent.implemented` gains
+      `EMAIL`, `RegistrationScreen`'s `when` gains its arm. **+1 core test**
+      (`RegistrationStepContentTest.isImplemented_email_isTrue`; the "every other step" sweep renamed/
+      updated to exclude PSEUDO+PHONE+EMAIL). Mutation (RED proof): the new test failed **exactly**
+      against the pre-slice `implemented` set (4 run, 1 failed, no collateral) before the one-line core
+      change; RGB confirmed green after. **Zero new ViewModel tests needed** — `RegistrationViewModelTest`
+      already covered every EMAIL branch (`editingEmail_invalidatesStaleAvailability`,
+      `validEmail_afterDebounce_probesAndAppliesVerdict`, the recap/register wire-field assertions) since
+      the availability-probe slice; re-ran unmodified, stayed green (52/52), the regression proof for this
+      Compose-wiring-only slice per `TDD-COVERAGE.md`'s exemption. `./apps/android/meeshy.sh check` →
+      BUILD SUCCESSFUL (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Diff =
+      `apps/android` only (`core/model` [1-line `implemented` set change, no new files], `feature/auth`
+      [+1 composable in `RegistrationScreen.kt`, the `when` arm, ×4 locale strings], zero ViewModel/network
+      changes). **Follow-up:** IDENTITY/PASSWORD/LANGUAGE/PROFILE/RECAP field UI in turn per the
+      `auth-onboarding-shell` decomposition — IDENTITY next (first/last name, no new core needed, same
+      "wiring-only" shape as this slice); PROFILE needs a photo/banner picker + compression pipeline, the
+      one step genuinely larger than the rest.
 - [~] First/last name capture; password strength meter + requirements checklist —
       **requirements-checklist + confirm-gate cores shipped** (slice `auth-password-requirements`,
       2026-07-21). The strength *meter* score (`PasswordStrength`, 0..5 bands) already existed; this

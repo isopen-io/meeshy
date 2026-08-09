@@ -1,5 +1,54 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **registration wizard's EMAIL step field UI** landed (slice
+> `auth-email-step-fields`, feature-parity §A — slice 3 of the `OnboardingFlowView` Compose
+> decomposition). Re-proven before picking: `RegistrationStepContent.implemented` held only
+> `PSEUDO`/`PHONE` — `EMAIL` still rendered the inert placeholder, confirming the prior run's "Next
+> slice" note. Every decision the step needed was already shipped and tested since the
+> `signup-availability-probe` slice (2026-07-25): `RegistrationFields.email`/`emailAvailable`,
+> `SignupAvailabilityPolicy.emailStepCanProceed`/`emailIntent`, `RegistrationStepGate`'s EMAIL arm,
+> `RegistrationViewModel.onEmailChange`/`onEmailAvailability`, and the debounced `emailInput` probe
+> pipeline — this slice is the first real UI consumer, one notch simpler than the PHONE slice (single
+> field, no country picker, no skip). **Added (production, all `apps/android`):** `feature/auth/
+> RegistrationScreen.kt` gains `EmailStepBody` — header/subtitle copy, an `OutlinedTextField`
+> (`KeyboardType.Email`) bound to `state.fields.email`/`viewModel::onEmailChange`, and the
+> available/taken indicator mirroring `PseudoStepBody`'s pattern verbatim — `RegistrationScreen`'s
+> `when` arm now also dispatches `RegistrationStep.EMAIL`, and `RegistrationStepContent.implemented`
+> gains `EMAIL` alongside `PSEUDO`/`PHONE`. **Deliberately no skip button**: iOS `StepEmailView` has
+> none either — verified by reading both the iOS view and `SignupAvailabilityPolicy.emailStepCanProceed`
+> before assuming one belonged here; unlike PHONE's `skipPhone` escape hatch, the EMAIL gate has no
+> skip arm at all, so a skip control would be a dead affordance whose tap does nothing. **+1 core test**
+> (`RegistrationStepContentTest.isImplemented_email_isTrue`; the "every other step" sweep renamed to
+> exclude PSEUDO+PHONE+EMAIL). **Mutation (RED proof):** the new test against the pre-slice
+> `implemented` set (still only `{PSEUDO, PHONE}`) failed **exactly** `isImplemented_email_isTrue` (4
+> run, 1 failed, no collateral) before the one-line core change landed. **Zero new ViewModel tests
+> needed** — `RegistrationViewModelTest` already covered every EMAIL branch
+> (`editingEmail_invalidatesStaleAvailability`, `validEmail_afterDebounce_probesAndAppliesVerdict`, the
+> recap/register field assertions) since the availability-probe slice; re-ran unmodified and stayed
+> green (52/52) — the regression proof for this Compose-wiring-only slice, per `TDD-COVERAGE.md`'s
+> exemption for `@Composable` glue. **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+> (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Reviewer **PASS** (diff
+> `apps/android` only — `core/model` [1-line `implemented` set change, no new files], `feature/auth`
+> [+1 composable in `RegistrationScreen.kt`, the `when` arm, ×4 locale strings], `tasks/
+> feature-parity.md`; SDK purity — `RegistrationStepContent` stays a stateless `:core:model` lookup,
+> `EmailStepBody` is ordinary UI glue reading ViewModel state, no shared-singleton-plus-product-rule
+> combo; SSOT — reuses `SignupAvailabilityPolicy`/`RegistrationStepGate`/`RegistrationViewModel`
+> untouched, re-implements none; instant-app — no spinner introduced; UDF — unchanged
+> `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays reachable, Next stays
+> correctly disabled until the server confirms availability; no tautological tests; no coverage floor
+> lowered, no existing test weakened). **Next slice:** IDENTITY (first/last name fields, no new core
+> needed — same "wiring-only" shape as this slice, `RegistrationStepGate.canProceed`'s IDENTITY arm
+> already requires both non-blank), OR PASSWORD (needs `PasswordEntry`'s strength/match UI, core
+> already shipped per `feature-parity.md`), OR the §C **inverted-list** message layout (bottom-anchored
+> `reverseLayout`, recurring since `chat-pinned-day-header` — re-verify `ChatScreen.kt` before
+> committing a run to it, the "genuinely large" verdict from prior runs is itself a hypothesis to
+> re-check), OR the `TagInputField` composable + `allTags` corpus hydration (still blocked on a new
+> `tags` wire field on `ApiConversation`), OR the tracked **Kover 90% coverage-gate infra**. **Hygiene
+> note (recurring, still unaddressed):** `PROGRESS.md`/`NOTES.md` remain well past the ~1500-line
+> archival threshold in `ROUTINE.md` §Hygiène (unaddressed since at least the `session-logout-teardown`
+> run) — flagging again rather than bundling an archive pass into this slice's commit, per the hygiene
+> section's "separate, dedicated commit" rule.
+
 > On 2026-08-09 the **registration wizard's PHONE step field UI** landed (slice
 > `auth-phone-step-fields`, feature-parity §A — slice 2 of the `OnboardingFlowView` Compose
 > decomposition, "Phone entry with searchable country-code picker (skippable)" flipped `[x]`).

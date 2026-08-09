@@ -82,8 +82,9 @@ import java.util.Locale
  * [RegistrationStepContent.isImplemented] — is covered by
  * `RegistrationStepContentTest`).
  *
- * [RegistrationStep.PSEUDO] and [RegistrationStep.PHONE] have real field UI today
- * (slices `auth-onboarding-shell`, `auth-phone-step-fields`); every other step
+ * [RegistrationStep.PSEUDO], [RegistrationStep.PHONE] and [RegistrationStep.EMAIL] have
+ * real field UI today (slices `auth-onboarding-shell`, `auth-phone-step-fields`,
+ * `auth-email-step-fields`); every other step
  * renders an inert "coming soon" placeholder — never a dead end, since
  * [RegistrationLeadingAction.BACK] is always reachable off the first step. Each
  * subsequent step gets its own slice per the decomposition note in
@@ -153,6 +154,7 @@ fun RegistrationScreen(
                     when (state.currentStep) {
                         RegistrationStep.PSEUDO -> PseudoStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.PHONE -> PhoneStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.EMAIL -> EmailStepBody(state = state, viewModel = viewModel)
                         // Each future per-step slice adds its own arm here, in lockstep
                         // with RegistrationStepContent's implemented set.
                         else -> Unit
@@ -295,6 +297,57 @@ private fun PseudoStepBody(state: RegistrationUiState, viewModel: RegistrationVi
                 stringResource(R.string.registration_username_available) to MeeshyPalette.Success
             } else {
                 stringResource(R.string.registration_username_taken) to MeeshyPalette.Error
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = color,
+                modifier = Modifier.padding(top = MeeshySpacing.xs),
+            )
+        }
+    }
+}
+
+/**
+ * EMAIL step — parity target: iOS `StepEmailView`
+ * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`): a single
+ * email field with the availability indicator (mirrors [PseudoStepBody]'s
+ * pattern). Unlike PHONE, EMAIL has no skip affordance on either iOS or Android
+ * — [me.meeshy.sdk.model.auth.RegistrationStepGate.canProceed]'s EMAIL arm always
+ * requires a confirmed-available address, and [RegistrationNavModel.showSkip] is
+ * `false` for every step but PROFILE.
+ */
+@Composable
+private fun EmailStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_email_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_email_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        OutlinedTextField(
+            value = state.fields.email,
+            onValueChange = viewModel::onEmailChange,
+            label = { Text(stringResource(R.string.registration_email_label)) },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
+        )
+        state.fields.emailAvailable?.let { available ->
+            val (text, color) = if (available) {
+                stringResource(R.string.registration_email_available) to MeeshyPalette.Success
+            } else {
+                stringResource(R.string.registration_email_taken) to MeeshyPalette.Error
             }
             Text(
                 text = text,
