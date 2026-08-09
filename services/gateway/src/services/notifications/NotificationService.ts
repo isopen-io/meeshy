@@ -1926,6 +1926,12 @@ export class NotificationService {
     // ci-dessus qui rendait `true` sur FRIENDS/EXCEPT sans lire aucun graphe.
     // Même audience que `canNotifyAboutPost`, qui garde la notification unitaire
     // de cette même population depuis le cycle 30.
+    //
+    // Sur un post COMMUNITY, les co-membres sont donc résolus une seconde fois
+    // (deux requêtes bornées de plus, sur un chemin déjà détaché de la réponse
+    // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main avec le set
+    // ci-dessus : une copie locale de la règle d'admission est exactement ce qui
+    // avait laissé ce seau sans garde.
     const engagedAudience = await filterPostConsumers({
       prisma: this.prisma,
       authorId: params.storyAuthorId,
