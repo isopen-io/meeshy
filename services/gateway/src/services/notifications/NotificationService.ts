@@ -38,7 +38,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
-import { filterPostAudience } from '../posts/postAudience';
+import { filterPostConsumers } from '../posts/postAudience';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 
 function formatDuration(ms: number): string {
@@ -1854,9 +1854,14 @@ export class NotificationService {
      * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
      * `createFriendContentNotificationsBatch` : un post ONLY/EXCEPT/PRIVATE/
      * COMMUNITY ne doit JAMAIS notifier (extrait de commentaire inclus) un
-     * utilisateur qui n'a pas le droit de le voir. Défaut PUBLIC (compat).
+     * utilisateur qui n'a pas le droit de le voir.
+     *
+     * REQUIS — annoncé par les cycles 28, 29 et 30, qui l'avaient laissé
+     * `visibility?` à défaut `PUBLIC`. Une garde qu'on désarme en omettant un
+     * paramètre optionnel n'est pas une garde : rien ne signalait l'oubli, ni
+     * au build ni à l'exécution. Le prix se paie une fois, à la déclaration.
      */
-    visibility?: string;
+    visibility: string | null | undefined;
     /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
     visibilityUserIds?: string[];
   }): Promise<void> {
@@ -1884,18 +1889,22 @@ export class NotificationService {
     // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
     // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
     // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
-    const visibility = params.visibility ?? 'PUBLIC';
+    const visibility = params.visibility;
     const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
     const coMemberIds = visibility === 'COMMUNITY'
       ? new Set(await getCommunityCoMemberIds(this.prisma, params.storyAuthorId))
       : null;
-    const canSeePost = (userId: string): boolean => {
+    // Ne s'applique QU'À `friendIds`, une sortie d'ÉNUMÉRATEUR : ces gens SONT
+    // les amis actuels de l'auteur, dépliés de son graphe quelques lignes plus
+    // haut. Leur amitié n'est donc pas à re-vérifier, et seules les listes
+    // nominatives peuvent encore les écarter. Un post COMMUNITY ne passe jamais
+    // ici : il a sa propre branche, adossée au graphe communauté.
+    const canSeeAsFriend = (userId: string): boolean => {
       switch (visibility) {
         case 'PRIVATE': return false;
         case 'ONLY': return visibilityUserIdSet.has(userId);
         case 'EXCEPT': return !visibilityUserIdSet.has(userId);
-        case 'COMMUNITY': return coMemberIds!.has(userId);
-        default: return true; // PUBLIC / FRIENDS
+        default: return true; // PUBLIC / FRIENDS — amis par construction
       }
     };
     // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
@@ -1907,9 +1916,29 @@ export class NotificationService {
             id !== params.storyAuthorId &&
             id !== params.commenterId &&
             !previousCommenterIds.includes(id))
-        : friendIds.filter(canSeePost)
+        : friendIds.filter(canSeeAsFriend)
     );
-    const engagedAudience = previousCommenterIds.filter(canSeePost);
+    // `previousCommenterIds` (commentateurs antérieurs ∪ réacteurs) n'est PAS une
+    // sortie d'énumérateur : c'est un ensemble arbitraire au regard de l'audience
+    // du moment. Ils y étaient admis quand ils ont engagé le post ; une
+    // dés-amitié ou une édition de visibilité les en sort sans toucher à leur
+    // commentaire. Il leur faut donc un test d'ADMISSION, pas la table locale
+    // ci-dessus qui rendait `true` sur FRIENDS/EXCEPT sans lire aucun graphe.
+    // Même audience que `canNotifyAboutPost`, qui garde la notification unitaire
+    // de cette même population depuis le cycle 30.
+    //
+    // Sur un post COMMUNITY, les co-membres sont donc résolus une seconde fois
+    // (deux requêtes bornées de plus, sur un chemin déjà détaché de la réponse
+    // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main avec le set
+    // ci-dessus : une copie locale de la règle d'admission est exactement ce qui
+    // avait laissé ce seau sans garde.
+    const engagedAudience = await filterPostConsumers({
+      prisma: this.prisma,
+      authorId: params.storyAuthorId,
+      visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: previousCommenterIds,
+    });
 
     const excerpt = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
@@ -2073,7 +2102,12 @@ export class NotificationService {
     // audience ne reçoit rien. Sans ce filtre, l'extrait du commentaire — donc
     // du contenu d'un post restreint — atterrissait sur son écran verrouillé,
     // avec un lien de tap vers un post qui le refuserait.
-    const audience = await filterPostAudience({
+    //
+    // Audience de CONSOMMATION (amis ∪ contacts DM) — la même que
+    // `canNotifyAboutPost` pour les notifications unitaires du fil, et que le
+    // feed. Un contact DM non-ami à qui le feed montre ce post doit être averti
+    // qu'on l'y a nommé.
+    const audience = await filterPostConsumers({
       prisma: this.prisma,
       authorId: params.postAuthorId,
       visibility: params.visibility,
@@ -2176,8 +2210,9 @@ export class NotificationService {
 
     // Nommer quelqu'un ne lui donne pas le droit de voir. Cf. le lot des
     // commentaires : l'extrait du post partait tel quel vers un mentionné hors
-    // audience.
-    const audience = await filterPostAudience({
+    // audience — et, jusqu'au cycle 31, ne partait pas non plus vers un contact
+    // DM que le feed admet pourtant.
+    const audience = await filterPostConsumers({
       prisma: this.prisma,
       authorId: params.posterId,
       visibility: params.visibility,

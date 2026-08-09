@@ -77,6 +77,12 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     communityMember: {
       findMany: jest.fn(),
     },
+    // Le seau « engagés antérieurs » passe par le test d'admission
+    // `filterPostConsumers`, dont l'audience est amis ∪ contacts DM : un double
+    // qui tairait `participant` ferait passer ses refus pour des refus d'ACL.
+    participant: {
+      findMany: jest.fn(),
+    },
   };
 
   return {
@@ -352,12 +358,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
   // ======================================================
 
   describe('createStoryCommentNotificationsBatch', () => {
+    // `visibility` est REQUIS depuis le cycle 31 : le défaut `PUBLIC` implicite
+    // désarmait la garde d'audience sans que rien ne le signale. Les cas
+    // restreints le surchargent au cas par cas.
     const baseParams = {
       postId: POST_ID,
       commentId: COMMENT_ID,
       storyAuthorId: AUTHOR_ID,
       commenterId: COMMENTER_ID,
       commentExcerpt: 'Great story!',
+      visibility: 'PUBLIC',
     };
 
     beforeEach(() => {
@@ -733,8 +743,12 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeUndefined();
     });
 
-    it('default/omitted visibility keeps the full friend fan-out (backward compatibility)', async () => {
-      prisma.postComment.findMany.mockResolvedValue([]);
+    it('une visibilité NULLE se lit comme FRIENDS, jamais comme publique', async () => {
+      // Le seau des amis vient de l'énumérateur : il reste servi. Celui des
+      // engagés antérieurs passe par l'admission, qui refuse un inconnu — une
+      // visibilité qu'on n'a pas su établir ne doit rien ouvrir de plus qu'un
+      // post réservé aux amis.
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
       prisma.friendRequest.findMany.mockResolvedValue([
         { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
         { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
@@ -743,11 +757,12 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         Promise.resolve(makeNotif(data.type)),
       );
 
-      await service.createStoryCommentNotificationsBatch(baseParams); // no visibility
+      await service.createStoryCommentNotificationsBatch({ ...baseParams, visibility: null });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
       expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
       expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
     });
 
     it('uses the comment excerpt as content when present', async () => {
@@ -1001,6 +1016,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
           commentId: COMMENT_ID,
           storyAuthorId: AUTHOR_ID,
           commenterId: COMMENTER_ID,
+          visibility: 'PUBLIC',
         })
       ).resolves.not.toThrow();
 
@@ -1065,6 +1081,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
@@ -1087,6 +1104,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
@@ -1109,6 +1127,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
@@ -1346,6 +1365,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       // Flush fire-and-forget emitCountsUpdate microtasks

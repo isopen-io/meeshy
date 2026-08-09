@@ -1,3 +1,107 @@
+# Cycle 31 — Deux tests d'admission pour une seule question, et le seau qui n'en avait aucun
+
+Tête laissée par le cycle 30 : « **Deux tests d'admission coexistent** : `filterPostAudience`
+(amis stricts) et `canUserConsumePost` (amis ∪ contacts DM). Un contact DM non-ami reçoit donc une
+notification de réponse mais pas de mention. **Candidat sérieux pour le prochain cycle.** »
+
+Pris tel quel. Le défaut annoncé était réel — et en le corrigeant, l'outil qu'il a fallu construire
+a rendu visible un second trou, plus grave, dans le même fichier.
+
+## Lot A — les deux tests d'admission avaient divergé
+
+Une seule question, « celui-là a-t-il le droit de LIRE ce post ? », posée sous trois formes :
+
+| forme | qui | audience AVANT |
+|---|---|---|
+| clause `where` | `buildPostVisibilityOrFilter` (feed, post unique) | amis ∪ contacts DM |
+| destinataire unique | `canUserConsumePost` (fil, notifications unitaires) | amis ∪ contacts DM |
+| lot de candidats | `filterPostAudience` (mentions) | **amis stricts** |
+
+Trois formes imposées par la manière dont la question se pose — pas par l'audience. La troisième
+avait dérivé, et la conséquence est observable par l'utilisateur : un contact DM non-ami voit le
+post dans son feed, peut en ouvrir le fil, reçoit une notification quand on répond à son
+commentaire — et **rien** quand on le nomme dans ce même post. Sous-livraison silencieuse.
+
+**Correctif.** `filterPostAudience` → **`filterPostConsumers`**. Le renommage n'est pas cosmétique :
+la doctrine posée au cycle 29 (D1) veut qu'un point d'entrée choisisse son audience en la
+**nommant**, et l'ancien nom ne disait pas laquelle des deux il appliquait — c'est précisément ce
+qui a permis la dérive. La branche `FRIENDS`/`EXCEPT` consulte désormais le lien DM.
+
+**Le coût est nul sur le cas dominant.** `filterDirectContactIdsAmong` — pendant BORNÉ de
+`getDirectConversationContactIds`, comme `loadFriendIdsAmong` l'est du graphe ami — n'est interrogé
+que pour le **résidu** : les candidats dont l'amitié n'a rien dit. Un lot entièrement composé d'amis
+ne coûte pas une requête de plus qu'avant. Les candidats déjà écartés par la liste noire `EXCEPT`
+sortent des bornes avant toute lecture, comme dans `canUserViewPost`.
+
+**Une panne partielle ne détruit pas ce qui est établi.** Le graphe ami qui échoue ne laisse rien —
+on refuse tout. Le graphe DM qui échoue ne laisse indéterminé que le résidu — on garde les amis et
+on refuse le reste. Distinguer les deux, c'est le corollaire du cycle 27 appliqué à un filtre.
+
+**L'anti-dérive est un test de conformité, pas une implémentation partagée.** Fusionner les deux
+formes serait faux : `filterPostConsumers` matérialise les co-membres (`getCommunityCoMemberIds`)
+là où `canUserConsumePost` tranche en pairwise (`doUsersShareCommunity`) — c'est la raison d'être
+des deux. 14 fixtures traversent donc les deux fonctions depuis le **même** double de graphe et
+doivent rendre le même verdict.
+
+## Lot B — le seau « engagés antérieurs » n'avait aucun test d'admission
+
+Trouvé en branchant le lot A. `createStoryCommentNotificationsBatch` sert trois seaux :
+
+| seau | nature | garde AVANT |
+|---|---|---|
+| auteur | possède le post | exempt, correct |
+| `friendIds` | **sortie d'énumérateur** — amis actuels dépliés du graphe | table locale, correct |
+| `previousCommenterIds` | **ensemble arbitraire** — commentateurs antérieurs ∪ réacteurs | table locale, **faux** |
+
+La table locale `canSeePost` ne lisait aucun graphe : `default: return true` couvrait `FRIENDS`, et
+`EXCEPT` se contentait de la liste noire. Pour les amis c'est juste — ils sont amis par
+construction. Pour les engagés antérieurs c'est un trou : ils étaient admis **quand ils ont engagé
+le post**, et une dés-amitié ou une édition de visibilité les en sort sans toucher à leur
+commentaire. Un post `PUBLIC` passé en `FRIENDS` emporte d'un coup tous ceux qui n'ont jamais été
+amis — et chacun reçoit `story_thread_reply` avec l'extrait du nouveau commentaire.
+
+C'est le trou que le cycle 30 avait fermé pour la notification UNITAIRE de la même population
+(`comment_reply` → `canNotifyAboutPost`). Le seau de fan-out l'avait gardé.
+
+`engagedAudience` passe par `filterPostConsumers`. `canSeePost` devient `canSeeAsFriend` — il ne
+filtre plus que les amis — et son cas `COMMUNITY`, devenu inatteignable, est retiré plutôt que
+laissé en garde décorative (repéré par la ligne non couverte 1906, pas par relecture).
+
+## Lot C — `visibility` requis (dette des cycles 28, 29, 30)
+
+`visibility?` à défaut `PUBLIC` sur `createStoryCommentNotificationsBatch`, annoncé trois fois comme
+« mécanique, sans risque ». Devenu `visibility: string | null | undefined` requis. Une visibilité
+nulle se lit désormais comme `FRIENDS`, jamais comme publique.
+
+Nuance apprise en le faisant : contrairement à ce qu'annonçait le cycle 28, la requiredness ne
+protège **que la production** ici — `services/gateway/tsconfig.json` exclut `**/__tests__/**`, donc
+aucun harnais n'échoue au build. Le seul appelant de production (`routes/posts/comments.ts`) est
+bien couvert ; les 3 harnais ont été rattrapés par leurs assertions, pas par `tsc`.
+
+## Vérification
+
+- **19 tests neufs** : 14 fixtures de conformité + 8 cas de fan-out + 5 cas de borne/panne côté lot,
+  et 3 cas de service pour la mention d'un contact DM. **10 rouges observés** avant implémentation
+  (7 lot A, 3 lot B), vérifiés en neutralisant la branche DM puis en la rétablissant.
+- **3 harnais** complètent leur double Prisma (`participant`) : sans lui, l'exception avalée faisait
+  passer leurs refus pour des refus d'ACL — ils prouvaient moins qu'ils n'en avaient l'air.
+- **Suite gateway complète : 611 suites, 15 783 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture lignes **95,66 %** ; `postAudience.ts` et `directContactVisibility.ts` à 100 % lignes.
+
+## Reste ouvert après ce cycle
+
+- **`canUserInteractWithPost` reste amis stricts** et c'est volontaire (décision 2026-07-08) : ce
+  cycle n'a réaligné que le côté CONSOMMATION, où les trois formes répondent maintenant à
+  l'identique. L'asymétrie voir ⊇ interagir est intacte — ne pas la « réaligner » sans re-décider.
+- **`getStoryNotificationRecipients` plafonne à 500 lignes par seau** sans le dire au destinataire ni
+  au log. Sur un post viral, un fan-out silencieusement tronqué ressemble à un fan-out complet.
+  **Tête du prochain cycle** si rien de plus grave n'apparaît.
+- **`@Display Name` reste inextractible dans le domaine social** — cinquième report.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29, et donc aucune passe de lint n'a pu tourner sur ce cycle non plus.
+
+---
+
 # Cycle 30 — Les notifications du fil suivaient l'auteur du commentaire, pas l'audience du post
 
 Suite directe du cycle 29, sur la tête qu'il avait lui-même désignée : « `createCommentReplyNotification`
