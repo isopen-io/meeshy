@@ -1,3 +1,101 @@
+# Cycle 33 — Les cycles précédents ont câblé « le transport primaire d'iOS ». Aucun n'avait câblé celui d'iOS.
+
+Le « Reste ouvert » du cycle 32 proposait la file d'attente de fan-out, sous réserve que « rien de
+plus grave n'apparaisse ». Quelque chose de plus grave est apparu, à l'étage d'en dessous : les
+obligations d'une édition de message dépendent encore du transport employé — et les deux transports
+que les clients emploient RÉELLEMENT sont ceux qui n'en portent aucune.
+
+## Le décompte
+
+L'édition d'un message a **quatre** points d'entrée. Ce qu'ils faisaient avant ce cycle :
+
+| entrée | fichier | liens traçables | mentions | qui l'appelle |
+|---|---|---|---|---|
+| socket `message:edit` | `MessageHandler` | oui | oui | web (composer) |
+| `PUT /conversations/:id/messages/:messageId` | `messages-advanced.ts` | oui | oui | **personne** |
+| `PUT /messages/:messageId` | `routes/messages.ts` | **non** | **non** | **iOS** (`MessageService.editMessage`) |
+| `PATCH /messages/:messageId` | `messages-advanced.ts` | **non** | **non** | **web** (`messages.service.ts`) |
+
+Les deux unités partagées existaient déjà, écrites par les cycles précédents, et elles étaient
+justes. Elles avaient simplement été branchées sur la mauvaise route. Deux commentaires — dans
+`emitMentionCreated.ts` et dans `messages-advanced.ts` — désignaient « le transport PRIMAIRE du
+client iOS, qui édite via `PUT /messages/:id` » **au-dessus du câblage de
+`PUT /conversations/:id/messages/:messageId`**. Le chemin nommé et le chemin câblé n'étaient pas
+le même. Le commentaire, lui, se lisait comme une preuve que le trou était fermé.
+
+## Ce que l'utilisateur voyait
+
+Éditer « salut @alice » en « salut @bob » **depuis un iPhone** : Alice reste mentionnée (ligne
+`Mention`, `validatedMentions`, inbox `/mentions`, surlignage), Bob n'est nommé nulle part, ne reçoit
+ni notification ni `mention:created`. Le même geste depuis le composer web (socket) fait tout
+correctement. Idem pour `[[url]]` : envoyé, le texte produit un lien traçable ; **édité** depuis iOS
+ou depuis `messages.service.ts`, les crochets restent en dur dans le message, définitivement.
+
+## Lot A — `PUT /messages/:messageId`, le transport d'iOS
+
+`processExplicitLinks` AVANT l'écriture, `reconcileEditedMentions` + `emitMentionCreated` après, et
+le contenu traité devient le SEUL en circulation : base, mentions, retraduction, payload diffusé.
+
+Une différence assumée avec le sibling PUT : la réconciliation précède le `findUniqueOrThrow` de
+relecture. Elle écrit `validatedMentions` en base, donc la relecture rend l'état réconcilié sans
+recopiage conditionnel — et quand elle n'a RIEN pu établir, la ligne porte toujours la valeur
+précédente, qui est la bonne. Le garde-fou `if (reconciled)` du sibling existe parce qu'il tient un
+objet rendu par l'écriture ; ici il n'y a rien à garder.
+
+La réconciliation est bien APRÈS le `updateMany` gardé : un `DELETE` concurrent rend `count === 0`,
+la route répond 404 et ne réconcilie rien sur un message que le client a déjà retiré.
+
+## Lot B — `PATCH /messages/:messageId`, le transport du web
+
+Même traitement, avec le garde-fou `if (reconciled)` du sibling puisqu'il tient lui aussi l'objet
+rendu par `update`.
+
+## Lot C — le `content.trim()` qui plantait sur le seul cas que la garde autorise
+
+`content` est OPTIONNEL dans `UpdateMessageBodySchema`, et l'omettre est précisément la façon de
+retirer la légende d'un message à pièce jointe — un cas que la garde d'entrée autorise
+explicitement (`(!content || …) && !messageHasAttachments`). L'écriture faisait ensuite
+`content.trim()` : TypeError, traduit en 500 par le catch. Le seul cas explicitement permis était le
+seul que l'écriture ne savait pas traiter. `content?.trim() ?? ''`.
+
+## Lot D — les commentaires qui nommaient la mauvaise route
+
+Corrigés aux deux endroits, et `broadcastMessageMutation.ts` — dont l'affirmation était JUSTE, elle,
+puisque cette unité-là est bien câblée sur `routes/messages.ts` — reçoit le chemin complet, l'ambiguïté
+entre les deux `PUT` étant exactement ce qui a permis la confusion. La leçon du 2026-08-07 (3) — « une garantie énoncée dans un commentaire
+n'est pas une garantie du système » — se double ici d'un corollaire : un commentaire qui nomme le
+chemin qu'il ne câble PAS ne se contente pas de ne rien garantir, il **détourne activement** le
+prochain audit. Les cycles suivants ont relu ces lignes et conclu que le cas iOS était traité.
+
+## Vérification
+
+- **10 tests neufs**, **8 rouges observés** avant correctif :
+  - `message-edit-mention-parity.test.ts` (6, dont 5 rouges) — réconciliation, `mention:created` aux
+    seuls entrants, traitement des liens avant écriture, contenu traité en circulation unique,
+    légende retirée sans 500 ; plus le cas qui doit RESTER muet (course de suppression : `count === 0`
+    → 404 et aucune réconciliation).
+  - `conversation-messages-advanced.test.ts` (4, dont 3 rouges) — mêmes obligations sur le PATCH, plus
+    le `validatedMentions` qui ne doit PAS être écrasé quand la réconciliation n'établit rien.
+- **Suite gateway complète : 613 suites, 15 799 tests, tout vert.** `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Quatre points d'entrée pour une édition, dont un que personne n'appelle**
+  (`PUT /conversations/:id/messages/:messageId`). Les quatre partagent désormais les mêmes unités,
+  mais chacun réimplémente ses propres gardes de permission — et elles DIVERGENT : le PATCH n'a pas
+  la fenêtre de 24h ni le bypass modérateur, le `PUT /messages/:messageId` filtre par
+  `sender: { userId }` (donc aucun bypass du tout). **Tête du prochain cycle** : une seule unité
+  d'admission à l'édition, nommée, plutôt que quatre tests d'admission qui ont déjà prouvé qu'ils
+  dérivent. C'est le motif exact des cycles 30-31, un étage plus bas.
+- **La file d'attente de fan-out** (héritée du cycle 32, D1). La troncature est mesurable depuis le
+  cycle 32 ; il faut regarder ce qu'elle mesure avant de choisir.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas.
+- **`@Display Name` reste inextractible dans le domaine social** — septième report.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29.
+
+---
+
 # Cycle 32b — Addendum d'une session parallèle
 
 Deux sessions ont livré le cycle 32 en parallèle, sur la même tête (« la troncature est muette »).
