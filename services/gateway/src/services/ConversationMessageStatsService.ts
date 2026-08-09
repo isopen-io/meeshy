@@ -228,10 +228,20 @@ export class ConversationMessageStatsService {
       where: { conversationId },
     });
 
-    if (!existing) {
-      await this.recompute(prisma, conversationId);
-      return;
-    }
+    // Pas de ligne, rien à corriger — et surtout PAS de `recompute()` ici.
+    // C'est la position d'`onMessageDeleted`, et l'édition a encore moins de
+    // raisons de s'en écarter : elle ne crée aucun message, donc l'absence de
+    // ligne ne rend rien périmé. La ligne sera bâtie, exacte, à la première
+    // lecture (`getStats` recalcule quand elle manque).
+    //
+    // La différence n'est pas théorique : `recompute()` balaie TOUS les
+    // messages vivants de la conversation, et les quatre transports d'édition
+    // l'attendent AVANT d'acquitter le client. Éditer un message dans une
+    // longue conversation dont personne n'a jamais lu les statistiques aurait
+    // bloqué l'accusé de réception derrière un scan complet. Le comptage à
+    // l'envoi peut se le permettre — il est fire-and-forget, hors du chemin de
+    // l'ACK ; l'ajustement d'édition, non.
+    if (!existing) return;
 
     const oldWords = countWords(oldContent);
     const newWords = countWords(newContent);

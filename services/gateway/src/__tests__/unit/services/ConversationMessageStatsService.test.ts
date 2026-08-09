@@ -715,15 +715,26 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.participantStats[USER_B]).toBeUndefined();
     });
 
-    it('calls recompute when stats row does not exist', async () => {
+    it('ne recalcule RIEN quand la ligne de compteurs n\'existe pas', async () => {
+      // Position d'`onMessageDeleted`, et l'édition a encore moins de raisons
+      // de s'en écarter : elle ne crée aucun message, donc l'absence de ligne
+      // ne rend rien périmé — `getStats` la bâtira, exacte, à la première
+      // lecture.
+      //
+      // Ce test remplace son inverse, qui exigeait le `recompute()`. La règle a
+      // changé parce que son exposition a changé : les QUATRE transports
+      // d'édition attendent cet appel AVANT d'acquitter le client, et
+      // `recompute()` balaie tous les messages vivants de la conversation.
+      // L'accusé de réception d'une édition ne doit pas passer derrière un scan
+      // complet. Le comptage à l'envoi garde le sien : il est fire-and-forget,
+      // hors du chemin de l'ACK.
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
-      prisma.message.findMany.mockResolvedValue([]);
-      prisma.conversationMessageStats.upsert.mockResolvedValue(makeExistingStats({ totalMessages: 0 }));
 
       await service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'old', 'new');
 
-      expect(prisma.message.findMany).toHaveBeenCalled();
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+      expect(prisma.conversationMessageStats.upsert).not.toHaveBeenCalled();
       expect(prisma.conversationMessageStats.update).not.toHaveBeenCalled();
     });
 
