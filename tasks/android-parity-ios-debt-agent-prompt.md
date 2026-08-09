@@ -173,14 +173,19 @@ du travail : ne jamais déclarer 100 % sans preuve reproductible.
    lot). SDK : scheme `MeeshySDK-Package`.
 6. **Livrer** — `git checkout -b claude/apps/ios/debt-<slice-id> origin/main` (`origin/main`
    explicitement, jamais le ref local `main`, potentiellement périmé dans ce repo multi-worktree —
-   cf. §Lane ANDROID), commit factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR. **N'assume
-   pas que le workflow « iOS Tests » (`ios-tests.yml`) est le bon gate** — il ne se déclenche que
-   sur push vers `dev`, jamais sur une PR. Identifie le(s) workflow(s) qui ont réellement un
-   trigger `pull_request` pour les chemins touchés (`gh pr checks <n>` te montre les checks
-   réellement attachés à la PR) — pour un diff limité à `packages/MeeshySDK/`, c'est typiquement
-   **`sdk-tests` / `sdk-tests.yml`**. Laisse tourner ces checks-là, squash-merge seulement si tout
-   est vert + gates locaux verts + rebase propre sur `main`. Jamais `--amend`, jamais de secret
-   committé.
+   cf. §Lane ANDROID). **`origin/main` peut aussi dériver PENDANT une vérification locale
+   longue** (repo multi-worktree, d'autres agents mergent en parallèle) — re-`git fetch`/rebase
+   juste avant la passe de vérification finale, pas seulement à l'Étape 0 (un run a vu 6 échecs de
+   test purement dus à un `origin/main` périmé pendant le test, pas au diff lui-même). Puis commit
+   factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR. **N'assume pas que le workflow
+   « iOS Tests » (`ios-tests.yml`) est le bon gate** — il ne se déclenche que sur push vers `dev`,
+   jamais sur une PR. **N'assume pas non plus qu'un diff `apps/ios`-only échappe au monorepo** :
+   `ci.yml` n'a pas de filtre de chemin et tourne sa matrice complète (gateway/web/shared/
+   translator/audio/voice, ~15-20 min) sur TOUTE PR quel que soit le diff — seul `packages/
+   MeeshySDK`-only en est dispensé (remplacé par `sdk-tests`/`sdk-tests.yml`). Ne devine jamais la
+   liste des checks : `gh pr checks <n>` te montre ceux réellement attachés à la PR. Laisse tourner
+   ces checks-là, squash-merge seulement si tout est vert + gates locaux verts + rebase propre sur
+   `main`. Jamais `--amend`, jamais de secret committé.
 7. **Mettre à jour `tasks/ios-debt-routine-progress.md`** — coche l'item (hash de commit + preuve
    courte), journal d'itération, tout nouveau finding découvert en route (le backlog doit rester
    réapprovisionné). **Commit séparé** de la PR de production (cf. §Choix de la lane) — jamais
