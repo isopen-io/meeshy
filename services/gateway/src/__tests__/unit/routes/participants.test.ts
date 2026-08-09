@@ -49,7 +49,11 @@ function createMockPrisma() {
     },
     participant: {
       findFirst: jest.fn<any>(),
-      findMany: jest.fn<any>(),
+      // Vide par défaut : `resolveConversationEntry` lit ici TOUTES les lignes
+      // de la paire (conversation, utilisateur) — y compris celles qu'un départ
+      // ou un bannissement a laissées inactives — donc « aucune ligne » =
+      // primo-arrivant.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>(),
       update: jest.fn<any>(),
       updateMany: jest.fn<any>(),
@@ -721,9 +725,10 @@ describe('registerParticipantsRoutes', () => {
 
     it('should return 400 when user is already an active participant', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
-      mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
-        .mockResolvedValueOnce(createParticipant({ userId: TARGET_USER_ID }));
+      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant({ role: 'admin' }));
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        createParticipant({ userId: TARGET_USER_ID, isActive: true, bannedAt: null }),
+      ]);
       mockPrisma.user.findFirst.mockResolvedValue({ id: TARGET_USER_ID, username: 'target' });
       const reply = createMockReply();
 

@@ -12,6 +12,10 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import {
+  resolveConversationEntry,
+  REJOIN_PARTICIPANT_STATE
+} from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
@@ -312,39 +316,55 @@ export function registerParticipantsRoutes(
         return sendNotFound(reply, 'User not found');
       }
 
-      const existingParticipant = await prisma.participant.findFirst({
-        where: {
-          conversationId: conversationId,
-          userId: userId,
-          isActive: true
-        }
-      });
+      // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
+      // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
+      // fabriquait une ligne neuve et active, ce qui défaisait le bannissement
+      // sans passer par `POST …/unban` — laquelle exige le rang `admin` là où
+      // cette route s'ouvre aussi aux `moderator`, et écrit une trace. Voir
+      // `services/conversations/conversationEntryAdmission.ts`.
+      const entry = await resolveConversationEntry({ prisma, conversationId, userId });
 
-      if (existingParticipant) {
+      if (entry.outcome === 'banned') {
+        return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');
+      }
+
+      if (entry.outcome === 'already-member') {
         return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
       }
 
-      await prisma.participant.create({
-        data: {
-          conversationId: conversationId,
-          userId: userId,
-          type: 'user',
-          displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
-          avatar: userToAdd.avatar,
-          role: 'member',
-          language: userToAdd.systemLanguage ?? 'en',
-          permissions: {
-            canSendMessages: true,
-            canSendFiles: true,
-            canSendImages: true,
-            canSendAudios: true,
-            canSendVideos: true,
-            canSendLocations: false,
-            canSendLinks: false
-          },
-          joinedAt: new Date()
+      const addedMemberFields = {
+        type: 'user',
+        displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
+        avatar: userToAdd.avatar,
+        role: 'member',
+        language: userToAdd.systemLanguage ?? 'en',
+        permissions: {
+          canSendMessages: true,
+          canSendFiles: true,
+          canSendImages: true,
+          canSendAudios: true,
+          canSendVideos: true,
+          canSendLocations: false,
+          canSendLinks: false
         }
-      });
+      };
+
+      if (entry.outcome === 'rejoin' && entry.participantId) {
+        await prisma.participant.update({
+          where: { id: entry.participantId },
+          data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
+        });
+        invalidateParticipantLookup(entry.participantId, conversationId);
+      } else {
+        await prisma.participant.create({
+          data: {
+            conversationId: conversationId,
+            userId: userId,
+            ...addedMemberFields,
+            joinedAt: new Date()
+          }
+        });
+      }
 
       // R6-1 — broadcast so other members' devices refresh the participant list
       // in real time (the POST previously created the row silently → stale member
