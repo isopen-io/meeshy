@@ -3294,3 +3294,14 @@ audit + liens (ici) — que le même raccourci se fait rattraper **un effet à l
 `services/gateway/CLAUDE.md` pose « Admin audit trail required for all admin actions », et la route
 console exige `canModerateContent` pour être empruntée. Les deux lectures se défendent ; trancher
 demande une décision produit, pas un correctif — ne pas la prendre en passant.
+
+**Piste pour le cycle suivant, trouvée en appliquant la règle 1 à la classe entière.** Le même
+défaut existe sur les MESSAGES, et à une échelle pire. `TrackingLink` porte un `messageId` : un
+message qui contient un lien court en est la cible. Or la suppression d'un message a **quatre**
+écrivains — `MessageHandler.ts:991`, `MaintenanceService.ts:527`, `messages-advanced.ts:554`,
+`messages.ts:584` — et **aucun** ne bascule `isActive: false`. Les trois fichiers de routes/handler
+connaissent pourtant `TrackingLinkService` : ils s'en servent à la CRÉATION et à l'ÉDITION, jamais à
+la suppression. Un message effacé laisse donc ses `/l/<token>` actifs, et ils continuent de compter
+des clics vers un contenu retiré. Quatre écrivains sans unité commune, c'est la même cause qu'ici
+d'un cran plus grave : commencer par nommer la liste (le pendant de `applyPostRemovalEffects` pour
+`Message`), pas par corriger les quatre sites.
