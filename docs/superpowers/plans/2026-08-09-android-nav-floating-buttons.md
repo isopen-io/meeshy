@@ -168,7 +168,7 @@ class AdaptiveEdgeToEdgeTest {
 - [ ] **Step 2 : Lancer le test, vérifier qu'il échoue**
 
 ```bash
-cd apps/android && ./gradlew :sdk-ui:testDebugUnitTest --tests '*AdaptiveEdgeToEdgeTest*'
+cd apps/android && ./meeshy.sh :sdk-ui:testDebugUnitTest --tests '*AdaptiveEdgeToEdgeTest*'
 ```
 Attendu : ÉCHEC — `Unresolved reference: MeeshyApiLevel`.
 
@@ -214,7 +214,7 @@ public fun systemGestureInsetsCompat(): PaddingValues =
 - [ ] **Step 4 : Relancer le test**
 
 ```bash
-cd apps/android && ./gradlew :sdk-ui:testDebugUnitTest --tests '*AdaptiveEdgeToEdgeTest*'
+cd apps/android && ./meeshy.sh :sdk-ui:testDebugUnitTest --tests '*AdaptiveEdgeToEdgeTest*'
 ```
 Attendu : SUCCÈS.
 
@@ -323,7 +323,7 @@ class FloatingButtonPositionTest {
 - [ ] **Step 2 : Lancer le test, vérifier qu'il échoue**
 
 ```bash
-cd apps/android && ./gradlew :sdk-ui:testDebugUnitTest --tests '*FloatingButtonPositionTest*'
+cd apps/android && ./meeshy.sh :sdk-ui:testDebugUnitTest --tests '*FloatingButtonPositionTest*'
 ```
 Attendu : ÉCHEC — `Unresolved reference: FloatingButtonPosition`.
 
@@ -398,7 +398,7 @@ public fun decodePosition(raw: String?, fallback: FloatingButtonPosition): Float
 - [ ] **Step 4 : Relancer le test**
 
 ```bash
-cd apps/android && ./gradlew :sdk-ui:testDebugUnitTest --tests '*FloatingButtonPositionTest*'
+cd apps/android && ./meeshy.sh :sdk-ui:testDebugUnitTest --tests '*FloatingButtonPositionTest*'
 ```
 Attendu : SUCCÈS, 7 tests.
 
@@ -467,7 +467,7 @@ class FloatingButtonPositionStoreTest {
 - [ ] **Step 2 : Lancer le test, vérifier qu'il échoue**
 
 ```bash
-cd apps/android && ./gradlew :sdk-core:testDebugUnitTest --tests '*FloatingButtonPositionStoreTest*'
+cd apps/android && ./meeshy.sh :sdk-core:testDebugUnitTest --tests '*FloatingButtonPositionStoreTest*'
 ```
 Attendu : ÉCHEC — `Unresolved reference: InMemoryFloatingButtonPositionStore`.
 
@@ -569,7 +569,7 @@ Dans `SdkModule.kt`, juste après `providesThemeStore`, en copiant sa forme :
 - [ ] **Step 5 : Relancer les tests**
 
 ```bash
-cd apps/android && ./gradlew :sdk-core:testDebugUnitTest --tests '*FloatingButtonPositionStoreTest*'
+cd apps/android && ./meeshy.sh :sdk-core:testDebugUnitTest --tests '*FloatingButtonPositionStoreTest*'
 ```
 Attendu : SUCCÈS, 3 tests.
 
@@ -704,7 +704,7 @@ class MeeshyFloatingButtonsTest {
 - [ ] **Step 2 : Lancer le test, vérifier qu'il échoue**
 
 ```bash
-cd apps/android && ./gradlew :sdk-ui:testDebugUnitTest --tests '*MeeshyFloatingButtonsTest*'
+cd apps/android && ./meeshy.sh :sdk-ui:testDebugUnitTest --tests '*MeeshyFloatingButtonsTest*'
 ```
 Attendu : ÉCHEC — `Unresolved reference: MeeshyFloatingButtons`.
 
@@ -863,7 +863,7 @@ private fun DraggableButton(
 - [ ] **Step 4 : Relancer le test**
 
 ```bash
-cd apps/android && ./gradlew :sdk-ui:testDebugUnitTest --tests '*MeeshyFloatingButtonsTest*'
+cd apps/android && ./meeshy.sh :sdk-ui:testDebugUnitTest --tests '*MeeshyFloatingButtonsTest*'
 ```
 Attendu : SUCCÈS, 3 tests.
 
@@ -919,7 +919,7 @@ class MeeshyAppMenuItemsTest {
 - [ ] **Step 2 : Lancer le test, vérifier qu'il échoue**
 
 ```bash
-cd apps/android && ./gradlew :app:testDebugUnitTest --tests '*MeeshyAppMenuItemsTest*'
+cd apps/android && ./meeshy.sh :app:testDebugUnitTest --tests '*MeeshyAppMenuItemsTest*'
 ```
 Attendu : ÉCHEC — `Unresolved reference: menuItemLabelKeys`.
 
@@ -950,7 +950,7 @@ Puis **retirer de `rememberRadialMenuItems` l'entrée `feed`** (le `RadialMenuIt
 - [ ] **Step 4 : Relancer le test**
 
 ```bash
-cd apps/android && ./gradlew :app:testDebugUnitTest --tests '*MeeshyAppMenuItemsTest*'
+cd apps/android && ./meeshy.sh :app:testDebugUnitTest --tests '*MeeshyAppMenuItemsTest*'
 ```
 Attendu : SUCCÈS, 2 tests.
 
@@ -1136,7 +1136,7 @@ class AuthExpiryInterceptorTest {
 - [ ] **Step 2 : Lancer le test, vérifier qu'il échoue**
 
 ```bash
-cd apps/android && ./gradlew :sdk-core:testDebugUnitTest --tests '*AuthExpiryInterceptorTest*'
+cd apps/android && ./meeshy.sh :sdk-core:testDebugUnitTest --tests '*AuthExpiryInterceptorTest*'
 ```
 Attendu : ÉCHEC — `Unresolved reference: AuthExpiryInterceptor`.
 
@@ -1180,7 +1180,7 @@ public class AuthExpiryInterceptor(
 - [ ] **Step 4 : Relancer le test**
 
 ```bash
-cd apps/android && ./gradlew :sdk-core:testDebugUnitTest --tests '*AuthExpiryInterceptorTest*'
+cd apps/android && ./meeshy.sh :sdk-core:testDebugUnitTest --tests '*AuthExpiryInterceptorTest*'
 ```
 Attendu : SUCCÈS, 4 tests.
 
