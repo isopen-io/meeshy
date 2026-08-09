@@ -94,12 +94,19 @@ ni `apps/ios`-only de la PR de slice/item (ça violerait la pureté de diff des 
 mettent à jour via **un commit séparé et dédié**, poussé directement sur `main` juste après le
 merge de la PR de production (`chore(tasks): lane-cursor → ...` ou
 `chore(tasks): ios-debt-routine-progress → ...`) — pas de PR/CI nécessaire, ce sont des fichiers
-de suivi, pas du code de production.
+de suivi, pas du code de production. **Pousse avec `git push origin HEAD:main` explicitement** —
+jamais `git push origin <nom-de-ta-branche-locale>` : si ta branche locale courante porte par
+coïncidence un nom qui existe déjà côté remote (ex. le nom de la branche du worktree de routine
+lui-même), Git crée silencieusement une branche remote homonyme au lieu de mettre à jour `main`,
+sans la moindre erreur (piège vécu à l'itération 4).
 
 ## Lane ANDROID — un run = un slice
 
 Suis **exactement** `apps/android/tasks/android-routine/ROUTINE.md` : choisir un slice → brancher
-`claude/apps/android/<slice-id>` → TDD rouge → vert → `./apps/android/meeshy.sh check` →
+`git checkout -b claude/apps/android/<slice-id> origin/main` (**`origin/main` explicitement, jamais
+le ref local `main`** — dans ce repo multi-worktree, `main` local peut être périmé de dizaines de
+commits même après un `git fetch`/`merge --ff-only` réussi sur ta propre branche courante, qui ne
+met à jour que celle-ci, pas le ref `main`) → TDD rouge → vert → `./apps/android/meeshy.sh check` →
 gate `REVIEWER.md` → mettre à jour `feature-parity.md` / `PROGRESS.md` / `NOTES.md` → PR + CI +
 squash-merge uniquement si diff `apps/android`-only + CI verte + reviewer PASS + rebase propre →
 avancer d'exactement une phase. Ne redéfinis rien ici — `ROUTINE.md` est la source de vérité,
@@ -150,10 +157,11 @@ du travail : ne jamais déclarer 100 % sans preuve reproductible.
 5. **Vérifier** — `./apps/ios/meeshy.sh build` (grep « BUILD SUCCEEDED » dans le log, jamais
    l'exit code seul) puis `./apps/ios/meeshy.sh test` (suite ciblée si le run est long ; suite
    complète avant de merger un lot). SDK : scheme `MeeshySDK-Package`.
-6. **Livrer** — branche `claude/apps/ios/debt-<slice-id>`, commit factuel `fix(ios/...)` ou
-   `refactor(ios/...)`, push, PR, laisser tourner la CI « iOS Tests » réelle, squash-merge
-   seulement si CI verte + gates locaux verts + rebase propre sur `main`. Jamais `--amend`,
-   jamais de secret committé.
+6. **Livrer** — `git checkout -b claude/apps/ios/debt-<slice-id> origin/main` (`origin/main`
+   explicitement, jamais le ref local `main`, potentiellement périmé dans ce repo multi-worktree —
+   cf. §Lane ANDROID), commit factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR, laisser
+   tourner la CI « iOS Tests » réelle, squash-merge seulement si CI verte + gates locaux verts +
+   rebase propre sur `main`. Jamais `--amend`, jamais de secret committé.
 7. **Mettre à jour `tasks/ios-debt-routine-progress.md`** — coche l'item (hash de commit + preuve
    courte), journal d'itération, tout nouveau finding découvert en route (le backlog doit rester
    réapprovisionné). **Commit séparé** de la PR de production (cf. §Choix de la lane) — jamais

@@ -21,6 +21,14 @@
     <string name="registration_skip_step">Passer cette étape</string>
     <string name="registration_step_placeholder_title">La suite arrive bientôt</string>
     <string name="registration_step_placeholder_body">Cette étape n\'est pas encore prête — appuie sur Retour pour continuer.</string>
+    <string name="registration_phone_header">Protège ton compte</string>
+    <string name="registration_phone_subtitle">Facultatif — aide à récupérer ton compte.</string>
+    <string name="registration_phone_number_label">Numéro de téléphone</string>
+    <string name="registration_phone_available">Numéro disponible</string>
+    <string name="registration_phone_taken">Ce numéro est déjà utilisé</string>
+    <string name="registration_phone_choose_country">Choisir un pays</string>
+    <string name="registration_phone_country_picker_title">Choisir un pays</string>
+    <string name="registration_phone_country_search_hint">Rechercher un pays ou un indicatif</string>
 
     <string name="guest_join_title">Rejoindre la conversation</string>
     <string name="guest_join_subtitle">Créez une identité temporaire pour rejoindre</string>
