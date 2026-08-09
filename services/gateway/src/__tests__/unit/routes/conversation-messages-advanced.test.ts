@@ -807,6 +807,104 @@ describe('registerMessagesAdvancedRoutes', () => {
       );
     });
 
+    // `originalLanguage` est OPTIONNEL dans le corps — la vue d'édition web
+    // n'en envoie un que parce qu'elle porte un sélecteur de langue. Le défaut
+    // `= 'fr'` faisait qu'une omission RÉÉTIQUETAIT le message en français :
+    // un message anglais devenait français en base, et la retraduction repartait
+    // de « fr » comme langue source. Les trois autres transports d'édition ne
+    // touchent jamais cette colonne. Omettre = ne rien affirmer sur la langue.
+    it('leaves originalLanguage untouched when the body omits it', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({ originalLanguage: 'en' }));
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'hello',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      const editWrite = prisma.message.update.mock.calls
+        .map((c: any[]) => c[0])
+        .find((arg: any) => arg?.data?.isEdited === true);
+      expect(editWrite).toBeDefined();
+      expect(editWrite.data).not.toHaveProperty('originalLanguage');
+    });
+
+    // Et la retraduction doit repartir de la langue STOCKÉE, pas du défaut :
+    // « fr » comme langue source d'un texte anglais produit du charabia dans
+    // toutes les langues cibles de la conversation.
+    it('retranslates from the stored language when the body omits it', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({ originalLanguage: 'en' }));
+      const retranslate = jest.fn<any>().mockResolvedValue(undefined);
+      fastify.translationService = { _processRetranslationAsync: retranslate };
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'hello',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      expect(retranslate).toHaveBeenCalledWith(
+        MSG_ID,
+        expect.objectContaining({ originalLanguage: 'en' })
+      );
+    });
+
+    // Garde de concurrence optimiste, jumelle de celle que portent déjà les
+    // trois autres transports d'édition : une suppression concurrente entre la
+    // lecture et l'écriture ferait sinon RESSUSCITER la ligne avec un contenu
+    // neuf, et `message:edited` partirait vers des clients qui l'ont retirée.
+    it('only writes while the message is still undeleted', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'hello',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      const editWrite = prisma.message.update.mock.calls
+        .map((c: any[]) => c[0])
+        .find((arg: any) => arg?.data?.isEdited === true);
+      expect(editWrite.where).toEqual({ id: MSG_ID, deletedAt: null });
+    });
+
+    it('answers 404 — not 500 — when the concurrency guard bites', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      const p2025 = Object.assign(new Error('Record to update not found.'), { code: 'P2025' });
+      prisma.message.update.mockRejectedValue(p2025);
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      expect(mockSendNotFound).toHaveBeenCalled();
+      expect(mockSendInternalError).not.toHaveBeenCalled();
+    });
+
     it('continues when retranslation fails', async () => {
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       fastify.translationService = {

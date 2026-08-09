@@ -127,8 +127,12 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Purge all in-memory cached translations for a given message.
-   * Must be called before triggering a re-translation so that the old
-   * cached result is never served in place of the freshly computed one.
+   *
+   * `_processRetranslationAsync` l'appelle lui-même, en tête : la purge est
+   * une obligation de la RETRADUCTION, pas une consigne adressée à ses
+   * appelants. Elle a longtemps été documentée dans l'autre sens (« must be
+   * called before triggering a re-translation »), et c'est exactement ce qui a
+   * produit trois transports d'édition sur quatre qui ne l'appelaient pas.
    */
   invalidateCacheForMessage(messageId: string): void {
     this.translationCache.deleteByMessageId(messageId);
@@ -598,8 +602,23 @@ export class MessageTranslationService extends EventEmitter {
    * pour éviter les traductions inutiles (ex: fr → fr)
    */
   private async _processRetranslationAsync(messageId: string, messageData: MessageData) {
+    // Le cache mémoire est servi AVANT la base (`getTranslation`,
+    // `_processTranslationsAsync`) et n'a AUCUN TTL : une entrée non purgée
+    // rend la traduction du texte D'AVANT pour le texte d'APRÈS, jusqu'à
+    // l'éviction LRU au millième message. Retraduire, c'est précisément dire
+    // que l'ancien résultat ne vaut plus — la purge appartient donc ici, et
+    // non à l'appelant. Elle n'y était câblée que sur UN des quatre transports
+    // d'édition ; les trois autres — dont le socket, transport PRIMAIRE, et
+    // `PUT /messages/:messageId`, celui du client iOS — laissaient le périmé
+    // en place.
+    //
+    // Avant tout `await` et avant tout court-circuit : un contenu vide ou un
+    // message introuvable ne relance rien, mais périme l'ancien résultat
+    // exactement pareil, et rien ne repasserait l'effacer.
+    this.invalidateCacheForMessage(messageId);
+
     try {
-      
+
       // Récupérer le message existant depuis la base
       const existingMessage = await this.prisma.message.findFirst({
         where: { id: messageId }

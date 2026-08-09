@@ -112,13 +112,22 @@ export function registerMessagesAdvancedRoutes(
       }
 
       const { id, messageId } = request.params;
-      const { content, originalLanguage: claimedLanguage = 'fr' } = bodyResult.data;
+      const { content, originalLanguage: claimedLanguage } = bodyResult.data;
       // Canonicalise the client-claimed locale at the write boundary. This REST
       // edit path re-persists `originalLanguage` from the request body (unlike
       // the socket edit path, which reuses the already-canonical stored value),
       // so a raw platform locale (`fr-FR`, `en_US`) would otherwise fragment the
       // stored value + the retranslation source. Irreducible codes kept verbatim.
-      const originalLanguage = normalizeLanguageCode(claimedLanguage) ?? claimedLanguage;
+      //
+      // Le champ est OPTIONNEL, et il l'était déjà avec un défaut `'fr'` : une
+      // omission RÉÉTIQUETAIT donc le message en français — en base ET comme
+      // langue source de la retraduction. Cette route est la seule des quatre
+      // entrées d'édition à écrire cette colonne, parce qu'elle est la seule
+      // servie par une vue qui porte un sélecteur de langue ; l'omettre veut
+      // dire « je n'affirme rien sur la langue », pas « c'est du français ».
+      const claimedCanonicalLanguage = claimedLanguage === undefined
+        ? undefined
+        : normalizeLanguageCode(claimedLanguage) ?? claimedLanguage;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -191,12 +200,20 @@ export function registerMessagesAdvancedRoutes(
         onError: (err) => logger.error('Error processing tracking links in edit', err),
       });
 
-      // Mettre à jour le message avec le contenu traité
+      // Mettre à jour le message avec le contenu traité.
+      // Garde de concurrence optimiste, jumelle de celle que portent déjà les
+      // trois autres transports d'édition (socket `message:edit`,
+      // `PUT /messages/:messageId`, `PATCH /messages/:messageId`) : une
+      // suppression concurrente entre la lecture ci-dessus et cette écriture
+      // ferait sinon RESSUSCITER la ligne avec un contenu neuf — un `update`
+      // par id réussit quel que soit `deletedAt` — et `message:edited`
+      // partirait vers des clients qui l'ont déjà retirée. Prisma lève P2025
+      // quand rien ne matche : traduit en 404 plus bas, pas en 500.
       const updatedMessage = await prisma.message.update({
-        where: { id: messageId },
+        where: { id: messageId, deletedAt: null },
         data: {
           content: processedContent,
-          originalLanguage,
+          ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt: new Date()
         },
@@ -298,24 +315,28 @@ export function registerMessagesAdvancedRoutes(
 
       // Déclencher la retraduction automatique du message modifié
       try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 
-        // Invalider les traductions en base ET dans le cache mémoire LRU avant
-        // de lancer la retraduction — sinon _processRetranslationAsync peut
-        // servir l'ancien résultat caché au lieu de calculer le nouveau.
+        // Invalider les traductions en base avant de lancer la retraduction.
+        // La purge du cache mémoire LRU, elle, n'est plus faite ici : elle vit
+        // désormais dans `_processRetranslationAsync`, en tête, pour les QUATRE
+        // transports d'édition. Elle n'était câblée que sur celui-ci — le
+        // socket et `PUT /messages/:messageId` (le client iOS) laissaient donc
+        // la traduction du texte d'AVANT servie pour le texte d'APRÈS.
         await prisma.message.update({
           where: { id: messageId },
           data: { translations: null }
         });
-        translationService.invalidateCacheForMessage(messageId);
 
-        // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links)
+        // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links).
+        // La langue source est celle qui vient d'être ÉCRITE — donc la valeur
+        // stockée quand le corps n'en revendiquait aucune. Repartir d'un `'fr'`
+        // par défaut ferait traduire un texte anglais comme du français.
         const messageForRetranslation = {
           id: messageId,
           content: processedContent,
-          originalLanguage: originalLanguage,
+          originalLanguage: claimedCanonicalLanguage ?? existingMessage.originalLanguage,
           conversationId: conversationId,
           senderId: existingMessage.senderId
         };
@@ -374,6 +395,13 @@ export function registerMessagesAdvancedRoutes(
       return sendSuccess(reply, messageResponse);
 
     } catch (error) {
+      // P2025 = la garde `deletedAt: null` de l'écriture a mordu : le message a
+      // été supprimé entre la lecture et l'écriture. Ce n'est pas une panne, et
+      // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
+      // Même traduction que sur le sibling `PATCH /messages/:messageId`.
+      if ((error as { code?: string })?.code === 'P2025') {
+        return sendNotFound(reply, 'Message not found');
+      }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');
     }
