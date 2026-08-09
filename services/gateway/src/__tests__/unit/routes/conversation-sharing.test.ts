@@ -106,6 +106,7 @@ function createMockFastify() {
   const authenticate = jest.fn<any>();
   const notificationService = {
     createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
+    createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     createConversationInviteNotification: jest.fn<any>().mockResolvedValue(undefined),
   };
   const mentionService = {
@@ -814,9 +815,17 @@ describe('POST /conversations/join/:linkId', () => {
     prisma.participant.findMany.mockResolvedValue([adminParticipant]);
     const req = makeRequest({ params: { linkId: LINK_ID } });
     await route.handler(req, reply);
-    expect(fastify.notificationService.createMemberJoinedNotification).toHaveBeenCalledTimes(2);
+    // La confirmation au nouvel arrivant reste unitaire (un destinataire, une
+    // notification) ; les administrateurs partagent une seule diffusion, qui ne
+    // bloque plus la réponse « vous avez rejoint » derrière N appels en série.
+    expect(fastify.notificationService.createMemberJoinedNotification).toHaveBeenCalledTimes(1);
     expect(fastify.notificationService.createMemberJoinedNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ recipientUserId: adminParticipant.userId })
+      expect.objectContaining({ recipientUserId: USER_ID })
+    );
+    expect(fastify.notificationService.createMemberJoinedNotificationsBatch).toHaveBeenCalledTimes(1);
+    expect(fastify.notificationService.createMemberJoinedNotificationsBatch).toHaveBeenCalledWith(
+      [adminParticipant.userId],
+      { newMemberUserId: USER_ID, conversationId: CONV_ID, joinMethod: 'via_link' }
     );
   });
 

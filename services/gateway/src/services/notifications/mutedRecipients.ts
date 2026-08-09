@@ -5,9 +5,24 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  *
  * Removes from `userIds` every recipient whose
  * `UserConversationPreferences.isMuted` is true for `conversationId`.
- * Applied to the new_message / message_reply / message_reaction fan-out.
- * user_mentioned deliberately does NOT go through this filter: mentions
- * pierce the mute (WhatsApp convention).
+ *
+ * ## Ce qui passe par ce filtre, et ce qui le perce
+ *
+ * La ligne de partage n'est pas « message ou pas » mais **ambiant ou adressé**.
+ *
+ * | respecte le mute (AMBIANT) | perce le mute (ADRESSÉ) |
+ * |---|---|
+ * | `new_message`, `message_reply`, `message_reaction` | `user_mentioned` |
+ * | `member_joined`, `member_removed`, `member_left` | `added_to_conversation`, `removed_from_conversation` |
+ * | | `member_promoted` / `member_demoted` / `member_role_changed` |
+ *
+ * Mettre une conversation en sourdine dit « ne me raconte pas ce qui s'y
+ * passe » — pas « ne me dis pas que j'en suis sorti ». Un événement dont le
+ * destinataire est le SUJET (on l'ajoute, on le retire, son rôle change, on le
+ * nomme) reste adressé et passe outre, comme la mention par convention
+ * WhatsApp. Les allées et venues d'AUTRUI sont du bruit de fond : elles sont
+ * d'autant plus fréquentes que la conversation est active, donc exactement le
+ * cas qui a motivé le mute.
  */
 export async function filterMutedRecipients(
   prisma: PrismaClient,

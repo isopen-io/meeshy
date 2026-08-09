@@ -525,6 +525,17 @@ type StoryNotificationRecipients = {
   truncatedBuckets: FanoutBucket[];
 };
 
+/**
+ * La part d'une notification `member_joined` qui ne dépend PAS du destinataire.
+ * Lue une fois, servie à toute l'audience — c'est ce qui distingue une arrivée
+ * (un événement, N destinataires) d'une boucle de N notifications distinctes.
+ */
+type MemberJoinedSnapshot = {
+  readonly newMember: { username: string; displayName: string | null; avatar: string | null };
+  readonly conversation: { title: string | null; type: string } | null;
+  readonly memberCount: number;
+};
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -617,6 +628,32 @@ export class NotificationService {
       notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId });
       return null;
     }
+  }
+
+  /**
+   * Le destinataire a-t-il mis CETTE conversation en sourdine ?
+   *
+   * Unique porte pour les notifications à destinataire unique dont le type
+   * respecte le mute (cf. le tableau ambiant/adressé de `mutedRecipients.ts`).
+   * Elle existe parce que la règle avait déjà deux exemplaires — réaction et
+   * réponse — qui devaient devenir cinq : un même verdict, un même log, une
+   * même place dans l'ordre d'exécution.
+   *
+   * À appeler AVANT toute lecture et avant tout compteur mutant : une
+   * notification supprimée par le mute ne doit ni payer ses requêtes de
+   * contexte, ni consommer le budget anti-spam d'une paire (verrouillé par
+   * « muted-conversation reactions do not consume the pair throttle budget »).
+   */
+  private async isConversationMutedFor(
+    userId: string,
+    conversationId: string,
+    type: NotificationType
+  ): Promise<boolean> {
+    const nonMuted = await filterMutedRecipients(this.prisma, conversationId, [userId]);
+    if (nonMuted.length > 0) return false;
+
+    notificationLogger.info('Notification suppressed (conversation muted)', { userId, conversationId, type });
+    return true;
   }
 
   private async shouldCreateNotification(
@@ -1575,12 +1612,7 @@ export class NotificationService {
     // throttle : le mute est déterministe/durable alors que
     // shouldCreateReactionNotification MUTE son bucket — une réaction
     // supprimée par le mute ne doit pas consommer le budget de la paire.
-    const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.messageAuthorId]);
-    if (nonMuted.length === 0) {
-      notificationLogger.info('Reaction notification suppressed (conversation muted)', {
-        userId: params.messageAuthorId,
-        conversationId: params.conversationId,
-      });
+    if (await this.isConversationMutedFor(params.messageAuthorId, params.conversationId, 'message_reaction')) {
       return null;
     }
 
@@ -2806,46 +2838,120 @@ export class NotificationService {
     conversationId: string;
     joinMethod?: 'via_link' | 'invited';
   }): Promise<Notification | null> {
+    // Une arrivée est de l'activité AMBIANTE : elle se tait dans une
+    // conversation en sourdine (cf. `mutedRecipients.ts`). Avant les lectures :
+    // sur un groupe où tout le monde a coupé le son, un ajout de membre payait
+    // trois requêtes par destinataire pour ne rien émettre.
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_joined')) {
+      return null;
+    }
+
+    const snapshot = await this.loadMemberJoinedSnapshot(params.newMemberUserId, params.conversationId);
+    if (!snapshot) return null;
+
+    return this.emitMemberJoined(params.recipientUserId, params, snapshot);
+  }
+
+  /**
+   * Prévient une audience entière de la même arrivée.
+   *
+   * Les trois lectures dont `member_joined` a besoin — profil du nouveau
+   * membre, conversation, effectif — ne dépendent pas du destinataire : elles
+   * sont faites UNE fois pour toute l'audience, et le mute est demandé en une
+   * requête plutôt qu'une par personne. La boucle d'appels unitaires qui
+   * précédait payait 4 requêtes par destinataire pour quatre résultats
+   * identiques, et le surcoût grandissait avec le groupe.
+   *
+   * Rend le nombre de notifications réellement créées : une préférence de type
+   * ou un DND côté destinataire peut en écarter sans que ce soit une erreur.
+   */
+  async createMemberJoinedNotificationsBatch(
+    recipientUserIds: readonly string[],
+    common: {
+      newMemberUserId: string;
+      conversationId: string;
+      joinMethod?: 'via_link' | 'invited';
+    }
+  ): Promise<number> {
+    const audience = [...new Set(recipientUserIds)];
+    if (audience.length === 0) return 0;
+
+    const listening = await filterMutedRecipients(this.prisma, common.conversationId, audience);
+    if (listening.length === 0) {
+      notificationLogger.info('Member-joined fan-out silenced (whole audience muted)', {
+        conversationId: common.conversationId,
+        audienceSize: audience.length,
+      });
+      return 0;
+    }
+
+    const snapshot = await this.loadMemberJoinedSnapshot(common.newMemberUserId, common.conversationId);
+    if (!snapshot) return 0;
+
+    // `createNotification` ne rejette jamais (catch interne) — un destinataire
+    // en échec rend `null` et n'emporte pas les autres.
+    const results = await Promise.all(
+      listening.map((recipientUserId) => this.emitMemberJoined(recipientUserId, common, snapshot))
+    );
+    return results.filter(Boolean).length;
+  }
+
+  /**
+   * La part de `member_joined` qui ne dépend PAS du destinataire. `null` quand
+   * le nouveau membre est introuvable : sans acteur, la notification n'a pas de
+   * sujet, et aucun destinataire ne doit en recevoir.
+   */
+  private async loadMemberJoinedSnapshot(
+    newMemberUserId: string,
+    conversationId: string
+  ): Promise<MemberJoinedSnapshot | null> {
     const [newMember, conversation, memberCount] = await Promise.all([
       this.prisma.user.findUnique({
-        where: { id: params.newMemberUserId },
+        where: { id: newMemberUserId },
         select: { username: true, displayName: true, avatar: true },
       }),
       this.prisma.conversation.findUnique({
-        where: { id: params.conversationId },
+        where: { id: conversationId },
         select: { title: true, type: true },
       }),
       this.prisma.participant.count({
-        where: { conversationId: params.conversationId },
+        where: { conversationId },
       }),
     ]);
 
     if (!newMember) return null;
+    return { newMember, conversation, memberCount };
+  }
 
+  private emitMemberJoined(
+    recipientUserId: string,
+    common: { newMemberUserId: string; conversationId: string; joinMethod?: 'via_link' | 'invited' },
+    snapshot: MemberJoinedSnapshot
+  ): Promise<Notification | null> {
     return this.createNotification({
-      userId: params.recipientUserId,
+      userId: recipientUserId,
       type: 'member_joined',
       priority: 'low',
       content: 'Nouveau membre',
 
       actor: {
-        id: params.newMemberUserId,
-        username: newMember.username,
-        displayName: newMember.displayName,
-        avatar: newMember.avatar,
+        id: common.newMemberUserId,
+        username: snapshot.newMember.username,
+        displayName: snapshot.newMember.displayName,
+        avatar: snapshot.newMember.avatar,
       },
 
       context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
+        conversationId: common.conversationId,
+        conversationTitle: snapshot.conversation?.title,
+        conversationType: snapshot.conversation?.type as any,
       },
 
       metadata: {
         action: 'view_conversation',
-        memberCount,
+        memberCount: snapshot.memberCount,
         isMember: true,
-        joinMethod: params.joinMethod,
+        joinMethod: common.joinMethod,
       },
     });
   }
@@ -2899,12 +3005,7 @@ export class NotificationService {
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
-    const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.recipientUserId]);
-    if (nonMuted.length === 0) {
-      notificationLogger.info('Reply notification suppressed (conversation muted)', {
-        userId: params.recipientUserId,
-        conversationId: params.conversationId,
-      });
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'message_reply')) {
       return null;
     }
 
@@ -3521,6 +3622,13 @@ export class NotificationService {
     removedByUserId: string;
     conversationId: string;
   }): Promise<Notification | null> {
+    // Exclusion d'un TIERS — ambiant. À ne pas confondre avec
+    // `createRemovedFromConversationNotification`, qui annonce au destinataire
+    // sa PROPRE exclusion et perce donc le mute.
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_removed')) {
+      return null;
+    }
+
     const actor = await this.prisma.user.findUnique({
       where: { id: params.removedByUserId },
       select: { username: true, displayName: true, avatar: true },
@@ -3612,6 +3720,11 @@ export class NotificationService {
     memberUserId: string;
     conversationId: string;
   }): Promise<Notification | null> {
+    // Départ d'un TIERS — ambiant, comme l'arrivée et l'exclusion.
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_left')) {
+      return null;
+    }
+
     const member = await this.prisma.user.findUnique({
       where: { id: params.memberUserId },
       select: { username: true, displayName: true, avatar: true },

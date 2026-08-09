@@ -1,3 +1,101 @@
+# Cycle 33 — Le mute ne faisait pas taire les allées et venues, et chaque membre repayait la même requête
+
+Tête prise après relecture du reste ouvert du cycle 32 : la file d'attente de fan-out (D1) attend
+de savoir **ce que** la troncature mesure en production, or cette routine n'a aucun accès aux logs.
+Construire la file maintenant serait choisir entre file, pagination et borne relevée à l'aveugle —
+exactement ce que le cycle 32 a refusé de faire. Le fan-out d'appartenance, lui, ne demandait aucune
+donnée de production pour être jugé : il porte deux défauts lisibles dans le code.
+
+## Lot A — « en sourdine » ne couvrait pas les allées et venues
+
+`UserConversationPreferences.isMuted` était respecté par trois familles de notifications —
+`new_message`, `message_reply`, `message_reaction` — et par elles seules. Trois autres, toutes
+attachées à une conversation, passaient outre : **`member_joined`, `member_removed`,
+`member_left`**. Une conversation mise en sourdine continuait donc de sonner à chaque va-et-vient,
+et **d'autant plus fort qu'elle est active** — donc précisément dans le cas qui a motivé le mute.
+Le toggle global `memberJoinedEnabled` existait, mais il coupe le type PARTOUT : il ne permet pas de
+faire taire un groupe bavard tout en gardant les arrivées ailleurs.
+
+La ligne de partage retenue n'est pas « message ou pas » mais **ambiant ou adressé** :
+
+| respecte le mute (AMBIANT) | perce le mute (ADRESSÉ) |
+|---|---|
+| `new_message`, `message_reply`, `message_reaction` | `user_mentioned` |
+| `member_joined`, `member_removed`, `member_left` | `added_to_conversation`, `removed_from_conversation` |
+| | `member_promoted` / `member_demoted` / `member_role_changed` |
+
+Mettre une conversation en sourdine dit « ne me raconte pas ce qui s'y passe », pas « ne me dis pas
+que j'en suis sorti ». Un événement dont le destinataire est le SUJET reste adressé et passe outre,
+comme la mention par convention WhatsApp. Le tableau vit dans `mutedRecipients.ts`, à côté du filtre
+qu'il gouverne — et **la frontière est verrouillée par trois tests** sur les types qui percent, pas
+seulement par ceux sur les types qui se taisent : sans eux, la règle dériverait au premier
+« appliquons-la partout ».
+
+La règle avait déjà deux exemplaires (réaction, réponse) et devait en gagner trois. Elle passe par
+une porte unique, `isConversationMutedFor(userId, conversationId, type)` : un même verdict, un même
+log, une même **place dans l'ordre d'exécution** — avant toute lecture de contexte et avant tout
+compteur mutant. Ce dernier point n'est pas cosmétique : le test « muted-conversation reactions do
+not consume the pair throttle budget » (cycle GW3) l'exigeait déjà pour les réactions, et il valait
+d'être rendu structurel plutôt que redécouvert par site.
+
+## Lot B — une arrivée est UN événement, pas N
+
+`createMemberJoinedNotification` fait trois lectures : profil du nouveau membre, conversation,
+effectif. **Aucune ne dépend du destinataire.** Les deux appelants l'appelaient en boucle, une fois
+par membre déjà présent : un ajout dans un groupe de 200 personnes payait donc ~600 requêtes pour
+trois résultats distincts, et le surcoût croissait avec la taille du groupe — là où il fait mal.
+Avec le lot A, la question du mute s'y ajoutait, une requête par destinataire de plus.
+
+`createMemberJoinedNotificationsBatch(recipientUserIds, common)` lit le contexte **une fois**
+(`MemberJoinedSnapshot`), demande le mute **une fois** pour toute l'audience, puis diffuse. Le compte
+rendu est celui des notifications **réellement créées**, pas la taille de l'audience visée : une
+préférence de type ou un DND côté destinataire en écarte sans que ce soit une erreur.
+
+Le second appelant (`routes/conversations/sharing.ts`, jointure par lien) aggravait le tableau d'une
+autre manière : sa boucle `await`ait **chaque administrateur à la suite**, dans la requête HTTP. La
+réponse « vous avez rejoint » attendait que le dernier d'entre eux soit notifié. Un seul appel
+maintenant, et la confirmation au nouvel arrivant reste unitaire — un destinataire, une notification.
+
+## Vérification
+
+- **20 tests neufs**, dont **6 rouges observés** avant implémentation (3 suppressions par le mute,
+  la non-lecture du contexte pour un destinataire en sourdine, et les 2 sites de fan-out passés au
+  batch). Les 14 autres verrouillent ce qui était déjà juste et devait le rester : les trois types
+  qui **percent** le mute, l'équivalence payload batch/unitaire, l'audience vide qui ne touche pas la
+  base, le doublon de destinataire, le nouveau membre introuvable, le décompte réel.
+- **Suite gateway complète : 613 suites, 15 820 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture lignes **95,67 %** (inchangée), `mutedRecipients.ts` à 100 %.
+- Une suite préexistante (`NotificationService-new-methods.test.ts`) est tombée sur le lot A : son
+  double Prisma n'avait ni `userConversationPreferences` ni `participant`. Elle avait **raison de
+  tomber** — le service lit désormais ces modèles — et le double a été complété, pas contourné.
+
+## Reste ouvert après ce cycle
+
+- **`filterMutedRecipients` échoue FERMÉ.** Si la lecture des préférences lève, la notification est
+  perdue (le rejet remonte au `.catch` de l'appelant). Le voisinage fait l'inverse et le dit :
+  `shouldCreateNotification` « fail open : en cas d'erreur de lecture des prefs, on crée la
+  notification », `_loadReadReceiptOptOuts` « repli ouvert ». Un incident Mongo transitoire avale
+  donc aujourd'hui toutes les notifications de réaction/réponse/appartenance au lieu d'en laisser
+  passer quelques-unes de trop. **Tête du prochain cycle** — comportement préexistant, hors de la
+  tête de celui-ci, mais désormais partagé par cinq familles au lieu de deux.
+- **Le fan-out `member_joined` n'a aucune borne** — ni de lignes, ni de concurrence. Le `Promise.all`
+  du batch reprend le parallélisme non borné que la boucle avait déjà (et que
+  `createMentionNotificationsBatch` a aussi) : sur un groupe de plusieurs milliers de membres, une
+  seule arrivée déclenche autant d'écritures simultanées. À arbitrer avec la file d'attente de
+  fan-out (D1 du cycle 32), pas séparément.
+- **La file d'attente de fan-out** (D1 du cycle 32) reste ouverte, inchangée, et pour la même
+  raison : elle demande de regarder ce que la troncature mesure en production.
+- **`createMemberLeftNotification` et `createTranslationReadyNotification` n'ont aucun appelant de
+  production.** Le premier a reçu le mute (il est le frère exact de l'arrivée et de l'exclusion) ;
+  le second a été laissé tel quel — « ta traduction est prête » se lit comme la fin d'une action
+  demandée, donc adressée. À trancher le jour où l'un des deux trouve un appelant.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`@Display Name` inextractible dans le domaine social** — septième report.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29, aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
+
+---
+
 # Cycle 32b — Addendum d'une session parallèle
 
 Deux sessions ont livré le cycle 32 en parallèle, sur la même tête (« la troncature est muette »).
