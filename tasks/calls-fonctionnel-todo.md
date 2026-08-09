@@ -5279,3 +5279,70 @@ et le contrôleur `adaptive-degradation`.
   scoped `translationCompleted:*`, `bufferCleanupInterval`) et sur `webrtc-service.ts`/`use-webrtc-p2p.ts`
   (web) au-delà du candidat retenu, sans trouver de second candidat de confiance équivalente — voir le
   rapport de session pour les pistes écartées et leur raison.
+
+## Vague 83 — `WebRTCService.addLocalMedia()` ne pré-associe pas le m-line vidéo réservé au stream de l'appel : l'upgrade audio→vidéo ne s'affiche jamais côté pair distant (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` a montré une PR ouverte de cette même routine (#2677, Vague 82, 15/15 checks CI verts,
+aucun conflit avec `main` — les deux seuls commits mergés sur `main` depuis sa base touchent la modération de
+posts et `tasks/todo.md`/`tasks/lessons.md`, aucun chevauchement) — mergée en premier (squash), règle de la
+routine de ne jamais empiler un nouveau cycle sur un backlog non fermé. Branche resynchronisée sur `main` à
+jour. iOS (`xcodebuild`/`swift` absents) et Android (`gradle` présent, aucun SDK Android sous `/opt`)
+restent hors d'atteinte dans ce sandbox, reconfirmé ce cycle. Audit délégué à un agent d'exploration sur
+l'ensemble de la pile web calling (hooks, services, stores, composants) au-delà des fichiers déjà couverts
+par les Vagues 76-82 — 3 candidats remontés, le premier retenu après relecture ligne à ligne directe (pas de
+confiance aveugle dans le rapport d'agent).
+
+- **Root cause confirmée par lecture directe** : `addLocalMedia()` crée le m-line vidéo de deux façons selon
+  que l'appel démarre en vidéo ou en audio-only. Branche vidéo (`sendVideo: true`) :
+  `addTransceiver(videoTrack, { direction: 'sendrecv', streams: [stream] })` — le sender est associé au
+  `MediaStream` de l'appel dès sa création. Branche audio-only (m-line vidéo réservé `recvonly`, sans piste,
+  pour un upgrade ultérieur façon FaceTime) : `addTransceiver('video', { direction: 'recvonly' })` — **sans
+  `streams`**. Cette asymétrie est invisible tant que l'appel reste audio-only, mais `enableVideoSend()`
+  (l'upgrade mi-appel) attache la caméra à ce transceiver réservé via `sender.replaceTrack(track)` puis
+  bascule la direction à `sendrecv` — et `replaceTrack()` ne modifie JAMAIS l'association stream/MSID d'un
+  sender (spec WebRTC 1.0) : elle est figée au moment de `addTransceiver()`. Résultat : la renégociation
+  déclenchée par l'upgrade envoie un m-line vidéo sans groupement MSID. Côté pair distant,
+  `RTCPeerConnection.ontrack` se déclenche avec `event.streams` vide — et le handler `onTrack` de
+  `use-webrtc-p2p.ts` ne fait `addRemoteStream(participantId, event.streams[0])` QUE
+  `if (event.streams && event.streams[0])` (ligne confirmée par lecture directe). L'upgrade caméra du pair
+  émetteur ne s'affiche donc jamais chez le pair distant — silencieusement, sans erreur ni log côté
+  destinataire — alors que le flux inverse (appel démarré directement en vidéo) fonctionne, ce qui a
+  probablement masqué le défaut jusqu'ici (le chemin FaceTime « démarrer en audio, activer la caméra en
+  cours d'appel », le seul qui emprunte la branche `recvonly` non associée, est un chemin moins testé
+  manuellement que « démarrer directement en vidéo »).
+- **Fix** : ajout de `streams: [stream]` à la branche `recvonly` de `addLocalMedia()`, symétrique à la
+  branche `sendrecv` juste au-dessus — une ligne. Le m-line vidéo réservé est désormais pré-associé au même
+  `MediaStream` que l'audio dès la création de l'appel, qu'il porte une piste tout de suite ou seulement
+  plus tard via `enableVideoSend()`. Aucune autre ligne de logique métier modifiée ; `enableVideoSend()` /
+  `disableVideoSend()` inchangés (le bug était uniquement dans l'association initiale, pas dans le cycle
+  toggle).
+- **Tests** (TDD, RED confirmé avant fix) : test existant `reserves a recvonly video m-line for an
+  audio-only call` (verrouillait le comportement bogué, `toHaveBeenCalledWith('video', { direction:
+  'recvonly' })` sans `streams`) réécrit pour asserter `{ direction: 'recvonly', streams: [stream] }` — RED
+  confirmé (l'appel réel n'incluait pas `streams`). Nouveau test dans le describe « mid-call A/V switch » :
+  « groups the upgraded video track under the call stream so the remote ontrack event carries streams[0] »
+  — vérifie l'association au moment de `addLocalMedia()` ET que `enableVideoSend()` ne recrée pas le
+  transceiver (un seul appel `addTransceiver('video', …)` au total, pas deux) — RED confirmé avant fix
+  (assertion `streams: [stream]` échouait, seul `{ direction: 'recvonly' }` reçu).
+- **Vérification** : `webrtc-service.test.ts` + `webrtc-service.coverage.test.ts` (2 suites / 174 tests, +2
+  net) verts. Sweep complet `video-call|use-webrtc|use-call|orchestrator|adaptive-degradation` (42 suites /
+  436 tests) vert — aucune régression sur les fixes des Vagues 76-82 (mutual exclusion toggle manuel/auto,
+  garde de ré-entrance `startCall`, piste vidéo exclusive au `close()`, ownership `participantLeft`).
+  Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`,
+  puis `packages/shared && npx prisma generate --generator client && bun run build` sans erreur. `npx tsc
+  --noEmit` sur `apps/web` : 1624 erreurs avant et après le diff (`git stash`/`stash pop`), zéro nouvelle.
+  `eslint` : même échec sandbox-only de config circulaire que documenté aux vagues précédentes
+  (65/67/68/69/72-82), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit + nouveaux candidats de l'agent d'exploration cette vague, non retenus) : dead
+  code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ;
+  candidat iOS `CallManager.selectCamera(id:)` (Vague 78) — tous reconfirmés hors d'atteinte faute de
+  toolchain iOS/Android vérifiable dans ce sandbox. Nouveaux candidats web (confiance moindre, non repris ce
+  cycle) : (1) `use-webrtc-p2p.ts` `enableVideo()` retourne tôt (no-op) si aucun pair n'existe encore (appel
+  encore en sonnerie), mais `VideoCallInterface.handleToggleVideo` traite ce retour comme un succès et
+  bascule quand même `controls.videoEnabled` — désynchronise l'état UI de l'état média réel pour cette
+  connexion tant qu'aucun pair n'a rejoint ; (2) `call-store.ts` `addRemoteStream` n'arrête pas les pistes
+  d'un stream remplacé, contrairement à `setLocalStream` (testé explicitement pour ce comportement) —
+  confirmé comme un vrai trou de couverture de test, mais le chemin d'exploitation (un stream remplacé sans
+  `removeRemoteStream` intercalé) n'a été que partiellement établi, confiance moyenne.
