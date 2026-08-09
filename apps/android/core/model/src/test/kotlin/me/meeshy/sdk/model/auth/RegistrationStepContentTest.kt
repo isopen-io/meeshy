@@ -39,12 +39,18 @@ class RegistrationStepContentTest {
     }
 
     @Test
-    fun isImplemented_everyStepOtherThanPseudoPhoneEmailAndIdentity_isFalse() {
+    fun isImplemented_password_isTrue() {
+        assertThat(RegistrationStepContent.isImplemented(RegistrationStep.PASSWORD)).isTrue()
+    }
+
+    @Test
+    fun isImplemented_everyStepOtherThanPseudoPhoneEmailIdentityAndPassword_isFalse() {
         val implementedSoFar = setOf(
             RegistrationStep.PSEUDO,
             RegistrationStep.PHONE,
             RegistrationStep.EMAIL,
             RegistrationStep.IDENTITY,
+            RegistrationStep.PASSWORD,
         )
         RegistrationStep.ordered
             .filter { it !in implementedSoFar }

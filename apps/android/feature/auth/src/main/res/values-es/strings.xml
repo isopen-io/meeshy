@@ -38,6 +38,25 @@
     <string name="registration_identity_subtitle">Tus amigos podrán reconocerte.</string>
     <string name="registration_identity_first_name_label">Nombre</string>
     <string name="registration_identity_last_name_label">Apellido</string>
+    <string name="registration_password_header">Protege tu cuenta</string>
+    <string name="registration_password_subtitle">Elige una contraseña segura que solo tú conozcas.</string>
+    <string name="registration_password_label">Contraseña</string>
+    <string name="registration_password_confirm_label">Confirmar contraseña</string>
+    <string name="registration_password_show">Mostrar contraseña</string>
+    <string name="registration_password_hide">Ocultar contraseña</string>
+    <string name="registration_password_match">¡Las contraseñas coinciden!</string>
+    <string name="registration_password_mismatch">Las contraseñas no coinciden</string>
+    <string name="registration_password_requirements_title">Requisitos de seguridad</string>
+    <string name="registration_password_req_length">Al menos 8 caracteres</string>
+    <string name="registration_password_req_uppercase">Una mayúscula</string>
+    <string name="registration_password_req_lowercase">Una minúscula</string>
+    <string name="registration_password_req_digit">Un dígito</string>
+    <string name="registration_password_strength_0">Demasiado débil</string>
+    <string name="registration_password_strength_1">Débil</string>
+    <string name="registration_password_strength_2">Regular</string>
+    <string name="registration_password_strength_3">Buena</string>
+    <string name="registration_password_strength_4">Fuerte</string>
+    <string name="registration_password_strength_5">Excelente</string>
 
     <string name="guest_join_title">Unirse a la conversación</string>
     <string name="guest_join_subtitle">Crea una identidad temporal para unirte</string>
