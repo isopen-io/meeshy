@@ -28,9 +28,19 @@ import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
+import javax.inject.Inject
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Ou l'utilisateur a range ses deux boutons flottants. Injecte ici et passe a
+     * [MeeshyApp] : c'est un singleton Hilt, pas un ViewModel.
+     */
+    @Inject
+    lateinit var floatingButtonPositions: FloatingButtonPositionStore
+
 
     private var launchRoute by mutableStateOf<String?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
@@ -46,6 +56,7 @@ class MainActivity : ComponentActivity() {
             LocalizedContent(languageCode = languageCode) {
                 MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
                     MeeshyApp(
+                        floatingButtonPositions = floatingButtonPositions,
                         launchRoute = launchRoute,
                         onLaunchRouteConsumed = { launchRoute = null },
                     )

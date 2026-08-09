@@ -89,6 +89,21 @@ import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryTray
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 
 object Routes {
     const val LOGIN = "login"
@@ -156,21 +171,40 @@ object Routes {
 }
 
 /**
- * iOS parity (Option A): the bottom tab bar is replaced by the radial [MeeshyMenuFab].
- * Each item navigates to a top-level destination with the same save/restore-state
- * semantics the tab bar used, plus a "new conversation" shortcut.
+ * Les entrees du menu deploye, dans l'ordre, par cle de libelle.
+ *
+ * Extrait de [rememberRadialMenuItems] — qui est @Composable, donc hors de portee
+ * d'un test JVM — pour que la regle « Feed sort, Reels reste » soit verifiable.
+ */
+internal fun menuItemLabelKeys(): List<String> = listOf(
+    "menu_new_conversation",
+    "tab_messages",
+    "menu_reels",
+    "tab_calls",
+    "tab_activity",
+    "menu_contacts",
+    "tab_profile",
+)
+
+/**
+ * Parite iOS : la barre d'onglets est remplacee par DEUX boutons flottants
+ * deplacables. Ce menu est le contenu deploye du bouton DROIT ; le bouton gauche
+ * mene au Flux (tap) et aux Reels (appui long).
+ *
+ * « Feed » n'y figure plus : un simple tap du bouton gauche y mene, et deux chemins
+ * pour un meme geste brouillent la carte mentale. « Reels » y reste au contraire —
+ * un appui long n'est pas decouvrable et ne peut pas etre le seul acces.
  */
 @Composable
 private fun rememberRadialMenuItems(navController: NavController): List<RadialMenuItem> {
     val messages = stringResource(R.string.tab_messages)
-    val feed = stringResource(R.string.tab_feed)
     val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
     val profile = stringResource(R.string.tab_profile)
     val newConversation = stringResource(R.string.menu_new_conversation)
     val reels = stringResource(R.string.menu_reels)
     val contacts = stringResource(R.string.menu_contacts)
-    return remember(messages, feed, calls, activity, profile, newConversation, reels, contacts) {
+    return remember(messages, calls, activity, profile, newConversation, reels, contacts) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -183,7 +217,6 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
                 navController.navigate(Routes.NEW_CONVERSATION)
             },
             RadialMenuItem(Icons.Filled.ChatBubble, messages, MeeshyPalette.Indigo500, onSelect = tab(Routes.CONVERSATIONS)),
-            RadialMenuItem(Icons.Filled.Home, feed, MeeshyPalette.Success, onSelect = tab(Routes.FEED)),
             RadialMenuItem(Icons.Filled.PlayCircle, reels, MeeshyPalette.Error) {
                 navController.navigate(Routes.reels())
             },
@@ -209,6 +242,7 @@ private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
 
 @Composable
 fun MeeshyApp(
+    floatingButtonPositions: FloatingButtonPositionStore,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
 ) {
@@ -227,6 +261,10 @@ fun MeeshyApp(
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
     val showMenuFab = currentRoute in tabRoutes
+    val leftButtonPosition by floatingButtonPositions.leftPosition.collectAsStateWithLifecycle()
+    val rightButtonPosition by floatingButtonPositions.rightPosition.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
     // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
@@ -267,11 +305,9 @@ fun MeeshyApp(
 
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        floatingActionButton = {
-            if (showMenuFab) {
-                MeeshyMenuFab(items = radialItems)
-            }
-        },
+        // Pas de floatingActionButton ici : ce slot positionne LUI-MEME son contenu,
+        // ce qui est incompatible avec des boutons deplacables. Ils sont poses dans
+        // le Box ci-dessous, par-dessus le NavHost.
     ) { padding ->
       Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
@@ -662,6 +698,81 @@ fun MeeshyApp(
                     .padding(top = MeeshySpacing.sm),
             )
         }
+
+        // Les deux boutons flottants qui pilotent le routage (parite iOS
+        // RootView.draggableFloatingButtons). Ils vivent ICI, par-dessus le NavHost,
+        // et non dans le slot floatingActionButton du Scaffold : ce slot positionne
+        // lui-meme son contenu, donc un bouton deplacable ne peut pas y tenir.
+        if (showMenuFab) {
+            MeeshyFloatingButtons(
+                leftPosition = leftButtonPosition,
+                rightPosition = rightButtonPosition,
+                onLeftPositionChange = { scope.launch { floatingButtonPositions.setLeftPosition(it) } },
+                onRightPositionChange = { scope.launch { floatingButtonPositions.setRightPosition(it) } },
+                // Tap : le Flux, par le NavHost et avec la meme semantique
+                // save/restore que les autres destinations de premier niveau.
+                onLeftTap = {
+                    navController.navigate(Routes.FEED) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                // Appui long : les Reels. Geste identique a celui d'iOS.
+                onLeftLongPress = { navController.navigate(Routes.reels()) },
+                onRightTap = { menuExpanded = !menuExpanded },
+                // Appui long sur l'avatar : raccourci direct vers le profil, sans
+                // passer par le menu.
+                onRightLongPress = {
+                    menuExpanded = false
+                    navController.navigate(Routes.SETTINGS) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                leftContentDescription = stringResource(R.string.tab_feed),
+                rightContentDescription = stringResource(R.string.a11y_floating_menu),
+                leftContent = {
+                    Icon(
+                        imageVector = Icons.Filled.Home,
+                        contentDescription = null,
+                        tint = MeeshyPalette.Success,
+                    )
+                },
+                rightContent = {
+                    if (menuExpanded) {
+                        MeeshyMenuFab(items = radialItems)
+                    } else {
+                        MeeshyInitialsButton(username = authState.username)
+                    }
+                },
+            )
+        }
       }
+    }
+}
+
+/**
+ * Le bouton droit au repos : les initiales de l'utilisateur.
+ *
+ * `AuthState` n'expose pas d'URL d'avatar — les initiales sont donc le chemin
+ * NOMINAL, pas un cas degrade. Un nom vide rend tout de meme un cercle plein : un
+ * bouton de navigation invisible rendrait l'application impilotable.
+ */
+@Composable
+private fun MeeshyInitialsButton(username: String) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(MeeshyPalette.Indigo500),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = username.trim().take(1).uppercase(),
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+        )
     }
 }

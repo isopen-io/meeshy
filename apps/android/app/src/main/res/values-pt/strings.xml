@@ -56,4 +56,5 @@
     <string name="call_channel_description">Chamadas de voz e vídeo recebidas</string>
     <string name="call_incoming_audio">Chamada recebida</string>
     <string name="call_incoming_video">Chamada de vídeo recebida</string>
+    <string name="a11y_floating_menu">Menu de navegação</string>
 </resources>
