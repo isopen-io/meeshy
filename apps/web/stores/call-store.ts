@@ -298,6 +298,18 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addRemoteStream: (participantId, stream) => {
     const { remoteStreams } = get();
+
+    // Stop the previous stream's tracks if this participant is being reassigned
+    // a different MediaStream (e.g. a full ICE restart producing a fresh remote
+    // stream object) — mirrors setLocalStream's replace-and-stop behavior above.
+    // A repeated ontrack for the SAME stream (e.g. the audio->video mid-call
+    // upgrade, where the reserved video m-line shares the audio track's MSID)
+    // must be a no-op here: stopping still-live tracks would kill the call.
+    const previousStream = remoteStreams.get(participantId);
+    if (previousStream && previousStream !== stream) {
+      previousStream.getTracks().forEach((track) => track.stop());
+    }
+
     const newStreams = new Map(remoteStreams);
     newStreams.set(participantId, stream);
     set({ remoteStreams: newStreams });

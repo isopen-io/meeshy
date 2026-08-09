@@ -419,6 +419,36 @@ describe('CallStore', () => {
         expect(state.remoteStreams.get('participant-1')).toBe(stream1);
         expect(state.remoteStreams.get('participant-2')).toBe(stream2);
       });
+
+      it('should stop the previous stream tracks when replacing a participant stream', () => {
+        const oldStream = new MockMediaStream() as unknown as MediaStream;
+        const oldTrack = new MockMediaStreamTrack('video');
+        (oldStream as any).tracks.push(oldTrack);
+
+        const newStream = new MockMediaStream() as unknown as MediaStream;
+
+        act(() => {
+          useCallStore.getState().addRemoteStream('participant-1', oldStream);
+          useCallStore.getState().addRemoteStream('participant-1', newStream);
+        });
+
+        expect(oldTrack.stopped).toBe(true);
+        expect(useCallStore.getState().remoteStreams.get('participant-1')).toBe(newStream);
+      });
+
+      it('should not stop tracks when the same stream is reported again for a participant', () => {
+        const stream = new MockMediaStream() as unknown as MediaStream;
+        const track = new MockMediaStreamTrack('video');
+        (stream as any).tracks.push(track);
+
+        act(() => {
+          useCallStore.getState().addRemoteStream('participant-1', stream);
+          useCallStore.getState().addRemoteStream('participant-1', stream);
+        });
+
+        expect(track.stopped).toBe(false);
+        expect(useCallStore.getState().remoteStreams.get('participant-1')).toBe(stream);
+      });
     });
 
     describe('removeRemoteStream', () => {

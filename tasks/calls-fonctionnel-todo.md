@@ -5504,3 +5504,59 @@ ligne avant implémentation.
   délivrer l'action ou terminer l'appel directement quand `supportsHolding=false`, indéterminable par
   lecture seule) ; candidats web Vague 83 non repris (`enableVideo()` no-op pré-connexion désynchronisant
   `controls.videoEnabled`, `call-store.ts.addRemoteStream` ne stoppant pas les pistes remplacées).
+
+## Vague 85 — `call-store.ts.addRemoteStream` ne stoppait pas les pistes d'un remote stream remplacé (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` (recherche large sur les titres/branches `claude/upbeat-dirac` + mots-clés calling) et
+`list_pull_requests` (état `open`, tout le dépôt) n'ont remonté aucune PR ouverte de cette routine — la
+Vague 84 (#2691) était déjà mergée sur `main`, HEAD strictement à jour (`cdf033b`). Cycle démarré sur une
+base propre, sans backlog à fermer d'abord. Repris directement le candidat laissé « non repris » à la fin
+de la Vague 83 : `call-store.ts.addRemoteStream` n'arrête pas les pistes d'un stream remplacé, contrairement
+à `setLocalStream` (testé explicitement pour ce comportement) — confirmé comme un vrai trou de couverture,
+confiance moyenne quant au chemin d'exploitation. Choix du candidat web plutôt que iOS/Android : seule pile
+dont la boucle TDD RED→GREEN est vérifiable dans ce sandbox (`xcodebuild`/`swift` et SDK Android toujours
+absents, reconfirmé).
+
+- **Root cause confirmée par lecture directe** : `addRemoteStream(participantId, stream)` fait
+  `newStreams.set(participantId, stream)` sans jamais inspecter s'il existe déjà un stream pour ce
+  `participantId` — contrairement à `setLocalStream` juste au-dessus, qui arrête explicitement les pistes
+  de l'ancien stream avant de le remplacer. Chemin d'exploitation identifié : le `onTrack` de
+  `use-webrtc-p2p.ts` (`event.streams[0]`) rappelle `addRemoteStream` à chaque track distant reçu. Pour
+  l'upgrade audio→vidéo en cours d'appel (le chemin que la Vague 83 vient de corriger), le nouveau track
+  vidéo partage le MSID du stream audio déjà en cours — même objet `MediaStream`, donc pas de remplacement,
+  pas de fuite. Mais un ICE restart complet / une reconnexion P2P qui recrée le `RTCPeerConnection`
+  (`P2PWebRTCClient`, chemin de reconnexion) fait renaître un `MediaStream` distinct pour le même
+  participant : l'ancien objet, avec ses pistes toujours actives côté navigateur (jamais `stop()`), est
+  silencieusement remplacé dans la Map — fuite de pistes média (et par extension, sur certains navigateurs,
+  fuite de la capture/décodage sous-jacente tant que le GC n'a pas collecté l'ancien objet, ce qui n'est pas
+  garanti pour des `MediaStreamTrack` actifs).
+- **Fix, même patron que `setLocalStream()`** : avant `newStreams.set`, si un stream existait déjà pour ce
+  `participantId` ET que ce n'est PAS le même objet (`previousStream !== stream`), ses pistes sont arrêtées.
+  La comparaison par référence est cruciale : le cas « même stream re-signalé » (upgrade audio→vidéo,
+  MSID partagé) doit rester un no-op — arrêter les pistes d'un stream toujours en cours d'utilisation
+  couperait l'appel en direct. Aucune autre ligne de logique métier modifiée ; `removeRemoteStream()` /
+  `clearRemoteStreams()` inchangés (déjà corrects, déjà testés).
+- **Tests** (TDD, RED confirmé avant fix) : deux nouveaux tests dans `call-store.test.ts` — « should stop
+  the previous stream tracks when replacing a participant stream » (RED confirmé : `oldTrack.stopped`
+  attendu `true`, reçu `false` avant le fix) et « should not stop tracks when the same stream is reported
+  again for a participant » (verrouille le cas MSID-partagé, déjà vert avant le fix — garde de
+  non-régression pour empêcher qu'un futur fix naïf compare par `participantId` seul au lieu de la
+  référence de stream).
+- **Vérification** : `call-store.test.ts` (68 tests, +2 net) vert. Sweep
+  `video-call|use-webrtc|use-call|orchestrator|adaptive-degradation|call-store` (43 suites / 504 tests)
+  vert — aucune régression, notamment sur `use-webrtc-p2p.test.tsx` (chemin `onTrack`, non touché) et sur
+  les fixes des Vagues 76-84. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun
+  install --ignore-scripts` (bun 1.3.11, léger écart avec la version cible 1.3.14 documentée, non
+  bloquant), puis `packages/shared && npx prisma generate --generator client && bun run build` sans
+  erreur. `npx tsc --noEmit` sur `apps/web` : 1181 erreurs avant et après le diff (`git stash`/`stash
+  pop`), zéro nouvelle. `eslint` non ré-exécuté ce cycle (échec sandbox-only de config circulaire documenté
+  aux vagues précédentes 65-84, indépendant de ce diff).
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
+  needs on-device confirmation) ; candidat web Vague 83 non repris cette vague : `use-webrtc-p2p.ts
+  enableVideo()` retourne tôt (no-op) si aucun pair n'existe encore (appel encore en sonnerie), mais
+  `VideoCallInterface.handleToggleVideo` traite ce retour comme un succès et bascule quand même
+  `controls.videoEnabled` — désynchronise l'état UI de l'état média réel pour cette connexion tant qu'aucun
+  pair n'a rejoint.
