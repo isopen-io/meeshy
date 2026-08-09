@@ -1772,11 +1772,20 @@ struct RootView: View {
             },
             onLeftLongPress: {
                 HapticFeedback.medium()
-                // Long-press : même action que le tap (ouvre/ferme l'overlay Feed).
-                // Les Reels se lancent depuis le bouton dédié du header « Meeshy Feed ».
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showFeed.toggle()
-                }
+                // Long-press : les Réels, en plein écran, sans graine — le lecteur
+                // va chercher sa page. Le tap garde le Flux ; les deux gestes du
+                // même bouton mènent donc aux deux formes du même contenu.
+                //
+                // `presentFresh()` a été écrite POUR ce geste (sa documentation dit
+                // « long-press launch »), et l'ancrage du liquid reveal se calcule
+                // depuis la position de CE bouton — cf. `FeedButtonAnchor` et ses
+                // tests. Le rebranchement rend au geste l'infrastructure qui
+                // l'attendait.
+                //
+                // Le bouton Réels du header « Meeshy Feed » RESTE en place : un
+                // appui long n'est pas découvrable et ne peut pas être le seul
+                // accès à une section entière.
+                ReelsPresenter.shared.presentFresh()
             },
             onRightLongPress: {
                 // Long-press sur l'avatar = raccourci direct vers la page profil
@@ -1791,7 +1800,10 @@ struct RootView: View {
                 router.push(.profile)
             },
             isSearchBarVisible: !isScrollingDown,
-            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            // L'appui long lance les Réels : un geste que rien ne signale à l'écran
+            // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
+            // ne peut pas le découvrir par tâtonnement.
+            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité. Appui long : les Réels.", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
             rightA11yValue: notificationManager.unreadCount > 0
                 ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
