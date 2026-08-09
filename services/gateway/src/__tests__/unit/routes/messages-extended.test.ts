@@ -199,6 +199,9 @@ async function buildApp(opts: {
       findFirst: jest.fn().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),
       findMany: jest.fn().mockResolvedValue([{ userId: USER_ID }]),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ role: 'USER' }),
+    },
     messageAttachment: {
       findFirst: jest.fn().mockResolvedValue(opts.attachmentOverride ?? mockAttachment),
     },
@@ -260,6 +263,69 @@ describe('DELETE /messages/:messageId — with attachments', () => {
       .mockResolvedValueOnce({ ...mockMessage, attachments: [{ id: ATTACHMENT_ID }, { id: 'attach-2' }] })
       .mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+// ─── DELETE /messages/:messageId — qui a le droit de supprimer ────────────────
+//
+// C'est la route qu'ANDROID emploie (`core/network/.../api/MessageApi.kt:40`,
+// `@DELETE("messages/{id}")`). Elle portait sa propre copie de la règle, et
+// cette copie avait dérivé sur deux points que rien ne mesurait : elle joignait
+// les participants SANS `isActive: true`, et elle testait un rôle `CREATOR` que
+// l'enum `UserRole` ne contient pas.
+
+describe('DELETE /messages/:messageId — admission', () => {
+  const OTHER_USER = 'user-other';
+  const foreignMessage = {
+    ...mockMessage,
+    sender: { ...mockMessage.sender, userId: OTHER_USER },
+  };
+
+  async function deleteAs(opts: { membership?: any; globalRole?: string | null }) {
+    const app = await buildApp({ messageOverride: foreignMessage });
+    (app as any).prisma.participant.findFirst.mockResolvedValue(opts.membership ?? null);
+    (app as any).prisma.user.findUnique.mockResolvedValue(
+      opts.globalRole === undefined ? { role: 'USER' } : { role: opts.globalRole }
+    );
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(foreignMessage)
+      .mockResolvedValueOnce(null);
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    const participantQuery = (app as any).prisma.participant.findFirst.mock.calls[0]?.[0];
+    await app.close();
+    return { res, participantQuery };
+  }
+
+  it("admet l'admin de CONVERSATION qui n'est qu'un USER global", async () => {
+    const { res } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } } });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("n'interroge l'appartenance QU'active — un admin qui a quitté ne supprime plus", async () => {
+    // Sans `isActive: true`, une ligne participant laissée derrière par un
+    // départ conservait indéfiniment le droit de supprimer.
+    const { participantQuery } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } } });
+
+    expect(participantQuery.where).toEqual({ conversationId: CONV_ID, userId: USER_ID, isActive: true });
+  });
+
+  it('refuse le simple membre', async () => {
+    const { res } = await deleteAs({ membership: { role: 'member', user: { role: 'USER' } } });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("refuse le rôle `CREATOR`, absent de l'enum `UserRole`", async () => {
+    const { res } = await deleteAs({ globalRole: 'CREATOR' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("admet le BIGBOSS global qui n'est pas participant", async () => {
+    const { res } = await deleteAs({ globalRole: 'BIGBOSS' });
+
     expect(res.statusCode).toBe(200);
   });
 });

@@ -3790,13 +3790,16 @@ describe('MessageHandler.handleMessageDelete', () => {
     const callback = jest.fn();
     const message = makeMessageForDelete({
       sender: { id: 'participant-other', userId: 'user-other' },
-      conversation: { createdAt: new Date(), participants: [{ role: 'admin' }] },
+      conversation: { createdAt: new Date() },
     });
+    // L'appartenance ne se lit plus dans le `include` du message : `admitMessageDelete`
+    // la lit lui-même, avec `isActive: true`, et seulement pour un non-auteur.
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => message),
         update: jest.fn(async () => ({})),
       },
+      participant: { findFirst: jest.fn(async () => ({ id: 'participant-deleter', role: 'admin', user: { role: 'USER' } })) },
       conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const io = makeMockIo();
@@ -3812,13 +3815,14 @@ describe('MessageHandler.handleMessageDelete', () => {
     const callback = jest.fn();
     const message = makeMessageForDelete({
       sender: { id: 'participant-other', userId: 'user-other' },
-      conversation: { createdAt: new Date(), participants: [{ role: 'member' }] },
+      conversation: { createdAt: new Date() },
     });
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => message),
         update: jest.fn(async () => ({})),
       },
+      participant: { findFirst: jest.fn(async () => null) },
       user: { findUnique: jest.fn(async () => ({ role: 'BIGBOSS' })) },
       conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
@@ -3958,7 +3962,6 @@ describe('MessageHandler.handleMessageDelete', () => {
       conversation: {
         createdAt: new Date('2025-01-01'),
         lastMessageAt: new Date('2026-02-01'),
-        participants: [{ id: 'participant-mod', role: 'admin' }],
       },
     });
     const enqueue: any = jest.fn(async () => undefined);
@@ -3969,6 +3972,11 @@ describe('MessageHandler.handleMessageDelete', () => {
       },
       conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
       participant: {
+        // La ligne du SUPPRIMEUR, lue par `admitMessageDelete` : c'est d'elle
+        // que vient le `Participant.id` à exclure de la file. La lire là plutôt
+        // que dans le `include` du message est ce qui empêche de retomber sur
+        // `message.senderId`, qui désigne l'AUTEUR.
+        findFirst: jest.fn(async () => ({ id: 'participant-mod', role: 'admin', user: { role: 'USER' } })),
         findMany: jest.fn(async () => [
           { id: 'participant-1', userId: 'user-1' },
           { id: 'participant-mod', userId: 'user-mod' },

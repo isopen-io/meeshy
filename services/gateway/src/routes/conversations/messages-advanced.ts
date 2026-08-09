@@ -19,6 +19,7 @@ import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
 import { processExplicitLinks } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -495,30 +496,22 @@ export function registerMessagesAdvancedRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      // Vérifier les permissions : l'auteur peut supprimer, ou les modérateurs/admins/créateurs
-      const isAuthor = existingMessage.sender?.userId === userId;
-      let canDelete = isAuthor;
-
-      if (!canDelete) {
-        // Vérifier si l'utilisateur est modérateur/admin/créateur dans cette conversation
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: conversationId,
-            userId: userId,
-            isActive: true
-          },
-          include: {
-            user: {
-              select: { role: true }
-            }
-          }
-        });
-
-        if (membership) {
-          const userRole = membership.user.role;
-          canDelete = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
-        }
-      }
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
+      // Cette copie-ci lisait `membership.user.role` — le rôle GLOBAL — alors
+      // que le commentaire qu'elle portait annonçait « les modérateurs/admins de
+      // CETTE conversation ». Un admin de conversation qui n'est qu'un `USER`
+      // global supprimait donc depuis Android et depuis le composer web, et
+      // recevait 403 ici : c'est-à-dire depuis iOS et depuis la vue web, les
+      // deux clients qui passent par cette route.
+      const { admitted: canDelete } = await admitMessageDelete({
+        prisma,
+        deleterUserId: userId,
+        message: {
+          authorUserId: existingMessage.sender?.userId,
+          conversationId,
+        },
+        onError: (err) => logger.error('[CONVERSATIONS] delete admission read failed', err),
+      });
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');

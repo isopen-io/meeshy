@@ -1,3 +1,172 @@
+# Cycle 38b — Deux sessions ont livré le cycle 38 en parallèle, sur la MÊME question
+
+Le cycle 37 laissait une question précise : « quoi d'autre identifie l'acteur d'une mutation par une
+propriété de l'objet muté plutôt que par le contexte d'authentification ? ». Deux sessions l'ont
+reprise en parallèle et ont trouvé **deux défauts différents, tous les deux réels** :
+
+- **Cycle 38 (ci-dessous)** — le miroir : un contexte d'authentification passé là où une propriété de
+  l'objet est attendue, sur la diffusion du retrait d'un post.
+- **Cycle 38b (ce bloc)** — le geste jumeau entier : `admitMessageEdit` avait un frère manquant, et
+  les trois transports de SUPPRESSION portaient trois règles divergentes.
+
+Les deux sont conservés intégralement : ils ne touchent aucun fichier source commun, et **aucune des
+deux réponses ne contient l'autre**. La leçon d'intégration du cycle 23 s'applique — comparer défaut
+par défaut, jamais « qui est arrivé en premier ». Ce qui est ajouté ici, au-delà des deux blocs :
+la question du cycle 37 a rendu **deux** familles de défauts d'un coup, ce qui est en soi le signe
+qu'elle n'est pas épuisée. Elle reste posée telle quelle pour le cycle 39.
+
+## Cycle 38b — Les cycles 33/34 ont unifié QUI peut ÉDITER. Personne n'avait unifié qui peut SUPPRIMER.
+
+Tête prise dans le « reste ouvert » du cycle 37, à la question qu'il posait mot pour mot : **quoi
+d'autre identifie l'acteur d'une mutation par une propriété de l'objet muté plutôt que par le
+contexte d'authentification ?** La réponse n'était pas un site isolé — c'est le geste jumeau tout
+entier. `messageEditAdmission.ts` existe depuis le cycle 33 ; `messageDeleteAdmission.ts` n'existait
+pas, et les **trois** transports de suppression portaient chacun leur copie de la règle. Les trois
+avaient divergé.
+
+## Ce que les trois copies répondaient
+
+| entrée | client | auteur | rôle CONVERSATION | rôle GLOBAL | appartenance ACTIVE |
+|---|---|---|---|---|---|
+| socket `message:delete` | web (composer) | oui | **oui** | MODERATOR/ADMIN/BIGBOSS | non exigée |
+| `DELETE /messages/:messageId` | **Android** (`MessageApi.kt:40`) | oui | **oui** | + **`CREATOR`** (mort) | **non filtrée — membre INACTIF admis** |
+| `DELETE /conversations/:id/messages/:mid` | **iOS** (`MessageService.swift:138`) + web (`message.service.ts:75`) | oui | **NON** | MODERATOR/ADMIN/BIGBOSS | oui |
+
+Les quatre clients ont été vérifiés dans les quatre langages (leçon 88). **Aucune entrée n'est
+morte.**
+
+## Lot A — un admin de conversation supprimait depuis Android et recevait 403 depuis son iPhone
+
+La route conversation-scopée annonçait en commentaire « les modérateurs/admins/créateurs de **cette
+conversation** » et lisait `membership.user.role` — le rôle **GLOBAL**. Un admin ou modérateur de
+conversation (`Participant.role`, minuscules) qui n'est qu'un `USER` global n'y passait jamais.
+
+Ce que ça donne pour un utilisateur : **la même personne, sur le même message, obtenait trois
+réponses selon le client qu'elle tenait en main.** Le bouton « supprimer » fonctionnait dans le
+composer web (socket) et sur Android, et échouait en 403 sur iPhone et dans la vue web — les deux
+clients qui passent par cette route. Rien dans l'interface ne distingue les deux chemins : le geste
+est le même, la personne est la même, le message est le même.
+
+C'est exactement le patron de la **leçon 88b** — un commentaire qui affirme une règle que le code
+n'applique pas. Celui-ci nommait même la bonne règle : il décrivait l'intention, pas le code, et
+trois cycles ont relu la ligne en la croyant.
+
+## Lot B — quitter une conversation n'y retirait pas le pouvoir de supprimer
+
+`DELETE /messages/:messageId` — la route d'Android — joignait les participants avec
+`where: { userId }` et **sans `isActive: true`**. Les deux autres transports filtrent. Une ligne
+`Participant` laissée derrière par un départ conservait donc indéfiniment le rôle qu'elle portait :
+un ancien admin, parti depuis des mois, supprimait toujours les messages de la conversation.
+
+Défaut de sécurité au sens strict — une permission qui survit à la révocation du lien qui la
+justifiait — et invisible : rien ne l'expose côté client, et aucun test ne l'avait mesuré.
+
+## Lot C — le rôle `CREATOR`, qui n'existe pas
+
+La même route testait `authRequest.authContext.registeredUser?.role === 'CREATOR'`. L'enum `UserRole`
+contient `USER, ADMIN, MODERATOR, BIGBOSS, AUDIT, ANALYST, AGENT` — **pas `CREATOR`**. La branche ne
+pouvait jamais être vraie. Elle ne causait aucun bug ; elle donnait à lire une permission
+inexistante, ce qui suffit à égarer le prochain audit. (`CREATOR` existe bien dans le dépôt, comme
+rôle de **communauté** — `MemberRole.CREATOR`. Deux espaces de nommage, un mot.)
+
+Au passage, le rôle global se lit désormais en **base** et non dans le jeton : un rôle révoqué depuis
+l'émission du jeton ne supprime plus. C'est ce que faisaient déjà le socket et
+`admitMessageEdit`.
+
+## Lot D — ce que l'unité rend, et pourquoi elle rend plus qu'un booléen
+
+`admitMessageDelete` rend `{ admitted, actorParticipantId? }`. Le second champ n'est pas une
+commodité : le cycle 37 a établi que la file de rejeu hors ligne doit exclure **l'acteur** dans les
+deux monnaies d'identité, et le handler socket tirait ce `Participant.id` du `include` du message
+qu'on vient de retirer. Sans le rendre, son appelant referait la lecture — ou, bien pire, retomberait
+sur `message.senderId`, qui désigne l'**AUTEUR** dès qu'un modérateur supprime. C'est précisément le
+défaut que le cycle 37 a fermé ; le rouvrir en refactorant aurait été le résultat le plus bête
+possible de ce cycle.
+
+Il est `undefined` pour l'auteur (son `Participant.id` **est** `message.senderId`, que l'appelant
+tient déjà) et pour l'admin global non participant (aucune ligne à lire). Il n'est **jamais** rendu
+avec un refus — un test le verrouille, pour que rien ne puisse l'employer sans avoir lu `admitted`.
+
+## Ce que l'unification a coûté en lectures : moins que rien
+
+Les trois transports joignaient les participants **sur tous les chemins**, y compris celui de
+l'auteur — le cas de très loin le plus fréquent. L'unité ne lit rien pour l'auteur, une fois pour un
+non-auteur membre (rôle de conversation ET rôle global dans la même ligne), deux fois pour un
+non-auteur non membre. Les deux `include` correspondants ont été retirés des requêtes de message.
+
+## Le choix de règle, et ce qu'il ne tranche pas
+
+La règle unifiée est **l'UNION des trois intentions, jamais leur intersection** : les trois copies
+voulaient admettre le rôle de conversation (deux le faisaient, la troisième l'annonçait), et deux
+admettaient le rôle global sans appartenance. Unifier vers l'union ne retire donc **aucune capacité
+vivante** — seuls le membre INACTIF et le `CREATOR` mort disparaissent, et ni l'un ni l'autre n'était
+voulu. Aucun transport n'est narrowed sur un chemin que quelqu'un emprunte.
+
+Ce que ce cycle **ne** tranche **pas**, et laisse explicitement à un arbitrage humain :
+`admitMessageEdit` EXIGE une appartenance active du non-auteur, `admitMessageDelete` non. Un
+`BIGBOSS` peut donc supprimer un message dans une conversation où il n'est pas, mais pas l'éditer.
+Les deux positions se défendent — corriger le texte d'autrui à distance est plus intrusif que retirer
+un contenu signalé — mais l'écart est réel et mérite une décision produit, pas un alignement
+silencieux décidé par une routine. Aligner dans un sens ou dans l'autre est mécanique une fois la
+décision prise : un `PRIVILEGED_GLOBAL_ROLES` partagé, deux unités jumelles, une garde à déplacer.
+
+## Vérification
+
+- **`PRIVILEGED_GLOBAL_ROLES` est désormais exporté et partagé** par les deux unités. Deux ensembles
+  écrits séparément dériveraient — c'est la maladie même que ces deux fichiers soignent.
+- **32 tests neufs, écrits AVANT l'implémentation, 6 rouges observés au niveau TRANSPORT** :
+  - `messageDeleteAdmission.test.ts` (neuf, 26 cas) — RED complet (le module n'existait pas) : les
+    trois branches d'admission, `isActive: true` vérifié sur la requête elle-même, le refus de
+    `CREATOR`, le refus de `USER`/`AUDIT`/`ANALYST`/`AGENT`, l'auteur qui ne coûte aucune lecture,
+    le message ANONYME dont personne n'est l'auteur, les cinq cas du `Participant.id` rendu, et
+    quatre cas d'échec FERMÉ — dont « une lecture d'appartenance en échec n'ouvre pas la porte au
+    rôle global », qui vérifie que la dégradation ne fabrique pas un second chemin.
+  - `messages-extended.test.ts` — 5 cas sur la route d'**Android**, **3 rouges** : l'admin de
+    conversation admis, la requête d'appartenance filtrée `isActive: true`, le `BIGBOSS` global.
+  - `conversation-messages-advanced.test.ts` — 4 cas sur la route d'**iOS et du web**, **3 rouges** :
+    l'admin de conversation, le modérateur de conversation, le `BIGBOSS` non participant.
+  - Le test du cycle 37 (« l'AUTEUR hors ligne reçoit la suppression quand un admin modère ») est
+    **conservé tel quel dans son assertion** et re-câblé sur la nouvelle lecture : c'est lui qui
+    prouve que le refactor n'a pas rouvert le défaut qu'il gardait.
+- **`tsc --noEmit` : 0 erreur** (après `prisma generate` + build de `packages/shared`, cf. CLAUDE.md).
+- **Suite gateway complète : 618 suites, 15 950 tests, tout vert.** Couverture lignes **95,66 %**
+  (inchangée), branches **89,03 %**. `messageDeleteAdmission.ts` : **100 % lignes, 100 % branches,
+  100 % fonctions**. `messageEditAdmission.ts` reste à 100 %. `MessageHandler.ts` : 98,20 % lignes,
+  96,10 % branches.
+- **Deux fichiers de tests socket ont dû être re-câblés** (`MessageHandlerEditDelete.test.ts`,
+  `MessageHandler.core.test.ts`) : ils injectaient l'appartenance dans le `include` du message. Leurs
+  **assertions sont inchangées** — seule la source de la donnée bouge. C'est délibéré : un test dont
+  on change l'assertion en même temps que le code ne prouve plus rien.
+
+## Reste ouvert après ce cycle
+
+- **L'asymétrie édition/suppression sur l'appartenance du non-auteur** (ci-dessus) — la seule
+  question que ce cycle a ouverte et délibérément pas fermée. **Tête sérieuse du prochain cycle si
+  une décision produit est disponible** ; sinon, la laisser ouverte plutôt que trancher à l'aveugle.
+- **La question du cycle 37 reste partiellement ouverte** : elle a rendu un geste entier (la
+  suppression), pas un site isolé. À reposer sur les autres familles de mutation — réactions,
+  épinglage, membres de conversation — en cherchant les rôles lus dans le **jeton** plutôt qu'en base,
+  et les appartenances jointes **sans `isActive`**. `routes/messages.ts:779-788` (l'épinglage) porte
+  encore une copie de la forme « rôle de conversation OU rôle du jeton » qui n'a pas été touchée ici :
+  candidat immédiat, même patron, même remède.
+- **`admin/messages.ts` n'a AUCUNE route de suppression** — la modération globale passe forcément par
+  les routes utilisateur. C'est ce qui rend le chemin « rôle global sans appartenance » nécessaire
+  aujourd'hui, et c'est ce qu'il faudrait construire avant de pouvoir le retirer.
+- **`appartenance active de l'auteur`** — la question produit du cycle 34 attend toujours une
+  décision (un auteur qui a quitté peut encore éditer ses messages par les quatre entrées). Elle est
+  le miroir exact de l'asymétrie ci-dessus ; les deux devraient être tranchées ensemble.
+- **La file d'attente de fan-out** (D1 du cycle 32) — septième report, même raison : elle demande de
+  savoir ce que la troncature mesure en production, et cette routine n'a aucun accès aux logs.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b).
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`@Display Name` inextractible dans le domaine social** — douzième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`
+  (cycle 26).
+- **Les deux scripts de réparation de base** (`repair-mention-user-ids.ts`,
+  `repair-tracking-link-created-by.ts`) attendent une exécution avec accès MongoDB — action humaine.
+- **`eslint` ne peut pas tourner sur le gateway** : aucun `eslint.config.js` depuis la migration
+  ESLint v9. Condition préexistante, non couverte par la CI — qui ne gate que sur `test:coverage`.
+
 # Cycle 38 — Un retrait de contenu doit s'annoncer, et s'annoncer au bon monde.
 
 Tête prise exactement où le cycle 37 la posait : « quoi d'autre identifie l'acteur d'une mutation par

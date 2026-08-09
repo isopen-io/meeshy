@@ -1030,10 +1030,15 @@ describe('MessageHandler — handleMessageDelete', () => {
       conversation: {
         createdAt: new Date('2024-01-01'),
         lastMessageAt: new Date('2024-05-01'),
-        participants: memberRole ? [{ role: memberRole }] : [],
       },
       attachments,
     });
+    // L'appartenance ne se lit plus dans le `include` du message : elle est lue
+    // par `admitMessageDelete`, avec `isActive: true`, et seulement quand
+    // l'acteur n'est pas l'auteur.
+    (deps.prisma.participant.findFirst as jest.Mock<any>).mockResolvedValue(
+      memberRole ? { role: memberRole, user: { role: 'USER' } } : null
+    );
     if (globalRole) {
       (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({ role: globalRole });
     }
@@ -1354,9 +1359,17 @@ describe('MessageHandler — handleMessageDelete', () => {
       conversation: {
         createdAt: new Date('2024-01-01'),
         lastMessageAt: new Date('2024-05-01'),
-        participants: [{ id: 'deleter-participant', role: 'admin' }],
       },
       attachments: [],
+    });
+    // La ligne participant du SUPPRIMEUR, lue par `admitMessageDelete` : c'est
+    // d'elle que vient le `Participant.id` à exclure. La lire là plutôt que dans
+    // le `include` du message est ce qui empêche de retomber sur
+    // `message.senderId`, qui désigne l'AUTEUR.
+    (deps.prisma.participant.findFirst as jest.Mock<any>).mockResolvedValue({
+      id: 'deleter-participant',
+      role: 'admin',
+      user: { role: 'USER' },
     });
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({ createdAt: new Date('2024-06-01') });

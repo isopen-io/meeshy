@@ -58,6 +58,7 @@ import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/Men
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import { processExplicitLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -878,8 +879,11 @@ export class MessageHandler {
    * Handles real-time message deletion (soft delete) via WebSocket.
    * Mirrors the REST DELETE /messages/:messageId logic.
    *
-   * Permissions: message author OR conversation admin/moderator OR global ADMIN/BIGBOSS.
-   * Anonymous users cannot delete.
+   * Permissions: `admitMessageDelete` — l'auteur sans limite de temps, sinon un
+   * rôle privilégié de CONVERSATION (`admin`/`moderator`) ou GLOBAL
+   * (`MODERATOR`/`ADMIN`/`BIGBOSS`). La règle vit dans l'unité partagée, pas
+   * ici : les trois transports de suppression y répondent désormais la même
+   * chose. Les utilisateurs anonymes ne peuvent pas supprimer.
    */
   async handleMessageDelete(
     socket: Socket,
@@ -916,14 +920,14 @@ export class MessageHandler {
           conversationId: true,
           senderId: true,
           sender: { select: { id: true, userId: true } },
+          // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
+          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. Ces deux
+          // dates restent pour la garde d'optimistic concurrency sur
+          // `lastMessageAt`, plus bas.
           conversation: {
             select: {
               createdAt: true,
               lastMessageAt: true,
-              participants: {
-                where: { userId, isActive: true },
-                select: { id: true, role: true },
-              },
             },
           },
           attachments: { select: { id: true } },
@@ -935,22 +939,23 @@ export class MessageHandler {
         return;
       }
 
-      const memberRole = message.conversation.participants[0]?.role;
-      const isAuthor = message.sender?.userId === userId;
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle,
+      // jumeau d'`admitMessageEdit`. Cette copie-ci était la plus juste des
+      // trois, et c'est précisément pour ça qu'elle n'était pas suffisante :
+      // rien ne la reliait aux deux autres, qui avaient dérivé chacune de son
+      // côté. Sa forme est conservée à l'identique — auteur, rôle de
+      // conversation, puis rôle global en lecture paresseuse.
+      const admission = await admitMessageDelete({
+        prisma: this.prisma,
+        deleterUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+        },
+        onError: (err) => handlerLogger.warn('delete admission read failed', { messageId: validated.messageId, error: err }),
+      });
 
-      let canDelete = isAuthor || memberRole === 'admin' || memberRole === 'moderator';
-
-      // Lazy global role lookup — only when author + conversation-role checks fail
-      if (!canDelete) {
-        const userRecord = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { role: true },
-        });
-        const globalRole = userRecord?.role;
-        canDelete = globalRole === 'ADMIN' || globalRole === 'BIGBOSS' || globalRole === 'MODERATOR';
-      }
-
-      if (!canDelete) {
+      if (!admission.admitted) {
         this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
         return;
       }
@@ -1012,13 +1017,19 @@ export class MessageHandler {
       // then never learns their moderated message was removed.
       //
       // Les DEUX monnaies d'identité de l'acteur sont passées, et elles se
-      // relaient : le `Participant.id` vient de la ligne conversation-scopée
-      // lue plus haut, qui est `undefined` pour un admin GLOBAL non-participant
-      // — lequel a toujours un `User.id`. L'exclusion ne dépend donc jamais du
-      // fait que l'acteur soit connecté. Les deux espaces d'id ne se croisant
-      // pas, en passer deux ne sur-exclut personne : ils désignent la même
-      // personne.
-      const deleterParticipantId = message.conversation.participants[0]?.id;
+      // relaient. Le `Participant.id` a deux provenances, et une seule est
+      // juste dans chaque cas :
+      //   - l'acteur EST l'auteur → c'est `message.senderId`, par définition ;
+      //   - l'acteur est un tiers → c'est la ligne que `admitMessageDelete`
+      //     vient de lire pour l'admettre, JAMAIS `message.senderId`, qui
+      //     désigne alors la personne à servir et non celle à exclure.
+      // Il reste `undefined` pour un admin GLOBAL non-participant, lequel a
+      // toujours un `User.id`. L'exclusion ne dépend donc jamais du fait que
+      // l'acteur soit connecté. Les deux espaces d'id ne se croisant pas, en
+      // passer deux ne sur-exclut personne : ils désignent la même personne.
+      const deleterParticipantId = message.sender?.userId === userId
+        ? message.senderId
+        : admission.actorParticipantId;
       this._enqueueOfflineEventForParticipants({
         conversationId: message.conversationId,
         actorParticipantId: deleterParticipantId,

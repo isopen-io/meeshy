@@ -1238,6 +1238,82 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
+    // C'est la route qu'iOS (`MeeshySDK/Services/MessageService.swift:138`) et
+    // le web (`services/message.service.ts:75`) emploient pour supprimer. Sa
+    // copie de la règle lisait `membership.user.role` — le rôle GLOBAL — alors
+    // que son commentaire annonçait « modérateurs/admins de CETTE
+    // conversation ». Un admin de conversation qui n'est qu'un `USER` global
+    // supprimait donc depuis Android et depuis le composer web, et recevait 403
+    // depuis son iPhone : même personne, même message, trois réponses.
+    it('admet l\'admin de CONVERSATION qui n\'est qu\'un USER global', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: OTHER_USER_ID },
+        attachments: [],
+      });
+      prisma.participant.findFirst.mockResolvedValue({ role: 'admin', user: { role: 'USER' } });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+      expect(mockSendForbidden).not.toHaveBeenCalled();
+    });
+
+    it('admet le modérateur de CONVERSATION qui n\'est qu\'un USER global', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: OTHER_USER_ID },
+        attachments: [],
+      });
+      prisma.participant.findFirst.mockResolvedValue({ role: 'moderator', user: { role: 'USER' } });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    it('admet le BIGBOSS global qui n\'est PAS participant — parité avec le socket et Android', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: OTHER_USER_ID },
+        attachments: [],
+      });
+      prisma.participant.findFirst.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({ role: 'BIGBOSS' });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    it('refuse le simple membre', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: OTHER_USER_ID },
+        attachments: [],
+      });
+      prisma.participant.findFirst.mockResolvedValue({ role: 'member', user: { role: 'USER' } });
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockSendForbidden).toHaveBeenCalled();
+    });
+
     it('allows delete when user is author', async () => {
       prisma.message.findFirst.mockResolvedValue({
         ...makeExistingMessage(),
