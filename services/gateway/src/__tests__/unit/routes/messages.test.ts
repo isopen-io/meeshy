@@ -26,6 +26,18 @@ jest.mock('../../../middleware/auth', () => ({
 }));
 
 const mockDeleteAttachment = jest.fn().mockResolvedValue(undefined);
+// Les compteurs de conversation : seul le singleton est doublé, la table
+// MIME → compteur et la clé de crédit restent les vraies.
+const mockOnMessageDeleted = jest.fn(async () => undefined);
+const mockOnMessageEdited = jest.fn(async () => undefined);
+jest.mock('../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
+  conversationMessageStatsService: {
+    onMessageDeleted: (...a: any[]) => (mockOnMessageDeleted as any)(...a),
+    onMessageEdited: (...a: any[]) => (mockOnMessageEdited as any)(...a),
+  },
+}));
+
 jest.mock('../../../services/attachments/index', () => ({
   AttachmentService: jest.fn().mockImplementation(() => ({
     deleteAttachment: (...args: any[]) => mockDeleteAttachment(...args),
@@ -306,6 +318,27 @@ describe('PUT /messages/:messageId', () => {
     }));
   });
 
+  // Ce transport — celui qu'emploie iOS — n'ajustait pas les compteurs :
+  // `totalWords`/`totalCharacters` restaient sur les longueurs du texte
+  // d'origine, définitivement (aucun recalcul périodique n'existe).
+  it('ajuste les compteurs sur l\'écart de longueur', async () => {
+    (mockOnMessageEdited as any).mockClear();
+
+    const res = await app.inject({
+      method: 'PUT', url: '/messages/' + MSG_ID,
+      payload: { content: 'Updated content' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const calls = (mockOnMessageEdited as any).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [, conversationId, authorKey, previous, next] = calls[0];
+    expect(conversationId).toBe(CONV_ID);
+    expect(authorKey).toBe(USER_ID);
+    expect(previous).toBe('Hello!');
+    expect(next).toBe('Updated content');
+  });
+
   it('returns 404 without broadcasting when the message was deleted between read and write (concurrent delete race)', async () => {
     (app as any).prisma.message.updateMany.mockResolvedValueOnce({ count: 0 });
     const res = await app.inject({
@@ -364,6 +397,32 @@ describe('DELETE /messages/:messageId', () => {
     (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
     expect(res.statusCode).toBe(500);
+  });
+
+  // Cette route — celle qu'emploie Android — retirait le message sans jamais
+  // rendre son crédit aux compteurs. Le décompte ne vivait que dans la route
+  // iOS/web, et le comptage que dans le handler socket : aucune des deux
+  // moitiés ne couvrait l'autre.
+  it('débite les compteurs de la conversation', async () => {
+    (mockOnMessageDeleted as any).mockClear();
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce({
+        ...mockMessage,
+        attachments: [{ id: 'att-1', mimeType: 'audio/mp4' }],
+      })
+      .mockResolvedValueOnce(null);
+
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    expect(res.statusCode).toBe(200);
+    const calls = (mockOnMessageDeleted as any).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [, conversationId, authorKey, content, tokens, messageType] = calls[0];
+    expect(conversationId).toBe(CONV_ID);
+    expect(authorKey).toBe(USER_ID);
+    expect(content).toBe('Hello!');
+    expect(tokens).toEqual(['audio']);
+    expect(messageType).toBe('text');
   });
 
   it('recomputes lastMessageAt via an optimistic-concurrency updateMany guarded on the pre-delete value', async () => {

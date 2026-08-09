@@ -1312,75 +1312,44 @@ describe('MessageHandler', () => {
     });
   });
 
-  // ── Attachment type classification in handleMessageSendWithAttachments ────
+  // ── Le handler ne compte plus lui-même ───────────────────────────────────
 
-  describe('handleMessageSendWithAttachments — attachment type stats', () => {
-    function setupSuccess(attachments: any[]) {
-      const validatedData = {
+  describe('comptage des messages — la place, pas le calcul', () => {
+    // Ce bloc remplace six tests qui vérifiaient ICI la classification des MIME
+    // et la clé `userId || participantId`. Ils passaient tous, et c'est
+    // précisément ce qui masquait la panne : la règle qu'ils verrouillaient ne
+    // vivait QUE dans ce handler, si bien qu'un message envoyé par REST — le
+    // chemin PRIMAIRE d'iOS — n'était jamais compté, pendant que sa suppression
+    // décrémentait. Le calcul est désormais celui de `runMessagePostSaveEffects`
+    // (testé chez lui, sur tous les tuyaux) ; ce qui reste à prouver ici est que
+    // le handler ne le refait PAS — sans quoi l'envoi socket compterait double.
+    async function sendWithAttachment(mimeType: string | null) {
+      const data = {
         conversationId: VALID_CONV_ID,
         content: 'msg',
-        attachmentIds: [attachments[0]?.id ?? 'a1b2c3d4e5f6a1b2c3d4e5f0'],
+        attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0'],
         clientMessageId: VALID_CID,
       };
-      mockValidateSocketEvent.mockReturnValue({ success: true, data: validatedData });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data });
       mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
       (deps.attachmentService.getAttachment as jest.Mock<any>).mockResolvedValue({
         id: 'a1b2c3d4e5f6a1b2c3d4e5f0', uploadedBy: USER_ID,
       });
       (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
         success: true,
-        data: { id: 'msg-att', conversationId: VALID_CONV_ID, createdAt: new Date(), senderId: PARTICIPANT_ID, attachments },
+        data: {
+          id: 'msg-att', conversationId: VALID_CONV_ID, createdAt: new Date(),
+          senderId: PARTICIPANT_ID, attachments: [{ id: 'att-1', mimeType }],
+        },
       });
       (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
       (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
       (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await handler.handleMessageSendWithAttachments(socket, data as any, callback);
     }
 
-    it('classifies image/jpeg as image type', async () => {
-      setupSuccess([{ id: 'att-1', mimeType: 'image/jpeg' }]);
-      await handler.handleMessageSendWithAttachments(socket, {
-        conversationId: VALID_CONV_ID, content: 'img', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
-      }, callback);
-      expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['image'], null, expect.anything()
-      );
-    });
-
-    it('classifies audio/mp3 as audio type', async () => {
-      setupSuccess([{ id: 'att-2', mimeType: 'audio/mp3' }]);
-      await handler.handleMessageSendWithAttachments(socket, {
-        conversationId: VALID_CONV_ID, content: 'audio', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
-      }, callback);
-      expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['audio'], null, expect.anything()
-      );
-    });
-
-    it('classifies video/mp4 as video type', async () => {
-      setupSuccess([{ id: 'att-3', mimeType: 'video/mp4' }]);
-      await handler.handleMessageSendWithAttachments(socket, {
-        conversationId: VALID_CONV_ID, content: 'vid', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
-      }, callback);
-      expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['video'], null, expect.anything()
-      );
-    });
-
-    it('classifies unknown mime as file type', async () => {
-      setupSuccess([{ id: 'att-4', mimeType: 'application/pdf' }]);
-      await handler.handleMessageSendWithAttachments(socket, {
-        conversationId: VALID_CONV_ID, content: 'doc', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
-      }, callback);
-      expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null, expect.anything()
-      );
-    });
-  });
-
-  // ── Stats update fire-and-forget error swallowing ─────────────────────────
-
-  describe('stats update fire-and-forget', () => {
-    it('swallows error from conversationMessageStatsService.onNewMessage in handleMessageSend', async () => {
+    it('ne compte pas le message une seconde fois sur `message:send`', async () => {
       mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData() });
       mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
       (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
@@ -1390,9 +1359,26 @@ describe('MessageHandler', () => {
       (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
       (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
       (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-      mockConversationMessageStatsOnNew.mockReturnValue(Promise.reject(new Error('stats error')));
 
-      await expect(handler.handleMessageSend(socket, makeValidSendData(), callback)).resolves.toBeUndefined();
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      expect(mockConversationMessageStatsOnNew).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('ne compte pas le message une seconde fois sur `message:send-with-attachments`', async () => {
+      await sendWithAttachment('image/jpeg');
+
+      expect(mockConversationMessageStatsOnNew).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('acquitte quand même un envoi dont la pièce jointe n\'a pas de MIME', async () => {
+      // L'ancien test lisait ici la branche `?? ""` du classement inline. Le
+      // classement a disparu du handler ; ce qui reste vrai — et vaut d'être
+      // tenu — est que l'envoi aboutit malgré un MIME absent.
+      await sendWithAttachment(null);
+
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
   });
@@ -1695,32 +1681,6 @@ describe('MessageHandler', () => {
       expect(deps.stats.errors).toBe(0);
     });
 
-    it('stats fire-and-forget catch in handleMessageSendWithAttachments', async () => {
-      const validAttachData = {
-        conversationId: VALID_CONV_ID,
-        content: 'doc',
-        attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0'],
-        clientMessageId: VALID_CID,
-      };
-      mockValidateSocketEvent.mockReturnValue({ success: true, data: validAttachData });
-      mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
-      (deps.attachmentService.getAttachment as jest.Mock<any>).mockResolvedValue({
-        id: 'a1b2c3d4e5f6a1b2c3d4e5f0', uploadedBy: USER_ID,
-      });
-      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
-        success: true,
-        data: { id: 'msg-statsf', conversationId: VALID_CONV_ID, createdAt: new Date(), senderId: PARTICIPANT_ID, attachments: [] },
-      });
-      (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
-      (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
-      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-      mockConversationMessageStatsOnNew.mockReturnValue(Promise.reject(new Error('stats fail')));
-
-      await expect(
-        handler.handleMessageSendWithAttachments(socket, validAttachData, callback)
-      ).resolves.toBeUndefined();
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
   });
 
   // ── Lang filter — anonymous sender + no sender ────────────────────────────
@@ -1929,30 +1889,6 @@ describe('MessageHandler', () => {
     });
   });
 
-  // ── Branch-gap-filling: userId undefined in stats call ────────────────────
-
-  describe('stats call userId || participantId (line 275)', () => {
-    it('uses participantId in stats onNewMessage when userId is undefined (anonymous)', async () => {
-      const anonUser = makeSocketUser({ isAnonymous: true, userId: undefined, participantId: 'anon-stats-0011' });
-      deps.connectedUsers.set(USER_ID, anonUser);
-      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData() });
-      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
-        success: true,
-        data: { id: 'msg-astat', conversationId: VALID_CONV_ID, createdAt: new Date(), senderId: 'anon-stats-0011', clientMessageId: VALID_CID },
-      });
-      (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
-      (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
-      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-
-      await handler.handleMessageSend(socket, makeValidSendData(), callback);
-
-      expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), 'anon-stats-0011',
-        expect.anything(), expect.anything(), null, expect.anything()
-      );
-    });
-  });
-
   // ── Branch-gap-filling: anonymous attachment ownership (line 373) ──────────
 
   describe('attachment ownership check — anonymous user (line 373 || right side)', () => {
@@ -2053,33 +1989,6 @@ describe('MessageHandler', () => {
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(agentClient.sendEvent).toHaveBeenCalledWith(
         expect.objectContaining({ senderDisplayName: undefined, senderUsername: undefined })
-      );
-    });
-  });
-
-  // ── Branch-gap-filling: attachment mimeType null ─────────────────────────
-
-  describe('attachment mimeType null (?? "" branch, line 460)', () => {
-    it('classifies null mimeType as "file" (hits ?? "" fallback)', async () => {
-      const data = { conversationId: VALID_CONV_ID, content: 'x', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0'], clientMessageId: VALID_CID };
-      mockValidateSocketEvent.mockReturnValue({ success: true, data });
-      mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
-      (deps.attachmentService.getAttachment as jest.Mock<any>).mockResolvedValue({ id: 'a1b2c3d4e5f6a1b2c3d4e5f0', uploadedBy: USER_ID });
-      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
-        success: true,
-        data: {
-          id: 'msg-nullmime', conversationId: VALID_CONV_ID, createdAt: new Date(),
-          senderId: PARTICIPANT_ID, attachments: [{ id: 'att-null', mimeType: null }],
-        },
-      });
-      (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
-      (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
-      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-
-      await handler.handleMessageSendWithAttachments(socket, data as any, callback);
-
-      expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null, expect.anything()
       );
     });
   });

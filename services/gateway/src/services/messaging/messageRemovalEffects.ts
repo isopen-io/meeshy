@@ -1,5 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import {
+  conversationMessageStatsService,
+  resolveAttachmentType,
+  statsAuthorKey,
+} from '../ConversationMessageStatsService';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -12,7 +17,10 @@ const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
  * reliait : chacun tenait de mémoire une liste d'effets, et les listes avaient
  * divergé. Le recalcul de `lastMessageAt` manquait à la route empruntée par iOS
  * et par la vue web ; la désactivation des liens de partage manquait aux
- * quatre. C'est le jumeau d'`applyPostRemovalEffects`, pour la même raison et
+ * quatre ; le décompte des compteurs de conversation ne vivait, lui, que dans
+ * cette même route iOS/web — et son PENDANT, le comptage à l'envoi, que dans le
+ * handler socket, si bien qu'aucune des deux moitiés ne couvrait l'autre.
+ * C'est le jumeau d'`applyPostRemovalEffects`, pour la même raison et
  * après le même constat : un effet ajouté ici s'applique à tous les chemins.
  *
  * BEST-EFFORT, délibérément : quand ceci s'exécute, `deletedAt` est DÉJÀ
@@ -21,10 +29,28 @@ const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
  * personne qui a cliqué.
  */
 
-/** Le message retiré, tel que les quatre chemins peuvent le rendre. */
+/**
+ * Le message retiré, tel que les quatre chemins peuvent le rendre.
+ *
+ * Tout ce que le DÉCOMPTE réclame est requis, délibérément : ces champs ne
+ * peuvent pas être relus ici. Deux des trois routes suppriment les
+ * `MessageAttachment` AVANT d'appeler cette unité, et les trois écrivent
+ * `deletedAt` avant elle — une relecture rendrait une liste de pièces jointes
+ * vide et un contenu déjà neutralisé. Ils doivent donc être CAPTURÉS à la
+ * lecture d'admission, et un champ requis est la seule chose qui le garantisse
+ * à un quatrième écrivain qui n'existe pas encore.
+ */
 export interface RemovedMessageRecord {
   id: string;
   conversationId: string;
+  /** `Participant.id` de l'auteur. */
+  senderId: string;
+  /** `Participant.userId` — `null` pour un anonyme. Cf. `statsAuthorKey`. */
+  senderUserId: string | null;
+  /** `text` / `location` / … — seul porteur du compteur de lieux. */
+  messageType: string | null;
+  /** Les MIME des pièces jointes, capturés AVANT leur suppression. */
+  attachmentMimeTypes: readonly string[];
   /** Le contenu AVANT le `translations: null` / `deletedAt` — il porte les `m+<token>`. */
   content?: string | null;
   /** `Json?` partagé ; seul `trackingLinks` est lu ici. */
@@ -217,6 +243,25 @@ export async function applyMessageRemovalEffects(
   prisma: PrismaClient,
   message: RemovedMessageRecord
 ): Promise<void> {
+  // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
+  // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue
+  // web — pendant que le comptage, lui, ne vivait que dans le handler socket.
+  // Aucune des deux moitiés ne couvrait l'autre. Il passe EN PREMIER parce
+  // qu'il est le seul des trois effets à lire des champs que le message porte
+  // déjà en mémoire : il ne peut être invalidé par rien de ce qui suit.
+  try {
+    await conversationMessageStatsService.onMessageDeleted(
+      prisma,
+      message.conversationId,
+      statsAuthorKey(message.senderId, message.senderUserId),
+      message.content ?? '',
+      message.attachmentMimeTypes.map(resolveAttachmentType),
+      message.messageType || 'text'
+    );
+  } catch (err) {
+    log.warn('message removal: stats decrement failed', { messageId: message.id, err });
+  }
+
   try {
     await deactivateOrphanedTrackingLinks(prisma, message);
   } catch (err) {

@@ -516,7 +516,7 @@ describe('MessageHandler.handleMessageSend', () => {
     }));
   });
 
-  it('successful send calls broadcastNewMessage and increments stats', async () => {
+  it('successful send calls broadcastNewMessage and leaves counting to the post-save unit', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
@@ -543,9 +543,11 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(mockPerformanceLogger.withTiming).toHaveBeenCalled();
     expect(stats.messages_processed).toBe(1);
 
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][5]).toBe('fr');
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
   it('skips broadcastNewMessage when isDuplicate is true', async () => {
@@ -898,7 +900,7 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   });
 
-  it('successful send calls broadcastNewMessage and increments stats', async () => {
+  it('successful send calls broadcastNewMessage and leaves counting to the post-save unit', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = makeAttachmentData();
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
@@ -953,7 +955,7 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Failed to send message' }));
   });
 
-  it('handles audio attachment type classification', async () => {
+  it('acquitte un envoi audio sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = makeAttachmentData();
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
@@ -980,12 +982,14 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     });
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['audio']));
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
-  it('forwards the saved message originalLanguage to the stats service (languageDistribution)', async () => {
+  it('acquitte un envoi dont la langue source est allemande sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = makeAttachmentData();
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
@@ -1014,9 +1018,11 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
 
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][5]).toBe('de');
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -2415,25 +2421,7 @@ describe('MessageHandler — coverage gap tests', () => {
     await expect(handler.broadcastNewMessage(msg, 'conv-abc')).resolves.toBeUndefined();
   });
 
-  it('handleMessageSend: conversationMessageStats .catch when stats rejects (line 276)', async () => {
-    mockConversationMessageStatsOnNewMessage.mockRejectedValue(new Error('stats fail'));
-    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
-    const socket = makeSocket('socket-1');
-    const cb = jest.fn();
-    const data = makeValidSendData();
-    mockValidateSocketEvent.mockReturnValue({ success: true, data });
-
-    const prisma = makeMockPrisma({
-      participant: { findMany: jest.fn(async () => []) },
-      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-    });
-
-    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
-    await expect(handler.handleMessageSend(socket, data as any, cb)).resolves.toBeUndefined();
-    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-  });
-
-  it('handleMessageSendWithAttachments: video attachment type classification (line 463)', async () => {
+  it('handleMessageSendWithAttachments: acquitte une vidéo sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = {
       conversationId: 'conv-abc',
@@ -2465,12 +2453,14 @@ describe('MessageHandler — coverage gap tests', () => {
     });
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-    const statsCalls: any[] = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['video']));
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
-  it('handleMessageSendWithAttachments: file attachment type for unknown mimeType (line 464)', async () => {
+  it('handleMessageSendWithAttachments: acquitte un MIME inconnu sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = {
       conversationId: 'conv-abc',
@@ -2502,9 +2492,11 @@ describe('MessageHandler — coverage gap tests', () => {
     });
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-    const statsCalls: any[] = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['file']));
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
   it('broadcastNewMessage: connectedUsers.values() callback exercised via captured updateOnNewMessage arg (line 506)', async () => {
@@ -2598,7 +2590,7 @@ describe('MessageHandler — coverage gap tests', () => {
     }
   });
 
-  it('handleMessageSend: data.content undefined → stats called with empty string (line 276 ?? branch)', async () => {
+  it('handleMessageSend: acquitte un contenu absent sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
@@ -2615,9 +2607,11 @@ describe('MessageHandler — coverage gap tests', () => {
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageSend(socket, rawData as any, cb);
 
-    const statsCalls: any[] = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(typeof statsCalls[0][3]).toBe('string');
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
   it('handleMessageSend: _sendResponse with no clientMessageId → stripped from response', async () => {

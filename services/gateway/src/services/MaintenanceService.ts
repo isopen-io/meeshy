@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { conversationMessageStatsService } from './ConversationMessageStatsService';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -558,6 +559,19 @@ export class MaintenanceService {
           await recomputeConversationLastMessageAt(this.prisma, conversationId);
         } catch (error) {
           logger.error(`❌ [CLEANUP] Recalcul lastMessageAt échoué pour conversation=${conversationId}:`, error);
+        }
+
+        // Les compteurs de conversation, eux, ne peuvent pas être décrémentés
+        // ici : ce balayage ne tient de ses messages que leur id et leur
+        // conversation, jamais l'auteur ni le contenu qu'un décrément demande.
+        // Le recalcul autoritatif est donc le seul geste possible — et il
+        // répare en passant la dérive déjà accumulée. Il ne s'applique qu'aux
+        // conversations dont les compteurs existent : un balayage nocturne ne
+        // doit pas se mettre à FABRIQUER des lignes à la place des lecteurs.
+        try {
+          await conversationMessageStatsService.recomputeIfTracked(this.prisma, conversationId);
+        } catch (error) {
+          logger.error(`❌ [CLEANUP] Recalcul des compteurs échoué pour conversation=${conversationId}:`, error);
         }
       }
     } catch (error) {
