@@ -46,6 +46,11 @@ export type FanOutPrisma = Pick<
 /**
  * Les trois créateurs que l'éventail appelle, en structural pour la même raison
  * que `FanOutPrisma`.
+ *
+ * Les retours sont déclarés parce qu'ils sont LUS : le compte rendu
+ * (`onFanOut`) dit ce qui est réellement parti, donc il compte les créations
+ * non nulles et le total rendu par le lot de mentions. Un `Promise<unknown>`
+ * partout laissait l'éventail annoncer son audience à la place de son résultat.
  */
 export interface MessageNotificationTarget {
   createReplyNotification(params: Record<string, unknown>): Promise<unknown>;
@@ -53,7 +58,7 @@ export interface MessageNotificationTarget {
     mentionedUserIds: string[],
     commonData: Record<string, unknown>,
     memberIds: string[]
-  ): Promise<unknown>;
+  ): Promise<number>;
   createMessageNotification(params: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -138,6 +143,74 @@ const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio'
   mimeType?.startsWith('image/') ? 'image' :
   mimeType?.startsWith('video/') ? 'video' :
   mimeType?.startsWith('audio/') ? 'audio' : 'document';
+
+/**
+ * Un éventail, isolé de ses frères.
+ *
+ * Réponse, mentions et messages réguliers sont indépendants par construction —
+ * leurs audiences se déduisent des ENTRÉES de la fonction, jamais du résultat
+ * de l'éventail précédent. Ils partageaient pourtant un unique `try`, si bien
+ * qu'une panne dans le premier annulait les deux suivants : un hoquet Mongo sur
+ * la notification de réponse d'UNE personne faisait taire le message pour TOUTE
+ * la conversation, mentions comprises — la famille qui perce pourtant toutes
+ * les autres suppressions.
+ *
+ * L'erreur remontée NOMME l'éventail tombé et garde l'originale en `cause` :
+ * sans elle, trois pannes distinctes arrivaient au même `onError` sous le même
+ * libellé.
+ */
+async function runLot<T>(
+  name: 'reply' | 'mentions' | 'regular',
+  onError: ((error: unknown) => void) | undefined,
+  whenLost: T,
+  run: () => Promise<T>
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    onError?.(new Error(`Notification fan-out lot "${name}" failed`, { cause: error }));
+    return whenLost;
+  }
+}
+
+/**
+ * Les candidats qui veulent encore de `new_message` dans cette conversation :
+ * une seule requête élargie écarte « mentions seulement » ET la sourdine (les
+ * deux suppriment `new_message` ; une mention perce la sourdine par son lot
+ * dédié).
+ *
+ * Repli OUVERT, comme `filterMutedRecipients` : préférence illisible = tout le
+ * monde reste notifié. Une préférence de confort qu'on ne sait plus lire ne
+ * doit pas se transformer en silence pour toute la conversation.
+ */
+async function listeningRegularRecipients(
+  prisma: FanOutPrisma,
+  conversationId: string,
+  candidates: readonly string[],
+  onError?: (error: unknown) => void
+): Promise<string[]> {
+  if (candidates.length === 0) return [];
+
+  try {
+    const conversationPrefs = await prisma.userConversationPreferences.findMany({
+      where: {
+        conversationId,
+        userId: { in: [...candidates] },
+        OR: [{ mentionsOnly: true }, { isMuted: true }],
+      },
+      select: { userId: true },
+    });
+
+    const suppressedUserIds = new Set(conversationPrefs.map(p => p.userId));
+    return candidates.filter(id => !suppressedUserIds.has(id));
+  } catch (error) {
+    onError?.(new Error(
+      'Conversation preferences unreadable — every regular recipient stays notified',
+      { cause: error }
+    ));
+    return [...candidates];
+  }
+}
 
 /**
  * Ce que TOUT message committé doit à ses destinataires quand ils ne regardent
@@ -286,61 +359,71 @@ export async function notifyMessageRecipients(params: {
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
 
-    if (
-      originalMessageAuthorUserId &&
+    // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
+    // qui était visé — même règle de compte rendu que
+    // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
+    // panne écartent des destinataires sans que l'appelant doive le deviner ;
+    // sans cela, un éventail entièrement tombé continuerait d'annoncer son
+    // audience comme si elle avait été servie.
+
+    const owesReplyNotification =
+      !!originalMessageAuthorUserId &&
       originalMessageAuthorUserId !== sender.actorId &&
-      !validatedMentionUserIds.includes(originalMessageAuthorUserId)
-    ) {
-      await notificationService.createReplyNotification({
-        recipientUserId: originalMessageAuthorUserId,
-        replierUserId: sender.actorId,
-        messageId: message.id,
-        conversationId,
-        messagePreview: notificationPreview,
-        originalMessageId: message.replyToId!,
-        senderProfile: sender.profile,
-      });
-    }
+      !validatedMentionUserIds.includes(originalMessageAuthorUserId);
 
-    if (validatedMentionUserIds.length > 0) {
-      await notificationService.createMentionNotificationsBatch(
-        [...validatedMentionUserIds],
-        {
-          senderId: sender.actorId,
-          senderProfile: sender.profile,
-          messageContent: notificationPreview,
-          conversationId,
-          messageId: message.id,
-        },
-        memberIds
-      );
-    }
+    const reply = owesReplyNotification
+      ? await runLot('reply', onError, false, async () => {
+          const created = await notificationService.createReplyNotification({
+            recipientUserId: originalMessageAuthorUserId,
+            replierUserId: sender.actorId,
+            messageId: message.id,
+            conversationId,
+            messagePreview: notificationPreview,
+            originalMessageId: message.replyToId!,
+            senderProfile: sender.profile,
+          });
+          return created != null;
+        })
+      : false;
 
+    const mentions = validatedMentionUserIds.length > 0
+      ? await runLot('mentions', onError, 0, () =>
+          notificationService.createMentionNotificationsBatch(
+            [...validatedMentionUserIds],
+            {
+              senderId: sender.actorId,
+              senderProfile: sender.profile,
+              messageContent: notificationPreview,
+              conversationId,
+              messageId: message.id,
+            },
+            memberIds
+          )
+        )
+      : 0;
+
+    // Les trois audiences se déduisent des ENTRÉES, jamais du résultat de
+    // l'éventail précédent : `alreadyNotified` ne lit que l'auteur du message
+    // cité et la liste de mentions validées. C'est ce qui rend l'isolement
+    // ci-dessus fidèle — un éventail tombé ne déplace personne.
     const alreadyNotified = new Set<string>([sender.actorId, ...validatedMentionUserIds]);
     if (originalMessageAuthorUserId) alreadyNotified.add(originalMessageAuthorUserId);
 
     const candidateRegularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
 
-    // GW3 — une seule requête élargie : un candidat quitte l'éventail régulier
-    // s'il a choisi « mentions seulement » OU mis la conversation en sourdine
-    // (les deux suppriment `new_message` ; une mention perce la sourdine via le
-    // lot dédié ci-dessus).
-    const conversationPrefs = candidateRegularRecipients.length > 0
-      ? await prisma.userConversationPreferences.findMany({
-          where: {
-            conversationId,
-            userId: { in: candidateRegularRecipients },
-            OR: [{ mentionsOnly: true }, { isMuted: true }],
-          },
-          select: { userId: true },
-        })
-      : [];
+    const regular = await runLot('regular', onError, 0, async () => {
+      const regularRecipients = await listeningRegularRecipients(
+        prisma,
+        conversationId,
+        candidateRegularRecipients,
+        onError
+      );
+      if (regularRecipients.length === 0) return 0;
 
-    const suppressedUserIds = new Set(conversationPrefs.map(p => p.userId));
-    const regularRecipients = candidateRegularRecipients.filter(id => !suppressedUserIds.has(id));
-
-    if (regularRecipients.length > 0) {
-      await Promise.all(regularRecipients.map(recipientUserId =>
+      // `allSettled` et non `all` : le destinataire dont la lecture de contexte
+      // hoquette ne doit pas emporter le compte rendu de ses voisins, dont les
+      // notifications sont déjà parties.
+      const results = await Promise.allSettled(regularRecipients.map(recipientUserId =>
         notificationService.createMessageNotification({
           recipientUserId,
           senderId: sender.actorId,
@@ -353,13 +436,22 @@ export async function notifyMessageRecipients(params: {
           ...attachmentInfo,
         })
       ));
-    }
 
-    onFanOut?.({
-      mentions: validatedMentionUserIds.length,
-      regular: regularRecipients.length,
-      reply: !!originalMessageAuthorUserId,
+      // Un signalement pour tout l'éventail, pas un par destinataire : sur un
+      // groupe large, une panne commune produirait autant de lignes de log que
+      // de membres. La première cause suffit à la nommer.
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (rejected.length > 0) {
+        onError?.(new Error(
+          `Notification fan-out lot "regular" lost ${rejected.length}/${regularRecipients.length} recipients`,
+          { cause: rejected[0].reason }
+        ));
+      }
+
+      return results.filter(r => r.status === 'fulfilled' && r.value != null).length;
     });
+
+    onFanOut?.({ mentions, regular, reply });
   } catch (error) {
     onError?.(error);
   }

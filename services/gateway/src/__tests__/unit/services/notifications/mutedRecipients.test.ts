@@ -104,6 +104,40 @@ describe('filterMutedRecipients', () => {
     expect(result).toEqual([]);
     expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
   });
+
+  // ─── Repli OUVERT ─────────────────────────────────────────────────────────
+  //
+  // Le mute est une préférence de CONFORT ; la notification est une obligation
+  // de LIVRAISON. Quand on ne sait plus laquelle des deux s'applique, laisser
+  // passer coûte un ping de trop, taire coûte un message jamais annoncé — et
+  // sur un incident Mongo transitoire, il les tait TOUS d'un coup pour tout le
+  // monde. Même arbitrage que les trois voisins qui l'ont déjà tranché et le
+  // disent : `loadNotificationPrefs` (« fail open »),
+  // `_loadReadReceiptOptOuts` (« everyone stays visible »),
+  // `PrivacyPreferencesService.fetchFromDatabase`.
+
+  it('returns every candidate when the preference read fails (fail open)', async () => {
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+
+    const result = await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID, OTHER_ID]);
+
+    expect(result).toEqual([AUTHOR_ID, OTHER_ID]);
+  });
+
+  it('logs the failed preference read instead of swallowing it silently', async () => {
+    const { notificationLogger } = require('../../../../utils/logger-enhanced');
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+
+    await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID]);
+
+    expect(notificationLogger.error).toHaveBeenCalled();
+  });
+
+  it('never rejects — the caller reads a list, not an exception', async () => {
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+
+    await expect(filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID])).resolves.toEqual([AUTHOR_ID]);
+  });
 });
 
 // ─── NotificationService fan-out sites ───────────────────────────────────────
@@ -353,6 +387,83 @@ describe('NotificationService — mute applied to reaction/reply fan-out', () =>
 
       expect(result).not.toBeNull();
       expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_promoted');
+    });
+  });
+
+  // ─── Un incident de lecture ne doit pas faire taire cinq familles ─────────
+  //
+  // `isConversationMutedFor` garde l'entrée de cinq familles de notifications,
+  // et `createMemberJoinedNotificationsBatch` celle d'un éventail entier. Si la
+  // lecture des préférences lève, toutes tombent en même temps et pour tout le
+  // monde. Le repli ouvert se vérifie donc ICI, au niveau du service, pas
+  // seulement sur le helper.
+
+  describe('la lecture du mute en échec ne supprime aucune notification', () => {
+    beforeEach(() => {
+      prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+    });
+
+    it('la réaction est notifiée quand même', async () => {
+      const result = await service.createReactionNotification({
+        messageAuthorId: AUTHOR_ID,
+        reactorUserId: ACTOR_ID,
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+        reactionEmoji: '❤️',
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it('la réponse est notifiée quand même', async () => {
+      const result = await service.createReplyNotification({
+        recipientUserId: AUTHOR_ID,
+        replierUserId: ACTOR_ID,
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+        messagePreview: 'a reply',
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("l'arrivée d'un membre est notifiée quand même", async () => {
+      const result = await service.createMemberJoinedNotification({
+        recipientUserId: AUTHOR_ID,
+        newMemberUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("l'exclusion d'un tiers est notifiée quand même", async () => {
+      const result = await service.createMemberRemovedNotification({
+        recipientUserId: AUTHOR_ID,
+        removedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("le départ d'un membre est notifié quand même", async () => {
+      const result = await service.createMemberLeftNotification({
+        recipientUserId: AUTHOR_ID,
+        memberUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("l'éventail d'arrivée atteint TOUTE son audience, pas zéro", async () => {
+      const count = await service.createMemberJoinedNotificationsBatch([AUTHOR_ID, OTHER_ID], {
+        newMemberUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(count).toBe(2);
     });
   });
 

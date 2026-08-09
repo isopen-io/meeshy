@@ -1,3 +1,142 @@
+# Cycle 34b — La sourdine échouait FERMÉ, et un éventail tombé emportait ses deux frères
+
+Numéroté **34b** : une session parallèle a livré son cycle 34 pendant celui-ci (« ce qu'une édition
+EXIGE », ci-dessous). Les deux têtes n'ont AUCUNE intersection — l'une unifie les quatre tests
+d'admission à l'édition d'un message, l'autre porte sur le repli des préférences de notification et
+l'isolement des trois éventails — et aucun fichier n'est touché par les deux. Rien à arbitrer défaut
+par défaut cette fois (leçon d'intégration du cycle 23, reprise aux 25b, 32b, 33b et 34) : les deux
+tiennent ensemble, fusionnés à la main et revalidés sur la suite complète. Là où les deux « reste
+ouvert » citent le même point (file de fan-out, `getVisibilityFilteredRecipients`, `@Display Name`,
+eslint), c'est le même report, pas deux.
+
+Tête annoncée par le « Reste ouvert » du cycle 33b, prise sans arbitrage : `filterMutedRecipients`
+échouait fermé alors que tout son voisinage échoue ouvert et le dit. En remontant ses appelants pour
+mesurer la portée, le défaut s'est avéré n'être que la moitié visible d'un second, plus grave, à
+l'étage au-dessus — celui-là jamais nommé par aucun cycle.
+
+## Lot A — une préférence de confort illisible faisait taire une obligation de livraison
+
+`filterMutedRecipients` lit `UserConversationPreferences.isMuted` pour décider qui, dans une
+audience, ne veut pas être dérangé. Il n'avait **aucun `try`**. Une lecture en échec — un incident
+Mongo transitoire suffit — remontait telle quelle jusqu'au `.catch` de l'appelant, qui journalisait
+et laissait tomber la notification.
+
+Le voisinage immédiat a déjà tranché la même question, trois fois, dans l'autre sens, et l'écrit
+noir sur blanc :
+
+| unité | comportement en cas d'échec de lecture | commentaire dans le code |
+|---|---|---|
+| `loadNotificationPrefs` | notification créée | « fail open » |
+| `_loadReadReceiptOptOuts` | tout le monde reste visible | « repli ouvert » |
+| `PrivacyPreferencesService.fetchFromDatabase` | idem | cité par le précédent |
+| **`filterMutedRecipients`** | **notification perdue** | **—** |
+
+L'arbitrage n'est pas symétrique. Le mute est une préférence de **confort** ; la notification est une
+obligation de **livraison**. Quand on ne sait plus laquelle des deux s'applique, un ping de trop se
+pardonne — un message jamais annoncé, non. Et il ne se joue pas à l'unité : depuis le cycle 33b cette
+porte garde **cinq familles** (`message_reaction`, `message_reply`, `member_joined`,
+`member_removed`, `member_left`) plus l'éventail d'arrivée entier. Un hoquet de lecture les taisait
+donc toutes, d'un coup, pour tout le monde — et le cycle 33b, en faisant passer trois familles de
+plus par cette porte, avait élargi le rayon du défaut sans le voir.
+
+Repli ouvert, log d'erreur, tous les candidats rendus.
+
+## Lot B — trois éventails indépendants dans un seul `try`
+
+En vérifiant la portée du lot A, une seconde chose est apparue chez l'appelant le plus chaud.
+
+`notifyMessageRecipients` sert **trois** éventails, dans cet ordre : réponse, mentions, messages
+réguliers. Ils sont indépendants **par construction** — leurs audiences se déduisent des ENTRÉES de
+la fonction (`validatedMentionUserIds`, l'auteur du message cité), jamais du résultat de l'éventail
+précédent. Ils partageaient pourtant un unique `try { … } catch`.
+
+Conséquence : une panne dans le PREMIER annulait purement et simplement les deux suivants, qui
+n'étaient jamais atteints. Un hoquet Mongo sur la notification de réponse d'**une** personne faisait
+taire le message pour **toute** la conversation — mentions comprises, c'est-à-dire la seule famille
+qui perce toutes les autres suppressions. L'ordre d'exécution décidait qui survivait, et il plaçait
+la famille la plus importante derrière la moins importante.
+
+Le lot A ferme la porte d'entrée que ce cycle avait identifiée ; il ne ferme pas celle-là. Tout ce
+qui lit la base dans ces trois éventails — `createReplyNotification`, le lot de mentions,
+`createMessageNotification` — peut encore lever pour une autre raison que le mute.
+
+Trois changements, tous dans la même unité :
+
+1. **`runLot(name, onError, whenLost, run)`** — chaque éventail est isolé, rend une valeur de repli
+   quand il tombe, et l'erreur remontée **nomme** l'éventail en gardant l'originale en `cause`.
+   Avant, trois pannes distinctes arrivaient au même `onError` sous le même libellé.
+2. **`Promise.allSettled`** dans l'éventail régulier, au lieu de `Promise.all` : le destinataire dont
+   la lecture de contexte hoquette n'emporte plus le compte rendu de ses voisins, dont les
+   notifications sont déjà parties. Un seul signalement pour tout l'éventail, pas un par
+   destinataire — sur un groupe large, une panne commune produirait autant de lignes de log que de
+   membres.
+3. **`listeningRegularRecipients`** — la lecture inline de `userConversationPreferences`
+   (« mentions seulement » OU sourdine) qui filtre l'éventail régulier passe au **repli ouvert**,
+   comme le lot A. Elle portait exactement le même défaut que `filterMutedRecipients`, sur la même
+   colonne `isMuted`, à trente lignes de distance.
+
+## Le compte rendu devait suivre, sinon l'isolement serait invisible
+
+`onFanOut` annonçait `mentions: validatedMentionUserIds.length` et `regular: regularRecipients.length`
+— l'**audience visée**, pas le résultat. Avec l'isolement, un éventail entièrement tombé aurait
+continué d'annoncer son audience comme si elle avait été servie : le correctif se serait caché
+lui-même dans les logs.
+
+Les trois valeurs disent désormais ce qui est réellement **parti** — le total rendu par le lot de
+mentions, les créations non nulles pour le reste. C'est le principe posé par
+`createMemberJoinedNotificationsBatch` au cycle 33b (« le compte rendu est celui des notifications
+réellement créées, pas la taille de l'audience visée »), appliqué là où il manquait. Le port
+`MessageNotificationTarget` déclare du coup le retour du lot de mentions (`Promise<number>` au lieu
+de `Promise<unknown>`) : il est lu, donc il se déclare.
+
+## Vérification
+
+- **17 tests neufs**, écrits AVANT l'implémentation, **14 rouges observés** :
+  - `mutedRecipients.test.ts` — 9 rouges. Le repli ouvert du helper (tous les candidats rendus,
+    l'échec journalisé, la promesse qui ne rejette jamais) **et** les cinq familles + l'éventail
+    d'arrivée vérifiés au niveau du SERVICE, pas seulement du helper : c'est là que le rayon se
+    mesure.
+  - `messageNotificationFanOut.test.ts` — 5 rouges. L'éventail réponse tombé qui n'annule ni les
+    mentions ni les réguliers, l'éventail mentions tombé qui n'annule pas les réguliers, le
+    destinataire régulier en échec qui n'emporte pas les autres, le compte rendu ramené à zéro quand
+    tout tombe, et l'erreur qui NOMME l'éventail. Plus deux tests qui verrouillent ce qui devait le
+    rester : la réponse ne se déclare partie que si elle l'est, et les préférences illisibles
+    laissent tout le monde notifié.
+- Le test existant « rend compte de l'éventail à son appelant » assertait `{mentions: 1, regular: 1}`
+  avec des doubles rendant `0` et `null` : il mesurait l'intention. Ses doubles ont été rendus
+  réalistes plutôt que l'assertion affaiblie.
+- **Suite gateway complète : 614 suites, 15 846 tests, tout vert** (avant : 613 / 15 820).
+  `tsc --noEmit` propre. Couverture globale lignes **95,66 %**, `mutedRecipients.ts` et
+  `messageNotificationFanOut.ts` à **100 %** tous les deux.
+
+## Reste ouvert après ce cycle
+
+- **`runLot('regular', …)` a un `catch` presque inatteignable** : `listeningRegularRecipients` se
+  replie seule et `allSettled` ne rejette pas. Il tient l'invariant « aucun éventail ne lève »
+  structurellement plutôt que par audit ligne à ligne, et garde les trois éventails symétriques —
+  gardé délibérément, à ne pas retirer au motif qu'il ne se déclenche pas.
+- **Le repli ouvert de `listeningRegularRecipients` couvre aussi `mentionsOnly`**, qui n'est pas la
+  sourdine. Même arbitrage, assumé : sur un incident de lecture, un utilisateur « mentions
+  seulement » reçoit une notification de message régulier plutôt que rien.
+- **La file d'attente de fan-out** (D1 du cycle 32) reste ouverte, inchangée, et pour la même raison
+  qu'aux cycles 32 et 33b : elle demande de savoir ce que la troncature mesure en production, et
+  cette routine n'a aucun accès aux logs.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b) — à arbitrer
+  avec la file, pas séparément.
+- **`member_removed` reste une boucle d'appels unitaires**, délibérément (cycle 33b) : audience
+  bornée par le rôle.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`@Display Name` inextractible dans le domaine social** — huitième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`
+  (cycle 26).
+- **Les deux scripts de réparation de base** attendent une exécution avec accès MongoDB — action
+  humaine.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29, aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
+
+
+---
+
 # Cycle 34 — Les cycles précédents ont unifié ce qu'une édition PRODUIT. Pas ce qu'elle EXIGE.
 
 Tête désignée par le cycle 33, prise telle quelle : « une seule unité d'admission à l'édition,
