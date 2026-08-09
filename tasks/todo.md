@@ -96,6 +96,88 @@ prochain audit. Les cycles suivants ont relu ces lignes et conclu que le cas iOS
 
 ---
 
+# Cycle 32b — Addendum d'une session parallèle
+
+Deux sessions ont livré le cycle 32 en parallèle, sur la même tête (« la troncature est muette »).
+Le cycle 32 ci-dessous est **le plus large** — il porte en plus les lots B et C sur les défauts
+permissifs — et sa forme sur la troncature est la meilleure sur deux points, gardés tels quels :
+le type nommé (`FanoutBucket` / `StoryNotificationRecipients`), et le log placé **dans**
+`getStoryNotificationRecipients` plutôt que chez un appelant, ce qui le rend vrai pour tous.
+Cette session s'aligne dessus et n'apporte que ce qui manquait. (Leçon d'intégration du cycle 23,
+reprise au 25b : comparer défaut par défaut, jamais « qui est arrivé en premier ».)
+
+## Ce que l'addendum ajoute — 1. la borne payait ses exclus sur son propre budget
+
+Défaut que le cycle 32 n'a pas touché, et qui est **antérieur** à la question de la troncature :
+deux des trois requêtes écartaient des gens **après** le `take`, pas dedans.
+
+| requête | écarté par la requête | écarté après coup |
+|---|---|---|
+| `postComment` | `commenterId` | **`authorId`** |
+| `postReaction` | `commenterId` | **`authorId`** |
+| `friendRequest` | — | `authorId` (structurel, voir plus bas) |
+
+Une ligne écartée après coup a quand même consommé sa place sous la borne. Et l'auteur n'est pas un
+engagé quelconque de son propre fil : **c'est le plus prolifique**, parce que répondre à chacun de
+ses commentateurs est le comportement normal d'un auteur. Sur un post où l'auteur a répondu à tout
+le monde, ses propres réponses évinçaient donc, une pour une, des destinataires réels — en silence,
+et d'autant plus fort que le post marchait bien. La borne annonçait 500 destinataires et en servait
+moins, sans que rien ne le dise.
+
+**Correctif.** `authorId: { notIn: [commenterId, authorId] }` dans le `where`. La borne compte
+désormais des destinataires, plus des lignes dont une partie était jetée d'avance.
+
+**Les `filter` en aval RESTENT, et ce n'est pas une garde en double.** Le `notIn` protège le
+**budget** ; les `filter` tiennent la **postcondition** de la méthode publique — « ni l'auteur ni le
+commentateur ne sortent d'ici », vrai quelle que soit la clause `where` du jour. C'est ce qui
+distingue ce cas du `COMMUNITY` décoratif retiré au cycle 31 : là c'était une branche de décision
+inatteignable, ici c'est ce dont une méthode répond. Les deux tests qui l'encodaient sont tombés
+quand je les avais retirés — ils avaient raison, ils sont restés.
+
+Sur `friendRequest` l'auteur ne peut PAS sortir par la requête : il ancre **chaque** ligne
+d'amitié. Sa présence y est structurelle, pas budgétaire — rien à corriger.
+
+## Ce que l'addendum ajoute — 2. la ligne témoin, parce que `>=` crie au loup à la borne
+
+Le cycle 32 déduit la troncature de « la requête a rendu **autant** de lignes que la borne »
+(`length >= FANOUT_ROW_CAP`). C'est un signal juste dans l'esprit, faux au point exact où son propre
+commentaire promet de trancher : un seau de **très exactement** 500 engagés est COMPLET, et il est
+déclaré tronqué. Sur le seau des amis, la conséquence n'est pas théorique — un auteur à exactement
+500 amis émet un `warn` de troncature à **chacune** de ses publications, pour toujours.
+
+**Correctif : `take: FANOUT_ROW_CAP + 1`.** La ligne excédentaire est un **témoin**, jamais un
+destinataire — lue, comptée, puis jetée par un `slice`. La borne de diffusion ne bouge pas d'un
+destinataire ; seul le verdict devient exact, et le test passe de `>=` à `>`.
+
+**Portée du témoin, dite honnêtement.** Sur `friendRequest` (pas de `distinct`) il est **exact** :
+une 501e ligne existe si et seulement si la base en avait plus de 500. Sur les deux requêtes
+`distinct`, il reste un signal **suffisant** — jamais déclenché à tort, mais capable de se taire sur
+une troncature que la déduplication a repliée en deçà de la borne. Ce n'est pas gênant là où ça
+compte : le seau où la troncature est de loin la plus probable est celui des amitiés — un auteur à
+plus de 500 amis est banal, un post à plus de 500 commentateurs distincts ne l'est pas — et c'est
+précisément celui où le compte est exact.
+
+## Vérification de l'addendum
+
+- **15 tests neufs**, dont **13 rouges observés** avant implémentation (le 15e — « sous la borne, on
+  se tait » — était vert d'emblée : il n'y avait alors aucun `warn` du tout, ce qui est exactement le
+  cas à verrouiller contre un futur `warn` trop bavard).
+- **Les 4 tests du cycle 32 qui nourrissaient exactement `FANOUT_ROW_CAP` lignes** passent à
+  `FANOUT_ROW_CAP + 1` : sous la sémantique du témoin, 500 lignes veut dire « complet ». Le cas
+  « exactement 500 → aucune troncature » devient un test à part entière — c'est le point que `>=`
+  manquait.
+- Le témoin est éprouvé sur ses **trois** régimes : 500 pile → pas de troncature ; 501 → troncature
+  signalée ; et dans les deux cas la 501e n'est jamais notifiée.
+
+## Reste ouvert après l'addendum
+
+- **La file d'attente de fan-out** reste la tête du prochain cycle, telle que le cycle 32 la pose
+  (D1) — inchangé, et mieux instrumenté : le verdict de troncature ne remonte plus de faux positifs,
+  donc ce que les logs mesureront sera lisible tel quel.
+- Tout le reste ouvert du cycle 32 ci-dessous est inchangé.
+
+---
+
 # Cycle 32 — Une troncature muette, et les défauts permissifs que le cycle précédent n'avait pas atteints
 
 Deux têtes prises ensemble, parce qu'elles se sont révélées être la même question posée à deux
