@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -20,7 +21,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,11 +53,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
+import me.meeshy.sdk.model.PasswordEntry
+import me.meeshy.sdk.model.PasswordRequirements
+import me.meeshy.sdk.model.PasswordRequirementsState
+import me.meeshy.sdk.model.PasswordStrength
+import me.meeshy.sdk.model.PasswordStrengthLevel
 import me.meeshy.sdk.model.auth.Country
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.RegistrationLeadingAction
@@ -82,10 +95,11 @@ import java.util.Locale
  * [RegistrationStepContent.isImplemented] — is covered by
  * `RegistrationStepContentTest`).
  *
- * [RegistrationStep.PSEUDO], [RegistrationStep.PHONE] and [RegistrationStep.EMAIL] have
- * real field UI today (slices `auth-onboarding-shell`, `auth-phone-step-fields`,
- * `auth-email-step-fields`); every other step
- * renders an inert "coming soon" placeholder — never a dead end, since
+ * [RegistrationStep.PSEUDO], [RegistrationStep.PHONE], [RegistrationStep.EMAIL],
+ * [RegistrationStep.IDENTITY] and [RegistrationStep.PASSWORD] have real field UI
+ * today (slices `auth-onboarding-shell`, `auth-phone-step-fields`,
+ * `auth-email-step-fields`, `auth-identity-step-fields`, `auth-password-step-fields`);
+ * every other step renders an inert "coming soon" placeholder — never a dead end, since
  * [RegistrationLeadingAction.BACK] is always reachable off the first step. Each
  * subsequent step gets its own slice per the decomposition note in
  * `feature-parity.md` §A.
@@ -155,6 +169,8 @@ fun RegistrationScreen(
                         RegistrationStep.PSEUDO -> PseudoStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.PHONE -> PhoneStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.EMAIL -> EmailStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.IDENTITY -> IdentityStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.PASSWORD -> PasswordStepBody(state = state, viewModel = viewModel)
                         // Each future per-step slice adds its own arm here, in lockstep
                         // with RegistrationStepContent's implemented set.
                         else -> Unit
@@ -530,6 +546,262 @@ private fun CountryPickerSheet(
             }
         }
     }
+}
+
+/**
+ * IDENTITY step — parity target: iOS `StepIdentityView`
+ * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`): a
+ * first-name field and a last-name field, no availability probe (the gate is
+ * purely local — [me.meeshy.sdk.model.auth.RegistrationStepGate.canProceed]'s
+ * IDENTITY arm just requires both non-blank) and no skip affordance
+ * ([RegistrationNavModel.showSkip] is `false` for every step but PROFILE).
+ */
+@Composable
+private fun IdentityStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_identity_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_identity_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        OutlinedTextField(
+            value = state.fields.firstName,
+            onValueChange = viewModel::onFirstNameChange,
+            label = { Text(stringResource(R.string.registration_identity_first_name_label)) },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
+        )
+        OutlinedTextField(
+            value = state.fields.lastName,
+            onValueChange = viewModel::onLastNameChange,
+            label = { Text(stringResource(R.string.registration_identity_last_name_label)) },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * PASSWORD step — parity target: iOS `StepPasswordView`
+ * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`): a
+ * password field, a live strength meter once the field is non-empty, a confirm
+ * field once the password reaches the minimum length, a match/mismatch verdict
+ * once the confirm field is non-empty, and the four-row requirements checklist.
+ * Every decision is driven by the already-shipped pure cores —
+ * [PasswordEntry] (confirm-field reveal + match verdict + proceed gate),
+ * [PasswordRequirements] (the checklist rows) and [PasswordStrength] (the
+ * meter score, already shipped and used verbatim by `ChangePasswordScreen`,
+ * `:feature:settings` — reused here rather than re-implemented, same 6-band
+ * scoring as iOS `PasswordStrengthIndicator`). No skip affordance
+ * ([RegistrationNavModel.showSkip] is PROFILE-only, mirrors iOS having none
+ * for this step either).
+ */
+@Composable
+private fun PasswordStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    val password = state.fields.password
+    val confirm = state.fields.confirmPassword
+    val entry = remember(password, confirm) { PasswordEntry.evaluate(password, confirm) }
+    val requirements = remember(password) { PasswordRequirements.evaluate(password) }
+
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_password_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_password_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        PasswordField(
+            value = password,
+            onValueChange = viewModel::onPasswordChange,
+            label = stringResource(R.string.registration_password_label),
+            enabled = !state.isSubmitting,
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
+        )
+        if (password.isNotEmpty()) {
+            PasswordStrengthMeter(level = PasswordStrength.evaluate(password))
+        }
+        if (entry.showConfirmField) {
+            PasswordField(
+                value = confirm,
+                onValueChange = viewModel::onConfirmPasswordChange,
+                label = stringResource(R.string.registration_password_confirm_label),
+                enabled = !state.isSubmitting,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (confirm.isNotEmpty()) {
+                PasswordMatchRow(matched = entry.isMatched)
+            }
+        }
+        PasswordRequirementsCard(requirements)
+    }
+}
+
+@Composable
+private fun PasswordField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var visible by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        enabled = enabled,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        trailingIcon = {
+            IconButton(onClick = { visible = !visible }) {
+                Icon(
+                    imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                    contentDescription = stringResource(
+                        if (visible) R.string.registration_password_hide else R.string.registration_password_show,
+                    ),
+                    tint = MeeshyTheme.tokens.textSecondary,
+                )
+            }
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun PasswordStrengthMeter(level: PasswordStrengthLevel) {
+    val color = level.strengthColor()
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            repeat(PasswordStrength.MAX_SCORE) { index ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (index < level.score) color else MeeshyTheme.tokens.inputBorder),
+                )
+            }
+        }
+        Text(
+            text = stringResource(level.strengthLabelRes()),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun PasswordMatchRow(matched: Boolean) {
+    val color = if (matched) MeeshyPalette.Success else MeeshyPalette.Error
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(color.copy(alpha = 0.1f))
+            .padding(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = if (matched) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
+            contentDescription = null,
+            tint = color,
+        )
+        Text(
+            text = stringResource(
+                if (matched) R.string.registration_password_match else R.string.registration_password_mismatch,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun PasswordRequirementsCard(requirements: PasswordRequirementsState) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .padding(MeeshySpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_password_requirements_title),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        PasswordRequirementRow(
+            met = requirements.length,
+            text = stringResource(R.string.registration_password_req_length),
+        )
+        PasswordRequirementRow(
+            met = requirements.uppercase,
+            text = stringResource(R.string.registration_password_req_uppercase),
+        )
+        PasswordRequirementRow(
+            met = requirements.lowercase,
+            text = stringResource(R.string.registration_password_req_lowercase),
+        )
+        PasswordRequirementRow(
+            met = requirements.digit,
+            text = stringResource(R.string.registration_password_req_digit),
+        )
+    }
+}
+
+@Composable
+private fun PasswordRequirementRow(met: Boolean, text: String) {
+    val color = if (met) MeeshyPalette.Success else MeeshyTheme.tokens.textMuted
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = if (met) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(text = text, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+private fun PasswordStrengthLevel.strengthColor(): Color = when (this) {
+    PasswordStrengthLevel.TOO_WEAK, PasswordStrengthLevel.WEAK -> MeeshyPalette.Error
+    PasswordStrengthLevel.MEDIUM, PasswordStrengthLevel.GOOD -> MeeshyPalette.Warning
+    PasswordStrengthLevel.STRONG, PasswordStrengthLevel.EXCELLENT -> MeeshyPalette.Success
+}
+
+private fun PasswordStrengthLevel.strengthLabelRes(): Int = when (this) {
+    PasswordStrengthLevel.TOO_WEAK -> R.string.registration_password_strength_0
+    PasswordStrengthLevel.WEAK -> R.string.registration_password_strength_1
+    PasswordStrengthLevel.MEDIUM -> R.string.registration_password_strength_2
+    PasswordStrengthLevel.GOOD -> R.string.registration_password_strength_3
+    PasswordStrengthLevel.STRONG -> R.string.registration_password_strength_4
+    PasswordStrengthLevel.EXCELLENT -> R.string.registration_password_strength_5
 }
 
 @Composable

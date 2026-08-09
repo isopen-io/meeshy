@@ -661,8 +661,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       changes). **Follow-up:** IDENTITY/PASSWORD/LANGUAGE/PROFILE/RECAP field UI in turn per the
       `auth-onboarding-shell` decomposition — IDENTITY next (first/last name, no new core needed, same
       "wiring-only" shape as this slice); PROFILE needs a photo/banner picker + compression pipeline, the
-      one step genuinely larger than the rest.
-- [~] First/last name capture; password strength meter + requirements checklist —
+      one step genuinely larger than the rest. **Slice 4 shipped** (`auth-identity-step-fields`,
+      2026-08-09) — the IDENTITY step's field UI (first/last name, no availability probe, no skip); see
+      the "First/last-name capture shipped" bullet above for the full writeup. **Follow-up:**
+      PASSWORD/LANGUAGE/PROFILE/RECAP in turn — each adds its step to `RegistrationStepContent.implemented`
+      + a `when` arm in `RegistrationScreen`.
+- [x] First/last name capture; password strength meter + requirements checklist —
       **requirements-checklist + confirm-gate cores shipped** (slice `auth-password-requirements`,
       2026-07-21). The strength *meter* score (`PasswordStrength`, 0..5 bands) already existed; this
       slice adds the two remaining pure Step-5 cores from iOS `StepPasswordView` +
@@ -684,6 +688,70 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `apps/android` only. **Follow-up:** first/last-name capture (Step 3) + the app-side `StepPasswordView`
       composable (needs the registration wizard scaffold) rendering the checklist card + strength bar
       + match card driven by these cores.
+      **First/last-name capture shipped** (slice `auth-identity-step-fields`, 2026-08-09) — the IDENTITY
+      step's field UI, slice 4 of the `OnboardingFlowView` Compose decomposition. Re-proven before
+      picking: `RegistrationStepContent.implemented` held only `PSEUDO`/`PHONE`/`EMAIL`, and every
+      decision the step needed was already shipped — `RegistrationFields.firstName`/`lastName`,
+      `RegistrationStepGate`'s IDENTITY arm (both non-blank), and
+      `RegistrationViewModel.onFirstNameChange`/`onLastNameChange` (wired since `registration-step-gate-
+      core`/`registration-wizard-viewmodel`, already exercised by `fillAllValid()` + the
+      `register_blankOptionalNames_sendsNullNotBlank` wire-mapping test) — this slice is the first real
+      UI consumer, same "wiring-only" shape as EMAIL one level up (two plain fields, no availability
+      probe, no skip — `RegistrationStepGate`'s IDENTITY arm is purely local and
+      `RegistrationNavModel.showSkip` is PROFILE-only). New `feature/auth/RegistrationScreen.kt`
+      `IdentityStepBody` — header/subtitle + two `OutlinedTextField`s (first name, last name) bound to
+      `state.fields.firstName`/`lastName` via the existing setters, no available/taken indicator (parity
+      with iOS `StepIdentityView`, which has no server check either). `RegistrationStepContent.implemented`
+      gains `IDENTITY`, `RegistrationScreen`'s `when` gains its arm. **+1 core test**
+      (`RegistrationStepContentTest.isImplemented_identity_isTrue`; the "every other step" sweep updated
+      to exclude PSEUDO+PHONE+EMAIL+IDENTITY). Mutation (RED proof): the new test failed **exactly**
+      against the pre-slice `implemented` set (5 run, 1 failed, no collateral) before the one-line core
+      change landed. **Zero new ViewModel tests needed** — `RegistrationStepGateTest` already covers
+      every IDENTITY gate branch (both/first-blank/last-blank/both-blank/whitespace-only) and
+      `RegistrationViewModelTest` already exercises `onFirstNameChange`/`onLastNameChange` end-to-end via
+      `fillAllValid()` and the blank-names→null register mapping; re-ran unmodified and stayed green
+      (52/52), the regression proof for this Compose-wiring-only slice per `TDD-COVERAGE.md`'s exemption.
+      `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 943 tasks). Diff = `apps/android` only (`core/model` [1-line `implemented` set
+      change, no new files], `feature/auth` [+1 composable in `RegistrationScreen.kt`, the `when` arm,
+      ×4 locale strings], zero ViewModel/network changes).
+      **Password strength/requirements/match UI shipped** (slice `auth-password-step-fields`,
+      2026-08-09) — Step 5's field UI, slice 5 of the `OnboardingFlowView` Compose decomposition.
+      Re-proven before picking: `RegistrationStepContent.implemented` held only
+      `PSEUDO`/`PHONE`/`EMAIL`/`IDENTITY`, `RegistrationFields.password`/`confirmPassword` and
+      `RegistrationViewModel.onPasswordChange`/`onConfirmPasswordChange` already existed and were
+      already exercised end-to-end by `RegistrationViewModelTest.fillAllValid()` (wiring-only shape,
+      same as EMAIL/IDENTITY) — the only missing piece was the Compose body. New
+      `feature/auth/RegistrationScreen.kt` `PasswordStepBody` composes the three already-shipped pure
+      cores verbatim, no re-implementation: `PasswordEntry.evaluate` (confirm-field reveal at
+      `password.length >= 8`, match verdict once confirm is non-empty), `PasswordRequirements.evaluate`
+      (the four-row checklist card), and `PasswordStrength.evaluate` (the 6-band meter — reuses the
+      exact core already shipped and tested for `ChangePasswordScreen`, `:feature:settings`, rather than
+      porting iOS onboarding's own file-local 4-band `PasswordStrength` enum; both share the identical
+      6-boolean-factor raw score, so this is a richer presentation of the same signal, not a
+      re-implementation with different math — read both iOS types before choosing, they are genuinely
+      different enums with the same underlying arithmetic). A local `PasswordField` composable adds the
+      show/hide toggle every OutlinedTextField in this step needs (`PasswordVisualTransformation`,
+      mirrors `ChangePasswordScreen`'s private `PasswordField`, duplicated rather than extracted to a
+      shared module — `:feature:auth` and `:feature:settings` don't share a UI component today and
+      Compose glue is exempt from the coverage gate, so extracting a cross-module component is a
+      separate, deliberate refactor, not part of this slice). No skip affordance
+      (`RegistrationNavModel.showSkip` is PROFILE-only, matches iOS `StepPasswordView` having none
+      either). **+1 core test** (`RegistrationStepContentTest.isImplemented_password_isTrue`; the
+      "every other step" sweep renamed to exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD). **Mutation
+      (RED proof):** the new test against the pre-slice `implemented` set failed **exactly**
+      `isImplemented_password_isTrue` (6 run, 1 failed, no collateral) before the one-line core change
+      landed. **Zero new ViewModel tests needed** — `RegistrationViewModelTest` already exercises
+      `onPasswordChange`/`onConfirmPasswordChange` via `fillAllValid()`; re-ran unmodified and stayed
+      green (52/52), the regression proof for this Compose-wiring-only slice per `TDD-COVERAGE.md`'s
+      exemption. `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 943 tasks). Diff = `apps/android` only (`core/model` [1-line `implemented`
+      set change, no new files], `feature/auth` [+7 composables in `RegistrationScreen.kt`, the `when`
+      arm, ×19 locale strings ×4 locales], zero ViewModel/network changes). Box flips to `[x]` — every
+      field-UI element `feature-parity.md` names for this bullet (strength meter, requirements
+      checklist, match card, first/last-name capture) is now wired. **Follow-up:**
+      LANGUAGE/PROFILE/RECAP field UI in turn per the `auth-onboarding-shell` decomposition; LANGUAGE
+      next (picker + live-translation preview, core shipped per `auth-language-step-selection-core`).
 - [~] System + regional language selection with live translation preview — **picker + preview
       decision core shipped** (slice `auth-language-step-selection-core`, 2026-07-22). Pure
       `:core:model/auth/LanguageStepSelection.kt` (`LanguageSlot` enum + `LanguageSelectionState`

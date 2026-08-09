@@ -1466,4 +1466,76 @@ describe('MessageTranslationService — branch supplement', () => {
       expect(prisma.message.update).toHaveBeenCalled();
     });
   });
+
+  // =========================================================================
+  // 23. processAudioAttachment — explicit targetLanguages honored over conversation
+  // =========================================================================
+  describe('processAudioAttachment — explicit targetLanguages param', () => {
+    const audioParams = {
+      messageId: 'msg-explicit-langs',
+      attachmentId: 'att-explicit-langs',
+      conversationId: 'conv-explicit-langs',
+      senderId: 'user-explicit-langs',
+      audioUrl: 'https://example.com/audio.mp3',
+      audioPath: '/app/uploads/audio/test.mp3',
+      audioDurationMs: 3000
+    };
+
+    it('uses params.targetLanguages verbatim instead of recomputing from the conversation', async () => {
+      // Regression test (prod 2026-08-09): POST /api/v1/voice/translate(/async)
+      // with an explicit targetLanguages was silently ignored — processAudioAttachment
+      // always recomputed languages from the conversation's participants, dropping
+      // any caller-provided list. Requested ['en','es','de'], translator received
+      // ['fr','en'] derived from the two participants' own language preferences.
+      await svc.processAudioAttachment({
+        ...audioParams,
+        targetLanguages: ['en', 'es', 'de']
+      } as any);
+
+      expect(mockZmqClient.sendAudioProcessRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en', 'es', 'de'] })
+      );
+    });
+
+    it('still falls back to conversation-derived languages when targetLanguages is omitted', async () => {
+      await svc.processAudioAttachment(audioParams);
+
+      // participant.findMany() resolves to [] in this suite's default mocks →
+      // _extractConversationLanguages returns [] → hardcoded ['en','fr'] fallback.
+      expect(mockZmqClient.sendAudioProcessRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en', 'fr'] })
+      );
+    });
+  });
+
+  // =========================================================================
+  // 24. translateAttachment — forwards explicit targetLanguages
+  // =========================================================================
+  describe('translateAttachment — forwards explicit targetLanguages', () => {
+    it('passes options.targetLanguages through to processAudioAttachment', async () => {
+      const processSpy = jest.spyOn(svc, 'processAudioAttachment')
+        .mockResolvedValueOnce('mock-task-explicit-langs');
+
+      prisma.messageAttachment.findUnique.mockResolvedValue({
+        id: 'att-fwd-langs',
+        messageId: 'msg-fwd-langs',
+        fileName: 'audio.mp3',
+        filePath: 'audio/audio.mp3',
+        fileUrl: 'https://example.com/audio.mp3',
+        duration: 5000,
+        mimeType: 'audio/mp3',
+        uploadedBy: 'user-1',
+        message: { conversationId: 'conv-1', senderId: 'participant-1' }
+      });
+
+      const result = await svc.translateAttachment('att-fwd-langs', {
+        targetLanguages: ['en', 'es', 'de']
+      });
+
+      expect(result).not.toBeNull();
+      expect(processSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en', 'es', 'de'] })
+      );
+    });
+  });
 });

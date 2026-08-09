@@ -86,13 +86,32 @@ describe('PostService — câblage de la capture', () => {
    * Sans ceci, une story supprimée par son auteur gardait ses usages jusqu'au
    * hard-delete (7 j) et un post non-STORY les gardait POUR TOUJOURS : le
    * `usageCount` qui trie la découverte n'aurait jamais redescendu.
+   *
+   * La libération vit maintenant dans `applyPostRemovalEffects`, partagée avec
+   * `DELETE /admin/posts/:postId`. `deletePost` doit donc lui passer SON
+   * instance — celle que les tests court-circuitent — et non la laisser en
+   * construire une seconde sur le défaut du paramètre.
    */
   it('test_deletePost_releasesItsUsages', () => {
     const start = code.indexOf('async deletePost');
     const end = code.indexOf('async likePost');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    expect(code.slice(start, end)).toContain('this.soundCaptureService.releasePost(postId)');
+    const body = code.slice(start, end);
+    expect(body).toContain('applyPostRemovalEffects(');
+    expect(body).toContain('this.soundCaptureService');
+  });
+
+  /**
+   * L'autre bout de la même chaîne : la délégation ci-dessus ne libère rien si
+   * le module partagé ne le fait pas. Les deux gardes ensemble couvrent ce
+   * qu'un seul appel couvrait avant la mise en commun.
+   */
+  it('test_postRemovalEffects_releasesItsUsages', () => {
+    const shared = strip(
+      fs.readFileSync(path.join(__dirname, '..', 'postRemovalEffects.ts'), 'utf-8')
+    );
+    expect(shared).toContain('soundCapture.releasePost(post.id)');
   });
 
   /**

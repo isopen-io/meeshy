@@ -55,12 +55,16 @@ Mission double, sur **deux lanes strictement séparées** :
    dernières lignes + le résumé en tête de fichier (cf. §Hygiène des fichiers d'état).
 5. **Reprise après interruption** — avant de choisir un nouveau slice/item, cherche un run
    précédent resté inachevé : `git branch -r --list 'origin/claude/apps/*'` +
-   `gh pr list --state open --search "apps/android OR apps/ios"`. Si tu trouves une branche/PR qui
-   ressemble à un run coupé en plein milieu (commits présents mais pas de PR, ou PR ouverte alors
-   que CI est verte et les gates locaux passent depuis un moment) : **termine-la ou classe-la
-   explicitement en bloqué** avant de démarrer un nouveau slice/item. Ne l'abandonne jamais en
-   silence — chaque run doit se conclure par : mergé, fermé avec raison notée, ou marqué ⚠ bloqué
-   dans le fichier de suivi de sa lane.
+   `gh pr list --state open --search "apps/android OR apps/ios"`. **Filtre le bruit** : ce repo
+   accumule des dizaines de branches `claude/apps/*` orphelines d'anciens processus sans rapport
+   avec cette routine (observé : 254 branches mono-commit, aucune de moins de 24h, aucune avec PR
+   ouverte) — ignore toute branche sans commit récent (< 24h) ET sans PR ouverte associée, ce n'est
+   pas un run de CETTE routine coupé en plein milieu. Ne t'intéresse qu'aux branches/PR qui matchent
+   les deux : commit récent OU PR ouverte. Si tu en trouves une qui ressemble à un run coupé en
+   plein milieu (commits présents mais pas de PR, ou PR ouverte alors que CI est verte et les gates
+   locaux passent depuis un moment) : **termine-la ou classe-la explicitement en bloqué** avant de
+   démarrer un nouveau slice/item. Ne l'abandonne jamais en silence — chaque run doit se conclure
+   par : mergé, fermé avec raison notée, ou marqué ⚠ bloqué dans le fichier de suivi de sa lane.
 
 ## Choix de la lane (règle d'alternance, à évaluer à chaque run)
 
@@ -154,14 +158,22 @@ du travail : ne jamais déclarer 100 % sans preuve reproductible.
 4. **TDD** — test rouge qui caractérise le comportement actuel/le manque, fix minimal, vert.
    Respecte `apps/ios/CLAUDE.md` (protocoles `*Providing`, mocks `Mock{Service}`, `@MainActor`
    sur les tests, factory functions).
-5. **Vérifier** — `./apps/ios/meeshy.sh build` (grep « BUILD SUCCEEDED » dans le log, jamais
-   l'exit code seul) puis `./apps/ios/meeshy.sh test` (suite ciblée si le run est long ; suite
-   complète avant de merger un lot). SDK : scheme `MeeshySDK-Package`.
+5. **Vérifier** — `./apps/ios/meeshy.sh build` (le wrapper imprime son propre message
+   **`Build succeeded in <N>s`** — pas le `BUILD SUCCEEDED` brut de `xcodebuild`, qui n'apparaît
+   que si tu appelles `xcodebuild` directement sans passer par le wrapper ; grep le format qui
+   correspond à la commande que tu as réellement lancée, jamais l'exit code seul) puis
+   `./apps/ios/meeshy.sh test` (suite ciblée si le run est long ; suite complète avant de merger un
+   lot). SDK : scheme `MeeshySDK-Package`.
 6. **Livrer** — `git checkout -b claude/apps/ios/debt-<slice-id> origin/main` (`origin/main`
    explicitement, jamais le ref local `main`, potentiellement périmé dans ce repo multi-worktree —
-   cf. §Lane ANDROID), commit factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR, laisser
-   tourner la CI « iOS Tests » réelle, squash-merge seulement si CI verte + gates locaux verts +
-   rebase propre sur `main`. Jamais `--amend`, jamais de secret committé.
+   cf. §Lane ANDROID), commit factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR. **N'assume
+   pas que le workflow « iOS Tests » (`ios-tests.yml`) est le bon gate** — il ne se déclenche que
+   sur push vers `dev`, jamais sur une PR. Identifie le(s) workflow(s) qui ont réellement un
+   trigger `pull_request` pour les chemins touchés (`gh pr checks <n>` te montre les checks
+   réellement attachés à la PR) — pour un diff limité à `packages/MeeshySDK/`, c'est typiquement
+   **`sdk-tests` / `sdk-tests.yml`**. Laisse tourner ces checks-là, squash-merge seulement si tout
+   est vert + gates locaux verts + rebase propre sur `main`. Jamais `--amend`, jamais de secret
+   committé.
 7. **Mettre à jour `tasks/ios-debt-routine-progress.md`** — coche l'item (hash de commit + preuve
    courte), journal d'itération, tout nouveau finding découvert en route (le backlog doit rester
    réapprovisionné). **Commit séparé** de la PR de production (cf. §Choix de la lane) — jamais

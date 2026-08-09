@@ -3254,3 +3254,90 @@ méthodes. Ils ont échoué bruyamment dès que le code a appelé la vraie surfa
 comportement (cf. 2026-08-07, « un mock qui invente le contrat protège le bug qu'il prétend
 couvrir »). Un double partiel n'est un piège que s'il rend `undefined` en silence ; ici, appeler une
 méthode absente lève, donc la dette s'est signalée elle-même.
+
+## 2026-08-09 (17) — Un schéma de réponse ne valide pas la sortie du handler : il la RÉÉCRIT, sans rien lever
+
+Routine messaging, cycle 41. `GET /signal/keys/:userId` rendait chaque clé décodée en `Uint8Array`
+alors que son schéma de réponse — et la colonne, et le client iOS — déclarent du base64. Fastify
+sérialise un 200 **à travers** le schéma déclaré (fast-json-stringify) : un champ typé `string` ne
+**rejette** pas une valeur non-string, il la **coerce** par `String(value)`. `String(Uint8Array)`
+étant la liste décimale des octets, le fil portait `"97,110,45,105,…"` là où le client attendait
+`"YW4tabc…="`. iOS décodait la `String` sans erreur puis `Data(base64Encoded:)` rendait `nil` :
+E2EE mort pour tous les pairs, silencieusement, depuis toujours.
+
+**Règle** — un schéma de réponse n'est pas une garde, c'est une **transformation**. TypeScript ne
+relie pas l'objet rendu par un handler au schéma déclaré dans `response: { 200: … }` : aucune erreur
+de compilation. Le sérialiseur ne lève pas non plus : il coerce. Entre les deux, **zéro alarme** —
+et la valeur produite reste du bon *type JSON*, donc elle traverse aussi le décodeur du client. À
+chaque frontière de sortie où un schéma déclare un ENCODAGE (base64, hex, ISO-8601, data-URI),
+vérifier que le handler rend cet encodage-là, pas la valeur décodée « équivalente ».
+
+**Corollaire — se demander pourquoi on décode.** Ici, la colonne, le schéma et le client étaient
+d'accord sur le base64 : les vingt lignes de décodage ne servaient **aucun** consommateur. Une
+conversion sans lecteur en aval n'est pas neutre — elle est exactement le site où l'encodage se perd.
+
+**Corollaire — mocker un SCHÉMA, c'est mocker un comportement, pas isoler une frontière.** Le
+fichier de tests voisin remplaçait `getPreKeyBundleResponseSchema` par
+`{ type: 'object', additionalProperties: true }` « pour simplifier », ce qui retirait précisément
+l'étape qui abîme les données. Ses six tests sur la route assertaient `statusCode` et `success`,
+jamais la forme d'un champ, et restaient verts. Un test de route qui n'assertera jamais la VALEUR
+d'un champ ne peut pas remplacer un test qui traverse le sérialiseur réel. Deuxième aveuglement
+structurel trouvé dans ce même fichier en deux cycles (cycle 40 : doubles Prisma indifférents au
+`where`) — quand un fichier de tests a menti une fois par construction, relire ce qu'il mocke
+d'autre.
+
+**Corollaire — consommer une ressource appartient à la route qui la DISTRIBUE.**
+`POST /signal/session/establish` mettait à `null` la pré-clé à usage unique du destinataire alors
+que sa réponse ne porte aucun matériel de clé : personne ne recevait ce qu'elle détruisait. Ce n'est
+pas une consommation, c'est une destruction — et un vecteur d'épuisement offert à tout participant.
+Avant d'écrire « marquer comme utilisé », vérifier que la même route rend bien la chose à quelqu'un.
+## 2026-08-09 (17) — Rattraper la troisième omission d'un raccourci, c'est reconnaître qu'il faut supprimer le raccourci
+
+Le cycle 16 fermait sur une tête précise : `DELETE /admin/posts/:postId` écrit `deletedAt` sans
+passer par `PostService.deletePost`, « restent la désactivation des liens de partage et la ligne
+d'audit ». Les deux existaient encore. Mais l'information qui compte n'est pas *lesquelles* : c'est
+que c'était la **troisième fois** — usages de sons (cycle N), diffusion temps réel (cycle 16),
+audit + liens (ici) — que le même raccourci se fait rattraper **un effet à la fois**.
+
+1. **Un compteur d'incidents sur un MÊME site est un diagnostic, pas une statistique.** Trois
+   omissions successives au même endroit ne disent pas « ce site est malchanceux », elles disent
+   que la liste des obligations n'existe **nulle part** : il fallait relire `deletePost` en entier
+   pour la reconstituer, et personne ne le refait au moment d'écrire un `prisma.post.update`. Le
+   correctif n'était donc pas d'ajouter les deux effets manquants — c'était de **nommer la liste**
+   (`applyPostRemovalEffects`) pour qu'un quatrième effet ajouté demain s'applique aux deux chemins
+   sans que quiconque ait à s'en souvenir. Règle : **au deuxième rattrapage sur le même
+   contournement, arrêter de rattraper et dédupliquer** ; au troisième, c'est déjà tard.
+2. **Le jumeau était déjà là et montrait la forme à copier.** `broadcastPostRemoval` — créé au
+   cycle 16 pour la moitié VOLATILE du retrait (ce qui s'annonce) — attendait son symétrique pour
+   la moitié DURABLE (ce qui s'écrit). Un helper partagé qui ne couvre qu'une moitié d'un geste est
+   une invitation lisible : chercher l'autre moitié avant d'ajouter du code à côté de lui.
+3. **Un schéma OpenAPI peut documenter une garantie que le code ne tient pas, et c'est indétectable
+   par les tests.** La route accepte `reason` avec la description « Reason for deletion (for audit
+   trail) ». La raison n'allait que dans un `fastify.log.info` — jamais dans `AdminAuditLog`, la
+   table que la console interroge. Aucun test ne pouvait échouer : le champ était bien accepté, bien
+   validé, bien journalisé. **Un champ dont la description nomme une DESTINATION est une assertion
+   testable** — grep les champs d'API décrits par leur destinataire (« for audit trail », « for
+   analytics », « for moderation ») et vérifier que la destination est atteinte.
+4. **La conséquence produit de l'omission des liens n'est pas « un lien mort ».** `TrackingLink`
+   n'est pas soumis au `onDelete: Cascade` (rien ne cascade sur un soft-delete). Un post retiré
+   **pour motif de modération** gardait donc ses `/l/<token>` actifs : le contenu sanctionné restait
+   atteignable **par le chemin même de sa diffusion**. Quand un effet manquant touche un objet de
+   partage, ne pas raisonner en « donnée incohérente » — dérouler qui, dehors, tient encore une
+   poignée sur le contenu.
+
+**Reste ouvert** — `applyPostRemovalEffects` n'écrit d'audit que si l'acteur n'est pas l'auteur
+(règle produit héritée : se supprimer soi-même n'est pas un acte de modération). Or
+`services/gateway/CLAUDE.md` pose « Admin audit trail required for all admin actions », et la route
+console exige `canModerateContent` pour être empruntée. Les deux lectures se défendent ; trancher
+demande une décision produit, pas un correctif — ne pas la prendre en passant.
+
+**Piste pour le cycle suivant, trouvée en appliquant la règle 1 à la classe entière.** Le même
+défaut existe sur les MESSAGES, et à une échelle pire. `TrackingLink` porte un `messageId` : un
+message qui contient un lien court en est la cible. Or la suppression d'un message a **quatre**
+écrivains — `MessageHandler.ts:991`, `MaintenanceService.ts:527`, `messages-advanced.ts:554`,
+`messages.ts:584` — et **aucun** ne bascule `isActive: false`. Les trois fichiers de routes/handler
+connaissent pourtant `TrackingLinkService` : ils s'en servent à la CRÉATION et à l'ÉDITION, jamais à
+la suppression. Un message effacé laisse donc ses `/l/<token>` actifs, et ils continuent de compter
+des clics vers un contenu retiré. Quatre écrivains sans unité commune, c'est la même cause qu'ici
+d'un cran plus grave : commencer par nommer la liste (le pendant de `applyPostRemovalEffects` pour
+`Message`), pas par corriger les quatre sites.

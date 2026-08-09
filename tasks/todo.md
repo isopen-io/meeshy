@@ -1,3 +1,131 @@
+# Cycle 41 — Le schéma de réponse ne VALIDE pas la sortie du handler : il la RÉÉCRIT
+
+Tête prise dans le « reste ouvert » du cycle 40, qui désignait `POST /signal/session/establish`
+comme tête sérieuse : *soit on l'implémente, soit on cesse de consommer une pré-clé qu'on n'utilise
+pas.* L'enquête a tranché cette question — et en a trouvé une autre, en amont, qui rendait la
+première sans objet : **le seul point de distribution de matériel de clé du serveur rendait des
+clés qu'aucun client ne peut décoder.** L'E2EE n'a jamais pu s'établir.
+
+## D1 — `GET /signal/keys/:userId` rendait des clés indécodables (sévérité CRITIQUE)
+
+La colonne stocke du base64. `signalPreKeyBundleSchema` documente du base64 (« base64-encoded, 32
+bytes »). iOS `E2EAPI.BackendPreKeyBundle` déclare `identityKey: String // Base64`. **Les trois
+côtés du contrat sont d'accord.** Le handler, lui, décodait chaque champ en `Uint8Array` avant de
+répondre.
+
+Fastify sérialise un 200 **à travers** le schéma de réponse déclaré (fast-json-stringify). Un champ
+typé `string` ne rejette pas une valeur non-string : il la **coerce** par `String(value)`. Et
+`String(Uint8Array)` est la liste décimale des octets. Vérifié en exécutant le sérialiseur réel
+(fast-json-stringify 7.0.1) :
+
+```
+DB stocke (base64) : YW4taWRlbnRpdHkta2V5LTMyLWJ5dGVzLWxvbmchISE=
+sur le fil          : "97,110,45,105,100,101,110,116,105,116,121,…"
+```
+
+Chaîne complète, confirmée par lecture directe du client : iOS décode le champ **sans erreur** (une
+`String` reste une `String`), puis `Data(base64Encoded:)` rencontre des virgules — hors alphabet
+base64 — et rend `nil`. `E2ESessionManager.getOrCreateSession` lève `SessionError.invalidBase64Payload`
+(ligne 175), le `catch` inscrit le pair dans `failedSessionAttempts` pour **600 s**, et le
+`ConversationViewModel` envoie en clair (DEBUG) ou marque `encryption_failed` (release). Pour
+**chaque pair, à chaque tentative.** Aucune session E2EE n'a jamais pu être dérivée.
+
+**Pourquoi personne ne l'avait vu.** Le défaut n'est visible qu'à travers le sérialiseur, et le
+fichier de tests voisin (`signal-protocol-routes.test.ts`) **mocke `@meeshy/shared/types/api-schemas`**
+en remplaçant `getPreKeyBundleResponseSchema` par `{ type: 'object', additionalProperties: true }`.
+Ce mock retire précisément l'étape qui abîme les données. Ses six tests sur cette route assertent
+`statusCode` et `success` — jamais la forme d'un champ — et restaient verts pendant que le fil
+portait des clés inutilisables. C'est le deuxième aveuglement structurel trouvé dans ce même fichier
+en deux cycles (cycle 40 : ses doubles Prisma ne discriminaient pas sur le `where`).
+
+**Correctif** : rendre la ligne telle qu'elle est stockée. Le `select` la restreignait déjà aux
+onze champs du schéma — les parties privées (`identityKeyPrivate`, `signedPreKeyPrivate`) n'y sont
+pas et n'y entrent pas. L'étape de décodage n'avait **aucun consommateur** à servir.
+
+## D2 — `POST /signal/session/establish` détruisait une pré-clé qu'il ne distribuait à personne
+
+La question du cycle 40, tranchée. La route mettait `preKeyId`/`preKeyPublic` à `null` chez le
+destinataire. Or sa réponse ne porte **aucun matériel de clé** — seulement un message — et le
+bundle qu'elle composait sur vingt lignes à partir de la ligne lue n'était **lu par personne**.
+
+Ce n'est donc pas une consommation : c'est une destruction. Elle ne devient une consommation que
+chez la route qui **distribue** — `GET /signal/keys/:userId`. Laissée en place, tout participant
+actif pouvait retirer la pré-clé à usage unique de n'importe quel autre membre, au rythme du rate
+limit, **sans rien recevoir en échange** ; et rien ne la reconstitue, les clients ne téléversant un
+bundle qu'au front montant de l'authentification (`MeeshyApp.swift`, edge `isAuthenticated`
+false→true). C'est l'épuisement de pré-clés que l'en-tête du fichier dit prévenir.
+
+**Correctif** : retrait de l'écriture destructrice. Les deux gardes d'appartenance active du cycle
+40 restent — la route garde un rôle réel, elle **autorise** une session, elle n'en établit pas.
+
+## D3 — code mort
+
+L'interface `PreKeyBundle` et ses deux constructions (une par route) disparaissent avec D1 et D2 :
+plus aucun lecteur. Diff net **-85 / +62**, dont l'essentiel des ajouts est du commentaire.
+
+## Ce que ce cycle retient de sa forme
+
+Les cycles 37-40 cherchaient des **prédicats** absents dans des `where`. Ici le défaut n'est dans
+aucune requête : il est dans la **frontière de sortie**, là où un schéma qu'on lit comme une
+validation est en réalité une transformation. Un handler n'est pas typé contre son schéma de
+réponse — TypeScript ne relie pas les deux — et le sérialiseur ne lève pas : il coerce. Entre les
+deux, aucune alarme. Seul un test qui traverse le sérialiseur **réel** peut voir la sortie.
+
+## Preuve
+
+Nouveau `signal-prekey-bundle-wire-format.test.ts` — 6 tests, **5 rouges avant correctif**, qui
+n'mocke délibérément PAS les schémas : le vrai `signalPreKeyBundleSchema` pilote le vrai
+sérialiseur, et les assertions portent sur le corps parsé. La sortie d'échec imprimait littéralement
+`"115,105,103,110,101,100,…"` là où le test attendait le base64 stocké, et l'appel
+`{data: {preKeyId: null, preKeyPublic: null}}` de la destruction de pré-clé. Valeurs **distinctes
+par champ** (une constante partagée laisserait passer un handler qui intervertit deux champs) et
+prédicat `isDecodableBase64` qui reproduit ce que fait `Data(base64Encoded:)`.
+
+Deux tests existants verrouillaient le défaut D2 (`signal-protocol-routes.test.ts`,
+`signal-session-departed-member.test.ts`) : réécrits pour asserter l'absence d'écriture, en gardant
+une preuve observable que le handler va au bout de ses gardes (`findUnique` appelé).
+
+Clients vérifiés dans les quatre langages (leçon 88) : iOS est le seul client complet (GET puis
+POST, dérivation **locale** à partir du seul `signedPreKeyPublic`) ; web n'appelle que `POST
+/signal/keys`, et avec un corps vide (`{}`) que le schéma rejette en 400 — défaut distinct,
+consigné ; Android et le SDK Swift n'ont aucun appelant. **Aucun client ne lit `preKeyId`/
+`preKeyPublic`**, donc aucune capacité vivante n'est retirée par D2.
+
+## Reste ouvert après ce cycle
+
+- **La pré-clé à usage unique n'est toujours pas à usage unique.** `GET /signal/keys/:userId` la
+  distribue autant de fois qu'on la demande. Le correctif juste — la réclamer atomiquement à la
+  distribution — demande d'abord un **pool** de pré-clés (le schéma n'a qu'un seul emplacement,
+  `preKeyId`/`preKeyPublic` scalaires) et un chemin de **réapprovisionnement** côté client. Réclamer
+  l'unique emplacement au premier `GET` laisserait tous les pairs suivants sans pré-clé et rien pour
+  la refaire : demi-correctif refusé, consigné entier.
+- **`POST /signal/session/establish` n'établit toujours aucune session.** Elle autorise, et le dit
+  maintenant dans ses logs et ses commentaires. La vraie établissement demande
+  `@signalapp/libsignal-client` et un magasin de sessions côté serveur — et se heurte à une question
+  d'architecture : dans un E2EE, l'état de session appartient au client, pas au serveur. Sa réponse
+  annonce encore `E2EE session established successfully` : chaîne inchangée à dessein (aucun lecteur,
+  contrat d'API stable), à revoir avec la question ci-dessus.
+- **`POST /signal/keys` est inappelable depuis le web.** `encryption-settings.tsx:104` envoie `{}` ;
+  le schéma de corps exige six propriétés — 400 avant le handler. Le bouton « Générer les clés » ne
+  peut pas aboutir. Défaut réel, hors de la famille traitée ici (sortie de clés), non corrigé.
+- **`registrationId` iOS déborde la borne documentée** : `getOrCreateStableId` tire dans 1…65535,
+  `signalPreKeyBundleSchema` annonce `maximum: 16383` (14 bits, borne du Signal Protocol). Rien ne
+  rejette : `generatePreKeyBundleRequestSchema` ne borne pas ce champ à l'entrée, et `maximum` dans
+  un schéma de RÉPONSE n'est pas appliqué par le sérialiseur (vérifié — même raison que D1 : ce
+  schéma transforme, il ne valide pas). Dérive de spécification, pas de panne. Non corrigé —
+  demande une décision (élargir la borne documentée ou borner le client).
+- **Le fichier de tests `signal-protocol-routes.test.ts` mocke encore les schémas** pour les autres
+  routes. Deux aveuglements structurels y ont été trouvés en deux cycles ; le troisième viendra du
+  même endroit.
+- Reconduits du cycle 40 : doublons `Participant` en base non dénombrés ; « qui a le droit
+  d'épingler ? » ; asymétrie édition/suppression (cycle 38b) et appartenance active de l'auteur
+  (cycle 34) à arbitrer ensemble ; `attachments/metadata.ts:185` ; balayage `routes/calls.ts` (cinq
+  jointures d'appartenance) sur la question du cycle 37 ; file d'attente de fan-out (cycle 32) ;
+  fan-out `member_joined` sans borne (cycle 33b) ; `getVisibilityFilteredRecipients` /
+  `filterPostConsumers` (cycle 32) ; `DELETE /admin/posts/:postId` (cycle 38) ; `@Display Name` ;
+  `createStoryCommentNotificationsBatch` ; les deux scripts de réparation de base ; `eslint`
+  inopérant sur le gateway (pas d'`eslint.config.js` depuis ESLint v9).
+
 # Cycle 40 — Le prédicat manquant n'a pas de valeur juste : il en a deux, opposées
 
 Tête prise dans le « reste ouvert » du cycle 39, qui reposait la question du cycle 37 pour la

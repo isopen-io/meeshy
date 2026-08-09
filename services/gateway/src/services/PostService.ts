@@ -20,6 +20,7 @@ import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
+import { applyPostRemovalEffects } from './posts/postRemovalEffects';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -1029,7 +1030,7 @@ export class PostService {
    * un poste — réécrire le texte de quelqu'un sous sa signature casserait
    * l'intégrité du contenu ; `updatePost` reste réservé à l'auteur.
    */
-  async deletePost(postId: string, actorId: string, options: { actorRole: string }) {
+  async deletePost(postId: string, actorId: string, options: { actorRole: string; reason?: string }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
     });
@@ -1047,45 +1048,16 @@ export class PostService {
       data: { deletedAt: new Date() },
     });
 
-    // Retrait par un tiers habilité : trace d'audit. Best-effort comme la
-    // désactivation des liens ci-dessous — un log perdu ne doit pas annuler
-    // une suppression déjà committée.
-    if (!isAuthor) {
-      try {
-        await this.prisma.adminAuditLog.create({
-          data: {
-            userId: post.authorId,
-            adminId: actorId,
-            action: 'DELETE_POST',
-            entity: 'Post',
-            entityId: postId,
-            metadata: JSON.stringify({ type: post.type }),
-          },
-        });
-      } catch (err) {
-        log.warn('deletePost: audit log write failed', { postId, actorId, err });
-      }
-    }
-
-    // Soft-delete only flips `deletedAt` — the Prisma `onDelete: Cascade` relation
-    // never fires, so any share-tracking links targeting this post would keep
-    // redirecting to a dead page. Deactivate them explicitly (best-effort).
-    try {
-      await this.prisma.trackingLink.updateMany({
-        where: { targetId: postId },
-        data: { isActive: false },
-      });
-    } catch (err) {
-      log.warn('deletePost: tracking link deactivation failed', { postId, err });
-    }
-
-    // Les usages meurent avec le post ; le `Sound`, lui, SURVIT.
-    // Sans ceci, une story supprimée par son auteur gardait ses usages jusqu'au
-    // hard-delete (7 j) et un post non-STORY les gardait POUR TOUJOURS — un
-    // `usageCount` gonflé indéfiniment, alors que c'est lui qui trie la
-    // découverte. `releasePost` ne rejette jamais : la suppression n'a pas à
-    // dépendre de la bibliothèque.
-    await this.soundCaptureService.releasePost(postId);
+    // Audit, liens de partage, usages de sons : la liste vit dans
+    // `applyPostRemovalEffects`, partagée avec `DELETE /admin/posts/:postId`
+    // qui retire le même objet. La tenir ici en double a coûté trois cycles
+    // d'omissions découvertes une par une côté console.
+    await applyPostRemovalEffects(
+      this.prisma,
+      post,
+      { id: actorId, reason: options.reason },
+      this.soundCaptureService
+    );
 
     return updated;
   }

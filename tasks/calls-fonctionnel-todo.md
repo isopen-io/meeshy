@@ -5432,3 +5432,75 @@ redirections ouvertes — en faisait partie. Deux vulnérabilités distinctes, v
   trouvailles Android de la Vague 70 ; le double `setInterval` de `setCurrentUser()` repéré Vague 75
   (impact faible confirmé cette vague : `initializeConnection()` est idempotent, gardé par
   `listenersAttachedSocket`).
+
+## Vague 84 — `CallManager.toggleSpeaker()` (iOS) ne revertait pas `isSpeaker` quand `overrideOutputAudioPort` échoue (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session,
+mandat explicitement recentré sur la qualité plateforme Apple (CallKit/PushKit/AVFoundation) pour ce
+cycle. `list_pull_requests` n'a remonté aucune PR ouverte de cette routine (branche `upbeat-dirac`
+inexistante côté remote, `HEAD == origin/main`) — cycle démarré sur une base propre, sans backlog à
+merger d'abord. Le candidat iOS laissé « prioritaire pour la prochaine session Xcode » à la fin de la
+Vague 78 (`CallManager.selectCamera(id:)` ne revertait pas son état optimiste sur échec) s'est avéré
+**déjà corrigé** — `git log` montre le commit `7a5770e85` (« revert optimistic picker state when
+selectCamera fails », #2685), postérieur à la dernière mise à jour de ce fichier ; le texte « reste
+ouvert » reconduit tel quel à travers les Vagues 79-83 n'a jamais été recoupé avec le code réel après ce
+fix — même piège de confusion documenté par l'audit du 2026-07-01, reconfirmé ici. Toolchain Swift
+(`swift`/`xcodebuild`) toujours absente de ce sandbox Linux — audit délégué à un agent dédié (lecture
+directe intégrale de `CallManager.swift`, `VoIPPushManager.swift`, `WebRTCService.swift`,
+`PiPCallController.swift`, cross-check systématique contre les `*FailureCorrectionSourceTests.swift` /
+`*SourceGuardTests.swift` existants pour ne pas re-trouver un candidat déjà couvert), confirmé ligne à
+ligne avant implémentation.
+
+- **Root cause confirmée par lecture directe** : `toggleSpeaker()` (`~L2388`, avant fix) flippe
+  `isSpeaker` de façon optimiste puis appelle `applySpeakerRoute()` (`~L3987`, avant fix) sans jamais
+  inspecter son résultat :
+  ```swift
+  func toggleSpeaker() {
+      isSpeaker.toggle()
+      applySpeakerRoute()
+      HapticFeedback.light()
+  }
+  ```
+  `applySpeakerRoute()` appelle `RTCAudioSession.overrideOutputAudioPort(port)` dans un `do/catch` qui ne
+  fait que logger l'échec (`Logger.calls.error(...)`) — `isSpeaker` reste à sa valeur optimiste quoi
+  qu'il arrive. `overrideOutputAudioPort` est connu pour lever `insufficientPriority` quand une route de
+  priorité supérieure (un casque Bluetooth/AirPods connecté, autorisé par `.allowBluetoothHFP` à la
+  config de catégorie, `~L3885`) est active — le fichier lui-même documente déjà cette classe d'échec
+  ailleurs (`WebRTCTypes.swift:1349-1354`, « can silently fail on some hardware »). Scénario concret :
+  appel actif avec AirPods connectés, tap « Haut-parleur » → `overrideOutputAudioPort(.speaker)` échoue,
+  `isSpeaker` reste `true` (bouton affiché actif, VoiceOver annonce « Désactiver le haut-parleur »,
+  `CallView.swift:1572`) alors que l'audio continue de sortir par Bluetooth ; un second tap flip
+  `isSpeaker` à `false` et appelle `overrideOutputAudioPort(.none)` — un no-op relatif à l'override jamais
+  réellement appliqué — rendant le bouton complètement inerte, désynchronisé jusqu'à ce qu'un événement de
+  route sans rapport (`.oldDeviceUnavailable`, déconnexion Bluetooth) réapplique par coïncidence la bonne
+  valeur via `handleAudioRouteChange`.
+- **Fix, même patron que `switchCamera()`/`selectCamera(id:)`** (déjà établis dans ce fichier pour la même
+  forme de bug — flip optimiste avant une opération async faillible sur la même famille caméra) :
+  `applySpeakerRoute()` devient `@discardableResult fileprivate func applySpeakerRoute() -> Bool`, retourne
+  `true` sur son early-return (`!callState.isActive` — rien à revert, la route n'a simplement pas encore
+  été appliquée) et sur succès, `false` quand `overrideOutputAudioPort` lève (`succeeded = false` posé dans
+  le `catch`). `toggleSpeaker()` capture `previousSpeaker` avant le flip et revert `isSpeaker` si
+  `applySpeakerRoute()` retourne `false`. `@discardableResult` préserve les 5 autres sites d'appel
+  (`handleAudioRouteChange` ×3, `handleMediaServicesReset`, `CXProviderDelegate.didActivate`) qui
+  continuent d'ignorer la valeur de retour sans avertissement compilateur — leur comportement est
+  inchangé, hors scope de ce fix (ils réagissent à des événements système, pas à un tap utilisateur, et
+  ont chacun leur propre re-application différée qui absorbe un échec transitoire).
+- **Tests** (source-level regression guard, RTCAudioSession nécessite une route audio réelle donc non
+  exerçable en comportemental — même limite documentée que
+  `CallManagerSwitchCameraFailureCorrectionSourceTests`) : nouveau fichier
+  `CallManagerToggleSpeakerFailureCorrectionSourceTests.swift`, deux tests — l'un verrouille la capture +
+  le revert conditionnel dans le corps de `toggleSpeaker()`, l'autre verrouille que `applySpeakerRoute()`
+  track et retourne bien son issue. Non exécutable dans ce sandbox (pas de toolchain Swift) — la seule
+  preuve définitive reste la CI `ios-tests` (macOS runner), comme pour tous les fix Swift de cette
+  routine.
+- **Vérification** : lecture ligne à ligne des deux fonctions modifiées + des 6 sites d'appel de
+  `applySpeakerRoute()` pour confirmer qu'aucun ne dépend de son ancien type `Void` de façon incompatible
+  avec `@discardableResult Bool`. CI `ios-tests` à surveiller au push (seule vérification de compile
+  disponible pour ce diff).
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` relevée
+  par l'agent d'audit cette vague (confiance basse, needs on-device confirmation — CallKit peut ne jamais
+  délivrer l'action ou terminer l'appel directement quand `supportsHolding=false`, indéterminable par
+  lecture seule) ; candidats web Vague 83 non repris (`enableVideo()` no-op pré-connexion désynchronisant
+  `controls.videoEnabled`, `call-store.ts.addRemoteStream` ne stoppant pas les pistes remplacées).
