@@ -1,3 +1,147 @@
+# Cycle 29 — Le fil d'un post n'héritait d'aucune de ses règles d'audience
+
+Tête laissée par le cycle 28 :
+« **`@Display Name` reste inextractible dans le domaine social.** […] **Tête du prochain cycle si
+rien de plus grave n'apparaît** — deux cycles de suite, quelque chose de plus grave est apparu. »
+
+Trois cycles de suite. Le défaut annoncé retourne à la file, avec sa raison inchangée.
+
+## Ce qui était ouvert
+
+Les six routes de `routes/posts/comments.ts` et les quatre handlers de réaction socket ne
+consultaient **jamais** `Post.visibility`. Un utilisateur authentifié connaissant un `postId`
+pouvait, sur un post `PRIVATE` / `ONLY` / `FRIENDS` / `COMMUNITY` :
+
+| surface | ce qu'elle donnait |
+|---|---|
+| `GET /posts/:postId/comments` | tout le fil — contenu, médias, auteurs |
+| `GET .../comments/:commentId/replies` | idem, et sans même regarder le post |
+| `POST /posts/:postId/comments` | **écrire** dedans, puis notifier l'auteur |
+| `POST`/`DELETE .../like` | réaction persistée sur un commentaire du fil |
+| `comment:reaction-add` / `-remove` | idem par socket |
+| `post:reaction-add` / `-remove` | réaction sur le post lui-même |
+
+Différence de nature avec le cycle 28 : cette fuite est **tirée par l'appelant**, pas poussée. Elle
+ne demande aucun préalable — ni mention, ni relation, ni notification — seulement un identifiant.
+
+## Pourquoi c'était visible dans le dépôt
+
+Le post, lui, était protégé : `PostService.getPostById` et `recordMediaDownloads` appliquent
+`buildVisibilityFilter`, et `post:join` refusait déjà l'abonnement à la room d'un post restreint
+via `canUserViewPost`. Le fil était la seule île sans ACL.
+
+Et la preuve était dans le fichier même : `CommentReactionHandler` **importait** `canUserViewPost`
+et portait un wrapper privé `_canUserViewPost` — que rien n'appelait. L'intention avait été écrite,
+le branchement n'avait jamais eu lieu.
+
+## D1 — une asymétrie documentée n'est pas une asymétrie appliquée
+
+`postVisibility.ts` porte depuis la décision 2026-07-08 : le filtre de LISTE admet amis ∪ contacts
+DM, tandis que `canUserViewPost` — « ce qui garde RÉAGIR / COMMENTER » — reste amis stricts. Cette
+règle n'existait qu'en prose : rien ne permettait de l'appliquer à UN objet.
+
+Quatre primitives la rendent exécutable, dans le fichier qui la documente plutôt que dans un module
+de plus :
+
+| primitive | question | audience |
+|---|---|---|
+| `loadPostAcl` | tranche ACL de ce post | — (`null` si absent OU supprimé) |
+| `loadCommentPostAcl` | ... du post PORTANT ce commentaire | — (id d'URL jamais cru) |
+| `canUserConsumePost` | peut-il LIRE le fil ? | amis ∪ contacts DM |
+| `canUserInteractWithPost` | peut-il ÉCRIRE / RÉAGIR ? | amis stricts |
+
+Les deux verdicts ne diffèrent que par `canUserViewPost(..., { includeDirectContacts })`. Un point
+d'entrée choisit son audience en la **nommant**, pas en réglant un booléen.
+
+Choisir la consommation pour la lecture n'est pas un élargissement, c'est l'absence d'une
+régression : un contact DM non-ami à qui le feed montre déjà une story `FRIENDS` doit pouvoir en
+lire les commentaires. Le verdict d'interaction en aurait fait un 404 — une garde qui casse un
+lecteur légitime n'est pas une garde.
+
+## D2 — l'identifiant du chemin ne vaut rien
+
+Trois surfaces adressent leur cible par `commentId` tout en recevant un `postId` (segment d'URL ou
+champ de payload) : les réponses, les likes de commentaire, les réactions socket. Le post y est
+désormais résolu **DEPUIS le commentaire**. Sans cela, un appelant annonçait le post public de son
+choix tout en visant le fil d'un post privé — le `postId` reçu n'est plus qu'une adresse de room et
+un segment de chemin.
+
+## D3 — refuser sans confirmer
+
+`404` partout, jamais `403`, et `null` indistinct entre post absent, supprimé et invisible. Même
+doctrine que `recordMediaDownloads` : distinguer ferait de la route un oracle d'existence de posts
+privés. Côté socket, l'ACK rend « Post/Comment not found » pour la même raison.
+
+## Coût
+
+- Cas dominant (post `PUBLIC`) : une requête bornée, **aucune** lecture de graphe ensuite.
+- `FRIENDS`/`EXCEPT` : une requête d'amitié ; le contact DM n'est consulté qu'en dernier recours.
+- `EXCEPT` court-circuite sur sa liste noire **avant** toute lecture de graphe (nouveau).
+- `doUsersShareDirectConversation` est le pendant **pairwise** de `getDirectConversationContactIds`,
+  exactement comme `doUsersShareCommunity` l'est de `getCommunityCoMemberIds` : deux requêtes
+  bornées au lieu de matérialiser le carnet d'adresses. Définition du contact DM reprise mot pour
+  mot du feed. **En panne, il refuse.**
+
+## Contrepartie assumée
+
+**Un utilisateur qui perd l'accès à un post ne peut plus retirer une réaction qu'il y avait
+laissée.** Elle lui est de toute façon invisible, et une ACL qui dépend du sens du geste est un
+footgun ; le retrait suit donc la pose. À rouvrir si un cas d'usage réel apparaît.
+
+## Vérification
+
+- **43 tests neufs**, écrits AVANT l'implémentation, **19 rouges observés** :
+  - `__tests__/unit/services/posts/postThreadAccess.test.ts` — 22 cas (les six modes, l'auteur
+    toujours admis sur son `PRIVATE`, le contact DM admis en lecture ET refusé en écriture, le post
+    résolu depuis le commentaire, la visibilité inconnue qui restreint, la panne qui refuse, les
+    court-circuits sans requête).
+  - `__tests__/unit/routes/posts/comments-audience.test.ts` — 17 cas sur les cinq routes, dont
+    « le `:postId` du chemin ne vaut rien » et « lire est ouvert là où écrire est refusé ».
+  - 9 cas d'audience ajoutés aux deux suites de handlers socket, dont « le `postId` du payload
+    n'est pas cru ».
+- **11 harnais ont dû déclarer leur audience.** C'est voulu, et c'est le même choix qu'au cycle 28 :
+  un double qui n'expose pas la tranche ACL échoue au lieu de rendre un verdict par défaut.
+- Le wrapper mort `_canUserViewPost` est retiré.
+- **Suite gateway complète : 607 suites, 15 731 tests, tout vert** (avant : 605 / 15 682).
+  `tsc --noEmit` propre. Couverture lignes **95,66 %**, en légère hausse.
+
+## Reste ouvert après ce cycle
+
+- **`@Display Name` reste inextractible dans le domaine social** — rendu à la file une TROISIÈME
+  fois, même raison mesurée : les deux clients insèrent un **handle**, jamais un nom d'affichage
+  (web `MentionAutocomplete` → `onSelect(suggestion.username)`, iOS `FeedCommentsSheet` →
+  `"@\(username) "`). Le cas ne se produit qu'en frappe manuelle. **Tête du prochain cycle si rien
+  de plus grave n'apparaît.**
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel à défaut `PUBLIC`** —
+  candidat sérieux annoncé par le cycle 28, non traité : ce cycle a trouvé plus grave dans le même
+  chemin. Un seul appelant, qui passe bien le paramètre ; le rendre requis est mécanique.
+  **Candidat sérieux pour le prochain cycle**, deux fois annoncé.
+- **`createCommentReplyNotification` et `createCommentLikeNotification` ne filtrent pas leur
+  destinataire unique** — l'auteur du commentaire parent reçoit un extrait de la réponse **et la
+  vignette du post** (`resolvePostMedia`) sans test d'audience. Le cas exige une restriction
+  postérieure à son commentaire (dés-amitié, édition de visibilité), donc plus étroit que ce cycle,
+  mais c'est le même défaut : `filterPostAudience` s'y applique tel quel. **Prochain lot naturel.**
+- **`likePost` / `PostReactionService.addReaction` ne vérifient que l'existence du post** — le
+  chemin REST `POST /posts/:postId/like` reste sans garde d'audience, là où son jumeau socket vient
+  d'en recevoir une. Non traité ici pour ne pas mêler deux surfaces dans un même lot ; à faire.
+- **Les deux réparations de base attendent une exécution avec accès base**
+  (`repair-mention-user-ids.ts`, `repair-tracking-link-created-by.ts`). À lancer SANS `--apply`
+  d'abord. Action humaine — cette routine n'a aucun accès MongoDB.
+- **Les `PostMention` périmées déjà écrites restent en base** (cycle 27, inchangé).
+- **Aucune lecture déjà servie n'est rattrapable.** Le correctif ne vaut que pour l'avenir ; les
+  fils restreints déjà lus l'ont été.
+- **`getMentionsForMessage` / `getRecentMentionsForUser` n'ont aucun consommateur d'écran**
+  (cycle 27, inchangé).
+- **`MeeshySocketIOManager.getConversationParticipantsForMention`** reste un deuxième exemplaire du
+  chargeur de participants (cycle 21, inchangé).
+- L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
+- **`eslint` ne peut pas tourner sur le gateway** : aucun `eslint.config.js` depuis la migration
+  ESLint v9. Condition préexistante ; la CI ne gate que sur `test:coverage`.
+- **La suppression de branche distante échoue depuis cette routine** — à supprimer depuis
+  l'interface GitHub.
+
+---
+
 # Cycle 28 — Nommer quelqu'un ne lui donne pas le droit de VOIR
 
 Tête laissée par le cycle 27 :

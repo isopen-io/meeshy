@@ -11,6 +11,12 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import {
+  loadPostAcl,
+  loadCommentPostAcl,
+  canUserConsumePost,
+  canUserInteractWithPost,
+} from '../../services/posts/postVisibility';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -58,6 +64,14 @@ export function registerCommentRoutes(
       const authContext = (request as UnifiedAuthRequest).authContext;
       const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
 
+      // Le fil hérite de l'audience du post : lire les commentaires d'un post
+      // qu'on n'a pas le droit de voir, c'est en lire le contenu. Refus en 404
+      // et non 403 — distinguer révélerait l'existence du post.
+      const postAcl = await loadPostAcl(prisma, postId);
+      if (!postAcl || !(await canUserConsumePost(prisma, postAcl, currentUserId))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+
       const result = await commentService.getComments(postId, cursor, limit, currentUserId);
 
       const commentContents = result.items
@@ -89,6 +103,14 @@ export function registerCommentRoutes(
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
+
+      // Le post est résolu DEPUIS le commentaire : cette route n'adresse la
+      // cible que par `commentId`, donc le `:postId` du chemin peut nommer
+      // n'importe quel post public tout en visant le fil d'un post privé.
+      const thread = await loadCommentPostAcl(prisma, commentId);
+      if (!thread || !(await canUserConsumePost(prisma, thread.post, currentUserId))) {
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
 
       const result = await commentService.getReplies(commentId, cursor, limit, currentUserId);
 
@@ -125,6 +147,16 @@ export function registerCommentRoutes(
       const parsed = CreateCommentSchema.safeParse(request.body);
       if (!parsed.success) {
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      // Commenter est une INTERACTION : amis stricts, l'audience plus étroite
+      // des deux (cf. `postVisibility.ts`). Un contact DM non-ami peut lire le
+      // fil d'une story FRIENDS sans pouvoir y écrire. La garde précède
+      // l'écriture — sans elle, le commentaire était persisté puis notifiait
+      // l'auteur, qui découvrait un intrus dans un fil restreint.
+      const postAcl = await loadPostAcl(prisma, postId);
+      if (!postAcl || !(await canUserInteractWithPost(prisma, postAcl, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       // Idempotent via clientMutationId — replays return the same comment.
@@ -349,6 +381,14 @@ export function registerCommentRoutes(
       const parsed = LikeSchema.safeParse(request.body ?? {});
       const emoji = parsed.success ? parsed.data.emoji : '❤️';
 
+      // Même verdict que le chemin socket (`CommentReactionHandler`) : réagir
+      // est une interaction. Le post est résolu depuis le commentaire, jamais
+      // depuis le `:postId` du chemin.
+      const thread = await loadCommentPostAcl(prisma, commentId);
+      if (!thread || !(await canUserInteractWithPost(prisma, thread.post, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
+
       const result = await commentService.likeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
@@ -415,6 +455,13 @@ export function registerCommentRoutes(
       const { commentId } = request.params;
       const parsed = LikeSchema.safeParse(request.body ?? {});
       const emoji = parsed.success ? parsed.data.emoji : '❤️';
+
+      // Retirer une réaction reste une interaction avec le fil — même garde
+      // que la pose, pour que l'ACL ne dépende pas du sens du geste.
+      const thread = await loadCommentPostAcl(prisma, commentId);
+      if (!thread || !(await canUserInteractWithPost(prisma, thread.post, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
 
       const result = await commentService.unlikeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {

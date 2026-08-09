@@ -30,7 +30,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { canUserViewPost } from '../../services/posts/postVisibility.js';
+import { canUserViewPost, loadPostAcl, canUserInteractWithPost } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
@@ -169,6 +169,18 @@ export class PostReactionHandler {
         return;
       }
 
+      // Réagir est une INTERACTION : même verdict que `post:join`, mais celui-ci
+      // ne gardait que l'abonnement à la room. Une réaction n'a pas besoin de la
+      // room — connaître le `postId` suffisait à en poser une sur un post
+      // restreint, à peser dans ses agrégats et à notifier son auteur.
+      // Refus indistinct d'un post inexistant : ne pas faire de l'ACK un oracle.
+      const postAcl = await loadPostAcl(this.prisma, validated.postId);
+      if (!postAcl || !(await canUserInteractWithPost(this.prisma, postAcl, userId))) {
+        this.logger.warn('[PostReactionHandler] post:reaction-add denied (visibility)', { userId, postId: validated.postId });
+        if (callback) callback({ success: false, error: 'Post not found' });
+        return;
+      }
+
       const reaction = await this.postReactionService.addReaction({
         postId: validated.postId,
         userId,
@@ -272,6 +284,15 @@ export class PostReactionHandler {
       if (!rateLimitAllowed) {
         this.logger.warn('[PostReactionHandler] post:reaction-remove rate limit exceeded', { userId, postId: validated.postId });
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      // Retirer reste une interaction avec le post — même garde que la pose,
+      // pour que l'ACL ne dépende pas du sens du geste.
+      const postAcl = await loadPostAcl(this.prisma, validated.postId);
+      if (!postAcl || !(await canUserInteractWithPost(this.prisma, postAcl, userId))) {
+        this.logger.warn('[PostReactionHandler] post:reaction-remove denied (visibility)', { userId, postId: validated.postId });
+        if (callback) callback({ success: false, error: 'Post not found' });
         return;
       }
 

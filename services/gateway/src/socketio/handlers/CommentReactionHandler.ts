@@ -27,7 +27,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { canUserViewPost } from '../../services/posts/postVisibility.js';
+import { loadCommentPostAcl, canUserInteractWithPost } from '../../services/posts/postVisibility.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -111,6 +111,17 @@ export class CommentReactionHandler {
       if (!rateLimitAllowed) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-add rate limit exceeded', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      // Le fil hérite de l'audience de son post, et réagir est une INTERACTION.
+      // Le post est résolu DEPUIS le commentaire : le `postId` du payload est
+      // fourni par le client, il ne sert qu'à adresser la room de diffusion.
+      // Refus indistinct d'un commentaire inexistant — pas d'oracle.
+      const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
+      if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-add denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Comment not found' });
         return;
       }
 
@@ -223,6 +234,14 @@ export class CommentReactionHandler {
       if (!rateLimitAllowed) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-remove rate limit exceeded', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      // Retirer reste une interaction avec le fil — même garde que la pose.
+      const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
+      if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-remove denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Comment not found' });
         return;
       }
 
@@ -377,16 +396,5 @@ export class CommentReactionHandler {
       .catch((error) => {
         this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });
       });
-  }
-
-  private async _canUserViewPost(
-    post: {
-      authorId: string;
-      visibility: import('@meeshy/shared/prisma/client').PostVisibility;
-      visibilityUserIds: string[];
-    },
-    userId: string
-  ): Promise<boolean> {
-    return canUserViewPost(this.prisma, post, userId);
   }
 }

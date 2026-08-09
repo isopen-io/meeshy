@@ -55,7 +55,7 @@ export async function getCommunityCoMemberIds(
  * toute la liste de co-membres.
  */
 export async function doUsersShareCommunity(
-  prisma: PrismaClient,
+  prisma: CommunityVisibilityPrisma,
   a: string,
   b: string,
 ): Promise<boolean> {
