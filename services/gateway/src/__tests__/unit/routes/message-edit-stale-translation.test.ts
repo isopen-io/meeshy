@@ -70,7 +70,13 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
 }));
 
 jest.mock('../../../services/messaging/messageLinks', () => ({
-  processExplicitLinks: jest.fn<any>(async (params: any) => params.content),
+  reconcileEditedLinks: jest.fn<any>(async (params: any) => ({
+    processedContent: params.content,
+    trackingLinks: [],
+    reconciled: true,
+  })),
+  mergeTrackingLinksIntoMetadata: (_existing: unknown, links: any[]) =>
+    (links.length > 0 ? { trackingLinks: links } : null),
 }));
 
 jest.mock('../../../services/messaging/messageMentions', () => ({

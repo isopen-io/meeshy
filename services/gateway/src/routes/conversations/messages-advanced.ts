@@ -17,7 +17,10 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
-import { processExplicitLinks } from '../../services/messaging/messageLinks';
+import {
+  reconcileEditedLinks,
+  mergeTrackingLinksIntoMetadata,
+} from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import {
@@ -198,18 +201,29 @@ export function registerMessagesAdvancedRoutes(
         return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
       }
 
-      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
-      // l'écriture. Le corps vivait ici, déplié — donc absent du chemin socket,
-      // qui est pourtant le transport d'édition PRIMAIRE et écrivait le texte
-      // brut. Un seul point d'appel, désormais, pour les deux transports.
-      const processedContent = await processExplicitLinks({
-        trackingLinkService,
+      // Ce que ce message doit à ses LIENS, après édition. La réécriture
+      // `[[url]]` / `<url>` → `m+<token>` vivait ici, dépliée — donc absente du
+      // chemin socket, qui est pourtant le transport d'édition PRIMAIRE et
+      // écrivait le texte brut. Et la seconde moitié, le mapping des URLs
+      // BRUTES (`metadata.trackingLinks`), n'était recomposée par AUCUN
+      // transport : elle n'existait qu'à la création. Les deux sont désormais
+      // soudées dans une unité que tous les écrivains appellent.
+      const editedLinks = await reconcileEditedLinks({
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId },
         content: editedContent.content,
-        conversationId,
-        messageId,
-        createdBy: userId,
+        editorUserId: userId,
         onError: (err) => logger.error('Error processing tracking links in edit', err),
       });
+      const processedContent = editedLinks.processedContent;
+
+      // `metadata` est un blob PARTAGÉ (`postReplyTo`, `location`) : fusion, pas
+      // affectation. Et il n'est réécrit que si la réconciliation a établi
+      // quelque chose — y compris l'ensemble vide, qui dit « ce texte ne porte
+      // plus d'URL ». Sur panne, la base garde le mapping qu'elle avait.
+      const nextMetadata = editedLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(existingMessage.metadata, editedLinks.trackingLinks) }
+        : {};
 
       // Mettre à jour le message avec le contenu traité.
       // Garde de concurrence optimiste, jumelle de celle que portent déjà les
@@ -235,7 +249,8 @@ export function registerMessagesAdvancedRoutes(
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt: new Date(),
-          translations: null
+          translations: null,
+          ...nextMetadata
         },
         include: {
           sender: {
@@ -726,14 +741,17 @@ export function registerMessagesAdvancedRoutes(
       // celui du client ANDROID (`OutboxFlushWorker`, lane `EDIT_MESSAGE`) : il
       // écrivait les crochets en dur, pour toujours, là où le même texte ENVOYÉ
       // produit un lien.
-      const processedContent = await processExplicitLinks({
-        trackingLinkService,
+      const patchedLinks = await reconcileEditedLinks({
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId: message.conversationId },
         content: editedContent.content,
-        conversationId: message.conversationId,
-        messageId,
-        createdBy: userId,
+        editorUserId: userId,
         onError: (err) => logger.error('Error processing tracking links in patch edit', err),
       });
+      const processedContent = patchedLinks.processedContent;
+      const patchedMetadata = patchedLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, patchedLinks.trackingLinks) }
+        : {};
 
       // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
       // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
@@ -749,7 +767,8 @@ export function registerMessagesAdvancedRoutes(
           content: processedContent,
           isEdited: true,
           editedAt,
-          translations: null
+          translations: null,
+          ...patchedMetadata
         },
         include: {
           sender: {

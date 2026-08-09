@@ -65,9 +65,15 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({})),
 }));
 
-const mockProcessExplicitLinks = jest.fn<any>(async (params: any) => params.content);
+const mockReconcileEditedLinks = jest.fn<any>(async (params: any) => ({
+  processedContent: params.content,
+  trackingLinks: [],
+  reconciled: true,
+}));
 jest.mock('../../../services/messaging/messageLinks', () => ({
-  processExplicitLinks: (...args: any[]) => mockProcessExplicitLinks(...args),
+  reconcileEditedLinks: (...args: any[]) => mockReconcileEditedLinks(...args),
+  mergeTrackingLinksIntoMetadata: (_existing: unknown, links: any[]) =>
+    (links.length > 0 ? { trackingLinks: links } : null),
 }));
 
 const mockReconcileEditedMentions = jest.fn<any>().mockResolvedValue({
@@ -192,7 +198,11 @@ describe('PUT /messages/:messageId — les obligations d\'une édition ne dépen
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockProcessExplicitLinks.mockImplementation(async (params: any) => params.content);
+    mockReconcileEditedLinks.mockImplementation(async (params: any) => ({
+      processedContent: params.content,
+      trackingLinks: [],
+      reconciled: true,
+    }));
     mockReconcileEditedMentions.mockResolvedValue({
       validatedUsernames: [],
       validatedUserIds: [],
@@ -244,16 +254,15 @@ describe('PUT /messages/:messageId — les obligations d\'une édition ne dépen
   });
 
   it('transforme les liens `[[url]]` en liens traçables AVANT l\'écriture, comme à l\'envoi', async () => {
-    mockProcessExplicitLinks.mockResolvedValue('regarde m+tok3n');
+    mockReconcileEditedLinks.mockResolvedValue({ processedContent: 'regarde m+tok3n', trackingLinks: [], reconciled: true });
 
     const res = await editRequest(app, 'regarde [[https://example.com]]');
 
     expect(res.statusCode).toBe(200);
-    expect(mockProcessExplicitLinks).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockReconcileEditedLinks).toHaveBeenCalledWith(expect.objectContaining({
       content: 'regarde [[https://example.com]]',
-      conversationId: CONV_ID,
-      messageId: MSG_ID,
-      createdBy: USER_ID,
+      message: expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID }),
+      editorUserId: USER_ID,
     }));
     expect((app as any).prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ content: 'regarde m+tok3n' }),
@@ -261,7 +270,7 @@ describe('PUT /messages/:messageId — les obligations d\'une édition ne dépen
   });
 
   it('fait circuler le contenu TRAITÉ, et lui seul — base, mentions, retraduction', async () => {
-    mockProcessExplicitLinks.mockResolvedValue('regarde m+tok3n @bob');
+    mockReconcileEditedLinks.mockResolvedValue({ processedContent: 'regarde m+tok3n @bob', trackingLinks: [], reconciled: true });
 
     await editRequest(app, 'regarde [[https://example.com]] @bob');
 
@@ -303,7 +312,11 @@ describe('PUT /messages/:messageId — l\'admission à l\'édition est celle des
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockProcessExplicitLinks.mockImplementation(async (params: any) => params.content);
+    mockReconcileEditedLinks.mockImplementation(async (params: any) => ({
+      processedContent: params.content,
+      trackingLinks: [],
+      reconciled: true,
+    }));
     mockReconcileEditedMentions.mockResolvedValue({
       validatedUsernames: [], validatedUserIds: [], newlyMentionedUserIds: [], reconciled: true,
     });

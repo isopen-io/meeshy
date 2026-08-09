@@ -9,7 +9,10 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
-import { processExplicitLinks } from '../services/messaging/messageLinks';
+import {
+  reconcileEditedLinks,
+  mergeTrackingLinksIntoMetadata,
+} from '../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import {
@@ -318,14 +321,21 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // l'écriture, exactement comme à l'envoi et comme sur les deux autres
       // transports d'édition. Le contenu traité est ensuite le SEUL en
       // circulation : base, mentions, retraduction, payload diffusé.
-      const editedContent = await processExplicitLinks({
-        trackingLinkService,
+      const reconciledLinks = await reconcileEditedLinks({
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId: message.conversationId },
         content: trimmedContent,
-        conversationId: message.conversationId,
-        messageId,
-        createdBy: userId,
+        editorUserId: userId,
         onError: (err) => logger.error('Error processing tracking links in edit', err as Error),
       });
+      const editedContent = reconciledLinks.processedContent;
+
+      // Le mapping des URLs BRUTES n'était recomposé par aucun transport
+      // d'édition : il n'existait qu'à la création. Écrit seulement s'il a été
+      // ÉTABLI — sur panne, la base garde celui qu'elle avait.
+      const nextMetadata = reconciledLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, reconciledLinks.trackingLinks) }
+        : {};
 
       // Mettre à jour le message — garde de concurrence optimiste : n'écrire
       // que si le message est toujours non supprimé. Un `DELETE` concurrent
@@ -353,7 +363,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           content: editedContent,
           isEdited: true,
           editedAt,
-          translations: null
+          translations: null,
+          ...nextMetadata
         }
       });
 

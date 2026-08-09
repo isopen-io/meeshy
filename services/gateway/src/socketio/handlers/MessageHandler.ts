@@ -57,7 +57,11 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
-import { processExplicitLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
+import {
+  reconcileEditedLinks,
+  mergeTrackingLinksIntoMetadata,
+  type LinkReconciler,
+} from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import {
@@ -114,7 +118,7 @@ export interface MessageHandlerDependencies {
    * de câbler, et l'édition socket réécrit du texte brut sans que rien ne le
    * dise.
    */
-  trackingLinkService?: ExplicitLinkProcessor | null;
+  trackingLinkService?: LinkReconciler | null;
 }
 
 export class MessageHandler {
@@ -133,7 +137,7 @@ export class MessageHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private deliveryQueue: RedisDeliveryQueue | null;
   private mentionService: MentionResolver | null;
-  private trackingLinkService: ExplicitLinkProcessor;
+  private trackingLinkService: LinkReconciler;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -675,6 +679,10 @@ export class MessageHandler {
           content: true,
           originalLanguage: true,
           createdAt: true,
+          // Lu pour la réconciliation des liens : `metadata` est un blob
+          // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
+          // `location`.
+          metadata: true,
           sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
           attachments: { select: attachmentMediaSelect },
         },
@@ -733,14 +741,24 @@ export class MessageHandler {
       // les crochets restaient en dur dans le message, pour toujours, alors que
       // le même texte envoyé produit un lien traçable. Le contenu traité est
       // ensuite le SEUL en circulation : base, mentions, retraduction, payload.
-      const editedContent = await processExplicitLinks({
-        trackingLinkService: this.trackingLinkService,
+      // La seconde moitié — le mapping des URLs BRUTES (`metadata.trackingLinks`)
+      // — n'était recomposée par aucun transport d'édition : une URL brute
+      // ajoutée par édition restait intraçable pour toujours.
+      const editedLinks = await reconcileEditedLinks({
+        linkService: this.trackingLinkService,
+        message: { id: validated.messageId, conversationId: message.conversationId },
         content: contentAdmission.content,
-        conversationId: message.conversationId,
-        messageId: validated.messageId,
-        createdBy: userId,
+        editorUserId: userId,
         onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
       });
+      const editedContent = editedLinks.processedContent;
+
+      // Écrit seulement si la réconciliation a ÉTABLI quelque chose — y compris
+      // l'ensemble vide, qui dit « ce texte ne porte plus d'URL ». Sur panne, la
+      // base garde le mapping qu'elle avait.
+      const nextMetadata = editedLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
+        : {};
 
       // Optimistic-concurrency guard: only write while the message is still
       // non-deleted. A `message:delete` landing between the read above and
@@ -757,6 +775,7 @@ export class MessageHandler {
           isEdited: true,
           editedAt,
           translations: null,
+          ...nextMetadata,
         },
       });
 

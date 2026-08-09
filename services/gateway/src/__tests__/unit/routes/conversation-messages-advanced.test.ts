@@ -41,9 +41,11 @@ const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-
 const mockRemoveReaction = jest.fn().mockResolvedValue(true);
 const mockCreateUpdateEvent = jest.fn().mockResolvedValue({ messageId: 'msg-id', emoji: '👍' });
 
+const mockCollectContentTrackingLinks = jest.fn<any>().mockResolvedValue([]);
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     processExplicitLinksInContent: (...args: any[]) => mockProcessExplicitLinksInContent(...args),
+    collectContentTrackingLinks: (...args: any[]) => mockCollectContentTrackingLinks(...args),
   })),
 }));
 
@@ -319,6 +321,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       processedContent: 'processed content',
       trackingLinks: [],
     });
+    mockCollectContentTrackingLinks.mockResolvedValue([]);
     mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
     mockRemoveReaction.mockResolvedValue(true);
     mockCreateUpdateEvent.mockResolvedValue({ messageId: MSG_ID, emoji: '👍' });
@@ -539,6 +542,127 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getEditHandler(fastify)(req, reply);
 
       expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // Le mapping des URLs BRUTES (`metadata.trackingLinks`, lu par le client
+    // pour router le clic vers `/l/<token>`) n'était écrit qu'à la CRÉATION.
+    // Ajouter une URL par édition la laissait intraçable pour toujours.
+    it('mints and persists the raw-URL mapping for a URL added by the edit', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      mockCollectContentTrackingLinks.mockResolvedValue([{ url: 'https://b.com', token: 'tokB' }]);
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'processed content', validatedMentions: [], translations: null });
+
+      // La syntaxe explicite est ce qui déclenche la RÉÉCRITURE : sans elle, la
+      // réécriture court-circuite (aucune requête) et le contenu ressort
+      // identique. Ce test-ci porte sur l'ordre des deux moitiés, il lui faut
+      // donc un texte réellement réécrit ; le cas de l'URL brute seule est
+      // couvert par le test suivant.
+      await getEditHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://b.com]]' } }),
+        makeReply()
+      );
+
+      // Collecté sur le contenu RÉÉCRIT, jamais sur l'entrée : une URL qui vient
+      // de devenir `m+<token>` recevrait sinon un second token.
+      expect(mockCollectContentTrackingLinks).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'processed content' })
+      );
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ metadata: { trackingLinks: [{ url: 'https://b.com', token: 'tokB' }] } }),
+        })
+      );
+    });
+
+    // Le cas NOMINAL de ce correctif, et celui que la réécriture ne voit pas :
+    // une URL BRUTE ne porte aucune syntaxe explicite, donc `processExplicitLinks`
+    // court-circuite. La collecte, elle, ne doit PAS court-circuiter — sinon
+    // l'URL ajoutée par édition reste intraçable, ce qui était tout le défaut.
+    it('mints the mapping for a raw URL even though nothing gets rewritten', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      mockCollectContentTrackingLinks.mockResolvedValue([{ url: 'https://b.com', token: 'tokB' }]);
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir https://b.com', validatedMentions: [], translations: null });
+
+      await getEditHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir https://b.com' } }),
+        makeReply()
+      );
+
+      expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+      expect(mockCollectContentTrackingLinks).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'voir https://b.com' })
+      );
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ metadata: { trackingLinks: [{ url: 'https://b.com', token: 'tokB' }] } }),
+        })
+      );
+    });
+
+    // `metadata` est un blob PARTAGÉ : `postReplyTo` y range un snapshot GELÉ,
+    // irrécupérable une fois la story expirée. L'écraser perdrait la citation.
+    it('preserves the neighbours of the metadata blob while rewriting the mapping', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
+        metadata: { postReplyTo: { id: 'post-1' }, trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] },
+      }));
+      mockCollectContentTrackingLinks.mockResolvedValue([{ url: 'https://b.com', token: 'tokB' }]);
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'processed content', validatedMentions: [], translations: null });
+
+      await getEditHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir https://b.com' } }),
+        makeReply()
+      );
+
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { postReplyTo: { id: 'post-1' }, trackingLinks: [{ url: 'https://b.com', token: 'tokB' }] },
+          }),
+        })
+      );
+    });
+
+    // Vide ÉTABLI : le texte ne porte plus d'URL, le token de celle qui a
+    // disparu ne doit pas lui survivre.
+    it('clears the mapping when the edited text no longer carries a URL', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
+        metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] },
+      }));
+      mockCollectContentTrackingLinks.mockResolvedValue([]);
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'processed content', validatedMentions: [], translations: null });
+
+      await getEditHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'plus rien' } }),
+        makeReply()
+      );
+
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ metadata: null }) })
+      );
+    });
+
+    // Vide parce que RIEN n'a pu être établi : la base garde ce qu'elle a. Un
+    // lien de tracking effacé ne revient jamais — personne ne relit le texte
+    // après coup — et le clic part alors sans jamais être compté.
+    it('leaves the stored mapping untouched when link processing fails', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
+        metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] },
+      }));
+      mockProcessExplicitLinksInContent.mockRejectedValue(new Error('link error'));
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir [[https://a.com]]', validatedMentions: [], translations: null });
+
+      // Syntaxe explicite : c'est elle qui fait appeler le service, donc la
+      // seule façon d'atteindre la panne qu'on veut éprouver.
+      await getEditHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://a.com]]' } }),
+        makeReply()
+      );
+
+      const updateArg = (prisma.message.update as any).mock.calls[0][0];
+      expect(updateArg.data).not.toHaveProperty('metadata');
+      // Le texte de l'utilisateur, lui, est persisté : son édition n'est pas
+      // annulée par une panne de tracking.
+      expect(updateArg.data.content).toBe('voir [[https://a.com]]');
     });
 
     it('processes mentions when mentionService is available', async () => {
