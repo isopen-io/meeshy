@@ -1,3 +1,96 @@
+# Cycle 32 — Une troncature muette, et les défauts permissifs que le cycle précédent n'avait pas atteints
+
+Deux têtes prises ensemble, parce qu'elles se sont révélées être la même question posée à deux
+étages. Celle laissée par le cycle 31 (livré en parallèle par une autre session, mergé en premier,
+et repris tel quel ici — sa forme était la bonne) : « **`getStoryNotificationRecipients` plafonne à
+500 lignes par seau** sans le dire au destinataire ni au log. Sur un post viral, un fan-out
+silencieusement tronqué ressemble à un fan-out complet. **Tête du prochain cycle.** »
+
+Et ce que ce cycle 31 n'avait pas atteint : il a rendu `visibility` requis sur un lot, mais le
+défaut permissif vivait aussi chez l'appelant, dans trois autres lots, et sur huit méthodes de
+diffusion temps réel.
+
+## Lot A — la borne était légitime, son silence ne l'était pas
+
+Quatre lectures bornées à 500 alimentent les fan-out de notification. Une liste rendue à la borne
+exacte est **indiscernable** d'une liste complète : le seau paraît entier, et le 501e destinataire
+n'apprend jamais rien. Le cas le plus net n'est même pas le post viral mais
+`createFriendContentNotificationsBatch` : tri `updatedAt desc`, borne fixe, donc chez un auteur qui
+dépasse durablement la borne ce sont **toujours les mêmes** — les contacts les plus anciens — qui
+n'apprennent aucune de ses publications. Un silence structurel, pas un incident.
+
+Correctif dans la ligne du corollaire du cycle 27 (« une valeur vide *établie* et une valeur vide
+*qu'on n'a pas pu établir* doivent être DISTINGUABLES dans le type de retour ») : la borne devient
+`FANOUT_ROW_CAP`, partagée par les quatre `take` — une constante ne peut pas dériver du test qui la
+surveille — la saturation entre dans le type de retour (`truncatedBuckets: FanoutBucket[]`) et dans
+le log (`postId`, `authorId`, seaux, borne).
+
+## Lot B — le défaut permissif ne vit pas que dans la signature
+
+`SocialEventsHandler` portait `visibility: string = 'PUBLIC'` et `visibilityUserIds: string[] = []`
+sur **huit** méthodes de diffusion et sur l'énumérateur `getVisibilityFilteredRecipients` lui-même.
+Un appelant qui les omettait diffusait un post `PRIVATE` à tous les amis de l'auteur, ou un `EXCEPT`
+sans sa liste noire.
+
+Aucun appelant de production ne les omettait — et c'est exactement l'argument : le retrait ne coûte
+rien, la conservation coûte le premier oubli. Les deux paramètres deviennent requis ; le build a
+lui-même désigné les deux harnais qui s'appuyaient sur le défaut.
+`createFriendContentNotificationsBatch` reçoit le même traitement que ses trois lots voisins.
+
+## Lot C — et il se réinstalle chez l'appelant
+
+Le cycle 31 a rendu `visibility` requis sur `createStoryCommentNotificationsBatch` ; son unique
+appelant passait `post.visibility ?? 'PUBLIC'`. Le défaut avait simplement changé d'étage, hors de
+vue du build. Même motif dans `routes/posts/interactions.ts`, deux fois, avec un cast en prime :
+`(post as { visibility?: string }).visibility ?? 'PUBLIC'` — alors que `postAcl`, la tranche ACL
+autoritative, est chargée **trois lignes plus haut** pour la garde d'interaction. Le cast disait que
+la forme rendue par `likePost` n'était pas sûre de porter le champ ; la réponse n'était pas de
+deviner une valeur, mais de lire celle qu'on avait déjà.
+
+## D1 — pourquoi le lot A ne va pas jusqu'à la file d'attente
+
+Le commentaire du code propose depuis longtemps « a background queue for fan-out ». Ce cycle ne la
+construit pas : une file change le modèle de livraison (ordre, reprise, idempotence) et mérite son
+propre cycle. Rendre la troncature **observable** est ce qui manquait pour pouvoir décider — on ne
+sait aujourd'hui ni à quelle fréquence la borne est atteinte, ni sur quels seaux.
+
+## D2 — ce qui n'a PAS été refait après la session parallèle
+
+Le cycle 31 a été livré deux fois, en parallèle. La branche arrivée première portait la meilleure
+forme sur trois points (le contrat `Set | null` de la lecture DM, qui distingue la panne de
+l'absence ; le refus du seul résidu plutôt que de tout le lot ; les 14 fixtures qui verrouillent
+l'accord des deux formes cas par cas), et son choix assumé de relire les co-membres plutôt que de
+recopier une règle d'admission localement est défendable. Elle est gardée telle quelle : ce cycle ne
+réécrit rien de ce qu'elle a livré, il prend la suite là où elle s'arrête.
+
+## Vérification
+
+- **6 tests neufs** (`__tests__/unit/services/NotificationService.fanouttruncation.test.ts`),
+  **5 rouges observés** : la saturation de chacun des trois seaux, le log qui nomme le post et le
+  seau, la borne du graphe ami côté publication — et les deux cas sous la borne qui ne doivent RIEN
+  consigner (sans eux, un log inconditionnel passerait les autres).
+- **Suite gateway complète : 612 suites, 15 789 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture lignes **95,67 %** (95,66 % avant).
+- Le lot B et le lot C ne changent aucun comportement observable : ils déplacent au build ce qui
+  n'était protégé que par la discipline des appelants. Aucun test neuf ne peut en témoigner — la
+  suite existante sert de filet, et les deux harnais que le compilateur a fait tomber sont la preuve
+  que la garde mord.
+
+## Reste ouvert après ce cycle
+
+- **La file d'attente de fan-out** (cf. D1). La troncature est désormais mesurable ; le prochain pas
+  est de regarder ce qu'elle mesure avant de choisir entre file, pagination et borne relevée.
+  **Tête du prochain cycle si rien de plus grave n'apparaît.**
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers` traitent une visibilité inconnue de la
+  même façon (retomber sur les amis), mais par deux chemins qui ne se citent pas.** L'un est un
+  énumérateur, l'autre un test d'admission — les fusionner serait la faute du cycle 28 ; les faire
+  se référencer mutuellement suffirait.
+- **`@Display Name` reste inextractible dans le domaine social** — sixième report.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29, aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
+
+---
+
 # Cycle 31 — Deux tests d'admission pour une seule question, et le seau qui n'en avait aucun
 
 Tête laissée par le cycle 30 : « **Deux tests d'admission coexistent** : `filterPostAudience`
