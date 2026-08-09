@@ -101,8 +101,15 @@ jest.mock('../../../services/ConversationStatsService', () => ({
   conversationStatsService: { updateOnNewMessage: jest.fn(() => Promise.resolve()) },
 }));
 
+const mockOnMessageDeleted = jest.fn<any>(() => Promise.resolve());
+const mockOnMessageEdited = jest.fn<any>(() => Promise.resolve());
 jest.mock('../../../services/ConversationMessageStatsService', () => ({
-  conversationMessageStatsService: { onNewMessage: jest.fn(() => Promise.resolve()) },
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
+  conversationMessageStatsService: {
+    onNewMessage: jest.fn(() => Promise.resolve()),
+    onMessageDeleted: (...a: any[]) => mockOnMessageDeleted(...a),
+    onMessageEdited: (...a: any[]) => mockOnMessageEdited(...a),
+  },
 }));
 
 // ── After all mocks, import the class ──────────────────────────────────────
@@ -352,6 +359,26 @@ describe('MessageHandler — handleMessageEdit', () => {
     expect(callback).toHaveBeenCalledWith(
       expect.objectContaining({ success: false, error: expect.stringContaining('cannot be empty') })
     );
+  });
+
+  // L'ajustement des compteurs sur l'écart de longueur ne vivait que dans
+  // `PUT /conversations/:id/messages/:mid`. Ce transport-ci est pourtant le
+  // PRIMAIRE : `totalWords` et `totalCharacters` y restaient sur les longueurs
+  // du texte d'origine, définitivement.
+  it('ajuste les compteurs sur l\'écart de longueur', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({ content: 'trois petits mots' })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(mockOnMessageEdited).toHaveBeenCalledTimes(1);
+    const [, conversationId, authorKey, previous, next] = mockOnMessageEdited.mock.calls[0];
+    expect(conversationId).toBe(VALID_CONV_ID);
+    expect(authorKey).toBe(USER_ID);
+    expect(previous).toBe('trois petits mots');
+    expect(next).toBe('Edited content');
   });
 
   it('allows edit with empty content when message has attachments', async () => {
@@ -1016,16 +1043,23 @@ describe('MessageHandler — handleMessageDelete', () => {
   let callback: jest.Mock<any>;
 
   function setupSuccessfulDelete(overrides: {
-    senderUserId?: string;
+    senderUserId?: string | null;
     memberRole?: string;
     globalRole?: string;
-    attachments?: { id: string }[];
+    attachments?: { id: string; mimeType?: string | null }[];
+    content?: string | null;
+    messageType?: string;
   } = {}) {
-    const { senderUserId = USER_ID, memberRole, globalRole, attachments = [] } = overrides;
+    const {
+      senderUserId = USER_ID, memberRole, globalRole, attachments = [],
+      content = 'trois petits mots', messageType = 'text',
+    } = overrides;
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({
       id: VALID_MSG_ID,
       conversationId: VALID_CONV_ID,
       senderId: PARTICIPANT_ID,
+      content,
+      messageType,
       sender: { id: PARTICIPANT_ID, userId: senderUserId },
       conversation: {
         createdAt: new Date('2024-01-01'),
@@ -1070,6 +1104,40 @@ describe('MessageHandler — handleMessageDelete', () => {
       const u = map.get(id);
       return u ? { user: u, realUserId: u.id } : null;
     });
+  });
+
+  // Le décompte des compteurs de conversation ne vivait QUE dans
+  // `DELETE /conversations/:id/messages/:id`. Ce transport-ci — le PRIMAIRE du
+  // composer web — retirait le message sans jamais rendre son crédit : il
+  // n'existait aucun test parce qu'il n'existait aucun appel.
+  it('débite les compteurs de la conversation', async () => {
+    setupSuccessfulDelete({
+      content: 'trois petits mots',
+      messageType: 'text',
+      attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }, { id: 'att-2', mimeType: null }],
+    });
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(mockOnMessageDeleted).toHaveBeenCalledTimes(1);
+    const [, conversationId, authorKey, content, tokens, messageType] = mockOnMessageDeleted.mock.calls[0];
+    expect(conversationId).toBe(VALID_CONV_ID);
+    // La MÊME clé que celle créditée à l'envoi : l'utilisateur, pas son
+    // Participant.
+    expect(authorKey).toBe(USER_ID);
+    expect(content).toBe('trois petits mots');
+    // Les MIME sont ceux CAPTURÉS à l'admission : les `MessageAttachment` sont
+    // supprimés avant que l'unité ne tourne, une relecture ne rendrait rien.
+    expect(tokens).toEqual(['image', 'file']);
+    expect(messageType).toBe('text');
+  });
+
+  it('retombe sur le Participant quand l\'auteur est anonyme', async () => {
+    setupSuccessfulDelete({ senderUserId: null, globalRole: 'ADMIN' });
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(PARTICIPANT_ID);
   });
 
   it('returns error on schema validation failure', async () => {

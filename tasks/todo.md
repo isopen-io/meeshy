@@ -1,3 +1,140 @@
+# Cycle 44 — Les compteurs de conversation étaient comptés par un tuyau et débités par un autre
+
+Tête prise dans le « reste ouvert » du cycle 43, qui la désignait nommément :
+`conversationMessageStatsService.onMessageDeleted` n'est appelé que par un chemin sur trois, « la
+dérive de statistiques est réelle et mesurable ; le correctif est un cycle à lui seul ».
+
+Elle l'était. **Et la moitié qui manquait au tableau était la plus grave** : le cycle 43 avait
+compté les appelants du DÉCRÉMENT sans regarder ceux de l'INCRÉMENT. Mis face à face, les deux
+listes ne se recouvrent nulle part.
+
+## R1 — Le comptage et le décompte n'habitaient pas les mêmes routes
+
+| geste | écrivains | qui touche `ConversationMessageStats` |
+|---|---|---|
+| envoi | handler socket `message:send` / `send-with-attachments`, `POST /conversations/:id/messages`, les deux routes de lien de partage, `translation-non-blocking` | **le handler socket, seul** |
+| retrait | handler socket `message:delete`, `DELETE /messages/:id`, `DELETE /conversations/:id/messages/:id`, balayage des messages vides | **`DELETE /conversations/:id/messages/:id`, seule** |
+| édition | handler socket `message:edit`, `PUT /conversations/:id/messages/:mid`, `PUT /messages/:id`, `PATCH /messages/:id` | **`PUT /conversations/:id/messages/:mid`, seule** |
+
+La route qui décrémente est **celle qu'emploient iOS et la vue web**. Le chemin d'envoi que ces
+mêmes clients empruntent en priorité est **REST** (`POST /conversations/:id/messages`), qui ne
+compte pas. Un message envoyé depuis un iPhone puis supprimé depuis ce même iPhone **débite un
+compteur qu'il n'a jamais crédité**.
+
+Deux propriétés du service transforment cette asymétrie en dommage permanent :
+
+1. **Les décréments sont atomiques et SANS plancher.** Le `Math.max(0, …)` a été délibérément
+   abandonné au profit de l'atomicité, sur l'argument — écrit en commentaire — que « des opérations
+   équilibrées ne passent jamais sous zéro ». Elles ne l'étaient pas. `totalMessages` descend en
+   négatif et y reste.
+2. **Il n'existe aucun recalcul périodique.** `recompute()` n'est appelé que paresseusement, quand
+   la ligne n'existe pas encore. Le commentaire qui promettait qu'« une dérive résiduelle est
+   corrigée par recompute() » désignait un mécanisme qui n'a jamais été planifié — et un autre
+   commentaire du même fichier le dit d'ailleurs noir sur blanc à propos de `locationCount`
+   (« aucun recalcul périodique »).
+
+## R2 — Trois copies inline d'une règle dont l'autorité est ailleurs
+
+`recompute()` est l'autorité : c'est elle qui reconstruit la ligne depuis les messages, donc elle
+qui contredit toute divergence. Elle applique deux règles que les chemins incrémentaux portaient
+recopiées :
+
+- la table **MIME → compteur** (`resolveAttachmentType`), recopiée dans le handler socket et dans la
+  route de suppression ;
+- la **clé de crédit** `sender.userId || senderId`, recopiée aux mêmes endroits.
+
+Les deux copies étaient justes ce jour-là. Rien ne les tenait.
+
+## Correctif — un effet ajouté à l'unité s'applique à tous les tuyaux
+
+Le remède est celui des cycles 42/43, appliqué à la troisième famille : chaque geste du cycle de vie
+d'un message a **une** unité, et les compteurs y entrent.
+
+| geste | unité | appelants |
+|---|---|---|
+| envoi | `runMessagePostSaveEffects` (4ᵉ effet, `messageStats`) | `MessagingService` (socket + REST + translation-non-blocking) et les deux routes de lien |
+| retrait | `applyMessageRemovalEffects` (3ᵉ effet) | les trois routes de suppression |
+| édition | **`applyMessageEditEffects`** (neuve, jumelle des deux autres) | les quatre transports d'édition |
+
+`resolveAttachmentType` et `statsAuthorKey` sont **exportés** depuis le service : la table MIME et la
+clé de crédit ne s'écrivent plus qu'à un endroit, celui où vit `recompute()`.
+
+**Les champs que le comptage réclame sont REQUIS dans les types des trois unités.** Ce n'est pas de
+la rigueur décorative : c'est exactement l'omission silencieuse que le cycle referme. Un cinquième
+tuyau d'envoi ne compilera pas sans dire qui créditer. La preuve en a été faite en passant — en
+retirant temporairement le correctif, la suite `MessagingService` ne compile plus.
+
+Le décompte lit des champs **capturés à l'admission** et jamais relus : deux des trois routes de
+suppression détruisent les `MessageAttachment` avant que l'unité ne tourne, une relecture rendrait
+toujours une liste vide et les compteurs image/audio/vidéo ne redescendraient jamais.
+
+**Correctif incident, non cosmétique** : le contenu compté est désormais celui qui est **PERSISTÉ**,
+et non celui de la requête. Le handler socket comptait le second ; un message chiffré stocke `''`,
+si bien que l'incrément divergeait de son propre recalcul dès le premier message E2EE.
+
+**Auto-réparation** : le balayage des messages vides (`MaintenanceService`) est le seul écrivain en
+LOT — il ne tient de ses messages que leur id et leur conversation, jamais l'auteur ni le contenu
+qu'un décrément demande. Il appelle donc `recomputeIfTracked` une fois par conversation touchée :
+le seul geste possible, et celui qui répare en passant la dérive déjà accumulée. La garde
+d'existence l'empêche de FABRIQUER des lignes de compteurs (`recompute()` fait un `upsert`) pour des
+conversations dont personne n'a jamais demandé les statistiques.
+
+## Preuve
+
+**633 suites, 16 114 tests, tout vert** (avant : 632 / 16 098). `tsc --noEmit` propre. Couverture
+lignes **95,75 %**, en hausse (95,65 % au cycle 43).
+
+Les témoins neufs échouent tous sur le code d'avant, vérifié en retirant le correctif :
+
+- unités partagées : 10 rouges sur `messagePostSaveEffects` / `messageRemovalEffects`, 4 sur
+  `messageEditEffects` (fichier neuf) ;
+- sites d'appel : `MessagingService` crédite les compteurs (LE témoin — l'entrée commune du socket
+  et du REST), les deux routes de suppression restantes débitent, les trois transports d'édition
+  restants ajustent, le balayage répare ;
+- `cleanupEmptyMessages` **n'avait aucun test** — il en a cinq.
+
+**Six tests existants ont dû partir, et c'est le fait le plus instructif du cycle.** Ils
+verrouillaient dans le handler socket la classification des MIME et la clé `userId || participantId`
+— nommés d'après les numéros de ligne qu'ils couvraient (`line 275`, `line 460`, `line 463`). Tous
+passaient. C'est précisément ce qui masquait la panne : ils prouvaient qu'une règle était juste
+**là où elle se trouvait**, jamais qu'elle s'appliquait partout où elle devait. Ce qui reste à leur
+place est le témoin inverse — le handler ne compte PAS lui-même, sinon l'envoi socket compterait
+double.
+
+## Reste ouvert après ce cycle
+
+- **Les compteurs déjà dérivés restent en base.** Le correctif ne vaut que pour l'avenir ; les
+  lignes déjà négatives ne se relèveront qu'au passage du balayage des messages vides sur leur
+  conversation, ou par un `recompute()` manuel. **Un script de réparation en lot serait un cycle
+  utile** — et, contrairement aux deux réparations en attente des cycles 25/27, celui-ci n'a besoin
+  d'aucune donnée que la base ne porte déjà.
+- **Le plancher reste absent des décréments.** Le correctif rend les opérations équilibrées, ce qui
+  était l'hypothèse du choix d'origine — mais une seule panne de `runMessagePostSaveEffects`
+  (best-effort, avec `.catch`) suffit à la rompre à nouveau, et rien ne le signale. Un compteur qui
+  descend sous zéro devrait au minimum **journaliser**, à défaut d'être plancé.
+- **`ConversationMessageStats` reste un dénormalisé sans propriétaire.** Les champs JSON
+  (`participantStats`, `dailyActivity`, …) sont toujours écrits en lecture-modification-écriture non
+  atomique : deux envois concurrents dans la même conversation peuvent encore s'écraser l'un
+  l'autre. Seuls les scalaires sont atomiques. C'est la limite structurelle que ce cycle **ne**
+  franchit pas.
+- **Les messages système de `CallService` ne sont comptés par personne.** Deux `message.create`
+  contournent `MessagingService`. À trancher comme une question produit — un message système
+  DOIT-il entrer dans `totalMessages` ? — et non en passant : `recompute()`, lui, les compte.
+  **Candidat sérieux pour le prochain cycle**, parce que la divergence incrément/recalcul y est du
+  même genre que celle que ce cycle vient de fermer.
+- Reconduits du cycle 43 : `TrackingLink.messageId` reste une colonne trompeuse (renommage ou table
+  de jonction) ; le décompte de références relit le texte pour retrouver une relation.
+- Reconduits des cycles 40-42 : E2EE web de bout en bout ; `signedPreKeySignature` invérifiable ; le
+  reste de `PreferencesService` (479 lignes) mort ; colonnes `User.signal*` mortes ; pré-clé à usage
+  unique non unique ; `POST /signal/session/establish` n'établit aucune session ; `registrationId`
+  iOS déborde le `maximum` documenté ; doublons `Participant` ; « qui a le droit d'épingler ? » ;
+  asymétrie édition/suppression ; audit du retrait d'un post par l'auteur lui-même.
+- **`eslint` ne peut toujours pas tourner sur le gateway** : aucun `eslint.config.js` depuis la
+  migration ESLint v9. Condition préexistante, non couverte par la CI — qui ne gate que sur
+  `test:coverage`.
+
+---
+
 # Cycle 43 — La piste laissée par le cycle 42 désignait un correctif qui aurait cassé la production
 
 Tête prise dans la « piste pour le cycle suivant » du cycle 42, qui l'énonçait précisément :

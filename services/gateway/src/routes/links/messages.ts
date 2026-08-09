@@ -349,6 +349,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           id: message.id,
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
+          // Un anonyme n'a pas d'utilisateur : les compteurs le créditent sous
+          // son `Participant.id`, exactement comme le fait `recompute()`.
+          senderUserId: null,
+          attachmentMimeTypes: [],
           content: message.content,
           messageType: message.messageType,
           replyToId: message.replyToId
@@ -631,6 +635,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           id: message.id,
           conversationId: shareLink.conversationId,
           senderId: participant.id,
+          // `participant` peut être SYNTHÉTIQUE (`{ id: userId }`) pour la
+          // conversation globale `meeshy` : nommer l'utilisateur explicitement
+          // est la seule façon de créditer la même clé que `recompute()`, qui
+          // lit `sender.userId` en base.
+          senderUserId: userId,
+          attachmentMimeTypes: [],
           content: message.content,
           messageType: message.messageType,
           replyToId: message.replyToId

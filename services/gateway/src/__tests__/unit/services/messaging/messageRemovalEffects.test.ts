@@ -24,6 +24,16 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
+// Le singleton des compteurs est doublé ; `resolveAttachmentType` reste le VRAI
+// (même table MIME → compteur que `recompute()`, cf. le jumeau côté post-save).
+const mockOnMessageDeleted = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../../services/ConversationMessageStatsService') as object),
+  conversationMessageStatsService: {
+    onMessageDeleted: (...a: any[]) => mockOnMessageDeleted(...a),
+  },
+}));
+
 import {
   applyMessageRemovalEffects,
   recomputeConversationLastMessageAt,
@@ -48,10 +58,17 @@ const prisma = {
   trackingLink: { updateMany: trackingLinkUpdateMany },
 } as any;
 
+const SENDER_PARTICIPANT_ID = '507f1f77bcf86cd799439033';
+const SENDER_USER_ID = '507f1f77bcf86cd799439044';
+
 function removedMessage(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: MESSAGE_ID,
     conversationId: CONVERSATION_ID,
+    senderId: SENDER_PARTICIPANT_ID,
+    senderUserId: SENDER_USER_ID,
+    messageType: 'text',
+    attachmentMimeTypes: [] as readonly string[],
     content: 'regarde ça m+aB3xY9',
     metadata: null,
     ...overrides,
@@ -60,6 +77,7 @@ function removedMessage(overrides: Partial<Record<string, unknown>> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOnMessageDeleted.mockResolvedValue(undefined);
   messageFindRaw.mockResolvedValue([]);
   messageFindFirst.mockResolvedValue({ createdAt: SURVIVOR_CREATED_AT });
   conversationFindUnique.mockResolvedValue({
@@ -260,5 +278,65 @@ describe('applyMessageRemovalEffects — lastMessageAt', () => {
     conversationFindUnique.mockRejectedValue(new Error('mongo down'));
 
     await expect(applyMessageRemovalEffects(prisma, removedMessage())).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Le décompte est le troisième effet du retrait, et le dernier arrivé. Il
+ * vivait recopié dans UNE seule des quatre routes de suppression — celle
+ * qu'empruntent iOS et la vue web — pendant que le comptage, lui, ne vivait que
+ * dans le handler socket. Aucune des deux moitiés ne couvrait l'autre : un
+ * message envoyé par REST puis supprimé décrémentait un compteur qu'il n'avait
+ * jamais incrémenté. Les décréments sont atomiques et SANS plancher (choix
+ * assumé, cf. la note du service), donc le total passait sous zéro sans
+ * qu'aucun recalcul périodique ne vienne le relever.
+ */
+describe('applyMessageRemovalEffects — décompte des statistiques', () => {
+  it('décompte le message retiré', async () => {
+    await applyMessageRemovalEffects(prisma, removedMessage({ content: 'trois petits mots' }));
+
+    expect(mockOnMessageDeleted).toHaveBeenCalledWith(
+      prisma,
+      CONVERSATION_ID,
+      SENDER_USER_ID,
+      'trois petits mots',
+      [],
+      'text'
+    );
+  });
+
+  it('débite la MÊME clé que celle qui a été créditée à l\'envoi', async () => {
+    // `senderUserId ?? senderId` — la règle de `recompute()`, mot pour mot.
+    // Créditer l'utilisateur et débiter son Participant laisserait deux entrées
+    // dans `participantStats`, l'une gonflée, l'autre plancher à zéro.
+    await applyMessageRemovalEffects(prisma, removedMessage({ senderUserId: null }));
+
+    expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(SENDER_PARTICIPANT_ID);
+  });
+
+  it('décompte les pièces jointes CAPTURÉES avant leur suppression', async () => {
+    // Deux des trois routes suppriment les `MessageAttachment` AVANT d'appeler
+    // cette unité : relire la relation ici rendrait toujours une liste vide et
+    // les compteurs image/audio/vidéo ne redescendraient jamais.
+    await applyMessageRemovalEffects(
+      prisma,
+      removedMessage({ attachmentMimeTypes: ['image/png', 'audio/mpeg', 'text/csv'] })
+    );
+
+    expect(mockOnMessageDeleted.mock.calls[0][4]).toEqual(['image', 'audio', 'file']);
+  });
+
+  it('transmet le messageType, seul porteur du compteur de lieux', async () => {
+    await applyMessageRemovalEffects(prisma, removedMessage({ messageType: 'location' }));
+
+    expect(mockOnMessageDeleted.mock.calls[0][5]).toBe('location');
+  });
+
+  it('ne fait jamais échouer la suppression, déjà committée, si le décompte jette', async () => {
+    mockOnMessageDeleted.mockRejectedValue(new Error('counters down'));
+
+    await expect(applyMessageRemovalEffects(prisma, removedMessage())).resolves.toBeUndefined();
+    expect(trackingLinkUpdateMany).toHaveBeenCalled();
+    expect(conversationUpdateMany).toHaveBeenCalled();
   });
 });

@@ -345,6 +345,14 @@ export class MessagingService {
   }): void {
     const { message, conversationId, senderParticipantId, originalLanguage } = args;
 
+    // `sender` et `attachments` viennent de l'`include` de `saveMessage` — les
+    // seconds RAFRAÎCHIS après `handleAttachments` (ÉTAPE 4 bis), sans quoi le
+    // comptage verrait la liste vide capturée par `message.create`.
+    const saved = message as typeof message & {
+      sender?: { userId?: string | null } | null;
+      attachments?: Array<{ mimeType?: string | null }> | null;
+    };
+
     runMessagePostSaveEffects({
       prisma: this.prisma,
       translationService: this.translationService,
@@ -352,6 +360,8 @@ export class MessagingService {
         id: message.id,
         conversationId: message.conversationId,
         senderId: message.senderId,
+        senderUserId: saved.sender?.userId ?? null,
+        attachmentMimeTypes: (saved.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: message.content,
         messageType: message.messageType,
         replyToId: message.replyToId

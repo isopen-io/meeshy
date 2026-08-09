@@ -16,6 +16,7 @@ import {
 import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -365,6 +366,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
       }
 
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs de la conversation. Ce transport — celui qu'emploie iOS —
+      // ne les ajustait pas. La liste vit dans `applyMessageEditEffects`, une
+      // fois pour les quatre transports.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: editedContent,
+      });
+
       // Ce que cette édition doit aux gens qu'elle NOMME. Ce transport — celui
       // que le client iOS emploie réellement (`MessageService.editMessage` →
       // `PUT /messages/:id`) — n'écrivait AUCUNE mention : ni ligne `Mention`,
@@ -523,9 +537,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           // quand l'acteur n'est PAS l'auteur), et `applyMessageRemovalEffects`
           // relit `lastMessageAt` au plus près de son écriture conditionnelle.
           // Le chemin nominal coûte donc deux lectures de moins qu'avant.
+          // `mimeType` est capturé ICI, avec l'admission : les attachements
+          // sont supprimés quelques lignes plus bas, et le décompte des
+          // compteurs de conversation ne pourrait plus les relire.
           attachments: {
             select: {
-              id: true
+              id: true,
+              mimeType: true
             }
           }
         }
@@ -589,7 +607,16 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. La liste vit
       // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
-      await applyMessageRemovalEffects(prisma, message);
+      await applyMessageRemovalEffects(prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        messageType: message.messageType,
+        attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        metadata: message.metadata,
+      });
 
       // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
       // de livraison hors ligne — voir broadcastMessageMutation)

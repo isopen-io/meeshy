@@ -65,6 +65,7 @@ import {
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -370,10 +371,12 @@ export class MessageHandler {
           createdAt: message.createdAt,
         });
 
-        conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], message.originalLanguage ?? null,
-          message.messageType || 'text'
-        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
+        // Le comptage du message n'est plus fait ici : il vit avec les trois
+        // autres obligations post-commit, dans `runMessagePostSaveEffects`, que
+        // `MessagingService.handleMessage` vient d'exécuter pour CE message.
+        // Le garder ici le compterait deux fois — et le laisser ici seulement
+        // était exactement ce qui laissait tous les autres tuyaux d'envoi
+        // (REST, liens de partage) ne jamais compter.
       }
 
       handlerLogger.info('perf:ws.message.send', {
@@ -593,18 +596,9 @@ export class MessageHandler {
           createdAt: message.createdAt,
         });
 
-        const msgAttachments = message.attachments as unknown as Array<Record<string, unknown>> | undefined;
-        const attachmentTypes = (msgAttachments ?? []).map((a: Record<string, unknown>) => {
-          const mime = (a.mimeType as string) ?? '';
-          if (mime.startsWith('image/')) return 'image';
-          if (mime.startsWith('audio/')) return 'audio';
-          if (mime.startsWith('video/')) return 'video';
-          return 'file';
-        });
-        conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, message.originalLanguage ?? null,
-          message.messageType || 'text'
-        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
+        // Idem : le comptage — pièces jointes comprises — vit dans
+        // `runMessagePostSaveEffects`, qui lit les MIME du message committé au
+        // lieu de retraduire ici une table déjà écrite ailleurs.
       }
 
       handlerLogger.info('perf:ws.message.send-with-attachments', {
@@ -785,6 +779,20 @@ export class MessageHandler {
         return;
       }
 
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
+      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
+      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
+      // pour les quatre transports.
+      await applyMessageEditEffects(this.prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: editedContent,
+      });
+
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
       // ni notification — alors qu'il est le transport d'édition PRIMAIRE.
@@ -946,10 +954,15 @@ export class MessageHandler {
           // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
           // relit `lastMessageAt` lui-même, au plus près de son écriture
           // conditionnelle. Restent le contenu et les métadonnées, qui portent
-          // les deux représentations des `/l/<token>` du message.
+          // les deux représentations des `/l/<token>` du message. Et, depuis que
+          // le décompte des compteurs vit dans la même unité, `messageType` et
+          // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
+          // lisibles une fois les attachements supprimés, quelques lignes plus
+          // bas.
           content: true,
           metadata: true,
-          attachments: { select: { id: true } },
+          messageType: true,
+          attachments: { select: { id: true, mimeType: true } },
         },
       });
 
@@ -995,7 +1008,16 @@ export class MessageHandler {
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. La liste vit
       // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
-      await applyMessageRemovalEffects(this.prisma, message);
+      await applyMessageRemovalEffects(this.prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        messageType: message.messageType,
+        attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        metadata: message.metadata,
+      });
 
       const room = ROOMS.conversation(message.conversationId);
       const deletedPayload = {

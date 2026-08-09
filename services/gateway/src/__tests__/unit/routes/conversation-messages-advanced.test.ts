@@ -61,7 +61,13 @@ jest.mock('../../../services/ConversationStatsService', () => ({
   },
 }));
 
+// Seul le singleton est doublé. `resolveAttachmentType` et `statsAuthorKey`
+// restent les VRAIS : depuis que le décompte vit dans `applyMessageRemovalEffects`,
+// ces tests traversent l'unité partagée pour de bon, et c'est ce qui en fait
+// des témoins de la ROUTE — « supprimer par ici débite bien les compteurs » —
+// et non du double.
 jest.mock('../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
   conversationMessageStatsService: {
     onMessageEdited: (...args: any[]) => mockOnMessageEdited(...args),
     onMessageDeleted: (...args: any[]) => mockOnMessageDeleted(...args),
@@ -1785,6 +1791,42 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getPatchHandler(fastify)(req, reply);
 
       expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // Ce transport — celui qu'emploie Android — n'ajustait pas les compteurs :
+    // `totalWords`/`totalCharacters` restaient sur les longueurs du texte
+    // d'origine, définitivement.
+    it('ajuste les compteurs sur l\'écart de longueur', async () => {
+      mockOnMessageEdited.mockClear();
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'trois petits mots',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: {
+          identifier: 'some-conv',
+          participants: [{ userId: USER_ID, isActive: true }],
+        },
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(mockOnMessageEdited).toHaveBeenCalledTimes(1);
+      const [, conversationId, authorKey, previous, next] = mockOnMessageEdited.mock.calls[0];
+      expect(conversationId).toBe(CONV_ID);
+      expect(authorKey).toBe(USER_ID);
+      expect(previous).toBe('trois petits mots');
+      expect(next).toBe('Updated');
     });
 
     it('calls sendInternalError on error', async () => {
