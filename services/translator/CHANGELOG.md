@@ -1,5 +1,23 @@
 # @meeshy/translator
 
+## 1.22.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - registration wizard LANGUAGE step field UI (#2696)
+  - colonne de controles dans le flux, contraste garanti sur carte satellite
+  - calcule la couleur d'accent une fois a l'init au lieu de chaque rendu
+  - registration wizard PASSWORD step field UI (#2695)
+  - section Position dans Confidentialite
+  - couleurs de conversation, controles flottants et precision dans le picker
+  - section de reglages partagee precision + type de carte
+  - composants geocodes separes et lieu partage a la precision choisie
+  - style de carte et controles systeme optionnels sur AdaptiveInteractiveMap
+  - store persistant des preferences de partage de position
+  - precision de partage et degradation par palier
+
 ## 1.21.0
 
 ### Minor Changes
