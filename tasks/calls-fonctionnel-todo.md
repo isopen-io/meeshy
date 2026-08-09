@@ -5030,3 +5030,77 @@ pour la prochaine session avec toolchain iOS. Le rapport web a fourni les deux f
   dupliqué tel quel à 10 sites sans helper partagé — explique directement pourquoi ces deux trous ont
   échappé à ce pair de nouveaux call sites. Candidat prioritaire pour la prochaine session disposant d'un
   toolchain Xcode/Swift.
+
+## Vague 79 — `CallManager` dupliquait la fermeture WebRTC de `VideoCallInterface` sur `CALL_PARTICIPANT_LEFT`, en amont de sa fenêtre de grâce anti-rejoin (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En
+tête de cycle, revue des PR ouvertes de la routine via `list_pull_requests` — aucune trouvée (les PR ouvertes
+du dépôt appartiennent toutes à une routine différente, `keen-hamilton`, plus un PR dependabot) : cycle
+démarré sur une base propre, sans backlog à merger d'abord. Toolchains iOS (`xcodebuild`/`swift`) et Android
+(`gradle :feature:calls:help --offline` échoue toujours à résoudre `com.android.application:8.7.3`)
+reconfirmées hors d'atteinte dans ce sandbox — le candidat iOS `CallManager.selectCamera(id:)` laissé en spec
+à la Vague 78 reste donc en attente d'une session avec toolchain Xcode/Swift. Audit dédié (subagent, lecture
+directe) du périmètre web (+ signaling gateway) ensuite, qui a remonté 3 candidats ; celui retenu est
+confirmé ligne à ligne avant implémentation (les deux autres — piste vidéo clonée orpheline en appel de
+groupe sur `webrtc-service.ts`, absence de garde de ré-entrance sur `use-video-call.ts` `startCall()` —
+notés ci-dessous comme candidats non retenus ce cycle, confiance moindre / effort de fix plus large).
+
+- **Root cause confirmée par lecture directe** : `CallManager.tsx` et `VideoCallInterface.tsx` avaient
+  chacun leur PROPRE listener `socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, ...)` pour le même événement,
+  avec deux stratégies contradictoires. `VideoCallInterface.tsx` (L518-595) est la version correcte,
+  documentée par son propre commentaire : elle retarde le nettoyage de 2s, prend un instantané de la
+  connexion au moment du départ pour détecter un rejoin dans la même session (reload d'onglet, coupure
+  réseau) pendant cette fenêtre de grâce, et appelle `removeParticipant` de `useWebRTCP2P` — qui ferme le
+  `WebRTCService` ET vide les maps internes `webrtcServicesRef`/`remoteDescriptionSetRef`/
+  `iceCandidateQueueRef`/`offerInFlightRef` (`use-webrtc-p2p.ts` L396-414), pas seulement la
+  `RTCPeerConnection` du store. `CallManager.tsx` (L398-423, avant fix), lui, appelait DIRECTEMENT et
+  SYNCHRONEMENT `removeRemoteStream`/`removePeerConnection` du store dès réception de l'événement — sans
+  fenêtre de grâce, sans détection de rejoin, et surtout sans jamais toucher aux maps internes de
+  `use-webrtc-p2p.ts`. Le listener de `CallManager` est attaché de façon inconditionnelle dès le montage
+  (avant même qu'un appel soit actif), alors que celui de `VideoCallInterface` n'existe qu'une fois l'appel
+  effectivement en cours — Socket.IO invoquant les listeners d'un même événement dans leur ordre
+  d'enregistrement, celui de `CallManager` s'exécutait donc TOUJOURS en premier, fermant la
+  `RTCPeerConnection` à t=0 pendant que les maps de `use-webrtc-p2p.ts` restaient périmées jusqu'à 2s plus
+  tard (ou indéfiniment si la détection de rejoin de `VideoCallInterface` sautait alors le nettoyage). Un
+  rejoin survenant dans cette fenêtre envoyait une offre fraîche que `handleIncomingSignal` routait à tort
+  vers la branche de renégociation (connexion jugée « déjà établie » via les maps périmées) au lieu de créer
+  une nouvelle connexion — `setRemoteDescription` sur une `RTCPeerConnection` déjà fermée lève une
+  `InvalidStateError`, capturée et affichée en simple toast « Failed to renegotiate call » côté pair
+  restant. Le reconnect échouait silencieusement et DÉFINITIVEMENT jusqu'à raccrocher/rappeler manuellement
+  tout l'appel.
+- **Fix** : `CallManager.handleParticipantLeft` ne fait plus que mettre à jour la liste des participants
+  (`removeParticipant` du store, indexé par `participantId` base de données) — plus aucun appel direct à
+  `removeRemoteStream`/`removePeerConnection` (indexés par `userId`), qui restent la responsabilité exclusive
+  de `VideoCallInterface`. Les deux références désormais inutilisées retirées du destructuring du store en
+  tête de composant. Aucune autre ligne de logique métier modifiée.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau fichier
+  `__tests__/components/video-call/CallManager.participantLeftOwnership.test.tsx` (2 tests, même patron de
+  mock socket que `CallManager.reconnect.test.tsx`) — un test confirme que la liste des participants se met
+  toujours à jour ; l'autre pré-peuple le store avec une fausse `RTCPeerConnection`/un faux `MediaStream`
+  gardés par `userId`, déclenche l'événement, et vérifie qu'ils restent intacts dans le store et que
+  `connection.close()` n'est jamais appelé par `CallManager` — RED confirmé avant fix (`peerConnections.get`
+  retournait `undefined`, la connexion ayant été fermée et retirée directement par l'ancien code).
+- **Vérification** : les 2 nouveaux tests + sweep complet `video-call|use-webrtc|use-call|orchestrator`
+  (40 suites / 416 tests) verts. `bun install --ignore-scripts` + `packages/shared && npx prisma generate
+  --generator client && bun run build` (prérequis CLAUDE.md, sandbox sans `node_modules` au démarrage) sans
+  erreur. `npx tsc --noEmit` sur `apps/web` : 1624 erreurs après diff contre 1625 avant (vérifié par `git
+  stash`/`stash pop`) — une de MOINS, aucune nouvelle ; le diff ne touche que deux imports de store retirés
+  et le corps d'un seul handler. `eslint` : même échec sandbox-only de config circulaire que documenté aux
+  vagues précédentes (65/67/68/69/72-78), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague) ; candidat iOS `CallManager.selectCamera(id:)` (Vague 78, prêt, sandbox sans toolchain Swift,
+  reconfirmé cette vague). **Nouveaux candidats web identifiés cette vague, non retenus (confiance/priorité
+  moindre)** : (1) `webrtc-service.ts` `enableVideoSend`/`close` — en appel de groupe avec vidéo activée,
+  la piste vidéo CLONÉE propre à un pair (par opposition à la piste caméra de base partagée) n'est ni
+  arrêtée ni retirée du `MediaStream` local partagé quand ce pair quitte (`close({ stopLocalTracks: false
+  })` ne distingue pas piste partagée vs. piste clonée dédiée à ce pair) — fuite de ressource réelle mais
+  qui ne se manifeste qu'en appel à 3+ participants avec vidéo, candidat pour une vague dédiée avec un test
+  de régression sur le nombre de pistes vidéo du stream partagé après un cycle join/leave ; (2)
+  `use-video-call.ts` `startCall()` n'a pas de garde de ré-entrance contrairement à ses cousins
+  (`acceptingCallIdRef` Vague 33, `videoToggleInFlightRef`/`cameraSwitchInFlightRef` Vague 76) — un
+  double-clic sur « Démarrer un appel » avant le premier aller-retour `call:initiate` peut écraser
+  `window.__preauthorizedMediaStream` et orpheliner une capture caméra/micro, même classe de défaut déjà
+  corrigée ailleurs, confiance moyenne (dépend du gateway pour rejeter ou non le doublon), candidat pour une
+  prochaine vague.
