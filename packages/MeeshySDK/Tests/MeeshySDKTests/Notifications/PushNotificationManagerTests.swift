@@ -293,7 +293,7 @@ final class PushNotificationManagerTests: XCTestCase {
     // MARK: - registerDeviceToken (P1.3 — APNs registration chain)
 
     @MainActor
-    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #file, line: UInt = #line)
+    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #filePath, line: UInt = #line)
     -> (sut: PushNotificationManager, defaults: UserDefaults, keychain: MockKeychainStore, suiteName: String)
     {
         let suiteName = "test.push.\(UUID().uuidString)"
