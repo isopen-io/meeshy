@@ -46,7 +46,8 @@ const EVENT_NAME = {
  * the same two-channel block without referencing each other; collapsing them
  * here means a sixth transport cannot silently reopen it.
  *
- * REST is not a secondary path: the iOS SDK edits via `PUT /messages/:id` and
+ * REST is not a secondary path: the iOS SDK edits via `PUT /messages/:messageId`
+ * (`routes/messages.ts` — NOT the conversation-scoped sibling) and
  * deletes via `DELETE /conversations/:id/messages/:id` (`MessageService.swift`),
  * so this is the primary mutation transport for the mobile client.
  *

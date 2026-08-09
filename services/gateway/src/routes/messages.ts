@@ -7,6 +7,10 @@ import { MessageTranslationService } from '../services/message-translation/Messa
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { emitMentionCreated } from '../socketio/emitMentionCreated';
+import { reconcileEditedMentions } from '../services/messaging/messageMentions';
+import { processExplicitLinks } from '../services/messaging/messageLinks';
+import { TrackingLinkService } from '../services/TrackingLinkService';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
   MessageParamsSchema,
@@ -51,6 +55,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   const attachmentService = new AttachmentService(prisma);
   const translationService = fastify.translationService;
   const socketIOHandler = fastify.socketIOHandler;
+  const trackingLinkService = new TrackingLinkService(prisma);
 
   // Middleware d'authentification requis pour les messages
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
@@ -257,6 +262,26 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Message content cannot be empty (unless attachments are included)');
       }
 
+      // `content` est OPTIONNEL dans `UpdateMessageBodySchema` — retirer la
+      // légende d'un message à pièce jointe consiste précisément à l'omettre.
+      // Le `content.trim()` qui vivait plus bas jetait alors un TypeError, que
+      // le catch traduisait en 500 : le seul cas que la garde ci-dessus autorise
+      // explicitement était le seul que l'écriture ne savait pas traiter.
+      const trimmedContent = content?.trim() ?? '';
+
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture, exactement comme à l'envoi et comme sur les deux autres
+      // transports d'édition. Le contenu traité est ensuite le SEUL en
+      // circulation : base, mentions, retraduction, payload diffusé.
+      const editedContent = await processExplicitLinks({
+        trackingLinkService,
+        content: trimmedContent,
+        conversationId: message.conversationId,
+        messageId,
+        createdBy: userId,
+        onError: (err) => logger.error('Error processing tracking links in edit', err as Error),
+      });
+
       // Mettre à jour le message — garde de concurrence optimiste : n'écrire
       // que si le message est toujours non supprimé. Un `DELETE` concurrent
       // entre la lecture ci-dessus et cette écriture ferait sinon ressusciter
@@ -268,7 +293,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const editResult = await prisma.message.updateMany({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: content.trim(),
+          content: editedContent,
           isEdited: true,
           editedAt
         }
@@ -277,6 +302,46 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       if (editResult.count === 0) {
         return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
       }
+
+      // Ce que cette édition doit aux gens qu'elle NOMME. Ce transport — celui
+      // que le client iOS emploie réellement (`MessageService.editMessage` →
+      // `PUT /messages/:id`) — n'écrivait AUCUNE mention : ni ligne `Mention`,
+      // ni `validatedMentions`, ni notification. Éditer « salut @alice » en
+      // « salut @bob » laissait Alice mentionnée et ne nommait jamais Bob.
+      // Les deux unités partagées existaient déjà ; les commentaires qui les
+      // accompagnent désignaient même cette route par son chemin — mais elles
+      // avaient été câblées sur `PUT /conversations/:id/messages/:messageId`,
+      // qu'aucun client n'appelle pour éditer.
+      //
+      // L'appel précède la relecture : `reconcileEditedMentions` écrit
+      // `validatedMentions` en base, et `findUniqueOrThrow` rend alors l'état
+      // réconcilié sans qu'aucun recopiage conditionnel soit nécessaire. Quand
+      // la réconciliation n'a RIEN pu établir, la ligne porte toujours la
+      // valeur précédente — qui est la bonne, et qu'un `[]` recopié aurait
+      // effacée.
+      const editedMentions = await reconcileEditedMentions({
+        prisma,
+        mentionService: fastify.mentionService,
+        notificationService: fastify.notificationService,
+        message: { id: messageId, conversationId: message.conversationId, senderId: message.senderId },
+        content: editedContent,
+        editorUserId: userId,
+        onError: (err) => logger.error('Edit - Error processing mentions', err as Error),
+      });
+
+      // `mention:created` aux seuls ENTRANTS, dans leur salon PERSONNEL : la
+      // diffusion qui suit ne fan qu'à `conversation:<id>`, où quelqu'un que
+      // cette édition vient de nommer n'est pas forcément assis.
+      emitMentionCreated({
+        io: socketIOHandler?.getManager()?.getIO(),
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId,
+        conversationId: message.conversationId,
+        editorUserId: userId,
+        content: editedContent,
+        timestamp: editedAt,
+        onError: (err) => logger.error('Edit - mention:created fanout failed', err as Error),
+      });
 
       const updatedMessage = await prisma.message.findUniqueOrThrow({
         where: { id: messageId },
@@ -304,7 +369,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         // Créer un objet message pour la retraduction
         const messageForRetranslation = {
           id: messageId,
-          content: content.trim(),
+          content: editedContent,
           originalLanguage: message.originalLanguage,
           conversationId: message.conversationId,
           senderId: message.senderId
