@@ -595,7 +595,7 @@ export function registerSharingRoutes(
       }
 
       // Ajouter l'utilisateur à la conversation
-      logger.info('Ajout utilisateur à conversation', { conversationId: shareLink.conversationId });
+      logger.info('Entrée dans la conversation', { conversationId: shareLink.conversationId, outcome: entry.outcome });
       const joiningUserInfo = await prisma.user.findUnique({
         where: { id: userToken.userId },
         select: { displayName: true, username: true }
@@ -646,7 +646,7 @@ export function registerSharingRoutes(
         where: { id: shareLink.id },
         data: { currentUses: { increment: 1 } }
       });
-      logger.info('Membre créé avec succès');
+      logger.info('Appartenance ouverte', { outcome: entry.outcome });
 
       // Auto-join the joining user's currently-connected sockets to the
       // conversation room so they receive message:new events immediately
