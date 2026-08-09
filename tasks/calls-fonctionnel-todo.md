@@ -4948,3 +4948,85 @@ toolchain dans ce sandbox.
   `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
   trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
   cette vague). Aucun nouveau candidat web/gateway identifié au-delà du fix livré cette vague.
+
+## Vague 78 — `VideoCallInterface` sans error boundary + fuite de listeners sur `app/call/[callId]/page.tsx` (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En
+tête de cycle, revue des PR ouvertes de la routine via `list_pull_requests` — deux trouvées (#2661 « auth
+retry interval », #2662 « re-entrancy guards »), toutes deux CI verte, mergées avant de démarrer un nouveau
+travail (règle de la routine : ne jamais empiler un nouveau cycle sur un backlog non fermé). #2662 avait un
+conflit de merge avec `main` mis à jour par #2661 (les deux avaient ajouté une entrée « Vague 76 » au même
+point d'ancrage de ce fichier) — résolu à la main en gardant les deux entrées et en renumérotant la seconde
+« Vague 77 », sans perte de contenu. Deux audits dédiés (subagents indépendants, iOS + web) lancés ensuite ;
+le rapport iOS (`CallManager.selectCamera` n'annule pas `selectedCameraId`/`isUsingFrontCamera` en cas
+d'échec, contrairement à son jumeau `switchCamera` du même commit du 2026-08-08) reste hors d'atteinte —
+sandbox Linux sans Xcode/Swift (`which xcodebuild swift` → rien), confirmé à nouveau ce cycle ; noté ci-dessous
+pour la prochaine session avec toolchain iOS. Le rapport web a fourni les deux fixes de cette vague.
+
+- **Root cause 1 — `VideoCallInterface` jamais protégé par un error boundary** : `CallErrorBoundary`
+  (`components/video-calls/CallErrorBoundary.tsx`) existe, est testé et exporté du barrel `video-calls`,
+  mais n'était monté nulle part. `VideoCallInterface` (768 lignes, une douzaine d'effets : callbacks WebRTC,
+  pipeline effets audio, dégradation adaptative, timers watchdog) était rendu SANS protection aux deux seuls
+  points de montage réels — `components/video-call/CallManager.tsx:1130` et
+  `app/call/[callId]/page.tsx:201` — en contradiction directe avec la règle déjà écrite dans
+  `apps/web/CLAUDE.md` : « Each feature MUST have its own ErrorBoundary. A crash in message list MUST NOT
+  crash the conversation list. » Une exception de rendu n'importe où dans cet arbre remontait donc au-delà
+  de la frontière dédiée jusqu'au premier boundary ancêtre de l'app, au lieu d'un écran « Call Error »
+  contenu et réinitialisable.
+- **Fix 1** : `<CallErrorBoundary><VideoCallInterface .../></CallErrorBoundary>` aux deux sites de montage.
+  Aucun autre changement.
+- **Root cause 2 — `app/call/[callId]/page.tsx` : l'effet de jointure ne nettoyait jamais rien** : l'effet
+  enregistrait les listeners `call:participant-joined`/`call:initiated` et le timeout de jointure (10s)
+  DEPUIS L'INTÉRIEUR d'une closure `async () => {...}`, puis appelait cette closure comme une simple
+  instruction (`joinCall();` au lieu de `return joinCall();`). React n'exécute jamais qu'une fonction de
+  nettoyage renvoyée SYNCHRONEMENT par le callback de l'effet — la valeur de résolution éventuelle d'une
+  Promise lui est invisible. `useEffect` n'avait donc lui-même aucun `return`, et enregistrait toujours
+  `undefined` comme cleanup : ni au démontage, ni à la ré-exécution de l'effet (changement de `callId`/
+  `currentCall`) les deux listeners n'étaient jamais retirés du socket singleton partagé — chaque visite de
+  cette route empilait deux listeners de plus, chacun fermé sur un `callId` et des setters d'état obsolètes.
+  Bug adjacent dans le même effet : `event: unknown` était déréférencé directement (`event.callId`, etc.) —
+  ne type-check même pas sous `tsc --noEmit` (7 erreurs `TS18046` avant fix), signe que ce fichier n'avait
+  plus été relu depuis un moment.
+- **Fix 2** : l'enregistrement des listeners/timeout sort de la closure async et vit directement dans le
+  corps de l'effet (synchrone) ; l'effet renvoie désormais sa VRAIE fonction de nettoyage
+  (`clearTimeout` + double `socket.off`). `event: unknown` remplacé par les types partagés
+  `CallParticipantJoinedEvent`/`CallInitiatedEvent` (`@meeshy/shared/types/video-call`) — les 7 erreurs
+  `TS18046` disparaissent avec le typage correct, aucune nouvelle erreur introduite (1625 erreurs
+  `tsc --noEmit` sur `apps/web` après diff contre 1632 avant, écart exactement expliqué par ces 7).
+- **Tests** (TDD, RED confirmé avant chaque fix via `git stash` du fichier source correspondant) :
+  - `__tests__/components/video-call/CallManager.errorBoundary.test.tsx` (2 tests, nouveau fichier) — sans
+    le boundary, `render(<CallManager/>)` avec un `VideoCallInterface` mocké pour jeter à l'exception lève
+    (RED : `toThrow()`) ; avec le fix, ne lève plus et affiche le fallback « Call Error ».
+  - `__tests__/app/call/CallPage.test.tsx` (3 tests, nouveau fichier — première couverture de cette route)
+    — un faux socket enregistrant les handlers passés à `on`/`off` ; RED confirmé sur 2 des 3 tests avant
+    fix (`socket.off` jamais appelé au démontage ; un événement `call:participant-joined` reçu APRÈS
+    démontage flippait quand même `isInCall` sur le store partagé) ; le 3e test (parcours heureux : join +
+    événement AVANT démontage) passait déjà avant et après, confirmant l'absence de régression sur le
+    chemin nominal. `page.tsx` utilise `use(params)` (React 19) — pour rester synchrone sans dépendre du
+    scheduling Suspense/act de l'environnement Bun/Jest-compat de ce sandbox, la Promise passée en prop est
+    pré-timbrée `status: 'fulfilled'`/`value` (le mécanisme interne que `use()` reconnaît pour une Promise
+    déjà observée résolue), évitant tout aller-retour de suspension.
+- **Vérification** : les deux nouveaux fichiers + sweep complet `components/video-call/**` +
+  `components/video-calls/**` + `app/call/**` (29 suites / 135 tests) verts. `bun install --ignore-scripts`
+  + `packages/shared && npx prisma generate --generator client && bun run build` (prérequis CLAUDE.md,
+  sandbox sans `node_modules` au démarrage) sans erreur. `npx tsc --noEmit` sur `apps/web` : 1625 erreurs
+  après diff contre 1632 avant (7 de moins, exactement les `TS18046` de `page.tsx` ; `CallManager.tsx`
+  strictement identique — mêmes 28 erreurs préexistantes décalées d'une ligne par l'import ajouté, aucune
+  nouvelle). `eslint` : même échec sandbox-only de config circulaire que documenté aux vagues précédentes
+  (65/67/68/69/72/73/74/75/76/77), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague). **Nouveau candidat iOS (spec prête, non corrigé — sandbox sans toolchain Swift)** :
+  `CallManager.selectCamera(id:)` (`~L2566`) n'annule pas `selectedCameraId`/`isUsingFrontCamera` en cas
+  d'échec de la sélection caméra, contrairement à son jumeau `switchCamera()` écrit dans le même commit
+  (2026-08-08, « serialize switchCamera/selectCamera ») qui a lui un test de régression dédié
+  (`CallManagerSwitchCameraFailureCorrectionSourceTests`) pour exactement ce revert. `selectCamera` ignore
+  entièrement le flag de succès de la completion — aucun test équivalent. La même famille de tâches
+  (`cameraSwitchTask`) ne re-valide pas non plus `currentCallId` après ses `await` chaînés, contrairement à
+  ses cousines (`applySurvivalVideoSend`, `scheduleICERestart`, tâches hold-vidéo) qui le font toutes — un
+  flip/select mis en file peut dans de rares fenêtres de timing s'appliquer à un appel déjà raccroché/
+  re-composé. Root cause de fond notée par l'audit : le boilerplate de chaînage de tâches (6 lignes) est
+  dupliqué tel quel à 10 sites sans helper partagé — explique directement pourquoi ces deux trous ont
+  échappé à ce pair de nouveaux call sites. Candidat prioritaire pour la prochaine session disposant d'un
+  toolchain Xcode/Swift.
