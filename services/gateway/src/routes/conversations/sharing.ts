@@ -660,15 +660,20 @@ export function registerSharingRoutes(
               select: { userId: true }
             });
 
-            // Envoyer une notification à chaque admin/créateur
-            for (const member of adminsAndCreators) {
-              await notificationService.createMemberJoinedNotification({
-                recipientUserId: member.userId,
+            // Une seule diffusion pour tous les administrateurs. La boucle
+            // `await` qui précédait tenait la réponse « vous avez rejoint »
+            // jusqu'à ce que le dernier d'entre eux soit notifié, et relisait
+            // par destinataire un contexte identique pour tous.
+            const adminUserIds = adminsAndCreators
+              .map((member) => member.userId)
+              .filter((id): id is string => !!id);
+            if (adminUserIds.length > 0) {
+              const notified = await notificationService.createMemberJoinedNotificationsBatch(adminUserIds, {
                 newMemberUserId: userToken.userId,
                 conversationId: shareLink.conversationId,
                 joinMethod: 'via_link'
               });
-              logger.debug('Notification membre rejoint envoyée');
+              logger.debug('Notifications membre rejoint envoyées', { notified, audience: adminUserIds.length });
             }
 
             logger.debug('Notification confirmation envoyée');

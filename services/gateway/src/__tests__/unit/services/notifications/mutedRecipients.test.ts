@@ -43,6 +43,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     user: { findUnique: jest.fn(), findMany: jest.fn() },
     conversation: { findUnique: jest.fn() },
     message: { findUnique: jest.fn() },
+    participant: { count: jest.fn() },
     userPreferences: { findUnique: jest.fn() },
     userConversationPreferences: { findMany: jest.fn() },
   };
@@ -126,6 +127,7 @@ describe('NotificationService — mute applied to reaction/reply fan-out', () =>
     prisma.user.findMany.mockResolvedValue([]);
     prisma.conversation.findUnique.mockResolvedValue({ title: 'c', type: 'direct' });
     prisma.message.findUnique.mockResolvedValue({ content: 'msg' });
+    prisma.participant.count.mockResolvedValue(3);
     prisma.userPreferences.findUnique.mockResolvedValue(null);
     prisma.userConversationPreferences.findMany.mockResolvedValue([]);
 
@@ -203,6 +205,154 @@ describe('NotificationService — mute applied to reaction/reply fan-out', () =>
 
       expect(result).not.toBeNull();
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── Les allées et venues sont de l'activité AMBIANTE ──────────────────────
+  //
+  // Un membre qui rejoint, qu'on exclut, ou qui part n'est pas un événement
+  // ADRESSÉ au destinataire : c'est le bruit de fond de la conversation, la
+  // même famille que `new_message` / `message_reply` / `message_reaction`. Le
+  // mute par conversation les couvrait déjà tous les trois ; ces trois-là lui
+  // échappaient, si bien qu'une conversation muette continuait de sonner à
+  // chaque va-et-vient — et d'autant plus fort qu'elle est active, donc
+  // précisément dans le cas qui a motivé le mute.
+
+  describe('createMemberJoinedNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      newMemberUserId: ACTOR_ID,
+      conversationId: CONV_ID,
+      joinMethod: 'invited' as const,
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createMemberJoinedNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('does not even load the member/conversation snapshot for a muted recipient', async () => {
+      // La suppression doit précéder la lecture : sinon un ajout de membre dans
+      // une conversation que tout le monde a mise en sourdine paie quand même
+      // ses trois requêtes par destinataire, pour rien.
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      await service.createMemberJoinedNotification(params);
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+      expect(prisma.participant.count).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createMemberJoinedNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_joined');
+    });
+  });
+
+  describe('createMemberRemovedNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      removedByUserId: ACTOR_ID,
+      conversationId: CONV_ID,
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createMemberRemovedNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createMemberRemovedNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_removed');
+    });
+  });
+
+  describe('createMemberLeftNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      memberUserId: ACTOR_ID,
+      conversationId: CONV_ID,
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createMemberLeftNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createMemberLeftNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_left');
+    });
+  });
+
+  // ─── Ce qui PERCE le mute, et pourquoi ─────────────────────────────────────
+  //
+  // Frontière de la règle ci-dessus, verrouillée pour qu'elle ne dérive pas :
+  // ces trois événements portent sur l'appartenance DU DESTINATAIRE lui-même
+  // (« on t'a ajouté », « on t'a retiré », « ton rôle a changé »). Ils sont
+  // adressés, pas ambiants — même famille que la mention, qui perce déjà le
+  // mute par convention WhatsApp. Mettre une conversation en sourdine dit « ne
+  // me raconte pas ce qui s'y passe », pas « ne me dis pas que j'en suis
+  // sorti ».
+
+  describe('les événements portant sur le destinataire lui-même percent le mute', () => {
+    beforeEach(() => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+    });
+
+    it('added_to_conversation still notifies a muted recipient', async () => {
+      const result = await service.createAddedToConversationNotification({
+        recipientUserId: AUTHOR_ID,
+        addedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('added_to_conversation');
+    });
+
+    it('removed_from_conversation still notifies a muted recipient', async () => {
+      const result = await service.createRemovedFromConversationNotification({
+        recipientUserId: AUTHOR_ID,
+        removedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('removed_from_conversation');
+    });
+
+    it('member_role_changed still notifies a muted recipient', async () => {
+      const result = await service.createMemberRoleChangedNotification({
+        recipientUserId: AUTHOR_ID,
+        changedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+        newRole: 'ADMIN',
+        previousRole: 'MEMBER',
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_promoted');
     });
   });
 
