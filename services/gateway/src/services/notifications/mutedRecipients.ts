@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { notificationLogger } from '../../utils/logger-enhanced';
 
 /**
  * GW3 — per-conversation mute, single rule site.
@@ -23,6 +24,19 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * WhatsApp. Les allées et venues d'AUTRUI sont du bruit de fond : elles sont
  * d'autant plus fréquentes que la conversation est active, donc exactement le
  * cas qui a motivé le mute.
+ *
+ * ## Repli OUVERT quand la préférence est illisible
+ *
+ * Ne lève jamais : une lecture en échec rend TOUS les candidats. Le mute est
+ * une préférence de confort, la notification une obligation de livraison —
+ * quand on ne sait plus laquelle des deux s'applique, un ping de trop se
+ * pardonne, un message jamais annoncé non. Et l'arbitrage ne se joue pas à
+ * l'unité : cette porte garde cinq familles de notifications plus un éventail
+ * entier, si bien qu'un incident Mongo transitoire les taisait toutes, d'un
+ * coup, pour tout le monde. Même arbitrage que les trois voisins qui l'ont déjà
+ * tranché et le disent : `loadNotificationPrefs` (« fail open »),
+ * `_loadReadReceiptOptOuts` (« everyone stays visible »),
+ * `PrivacyPreferencesService.fetchFromDatabase`.
  */
 export async function filterMutedRecipients(
   prisma: PrismaClient,
@@ -31,11 +45,20 @@ export async function filterMutedRecipients(
 ): Promise<string[]> {
   if (userIds.length === 0) return [];
 
-  const mutedRows = await prisma.userConversationPreferences.findMany({
-    where: { conversationId, userId: { in: [...userIds] }, isMuted: true },
-    select: { userId: true },
-  });
+  try {
+    const mutedRows = await prisma.userConversationPreferences.findMany({
+      where: { conversationId, userId: { in: [...userIds] }, isMuted: true },
+      select: { userId: true },
+    });
 
-  const mutedIds = new Set(mutedRows.map((row) => row.userId));
-  return userIds.filter((id) => !mutedIds.has(id));
+    const mutedIds = new Set(mutedRows.map((row) => row.userId));
+    return userIds.filter((id) => !mutedIds.has(id));
+  } catch (error) {
+    notificationLogger.error('Lecture du mute en échec — tous les destinataires restent notifiés', {
+      error,
+      conversationId,
+      audienceSize: userIds.length,
+    });
+    return [...userIds];
+  }
 }

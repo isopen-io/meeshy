@@ -438,6 +438,8 @@ describe('notifyMessageRecipients — l’éventail', () => {
       members: [PEER_USER_ID, OTHER_USER_ID],
     });
     const notificationService = makeNotificationService();
+    notificationService.createMentionNotificationsBatch.mockResolvedValue(1);
+    notificationService.createMessageNotification.mockResolvedValue({ id: 'n1' });
     const onFanOut = jest.fn<any>();
 
     await notifyMessageRecipients({
@@ -452,6 +454,205 @@ describe('notifyMessageRecipients — l’éventail', () => {
     });
 
     expect(onFanOut).toHaveBeenCalledWith({ mentions: 1, regular: 1, reply: false });
+  });
+
+  // ─── Trois éventails, trois destins ───────────────────────────────────────
+  //
+  // Réponse, mentions et messages réguliers sont indépendants par
+  // construction : leurs audiences se déduisent des ENTRÉES
+  // (`validatedMentionUserIds`, l'auteur du message cité), jamais du résultat
+  // de l'éventail précédent. Ils partageaient pourtant un seul `try` : une
+  // panne dans le PREMIER annulait purement et simplement les deux suivants —
+  // dont les mentions, la seule famille qui perce toutes les autres
+  // suppressions. Un hoquet Mongo sur la notification de réponse d'UNE personne
+  // faisait taire le message pour TOUTE la conversation.
+
+  it('une panne de l’éventail réponse n’annule ni les mentions ni les messages réguliers', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+      replyAuthorParticipantId: '507f1f77bcf86cd799439060',
+      replyAuthorUserId: PEER_USER_ID,
+    });
+    const notificationService = makeNotificationService();
+    notificationService.createReplyNotification.mockRejectedValue(new Error('mongo down'));
+    const onError = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: '507f1f77bcf86cd799439070' }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '@other ma réponse',
+      validatedMentionUserIds: [OTHER_USER_ID],
+      onError,
+    });
+
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('une panne de l’éventail mentions n’annule pas les messages réguliers', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+    notificationService.createMentionNotificationsBatch.mockRejectedValue(new Error('mongo down'));
+    const onError = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '@peer regarde',
+      validatedMentionUserIds: [PEER_USER_ID],
+      onError,
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(1);
+    expect(
+      (notificationService.createMessageNotification.mock.calls[0][0] as any).recipientUserId
+    ).toBe(OTHER_USER_ID);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('un destinataire régulier en échec n’emporte pas les autres', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+    notificationService.createMessageNotification.mockImplementation((params: any) =>
+      params.recipientUserId === PEER_USER_ID
+        ? Promise.reject(new Error('mongo down'))
+        : Promise.resolve({ id: 'n1' })
+    );
+    const onFanOut = jest.fn<any>();
+    const onError = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+      onFanOut,
+      onError,
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(2);
+    expect(onFanOut).toHaveBeenCalledWith({ mentions: 0, regular: 1, reply: false });
+  });
+
+  // Le compte rendu dit ce qui est PARTI, pas ce qui était visé — principe
+  // déjà retenu par `createMemberJoinedNotificationsBatch`. Sans lui,
+  // l'isolement ci-dessus serait invisible : un éventail entièrement tombé
+  // continuerait d'annoncer son audience comme si elle avait été servie.
+
+  it('le compte rendu est celui des notifications réellement parties', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+    notificationService.createMentionNotificationsBatch.mockRejectedValue(new Error('mongo down'));
+    notificationService.createMessageNotification.mockRejectedValue(new Error('mongo down'));
+    const onFanOut = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '@peer regarde',
+      validatedMentionUserIds: [PEER_USER_ID],
+      onFanOut,
+    });
+
+    expect(onFanOut).toHaveBeenCalledWith({ mentions: 0, regular: 0, reply: false });
+  });
+
+  it('la réponse ne se déclare partie que si elle l’est', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      replyAuthorParticipantId: '507f1f77bcf86cd799439060',
+      replyAuthorUserId: PEER_USER_ID,
+    });
+    const notificationService = makeNotificationService();
+    notificationService.createReplyNotification.mockResolvedValue({ id: 'n1' });
+    const onFanOut = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: '507f1f77bcf86cd799439070' }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ma réponse',
+      onFanOut,
+    });
+
+    expect(onFanOut).toHaveBeenCalledWith({ mentions: 0, regular: 0, reply: true });
+  });
+
+  it('préférences de conversation illisibles → tout le monde reste notifié', async () => {
+    // Repli OUVERT, comme `filterMutedRecipients`. « Mentions seulement » et
+    // sourdine sont des préférences de CONFORT ; quand on ne sait plus les
+    // lire, un ping de trop se pardonne, un message jamais annoncé non — et
+    // l'incident vaut pour la conversation entière, pas pour une personne.
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+    });
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('mongo down'));
+    const notificationService = makeNotificationService();
+    notificationService.createMessageNotification.mockResolvedValue({ id: 'n1' });
+    const onFanOut = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+      onFanOut,
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(2);
+    expect(onFanOut).toHaveBeenCalledWith({ mentions: 0, regular: 2, reply: false });
+  });
+
+  it('une panne signale à onError QUEL éventail est tombé', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+    notificationService.createMentionNotificationsBatch.mockRejectedValue(new Error('mongo down'));
+    const onError = jest.fn<any>();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '@peer regarde',
+      validatedMentionUserIds: [PEER_USER_ID],
+      onError,
+    });
+
+    const reported = onError.mock.calls[0][0] as Error;
+    expect(reported.message).toContain('mentions');
+    expect((reported as any).cause).toEqual(expect.any(Error));
   });
 
   it('ne rend aucun compte quand l’éventail est abandonné', async () => {
