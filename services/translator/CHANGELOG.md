@@ -1,5 +1,14 @@
 # @meeshy/translator
 
+## 1.22.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - revert optimistic picker state when selectCamera fails (#2685)
+  - registration wizard pager/progress-bar/nav-chrome shell (#2684)
+
 ## 1.21.0
 
 ### Minor Changes

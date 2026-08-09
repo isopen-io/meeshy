@@ -1,5 +1,14 @@
 # @meeshy/web
 
+## 1.23.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - revert optimistic picker state when selectCamera fails (#2685)
+  - registration wizard pager/progress-bar/nav-chrome shell (#2684)
+
 ## 1.22.4
 
 ### Patch Changes
