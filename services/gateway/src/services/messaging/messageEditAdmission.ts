@@ -43,7 +43,15 @@
  * sans écran pour le dire. Voir `tasks/lessons.md`, leçon 88.
  */
 
-const PRIVILEGED_GLOBAL_ROLES = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
+/**
+ * Les rôles GLOBAUX (`User.role`, en MAJUSCULES) qui ouvrent une porte de
+ * modération sur le message d'autrui.
+ *
+ * Exporté pour `admitMessageDelete`, qui doit répondre EXACTEMENT la même chose
+ * à « ce rôle global est-il privilégié ? ». Deux ensembles écrits séparément
+ * dériveraient — c'est précisément la maladie que ces deux unités soignent.
+ */
+export const PRIVILEGED_GLOBAL_ROLES = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
 
 /** 24 heures. La fenêtre ne vaut QUE pour l'auteur (voir `admitMessageEdit`). */
 export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;

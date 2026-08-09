@@ -11,6 +11,7 @@ import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import { processExplicitLinks } from '../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
+import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -512,13 +513,14 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               user: { select: { username: true } }
             }
           },
+          // Seules ces deux dates servent encore : la garde d'optimistic
+          // concurrency sur `lastMessageAt`, plus loin. L'appartenance n'est
+          // plus jointe ici — `admitMessageDelete` la lit lui-même, avec le
+          // filtre `isActive: true` que cette jointure n'avait jamais, et
+          // seulement quand l'acteur n'est PAS l'auteur. Le chemin nominal
+          // coûte donc une lecture de moins qu'avant.
           conversation: {
-            include: {
-              participants: {
-                where: { userId: userId },
-                select: { userId: true, role: true }
-              }
-            }
+            select: { createdAt: true, lastMessageAt: true }
           },
           attachments: {
             select: {
@@ -532,18 +534,26 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Message non trouvé');
       }
 
-      // Vérifier les permissions de suppression
-      const userMembership = message.conversation.participants[0];
-      const canDelete =
-        // L'auteur du message peut le supprimer (sender.userId est le User ID)
-        message.sender?.userId === userId ||
-        // Les administrateurs et modérateurs peuvent supprimer
-        userMembership?.role === 'admin' ||
-        userMembership?.role === 'moderator' ||
-        authRequest.authContext.registeredUser?.role === 'ADMIN' ||
-        authRequest.authContext.registeredUser?.role === 'BIGBOSS' ||
-        authRequest.authContext.registeredUser?.role === 'MODERATOR' ||
-        authRequest.authContext.registeredUser?.role === 'CREATOR';
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
+      // Cette copie-ci — la route qu'ANDROID emploie — avait dérivé sur deux
+      // points que rien ne mesurait :
+      //   - elle joignait les participants SANS `isActive: true`, donc une ligne
+      //     laissée derrière par un départ conservait indéfiniment le droit de
+      //     supprimer ;
+      //   - elle testait `registeredUser?.role === 'CREATOR'`, absent de l'enum
+      //     `UserRole` : une branche qui ne pouvait jamais être vraie et qui
+      //     donnait à lire une permission inexistante.
+      // Le rôle global se lit désormais en BASE et non dans le jeton : un rôle
+      // révoqué depuis l'émission du jeton ne supprime plus.
+      const { admitted: canDelete } = await admitMessageDelete({
+        prisma,
+        deleterUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+        },
+        onError: (err) => logger.error('delete admission read failed', err as Error),
+      });
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
