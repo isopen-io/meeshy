@@ -61,7 +61,17 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
             coerceInputValues = true
         }
 
-        fun create(config: MeeshyConfig, tokenStore: TokenStore): MeeshyApi {
+        /**
+         * @param onSessionExpired appele quand la passerelle refuse l'identite
+         *   (401/403) hors des routes d'authentification. Sans lui, une session
+         *   expiree remontait comme une erreur de chargement et l'utilisateur
+         *   lisait « verifiez votre connexion » alors que le reseau allait bien.
+         */
+        fun create(
+            config: MeeshyConfig,
+            tokenStore: TokenStore,
+            onSessionExpired: () -> Unit = {},
+        ): MeeshyApi {
             // The authenticator needs to call `auth.refresh` on the very instance it
             // guards; the instance does not exist yet. The refresher closure is only
             // invoked on a 401 — long after `api` is assigned — so a lateinit binding
@@ -81,6 +91,10 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
 
             val client = OkHttpClient.Builder()
                 .addInterceptor(AuthInterceptor(tokenStore))
+                // Apres l'authenticator: si le rafraichissement a pu sauver la
+                // session, la reponse finale n'est plus un 401 et rien ne se
+                // declenche. On ne signale donc que les expirations REELLES.
+                .addInterceptor(AuthExpiryInterceptor(onSessionExpired))
                 .authenticator(RefreshAuthenticator(tokenStore, refresher))
                 .apply {
                     if (config.enableLogging) {

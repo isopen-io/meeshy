@@ -43,6 +43,8 @@ import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.theme.DataStoreThemeStore
 import me.meeshy.sdk.theme.ThemeStore
 import javax.inject.Singleton
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.chrome.DataStoreFloatingButtonPositionStore
 
 /**
  * Hilt bindings for sdk-core dependencies not covered by NetworkModule
@@ -85,6 +87,18 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_theme")
         }
         return DataStoreThemeStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesFloatingButtonPositionStore(
+        @ApplicationContext context: Context,
+    ): FloatingButtonPositionStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_floating_buttons")
+        }
+        return DataStoreFloatingButtonPositionStore(dataStore, scope)
     }
 
     @Provides

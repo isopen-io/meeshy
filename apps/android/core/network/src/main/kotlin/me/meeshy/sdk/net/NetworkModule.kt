@@ -49,8 +49,16 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesMeeshyApi(config: MeeshyConfig, tokenStore: TokenStore): MeeshyApi =
-        MeeshyApi.create(config, tokenStore)
+    fun providesSessionExpiryNotifier(): SessionExpiryNotifier = SessionExpiryNotifier()
+
+    @Provides
+    @Singleton
+    fun providesMeeshyApi(
+        config: MeeshyConfig,
+        tokenStore: TokenStore,
+        sessionExpiry: SessionExpiryNotifier,
+    ): MeeshyApi =
+        MeeshyApi.create(config, tokenStore, onSessionExpired = sessionExpiry::notifyExpired)
 
     @Provides
     fun providesAuthApi(api: MeeshyApi): AuthApi = api.auth
