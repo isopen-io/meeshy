@@ -68,6 +68,7 @@ struct PrivacySettingsView: View {
             VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
                 visibilitySection
                 contactsSection
+                locationSection
                 mediaSection
                 encryptionSection
 
@@ -171,6 +172,16 @@ struct PrivacySettingsView: View {
                 ),
             ]
         )
+    }
+
+    /// Les réglages de partage de position — la MÊME vue que celle qu'ouvre le
+    /// `(i)` du sélecteur de lieu. Une seule source, deux surfaces : ce sont
+    /// des préférences applicatives, pas propres à une conversation.
+    ///
+    /// Contrairement aux autres sections de cet écran, celle-ci est pleinement
+    /// fonctionnelle — pas de « Bientôt disponible ».
+    private var locationSection: some View {
+        LocationSharingSettingsSection(accentColor: accentColor)
     }
 
     private var mediaSection: some View {

@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import MeeshySDK
 
 // MARK: - Map target (version-neutral bridge type)
 
@@ -111,6 +112,8 @@ nonisolated public enum CoordinateEquivalence {
 public struct AdaptiveInteractiveMap<PinContent: View>: View {
     private let target: MapTarget?
     private let annotationCoordinate: CLLocationCoordinate2D?
+    private let style: SharedMapStyle
+    private let defaultControls: Bool
     private let onRegionChange: (CLLocationCoordinate2D) -> Void
     private let pin: () -> PinContent
 
@@ -120,16 +123,27 @@ public struct AdaptiveInteractiveMap<PinContent: View>: View {
     ///     callers that want auto-centering on the user must set `target`
     ///     once a location fix arrives.
     ///   - annotationCoordinate: coordinate of the single pin, or `nil`.
+    ///   - style: map rendering. No effect on iOS 16 (`.mapStyle` is iOS 17+):
+    ///     callers exposing a style picker must gate it behind
+    ///     `Platform.isIOS17OrLater`.
+    ///   - defaultControls: renders `MapUserLocationButton` + `MapCompass`.
+    ///     Pass `false` when the caller lays out its own controls — the system
+    ///     ones anchor top-trailing and slide under any floating bar living
+    ///     there.
     ///   - onRegionChange: called with the map center after the camera moves.
     ///   - pin: builds the pin view.
     public init(
         target: MapTarget?,
         annotationCoordinate: CLLocationCoordinate2D?,
+        style: SharedMapStyle = .standard,
+        defaultControls: Bool = true,
         onRegionChange: @escaping (CLLocationCoordinate2D) -> Void,
         @ViewBuilder pin: @escaping () -> PinContent
     ) {
         self.target = target
         self.annotationCoordinate = annotationCoordinate
+        self.style = style
+        self.defaultControls = defaultControls
         self.onRegionChange = onRegionChange
         self.pin = pin
     }
@@ -139,6 +153,8 @@ public struct AdaptiveInteractiveMap<PinContent: View>: View {
             ModernInteractiveMap(
                 target: target,
                 annotationCoordinate: annotationCoordinate,
+                style: style,
+                defaultControls: defaultControls,
                 onRegionChange: onRegionChange,
                 pin: pin
             )
@@ -159,6 +175,8 @@ public struct AdaptiveInteractiveMap<PinContent: View>: View {
 private struct ModernInteractiveMap<PinContent: View>: View {
     private let target: MapTarget?
     private let annotationCoordinate: CLLocationCoordinate2D?
+    private let style: SharedMapStyle
+    private let defaultControls: Bool
     private let onRegionChange: (CLLocationCoordinate2D) -> Void
     private let pin: () -> PinContent
 
@@ -167,11 +185,15 @@ private struct ModernInteractiveMap<PinContent: View>: View {
     init(
         target: MapTarget?,
         annotationCoordinate: CLLocationCoordinate2D?,
+        style: SharedMapStyle,
+        defaultControls: Bool,
         onRegionChange: @escaping (CLLocationCoordinate2D) -> Void,
         @ViewBuilder pin: @escaping () -> PinContent
     ) {
         self.target = target
         self.annotationCoordinate = annotationCoordinate
+        self.style = style
+        self.defaultControls = defaultControls
         self.onRegionChange = onRegionChange
         self.pin = pin
         self._position = State(initialValue: .region(AdaptiveMapInitialRegion.resolve(for: target)))
@@ -183,15 +205,29 @@ private struct ModernInteractiveMap<PinContent: View>: View {
                 Annotation("", coordinate: annotationCoordinate) { pin() }
             }
         }
+        // `.mapStyle` is a RENDERING modifier: it touches neither `position`
+        // nor `region`, so it does not open the synchronous re-entrancy path
+        // documented on `AdaptiveMapInitialRegion`.
+        .mapStyle(resolvedStyle)
         .onMapCameraChange(frequency: .onEnd) { context in
             onRegionChange(context.camera.centerCoordinate)
         }
         .mapControls {
-            MapUserLocationButton()
-            MapCompass()
+            if defaultControls {
+                MapUserLocationButton()
+                MapCompass()
+            }
         }
         .onChange(of: target) { _, newTarget in
             if let newTarget { position = .region(newTarget.region) }
+        }
+    }
+
+    private var resolvedStyle: MapStyle {
+        switch style {
+        case .standard: return .standard
+        case .hybrid:   return .hybrid
+        case .imagery:  return .imagery
         }
     }
 }

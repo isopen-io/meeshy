@@ -106,6 +106,13 @@ sans la moindre erreur (piège vécu à l'itération 4).
 
 ## Lane ANDROID — un run = un slice
 
+**Piège vécu à l'itération 8 : crée la branche AVANT d'éditer le moindre fichier, pas après.**
+Un agent a commencé à écrire test + code directement sur la branche du worktree de routine
+(`ops/android-ios-parity-routine`) parce que le choix du slice et l'ouverture d'un éditeur sont
+venus avant le `git checkout -b`. Récupéré via un `git stash` scopé, mais du temps perdu pour rien.
+Dès que le slice est choisi, la **toute première commande** — avant le premier `Write`/`Edit` — est
+le `git checkout -b` ci-dessous, jamais après.
+
 Suis **exactement** `apps/android/tasks/android-routine/ROUTINE.md` : choisir un slice → brancher
 `git checkout -b claude/apps/android/<slice-id> origin/main` (**`origin/main` explicitement, jamais
 le ref local `main`** — dans ce repo multi-worktree, `main` local peut être périmé de dizaines de
