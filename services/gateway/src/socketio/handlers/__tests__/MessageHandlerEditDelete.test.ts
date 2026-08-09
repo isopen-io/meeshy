@@ -463,6 +463,48 @@ describe('MessageHandler — handleMessageEdit', () => {
     expect(deps.prisma.message.updateMany).toHaveBeenCalled();
   });
 
+  it('admet un modérateur GLOBAL membre actif sur le message de quelqu\'un d\'autre — le composer web le lui propose', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: new Date(),
+        sender: { id: PARTICIPANT_ID, userId: 'user-someone-else', displayName: 'Bob', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.participant.findFirst as jest.Mock<any>).mockResolvedValue({
+      id: PARTICIPANT_ID,
+      user: { role: 'MODERATOR' },
+    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'contenu modéré' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    // La lecture ne doit plus ENCODER la règle : tant qu'elle filtre
+    // `sender: { userId }`, la ligne n'atteint jamais la décision et aucun
+    // modérateur ne peut être admis.
+    const where = (deps.prisma.message.findFirst as jest.Mock<any>).mock.calls[0][0].where;
+    expect(where).toEqual({ id: VALID_MSG_ID, deletedAt: null });
+  });
+
+  it('refuse un simple membre sur le message de quelqu\'un d\'autre, et n\'écrit rien', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: new Date(),
+        sender: { id: PARTICIPANT_ID, userId: 'user-someone-else', displayName: 'Bob', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.participant.findFirst as jest.Mock<any>).mockResolvedValue({
+      id: PARTICIPANT_ID,
+      user: { role: 'USER' },
+    });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'pas le mien' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(deps.prisma.message.updateMany).not.toHaveBeenCalled();
+    expect(deps.io.to).not.toHaveBeenCalled();
+  });
+
   it('updates message in database on success, guarded against a concurrent delete', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });

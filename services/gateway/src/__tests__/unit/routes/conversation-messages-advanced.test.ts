@@ -1254,6 +1254,8 @@ describe('registerMessagesAdvancedRoutes', () => {
           participants: [],
         },
       });
+      // Membre bel et bien actif : ce qui manque, c'est le message, pas la porte.
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, user: { role: 'USER' } });
 
       const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
       const reply = makeReply();
@@ -1266,12 +1268,13 @@ describe('registerMessagesAdvancedRoutes', () => {
       );
     });
 
-    it('returns 403 when user not member of non-meeshy conversation', async () => {
+    it('refuse un modérateur GLOBAL qui n\'est pas membre actif — le privilège ne franchit pas la porte', async () => {
       prisma.message.findFirst.mockResolvedValue({
         id: MSG_ID,
         conversationId: CONV_ID,
         content: 'Original',
-        sender: { userId: USER_ID },
+        createdAt: new Date(),
+        sender: { userId: OTHER_USER_ID },
         conversation: {
           identifier: 'some-conv',
           participants: [],
@@ -1288,6 +1291,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         reply,
         expect.stringContaining('Unauthorized')
       );
+      expect(prisma.message.update).not.toHaveBeenCalled();
     });
 
     it('allows edit for meeshy conversation without membership check', async () => {
@@ -1625,6 +1629,112 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       const payload = mockSendSuccess.mock.calls[0][1] as any;
       expect(payload.validatedMentions).toEqual(['alice']);
+    });
+
+    // ── Admission : la même règle que les trois autres entrées ──────────────
+
+    it('refuse l\'auteur au-delà de 24h — ce transport n\'imposait AUCUNE fenêtre', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+        sender: { userId: USER_ID },
+        conversation: { identifier: 'some-conv', participants: [{ userId: USER_ID, isActive: true }] },
+      });
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
+
+      const reply = makeReply();
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'trop tard' } }),
+        reply
+      );
+
+      expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.stringContaining('24-hour'));
+      expect(prisma.message.update).not.toHaveBeenCalled();
+    });
+
+    it('rouvre la fenêtre à un auteur au rôle GLOBAL privilégié', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+        sender: { userId: USER_ID },
+        conversation: { identifier: 'some-conv', participants: [{ userId: USER_ID, isActive: true }] },
+      });
+      prisma.user.findUnique.mockResolvedValue({ role: 'BIGBOSS' });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID, content: 'correction', validatedMentions: [], translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'correction' } }),
+        makeReply()
+      );
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    it('admet un modérateur GLOBAL membre actif sur le message de quelqu\'un d\'autre — comme la route conversation-scopée', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        createdAt: new Date(),
+        sender: { userId: OTHER_USER_ID },
+        conversation: { identifier: 'some-conv', participants: [] },
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, user: { role: 'MODERATOR' } });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID, content: 'modéré', validatedMentions: [], translations: null,
+        sender: { id: PART_ID, userId: OTHER_USER_ID, displayName: 'Bob', avatar: null, role: 'USER', user: { username: 'bob' } },
+      });
+
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'modéré' } }),
+        makeReply()
+      );
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // ── Un message supprimé ne se ré-écrit pas ─────────────────────────────
+
+    it('ne lit jamais un message supprimé — la garde `deletedAt` manquait des DEUX côtés', async () => {
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'zombie' } }),
+        makeReply()
+      );
+
+      expect(prisma.message.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ deletedAt: null }) })
+      );
+    });
+
+    it('l\'écriture est gardée : une suppression concurrente rend 404 au lieu de ressusciter la ligne', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        createdAt: new Date(),
+        sender: { userId: USER_ID },
+        conversation: { identifier: 'some-conv', participants: [{ userId: USER_ID, isActive: true }] },
+      });
+      prisma.message.update.mockRejectedValue(Object.assign(new Error('not found'), { code: 'P2025' }));
+
+      const reply = makeReply();
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'course' } }),
+        reply
+      );
+
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: MSG_ID, deletedAt: null } })
+      );
+      expect(mockSendNotFound).toHaveBeenCalled();
+      expect(mockSendInternalError).not.toHaveBeenCalled();
     });
   });
 

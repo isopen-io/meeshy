@@ -57,6 +57,7 @@ import { conversationMessageStatsService } from '../../services/ConversationMess
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import { processExplicitLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
+import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { emitMentionCreated } from '../emitMentionCreated';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
@@ -645,10 +646,15 @@ export class MessageHandler {
         return;
       }
 
+      // La lecture n'ENCODE plus la règle d'admission : elle filtrait
+      // `sender: { userId }`, donc la ligne d'un message qu'on n'a pas écrit
+      // n'atteignait jamais la décision — et aucun modérateur ne pouvait être
+      // admis ici, alors que l'UI web lui propose le geste et que la route
+      // conversation-scopée l'admet. Une politique cachée dans un `where` est
+      // une politique qu'on ne peut ni lire ni unifier.
       const message = await this.prisma.message.findFirst({
         where: {
           id: validated.messageId,
-          sender: { userId },
           deletedAt: null,
         },
         select: {
@@ -668,37 +674,34 @@ export class MessageHandler {
         return;
       }
 
-      // Fenêtre d'édition — parité stricte avec la route REST
-      // (`routes/conversations/messages-advanced.ts` : « 24 heures max pour les
-      // utilisateurs normaux »). Le transport socket est le chemin d'édition
-      // PRIMAIRE : sans cette garde il contournait ENTIÈREMENT la fenêtre que
-      // REST impose — un client pouvait éditer un message arbitrairement ancien
-      // via `message:edit`. L'auteur au-delà de 24h est bloqué, sauf privilège
-      // MODERATOR/ADMIN/BIGBOSS. Un `createdAt` absent (Date invalide → NaN) ne
-      // bloque jamais : `NaN > window` est faux.
-      const messageAgeMs = Date.now() - new Date(message.createdAt).getTime();
-      const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
-      if (messageAgeMs > EDIT_WINDOW_MS) {
-        // The bypass is a GLOBAL-role privilege (User.role: ADMIN/BIGBOSS/
-        // MODERATOR), NOT the conversation-scoped Participant.role that
-        // `message.sender.role` exposes (only ever admin/moderator/member,
-        // lowercase — see schema.prisma). Comparing that lowercase participant
-        // role to the uppercase global constants never matched, so the bypass
-        // was dead code and every privileged author was wrongly blocked past
-        // 24h. Mirror handleMessageDelete's lazy global-role lookup — the editor
-        // IS the author here (the message query filters `sender: { userId }`),
-        // so the lookup keys on `userId`. Kept lazy: only fires past the window.
-        const authorRecord = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { role: true },
-        });
-        const globalRole = authorRecord?.role;
-        const hasEditPrivilege =
-          globalRole === 'MODERATOR' || globalRole === 'ADMIN' || globalRole === 'BIGBOSS';
-        if (!hasEditPrivilege) {
-          this._sendGenericError(callback, 'You can no longer edit this message (24-hour limit exceeded)', socket);
-          return;
-        }
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`services/messaging/messageEditAdmission`). Cette garde vivait ici
+      // dépliée, et les trois entrées REST en portaient chacune une variante
+      // différente. Le privilège de contournement est un rôle GLOBAL
+      // (`User.role`), JAMAIS le `Participant.role` minuscule qu'expose
+      // `message.sender.role` — confondre les deux avait déjà produit un bypass
+      // mort. L'unité garde ses lectures paresseuses : l'auteur dans sa fenêtre
+      // n'en déclenche aucune.
+      const admission = await admitMessageEdit({
+        prisma: this.prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          createdAt: message.createdAt,
+        },
+        onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
+      });
+
+      if (isEditRefused(admission)) {
+        this._sendGenericError(
+          callback,
+          admission.reason === 'edit-window-expired'
+            ? 'You can no longer edit this message (24-hour limit exceeded)'
+            : 'Message not found or you are not authorized to edit it',
+          socket
+        );
+        return;
       }
 
       const hasAttachments = message.attachments && message.attachments.length > 0;
