@@ -2386,8 +2386,19 @@ final class CallManager: ObservableObject {
     }
 
     func toggleSpeaker() {
+        // §7.8 — optimistic speaker toggle, corrected on failure. Same class of
+        // bug already fixed for switchCamera()/selectCamera(id:) above:
+        // `overrideOutputAudioPort` can throw (e.g. `insufficientPriority` when
+        // a higher-priority route — a connected Bluetooth headset — is active),
+        // and without a revert `isSpeaker` stays desynced from the real audio
+        // route: the button renders "on" while audio keeps playing through
+        // Bluetooth, and a second tap becomes a no-op relative to the actual
+        // route since it flips back to a state that was never truly applied.
+        let previousSpeaker = isSpeaker
         isSpeaker.toggle()
-        applySpeakerRoute()
+        if !applySpeakerRoute() {
+            isSpeaker = previousSpeaker
+        }
         HapticFeedback.light()
     }
 
@@ -3984,8 +3995,15 @@ final class CallManager: ObservableObject {
         }
     }
 
-    fileprivate func applySpeakerRoute() {
-        guard callState.isActive else { return }
+    /// Returns whether the route override actually applied. `toggleSpeaker()`
+    /// uses this to revert its optimistic `isSpeaker` flip on failure — see
+    /// the doc-comment there. The early-return below (call not active yet) is
+    /// reported as success: there is nothing to revert, the route simply
+    /// hasn't been applied yet (it will be, once the call becomes active and
+    /// this is invoked again from the audio-session lifecycle call sites).
+    @discardableResult
+    fileprivate func applySpeakerRoute() -> Bool {
+        guard callState.isActive else { return true }
         let speaker = isSpeaker
 
         // CRITIQUE simulator : `.none` (= défaut earpiece/Receiver) ne route
@@ -4009,6 +4027,7 @@ final class CallManager: ObservableObject {
         let port: AVAudioSession.PortOverride = (speaker || forceSpeakerForMac) ? .speaker : .none
         #endif
 
+        var succeeded = true
         audioSessionQueue.sync {
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
@@ -4018,8 +4037,10 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Audio route override applied: \(port.rawValue) (isSpeaker=\(speaker))")
             } catch {
                 Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
+                succeeded = false
             }
         }
+        return succeeded
     }
 
     private func updateProximityMonitoring() {

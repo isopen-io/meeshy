@@ -190,17 +190,26 @@ describe('POST /signal/session/establish — appartenance active', () => {
     await app.close();
   });
 
-  it('laisse passer deux membres actifs, et consomme la pré-clé à usage unique', async () => {
+  it('laisse passer deux membres actifs, sans consommer la pré-clé à usage unique', async () => {
     const prisma = buildPrisma({ callerActive: true, recipientActive: true });
     const app = await buildApp(prisma);
 
     const res = await app.inject({ method: 'POST', url: '/signal/session/establish', headers: AUTH, payload: BODY });
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.signalPreKeyBundle.update).toHaveBeenCalledWith({
+
+    // La lecture du trousseau prouve que le handler est allé au bout des deux
+    // gardes — c'est ce que ce test mesure.
+    expect(prisma.signalPreKeyBundle.findUnique).toHaveBeenCalledWith({
       where: { userId: RECIPIENT_ID },
-      data: { preKeyId: null, preKeyPublic: null },
     });
+
+    // Cette route ne rend AUCUN matériel de clé : elle ne peut donc pas
+    // « consommer » la pré-clé à usage unique du destinataire, seulement la
+    // détruire pour tout le monde. La consommation appartient à la route qui
+    // distribue — `GET /signal/keys/:userId`. Voir
+    // `signal-prekey-bundle-wire-format.test.ts`.
+    expect(prisma.signalPreKeyBundle.update).not.toHaveBeenCalled();
     await app.close();
   });
 
