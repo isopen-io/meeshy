@@ -93,6 +93,13 @@ public enum LocationPrecision: String, Codable, CaseIterable, Sendable {
 la précision de partage d'un utilisateur existant serait une régression
 fonctionnelle déguisée en réglage.
 
+L'enum ne porte **aucun libellé**. Il expose `decimalPlaces` et
+`approximateRadiusMeters` — de la donnée. Les libellés (« Quartier »,
+« ~1 km ») vivent côté app, dans `LocationSharingSettingsSection`. Mettre des
+chaînes dans un enum du SDK obligerait à alimenter le catalogue `.module` et
+reproduirait le défaut de `LiveLocationDuration.displayText`, qui rend du
+français en dur depuis le SDK quelle que soit la langue de l'interface.
+
 ### Dégradation par palier
 
 La règle ne se contente pas d'arrondir les coordonnées : envoyer
@@ -207,9 +214,19 @@ d'autocomplétion des mentions.
 
 `LocationSharingSettingsSection` est une vue unique rendue à deux endroits :
 dans une `sheet` depuis le picker, et dans `PrivacySettingsView` entre
-*Contacts & Groupes* et *Média & Données*. Elle réutilise `SettingsSectionHeader`
-et le motif de ligne radio de `MediaDownloadSettingsView` (icône encadrée,
-libellé, coche à droite).
+*Contacts & Groupes* et *Média & Données*.
+
+Elle est bâtie sur les composants SDK `SettingsSectionHeader` / `SettingsCard` /
+`SettingsRow` / `SettingsSeparator` — **pas** sur le motif de
+`MediaDownloadSettingsView`. Cette dernière a son propre style local
+(`sectionBackground`, `fieldIcon`, coins de 16) qui diffère de celui de
+`PrivacySettingsView` (`MeeshyRadius.xxl`, filets encartés). Une vue partagée
+entre les deux surfaces doit adopter le style de sa surface la plus contrainte,
+sinon la section jurera dans Confidentialité.
+
+Chaque ligne radio est un `Button` enveloppant un `SettingsRow` dont le
+`trailing` porte la coche. Le paramètre `info:` de `SettingsRow` n'est pas
+utilisé sur ces lignes : le bouton englobant avalerait le tap du `(i)`.
 
 **Section 1 — Précision du partage.** Quatre lignes, icônes `scope`,
 `circle.dashed`, `house`, `building.2`. Chaque libellé porte son rayon :
@@ -253,12 +270,40 @@ Ordre TDD, RED avant toute ligne de production.
 - Chargement d'une valeur encodée → valeur restituée.
 - JSON corrompu → défauts, pas de crash.
 
-**App — `LocationPickerSourceGuardTests`**
-Gardes ancrées sur le comportement, pas sur des fenêtres de caractères :
+**App — `LocationPickerModelTests`** (comportement, pas texte du source)
+- `sharedPlace(at: .exact)` rend le lieu brut.
+- `sharedPlace(at: .neighborhood)` rend des coordonnées à 2 décimales et le
+  `subLocality` capté par le géocodage.
+- `sharedPlace(at:)` rend `nil` tant qu'aucune coordonnée n'est choisie.
+
+C'est là que se joue « ce qui part est bien coarsé » : le picker n'appelle plus
+que `sharedPlace(at: store.preferences.precision)`, une fonction testable.
+
+**App — `LocationPickerSourceGuardTests`** (deux gardes seulement)
 - le picker n'instancie plus `MapUserLocationButton` ;
-- il ne contient plus la clé `location.my-position` ;
-- il applique bien `coarsen` avant `onSelect` (la garde vérifie que `onSelect`
-  n'est jamais appelé avec `viewModel.selectedPlace` brut).
+- il ne contient plus la clé `location.my-position`.
+
+Une troisième garde vérifiant que `onSelect` ne reçoit jamais `selectedPlace`
+brut a été écartée : c'est une assertion sur le texte du source, que le moindre
+`extract` casse sans qu'aucun comportement ne change. Le test de comportement
+ci-dessus couvre la même propriété sans cette fragilité.
+
+## Localisation — porte de test, pas finition
+
+`FrenchDefaultValueRatchetTests` est un **cliquet à zéro tolérance** : sa liste
+de dette est vide depuis le 2026-07-29. Toute clé neuve sous `apps/ios/Meeshy/`
+dont le `defaultValue` porte un marqueur français (accent, ou mot-outil de sa
+liste) et qui n'est pas au catalogue fait **échouer la suite**.
+
+Chaque clé introduite par ce lot entre donc dans
+`apps/ios/Meeshy/Localizable.xcstrings` dans les **7 langues** du catalogue :
+`fr` (source), `en`, `es`, `de`, `it`, `pt-BR`, `ar`.
+
+Le cliquet est aveugle aux libellés sans accent ni mot-outil — « Quartier »,
+« Autour », « Satellite » passeraient sous son radar. On les catalogue quand
+même : un libellé de réglage non traduit sortirait en français dans une
+interface anglaise, ce que le cliquet vise à empêcher même là où il ne le voit
+pas.
 
 ## Risques
 
@@ -268,6 +313,13 @@ causé par un cycle `objectWillChange` → re-render → `updateUIView`. Ajouter
 chaud. Mitigation : `style` est une valeur `Equatable` passée en `let`, appliquée
 par `.mapStyle` — un modificateur, pas une écriture de camera position. Il ne
 touche ni `position` ni `region`, donc n'ouvre pas le chemin de ré-entrance.
+
+**Primaire désaturée.** `shiftHue` passe par `UIColor.getHue` : sur une couleur
+grise (saturation ≈ 0), un décalage de teinte rend la couleur inchangée, donc
+`accent == primary` et le dégradé du CTA devient plat. Non atteignable en
+pratique — `blendColors` mélange trois couleurs de palette toutes saturées à
+65 % ou plus, et le repli `colorForName` puise dans la même palette. Noté sans
+mitigation : ajouter un garde-fou coûterait plus que le défaut qu'il couvre.
 
 **Champ privé lu depuis un fichier frère.** Aucune extension `LocationPickerView+*`
 n'est créée ; le piège « inaccessible due to private protection level » documenté
