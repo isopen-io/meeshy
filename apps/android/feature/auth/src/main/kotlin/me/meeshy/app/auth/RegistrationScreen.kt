@@ -155,6 +155,7 @@ fun RegistrationScreen(
                         RegistrationStep.PSEUDO -> PseudoStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.PHONE -> PhoneStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.EMAIL -> EmailStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.IDENTITY -> IdentityStepBody(state = state, viewModel = viewModel)
                         // Each future per-step slice adds its own arm here, in lockstep
                         // with RegistrationStepContent's implemented set.
                         else -> Unit
@@ -529,6 +530,50 @@ private fun CountryPickerSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * IDENTITY step — parity target: iOS `StepIdentityView`
+ * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`): a
+ * first-name field and a last-name field, no availability probe (the gate is
+ * purely local — [me.meeshy.sdk.model.auth.RegistrationStepGate.canProceed]'s
+ * IDENTITY arm just requires both non-blank) and no skip affordance
+ * ([RegistrationNavModel.showSkip] is `false` for every step but PROFILE).
+ */
+@Composable
+private fun IdentityStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_identity_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_identity_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        OutlinedTextField(
+            value = state.fields.firstName,
+            onValueChange = viewModel::onFirstNameChange,
+            label = { Text(stringResource(R.string.registration_identity_first_name_label)) },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
+        )
+        OutlinedTextField(
+            value = state.fields.lastName,
+            onValueChange = viewModel::onLastNameChange,
+            label = { Text(stringResource(R.string.registration_identity_last_name_label)) },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

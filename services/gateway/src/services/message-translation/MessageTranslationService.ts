@@ -2284,6 +2284,9 @@ export class MessageTranslationService extends EventEmitter {
     audioUrl: string;
     audioPath: string;
     audioDurationMs: number;
+    /// Langues cibles explicites (ex: retraduction manuelle via /voice/translate).
+    /// Si omis ou vide, recalculées depuis les préférences des participants.
+    targetLanguages?: string[];
     mobileTranscription?: {
       text: string;
       language: string;
@@ -2405,8 +2408,10 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`   ℹ️ Clonage vocal désactivé (pas de consentement)`);
       }
 
-      // 1. Récupérer les langues cibles de la conversation
-      let targetLanguages = await this._extractConversationLanguages(params.conversationId);
+      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation
+      let targetLanguages = params.targetLanguages && params.targetLanguages.length > 0
+        ? params.targetLanguages
+        : await this._extractConversationLanguages(params.conversationId);
 
       if (targetLanguages.length === 0) {
         logger.warn(`[TranslationService] Aucune langue cible pour la conversation ${params.conversationId}`);
@@ -2809,19 +2814,7 @@ export class MessageTranslationService extends EventEmitter {
       const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = path.join(uploadBasePath, attachment.filePath);
 
-      // 3. Déterminer les langues cibles
-      let targetLanguages = options.targetLanguages;
-      if (!targetLanguages || targetLanguages.length === 0) {
-        // Récupérer les langues de la conversation
-        targetLanguages = await this._extractConversationLanguages(attachment.message.conversationId);
-      }
-
-      if (!targetLanguages || targetLanguages.length === 0) {
-        logger.warn(`[TranslationService] Aucune langue cible pour la traduction`);
-        targetLanguages = ['en']; // Fallback à l'anglais
-      }
-
-      // 4. Resolve senderId (Participant ID) → User ID
+      // 3. Resolve senderId (Participant ID) → User ID
       let resolvedSenderId = attachment.message.senderId;
       const senderParticipant = await this.prisma.participant.findUnique({
         where: { id: attachment.message.senderId },
@@ -2831,7 +2824,9 @@ export class MessageTranslationService extends EventEmitter {
         resolvedSenderId = senderParticipant.userId;
       }
 
-      // 5. Appeler processAudioAttachment avec toutes les infos
+      // 4. Appeler processAudioAttachment avec toutes les infos — processAudioAttachment
+      // est l'unique source de vérité pour la résolution des langues (explicites sinon
+      // dérivées de la conversation, cf. son propre fallback).
       const taskId = await this.processAudioAttachment({
         messageId: attachment.messageId,
         attachmentId: attachment.id,
@@ -2840,6 +2835,7 @@ export class MessageTranslationService extends EventEmitter {
         audioUrl: attachment.fileUrl,
         audioPath: audioPath,
         audioDurationMs: attachment.duration || 0,
+        targetLanguages: options.targetLanguages,
         generateVoiceClone: options.generateVoiceClone ?? false,
         modelType: options.modelType || 'medium'
       });

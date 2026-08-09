@@ -16,7 +16,7 @@ package me.meeshy.sdk.model.auth
 object RegistrationStepContent {
 
     private val implemented: Set<RegistrationStep> =
-        setOf(RegistrationStep.PSEUDO, RegistrationStep.PHONE, RegistrationStep.EMAIL)
+        setOf(RegistrationStep.PSEUDO, RegistrationStep.PHONE, RegistrationStep.EMAIL, RegistrationStep.IDENTITY)
 
     /** True when [step] renders real field UI (vs. an inert placeholder). */
     fun isImplemented(step: RegistrationStep): Boolean = step in implemented

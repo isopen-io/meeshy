@@ -55,12 +55,16 @@ Mission double, sur **deux lanes strictement séparées** :
    dernières lignes + le résumé en tête de fichier (cf. §Hygiène des fichiers d'état).
 5. **Reprise après interruption** — avant de choisir un nouveau slice/item, cherche un run
    précédent resté inachevé : `git branch -r --list 'origin/claude/apps/*'` +
-   `gh pr list --state open --search "apps/android OR apps/ios"`. Si tu trouves une branche/PR qui
-   ressemble à un run coupé en plein milieu (commits présents mais pas de PR, ou PR ouverte alors
-   que CI est verte et les gates locaux passent depuis un moment) : **termine-la ou classe-la
-   explicitement en bloqué** avant de démarrer un nouveau slice/item. Ne l'abandonne jamais en
-   silence — chaque run doit se conclure par : mergé, fermé avec raison notée, ou marqué ⚠ bloqué
-   dans le fichier de suivi de sa lane.
+   `gh pr list --state open --search "apps/android OR apps/ios"`. **Filtre le bruit** : ce repo
+   accumule des dizaines de branches `claude/apps/*` orphelines d'anciens processus sans rapport
+   avec cette routine (observé : 254 branches mono-commit, aucune de moins de 24h, aucune avec PR
+   ouverte) — ignore toute branche sans commit récent (< 24h) ET sans PR ouverte associée, ce n'est
+   pas un run de CETTE routine coupé en plein milieu. Ne t'intéresse qu'aux branches/PR qui matchent
+   les deux : commit récent OU PR ouverte. Si tu en trouves une qui ressemble à un run coupé en
+   plein milieu (commits présents mais pas de PR, ou PR ouverte alors que CI est verte et les gates
+   locaux passent depuis un moment) : **termine-la ou classe-la explicitement en bloqué** avant de
+   démarrer un nouveau slice/item. Ne l'abandonne jamais en silence — chaque run doit se conclure
+   par : mergé, fermé avec raison notée, ou marqué ⚠ bloqué dans le fichier de suivi de sa lane.
 
 ## Choix de la lane (règle d'alternance, à évaluer à chaque run)
 
