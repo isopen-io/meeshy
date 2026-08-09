@@ -314,7 +314,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, userId: USER_ID, emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 } };
 
-      await handler.broadcastPostLiked(data, AUTHOR_ID);
+      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', []);
 
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
       expect(roomsArg).toContain(`feed:${FRIEND_ID_1}`);
@@ -327,7 +327,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, userId: USER_ID, emoji: '❤️', likeCount: 1, reactionSummary: {} };
 
-      await handler.broadcastPostLiked(data, AUTHOR_ID);
+      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', []);
 
       expect(io.to).toHaveBeenCalledTimes(1);
     });
@@ -338,7 +338,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, userId: USER_ID, emoji: '❤️', likeCount: 5, reactionSummary: {} };
 
-      await handler.broadcastPostUnliked(data, AUTHOR_ID);
+      await handler.broadcastPostUnliked(data, AUTHOR_ID, 'PUBLIC', []);
 
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
       expect(roomsArg).toContain(`post:${POST_ID}`);
@@ -572,7 +572,7 @@ describe('SocialEventsHandler', () => {
     it('emits status:deleted with statusId and authorId to friends', async () => {
       const { handler, io } = buildHandler();
 
-      await handler.broadcastStatusDeleted(STATUS_ID, AUTHOR_ID);
+      await handler.broadcastStatusDeleted(STATUS_ID, AUTHOR_ID, 'PUBLIC', []);
 
       const emitFn = io.to.mock.results[0].value.emit;
       const [event, payload] = (emitFn as jest.Mock<any>).mock.calls[0] as [string, unknown];
@@ -596,7 +596,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, translations: { en: 'Hello' } } as any;
 
-      await handler.broadcastPostTranslationUpdated(data, AUTHOR_ID);
+      await handler.broadcastPostTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
 
       const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);

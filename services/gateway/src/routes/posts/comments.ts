@@ -311,7 +311,10 @@ export function registerCommentRoutes(
           postCreatedAt: post.createdAt ?? undefined,
           postExpiresAt: post.expiresAt ?? undefined,
           excludeUserIds: mentionedUserIds,
-          visibility: post.visibility ?? 'PUBLIC',
+          // Passée BRUTE : un `?? 'PUBLIC'` ici rétablirait, un étage plus haut
+          // et hors de vue du build, le défaut permissif que le paramètre vient
+          // de perdre. Une visibilité absente doit restreindre, pas ouvrir.
+          visibility: post.visibility,
           visibilityUserIds: post.visibilityUserIds ?? [],
         }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
       }

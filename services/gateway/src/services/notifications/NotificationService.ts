@@ -482,6 +482,33 @@ const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
 
 const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
 
+/**
+ * Borne appliquée à chaque lecture de graphe qui alimente un fan-out de
+ * notification. Elle tient le coût sur un post viral ou un auteur à très grand
+ * carnet — et elle est nommée pour que le seuil de saturation soit LE MÊME que
+ * celui écrit dans le `take` : une constante partagée ne peut pas dériver du
+ * test qui la surveille.
+ */
+const FANOUT_ROW_CAP = 500;
+
+/** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
+type FanoutBucket = 'previousComments' | 'friendRequests' | 'reactors';
+
+/**
+ * Les trois seaux d'un fan-out de commentaire, et ce qu'on n'a PAS pu lire.
+ *
+ * `truncatedBuckets` distingue « ce seau est complet » de « ce seau s'arrête à
+ * la borne » — deux listes identiques en apparence, dont une seule dit la
+ * vérité sur l'audience réelle. Sans ce champ, un fan-out silencieusement
+ * tronqué se lit exactement comme un fan-out exhaustif.
+ */
+type StoryNotificationRecipients = {
+  authorId: string;
+  friendIds: string[];
+  previousCommenterIds: string[];
+  truncatedBuckets: FanoutBucket[];
+};
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -1746,8 +1773,8 @@ export class NotificationService {
     postId: string,
     authorId: string,
     commenterId: string
-  ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
-    // Cap at 500 rows to bound fan-out cost on viral posts.
+  ): Promise<StoryNotificationRecipients> {
+    // Cap at FANOUT_ROW_CAP rows to bound fan-out cost on viral posts.
     // Future: large posts should use a background queue for fan-out.
     const [previousComments, friendRequests, reactors] = await Promise.all([
       this.prisma.postComment.findMany({
@@ -1758,7 +1785,7 @@ export class NotificationService {
         },
         distinct: ['authorId'],
         select: { authorId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.friendRequest.findMany({
@@ -1767,7 +1794,7 @@ export class NotificationService {
           OR: [{ senderId: authorId }, { receiverId: authorId }],
         },
         select: { senderId: true, receiverId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP,
         orderBy: { updatedAt: 'desc' },
       }),
       // Include post reactors as thread-engaged participants (same bucket as prior commenters)
@@ -1778,10 +1805,30 @@ export class NotificationService {
         },
         distinct: ['userId'],
         select: { userId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
+
+    // Une liste rendue à la borne exacte est INDISCERNABLE d'une liste
+    // complète : le seau paraît entier, et le destinataire au-delà de la borne
+    // n'apprend jamais rien. La saturation est donc nommée dans le retour — pour
+    // que l'appelant puisse en tenir compte — et consignée ici, pour qu'elle
+    // soit observable ailleurs que dans le silence d'un utilisateur.
+    const truncatedBuckets = [
+      previousComments.length >= FANOUT_ROW_CAP ? 'previousComments' as const : null,
+      friendRequests.length >= FANOUT_ROW_CAP ? 'friendRequests' as const : null,
+      reactors.length >= FANOUT_ROW_CAP ? 'reactors' as const : null,
+    ].filter((bucket): bucket is FanoutBucket => bucket !== null);
+
+    if (truncatedBuckets.length > 0) {
+      notificationLogger.warn('Fan-out de commentaire tronqué à la borne', {
+        postId,
+        authorId,
+        buckets: truncatedBuckets,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
 
     const rawPreviousCommenterIds = previousComments
       .map((c: { authorId: string }) => c.authorId)
@@ -1812,7 +1859,7 @@ export class NotificationService {
       (id: string) => id !== commenterId
     );
 
-    return { authorId, friendIds, previousCommenterIds };
+    return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
   }
 
   /**
@@ -2310,8 +2357,15 @@ export class NotificationService {
      * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
      */
     excludeUserIds?: string[];
-    /** Post visibility — used to filter recipients (same rules as Socket.IO broadcast). */
-    visibility?: string;
+    /**
+     * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
+     *
+     * **Requis**, comme sur les trois lots voisins depuis les cycles 28 et 31.
+     * L'omission n'était pas anodine ici : le défaut `PUBLIC` fait retomber un
+     * post `PRIVATE` — ou un `EXCEPT` et sa liste noire — sur l'énumération
+     * complète des amis, avec extrait et vignette. La faute appartient au build.
+     */
+    visibility: string | null | undefined;
     /** User IDs list for ONLY/EXCEPT visibility modes. */
     visibilityUserIds?: string[];
   }): Promise<void> {
@@ -2339,9 +2393,21 @@ export class NotificationService {
         OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
       },
       select: { senderId: true, receiverId: true },
-      take: 500,
+      take: FANOUT_ROW_CAP,
       orderBy: { updatedAt: 'desc' },
     });
+
+    // Le tri est `updatedAt desc` et la borne est fixe : chez un auteur qui la
+    // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
+    // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
+    // structurel, pas ponctuel, d'où la trace.
+    if (friendRequests.length >= FANOUT_ROW_CAP) {
+      notificationLogger.warn('Fan-out de publication tronqué à la borne', {
+        postId: params.postId,
+        authorId: params.authorId,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
@@ -2350,7 +2416,9 @@ export class NotificationService {
     const media = await this.resolvePostMedia(params.postId);
     const mediaType = params.mediaType ?? media?.mediaType;
 
-    const visibility = params.visibility ?? 'PUBLIC';
+    // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
+    // défaut ci-dessous (l'énumération des amis), jamais sur une ouverture.
+    const visibility = params.visibility;
     const visibilityUserIds = params.visibilityUserIds ?? [];
     const visibilityUserIdSet = new Set(visibilityUserIds);
 
