@@ -397,12 +397,15 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   });
 
   describe('createStoryCommentNotificationsBatch — subtitles + postType', () => {
+    // `visibility` est REQUIS depuis le cycle 31 — ces cas portent sur le
+    // wording, pas sur l'audience, et déclarent donc le post public.
     const baseParams = {
       postId: POST_ID,
       commentId: COMMENT_ID,
       storyAuthorId: RECIPIENT_ID,
       commenterId: ACTOR_ID,
       commentExcerpt: 'Super moment !',
+      visibility: 'PUBLIC',
     };
 
     beforeEach(() => {

@@ -148,6 +148,7 @@ describe('Push data — clés de navigation commentId / friendRequestId', () => 
       commenterId: ACTOR_ID,
       commentExcerpt: 'Magnifique coucher de soleil',
       postType: 'STORY',
+      visibility: 'PUBLIC',
     });
 
     const byType = {

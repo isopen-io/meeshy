@@ -52,6 +52,12 @@ export type PostAclPrisma = Pick<
  * fichier — `canUserConsumePost` et `canUserInteractWithPost` — et c'est par
  * eux que passent les points d'entrée. Ce filtre ne sert qu'aux requêtes de
  * LISTE (feed, post unique) qui ne peuvent pas trancher post par post.
+ *
+ * Le côté CONSOMMATION a une troisième forme, pour juger un LOT de candidats
+ * arbitraires en une requête bornée : `filterPostConsumers` (`postAudience.ts`),
+ * qui garde les notifications de mention. Trois formes, une seule audience —
+ * l'accord des deux formes unitaire/lot est verrouillé cas par cas dans
+ * `__tests__/unit/services/posts/postAudienceConsumption.test.ts`.
  */
 export function buildPostVisibilityOrFilter(
   viewerId: string,

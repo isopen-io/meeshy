@@ -1,5 +1,5 @@
 /**
- * `filterPostAudience` — le test d'ADMISSION d'un post, l'inverse des
+ * `filterPostConsumers` — le test d'ADMISSION d'un post, l'inverse des
  * énumérateurs d'audience.
  *
  * Tout le domaine social possède déjà des énumérateurs (auteur → destinataires) :
@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { filterPostAudience } from '../../../../services/posts/postAudience';
+import { filterPostConsumers } from '../../../../services/posts/postAudience';
 
 const AUTHOR = 'u-author';
 
@@ -26,6 +26,12 @@ const AUTHOR = 'u-author';
  * Le double n'expose que ce que la fonction touche. `friendRequest.findMany`
  * rend les liens d'amitié acceptés ; le filtre est censé n'interroger que
  * l'intersection avec les candidats, jamais le graphe entier.
+ *
+ * `participant` rend un auteur SANS aucune conversation directe : les refus
+ * vérifiés ici sont alors des refus de l'ACL, pas l'effet d'un délégué absent
+ * dont l'exception serait avalée. L'audience de consommation admet amis ∪
+ * contacts DM — un harnais qui tairait le second prouverait moins qu'il n'en a
+ * l'air. Les cas contacts DM vivent dans `postAudienceConsumption.test.ts`.
  */
 function makePrisma(friends: string[] = [], overrides: Record<string, any> = {}) {
   return {
@@ -37,15 +43,18 @@ function makePrisma(friends: string[] = [], overrides: Record<string, any> = {})
     communityMember: {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     ...overrides,
   } as any;
 }
 
-describe('filterPostAudience — un post PUBLIC se lit par n’importe qui', () => {
+describe('filterPostConsumers — un post PUBLIC se lit par n’importe qui', () => {
   it('admet un candidat qui n’est PAS ami de l’auteur', async () => {
     const prisma = makePrisma([]);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'PUBLIC',
@@ -58,7 +67,7 @@ describe('filterPostAudience — un post PUBLIC se lit par n’importe qui', () 
   it('ne coûte AUCUNE requête — l’admission publique ne dépend d’aucun graphe', async () => {
     const prisma = makePrisma([]);
 
-    await filterPostAudience({
+    await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'PUBLIC',
@@ -70,11 +79,11 @@ describe('filterPostAudience — un post PUBLIC se lit par n’importe qui', () 
   });
 });
 
-describe('filterPostAudience — FRIENDS n’admet que les amis', () => {
+describe('filterPostConsumers — FRIENDS s’adosse au graphe social de l’auteur', () => {
   it('retient l’ami et écarte l’inconnu', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',
@@ -93,7 +102,7 @@ describe('filterPostAudience — FRIENDS n’admet que les amis', () => {
       },
     });
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',
@@ -106,7 +115,7 @@ describe('filterPostAudience — FRIENDS n’admet que les amis', () => {
   it('n’interroge que l’intersection avec les candidats, jamais le graphe entier', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    await filterPostAudience({
+    await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',
@@ -121,11 +130,11 @@ describe('filterPostAudience — FRIENDS n’admet que les amis', () => {
   });
 });
 
-describe('filterPostAudience — ONLY est une liste blanche', () => {
+describe('filterPostConsumers — ONLY est une liste blanche', () => {
   it('n’admet que les ids listés', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'ONLY',
@@ -137,11 +146,11 @@ describe('filterPostAudience — ONLY est une liste blanche', () => {
   });
 });
 
-describe('filterPostAudience — EXCEPT est le graphe ami MOINS les exclus', () => {
+describe('filterPostConsumers — EXCEPT est ce graphe MOINS les exclus', () => {
   it('écarte l’exclu ET l’inconnu, retient l’ami restant', async () => {
     const prisma = makePrisma(['u-friend', 'u-banned']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'EXCEPT',
@@ -153,11 +162,11 @@ describe('filterPostAudience — EXCEPT est le graphe ami MOINS les exclus', () 
   });
 });
 
-describe('filterPostAudience — PRIVATE n’a pas d’audience', () => {
+describe('filterPostConsumers — PRIVATE n’a pas d’audience', () => {
   it('n’admet personne, pas même un ami', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'PRIVATE',
@@ -168,7 +177,7 @@ describe('filterPostAudience — PRIVATE n’a pas d’audience', () => {
   });
 });
 
-describe('filterPostAudience — COMMUNITY n’admet que les co-membres', () => {
+describe('filterPostConsumers — COMMUNITY n’admet que les co-membres', () => {
   it('retient le co-membre et écarte l’ami hors communauté', async () => {
     const prisma = makePrisma(['u-friend'], {
       communityMember: {
@@ -178,7 +187,7 @@ describe('filterPostAudience — COMMUNITY n’admet que les co-membres', () => 
       },
     });
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'COMMUNITY',
@@ -189,7 +198,7 @@ describe('filterPostAudience — COMMUNITY n’admet que les co-membres', () => 
   });
 });
 
-describe('filterPostAudience — en panne, on REFUSE', () => {
+describe('filterPostConsumers — en panne, on REFUSE', () => {
   it('n’admet personne quand le graphe ami est illisible', async () => {
     const prisma = makePrisma([], {
       friendRequest: {
@@ -197,7 +206,7 @@ describe('filterPostAudience — en panne, on REFUSE', () => {
       },
     });
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',
@@ -210,7 +219,7 @@ describe('filterPostAudience — en panne, on REFUSE', () => {
   it('traite une visibilité INCONNUE comme FRIENDS, jamais comme publique', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'SOMETHING_NEW',
@@ -221,11 +230,11 @@ describe('filterPostAudience — en panne, on REFUSE', () => {
   });
 });
 
-describe('filterPostAudience — l’auteur voit toujours son propre post', () => {
+describe('filterPostConsumers — l’auteur voit toujours son propre post', () => {
   it('n’interroge pas le graphe quand l’auteur est le SEUL candidat', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',
@@ -239,7 +248,7 @@ describe('filterPostAudience — l’auteur voit toujours son propre post', () =
   it('admet l’auteur même sur un post PRIVATE', async () => {
     const prisma = makePrisma([]);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'PRIVATE',
@@ -250,11 +259,11 @@ describe('filterPostAudience — l’auteur voit toujours son propre post', () =
   });
 });
 
-describe('filterPostAudience — court-circuit', () => {
+describe('filterPostConsumers — court-circuit', () => {
   it('rend une liste vide sans requête quand il n’y a aucun candidat', async () => {
     const prisma = makePrisma(['u-friend']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',
@@ -268,7 +277,7 @@ describe('filterPostAudience — court-circuit', () => {
   it('préserve l’ordre des candidats fournis', async () => {
     const prisma = makePrisma(['u-b', 'u-a']);
 
-    const admitted = await filterPostAudience({
+    const admitted = await filterPostConsumers({
       prisma,
       authorId: AUTHOR,
       visibility: 'FRIENDS',

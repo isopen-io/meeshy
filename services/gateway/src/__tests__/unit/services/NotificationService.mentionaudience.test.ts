@@ -63,6 +63,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     communityMember: {
       findMany: jest.fn(),
     },
+    participant: {
+      findMany: jest.fn(),
+    },
   };
 
   return {
@@ -99,6 +102,8 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const FRIEND_ID = '507f1f77bcf86cd799439002';
 const STRANGER_ID = '507f1f77bcf86cd799439003';
+const DM_CONTACT_ID = '507f1f77bcf86cd799439004';
+const DM_CONVERSATION_ID = '507f1f77bcf86cd7994390d1';
 const POST_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const COMMENT_ID = 'bbbbbbbbbbbbbbbbbbbbbbbb';
 
@@ -131,7 +136,25 @@ describe('NotificationService — les mentions respectent l’audience du post',
       { senderId: AUTHOR_ID, receiverId: FRIEND_ID },
     ]);
     prisma.communityMember.findMany.mockResolvedValue([]);
+    // Par défaut l'auteur n'a AUCUNE conversation directe : les refus vérifiés
+    // ci-dessous sont des refus d'audience, pas l'effet d'un délégué absent.
+    prisma.participant.findMany.mockResolvedValue([]);
   });
+
+  /**
+   * Donne à l'auteur une conversation directe active avec `DM_CONTACT_ID` —
+   * l'audience de consommation admet amis ∪ contacts DM, exactement comme le
+   * feed qui montre le post à ce contact.
+   */
+  const givenAuthorHasDirectContact = (): void => {
+    prisma.participant.findMany.mockImplementation(async ({ where }: any) =>
+      where?.userId === AUTHOR_ID
+        ? [{ conversationId: DM_CONVERSATION_ID }]
+        : (where?.userId?.in as string[] ?? [])
+            .filter((id) => id === DM_CONTACT_ID)
+            .map((id) => ({ userId: id }))
+    );
+  };
 
   /** Les destinataires réellement notifiés, lus sur les écritures de notification. */
   const notifiedUserIds = (): string[] =>
@@ -204,6 +227,35 @@ describe('NotificationService — les mentions respectent l’audience du post',
       expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
     });
 
+    it('notifie un contact DM non-ami nommé dans un post FRIENDS — le feed le lui montre déjà', async () => {
+      givenAuthorHasDirectContact();
+
+      await service.createPostMentionNotificationsBatch({
+        postId: POST_ID,
+        posterId: AUTHOR_ID,
+        mentionedUserIds: [DM_CONTACT_ID, STRANGER_ID],
+        postExcerpt: 'coucou @dm et @stranger',
+        visibility: 'FRIENDS',
+      });
+
+      expect(notifiedUserIds()).toEqual([DM_CONTACT_ID]);
+    });
+
+    it('n’notifie pas un contact DM explicitement exclu par EXCEPT', async () => {
+      givenAuthorHasDirectContact();
+
+      await service.createPostMentionNotificationsBatch({
+        postId: POST_ID,
+        posterId: AUTHOR_ID,
+        mentionedUserIds: [DM_CONTACT_ID],
+        postExcerpt: 'sauf toi',
+        visibility: 'EXCEPT',
+        visibilityUserIds: [DM_CONTACT_ID],
+      });
+
+      expect(notifiedUserIds()).toEqual([]);
+    });
+
     it('ne notifie personne quand le graphe d’audience est illisible', async () => {
       prisma.friendRequest.findMany.mockRejectedValue(new Error('mongo down'));
 
@@ -266,6 +318,22 @@ describe('NotificationService — les mentions respectent l’audience du post',
       });
 
       expect(notifiedUserIds()).toEqual([STRANGER_ID]);
+    });
+
+    it('notifie un contact DM non-ami nommé dans un commentaire sur un post FRIENDS', async () => {
+      givenAuthorHasDirectContact();
+
+      await service.createCommentMentionNotificationsBatch({
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        commenterId: FRIEND_ID,
+        postAuthorId: AUTHOR_ID,
+        mentionedUserIds: [DM_CONTACT_ID],
+        commentExcerpt: 'regarde ça @dm',
+        visibility: 'FRIENDS',
+      });
+
+      expect(notifiedUserIds()).toEqual([DM_CONTACT_ID]);
     });
 
     it('ne notifie personne sur un post PRIVATE', async () => {
