@@ -147,6 +147,37 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   }, [callId]);
 
+  // Re-entrancy guard for every video on/off path — the manual button
+  // (handleToggleVideo below) AND the adaptive-degradation controller's own
+  // suspend()/resume() (right below) both end up calling
+  // enableVideo()/disableVideo() (use-webrtc-p2p.ts) on the same
+  // WebRTCService instances. Vague 76 guarded the manual double-click but
+  // left this cross-path race open ("reste ouvert": no MUTUAL synchronization
+  // between a manual toggle and an automatic suspend/resume) — either
+  // ordering acquires two independent camera tracks via getUserMedia, exactly
+  // like the double-click bug: the LOSING track is never referenced by
+  // anything that could stop it, an orphaned camera capture surviving
+  // silently for the rest of the call.
+  const videoToggleInFlightRef = useRef(false);
+
+  // Wraps a video on/off operation with the guard above; rejects instead of
+  // running when another video toggle (manual or automatic) is already in
+  // flight. The adaptive-degradation controller's existing suspend()/resume()
+  // `.catch()` handlers already revert its state machine on rejection, so a
+  // rejected guard collision degrades correctly — the automatic decision
+  // simply retries on the next quality sample.
+  const runGuardedVideoToggle = useCallback(async (op: () => Promise<void>): Promise<void> => {
+    if (videoToggleInFlightRef.current) {
+      throw new Error('VIDEO_TOGGLE_IN_PROGRESS');
+    }
+    videoToggleInFlightRef.current = true;
+    try {
+      await op();
+    } finally {
+      videoToggleInFlightRef.current = false;
+    }
+  }, []);
+
   // Adaptive compression + graceful-degradation control loop. Feeds observed
   // connection quality into a hysteresis state machine that (1) sheds the
   // encoder down the bitrate ladder under congestion, (2) DROPS outbound video
@@ -156,17 +187,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // is authoritative — the controller never re-enables video the user turned off.
   const degradationActions = useMemo<AdaptiveDegradationActions>(() => ({
     applyTier: (tier) => { applyQualityTier(tier).catch(() => { /* best effort */ }); },
-    suspend: async () => {
+    suspend: () => runGuardedVideoToggle(async () => {
       await disableVideo();
       emitVideoToggle(false);
       toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
-    },
-    resume: async () => {
+    }),
+    resume: () => runGuardedVideoToggle(async () => {
       await enableVideo();
       emitVideoToggle(true);
       toast.success(t('calls.toasts.videoResumed'));
-    },
-  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, t]);
+    }),
+  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, runGuardedVideoToggle, t]);
 
   const { videoSuspended } = useAdaptiveDegradation({
     qualityStats,
@@ -350,16 +381,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   };
 
-  // Re-entrancy guards: neither handler held one, unlike their sibling
-  // `CallManager.handleAcceptCall` (Vague 33). A double-click/tap — or the
-  // adaptive-degradation controller's own resume()/suspend() (see
-  // use-adaptive-degradation.ts) racing a manual toggle — before the first
-  // getUserMedia + replaceTrack round-trip settles let a second invocation
-  // acquire its own camera track. Whichever replaceTrack/store-write resolves
-  // last "wins"; the LOSING track is never referenced by anything that could
-  // stop it, leaking an orphaned camera capture for the rest of the call
-  // (camera indicator stays lit with nothing consuming the feed).
-  const videoToggleInFlightRef = useRef(false);
+  // Re-entrancy guard for handleSwitchCamera — same class of bug as
+  // handleToggleVideo (guarded above via videoToggleInFlightRef, shared with
+  // the adaptive-degradation controller): a double-click/tap before the first
+  // getUserMedia + replaceTrack round-trip settles lets a second invocation
+  // acquire its own camera track that nothing stops.
   const cameraSwitchInFlightRef = useRef(false);
 
   const handleToggleVideo = async () => {

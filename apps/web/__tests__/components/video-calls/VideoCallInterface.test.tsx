@@ -83,6 +83,7 @@ jest.mock('sonner', () => ({
   toast: {
     success: jest.fn(),
     error: jest.fn(),
+    warning: jest.fn(),
   },
 }));
 jest.mock('@/services/meeshy-socketio.service', () => ({
@@ -763,6 +764,78 @@ describe('VideoCallInterface (container)', () => {
         await Promise.resolve();
         await Promise.resolve();
       });
+    });
+  });
+
+  // Vague 82: Vague 76 guarded the manual double-click (`videoToggleInFlightRef`)
+  // but explicitly left open ("reste ouvert") that the manual toggle and the
+  // adaptive-degradation controller's own suspend()/resume() (which call
+  // enableVideo/disableVideo directly, see use-adaptive-degradation.ts) were
+  // never synchronized against EACH OTHER — only against themselves. Either
+  // ordering (manual-then-auto or auto-then-manual) acquires two independent
+  // camera tracks on the same WebRTCService instances, exactly like the
+  // double-click bug: the losing track is never referenced by anything that
+  // could stop it.
+  describe('mutual exclusion — manual toggle vs. adaptive-degradation controller (Vague 82)', () => {
+    type CapturedDegradationActions = {
+      applyTier: (tier: string) => void;
+      suspend: () => Promise<void>;
+      resume: () => Promise<void>;
+    };
+
+    const capturedActions = (): CapturedDegradationActions => {
+      const calls = useAdaptiveDegradationMock.mock.calls;
+      const lastCall = calls[calls.length - 1] as unknown as [{ actions: CapturedDegradationActions }];
+      return lastCall[0].actions;
+    };
+
+    afterEach(() => {
+      webrtc.enableVideo.mockResolvedValue(undefined);
+      webrtc.disableVideo.mockResolvedValue(undefined);
+    });
+
+    it('a manual toggle in flight blocks a concurrent auto-suspend from calling disableVideo twice', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button); // manual disableVideo now in flight
+
+      expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+
+      await expect(capturedActions().suspend()).rejects.toThrow();
+      expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+    });
+
+    it('an in-flight auto-suspend blocks a concurrent manual toggle from calling disableVideo twice', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+
+      render(<VideoCallInterface callId="call1" />);
+      const suspendPromise = capturedActions().suspend(); // auto suspend now in flight
+
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button);
+
+      expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+      await suspendPromise;
     });
   });
 });

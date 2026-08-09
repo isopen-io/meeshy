@@ -5212,3 +5212,70 @@ la Vague 79 (confiance moyenne à l'époque, confirmé ligne à ligne cette vagu
   trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
   cette vague) ; candidat iOS `CallManager.selectCamera(id:)` (Vague 78, prêt, sandbox sans toolchain Swift,
   reconfirmé cette vague).
+
+## Vague 82 — `VideoCallInterface` : le toggle vidéo manuel et le contrôleur `adaptive-degradation` n'étaient jamais synchronisés l'un contre l'autre (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine (la Vague 81, #2674, était déjà mergée sur
+`main`). Toolchains iOS (`xcodebuild`/`swift` absents) et Android (`gradle` présent, aucun SDK) reconfirmées
+hors d'atteinte dans ce sandbox. Audit dédié (lecture directe) du périmètre web/gateway, avec un candidat
+explicitement laissé en spec à la fin de la Vague 76 : la synchronisation MUTUELLE entre `handleToggleVideo`
+et le contrôleur `adaptive-degradation`.
+
+- **Root cause confirmée par lecture directe** : la Vague 76 avait posé `videoToggleInFlightRef` pour empêcher
+  UN double-clic manuel sur `handleToggleVideo` d'appeler `enableVideo()`/`disableVideo()` (`use-webrtc-p2p.ts`)
+  deux fois en vol — mais son propre commentaire de clôture documentait explicitement le trou restant : «
+  `enableVideo()`/`disableVideo()` n'ont pas de synchronisation MUTUELLE (enable-vs-disable, pas seulement
+  enable-vs-enable) ». `VideoCallInterface.tsx` lignes 157-169 (avant fix) construisait `degradationActions`
+  (passé à `useAdaptiveDegradation`) avec `suspend: async () => { await disableVideo(); ... }` et
+  `resume: async () => { await enableVideo(); ... }` — appelant les MÊMES primitives que `handleToggleVideo`,
+  mais SANS jamais lire ni poser `videoToggleInFlightRef`. Le contrôleur `use-adaptive-degradation.ts` invoque
+  `actions.suspend()`/`actions.resume()` de façon totalement autonome (hystérésis sur la qualité du lien,
+  `lib/calls/adaptive-degradation.ts`), indépendamment de tout clic utilisateur. Un utilisateur qui clique
+  « caméra ON » pendant que le contrôleur automatique déclenche `suspend()` (lien dégradé pendant 6 s
+  sustained, `SUSPEND_AFTER_POOR_MS`) — ou l'inverse, un `resume()` automatique pendant qu'un clic manuel est
+  en vol — fait courir DEUX chemins `getUserMedia()`/`replaceTrack()` concurrents sur les mêmes instances
+  `WebRTCService`, sans aucun verrou partagé : exactement la même classe de bogue que la Vague 76 (capture
+  caméra orpheline, dernière piste "gagnante" jamais référencée par rien capable de l'arrêter), mais sur un
+  chemin d'appel que le guard posé à la Vague 76 ne couvrait pas.
+- **Fix** : `videoToggleInFlightRef` remonté avant `degradationActions` (même ref, réutilisée telle quelle par
+  `handleToggleVideo` plus bas — aucun changement de comportement pour le clic manuel seul) ; nouveau helper
+  `runGuardedVideoToggle(op)` qui lève si le guard est déjà tenu, sinon l'arme/le relâche autour de `op()`.
+  `degradationActions.suspend`/`resume` passent désormais par ce helper. Le rejet est délibérément laissé
+  remonter jusqu'au contrôleur : ses `.catch()` existants (`use-adaptive-degradation.ts`) réagissent déjà
+  correctement à un échec de `suspend()`/`resume()` en annulant la transition d'état tentée (`sending`/
+  `poorSince`/`goodSince` restaurés), donc une collision de guard se dégrade proprement — la décision
+  automatique est simplement retentée au prochain échantillon de qualité. Un seul fichier de production modifié
+  (`VideoCallInterface.tsx`) ; `use-adaptive-degradation.ts`/`webrtc-service.ts` intouchés.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau describe dans `VideoCallInterface.test.tsx` — « mutual
+  exclusion — manual toggle vs. adaptive-degradation controller » (2 tests). Le contrôleur étant mocké dans ce
+  fichier de test, les `actions` passées à `useAdaptiveDegradation` sont capturées directement depuis
+  `useAdaptiveDegradationMock.mock.calls` (aucune dépendance à la logique interne d'hystérésis, qui a sa propre
+  suite `lib/adaptive-degradation.test.ts`, non modifiée). RED confirmé : un clic manuel en vol suivi d'un
+  `actions.suspend()` capturé timeoutait (pas de rejet possible avant fix, `disableVideo` jamais résolu dans le
+  test) ; l'ordre inverse (`actions.suspend()` en vol puis clic manuel) appelait `disableVideo` deux fois. Les
+  deux verts après fix — la seconde invocation (quel que soit l'ordre) n'appelle jamais `disableVideo` une
+  deuxième fois, et le rejet est bien observable côté appelant. Gap de mock découvert au passage : le mock
+  `sonner` du fichier n'exposait pas `toast.warning` (jamais exercé avant ce fix car `degradationActions`
+  n'était jamais réellement invoqué par les tests existants) — ajouté.
+- **Vérification** : `VideoCallInterface.test.tsx` (24 tests, +2 net) vert. Sweep
+  `video-call|use-webrtc|use-call|orchestrator|adaptive-degradation` (42 suites / 436 tests) vert — aucune
+  régression, notamment sur `use-adaptive-degradation.test.tsx` et `lib/adaptive-degradation.test.ts`
+  (logique pure d'hystérésis, non touchée). Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au
+  démarrage) : `bun install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator
+  client && bun run build` sans erreur. `npx tsc --noEmit` sur `apps/web` : 1624 erreurs avant et après le
+  diff (`git stash`/`stash pop`, comparaison ligne-à-ligne normalisée sur les numéros de ligne pour absorber
+  le déplacement du code) — zéro nouvelle après correction d'une régression transitoire d'1 erreur de typage
+  introduite par le test lui-même (`mock.calls` non typé sur un `jest.fn()` sans generic, cast `as unknown as`
+  ajouté, même patron que le reste du fichier). `eslint` : même échec sandbox-only de config circulaire que
+  documenté aux vagues précédentes, non bloquant, indépendant de ce diff (non ré-exécuté ce cycle, aucune
+  raison de diverger).
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague) ; candidat iOS `CallManager.selectCamera(id:)` (Vague 78, prêt, sandbox sans toolchain Swift,
+  reconfirmé cette vague) ; passe de lecture ce cycle sur `CallEventsHandler.ts`/`CallService.ts`/
+  `CallCleanupService.ts` (gateway, focus timers/listeners : `disconnectGraceTimers`, le timer de traduction
+  scoped `translationCompleted:*`, `bufferCleanupInterval`) et sur `webrtc-service.ts`/`use-webrtc-p2p.ts`
+  (web) au-delà du candidat retenu, sans trouver de second candidat de confiance équivalente — voir le
+  rapport de session pour les pistes écartées et leur raison.
