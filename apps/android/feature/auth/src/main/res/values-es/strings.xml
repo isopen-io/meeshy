@@ -57,6 +57,12 @@
     <string name="registration_password_strength_3">Buena</string>
     <string name="registration_password_strength_4">Fuerte</string>
     <string name="registration_password_strength_5">Excelente</string>
+    <string name="registration_language_header">Elige tus idiomas</string>
+    <string name="registration_language_subtitle">Meeshy traduce cada conversación a estos idiomas por ti.</string>
+    <string name="registration_language_system_tab">Idioma principal</string>
+    <string name="registration_language_regional_tab">Idioma regional</string>
+    <string name="registration_language_search_hint">Buscar un idioma…</string>
+    <string name="registration_language_example_title">Cómo funciona</string>
 
     <string name="guest_join_title">Unirse a la conversación</string>
     <string name="guest_join_subtitle">Crea una identidad temporal para unirte</string>

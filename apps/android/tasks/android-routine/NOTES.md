@@ -3294,3 +3294,46 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   two call-site migrations), out of scope for a single field-UI slice. Duplicating ~15 lines of
   UI-only Composable code here is the minimal-impact call; flagged in `feature-parity.md` as a
   deliberate, not accidental, scope boundary.
+
+## Slice `auth-language-step-fields` (2026-08-09)
+- **A lazy list nested inside an already-scrollable `Column` crashes Compose — know this before
+  reaching for `LazyColumn`/`LazyVerticalGrid` inside a step body.** `RegistrationScreen`'s step
+  content sits inside the wizard's own `Modifier.verticalScroll(rememberScrollState())` `Column`.
+  A `LazyVerticalGrid` (or `LazyColumn`) composed directly in there — unlike `CountryPickerSheet`,
+  which lives inside its own `ModalBottomSheet` with a `heightIn(max = …)` bound — gets measured
+  with an unbounded height and crashes at runtime ("Vertically scrollable component was measured
+  with an infinity maximum height constraints, which is disallowed"). For a bounded, modest-size
+  list (79 languages) the simplest correct fix is a **non-lazy** grid: `languages.chunked(2)`
+  composed straight into the parent `Column`, no new import family, no height-bounding needed. Lazy
+  layouts are only safe here when they own their own scroll container (a sheet, a fixed-height
+  `Box`) — never bare inside a step body that's already inside the wizard's outer scroll.
+- **When a core function's two returned fields play different "which one is active" roles, a
+  Compose step body only needs local `remember` state for the role, not a mirrored copy of the
+  core's data.** `LanguageStepSelection` operates on a slot (`LanguageSlot.SYSTEM`/`REGIONAL`) plus
+  the read-only `LanguageSelectionState` snapshot already exposed via
+  `RegistrationUiState.languageSelection`; the step body only needed one new piece of local UI
+  state — which slot is *currently being edited* (`var activeSlot by remember { mutableStateOf(...) }`)
+  — everything else (the two slots' current values, the filtered list, the preview) is a pure
+  function of `state` + `activeSlot` + the search query, recomputed each recomposition via
+  `remember(query)`. No new ViewModel state, no new core needed — the wiring is provably complete
+  once every core function the step needs already exists (verified against `feature-parity.md`'s
+  own follow-up note before starting).
+- **A step's "Deliberately out of scope" note is only trustworthy if it's re-derived from the
+  actual follow-up text, not assumed.** `feature-parity.md`'s own §A bullet for this step already
+  separated "wire the picker UI" from "wire `SignupRegionInference` for a device-locale default"
+  into two distinct follow-up sentences written back on 2026-07-21/07-22 — re-reading both before
+  scoping this slice (rather than assuming the whole language step was one unit) is what kept the
+  slice PHONE-sized instead of accidentally growing into a device-locale-detection slice too. Same
+  discipline as `auth-phone-step-fields`'s "the phone-ownership recovery hint is a distinct,
+  larger capability" call — a shipped-but-unwired core two slices away doesn't have to land in the
+  same run as the field UI it eventually feeds.
+- **Merging two iOS UI elements that convey the same information into one control is a legitimate,
+  minor simplification worth calling out explicitly rather than doing silently.** iOS
+  `StepLanguageView` renders the system/regional summary as an always-visible card pair *and* a
+  separate pair of tab buttons that switch which slot the grid edits — four controls carrying
+  three facts (system value, regional value, which slot is active). Merging summary-card and
+  tab-button into one tappable card per slot (label + current value, tap = both "shows the value"
+  and "activates editing") drops one redundant control row without losing any information the user
+  could see or do on iOS. Flagged as a deliberate simplification in `feature-parity.md`, not an
+  accidental parity miss — the same "SOTA note" discipline the `auth-language-step-selection-core`
+  slice already established for this exact core.
