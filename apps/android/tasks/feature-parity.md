@@ -522,6 +522,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       from a new "Sign up" link on `LoginScreen` so it's never orphaned) as slice 1, then one slice per
       remaining step. Do **not** keep re-listing "the OnboardingFlowView Compose scaffold" as a single
       bullet in future "Next slice" notes — it has proven itself unpickable at that grain.
+      **Slice 1 shipped** (`auth-onboarding-shell`, 2026-08-09): the pager/progress-bar/nav-chrome
+      container is live — `feature/auth/RegistrationScreen.kt`, a dumb renderer wired to the already-
+      tested `RegistrationViewModel`. Top bar (Close on PSEUDO / Back otherwise + `n/8` position pill),
+      an 8-segment tappable progress row (`RegistrationProgressBar.fill`/`state::fill`, jump-back only —
+      `Box.clickable(enabled = role != UPCOMING)`), bottom bar (`MeeshyPrimaryButton` driven by
+      `RegistrationNavModel.primaryLabel/primaryEnabled`, dispatching `register()` on RECAP else
+      `next()`; skip button on PROFILE only). `LoginScreen` gains a "Sign up" link (`onSignUp`,
+      default `{}` — source-compatible) navigating to the new `Routes.REGISTRATION` (`MeeshyApp.kt`).
+      **PSEUDO is the only step with real field UI** (username field + available/taken hint from
+      `RegistrationFields.usernameAvailable`); every other step renders an inert "coming soon"
+      placeholder — **new pure SSOT `:core:model/auth/RegistrationStepContent.isImplemented(step)`**
+      gates real-content vs. placeholder, so a future per-step slice adds one entry to its `implemented`
+      set + one `when` arm here, in lockstep. No dead end: a placeholder step's Next stays correctly
+      disabled (its field-less `RegistrationFields` never satisfies `RegistrationStepGate.canProceed`)
+      but Back is always reachable off the first step, all the way out via Close. +2 behavioural tests
+      (`RegistrationStepContentTest` — pseudo implemented=true, every other of the 7 steps
+      implemented=false). Mutation (RED proof): widening `implemented` to all 8 steps fails **exactly**
+      `isImplemented_everyStepOtherThanPseudo_isFalse` (2 run, 1 failed, no collateral); RED first
+      proven by the suite failing to compile against the absent `RegistrationStepContent`. The rest of
+      the slice is Compose wiring only (exempt from the JVM gate per `TDD-COVERAGE.md`) — verified by
+      the full, unmodified `RegistrationViewModelTest` suite staying green (45/45) alongside it, proving
+      no regression to the decision layer the new screen reads. `./apps/android/meeshy.sh check` →
+      BUILD SUCCESSFUL (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Diff =
+      `apps/android` only (`core/model` [+1 core, +1 test], `feature/auth` [+1 screen, `LoginScreen`
+      link, ×4 locale strings], `app` [+1 route]). **Follow-up:** slice 2 is the PHONE step field UI
+      (country picker + skip), then EMAIL/IDENTITY/PASSWORD/LANGUAGE/PROFILE/RECAP in turn — each adds
+      its step to `RegistrationStepContent.implemented` + a `when` arm in `RegistrationScreen`.
 - [x] **App-side availability-debounce network probe** — **shipped** (slice `signup-availability-probe`,
       2026-07-25). Closes the last orphan seam of the registration wizard: the three
       `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real

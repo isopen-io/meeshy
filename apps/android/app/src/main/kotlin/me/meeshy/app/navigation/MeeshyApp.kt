@@ -38,6 +38,7 @@ import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.GuestJoinScreen
 import me.meeshy.app.auth.GuestJoinViewModel
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.auth.RegistrationScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
@@ -91,6 +92,7 @@ import me.meeshy.app.stories.StoryViewerViewModel
 
 object Routes {
     const val LOGIN = "login"
+    const val REGISTRATION = "register"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
     fun guestJoin(identifier: String): String = "join/$identifier"
@@ -281,6 +283,17 @@ fun MeeshyApp(
                 LoginScreen(
                     viewModel = authViewModel,
                     onAuthenticated = {
+                        navController.navigate(Routes.CONVERSATIONS) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
+                    },
+                    onSignUp = { navController.navigate(Routes.REGISTRATION) },
+                )
+            }
+            composable(Routes.REGISTRATION) {
+                RegistrationScreen(
+                    onClose = { navController.popBackStack() },
+                    onRegistered = {
                         navController.navigate(Routes.CONVERSATIONS) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }

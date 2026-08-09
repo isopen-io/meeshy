@@ -5,6 +5,22 @@
     <string name="login_password_label">Senha</string>
     <string name="login_button">Entrar</string>
     <string name="login_error_required">Nome de usuário e senha são obrigatórios</string>
+    <string name="login_signup_prompt">Ainda não tem uma conta?</string>
+    <string name="login_signup_link">Criar conta</string>
+
+    <string name="registration_close">Fechar</string>
+    <string name="registration_back">Voltar</string>
+    <string name="registration_pseudo_header">Um nome de usuário só seu</string>
+    <string name="registration_pseudo_subtitle">Escolha o nome que o mundo vai lembrar.</string>
+    <string name="registration_username_label">Nome de usuário</string>
+    <string name="registration_username_available">Nome de usuário disponível</string>
+    <string name="registration_username_taken">Este nome de usuário já está em uso</string>
+    <string name="registration_next">Próximo</string>
+    <string name="registration_continue">Continuar</string>
+    <string name="registration_create_account">Criar minha conta</string>
+    <string name="registration_skip_step">Pular esta etapa</string>
+    <string name="registration_step_placeholder_title">Em breve</string>
+    <string name="registration_step_placeholder_body">Esta etapa ainda não está pronta — toque em Voltar para continuar.</string>
 
     <string name="guest_join_title">Entrar na conversa</string>
     <string name="guest_join_subtitle">Crie uma identidade temporária para entrar</string>

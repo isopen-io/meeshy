@@ -3166,3 +3166,38 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   `PROGRESS-archive-<YYYY-MM>.md`, dedicated commit per the hygiene section) that no run has actually
   done yet. Flagging rather than attempting it inside this slice's run — it's a big enough diff to
   deserve its own dedicated pass, not a rider on a security-fix slice.
+
+## Slice `auth-onboarding-shell` (2026-08-09)
+- **A "genuinely too large for one slice" verdict from a prior run is itself a hypothesis to re-check,
+  not just its "next slice" pointer.** The previous run concluded the paged `OnboardingFlowView`
+  Compose scaffold was oversized and left a concrete decomposition (`auth-onboarding-shell` as slice 1)
+  instead of re-listing the whole thing. Re-proving that decomposition (not just trusting it) meant
+  actually reading `RegistrationViewModel.kt`'s full public surface (`nav`, `fill`, `canProceed`,
+  `next`/`previous`/`skip`/`jumpTo`) before writing a line of UI — every decision the shell needed was
+  already there and already tested, which is what made "PSEUDO step only" a real, mergeable slice
+  instead of another unpickable bundle.
+- **A step with no field UI yet is a safe no-op, not a trap, if the proceed gate is already strict.**
+  `RegistrationStepGate.canProceed` for PHONE/EMAIL/IDENTITY/PASSWORD/LANGUAGE all require non-empty
+  field state (`phoneStepCanProceed("", null, false)` = false, same shape for the others) — so a
+  placeholder step reached via a lucky `next()` just sits with a permanently-disabled primary button.
+  No skip affordance is needed there either (`RegistrationNavModel.showSkip` is PROFILE-only). The one
+  and only escape a placeholder step needs is Back, which the chrome already provides unconditionally
+  off the first step — traced through the actual gate functions before relying on this, not assumed
+  from the enum shape.
+- **When a Compose container's body will grow one `when` arm per future slice, extract the "is this
+  arm live yet" boolean into `:core:model` even though the dispatch itself stays exempt UI glue.**
+  `RegistrationStepContent.isImplemented(step)` is one line of real logic (today: `step == PSEUDO`) but
+  it's the single place next slice's author edits, and unlike an inline `when` fallback it comes with a
+  test that will start failing the moment someone adds a step to the Composable's `when` without adding
+  it here (or vice versa) — cheap insurance against future-slice drift, and it kept this slice honestly
+  TDD-compliant (RED→GREEN→mutation-proof) instead of leaning entirely on the `TDD-COVERAGE.md` Compose
+  exemption for zero new tests.
+- **A new `LoginScreen` parameter with a default (`onSignUp: () -> Unit = {}`) is source-compatible
+  with every existing call site** — `MeeshyApp.kt` was the only production caller and still needed
+  updating (to actually wire the navigation), but nothing else (tests, previews) broke from the
+  signature change. Cheaper than threading a nullable/optional through a wrapper.
+- **`RegistrationViewModelTest` staying green and untouched (45/45) is itself the regression proof for
+  a Compose-wiring-only slice** — the routine's `TDD-COVERAGE.md` exempts `@Composable` glue from new
+  tests, but that's not licence to skip verification: re-running the existing VM suite after wiring the
+  screen on top of it is what confirms the new UI didn't have to (and didn't) change any tested
+  decision behaviour underneath.
