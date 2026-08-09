@@ -1777,6 +1777,42 @@ describe('close', () => {
     expect(serviceB.getCurrentStream()).toBe(sharedStream);
   });
 
+  // enableVideoSend() attaches a track that is NEVER shared with another
+  // peer's sender in a group call — use-webrtc-p2p.ts's enableVideo() gives
+  // the first peer the literal camera track and every other peer a
+  // `.clone()` specifically so each sender owns an exclusive track object.
+  // close({ stopLocalTracks: false }) must still release THIS instance's own
+  // video track (stop it + remove it from the shared local preview stream)
+  // even though it must not touch the genuinely shared tracks — otherwise a
+  // departed group-call participant's clone (or the original, if peer index
+  // 0 leaves) is orphaned on the shared MediaStream forever.
+  it('close({ stopLocalTracks: false }) still releases the exclusive video track set by enableVideoSend', async () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(baseTrack.stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    // The genuinely shared track (audio) is untouched by a non-full teardown.
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+
+    // Peer B's own, independent clone track is unaffected.
+    expect(cloneTrack.stop).not.toHaveBeenCalled();
+    expect(pcB.close).not.toHaveBeenCalled();
+  });
+
   it('close() with no options still stops local tracks (full-teardown default unchanged)', () => {
     const { service, pc } = setup();
     const stream = makeStream({ audio: true, video: true });

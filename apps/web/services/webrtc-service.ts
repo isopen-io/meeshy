@@ -102,6 +102,14 @@ export class WebRTCService {
   // a track — never by addTransceiver mid-call (which desyncs m-line order).
   private videoTransceiver: RTCRtpTransceiver | null = null;
   private currentVideoTier: VideoQualityTier = 'high';
+  // The track attached by enableVideoSend() — unlike addLocalMedia()'s
+  // initial video track (which CAN be the same literal object across every
+  // peer's sender in a group call), this one is always exclusive to this
+  // instance: use-webrtc-p2p.ts's enableVideo() gives the first peer the
+  // camera track and every other peer a `.clone()`. close({stopLocalTracks:
+  // false}) must still release it — nothing else references it — or it
+  // leaks as a dead track on the shared local preview stream forever.
+  private exclusiveVideoTrack: MediaStreamTrack | null = null;
   // Grace timer for a transient ICE 'disconnected' before escalating to an ICE
   // restart. A blip often self-heals within a couple of seconds; restarting
   // immediately causes needless churn.
@@ -940,6 +948,7 @@ export class WebRTCService {
     if (this.localStream) {
       this.localStream.addTrack(track);
     }
+    this.exclusiveVideoTrack = track;
     await this.videoTransceiver.sender.replaceTrack(track);
     if (this.videoTransceiver.direction !== 'sendrecv') {
       this.videoTransceiver.direction = 'sendrecv';
@@ -966,6 +975,7 @@ export class WebRTCService {
       track.stop();
       this.localStream?.removeTrack(track);
     }
+    this.exclusiveVideoTrack = null;
     if (this.videoTransceiver.direction !== 'recvonly') {
       this.videoTransceiver.direction = 'recvonly';
     }
@@ -1186,9 +1196,17 @@ export class WebRTCService {
             trackKind: track.kind,
           });
         });
+      } else if (this.exclusiveVideoTrack) {
+        // Not a full teardown (group call, one peer among several), but this
+        // instance's own video track from enableVideoSend() is never shared
+        // with another peer's sender — release it or it leaks on the shared
+        // stream forever. See the field doc comment.
+        this.exclusiveVideoTrack.stop();
+        this.localStream.removeTrack(this.exclusiveVideoTrack);
       }
       this.localStream = null;
     }
+    this.exclusiveVideoTrack = null;
 
     // Close peer connection
     if (this.peerConnection) {

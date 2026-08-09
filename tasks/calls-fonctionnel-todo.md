@@ -5104,3 +5104,57 @@ notés ci-dessous comme candidats non retenus ce cycle, confiance moindre / effo
   `window.__preauthorizedMediaStream` et orpheliner une capture caméra/micro, même classe de défaut déjà
   corrigée ailleurs, confiance moyenne (dépend du gateway pour rejeter ou non le doublon), candidat pour une
   prochaine vague.
+
+## Vague 80 — `WebRTCService.close({stopLocalTracks:false})` orpheline la piste vidéo exclusive d'un pair en appel de groupe (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` a montré une PR ouverte de cette même routine (#2668, Vague 79, CI verte, `mergeable_state:
+clean`) — mergée avant tout nouveau travail (règle de la routine : ne jamais empiler un nouveau cycle sur un
+backlog non fermé). Branche resynchronisée sur `main` à jour. iOS (`xcodebuild`/`swift` absents,
+`which xcodebuild swift` → rien) et Android (toolchain gradle non vérifiable) restent hors d'atteinte dans ce
+sandbox, reconfirmé ce cycle. Reprise directe du candidat #1 laissé en spec à la fin de la Vague 79 :
+`webrtc-service.ts` `enableVideoSend`/`close`.
+
+- **Root cause confirmée par lecture directe** : en appel de groupe, `use-webrtc-p2p.ts` garde une instance
+  `WebRTCService` par pair distant, mais toutes reçoivent la MÊME référence `MediaStream` locale via
+  `addLocalMedia(stream, ...)` (`ensureLocalStream()` retourne le stream unique du store). Quand la vidéo est
+  activée en cours d'appel (`enableVideo()`, upgrade audio→vidéo façon FaceTime), le premier pair reçoit la
+  piste caméra littérale et chaque pair suivant reçoit `baseTrack.clone()` — précisément pour qu'aucune piste
+  vidéo ne soit jamais partagée entre deux `sender` de pairs différents (contrairement à la piste audio,
+  toujours partagée littéralement). Mais `WebRTCService.enableVideoSend()` n'enregistrait cette piste
+  qu'auprès de `this.localStream.addTrack(track)` — sans en garder de référence dédiée sur l'instance. Quand
+  ce pair quitte l'appel, `removeParticipant()` appelle `close({ stopLocalTracks: false })` (correct : ne
+  jamais arrêter les pistes matérielles partagées, sous peine de couper micro/caméra pour tous les autres
+  pairs encore connectés) — mais ce garde-fou, correct pour la piste AUDIO réellement partagée, s'appliquait
+  aussi à la piste vidéo, qui elle n'est JAMAIS partagée. Résultat : la piste vidéo propre à ce pair (clonée,
+  ou la piste de base si c'est le pair d'index 0 qui part) n'était ni arrêtée ni retirée du `MediaStream`
+  local partagé — elle restait attachée indéfiniment, piste morte accumulée à chaque cycle join/leave d'un
+  appel à 3+ participants avec vidéo active.
+- **Fix** : nouveau champ `exclusiveVideoTrack` sur `WebRTCService`, posé dans `enableVideoSend()` (la piste
+  qu'elle reçoit n'est, par construction de l'appelant, jamais partagée avec un autre pair) et vidé dans
+  `disableVideoSend()` (qui arrête/retire déjà explicitement cette piste). Dans `close()`, la branche
+  `stopLocalTracks: false` arrête et retire désormais CETTE piste précise du stream local partagé — même
+  logique que `disableVideoSend()`, appliquée au moment de la fermeture plutôt qu'au toggle vidéo. La piste
+  audio (et toute piste vidéo attachée via `addLocalMedia` plutôt que via `enableVideoSend`, seule
+  authentiquement partagée entre pairs) reste intouchée par un teardown non complet, comme avant.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau test dans `__tests__/services/webrtc-service.coverage.test.ts`
+  (describe `close`) — deux instances `WebRTCService` partagent un stream audio-only, chacune reçoit une piste
+  vidéo distincte via `enableVideoSend` (piste de base pour A, clone pour B, miroir exact de
+  `use-webrtc-p2p.ts`), puis `serviceA.close({ stopLocalTracks: false })` : RED confirmé (`baseTrack.stop`
+  jamais appelé, `sharedStream.removeTrack` jamais appelé avec `baseTrack`) ; GREEN après fix, et vérifie en
+  négatif que la piste audio partagée et la piste vidéo indépendante de B restent intouchées.
+- **Vérification** : `webrtc-service.coverage.test.ts` + `webrtc-service.test.ts` (2 suites / 173 tests) vert.
+  Sweep `video-call|use-webrtc|use-call|orchestrator` (40 suites / 416 tests) vert — aucune régression sur
+  `CallManager.participantLeftOwnership.test.tsx` (Vague 79) ni sur le test `close({stopLocalTracks:false})`
+  déjà existant (scénario `addLocalMedia` avec piste réellement partagée, non touché par ce fix). Prérequis
+  CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`, puis
+  `packages/shared && npx prisma generate --generator client && bun run build` sans erreur. `npx tsc --noEmit`
+  sur `apps/web` : 1181 erreurs avant et après le diff (`git stash`/`stash pop`), zéro nouvelle. `eslint` :
+  même échec sandbox-only de config circulaire que documenté aux vagues précédentes (65/67/68/69/72-79), non
+  bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague) ; candidat iOS `CallManager.selectCamera(id:)` (Vague 78, prêt, sandbox sans toolchain Swift,
+  reconfirmé cette vague) ; `use-video-call.ts` `startCall()` sans garde de ré-entrance (Vague 79, confiance
+  moyenne, non repris ce cycle).
