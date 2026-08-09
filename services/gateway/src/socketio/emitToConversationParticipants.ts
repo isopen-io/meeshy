@@ -118,6 +118,9 @@ export function emitToConversationParticipants(params: {
   if (!io) return [];
 
   const conversationRoom = ROOMS.conversation(conversationId);
+  // Seeding with the conversation room makes it `rooms[0]` AND protects it from
+  // being chained twice by a participant that somehow named it. It is already
+  // on the emitter below, so the chain resumes at the personal rooms after it.
   const rooms = participantUserRooms(participants, [conversationRoom]);
 
   let emitter = io.to(conversationRoom);

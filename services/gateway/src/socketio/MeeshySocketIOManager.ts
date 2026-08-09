@@ -553,11 +553,12 @@ export class MeeshySocketIOManager {
         };
         // Chain the conversation room + each participant's user room, deduped so
         // Socket.IO delivers the event at most once per socket. Same unit as the
-        // three sibling emitters of this same event — `autoDeliverToOnlineRecipients`,
-        // `broadcastReadStatusUpdate` and the REST mark-as-read route — so authors
-        // never get stuck on a single "sent" tick after navigating away. The
-        // inline copy this replaces was the fourth, and the last one still
-        // addressing by `userId` alone.
+        // four sibling emitters of this same event — `autoDeliverToOnlineRecipients`,
+        // `broadcastReadStatusUpdate` and the two REST mark-as-read routes — so
+        // authors never get stuck on a single "sent" tick after navigating away.
+        // The copy this replaces filtered on `userId` one step earlier than the
+        // others, at the `Map` it built rather than at the emit, which is why the
+        // sweep that unified the verbatim copies never saw it.
         const rooms = emitToConversationParticipants({
           io: this.io,
           conversationId,
