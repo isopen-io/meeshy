@@ -6,7 +6,7 @@ const COMMUNITY_COMEMBERS_CACHE_TTL = 300; // 5 min — miroir des listes amis/c
 /**
  * La seule surface Prisma que la résolution touche. Déclarée en `Pick` plutôt
  * qu'en `PrismaClient` entier pour que les appelants qui ne portent eux-mêmes
- * qu'une tranche du client (`filterPostAudience`) puissent la passer sans
+ * qu'une tranche du client (`filterPostConsumers`) puissent la passer sans
  * assertion de type — un `as PrismaClient` sur un sous-type structurel est
  * exactement le genre d'assertion que ce dépôt refuse.
  */
