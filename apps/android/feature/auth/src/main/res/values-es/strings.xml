@@ -63,6 +63,19 @@
     <string name="registration_language_regional_tab">Idioma regional</string>
     <string name="registration_language_search_hint">Buscar un idioma…</string>
     <string name="registration_language_example_title">Cómo funciona</string>
+    <string name="registration_recap_header">¡Ya casi está!</string>
+    <string name="registration_recap_subtitle">Revisa que todo esté correcto antes de crear tu cuenta.</string>
+    <string name="registration_recap_summary_title">Tu perfil de un vistazo</string>
+    <string name="registration_recap_field_username">Nombre de usuario</string>
+    <string name="registration_recap_field_email">Correo electrónico</string>
+    <string name="registration_recap_field_name">Nombre</string>
+    <string name="registration_recap_field_phone">Teléfono</string>
+    <string name="registration_recap_field_languages">Idiomas</string>
+    <string name="registration_recap_field_bio">Biografía</string>
+    <string name="registration_recap_terms_accept">Acepto los Términos de servicio y la Política de privacidad</string>
+    <string name="registration_recap_terms_read">Leer las condiciones</string>
+    <string name="registration_recap_terms_title">Términos de servicio</string>
+    <string name="registration_recap_terms_body">¡Bienvenido a Meeshy! Al usar nuestra aplicación, aceptas las siguientes condiciones:\n\n1. USO RESPONSABLE\nMeeshy está pensado para conectar a las personas de forma positiva. Nada de contenido ofensivo o ilegal.\n\n2. TU CUENTA\nEres responsable de tu cuenta. ¡Guarda tu contraseña en secreto!\n\n3. TUS DATOS\nProtegemos tus datos con cifrado de extremo a extremo. Tus mensajes son privados.\n\n4. TRADUCCIÓN\nLa traducción es automática y puede no ser perfecta. ¡Es una herramienta, no una ciencia exacta!\n\n5. RESPETO\nTrata a los demás como te gustaría que te trataran. ¡Somos una comunidad!\n\n¡Estamos juntos en esto!</string>
 
     <string name="guest_join_title">Unirse a la conversación</string>
     <string name="guest_join_subtitle">Crea una identidad temporal para unirte</string>

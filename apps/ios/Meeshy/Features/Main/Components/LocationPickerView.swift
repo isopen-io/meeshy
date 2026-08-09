@@ -16,7 +16,10 @@ struct LocationPickerView: View {
     /// sites, dont un littéral `{ coordinate, _ in }`.
     let onSelect: (SharedPlace) -> Void
     @Environment(\.dismiss) private var dismiss
-    private var theme: ThemeManager { ThemeManager.shared }
+    // Plus de référence à `ThemeManager.shared` : tout ce que cette vue pose
+    // est soit une couleur de conversation, soit une couleur sémantique qui
+    // s'adapte au matériau. Une vue posée sur une carte n'a pas à lire un
+    // singleton global de thème.
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
@@ -270,7 +273,7 @@ struct LocationPickerView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(14))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundColor(.secondary)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Clear search", bundle: .main))
             }
@@ -327,21 +330,26 @@ struct LocationPickerView: View {
                             // a scalable font would overflow the frame (doctrine 86i).
                             // Decorative — the place name carries the meaning.
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: secondaryAccent))
+                            // Accent ADAPTÉ et couleurs sémantiques : cette
+                            // liste flotte sur le même verre que la carte du
+                            // bas, au-dessus d'un fond de carte devenu
+                            // imprévisible avec les styles satellite et
+                            // hybride. Les tokens de thème y disparaissaient.
+                            .foregroundColor(Color(hex: onMap.accent))
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color(hex: secondaryAccent).opacity(0.12)))
+                            .background(Circle().fill(Color(hex: onMap.accent).opacity(0.14)))
                             .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
                                 .font(MeeshyFont.relative(13, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundColor(.primary)
                                 .lineLimit(1)
 
                             if let subtitle = item.placemark.title {
                                 Text(subtitle)
                                     .font(MeeshyFont.relative(11))
-                                    .foregroundColor(theme.textSecondary)
+                                    .foregroundColor(.secondary)
                                     .lineLimit(1)
                             }
                         }
@@ -477,11 +485,7 @@ struct LocationPickerView: View {
     /// au niveau exact.
     private var displayedTitle: String? {
         guard let place = displayedPlace else { return nil }
-        let parts = [place.name, place.address].compactMap { $0 }.filter { !$0.isEmpty }
-        let deduped = parts.reduce(into: [String]()) { acc, part in
-            if !acc.contains(part) { acc.append(part) }
-        }
-        return deduped.isEmpty ? nil : deduped.joined(separator: " · ")
+        return LocationSharingLabels.placeTitle(name: place.name, address: place.address)
     }
 
     /// Le nombre de décimales suit le niveau : afficher `20.00000` pour une

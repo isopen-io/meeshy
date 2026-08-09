@@ -2,6 +2,79 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-09 the **registration wizard's RECAP step field UI** landed (slice
+> `auth-recap-step-fields`, feature-parity §A — slice 7 of the `OnboardingFlowView` Compose
+> decomposition, closing the "registration recap + terms acceptance" half of the combined
+> "Profile photo / banner / bio optional step; registration recap + terms acceptance" `[~]` item
+> — the PROFILE half stays `[ ]`). Re-proven before picking: `RegistrationStepContent.implemented`
+> held only `PSEUDO`/`PHONE`/`EMAIL`/`IDENTITY`/`PASSWORD`/`LANGUAGE` — `RECAP` still rendered the
+> inert placeholder, confirming the prior run's "Next slice" note. Every decision the step needed
+> was already shipped and tested: `RegistrationSummary.rows` (slice `registration-recap-summary`,
+> 2026-07-26 — the recap card's rows), `RegistrationStepGate`'s RECAP arm (`fields.acceptTerms`,
+> since `registration-step-gate-core`, 2026-07-22), and `RegistrationViewModel.onAcceptTermsChange`
+> / `state.summary` — this slice is the first real UI consumer of all three, same "wiring-only"
+> shape as every step since IDENTITY. The primary button was ALREADY correctly wired to
+> `register()` on RECAP (`RegistrationNavModel.primaryAction == REGISTER`, shipped
+> `registration-nav-chrome`) — nothing to change there either. **Added (production, all
+> `apps/android`):** `feature/auth/RegistrationScreen.kt` gains `RecapStepBody` — header/subtitle
+> copy, a `RecapSummaryCard` (icon + localized label + value per `state.summary` row, icons a
+> faithful port of iOS `summaryItems`'s SF Symbols: `at`→`AlternateEmail`, `envelope.fill`→`Email`,
+> `person.fill`→`Person`, `phone.fill`→`Phone`, `globe`→`Language`, `text.quote`→`Description`), and
+> a `RecapTermsCheckbox` (`Modifier.toggleable(role = Role.Checkbox)` — correct a11y semantics,
+> mirrors iOS's `.accessibilityAddTraits(.isSelected)` intent) bound to
+> `onAcceptTermsChange`, plus a "Read the terms" link opening a `RecapTermsSheet`
+> (`ModalBottomSheet`, same established pattern as `CountryPickerSheet`) with the terms body text
+> ported from iOS `StepRecapView.termsSheet` — `RegistrationScreen`'s `when` arm now also
+> dispatches `RegistrationStep.RECAP`, and `RegistrationStepContent.implemented` gains `RECAP`
+> alongside the six prior steps. **Deliberately no password row:** iOS's recap appends a
+> `••••••••` row (`String(repeating: "•", count: min(password.count, 10))`) outside
+> `summaryItems`; Android's `RegistrationSummaryRow`/`SummaryField` (shipped
+> `registration-recap-summary`, 2026-07-26) has no `PASSWORD` case at all — a decision made and
+> tested two slices before this one, re-verified here rather than silently overridden or re-opening
+> the shipped core to add a field only this one step would ever read. Never re-surfacing the
+> password, even as masked dots whose *length* leaks a weak signal, is a legitimate simplification
+> over iOS, not an accidental parity miss. **SSOT reuse:** the terms sheet's close button reuses
+> the existing `registration_close` string (already used by the top bar's leading-Close icon)
+> rather than adding a near-duplicate string. **No skip affordance** — iOS `StepRecapView` has none
+> either, and `RegistrationNavModel.showSkip` is PROFILE-only. **No duplicated loading/error
+> handling** — unlike iOS, which branches `isLoading`/`errorMessage` internally inside
+> `StepRecapView.body`, Android's shared `state.errorMessage` banner (rendered once, above every
+> step body since `auth-onboarding-shell`) and the bottom bar's existing `loading` param already
+> cover both, so RECAP stays exactly as thin as every other field-UI step — no step-local
+> reimplementation of state the chrome already owns. **+13 new locale strings ×4 locales**
+> (`registration_recap_*`: header/subtitle/summary_title/field_username/field_email/field_name/
+> field_phone/field_languages/field_bio/terms_accept/terms_read/terms_title/terms_body — the last
+> one a multi-paragraph terms text faithfully translated from iOS's French source into en/fr/es/pt).
+> **+2 core tests** (`RegistrationStepContentTest.isImplemented_recap_isTrue`; the "every other
+> step" sweep renamed to exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD+LANGUAGE+RECAP). **Mutation
+> (RED proof):** the new test against the pre-slice `implemented` set (still only `{PSEUDO, PHONE,
+> EMAIL, IDENTITY, PASSWORD, LANGUAGE}`) failed **exactly** `isImplemented_recap_isTrue` (8 run, 1
+> failed, no collateral) before the one-line core change landed. **Zero new ViewModel tests
+> needed** — `RegistrationViewModelTest` already exercises `onAcceptTermsChange`/`register()`/
+> `summary` end-to-end; re-ran unmodified and stayed green (52/52) — the regression proof for this
+> Compose-wiring-only slice, per `TDD-COVERAGE.md`'s exemption for `@Composable` glue. **Gate:**
+> `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL in 23s` (full `assembleDebug` +
+> all-module `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only —
+> `core/model` [1-line `implemented` set change, no new files], `feature/auth` [+9
+> composables/helpers in `RegistrationScreen.kt`, the `when` arm, ×13 locale strings ×4 locales],
+> `tasks/feature-parity.md`; SDK purity — `RegistrationStepContent` stays a stateless `:core:model`
+> lookup, every new Composable is ordinary UI glue over the already-shipped
+> `RegistrationSummary`/`RegistrationStepGate`/`RegistrationViewModel` cores, no
+> shared-singleton-plus-product-rule combo; SSOT — reuses every existing recap/terms/register
+> wiring untouched, re-implements no rule, reuses `registration_close` instead of duplicating it;
+> instant-app — no spinner introduced; UDF — unchanged `RegistrationViewModel` + immutable
+> `StateFlow`; no dead end — Back stays reachable, the terms sheet dismisses via its close
+> button/scrim/swipe; no tautological tests; no coverage floor lowered, no existing test
+> weakened). **Next slice:** PROFILE (needs a photo/banner picker + compression pipeline — the
+> ONE remaining step of the `OnboardingFlowView` Compose decomposition, now 7/8 done; every prior
+> "next slice" note has flagged this as the one genuinely large step, re-verify that verdict rather
+> than assuming it before committing a run to it), OR wiring `SignupRegionInference` into the
+> wizard's init for a device-locale default (deliberately deferred since `auth-language-step-fields`),
+> OR the §C **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header` — re-verify `ChatScreen.kt` before committing a run to it), OR the
+> `TagInputField` composable + `allTags` corpus hydration (still blocked on a new `tags` wire field
+> on `ApiConversation`), OR the tracked **Kover 90% coverage-gate infra**.
+>
 > On 2026-08-09 the **registration wizard's LANGUAGE step field UI** landed (slice
 > `auth-language-step-fields`, feature-parity §A — slice 6 of the `OnboardingFlowView` Compose
 > decomposition, "System + regional language selection with live translation preview" `[~]`

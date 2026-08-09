@@ -316,3 +316,44 @@ Append-only log of gotchas and decisions that save time next run.
   could see or do on iOS. Flagged as a deliberate simplification in `feature-parity.md`, not an
   accidental parity miss — the same "SOTA note" discipline the `auth-language-step-selection-core`
   slice already established for this exact core.
+
+## Slice `auth-recap-step-fields` (2026-08-09)
+- **A pure core's enum missing a case iOS has is a decision to re-verify, not a gap to silently
+  patch.** iOS `StepRecapView` appends a masked-password row (`••••••••`) outside its
+  `summaryItems` array; Android's `SummaryField`/`RegistrationSummaryRow` (shipped
+  `registration-recap-summary`, two slices before this one) simply has no `PASSWORD` case. The
+  cheap, wrong move would have been to add one "for parity" without checking whether the omission
+  was deliberate. Reading that slice's own `feature-parity.md` writeup first (its SOTA note lists
+  three hardening edges over iOS but says nothing about password — meaning its exclusion, not its
+  inclusion, was the actual design) turned "add a PASSWORD case to the core" into "leave the
+  shipped, tested core alone and don't re-surface the password at all" — the more defensible
+  security posture, not a missed port.
+- **`Modifier.toggleable(role = Role.Checkbox)` is the idiomatic Compose equivalent of iOS's
+  `.accessibilityAddTraits(.isSelected)` on a custom checkbox button** — it gives VoiceOver-
+  equivalent TalkBack semantics (announces "checkbox, checked/unchecked") for free, without a
+  manual `contentDescription` state string that would need to be kept in sync with `accepted` by
+  hand. Reached for it instead of a bare `Modifier.clickable` + `semantics { contentDescription =
+  ... }` block (the pattern every other custom tappable row in this file — `LanguageSlotCard`,
+  `CountryPickerSheet`'s rows — uses, because none of them are actually a binary accept/reject
+  toggle; RECAP's terms checkbox is the first row in the wizard that genuinely is one).
+- **A step whose primary-button wiring was already fully correct before this slice is a real,
+  cheap signal the remaining work is presentation-only.** `RegistrationNavModel.primaryAction ==
+  REGISTER` on RECAP dispatching to `viewModel.register()` was already wired in
+  `RegistrationScreen`'s `onPrimaryClick` since `auth-onboarding-shell` (RECAP being the wizard's
+  last step, its primary action was always going to be `REGISTER`, decided the moment the nav
+  chrome shipped) — this slice never had to touch `RegistrationBottomBar` or the click dispatch at
+  all, only add the step body content above it. Confirmed by grepping the dispatch switch before
+  writing anything, not assumed from the step's position in the wizard.
+- **The shared `state.errorMessage` banner + bottom-bar `loading` param already cover what iOS's
+  `StepRecapView` re-implements per-step (`isLoading`/`errorMessage` branches inside its own
+  `body`).** Porting those internal branches into `RecapStepBody` would have duplicated state the
+  wizard's outer `Column` already renders once, above every step, since `auth-onboarding-shell` —
+  worth calling out explicitly in the tracking docs as a deliberate non-port rather than an
+  oversight, the same discipline as the "no skip button" checks on EMAIL/IDENTITY/PASSWORD/
+  LANGUAGE.
+- **Reusing an existing string across two visually different controls (an icon-only top-bar Close
+  button vs. a text `TextButton` dismissing a bottom sheet) is still the same semantic action** —
+  `registration_close` (already used by `RegistrationTopBar`'s leading `IconButton`) was reused
+  verbatim for `RecapTermsSheet`'s dismiss button instead of adding a near-duplicate
+  `registration_recap_terms_close` string in ×4 locales. Different visual chrome, same meaning,
+  one string — SSOT wins over "give every composable its own string for symmetry."
