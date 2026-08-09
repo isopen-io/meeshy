@@ -10,6 +10,7 @@ import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import { processExplicitLinks } from '../services/messaging/messageLinks';
+import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
 import { TrackingLinkService } from '../services/TrackingLinkService';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
@@ -231,15 +232,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      // Vérifier que le message existe et appartient à l'utilisateur
-      // senderId est un Participant ID, pas un User ID — filtrer via sender.userId
+      // La lecture n'ENCODE plus la règle d'admission. Elle filtrait
+      // `sender: { userId }` — donc la ligne d'un message qu'on n'a pas écrit
+      // n'atteignait jamais la décision, et aucun modérateur ne pouvait être
+      // admis ici alors que l'UI web le lui propose. Une politique qui se cache
+      // dans un `where` est une politique qu'on ne peut plus unifier.
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          sender: { userId },
           deletedAt: null
         },
         include: {
+          sender: { select: { userId: true } },
           attachments: { select: attachmentMediaSelect },
           conversation: {
             include: {
@@ -254,6 +258,33 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       if (!message) {
         return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+      }
+
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`messageEditAdmission`). Ce transport — celui du client iOS —
+      // n'imposait AUCUNE fenêtre de 24h, là où le socket et la route
+      // conversation-scopée la refusent : un iPhone éditait un message vieux de
+      // trois ans que le web refusait d'éditer.
+      //
+      // Les refus non temporels gardent le **404** que cette route rendait déjà,
+      // plutôt que le 403 de la route conversation-scopée : passer à 403 ferait
+      // de cette route un oracle d'existence pour qui sonde des ObjectIds. Une
+      // seule politique, deux vocabulaires de transport.
+      const admission = await admitMessageEdit({
+        prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          createdAt: message.createdAt,
+        },
+        onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
+      });
+
+      if (isEditRefused(admission)) {
+        return admission.reason === 'edit-window-expired'
+          ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
+          : sendNotFound(reply, 'Message not found or you are not authorized to modify it');
       }
 
       // Permettre l'édition de messages sans contenu si le message a des attachements

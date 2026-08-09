@@ -1,4 +1,13 @@
-# Cycle 34 — La sourdine échouait FERMÉ, et un éventail tombé emportait ses deux frères
+# Cycle 34b — La sourdine échouait FERMÉ, et un éventail tombé emportait ses deux frères
+
+Numéroté **34b** : une session parallèle a livré son cycle 34 pendant celui-ci (« ce qu'une édition
+EXIGE », ci-dessous). Les deux têtes n'ont AUCUNE intersection — l'une unifie les quatre tests
+d'admission à l'édition d'un message, l'autre porte sur le repli des préférences de notification et
+l'isolement des trois éventails — et aucun fichier n'est touché par les deux. Rien à arbitrer défaut
+par défaut cette fois (leçon d'intégration du cycle 23, reprise aux 25b, 32b, 33b et 34) : les deux
+tiennent ensemble, fusionnés à la main et revalidés sur la suite complète. Là où les deux « reste
+ouvert » citent le même point (file de fan-out, `getVisibilityFilteredRecipients`, `@Display Name`,
+eslint), c'est le même report, pas deux.
 
 Tête annoncée par le « Reste ouvert » du cycle 33b, prise sans arbitrage : `filterMutedRecipients`
 échouait fermé alors que tout son voisinage échoue ouvert et le dit. En remontant ses appelants pour
@@ -125,7 +134,132 @@ de `Promise<unknown>`) : il est lu, donc il se déclare.
 - **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
   le cycle 29, aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
 
+
 ---
+
+# Cycle 34 — Les cycles précédents ont unifié ce qu'une édition PRODUIT. Pas ce qu'elle EXIGE.
+
+Tête désignée par le cycle 33, prise telle quelle : « une seule unité d'admission à l'édition,
+nommée, plutôt que quatre tests d'admission qui ont déjà prouvé qu'ils dérivent ».
+
+## Le décompte, deuxième passage
+
+Le cycle 33 avait dressé la table de ce qu'une édition PRODUIT (liens, mentions) et l'avait rendue
+uniforme. Voici celle de ce qu'elle EXIGE, telle qu'elle était encore ce matin :
+
+| entrée | fenêtre 24h | modérateur admis | appartenance | `deletedAt` gardé | qui l'appelle |
+|---|---|---|---|---|---|
+| socket `message:edit` | oui | **non** | implicite | oui | web (composer) |
+| `PUT /conversations/:id/messages/:messageId` | oui | oui | oui | oui | **web** (`message.service.ts`) |
+| `PUT /messages/:messageId` | **non** | **non** | **non** | oui | **iOS** |
+| `PATCH /messages/:messageId` | **non** | **non** | oui | **NON** | personne |
+
+Correction au décompte du cycle 33, qui attribuait le `PATCH` au web : `messagesService.updateMessage`
+existe, mais **aucun écran ne l'appelle** — seuls ses propres tests. Le web édite par le socket
+(composer) et par le `PUT` conversation-scopé. Trois entrées vivantes, quatre règles.
+
+## Ce que l'utilisateur voyait
+
+**La fenêtre de 24h se traversait en changeant de verbe HTTP.** Le socket et le `PUT` conversation
+la refusent ; les deux entrées `/messages/:messageId` ne la connaissaient pas. Un iPhone éditait
+donc un message de trois ans que le même geste depuis le web refusait de toucher — et ce n'est pas
+une divergence de confort, c'est le contournement complet d'une règle que le produit énonce.
+
+**Le modérateur que l'UI web autorise se voyait refuser par le composer.** `BubbleMessage.canEdit`
+rend vrai pour `isOwnMessage || hasModeratorPrivileges(userRole)`. Le geste réussit par le `PUT`
+conversation-scopé et échoue par le socket, qui filtrait `sender: { userId }` dans sa lecture.
+
+**Un message SUPPRIMÉ se réécrivait par le `PATCH`.** Ni garde à la lecture, ni garde à l'écriture.
+Un `update` par id réussit quel que soit `deletedAt` : la ligne ressuscitait avec un contenu neuf,
+`message:edited` partait vers des clients qui l'avaient déjà retirée, l'API répondait succès.
+
+## Lot A — `admitMessageEdit`, l'unique énoncé
+
+`services/messaging/messageEditAdmission.ts`. L'auteur édite 24h ; un rôle **GLOBAL** privilégié lui
+rouvre la porte au-delà ; un tiers n'édite que membre ACTIF + rôle privilégié, sans fenêtre — un
+modérateur corrige précisément ce qui traîne.
+
+Coût : **aucun aller-retour ajouté**. La branche modérateur lit appartenance ET rôle en une seule
+requête — la forme (`include: { user: { select: { role } } }`) que la route conversation-scopée
+employait déjà. La branche auteur-hors-fenêtre en lit une. Le chemin nominal n'en déclenche aucune.
+Toute lecture échoue **fermée**.
+
+## Lot B — les quatre entrées, chacune dans son vocabulaire
+
+Une politique, quatre traductions. Les deux routes `/messages/:messageId` gardent leur **404** sur
+les refus non temporels au lieu d'adopter le 403 de leur sœur : passer à 403 en ferait un oracle
+d'existence pour qui sonde des ObjectIds. Une seule politique n'oblige pas à un seul code HTTP.
+
+La lecture Prisma du socket et du `PUT` iOS n'**encode** plus la règle. Elles filtraient
+`sender: { userId }` : la ligne d'un message qu'on n'a pas écrit n'atteignait jamais la décision.
+Un test par transport verrouille désormais que le `where` ne porte plus la politique — c'est la
+forme la plus durable du correctif, puisque c'est ce `where` qui rendait l'unification impossible.
+
+## Lot C — le `PATCH` et son message ressuscité
+
+`deletedAt: null` à la lecture, garde de concurrence optimiste à l'écriture (`where: { id,
+deletedAt: null }`), `P2025` traduit en **404 et non en 500** : une suppression concurrente n'est
+pas une panne, et la rendre en 500 ferait retenter un client qui n'a rien à retenter.
+
+## Ce que ce cycle a délibérément REFUSÉ de faire
+
+**Exiger l'appartenance active de l'AUTEUR.** Le `PATCH` le faisait ; les trois transports vivants
+tiennent l'authorship pour suffisant. Rendre la règle commune plus stricte que les trois chemins
+réels aurait été une restriction neuve déguisée en unification — et livrée sans qu'on la nomme.
+« Un auteur qui a quitté la conversation peut-il encore éditer ? » est une bonne question produit ;
+elle se tranche pour les quatre à la fois, pas en passant sur celle que personne n'appelle.
+
+**Retirer l'édition modérateur.** Premier réflexe, et il était faux : l'intégrité voudrait que nul
+ne réécrive sous le nom d'autrui. Mais `BubbleMessage.canEdit` propose le geste, donc la capacité
+est vivante et voulue. Un agent qui aurait « unifié » en supprimant la branche modérateur aurait
+retiré une fonctionnalité en croyant fermer un trou. Le code client est la source de vérité sur ce
+que le produit promet — le lire AVANT de trancher est ce qui a changé la conclusion.
+
+## Vérification
+
+- **26 tests neufs, 10 rouges observés** avant implémentation.
+  - `messageEditAdmission.test.ts` (18 cas, **100 % lignes**) — les deux branches, la borne
+    **inclusive** à 24h pile, le `createdAt` illisible qui n'a jamais bloqué personne et ne bloque
+    toujours pas, le modérateur non-membre refusé, le message d'auteur anonyme que seul un
+    modérateur modère, les trois pannes qui refusent.
+  - 4 cas sur le `PUT` iOS, 5 sur le `PATCH`, 2 sur le socket — dont, sur les deux transports dont
+    la lecture encodait la règle, un verrou sur le `where`.
+- **Suite gateway complète : 614 suites, 15 840 tests, tout vert** (avant : 613 / 15 799).
+  `tsc --noEmit` propre. Couverture lignes **95,64 %**.
+
+## Reste ouvert après ce cycle
+
+- **`appartenance active de l'auteur` — la question posée ci-dessus attend une décision produit.**
+  Aujourd'hui : un auteur qui a quitté une conversation peut encore éditer ses messages par les
+  quatre entrées. Défendable (ce sont ses mots) comme l'inverse (il n'a plus de session là-bas).
+  **Candidat sérieux pour le prochain cycle** — le correctif est mécanique une fois la règle
+  choisie, puisqu'il n'y a plus qu'un endroit où l'écrire.
+- **`PATCH /messages/:messageId` n'a aucun appelant de production.** `messagesService.updateMessage`
+  n'est invoqué que par ses propres tests. Une entrée d'écriture sans écran est une surface
+  d'attaque qui ne rend rien. **Tête sérieuse du prochain cycle** : la retirer, elle et son service
+  client, plutôt que de continuer à la maintenir à parité — ce cycle vient de payer ce prix.
+- **`PUT /conversations/:id/messages/:messageId` re-persiste `originalLanguage` depuis le corps de
+  la requête** là où les trois autres réutilisent la valeur stockée. Divergence restante sur ce que
+  l'édition ÉCRIT, du même genre que celles que ce cycle vient de fermer sur ce qu'elle EXIGE.
+- **La file d'attente de fan-out** (héritée du cycle 32, D1) — troisième report.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas.
+- **`@Display Name` reste inextractible dans le domaine social** — huitième report.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29.
+- **Les deux réparations de base attendent une exécution avec accès base**
+  (`repair-mention-user-ids.ts`, `repair-tracking-link-created-by.ts`). Action humaine.
+
+---
+
+# Note d'intégration — cycle 34 par-dessus le cycle 33b
+
+Une session parallèle a livré le cycle **33b** (ci-dessous) pendant celui-ci. Aucune intersection :
+33b porte sur le mute des allées et venues et le fan-out d'appartenance, le cycle 34 sur l'admission
+à l'édition d'un message. Rien à arbitrer défaut par défaut (leçon d'intégration du cycle 23, reprise
+aux 25b, 32b et 33b) — les deux tiennent ensemble, fusionnés à la main et revalidés sur la suite
+complète. Le « reste ouvert » du cycle 34 ci-dessus vaut par-dessus celui de 33b ; là où les deux
+citent le même point (file de fan-out, `getVisibilityFilteredRecipients`, `@Display Name`, eslint),
+c'est le même report, pas deux.
 
 # Cycle 33b — Le mute ne faisait pas taire les allées et venues, et chaque membre repayait la même requête
 
