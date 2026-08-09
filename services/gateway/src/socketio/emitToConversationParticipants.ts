@@ -26,6 +26,48 @@ export interface ConversationRoomEmitter {
 }
 
 /**
+ * The personal rooms a participant list maps to, deduped, in list order.
+ *
+ * `userId ?? id` is the entire point — see the note on
+ * `emitToConversationParticipants` below for why an accountless participant's
+ * room is named after its `Participant.id`, and why addressing by `userId`
+ * alone skips a room that EXISTS rather than one that does not.
+ *
+ * Two families of emitter need these rooms and they do NOT share an emit
+ * shape: the read/delivery receipts chain the conversation room together with
+ * the personal ones (`emitToConversationParticipants`), while
+ * `conversation:updated` addresses personal rooms ONLY — a conversation-room
+ * copy would be redundant for anyone already looking at the thread, whose list
+ * row is not on screen. Sharing the emit loop would have forced one shape onto
+ * the other; sharing the room list is what they actually have in common, and it
+ * is the only line every copy of this code got wrong.
+ *
+ * `seed` pre-fills both the result and the dedupe set, so a caller that also
+ * targets the conversation room cannot reach a socket sitting in both twice.
+ */
+export function participantUserRooms(
+  participants: ReadonlyArray<ParticipantRoomTarget>,
+  seed: ReadonlyArray<string> = [],
+): string[] {
+  const rooms = [...seed];
+  const seen = new Set<string>(rooms);
+  for (const participant of participants) {
+    // Neither identity present means no room CAN be named — a caller whose
+    // `select` forgot both would otherwise blast every event at the single
+    // room `user:undefined`, where any socket that ever joined it receives
+    // every conversation's traffic. The type says this cannot happen; the
+    // partial selects this function exists to fix say otherwise.
+    const key = participant.userId ?? participant.id;
+    if (!key) continue;
+    const room = ROOMS.user(key);
+    if (seen.has(room)) continue;
+    seen.add(room);
+    rooms.push(room);
+  }
+  return rooms;
+}
+
+/**
  * The single chained room fan-out for an event that concerns a whole
  * conversation.
  *
@@ -76,17 +118,10 @@ export function emitToConversationParticipants(params: {
   if (!io) return [];
 
   const conversationRoom = ROOMS.conversation(conversationId);
-  const rooms = [conversationRoom];
-  const seen = new Set<string>(rooms);
+  const rooms = participantUserRooms(participants, [conversationRoom]);
 
   let emitter = io.to(conversationRoom);
-  for (const participant of participants) {
-    const room = ROOMS.user(participant.userId ?? participant.id);
-    if (seen.has(room)) continue;
-    seen.add(room);
-    rooms.push(room);
-    emitter = emitter.to(room);
-  }
+  for (const room of rooms.slice(1)) emitter = emitter.to(room);
 
   for (const event of events) emitter.emit(event, payload);
 

@@ -35,6 +35,11 @@ import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
+import {
+  emitToConversationParticipants,
+  participantUserRooms,
+  type ParticipantRoomTarget,
+} from './emitToConversationParticipants';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -517,15 +522,17 @@ export class MeeshySocketIOManager {
 
     // conversationId → the reconnecting user's participantId (drives markReceived)
     const ownParticipant = new Map<string, string>();
-    // conversationId → every participant's userId (drives the user-room fanout)
-    const convUserIds = new Map<string, string[]>();
+    // conversationId → every participant, room-addressable (drives the fanout).
+    // Accountless rows are KEPT: `emitToConversationParticipants` names their
+    // room after `Participant.id`. Filtering on `userId` here left an anonymous
+    // sender stuck on a single "sent" tick forever, since the receipt for the
+    // message they sent never reached the only room they are in.
+    const convParticipants = new Map<string, ParticipantRoomTarget[]>();
     for (const row of participantRows) {
       if (row.userId === userId) ownParticipant.set(row.conversationId, row.id);
-      if (row.userId) {
-        const list = convUserIds.get(row.conversationId) ?? [];
-        list.push(row.userId);
-        convUserIds.set(row.conversationId, list);
-      }
+      const list = convParticipants.get(row.conversationId) ?? [];
+      list.push({ id: row.id, userId: row.userId });
+      convParticipants.set(row.conversationId, list);
     }
 
     await Promise.allSettled(
@@ -545,22 +552,20 @@ export class MeeshySocketIOManager {
           summary,
         };
         // Chain the conversation room + each participant's user room, deduped so
-        // Socket.IO delivers the event at most once per socket. Mirrors the two
-        // sibling emitters of this same event — `autoDeliverToOnlineRecipients`
-        // and `broadcastReadStatusUpdate` — which fan out identically so authors
-        // never get stuck on a single "sent" tick after navigating away.
-        const convRoom = ROOMS.conversation(conversationId);
-        let emitter = this.io.to(convRoom);
-        const seenRooms = new Set<string>([convRoom]);
-        for (const pUserId of convUserIds.get(conversationId) ?? []) {
-          const userRoom = ROOMS.user(pUserId);
-          if (seenRooms.has(userRoom)) continue;
-          seenRooms.add(userRoom);
-          emitter = emitter.to(userRoom);
-        }
-        emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
-        emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
-        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms: [...seenRooms] });
+        // Socket.IO delivers the event at most once per socket. Same unit as the
+        // three sibling emitters of this same event — `autoDeliverToOnlineRecipients`,
+        // `broadcastReadStatusUpdate` and the REST mark-as-read route — so authors
+        // never get stuck on a single "sent" tick after navigating away. The
+        // inline copy this replaces was the fourth, and the last one still
+        // addressing by `userId` alone.
+        const rooms = emitToConversationParticipants({
+          io: this.io,
+          conversationId,
+          participants: convParticipants.get(conversationId) ?? [],
+          events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+          payload: drainPayload,
+        });
+        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms });
       })
     );
   }
@@ -2166,9 +2171,12 @@ export class MeeshySocketIOManager {
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
-          for (const p of allParticipants) {
-            if (!p.userId) continue;
-            this.io.to(ROOMS.user(p.userId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          // `userId ?? id` (participantUserRooms) : parité avec le chemin socket
+          // de MessageHandler. Un participant sans compte a une room personnelle
+          // nommée d'après son `Participant.id` — la sauter privait un invité de
+          // lien partagé de tout re-tri de sa liste de conversations.
+          for (const room of participantUserRooms(allParticipants)) {
+            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
           }
 
           // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).

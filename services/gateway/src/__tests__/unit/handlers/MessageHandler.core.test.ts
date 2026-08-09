@@ -1261,14 +1261,14 @@ describe('MessageHandler.broadcastNewMessage', () => {
     expect(payload).not.toHaveProperty('mentionedUsers');
   });
 
-  it('emits CONVERSATION_UPDATED to each participant user room', async () => {
+  it('emits CONVERSATION_UPDATED to each participant user room, accountless ones included', async () => {
     const io = makeMockIo();
     const prisma = makeMockPrisma({
       participant: {
         findMany: jest.fn(async () => [
-          { userId: 'user-a' },
-          { userId: 'user-b' },
-          { userId: null },
+          { id: 'part-a', userId: 'user-a' },
+          { id: 'part-b', userId: 'user-b' },
+          { id: 'part-anon', userId: null },
         ]),
       },
       message: { findUnique: jest.fn(async () => ({ translations: [] })) },
@@ -1283,6 +1283,11 @@ describe('MessageHandler.broadcastNewMessage', () => {
     const toArgs = io._to.mock.calls.map((c: any[]) => c[0]);
     expect(toArgs).toContain('user:user-a');
     expect(toArgs).toContain('user:user-b');
+    // `conversation:updated` est le SEUL signal qui fait remonter une
+    // conversation en tête de liste et apparaître une conversation neuve.
+    // Adressé par `userId` seul, il ne parvenait jamais à un invité de lien
+    // partagé : sa liste ne se retriait pas, et un nouveau fil n'y entrait pas.
+    expect(toArgs).toContain('user:part-anon');
 
     // ConversationUpdatedEventData requires `updatedBy`. With no sender user
     // (anonymous), the payload falls back to the participant senderId — never
