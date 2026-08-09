@@ -1,5 +1,56 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **registration wizard's IDENTITY step field UI** landed (slice
+> `auth-identity-step-fields`, feature-parity §A — slice 4 of the `OnboardingFlowView` Compose
+> decomposition, "First/last name capture" `[~]` gains its field UI half). Re-proven before picking:
+> `RegistrationStepContent.implemented` held only `PSEUDO`/`PHONE`/`EMAIL` — `IDENTITY` still rendered
+> the inert placeholder, confirming both the prior run's "Next slice" note and the `feature-parity.md`
+> §A follow-up ("IDENTITY next (first/last name, no new core needed, same wiring-only shape")). Every
+> decision the step needed was already shipped and tested: `RegistrationFields.firstName`/`lastName`
+> (since `registration-wizard-viewmodel`), `RegistrationStepGate`'s IDENTITY arm (`firstName.isNotBlank()
+> && lastName.isNotBlank()`, since `registration-step-gate-core`, 2026-07-22), and
+> `RegistrationViewModel.onFirstNameChange`/`onLastNameChange` — this slice is the first real UI
+> consumer, one notch simpler than EMAIL (two fields, no availability probe at all — the gate is purely
+> local — and no skip, `RegistrationNavModel.showSkip` stays PROFILE-only). **Added (production, all
+> `apps/android`):** `feature/auth/RegistrationScreen.kt` gains `IdentityStepBody` — header/subtitle
+> copy, two `OutlinedTextField`s (first name, last name) bound to `state.fields.firstName`/`lastName`
+> and `viewModel::onFirstNameChange`/`onLastNameChange`, no available/taken indicator (iOS
+> `StepIdentityView` has no server check either — verified by reading it before assuming one belonged
+> here, unlike PSEUDO/PHONE/EMAIL's tri-state availability) — `RegistrationScreen`'s `when` arm now also
+> dispatches `RegistrationStep.IDENTITY`, and `RegistrationStepContent.implemented` gains `IDENTITY`
+> alongside `PSEUDO`/`PHONE`/`EMAIL`. **+1 core test**
+> (`RegistrationStepContentTest.isImplemented_identity_isTrue`; the "every other step" sweep updated to
+> exclude PSEUDO+PHONE+EMAIL+IDENTITY). **Mutation (RED proof):** the new test against the pre-slice
+> `implemented` set (still only `{PSEUDO, PHONE, EMAIL}`) failed **exactly** `isImplemented_identity_isTrue`
+> (5 run, 1 failed, no collateral) before the one-line core change landed. **Zero new ViewModel tests
+> needed** — `RegistrationStepGateTest` already covers every IDENTITY gate branch
+> (both/first-blank/last-blank/both-blank/whitespace-only, since `registration-step-gate-core`) and
+> `RegistrationViewModelTest` already exercises `onFirstNameChange`/`onLastNameChange` end-to-end via
+> `fillAllValid()` plus the blank-names→null register-mapping assertion
+> (`register_blankOptionalNames_sendsNullNotBlank`); re-ran unmodified and stayed green (52/52) — the
+> regression proof for this Compose-wiring-only slice, per `TDD-COVERAGE.md`'s exemption for
+> `@Composable` glue. **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full
+> `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Reviewer **PASS** (diff `apps/android`
+> only — `core/model` [1-line `implemented` set change, no new files], `feature/auth` [+1 composable in
+> `RegistrationScreen.kt`, the `when` arm, ×4 locale strings], `tasks/feature-parity.md`; SDK purity —
+> `RegistrationStepContent` stays a stateless `:core:model` lookup, `IdentityStepBody` is ordinary UI
+> glue reading ViewModel state, no shared-singleton-plus-product-rule combo; SSOT — reuses
+> `RegistrationStepGate`/`RegistrationViewModel`'s existing firstName/lastName wiring untouched,
+> re-implements none; instant-app — no spinner introduced; UDF — unchanged `RegistrationViewModel` +
+> immutable `StateFlow`; no dead end — Back stays reachable, Next stays correctly disabled until both
+> names are non-blank; no tautological tests; no coverage floor lowered, no existing test weakened).
+> **Next slice:** PASSWORD (needs `PasswordEntry`'s strength/match UI + `PasswordRequirements`'s
+> checklist card, both cores already shipped per `feature-parity.md`), OR LANGUAGE (system/regional
+> picker + live-translation preview, core shipped per `auth-language-step-selection-core`), OR the §C
+> **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header` — re-verify `ChatScreen.kt` before committing a run to it, the "genuinely
+> large" verdict from prior runs is itself a hypothesis to re-check), OR the `TagInputField` composable +
+> `allTags` corpus hydration (still blocked on a new `tags` wire field on `ApiConversation`), OR the
+> tracked **Kover 90% coverage-gate infra**. **Hygiene note (recurring, still unaddressed):**
+> `PROGRESS.md`/`NOTES.md` remain well past the ~1500-line archival threshold in `ROUTINE.md` §Hygiène
+> (unaddressed since at least the `session-logout-teardown` run) — flagging again rather than bundling an
+> archive pass into this slice's commit, per the hygiene section's "separate, dedicated commit" rule.
+
 > On 2026-08-09 the **registration wizard's EMAIL step field UI** landed (slice
 > `auth-email-step-fields`, feature-parity §A — slice 3 of the `OnboardingFlowView` Compose
 > decomposition). Re-proven before picking: `RegistrationStepContent.implemented` held only

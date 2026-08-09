@@ -34,6 +34,10 @@
     <string name="registration_email_label">E-mail</string>
     <string name="registration_email_available">E-mail disponível</string>
     <string name="registration_email_taken">Este e-mail já está em uso</string>
+    <string name="registration_identity_header">Sua identidade no Meeshy</string>
+    <string name="registration_identity_subtitle">Seus amigos poderão te reconhecer.</string>
+    <string name="registration_identity_first_name_label">Nome</string>
+    <string name="registration_identity_last_name_label">Sobrenome</string>
 
     <string name="guest_join_title">Entrar na conversa</string>
     <string name="guest_join_subtitle">Crie uma identidade temporária para entrar</string>
