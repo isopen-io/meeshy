@@ -72,8 +72,10 @@ class AuthViewModel @Inject constructor(
     }
 
     fun logout() {
-        authRepository.logout()
-        realtimeCoordinator.onAuthenticatedChanged(false)
-        _state.value = AuthUiState()
+        viewModelScope.launch {
+            authRepository.logout()
+            realtimeCoordinator.onAuthenticatedChanged(false)
+            _state.value = AuthUiState()
+        }
     }
 }

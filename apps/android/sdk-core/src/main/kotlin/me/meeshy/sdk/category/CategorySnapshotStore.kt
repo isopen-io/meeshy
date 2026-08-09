@@ -34,6 +34,13 @@ public interface CategorySnapshotStore {
 
     /** Replaces the cached snapshot and records [syncedAtMillis] as the sync time. */
     public suspend fun save(categories: List<CategoryOption>, syncedAtMillis: Long)
+
+    /**
+     * Wipes the snapshot back to a cold, never-synced cache — the account-teardown
+     * seam ([me.meeshy.sdk.session.SessionTeardown]): a second account signing in on
+     * the same device must never inherit the previous account's category catalogue.
+     */
+    public suspend fun clearAll()
 }
 
 /** Volatile [CategorySnapshotStore] — for tests and previews. */
@@ -51,6 +58,11 @@ public class InMemoryCategorySnapshotStore(
     override suspend fun save(categories: List<CategoryOption>, syncedAtMillis: Long) {
         snapshot.update { categories }
         syncedAt.update { syncedAtMillis }
+    }
+
+    override suspend fun clearAll() {
+        snapshot.update { null }
+        syncedAt.update { null }
     }
 }
 
@@ -82,6 +94,10 @@ public class DataStoreCategorySnapshotStore(
             prefs[SNAPSHOT] = json.encodeToString(serializer, categories)
             prefs[SYNCED_AT] = syncedAtMillis
         }
+    }
+
+    override suspend fun clearAll() {
+        dataStore.edit { prefs -> prefs.clear() }
     }
 
     private fun decode(raw: String?): List<CategoryOption> =

@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
+import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.category.CategorySnapshotStore
@@ -37,6 +38,8 @@ import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
+import me.meeshy.sdk.session.DefaultSessionTeardown
+import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.theme.DataStoreThemeStore
 import me.meeshy.sdk.theme.ThemeStore
 import javax.inject.Singleton
@@ -169,6 +172,14 @@ object SdkModule {
         }
         return DataStoreAnonymousSessionStore(dataStore, json)
     }
+
+    @Provides
+    @Singleton
+    fun providesSessionTeardown(
+        database: MeeshyDatabase,
+        categorySnapshotStore: CategorySnapshotStore,
+        conversationDraftStore: ConversationDraftStore,
+    ): SessionTeardown = DefaultSessionTeardown(database, categorySnapshotStore, conversationDraftStore)
 
     @Provides
     @Singleton
