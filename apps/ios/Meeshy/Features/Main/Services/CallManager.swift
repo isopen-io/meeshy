@@ -2565,6 +2565,13 @@ final class CallManager: ObservableObject {
 
     func selectCamera(id: String) {
         guard id != selectedCameraId else { return }
+        // §7.1/§7.7 — optimistic picker/mirroring state, corrected on failure
+        // (camera busy, no matching capture format) so neither the picker
+        // selection nor the self-preview mirror stays desynced from the
+        // camera actually in use for the rest of the call. Mirrors the
+        // revert-on-failure pattern already established for switchCamera().
+        let previousSelectedCameraId = selectedCameraId
+        let previousFrontCamera = isUsingFrontCamera
         selectedCameraId = id
         if let cam = availableCameras.first(where: { $0.id == id }) {
             // §7.7 — only the front camera is mirrored; external/back are not.
@@ -2589,11 +2596,14 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                self.webRTCService.switchToCamera(uniqueID: id) { _ in
-                    continuation.resume()
+            let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                self.webRTCService.switchToCamera(uniqueID: id) { success in
+                    continuation.resume(returning: success)
                 }
             }
+            guard !success else { return }
+            self.selectedCameraId = previousSelectedCameraId
+            self.isUsingFrontCamera = previousFrontCamera
         }
     }
 
