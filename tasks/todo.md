@@ -1,3 +1,144 @@
+# Cycle 40 — Le prédicat manquant n'a pas de valeur juste : il en a deux, opposées
+
+Tête prise dans le « reste ouvert » du cycle 39, qui reposait la question du cycle 37 pour la
+quatrième fois : **quelles appartenances sont jointes sans `isActive` ?** Les cycles 37, 38b et 39
+l'ont traitée comme une question à une seule réponse — ajouter le filtre. Ce cycle trouve la famille
+où **ajouter le filtre est exactement le mauvais correctif sur deux sites sur trois.**
+
+Un départ n'efface pas la ligne `Participant` : `POST …/leave` écrit `{ isActive: false, leftAt }`,
+et `POST …/ban` écrit en plus `bannedAt`. Toute porte d'entrée d'une conversation hérite donc d'une
+question que le schéma rend inévitable — *une ligne existe peut-être déjà, et son état dit ce qu'il
+faut en faire.* **Les trois portes y répondaient différemment, et aucune ne la traitait.**
+
+## Lot A — les trois portes d'entrée
+
+| porte | recherche de l'existant | ce qu'obtenait un ancien membre | ce qu'obtenait un BANNI |
+|---|---|---|---|
+| `POST /conversations/join/:linkId` (lien de partage) | `{ conversationId, userId }` — **sans `isActive`** | « vous êtes déjà membre », 200, **jamais réintégré** | 200 « déjà membre » |
+| `POST /conversations/:id/participants` (ajout par un admin) | `{ …, isActive: true }` puis **`create`** | une **SECONDE ligne** | une **ligne neuve et ACTIVE** |
+| `POST /conversations/:id/invite` | `participants` inclus `where: { isActive: true }` puis **`create`** | une **SECONDE ligne** | une **ligne neuve et ACTIVE** |
+
+Trois défauts distincts, produits par le même prédicat absent, **dans les deux directions
+opposées** :
+
+1. **Trop permissif — le bannissement s'évade par la porte d'à côté (sécurité).** Bannir écrit
+   `isActive: false`. Les deux portes d'ajout ne cherchent que les lignes actives, ne trouvent donc
+   pas le banni, et lui **créent une ligne neuve et active**. Le bannissement est défait sans passer
+   par `POST …/unban` — qui exige le rang `admin` là où `POST …/participants` s'ouvre aussi aux
+   `moderator`. **Un modérateur, qui n'a pas le droit de débannir, débannissait par un chemin qui ne
+   s'appelle pas ainsi et n'écrit aucune trace.**
+2. **Trop restrictif — on ne revient jamais (produit).** La porte du lien trouve la ligne inactive,
+   en conclut « déjà membre » et répond 200 **sans rien écrire**. Le client navigue alors vers une
+   conversation que `GET /conversations/:id/messages` refuse, puisqu'elle exige une appartenance
+   ACTIVE (cycle 39, lot B). Aucun autre chemin ne réactive la ligne — `unban` seul le fait, et
+   encore faut-il avoir été banni. **Quitter une conversation rejointe par lien était définitif**, et
+   l'écran ne disait rien d'autre que « vous êtes déjà membre ».
+3. **Lignes en double.** `Participant` ne porte **aucune contrainte d'unicité** sur
+   `(conversationId, userId)` : le schéma ne rattrape rien. Deux lignes actives pour la même
+   personne, c'est une identité d'expéditeur ambiguë (`findFirst` en choisit une au hasard), un
+   fan-out doublé, des non-lus comptés deux fois et des réactions attribuées à un fantôme.
+
+**Ce que ce cycle retient de sa forme.** Les cycles 37 à 39 ont appris à chercher le filtre absent.
+Ici, « ajouter `isActive: true` » réparait la porte 1 **en aggravant** les portes 2 et 3 : le filtre
+fait tomber l'ancien membre dans le `create`, donc dans la seconde ligne. Le prédicat manquant n'a
+pas de valeur juste dans l'absolu — **elle dépend de ce qu'on fait ensuite de la ligne trouvée.**
+C'est cette décision-là, et pas le filtre, qui devait exister à un seul endroit.
+
+`resolveConversationEntry` (`services/conversations/conversationEntryAdmission.ts`) est cet endroit :
+une lecture, quatre issues (`banned` / `already-member` / `rejoin` / `create`). Elle lit **toutes**
+les lignes de la paire, pas la première — les deux portes d'ajout en ont produit des doubles avant
+ce correctif, et un `findFirst` sur un jeu contenant une ligne bannie et une ligne active répondrait
+selon l'ordre de Mongo. L'agrégat est conservateur (le bannissement l'emporte, puis l'appartenance
+active) et réintègre la ligne la plus récente, ce qui **fait converger l'état sans script de
+réparation**.
+
+**Ce que la règle unifiée retient.** Union des intentions, jamais intersection — sauf sur le
+bannissement, seule capacité retirée par ce cycle, et retirée dans le sens que `POST …/ban` énonce
+explicitement. `joinedAt` est **conservé** à la réintégration : il ne date pas la ligne, il borne
+l'historique visible quand le lien porte `allowViewHistory: false`, et le remettre à maintenant
+retirerait à quelqu'un qui revient des messages qu'il avait déjà légitimement lus. `role` et
+`permissions`, eux, repartent de ce que la porte donne à un nouvel arrivant : un ancien `admin` qui
+revient par un lien PUBLIC ne récupère pas son rang dans une ligne périmée (leçon 89).
+
+Clients vérifiés dans les quatre langages (leçon 88) : web `use-conversation-join.ts` /
+`invite-user-modal.tsx`, SDK Swift `ShareLinkService.joinAuthenticated`, iOS, Android. La forme de
+réponse d'une réintégration est **identique** à celle d'une jointure neuve — `JoinAuthenticatedResponse`
+documente d'ailleurs cette idempotence — donc aucun décodeur ne bouge ; le 403 du banni emprunte le
+même canal que le 410 du lien expiré, déjà traité partout.
+
+## Lot B — établir une session E2EE depuis une conversation qu'on a quittée
+
+`routes/signal-protocol.ts` annonce en en-tête qu'il protège contre le « key scraping » et
+l'« épuisement des pré-clés ». `GET /signal/keys/:userId` tient la promesse : conversation partagée
+où **les deux côtés** sont `isActive: true`, ou amitié acceptée.
+
+Cent lignes plus bas, dans le **même fichier**, les deux gardes de `POST /signal/session/establish`
+ne filtraient **ni l'une ni l'autre**. Et cette route n'est pas en lecture seule : elle **consomme la
+pré-clé à usage unique du destinataire** (`preKeyId: null, preKeyPublic: null`).
+
+Conséquence : un ancien membre — dont la ligne survit à `isActive: false`, et qui garde en cache
+local l'identifiant de la conversation — **détruisait à volonté la pré-clé de n'importe quel membre
+resté**. C'est l'épuisement de pré-clés que l'en-tête dit prévenir, atteint par la porte qui ne
+vérifie pas ce que la porte voisine vérifie. Symétriquement, une session s'ouvrait vers un
+destinataire parti, qui n'y lira jamais rien.
+
+Le correctif est le `where` du jumeau, sur les deux côtés. iOS (`E2ESessionManager.getOrCreateSession`
+→ `E2EAPI.establishSession`) est le seul appelant et appelle `fetchBundle` juste avant, sur la route
+déjà filtrée : **aucune capacité vivante n'est retirée.**
+
+## Preuve
+
+**20 tests neufs, RED→GREEN, 14 rouges observés** avant correctif :
+`conversation-rejoin-and-ban-evasion.test.ts` (14 tests, 9 rouges — dont le `create` appelé avec une
+cible bannie, imprimé dans la sortie d'échec) et `signal-session-departed-member.test.ts` (6 tests,
+5 rouges). Plus 13 tests d'unité sur `conversationEntryAdmission`.
+
+Les doubles Prisma de ces deux fichiers **discriminent réellement** — sur `isActive` et `bannedAt` —
+et c'est ce qui les rend capables de voir les défauts. Celui de `signal-protocol-routes.test.ts`
+rend ses deux lignes **dans l'ordre d'appel, quel que soit le `where`** : il ne pouvait structurellement
+pas mesurer le lot B, et son commentaire d'en-tête annonçait pourtant couvrir « user not a
+participant → 403 ».
+
+Un faux positif a été corrigé en cours de route : le premier harnais donnait à l'appelant des portes
+d'ajout le rang `member`, si bien que le 403 de **rang** satisfaisait l'assertion qui mesurait le 403
+de **bannissement**. Le test passait pour la mauvaise raison.
+
+Suite gateway : **627/627 suites, 16 049 tests verts**, `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Les doublons `Participant` déjà en base ne sont pas comptés.** `resolveConversationEntry` les
+  fait converger à la prochaine entrée, mais une paire dont les deux lignes sont ACTIVES reste
+  ambiguë et personne ne sait combien il y en a. Un script de dénombrement (pas de réparation)
+  demanderait un accès MongoDB — action humaine, comme les deux scripts déjà en attente.
+- **`POST /signal/session/establish` n'établit aucune session.** Le `preKeyBundle` que la route
+  compose sur vingt lignes n'est **lu par personne** : `signalService` est récupéré, testé non-nul,
+  puis abandonné. Le seul effet observable de la route est de **détruire** la pré-clé du
+  destinataire. Ce n'est pas un oubli à corriger d'un appel — la vraie établissement de session
+  demande `@signalapp/libsignal-client` côté serveur et un magasin de sessions ; la route porte un
+  `Note:` qui le dit. **Tête sérieuse du prochain cycle**, à instruire avant de toucher : soit on
+  l'implémente, soit on cesse de consommer une pré-clé qu'on n'utilise pas.
+- **Qui a le droit d'épingler ?** (cycle 39) — inchangé, toujours en attente d'une décision produit.
+- **L'asymétrie édition/suppression sur l'appartenance du non-auteur** (cycle 38b) et
+  **l'appartenance active de l'auteur** (cycle 34) attendent le même arbitrage, à trancher ensemble.
+- **`attachments/metadata.ts:185`** lit toujours `registeredUser?.role` dans le jeton — vérifié ce
+  cycle, non corrigé : c'est la suppression d'une pièce jointe par son déposant ou un admin GLOBAL,
+  sans dimension de conversation, donc hors de la famille traitée ici.
+- **Reste à balayer sur la question du cycle 37** : les **appels** (`routes/calls.ts`, cinq jointures
+  d'appartenance). Les **réactions** ont été vérifiées ce cycle — `ReactionHandler` filtre déjà
+  `isActive` sur ses deux chemins, et les lectures de `ReactionService` sont des enrichissements,
+  pas des gardes. Le **partage de lien** est traité par le lot A.
+- **La file d'attente de fan-out** (D1 du cycle 32) — neuvième report, même raison : aucun accès aux
+  logs de production.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b).
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`DELETE /admin/posts/:postId` devrait déléguer à `PostService.deletePost`** (cycle 38).
+- **`@Display Name` inextractible dans le domaine social** — quatorzième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`.
+- **Les deux scripts de réparation de base** attendent un accès MongoDB — action humaine.
+- **`eslint` ne peut pas tourner sur le gateway** : aucun `eslint.config.js` depuis ESLint v9.
+  Condition préexistante, non couverte par la CI — qui ne gate que sur `test:coverage`.
+
 # Cycle 39 — Le cycle 38b a unifié qui peut supprimer. Personne n'avait vérifié QUOI on mute.
 
 Tête prise dans le « reste ouvert » du cycle 38b, qui désignait l'épinglage comme candidat immédiat

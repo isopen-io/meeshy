@@ -115,7 +115,16 @@ function createMockFastify() {
   const prismaOnFastify = {
     conversation: { findUnique: jest.fn<any>() },
     user: { findUnique: jest.fn<any>() },
-    participant: { create: jest.fn<any>() },
+    // `findMany` sert la décision d'entrée (`resolveConversationEntry`) : elle
+    // lit TOUTES les lignes de la paire (conversation, utilisateur), y compris
+    // celles qu'un départ ou un bannissement a laissées inactives — que
+    // `conversation.participants`, chargé avec `isActive: true`, ne peut pas
+    // voir. Vide par défaut = primo-arrivant.
+    participant: {
+      create: jest.fn<any>(),
+      update: jest.fn<any>(),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
   };
   const joinUserToConversationRoom = jest.fn<any>().mockResolvedValue(undefined);
   const socketIOHandler = {
@@ -726,7 +735,7 @@ describe('POST /conversations/join/:linkId', () => {
   it('returns success when user is already a member', async () => {
     const { prisma, reply, route } = getJoinRoute();
     prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant());
+    prisma.participant.findMany.mockResolvedValue([makeParticipant()]);
     const req = makeRequest({ params: { linkId: LINK_ID } });
     await route.handler(req, reply);
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({
@@ -1045,8 +1054,9 @@ describe('POST /conversations/:id/invite', () => {
   it('returns 400 when user is already a member', async () => {
     const { fastify, reply, route } = getInviteRoute();
     const inviter = makeInviterParticipant('admin');
-    const existingMember = { id: 'existing', userId: INVITEE_ID, role: 'member', user: { id: INVITEE_ID, username: 'bob', role: 'USER' } };
+    const existingMember = { id: 'existing', userId: INVITEE_ID, role: 'member', isActive: true, bannedAt: null, user: { id: INVITEE_ID, username: 'bob', role: 'USER' } };
     fastify.prisma.conversation.findUnique.mockResolvedValue(makeConversation([inviter, existingMember]));
+    fastify.prisma.participant.findMany.mockResolvedValue([existingMember]);
     fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);

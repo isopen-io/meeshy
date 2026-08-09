@@ -390,11 +390,22 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         }
         const { recipientUserId, conversationId } = bodyResult.data;
 
-        // SECURITY: Verify user is a participant in the conversation
+        // SECURITY: Verify user is an ACTIVE participant in the conversation.
+        //
+        // `isActive: true` n'est pas décoratif ici. Un départ ne supprime pas la
+        // ligne `Participant`, il la passe à `isActive: false` — et cette route
+        // consomme la pré-clé à usage unique du destinataire un peu plus bas.
+        // Sans ce filtre, un ancien membre qui a gardé l'identifiant de
+        // conversation en cache local détruisait à volonté la pré-clé de
+        // n'importe quel membre resté : l'épuisement de pré-clés que l'en-tête
+        // de ce fichier dit prévenir, par la porte qui ne vérifiait pas ce que
+        // `GET /signal/keys/:userId` vérifie cent lignes plus haut sur ses DEUX
+        // côtés.
         const isParticipant = await prisma.participant.findFirst({
           where: {
             userId,
-            conversationId
+            conversationId,
+            isActive: true
           }
         });
 
@@ -408,11 +419,15 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'You are not a participant in this conversation');
         }
 
-        // SECURITY: Verify recipient is also a participant
+        // SECURITY: Verify recipient is also an ACTIVE participant — chiffrer
+        // vers quelqu'un qui a quitté la conversation revient à ouvrir une
+        // session avec un destinataire qui n'y lira plus rien, tout en brûlant
+        // sa pré-clé.
         const recipientIsParticipant = await prisma.participant.findFirst({
           where: {
             userId: recipientUserId,
-            conversationId
+            conversationId,
+            isActive: true
           }
         });
 
