@@ -82,9 +82,19 @@ privés. Côté socket, l'ACK rend « Post/Comment not found » pour la même ra
   bornées au lieu de matérialiser le carnet d'adresses. Définition du contact DM reprise mot pour
   mot du feed. **En panne, il refuse.**
 
-## Contrepartie assumée
+## Contreparties assumées
 
-**Un utilisateur qui perd l'accès à un post ne peut plus retirer une réaction qu'il y avait
+**1. Un contact DM non-ami perd le droit d'ÉCRIRE dans le fil d'un post `FRIENDS`/`EXCEPT` qu'il
+peut pourtant VOIR** (il garde la lecture). C'est le seul cas où une action qui réussissait pour un
+utilisateur *voyant* le post échoue désormais — il mérite d'être appelé par son nom plutôt que
+caché derrière « on ferme un trou ». Ce n'est pas un effet de bord : c'est exactement la décision
+produit du 2026-07-08 citée dans `postVisibility.ts` (« un DM-contact peut ouvrir une story FRIENDS
+et compter comme viewer, mais pas y réagir »), restée sans point d'application jusqu'ici. Si
+l'équipe produit veut au contraire ouvrir l'interaction aux contacts DM, la correction tient en une
+ligne (`canUserInteractWithPost` passant `includeDirectContacts: true`) — et doit se faire en
+RE-DÉCIDANT l'ACL, jamais en retirant la garde. **Point de validation humaine.**
+
+**2. Un utilisateur qui perd l'accès à un post ne peut plus retirer une réaction qu'il y avait
 laissée.** Elle lui est de toute façon invisible, et une ACL qui dépend du sens du geste est un
 footgun ; le retrait suit donc la pose. À rouvrir si un cas d'usage réel apparaît.
 
