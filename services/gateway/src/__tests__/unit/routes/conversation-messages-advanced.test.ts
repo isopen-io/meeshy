@@ -228,7 +228,7 @@ const createMockFastify = () => {
     notificationService: null,
     mentionService: null,
     translationService: {
-      _processRetranslationAsync: jest.fn().mockResolvedValue(undefined),
+      retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
     },
     _routes: routes,
     _mockTo: mockTo,
@@ -291,7 +291,7 @@ const makeExistingMessage = (overrides: any = {}) => ({
 });
 
 const makeTranslationService = (): any => ({
-  _processRetranslationAsync: jest.fn().mockResolvedValue(undefined),
+  retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
 });
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -842,7 +842,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('retranslates from the stored language when the body omits it', async () => {
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage({ originalLanguage: 'en' }));
       const retranslate = jest.fn<any>().mockResolvedValue(undefined);
-      fastify.translationService = { _processRetranslationAsync: retranslate };
+      fastify.translationService = { retranslateMessageAsync: retranslate };
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
         content: 'hello',
@@ -908,7 +908,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('continues when retranslation fails', async () => {
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       fastify.translationService = {
-        _processRetranslationAsync: jest.fn().mockRejectedValue(new Error('translation error')),
+        retranslateMessageAsync: jest.fn().mockRejectedValue(new Error('translation error')),
       };
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
@@ -1104,6 +1104,76 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       // Should not fail — mention error is caught
       expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // ─── Ce que l'édition PUBLIE ────────────────────────────────────────────
+    //
+    // L'invalidation de `translations` vivait dans un SECOND `update`, placé
+    // dans le bloc de retraduction — donc APRÈS que `updatedMessage` (le
+    // produit du premier `update`, qui compose la réponse ET la charge
+    // `message:edited`) a été capturé. La ligne relue portait le texte d'APRÈS
+    // et les traductions d'AVANT, et c'est cette paire qui partait vers toute
+    // la conversation. Le commentaire du code affirmait l'inverse.
+    describe('une édition ne publie jamais la traduction du texte d\'avant', () => {
+      // `update` rend ce qu'il vient d'écrire, comme le ferait la base : sans
+      // cela, aucun mock ne peut distinguer « invalidé dans l'écriture » de
+      // « invalidé après la lecture ».
+      const writeReflectsWhatItWrote = (storedTranslations: unknown) => {
+        prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
+          translations: storedTranslations,
+        }));
+        prisma.message.update.mockImplementation(async ({ data }: any) => ({
+          id: MSG_ID,
+          conversationId: CONV_ID,
+          content: 'New content',
+          validatedMentions: [],
+          translations: storedTranslations,
+          ...data,
+        }));
+      };
+
+      const stale = {
+        fr: { text: 'le texte AVANT édition', translationModel: 'basic', createdAt: new Date() },
+      };
+
+      it('invalide les traductions dans l\'écriture du contenu elle-même', async () => {
+        writeReflectsWhatItWrote(stale);
+        const req = makeRequest({
+          params: { id: CONV_ID, messageId: MSG_ID },
+          body: { content: 'New content' },
+        });
+
+        await getEditHandler(fastify)(req, makeReply());
+
+        expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
+          where: { id: MSG_ID, deletedAt: null },
+          data: expect.objectContaining({ translations: null }),
+        }));
+      });
+
+      it('n\'écrit pas une seconde fois pour périmer ce que la première écriture a déjà vidé', async () => {
+        writeReflectsWhatItWrote(stale);
+        const req = makeRequest({
+          params: { id: CONV_ID, messageId: MSG_ID },
+          body: { content: 'New content' },
+        });
+
+        await getEditHandler(fastify)(req, makeReply());
+
+        expect(prisma.message.update).toHaveBeenCalledTimes(1);
+      });
+
+      it('ne fait pas dériver la charge diffusée d\'une ligne portant encore les traductions périmées', async () => {
+        writeReflectsWhatItWrote(stale);
+        const req = makeRequest({
+          params: { id: CONV_ID, messageId: MSG_ID },
+          body: { content: 'New content' },
+        });
+
+        await getEditHandler(fastify)(req, makeReply());
+
+        expect(mockTransformTranslationsToArray).toHaveBeenCalledWith(MSG_ID, null);
+      });
     });
   });
 
@@ -1550,7 +1620,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getPatchHandler(fastify)(req, reply);
 
-      expect(fastify.translationService._processRetranslationAsync).toHaveBeenCalledWith(
+      expect(fastify.translationService.retranslateMessageAsync).toHaveBeenCalledWith(
         MSG_ID,
         expect.objectContaining({ id: MSG_ID, content: 'Updated', conversationId: CONV_ID })
       );
@@ -1567,7 +1637,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         conversation: { identifier: 'meeshy', participants: [] },
       });
       fastify.translationService = {
-        _processRetranslationAsync: jest.fn().mockRejectedValue(new Error('translation error')),
+        retranslateMessageAsync: jest.fn().mockRejectedValue(new Error('translation error')),
       };
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
@@ -1703,7 +1773,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ content: 'processed content' }),
       }));
-      expect(fastify.translationService._processRetranslationAsync).toHaveBeenCalledWith(
+      expect(fastify.translationService.retranslateMessageAsync).toHaveBeenCalledWith(
         MSG_ID,
         expect.objectContaining({ content: 'processed content' })
       );
@@ -2847,7 +2917,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         socketIOHandler: null, // null at registration time
         notificationService: null,
         mentionService: null,
-        translationService: { _processRetranslationAsync: jest.fn().mockResolvedValue(undefined) },
+        translationService: { retranslateMessageAsync: jest.fn().mockResolvedValue(undefined) },
         _routes: routes,
       };
       return f;

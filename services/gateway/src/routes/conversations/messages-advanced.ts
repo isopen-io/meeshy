@@ -209,13 +209,22 @@ export function registerMessagesAdvancedRoutes(
       // par id réussit quel que soit `deletedAt` — et `message:edited`
       // partirait vers des clients qui l'ont déjà retirée. Prisma lève P2025
       // quand rien ne matche : traduit en 404 plus bas, pas en 500.
+      // `translations: null` appartient à CETTE écriture : un nouveau contenu
+      // périme ses traductions à l'instant où il est écrit. L'invalidation
+      // vivait plus bas, dans le bloc de retraduction — donc APRÈS la capture
+      // de `updatedMessage`, qui compose la réponse HTTP ET la charge
+      // `message:edited`. Les deux emportaient la traduction du texte d'AVANT,
+      // et le Prisme Linguistique fait que la plupart des lecteurs ne voient
+      // QUE celle-là : ils relisaient l'ancien message, présenté comme la
+      // traduction du nouveau.
       const updatedMessage = await prisma.message.update({
         where: { id: messageId, deletedAt: null },
         data: {
           content: processedContent,
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
-          editedAt: new Date()
+          editedAt: new Date(),
+          translations: null
         },
         include: {
           sender: {
@@ -318,16 +327,11 @@ export function registerMessagesAdvancedRoutes(
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 
-        // Invalider les traductions en base avant de lancer la retraduction.
-        // La purge du cache mémoire LRU, elle, n'est plus faite ici : elle vit
-        // désormais dans `_processRetranslationAsync`, en tête, pour les QUATRE
-        // transports d'édition. Elle n'était câblée que sur celui-ci — le
-        // socket et `PUT /messages/:messageId` (le client iOS) laissaient donc
-        // la traduction du texte d'AVANT servie pour le texte d'APRÈS.
-        await prisma.message.update({
-          where: { id: messageId },
-          data: { translations: null }
-        });
+        // L'invalidation de `translations` en base n'est plus faite ici : elle
+        // appartient à l'écriture du contenu, plus haut, et la refaire après la
+        // capture de `updatedMessage` rouvrirait la fenêtre que cette écriture
+        // vient de fermer. La purge du cache mémoire LRU, elle, vit dans
+        // `_processRetranslationAsync`, en tête, pour les QUATRE transports.
 
         // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links).
         // La langue source est celle qui vient d'être ÉCRITE — donc la valeur
@@ -341,8 +345,11 @@ export function registerMessagesAdvancedRoutes(
           senderId: existingMessage.senderId
         };
 
-        // Déclencher la retraduction via la méthode privée existante
-        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+        // Entrée PUBLIQUE du service, comme sur le handler socket. Le `as any`
+        // qui vivait ici visait `_processRetranslationAsync`, la méthode privée
+        // que `retranslateMessageAsync` se contente d'exposer : deux vocabulaires
+        // pour un même geste, dont un qui perçait l'encapsulation.
+        await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
         logger.info(`Edit - Retranslation queued for message ${messageId}`);
 
       } catch (translationError) {
@@ -364,8 +371,10 @@ export function registerMessagesAdvancedRoutes(
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
       // `translations` est stocké en MongoDB sous forme d'objet (clé = langue) mais le contrat API attend
       // un tableau (`[APITextTranslation]` côté iOS) : sans cette transformation, iOS échoue au décodage
-      // avec "Type mismatch for type Array<Any> at path data.translations". La retraduction qui suit
-      // invalide `translations` en base, donc le payload renvoyé reflète cet état : `[]`.
+      // avec "Type mismatch for type Array<Any> at path data.translations". L'écriture du contenu a déjà
+      // invalidé `translations`, donc `updatedMessage` — son produit — porte bien `null`, et le payload
+      // reflète cet état : `[]`. Cette phrase désignait auparavant la retraduction qui SUIT, qui invalidait
+      // trop tard pour la charge déjà composée.
       const messageResponse = {
         ...updatedMessage,
         conversationId,
@@ -774,7 +783,9 @@ export function registerMessagesAdvancedRoutes(
           senderId: message.senderId
         };
 
-        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+        // Entrée PUBLIQUE du service (voir le sibling PUT) : `retranslateMessageAsync`
+        // expose `_processRetranslationAsync`, que ce `as any` atteignait de force.
+        await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
       } catch (translationError) {
         logger.error('Erreur lors de la retraduction', translationError);
         // Ne pas faire échouer l'édition si la retraduction échoue
