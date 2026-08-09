@@ -8,7 +8,13 @@ import MeeshyUI
 /// SDK obligerait à alimenter le catalogue `.module` et rendrait du français
 /// en dur quelle que soit la langue de l'interface — le défaut que traîne
 /// `LiveLocationDuration.displayText`.
-enum LocationSharingLabels {
+/// `nonisolated` sur le TYPE : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous
+/// `nonisolated`. Sans cette annotation, ces fonctions pures deviennent
+/// isolées au main actor et les tests ne peuvent plus les appeler. Même
+/// motif que les helpers de la Share extension (`ShareSession`,
+/// `ShareConversationStore`).
+nonisolated enum LocationSharingLabels {
 
     static func precisionTitle(_ precision: LocationPrecision) -> String {
         switch precision {
@@ -63,6 +69,30 @@ enum LocationSharingLabels {
         case .hybrid:   return "globe.europe.africa"
         case .imagery:  return "photo"
         }
+    }
+
+    /// Titre du lieu affiché : nom et adresse, sans redite.
+    ///
+    /// `LocationPickerModel.reverseGeocode` construit l'adresse en partant de
+    /// `placemark.name` — elle CONTIENT donc déjà le nom quand le lieu vient
+    /// d'un résultat de recherche. Les concaténer sans le voir affiche
+    /// « Tour Eiffel · Tour Eiffel, Champ de Mars, Paris » sur le chemin le
+    /// plus courant du picker.
+    ///
+    /// Le test de contenance est fait sur l'adresse, pas une simple égalité :
+    /// c'est une SOUS-chaîne, jamais une répétition à l'identique.
+    static func placeTitle(name: String?, address: String?) -> String? {
+        let cleanName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanAddress = address?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let cleanName, !cleanName.isEmpty else {
+            return (cleanAddress?.isEmpty == false) ? cleanAddress : nil
+        }
+        guard let cleanAddress, !cleanAddress.isEmpty else { return cleanName }
+
+        return cleanAddress.localizedCaseInsensitiveContains(cleanName)
+            ? cleanAddress
+            : "\(cleanName) · \(cleanAddress)"
     }
 }
 
