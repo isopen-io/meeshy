@@ -106,6 +106,18 @@ avancer d'exactement une phase. Ne redéfinis rien ici — `ROUTINE.md` est la s
 ne pas la dupliquer ni la contredire. Après le merge, pousse le commit séparé de mise à jour de
 `tasks/lane-cursor.md` (cf. §Choix de la lane) — jamais dans le diff `apps/android`-only.
 
+**RE-PROUVER avant de choisir un slice — une note « Next slice » est une hypothèse, pas un
+fait.** L'itération 2 a découvert qu'une recommandation « à faire » répétée pendant plusieurs runs
+(catégorie expand/collapse) était en réalité déjà livrée — personne n'avait rouvert le composant
+avant de recopier la note. Avant de retenir le slice suggéré par `PROGRESS.md`/`feature-parity.md`,
+va lire le code réel visé (pas seulement la note) et confirme que le gap existe encore. Si un slice
+est resté non pris pendant plusieurs runs, ne présume pas automatiquement qu'il faut le re-scoper en
+plus petit (ça a marché pour `category-picker-create`, un composant réutilisable déjà prêt à
+brancher) — vérifie la surface réellement restante avant de conclure ; parfois c'est juste
+légitimement trop gros pour un slice (ex. `OnboardingFlowView`, 8 étapes d'UI distinctes à créer),
+et la bonne action est de documenter une décomposition concrète en sous-slices plutôt que de le
+re-proposer tel quel.
+
 **Condition de complétion (« 100 % parité perf/qualité »)** : toutes les cases de
 `feature-parity.md` cochées **et vérifiées**, **et** les gates de `ARCHITECTURE.md §17` actifs et
 verts — Roborazzi (charte graphique), `:macrobenchmark` (cold-start ≤ 1 s + scroll jank),

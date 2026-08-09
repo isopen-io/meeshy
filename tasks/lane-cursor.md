@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=category-picker-create
+lane=ANDROID android_streak=2 last_run=session-logout-teardown

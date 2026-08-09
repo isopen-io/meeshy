@@ -3112,3 +3112,57 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   Keying the search-query `remember` on the `DropdownMenu`'s own `expanded` boolean gives a fresh state
   instance each time the menu transitions to visible, without needing an explicit `LaunchedEffect` reset —
   cheaper than threading a reset callback through `onDismiss`.
+
+## Slice `session-logout-teardown` (2026-08-09)
+- **A "Next slice" note is a hypothesis, not a fact — re-prove it against the actual code before
+  spending a run on it or before choosing something else because of it.** The routine's own
+  "category expand/collapse toggle still unbuilt" recommendation (recorded in `feature-parity.md` §B
+  after `category-picker-create`) was flat-out wrong: `CollapsibleSection` has had a working
+  `clickable { expanded = !expanded }` header since its very first commit (`560dce4e9`, phase-4 design
+  system), months before that note was written, and `ConversationListScreen` already wraps every
+  section in one. Nobody had actually opened the component before writing the note. Cost ~10 minutes
+  to catch by reading the file instead of trusting the claim — cheap insurance against burning a whole
+  run on already-done work. Same discipline the iOS-dette lane already mandates ("RE-PROUVER avant de
+  corriger") applies equally to the Android lane's "Next slice" pointer, even though `ROUTINE.md`
+  doesn't say so explicitly today.
+- **"Recommended in every run's Next-slice note but never picked for 15+ runs" is a real signal — but
+  it can mean two different things, and they need different responses.** For `category-picker-create`
+  it meant "reads as one big slice, actually isn't" (fix: re-scope it down, do it). For the paged
+  `OnboardingFlowView` Compose scaffold it means the opposite: it genuinely IS oversized for one
+  slice — 8 step screens, zero registration-wizard UI existing yet beyond `LoginScreen`/
+  `GuestJoinScreen`, and the PROFILE step alone needs a photo-picker + compression pipeline. Don't
+  pattern-match "recurring but unpicked" straight to "just re-scope and ship it" — check the actual
+  remaining surface area first. Left a concrete decomposition (named sub-slices, starting with a
+  `auth-onboarding-shell` pager+PSEUDO-step slice) in `feature-parity.md` §A instead of either
+  attempting the whole thing or re-listing it as one vague bullet for run #16.
+- **Room's `RoomDatabase.clearAllTables()` is a real, first-class "wipe everything" primitive — reach
+  for it before hand-rolling per-DAO `clear()` calls.** One call replaces N `dao.clear()` calls across
+  every entity and stays correct automatically as new entities/tables are added (iOS's `CacheCoordinator
+  .reset()` — the parity target — is the same "wipe every store" shape). It's a **blocking** call
+  though (not `suspend`), so it must be dispatched (`withContext(Dispatchers.IO)`) — calling it
+  straight from a `viewModelScope.launch` body (Main dispatcher) would violate `StrictMode`/hang the UI
+  thread on a real device even though Robolectric's JVM test won't catch that.
+- **`Room.inMemoryDatabaseBuilder(...).allowMainThreadQueries().build()` (Robolectric) is the existing,
+  proven pattern for testing real Room behaviour in this repo** (see `OutboxRepositoryTest`) — reuse it
+  for anything that needs to prove a *real* Room effect (like `clearAllTables()`) rather than mocking
+  `MeeshyDatabase` and only checking the mock recorded a call. A seeded-then-wiped-then-reread
+  assertion is strictly stronger evidence than `verify { database.clearAllTables() }`.
+- **A store's `clearAll()` sibling to its existing `clear(id)`/`save()` is cheap to add and worth
+  adding proactively when a teardown seam needs it**, rather than reaching into the DataStore
+  `Preferences` object from outside the store's own file. `DataStoreCategorySnapshotStore.clearAll()`
+  and `DataStoreConversationDraftStore.clearAll()` are both one-liners (`dataStore.edit { it.clear() }`)
+  because each backing file is dedicated to exactly one store — safe to nuke the whole file. Would need
+  a narrower `prefs.asMap().keys.filter { ... }.forEach(prefs::remove)` if a DataStore file were ever
+  shared between two stores; it currently isn't for either of these two.
+- **Changing a repository method from sync to `suspend` ripples to every constructor call site in
+  tests, not just the direct caller.** `AuthRepository.logout()` becoming `suspend` broke compilation
+  in three test files (`AuthRepositoryTest`, `AuthViewModelTest`, `RegistrationViewModelTest`) purely
+  because their `AuthRepository(...)` constructor calls needed the new `SessionTeardown` parameter —
+  `grep -rn "AuthRepository("` across the whole tree before declaring the change done is cheaper than
+  discovering the second and third call sites one gate-failure at a time.
+- **`PROGRESS.md` is now 14k+ lines, ~10x the ~1500-line hygiene threshold in `ROUTINE.md`, and has
+  been over that threshold for a while (it was already 14283 lines at the start of this run) —**
+  archiving it is a real, standalone follow-up (move everything but the ~300 most recent lines to
+  `PROGRESS-archive-<YYYY-MM>.md`, dedicated commit per the hygiene section) that no run has actually
+  done yet. Flagging rather than attempting it inside this slice's run — it's a big enough diff to
+  deserve its own dedicated pass, not a rider on a security-fix slice.

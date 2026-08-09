@@ -1,5 +1,59 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **logout/account-switch cache teardown** landed (slice `session-logout-teardown`,
+> feature-parity §A Auth — "Login/logout teardown wiping E2EE keys and per-user caches", a `[ ]`
+> untouched, security-flagged gap: none of Meeshy's on-device stores are namespaced by userId, so a
+> second account signing in on a shared device inherited the previous account's conversations,
+> messages, stories, call history, friends, category catalogue and unsent draft text). Faithful port of
+> iOS `RootView`'s logout branch (`CacheCoordinator.reset()` + friendship-cache clear, part-13 audit:
+> "wiping is mandatory to prevent cross-account leaks"). **Added (production, all `apps/android`):**
+> (1) `:sdk-core/session/SessionTeardown.wipe()` — the single account-teardown seam: `MeeshyDatabase
+> .clearAllTables()` (dispatched `Dispatchers.IO` since Room's call is blocking) wipes all 11 entities
+> (conversations, messages, stories, outbox, call history, friends, suggestions, profile/status-bar
+> caches, sync meta) in one transaction; `CategorySnapshotStore.clearAll()` (new) resets the category
+> catalogue to a cold, never-synced cache; `ConversationDraftStore.clearAll()` (new) empties every
+> per-conversation draft. Idempotent by construction (every wipe is a hard reset, not a delta).
+> (2) `AuthRepository.logout()` is now `suspend`, awaits the teardown after clearing tokens/session —
+> the caller may treat the device as clean the instant it returns; wired into DI
+> (`SdkModule.providesSessionTeardown`). (3) `AuthViewModel.logout()` wraps the call in
+> `viewModelScope.launch`, keeping its public signature synchronous so `MeeshyApp.kt`'s two call sites
+> (conversations + settings logout) needed zero changes. **Deliberately out of scope:** the theme/
+> language/notification/media-download/privacy DataStores — audited and left un-wiped as device-level
+> UX preferences (several server-synced), not per-account content; mirrors iOS, where
+> `UserPreferencesManager` isn't part of `CacheCoordinator.reset()` either. **E2EE note:** Android has
+> no client-side Signal/identity-key store yet (grepped — none exists), so "wiping E2EE keys" is
+> currently moot; `wipe()` is the seam where that clear lands once key material exists client-side.
+> **+9 behavioural tests:** `CategorySnapshotStoreTest` +2, `ConversationDraftStoreTest` +2,
+> `SessionTeardownTest` +4 (new file, Robolectric + in-memory Room — seeded-outbox wipe / category
+> reset / draft wipe / idempotent-on-second-call), `AuthRepositoryTest` +1 (logout invokes the teardown
+> exactly once), `AuthViewModelTest` +1 (logout wipes before the authenticated state clears,
+> end-to-end through the live coroutine); 2 existing tests adapted (not weakened) to the new suspend/
+> async signature — same assertions, `runTest`/`advanceUntilIdle` added. **Mutation (RED proof):**
+> dropping the category/draft clears from `wipe()` (Room clear kept) fails **exactly** the 2 tests
+> asserting those two stores post-wipe (3 run, 2 failed), the Room-wipe and idempotency tests staying
+> green; restored after. **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full
+> `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Reviewer **PASS** (diff `apps/android`
+> only — 1 new core + 1 new test file + 2 store `clearAll` methods/tests + `AuthRepository`/
+> `AuthViewModel` wiring + 3 adapted test call sites + DI provider + tracking docs; SDK purity —
+> `SessionTeardown` is ordinary `:sdk-core` repository-adjacent plumbing, no product "when" decision
+> baked in, it always wipes on logout; SSOT — one teardown seam reusing each store's own persistence,
+> no reimplementation; no tautological tests; no coverage floor lowered, no existing test weakened).
+> **Correction to a stale prior note:** re-investigated the long-recommended "category expand/collapse
+> toggle" item before picking a slice and found it was **already shipped** — `CollapsibleSection`
+> (`:sdk-ui`) has had a working `clickable { expanded = !expanded }` header since its first commit
+> (`560dce4e9`), and `ConversationListScreen` already wraps every section in one; the "still unbuilt"
+> claim in `feature-parity.md` §B was never re-proven against the code. Corrected there — see that
+> file's §B "Correction (2026-08-09)" note. **Also evaluated and deliberately deferred:** the paged
+> `OnboardingFlowView` Compose scaffold (Auth) — confirmed genuinely oversized for one slice (8 step
+> screens, zero existing UI beyond `LoginScreen`/`GuestJoinScreen`), not merely under-prioritized;
+> left a decomposition recommendation in `feature-parity.md` §A instead of re-listing it whole.
+> **Next slice:** the §C **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring
+> since `chat-pinned-day-header`), OR `auth-onboarding-shell` (first named sub-slice of the wizard
+> scaffold per the decomposition note above — pager/progress-bar/nav-chrome container + PSEUDO step,
+> reachable from a new "Sign up" link on `LoginScreen`), OR the `TagInputField` composable + `allTags`
+> corpus hydration (still blocked on a new `tags` wire field on `ApiConversation`), OR the tracked
+> **Kover 90% coverage-gate infra**.
+
 > On 2026-08-08 the **conversation category picker + create** landed (slice `category-picker-create`,
 > feature-parity §B — "Conversation category create + expand/collapse", the *create* half; expand/collapse
 > and tags remain open). Two pure `:core:model` cores shipped 2026-07-26
