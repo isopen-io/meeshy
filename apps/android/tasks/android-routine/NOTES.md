@@ -3262,3 +3262,35 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   simultaneously "prove RED" and "prove the mutation (reverting the one-line change) fails exactly this
   test" — no separate revert-then-rerun step needed when the production change is a single-line set
   literal with no other logic to accidentally break.
+
+## Slice `auth-password-step-fields` (2026-08-09)
+- **A same-named type on each platform is not proof of a faithful port — read both definitions before
+  reusing or porting.** iOS declares TWO distinct `PasswordStrength` enums: a file-local one inside
+  `OnboardingStepViews.swift` (4 bands: weak/fair/good/strong) used only by the onboarding
+  `StepPasswordView`, and a separate one in `MeeshyUI/Auth/Components/PasswordStrengthIndicator.swift`
+  (6 bands) used by `ChangePasswordView`/`ForgotPasswordView` — Android's `PasswordStrength` core
+  already ports the *second* one. Diffing their scoring formulas (both sum the identical six booleans:
+  length≥8, length≥12, uppercase, lowercase, digit, special-char) before assuming they're the same type
+  is what made "reuse the already-shipped 6-band core for onboarding too" a defensible SSOT call
+  instead of an accidental parity miss — same signal, more granular presentation, not different math
+  silently substituted for the real one. The prior `auth-password-requirements` slice's note ("The
+  strength *meter* score already existed") had already made this call; this slice just had to verify
+  it before trusting it, per the routine's own "re-prove before picking" discipline.
+- **A registration-branch's working tree is not automatically a `claude/apps/android/<slice-id>`
+  branch — create the branch BEFORE editing files, not after.** This run wrote the RED test, the GREEN
+  core change, the Compose body and all four locale files directly on the routine's own driver branch
+  (`ops/android-ios-parity-routine`) before realising no slice branch had been created. Recovered
+  cleanly with `git stash push -- <files>` (scoped to just the touched paths, not `-A`, to avoid
+  sweeping up anything else live in the shared worktree), `git fetch origin main && git checkout -b
+  claude/apps/android/<slice-id> origin/main`, then `git stash pop` — but the cheaper fix is sequencing
+  right the first time: branch off `origin/main` as literally the first action of §Lane ANDROID step 2,
+  before opening any editor on a single file, never after drafting the change.
+- **Reusing an existing private Composable pattern across feature modules means duplicating it, not
+  importing it, when the modules don't already share a UI dependency.** `ChangePasswordScreen`
+  (`:feature:settings`) already has a private `PasswordField` (visibility-toggle `OutlinedTextField`)
+  and `StrengthMeter`. `RegistrationScreen` (`:feature:auth`) needed the identical shape but the two
+  feature modules don't depend on each other and Compose glue is exempt from the JVM coverage gate —
+  extracting a shared component would be a legitimate but separate refactor (new `:sdk-ui` component +
+  two call-site migrations), out of scope for a single field-UI slice. Duplicating ~15 lines of
+  UI-only Composable code here is the minimal-impact call; flagged in `feature-parity.md` as a
+  deliberate, not accidental, scope boundary.

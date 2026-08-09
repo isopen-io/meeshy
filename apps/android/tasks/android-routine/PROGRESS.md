@@ -1,5 +1,78 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **registration wizard's PASSWORD step field UI** landed (slice
+> `auth-password-step-fields`, feature-parity §A — slice 5 of the `OnboardingFlowView` Compose
+> decomposition, "First/last name capture; password strength meter + requirements checklist" `[~]`
+> flipped `[x]`). Re-proven before picking: `RegistrationStepContent.implemented` held only
+> `PSEUDO`/`PHONE`/`EMAIL`/`IDENTITY` — `PASSWORD` still rendered the inert placeholder, confirming the
+> prior run's "Next slice" note. Every decision the step needed was already shipped and tested:
+> `RegistrationFields.password`/`confirmPassword` (since `registration-wizard-viewmodel`),
+> `RegistrationStepGate`'s PASSWORD arm (`PasswordEntry.evaluate(...).canProceed`, since
+> `registration-step-gate-core`), `RegistrationViewModel.onPasswordChange`/`onConfirmPasswordChange`,
+> and — the three pure Step-5 decision cores from iOS `StepPasswordView` —
+> `PasswordEntry.evaluate` (confirm-field reveal at `password.length >= 8` + match verdict),
+> `PasswordRequirements.evaluate` (the four-row checklist), and `PasswordStrength.evaluate` (the 6-band
+> meter, since `auth-password-requirements`/the change-password slice) — this slice is the first real
+> UI consumer of all three, same "wiring-only" shape as EMAIL/IDENTITY one level up. **Added
+> (production, all `apps/android`):** `feature/auth/RegistrationScreen.kt` gains `PasswordStepBody` —
+> header/subtitle copy, a local `PasswordField` (show/hide toggle via `PasswordVisualTransformation`,
+> reused twice for the password + confirm fields), a `PasswordStrengthMeter` (5-segment bar + label,
+> reuses `PasswordStrength`/`PasswordStrengthLevel` verbatim — the exact core already shipped and
+> tested for `ChangePasswordScreen`, `:feature:settings`) shown once the password is non-empty, the
+> confirm field shown once `PasswordEntry.evaluate(...).showConfirmField`, a `PasswordMatchRow`
+> (check/cancel icon + match/mismatch text) shown once the confirm field is non-empty, and a
+> `PasswordRequirementsCard` (four `PasswordRequirementRow`s off `PasswordRequirements.evaluate`) —
+> `RegistrationScreen`'s `when` arm now also dispatches `RegistrationStep.PASSWORD`, and
+> `RegistrationStepContent.implemented` gains `PASSWORD` alongside `PSEUDO`/`PHONE`/`EMAIL`/`IDENTITY`.
+> **Deliberate choice, read both iOS types before deciding:** iOS onboarding's `StepPasswordView` file
+> declares its own file-local `PasswordStrength` enum (4 bands: weak/fair/good/strong) — a *different*
+> Swift type from `MeeshyUI.PasswordStrengthIndicator`'s strength type that Android's `PasswordStrength`
+> core already ports (6 bands, TOO_WEAK..EXCELLENT). Both compute the identical 6-boolean-factor raw
+> score (length≥8, length≥12, uppercase, lowercase, digit, special char) — only the band-to-label
+> mapping differs (4 labels vs. 6). Reusing the already-shipped 6-band core (as the prior
+> `auth-password-requirements` slice's note already flagged: "The strength *meter* score
+> (`PasswordStrength`, 0..5 bands) already existed") is SSOT-correct — same signal, richer bands — over
+> porting a second, near-duplicate scoring type just to match iOS's file-local label count. **No skip
+> affordance** — iOS `StepPasswordView` has none either, and `RegistrationNavModel.showSkip` is
+> PROFILE-only. **+19 new locale strings ×4 locales** (`registration_password_*`: header/subtitle/
+> label/confirm_label/show/hide/match/mismatch/requirements_title/req_length/req_uppercase/
+> req_lowercase/req_digit/strength_0..5). **+1 core test**
+> (`RegistrationStepContentTest.isImplemented_password_isTrue`; the "every other step" sweep updated to
+> exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD). **Mutation (RED proof):** the new test against the
+> pre-slice `implemented` set (still only `{PSEUDO, PHONE, EMAIL, IDENTITY}`) failed **exactly**
+> `isImplemented_password_isTrue` (6 run, 1 failed, no collateral) before the one-line core change
+> landed. **Zero new ViewModel tests needed** — `RegistrationViewModelTest` already exercises
+> `onPasswordChange`/`onConfirmPasswordChange` end-to-end via `fillAllValid()`; re-ran unmodified and
+> stayed green (52/52) — the regression proof for this Compose-wiring-only slice, per
+> `TDD-COVERAGE.md`'s exemption for `@Composable` glue. **Gate:** `./apps/android/meeshy.sh check` →
+> `BUILD SUCCESSFUL` (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Reviewer
+> **PASS** (diff `apps/android` only — `core/model` [1-line `implemented` set change, no new files],
+> `feature/auth` [+7 composables in `RegistrationScreen.kt`, the `when` arm, ×19 locale strings ×4
+> locales], `tasks/feature-parity.md`; SDK purity — `RegistrationStepContent` stays a stateless
+> `:core:model` lookup, every new Composable is ordinary UI glue reading ViewModel state and the three
+> pure cores, no shared-singleton-plus-product-rule combo; SSOT — reuses
+> `PasswordEntry`/`PasswordRequirements`/`PasswordStrength`/`RegistrationStepGate`/
+> `RegistrationViewModel`'s existing password wiring untouched, re-implements none — the `PasswordField`
+> show/hide composable is duplicated from `ChangePasswordScreen`'s private equivalent rather than
+> extracted to a shared module, a deliberate scope call since `:feature:auth` and `:feature:settings`
+> share no UI component today and Compose glue is coverage-exempt; instant-app — no spinner
+> introduced; UDF — unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays
+> reachable, Next stays correctly disabled until the password meets both length and match; no
+> tautological tests; no coverage floor lowered, no existing test weakened). **Next slice:** LANGUAGE
+> (system/regional picker + live-translation preview, core shipped per
+> `auth-language-step-selection-core`), OR PROFILE (needs a photo/banner picker + compression
+> pipeline — the one step genuinely larger than the rest, per the prior run's note), OR RECAP (terms
+> checkbox + summary rows, core shipped per `registration-step-gate-core`/`RegistrationSummary`), OR
+> the §C **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header` — re-verify `ChatScreen.kt` before committing a run to it, the "genuinely
+> large" verdict from prior runs is itself a hypothesis to re-check), OR the `TagInputField` composable
+> + `allTags` corpus hydration (still blocked on a new `tags` wire field on `ApiConversation`), OR the
+> tracked **Kover 90% coverage-gate infra**. **Hygiene note (recurring, still unaddressed):**
+> `PROGRESS.md`/`NOTES.md` remain well past the ~1500-line archival threshold in `ROUTINE.md` §Hygiène
+> (unaddressed since at least the `session-logout-teardown` run) — flagging again rather than bundling
+> an archive pass into this slice's commit, per the hygiene section's "separate, dedicated commit"
+> rule; both files have grown further since the last flag (`PROGRESS.md` now 14563+ lines pre-this-entry).
+
 > On 2026-08-09 the **registration wizard's IDENTITY step field UI** landed (slice
 > `auth-identity-step-fields`, feature-parity §A — slice 4 of the `OnboardingFlowView` Compose
 > decomposition, "First/last name capture" `[~]` gains its field UI half). Re-proven before picking:
