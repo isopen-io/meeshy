@@ -78,6 +78,12 @@ maintenant, et la confirmation au nouvel arrivant reste unitaire — un destinat
 
 ## Reste ouvert après ce cycle
 
+- **`member_removed` reste une boucle d'appels unitaires, délibérément.** Son audience est bornée par
+  le rôle — `creator` / `admin` / `moderator` — donc quelques personnes, là où `member_joined` fanne
+  vers TOUS les membres déjà présents. Le lot A y ajoute une requête de mute par destinataire ; c'est
+  le prix assumé sur une audience de cet ordre, et la raison pour laquelle un seul des deux frères a
+  été batché. À revoir si un jour une conversation peut compter des dizaines de modérateurs.
+
 - **`filterMutedRecipients` échoue FERMÉ.** Si la lecture des préférences lève, la notification est
   perdue (le rejet remonte au `.catch` de l'appelant). Le voisinage fait l'inverse et le dit :
   `shouldCreateNotification` « fail open : en cas d'erreur de lecture des prefs, on crée la
