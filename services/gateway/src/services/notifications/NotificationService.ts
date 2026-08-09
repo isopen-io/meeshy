@@ -2849,7 +2849,7 @@ export class NotificationService {
     const snapshot = await this.loadMemberJoinedSnapshot(params.newMemberUserId, params.conversationId);
     if (!snapshot) return null;
 
-    return this.emitMemberJoined(params.recipientUserId, params, snapshot);
+    return this.createMemberJoinedFor(params.recipientUserId, params, snapshot);
   }
 
   /**
@@ -2891,7 +2891,7 @@ export class NotificationService {
     // `createNotification` ne rejette jamais (catch interne) — un destinataire
     // en échec rend `null` et n'emporte pas les autres.
     const results = await Promise.all(
-      listening.map((recipientUserId) => this.emitMemberJoined(recipientUserId, common, snapshot))
+      listening.map((recipientUserId) => this.createMemberJoinedFor(recipientUserId, common, snapshot))
     );
     return results.filter(Boolean).length;
   }
@@ -2923,7 +2923,7 @@ export class NotificationService {
     return { newMember, conversation, memberCount };
   }
 
-  private emitMemberJoined(
+  private createMemberJoinedFor(
     recipientUserId: string,
     common: { newMemberUserId: string; conversationId: string; joinMethod?: 'via_link' | 'invited' },
     snapshot: MemberJoinedSnapshot
