@@ -752,7 +752,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       checklist, match card, first/last-name capture) is now wired. **Follow-up:**
       LANGUAGE/PROFILE/RECAP field UI in turn per the `auth-onboarding-shell` decomposition; LANGUAGE
       next (picker + live-translation preview, core shipped per `auth-language-step-selection-core`).
-- [~] System + regional language selection with live translation preview — **picker + preview
+- [x] System + regional language selection with live translation preview — **picker + preview
       decision core shipped** (slice `auth-language-step-selection-core`, 2026-07-22). Pure
       `:core:model/auth/LanguageStepSelection.kt` (`LanguageSlot` enum + `LanguageSelectionState`
       data class + `LanguageStepSelection` object), a faithful port of iOS `StepLanguageView`
@@ -797,8 +797,53 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       register sends the chosen code / null when blank / null when whitespace / trimmed value; summary
       shows the distinct regional label). **Mutation (RED proof):** replacing the `toRegisterRequest`
       regional line with `null` fails **exactly** `register_sendsChosenRegionalLanguage` +
-      `register_trimsRegionalLanguageValue`, no collateral. Only the app-side `StepLanguageView` composable
-      remains before this box flips to `[x]`.
+      `register_trimsRegionalLanguageValue`, no collateral.
+      **App-side `LanguageStepBody` composable shipped** (slice `auth-language-step-fields`,
+      2026-08-09) — the wizard's Step 6 field UI, closing the two follow-ups above and flipping
+      this box to `[x]`. Re-proven before picking: `RegistrationStepContent.implemented` held
+      only PSEUDO/PHONE/EMAIL/IDENTITY/PASSWORD — LANGUAGE still rendered the inert placeholder.
+      Every decision the step needed was already shipped: `LanguageStepSelection` (picker list,
+      search filter, summary/preview labels, slot-aware highlight + write, since
+      `auth-language-step-selection-core`) and `RegistrationViewModel.onSystemLanguageChange`/
+      `onRegionalLanguageChange`/`languageSelection` (since `registration-regional-language`).
+      `RegistrationScreen.kt` gains `LanguageStepBody` — two tappable slot cards (label + current
+      `summaryLabel`, tap both shows the slot's value and activates it for editing — a deliberate
+      merge of iOS's separate always-visible summary cards + tab-button row into one control),
+      a search field driving `LanguageStepSelection.filter`, a non-lazy 2-column picker grid over
+      the (already small, 79-entry) filtered list highlighting the active slot's current choice
+      (`LanguageStepSelection.isSelected`), and a translation-preview card
+      (`LanguageStepSelection.translationPreview`). **Deliberately non-lazy grid:** the step body
+      already sits inside the wizard's outer `verticalScroll` `Column` (`RegistrationScreen`) — a
+      `LazyVerticalGrid`/`LazyColumn` nested there without a bounded height crashes Compose
+      ("infinity maximum height constraints"), same pitfall `CountryPickerSheet` sidesteps with a
+      `heightIn(max = …)` inside its own `ModalBottomSheet`; a plain `chunked(2)` grid composed
+      directly into the parent scroll avoids the nesting hazard entirely and is simple enough for
+      79 rows. **Deliberately out of scope:** wiring `SignupRegionInference`/`SignupLanguages`
+      (shipped `auth-region-language-inference`, 2026-07-21) to pre-select from the device locale
+      — a distinct follow-up the bullet above already called out separately from the field-UI
+      slice, same "wiring-only" shape as PHONE shipping with a static default country rather than
+      device-locale inference. **+1 core test**
+      (`RegistrationStepContentTest.isImplemented_language_isTrue`; the "every other step" sweep
+      renamed to exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD+LANGUAGE). **Mutation (RED proof):**
+      the new test against the pre-slice `implemented` set failed **exactly**
+      `isImplemented_language_isTrue` (7 run, 1 failed, no collateral) before the one-line core
+      change landed. **Zero new ViewModel tests needed** — `RegistrationViewModelTest` already
+      exercises `onSystemLanguageChange`/`onRegionalLanguageChange`/`languageSelection` (since
+      `registration-regional-language`); re-ran unmodified and stayed green (52/52) — the
+      regression proof for this Compose-wiring-only slice, per `TDD-COVERAGE.md`'s exemption for
+      `@Composable` glue. **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL in 39s`
+      (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Reviewer **PASS** (diff
+      `apps/android` only — `core/model` [1-line `implemented` set change, no new files],
+      `feature/auth` [+9 composables in `RegistrationScreen.kt`, the `when` arm, ×6 locale
+      strings ×4 locales]; SDK purity — `LanguageStepBody` is ordinary UI glue over the stateless
+      `LanguageStepSelection` core + ViewModel state, no shared-singleton-plus-product-rule combo;
+      SSOT — reuses `LanguageStepSelection`/`LanguageData`/`RegistrationViewModel`'s existing
+      language wiring untouched, re-implements no rule; instant-app — no spinner introduced; UDF —
+      unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays
+      reachable, Next stays disabled until a system language is chosen; no tautological tests; no
+      coverage floor lowered, no existing test weakened). **Follow-up (deliberately deferred, not
+      part of this slice):** wiring `SignupRegionInference` for a device-locale default (noted
+      above).
 - [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
       **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
       Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's

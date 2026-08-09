@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
+import me.meeshy.sdk.model.LanguageInfo
 import me.meeshy.sdk.model.PasswordEntry
 import me.meeshy.sdk.model.PasswordRequirements
 import me.meeshy.sdk.model.PasswordRequirementsState
@@ -67,6 +68,9 @@ import me.meeshy.sdk.model.PasswordStrength
 import me.meeshy.sdk.model.PasswordStrengthLevel
 import me.meeshy.sdk.model.auth.Country
 import me.meeshy.sdk.model.auth.CountryCatalog
+import me.meeshy.sdk.model.auth.LanguageSelectionState
+import me.meeshy.sdk.model.auth.LanguageSlot
+import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.RegistrationLeadingAction
 import me.meeshy.sdk.model.auth.RegistrationNavModel
 import me.meeshy.sdk.model.auth.RegistrationPrimaryAction
@@ -96,10 +100,11 @@ import java.util.Locale
  * `RegistrationStepContentTest`).
  *
  * [RegistrationStep.PSEUDO], [RegistrationStep.PHONE], [RegistrationStep.EMAIL],
- * [RegistrationStep.IDENTITY] and [RegistrationStep.PASSWORD] have real field UI
- * today (slices `auth-onboarding-shell`, `auth-phone-step-fields`,
- * `auth-email-step-fields`, `auth-identity-step-fields`, `auth-password-step-fields`);
- * every other step renders an inert "coming soon" placeholder — never a dead end, since
+ * [RegistrationStep.IDENTITY], [RegistrationStep.PASSWORD] and [RegistrationStep.LANGUAGE]
+ * have real field UI today (slices `auth-onboarding-shell`, `auth-phone-step-fields`,
+ * `auth-email-step-fields`, `auth-identity-step-fields`, `auth-password-step-fields`,
+ * `auth-language-step-fields`); every other step renders an inert "coming soon"
+ * placeholder — never a dead end, since
  * [RegistrationLeadingAction.BACK] is always reachable off the first step. Each
  * subsequent step gets its own slice per the decomposition note in
  * `feature-parity.md` §A.
@@ -171,6 +176,7 @@ fun RegistrationScreen(
                         RegistrationStep.EMAIL -> EmailStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.IDENTITY -> IdentityStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.PASSWORD -> PasswordStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.LANGUAGE -> LanguageStepBody(state = state, viewModel = viewModel)
                         // Each future per-step slice adds its own arm here, in lockstep
                         // with RegistrationStepContent's implemented set.
                         else -> Unit
@@ -802,6 +808,228 @@ private fun PasswordStrengthLevel.strengthLabelRes(): Int = when (this) {
     PasswordStrengthLevel.GOOD -> R.string.registration_password_strength_3
     PasswordStrengthLevel.STRONG -> R.string.registration_password_strength_4
     PasswordStrengthLevel.EXCELLENT -> R.string.registration_password_strength_5
+}
+
+/**
+ * LANGUAGE step — parity target: iOS `StepLanguageView`
+ * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`): a
+ * searchable system/regional language picker with a summary of each slot's
+ * current choice and a live translation-preview example. Every decision (the
+ * picker list, the search filter, the summary/preview labels, the slot-aware
+ * highlight + write) is driven verbatim by the already-shipped pure
+ * [LanguageStepSelection] core (slice `auth-language-step-selection-core`) —
+ * this Composable is a thin renderer over it plus
+ * [RegistrationViewModel.onSystemLanguageChange] /
+ * [RegistrationViewModel.onRegionalLanguageChange]. No skip affordance
+ * ([RegistrationNavModel.showSkip] is PROFILE-only, matches iOS having none for
+ * this step either). **Deliberate simplification vs iOS:** iOS renders the two
+ * slots' current values as a pair of always-visible summary cards *and* a
+ * separate pair of tab buttons that switch which slot the grid below edits —
+ * here the two roles are merged into one pair of tappable cards (label +
+ * current value, tap = both "shows the slot's value" and "activates it for
+ * editing"), the same visual information with one fewer redundant control row.
+ * Country/language auto-detection from the device locale
+ * ([me.meeshy.sdk.model.auth.SignupRegionInference], shipped since
+ * `auth-region-language-inference`) stays a distinct, not-yet-wired follow-up —
+ * out of scope for this field-UI slice, the same "wiring-only" shape as the
+ * steps before it (PHONE similarly ships with a static default country, not
+ * device-locale inference).
+ */
+@Composable
+private fun LanguageStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    var activeSlot by remember { mutableStateOf(LanguageSlot.SYSTEM) }
+    var query by remember { mutableStateOf("") }
+    val selection = state.languageSelection
+    val filtered = remember(query) { LanguageStepSelection.filter(query) }
+
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_language_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_language_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            LanguageSlotCard(
+                label = stringResource(R.string.registration_language_system_tab),
+                valueLabel = LanguageStepSelection.summaryLabel(selection.systemLanguage),
+                color = MeeshyPalette.Indigo500,
+                isActive = activeSlot == LanguageSlot.SYSTEM,
+                onClick = { activeSlot = LanguageSlot.SYSTEM },
+                modifier = Modifier.weight(1f),
+            )
+            LanguageSlotCard(
+                label = stringResource(R.string.registration_language_regional_tab),
+                valueLabel = LanguageStepSelection.summaryLabel(selection.regionalLanguage),
+                color = MeeshyPalette.Warning,
+                isActive = activeSlot == LanguageSlot.REGIONAL,
+                onClick = { activeSlot = LanguageSlot.REGIONAL },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.registration_language_search_hint)) },
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.sm),
+        )
+
+        LanguagePickerGrid(
+            languages = filtered,
+            activeSlot = activeSlot,
+            selection = selection,
+            onSelect = { code ->
+                when (activeSlot) {
+                    LanguageSlot.SYSTEM -> viewModel.onSystemLanguageChange(code)
+                    LanguageSlot.REGIONAL -> viewModel.onRegionalLanguageChange(code)
+                }
+            },
+        )
+
+        LanguageTranslationPreviewCard(systemLanguage = selection.systemLanguage)
+    }
+}
+
+@Composable
+private fun LanguageSlotCard(
+    label: String,
+    valueLabel: String,
+    color: Color,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(color.copy(alpha = if (isActive) 0.18f else 0.08f))
+            .clickable(onClick = onClick)
+            .padding(MeeshySpacing.sm)
+            .semantics { contentDescription = "$label $valueLabel" },
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textSecondary)
+        Text(
+            text = valueLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+    }
+}
+
+@Composable
+private fun LanguagePickerGrid(
+    languages: List<LanguageInfo>,
+    activeSlot: LanguageSlot,
+    selection: LanguageSelectionState,
+    onSelect: (String) -> Unit,
+) {
+    val activeColor = if (activeSlot == LanguageSlot.SYSTEM) MeeshyPalette.Indigo500 else MeeshyPalette.Warning
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        languages.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                row.forEach { language ->
+                    LanguageCard(
+                        language = language,
+                        isSelected = LanguageStepSelection.isSelected(activeSlot, language.code, selection),
+                        activeColor = activeColor,
+                        onClick = { onSelect(language.code) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (row.size == 1) Box(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageCard(
+    language: LanguageInfo,
+    isSelected: Boolean,
+    activeColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rowLabel = "${language.nativeName} ${language.code.uppercase()}"
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(if (isSelected) activeColor.copy(alpha = 0.15f) else MeeshyTheme.tokens.backgroundSecondary)
+            .clickable(onClick = onClick)
+            .padding(MeeshySpacing.sm)
+            .semantics { contentDescription = rowLabel },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Text(text = language.flag, style = MaterialTheme.typography.titleMedium)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = language.nativeName,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+            Text(
+                text = language.code.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = activeColor,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageTranslationPreviewCard(systemLanguage: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = MeeshySpacing.sm)
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .padding(MeeshySpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_language_example_title),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        Text(
+            text = LanguageStepSelection.translationPreview(systemLanguage),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+    }
 }
 
 @Composable

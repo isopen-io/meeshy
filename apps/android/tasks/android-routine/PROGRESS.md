@@ -1,5 +1,77 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **registration wizard's LANGUAGE step field UI** landed (slice
+> `auth-language-step-fields`, feature-parity §A — slice 6 of the `OnboardingFlowView` Compose
+> decomposition, "System + regional language selection with live translation preview" `[~]`
+> flipped `[x]`). Re-proven before picking: `RegistrationStepContent.implemented` held only
+> `PSEUDO`/`PHONE`/`EMAIL`/`IDENTITY`/`PASSWORD` — `LANGUAGE` still rendered the inert placeholder,
+> confirming the prior run's "Next slice" note. Every decision the step needed was already shipped
+> and tested: `LanguageStepSelection` (picker list, search filter, summary/preview labels,
+> slot-aware highlight + write — since `auth-language-step-selection-core`, 2026-07-22) and
+> `RegistrationViewModel.onSystemLanguageChange`/`onRegionalLanguageChange`/`languageSelection`
+> (since `registration-regional-language`, 2026-07-26) — this slice is the first real UI consumer
+> of both, same "wiring-only" shape as PASSWORD one level up. **Added (production, all
+> `apps/android`):** `feature/auth/RegistrationScreen.kt` gains `LanguageStepBody` — two tappable
+> slot cards (label + current `LanguageStepSelection.summaryLabel`, tap both shows the slot's value
+> and activates it for editing — a deliberate merge of iOS `StepLanguageView`'s separate
+> always-visible summary cards + tab-button row into one control, same information with one fewer
+> redundant control row), a search field driving `LanguageStepSelection.filter`, a non-lazy
+> 2-column picker grid (`chunked(2)`) over the filtered `LanguageData` catalogue (79 entries)
+> highlighting the active slot's current choice (`LanguageStepSelection.isSelected`) and
+> dispatching taps to `onSystemLanguageChange`/`onRegionalLanguageChange` depending on which slot
+> is active, and a translation-preview card (`LanguageStepSelection.translationPreview`) —
+> `RegistrationScreen`'s `when` arm now also dispatches `RegistrationStep.LANGUAGE`, and
+> `RegistrationStepContent.implemented` gains `LANGUAGE` alongside
+> `PSEUDO`/`PHONE`/`EMAIL`/`IDENTITY`/`PASSWORD`. **Deliberately non-lazy grid:** the step body
+> sits inside the wizard's outer `verticalScroll` `Column`; a `LazyVerticalGrid`/`LazyColumn`
+> nested there without a bounded height would crash Compose ("infinity maximum height
+> constraints") — the same pitfall `CountryPickerSheet` (from `auth-phone-step-fields`) sidesteps
+> with a `heightIn(max = …)` inside its own `ModalBottomSheet`. A plain `chunked(2)` grid composed
+> directly into the parent scroll avoids the nesting hazard entirely, simple enough for 79 rows in
+> an onboarding step used once. **Deliberately out of scope:** wiring
+> `SignupRegionInference`/`SignupLanguages` (shipped `auth-region-language-inference`, 2026-07-21)
+> to pre-select from the device locale — verified by reading its own `feature-parity.md` follow-up
+> note, which already calls this out as a distinct, separate task from the field-UI wiring; the
+> same "wiring-only" shape as PHONE shipping with a static default country (`CountryCatalog.
+> priority.first()`) rather than device-locale inference. **No skip affordance** — iOS
+> `StepLanguageView` has none either, and `RegistrationNavModel.showSkip` is PROFILE-only. **+6
+> new locale strings ×4 locales** (`registration_language_*`:
+> header/subtitle/system_tab/regional_tab/search_hint/example_title). **+1 core test**
+> (`RegistrationStepContentTest.isImplemented_language_isTrue`; the "every other step" sweep
+> updated to exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD+LANGUAGE). **Mutation (RED proof):** the
+> new test against the pre-slice `implemented` set (still only `{PSEUDO, PHONE, EMAIL, IDENTITY,
+> PASSWORD}`) failed **exactly** `isImplemented_language_isTrue` (7 run, 1 failed, no collateral)
+> before the one-line core change landed. **Zero new ViewModel tests needed** —
+> `RegistrationViewModelTest` already exercises `onSystemLanguageChange`/`onRegionalLanguageChange`/
+> `languageSelection` end-to-end (since `registration-regional-language`); re-ran unmodified and
+> stayed green (52/52) — the regression proof for this Compose-wiring-only slice, per
+> `TDD-COVERAGE.md`'s exemption for `@Composable` glue. **Gate:** `./apps/android/meeshy.sh check`
+> → `BUILD SUCCESSFUL in 39s` (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks).
+> Reviewer **PASS** (diff `apps/android` only — `core/model` [1-line `implemented` set change, no
+> new files], `feature/auth` [+9 composables in `RegistrationScreen.kt`, the `when` arm, ×6 locale
+> strings ×4 locales], `tasks/feature-parity.md`; SDK purity — `RegistrationStepContent` stays a
+> stateless `:core:model` lookup, every new Composable is ordinary UI glue over the stateless
+> `LanguageStepSelection` core + ViewModel state, no shared-singleton-plus-product-rule combo; SSOT
+> — reuses `LanguageStepSelection`/`LanguageData`/`RegistrationViewModel`'s existing language wiring
+> untouched, re-implements none; instant-app — no spinner introduced; UDF — unchanged
+> `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays reachable, Next stays
+> correctly disabled until a system language is chosen; no tautological tests; no coverage floor
+> lowered, no existing test weakened). **Next slice:** PROFILE (needs a photo/banner picker +
+> compression pipeline — the one step genuinely larger than the rest, per prior runs' notes), OR
+> RECAP (terms checkbox + summary rows, core shipped per `registration-step-gate-core`/
+> `RegistrationSummary`), OR wiring `SignupRegionInference` into the wizard's init for a
+> device-locale default (deliberately deferred by this slice, see above), OR the §C
+> **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header` — re-verify `ChatScreen.kt` before committing a run to it), OR the
+> `TagInputField` composable + `allTags` corpus hydration (still blocked on a new `tags` wire field
+> on `ApiConversation`), OR the tracked **Kover 90% coverage-gate infra**. **Hygiene note
+> (recurring, still unaddressed):** `PROGRESS.md`/`NOTES.md` remain well past the ~1500-line
+> archival threshold in `ROUTINE.md` §Hygiène (unaddressed since at least the
+> `session-logout-teardown` run) — flagging again rather than bundling an archive pass into this
+> slice's commit, per the hygiene section's "separate, dedicated commit" rule; both files have
+> grown further since the last flag. A dedicated archival increment is now a strong candidate for
+> the next run that doesn't pick a content slice.
+
 > On 2026-08-09 the **registration wizard's PASSWORD step field UI** landed (slice
 > `auth-password-step-fields`, feature-parity §A — slice 5 of the `OnboardingFlowView` Compose
 > decomposition, "First/last name capture; password strength meter + requirements checklist" `[~]`
