@@ -1214,13 +1214,17 @@ describe('MessageHandler — handleMessageDelete', () => {
       })
       .mockResolvedValueOnce({ createdAt: lastMsgDate });
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
+    (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
+      createdAt: new Date('2024-01-01'), lastMessageAt: convLastMessageAt,
+    });
     (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
     // Optimistic-concurrency guard: the write only lands while lastMessageAt is
-    // still the value read at handler start — a racing message:new advances it,
-    // the guard mismatches, and the cursor never regresses onto the deleted message.
+    // still the value `applyMessageRemovalEffects` read just before writing — a
+    // racing message:new advances it, the guard mismatches, and the cursor never
+    // regresses onto the deleted message.
     expect(deps.prisma.conversation.updateMany).toHaveBeenCalledWith({
       where: { id: VALID_CONV_ID, lastMessageAt: convLastMessageAt },
       data: { lastMessageAt: lastMsgDate },
@@ -1239,6 +1243,9 @@ describe('MessageHandler — handleMessageDelete', () => {
       })
       .mockResolvedValueOnce(null);
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
+    (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
+      createdAt: convCreatedAt, lastMessageAt: convLastMessageAt,
+    });
     (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);

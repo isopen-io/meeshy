@@ -15,6 +15,7 @@ import {
 } from '../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -516,15 +517,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               user: { select: { username: true } }
             }
           },
-          // Seules ces deux dates servent encore : la garde d'optimistic
-          // concurrency sur `lastMessageAt`, plus loin. L'appartenance n'est
-          // plus jointe ici — `admitMessageDelete` la lit lui-même, avec le
-          // filtre `isActive: true` que cette jointure n'avait jamais, et
-          // seulement quand l'acteur n'est PAS l'auteur. Le chemin nominal
-          // coûte donc une lecture de moins qu'avant.
-          conversation: {
-            select: { createdAt: true, lastMessageAt: true }
-          },
+          // Ni l'appartenance ni la conversation ne sont jointes ici :
+          // `admitMessageDelete` lit la première lui-même (avec le filtre
+          // `isActive: true` que cette jointure n'avait jamais, et seulement
+          // quand l'acteur n'est PAS l'auteur), et `applyMessageRemovalEffects`
+          // relit `lastMessageAt` au plus près de son écriture conditionnelle.
+          // Le chemin nominal coûte donc deux lectures de moins qu'avant.
           attachments: {
             select: {
               id: true
@@ -588,29 +586,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Mettre à jour le lastMessageAt de la conversation avec le dernier message non supprimé.
-      // Optimistic-concurrency guard: only write while lastMessageAt is still the
-      // value read at handler start. A message:new committing between the read
-      // and this write advances lastMessageAt; the guard then mismatches (0 rows
-      // updated) so the cursor never regresses backward onto the deleted message.
-      const lastNonDeletedMessage = await prisma.message.findFirst({
-        where: {
-          conversationId: message.conversationId,
-          deletedAt: null
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true }
-      });
-
-      await prisma.conversation.updateMany({
-        where: {
-          id: message.conversationId,
-          lastMessageAt: message.conversation.lastMessageAt
-        },
-        data: {
-          lastMessageAt: lastNonDeletedMessage?.createdAt || message.conversation.createdAt
-        }
-      });
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. La liste vit
+      // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
+      await applyMessageRemovalEffects(prisma, message);
 
       // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
       // de livraison hors ligne — voir broadcastMessageMutation)

@@ -193,8 +193,19 @@ async function buildApp(): Promise<FastifyInstance> {
       findFirst: jest.fn().mockResolvedValue(mockAttachment),
     },
     conversation: {
+      // `applyMessageRemovalEffects` relit `lastMessageAt` au plus près de son
+      // écriture conditionnelle plutôt que de le recevoir joint au message :
+      // la garde CAS porte ainsi sur une valeur fraîche, et la route économise
+      // la jointure. Le double rend ce que la jointure rendait.
+      findUnique: jest.fn().mockResolvedValue({
+        lastMessageAt: mockMessage.conversation.lastMessageAt,
+        createdAt: mockMessage.conversation.createdAt,
+      }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    trackingLink: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   });
 

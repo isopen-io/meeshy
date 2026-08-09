@@ -64,6 +64,7 @@ import {
 } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -941,15 +942,13 @@ export class MessageHandler {
           senderId: true,
           sender: { select: { id: true, userId: true } },
           // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
-          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. Ces deux
-          // dates restent pour la garde d'optimistic concurrency sur
-          // `lastMessageAt`, plus bas.
-          conversation: {
-            select: {
-              createdAt: true,
-              lastMessageAt: true,
-            },
-          },
+          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
+          // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
+          // relit `lastMessageAt` lui-même, au plus près de son écriture
+          // conditionnelle. Restent le contenu et les métadonnées, qui portent
+          // les deux représentations des `/l/<token>` du message.
+          content: true,
+          metadata: true,
           attachments: { select: { id: true } },
         },
       });
@@ -993,26 +992,10 @@ export class MessageHandler {
         data: { translations: null, deletedAt: new Date() },
       });
 
-      // Recompute conversation's lastMessageAt to the latest non-deleted message.
-      // Optimistic-concurrency guard: only write while lastMessageAt is still the
-      // value read at handler start. A `message:new` committing between the read
-      // and this write advances lastMessageAt; the guard then mismatches (0 rows
-      // updated) so the cursor never regresses backward onto the deleted message
-      // and mis-sorts the conversation list.
-      const lastNonDeleted = await this.prisma.message.findFirst({
-        where: { conversationId: message.conversationId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      });
-      await this.prisma.conversation.updateMany({
-        where: {
-          id: message.conversationId,
-          lastMessageAt: message.conversation.lastMessageAt,
-        },
-        data: {
-          lastMessageAt: lastNonDeleted?.createdAt ?? message.conversation.createdAt,
-        },
-      });
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. La liste vit
+      // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
+      await applyMessageRemovalEffects(this.prisma, message);
 
       const room = ROOMS.conversation(message.conversationId);
       const deletedPayload = {
