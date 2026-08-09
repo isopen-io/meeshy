@@ -910,11 +910,12 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // and restartCapturerIfStopped.
         let source = try p2pClientSource()
 
-        guard let fnRange = source.range(of: "func switchCamera() async throws {") else {
+        // Corps équilibré, pas une fenêtre de 1 500 caractères : la fonction a
+        // grossi et la vérification post-`startCapture` en est sortie, faisant
+        // rougir la garde sur du code correct.
+        guard let fnBody = DeclarationBodyScanner.body(containing: "func switchCamera() async throws", in: source) else {
             XCTFail("switchCamera not found in P2PWebRTCClient.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
             fnBody.contains("let generation = sessionGeneration"),

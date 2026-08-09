@@ -1,5 +1,11 @@
 package me.meeshy.app.auth
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,12 +24,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -33,6 +41,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -56,8 +65,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -67,10 +79,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import me.meeshy.feature.auth.R
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.LanguageInfo
 import me.meeshy.sdk.model.PasswordEntry
 import me.meeshy.sdk.model.PasswordRequirements
@@ -112,13 +127,11 @@ import java.util.Locale
  * [RegistrationStepContent.isImplemented] — is covered by
  * `RegistrationStepContentTest`).
  *
- * [RegistrationStep.PSEUDO], [RegistrationStep.PHONE], [RegistrationStep.EMAIL],
- * [RegistrationStep.IDENTITY], [RegistrationStep.PASSWORD], [RegistrationStep.LANGUAGE] and
- * [RegistrationStep.RECAP] have real field UI today (slices `auth-onboarding-shell`,
+ * Every [RegistrationStep] now has real field UI (slices `auth-onboarding-shell`,
  * `auth-phone-step-fields`, `auth-email-step-fields`, `auth-identity-step-fields`,
- * `auth-password-step-fields`, `auth-language-step-fields`, `auth-recap-step-fields`); only
- * [RegistrationStep.PROFILE] still renders an inert "coming soon" placeholder — never a dead
- * end, since [RegistrationLeadingAction.BACK] is always reachable off the first step.
+ * `auth-password-step-fields`, `auth-language-step-fields`, `auth-profile-step-fields`,
+ * `auth-recap-step-fields`) — the `else -> Unit` branch below is now permanently dead code kept
+ * only as a guard against a future 9th step landing without its own arm.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -188,6 +201,7 @@ fun RegistrationScreen(
                         RegistrationStep.IDENTITY -> IdentityStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.PASSWORD -> PasswordStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.LANGUAGE -> LanguageStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.PROFILE -> ProfileStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.RECAP -> RecapStepBody(state = state, viewModel = viewModel)
                         // Each future per-step slice adds its own arm here, in lockstep
                         // with RegistrationStepContent's implemented set.
@@ -1069,6 +1083,254 @@ private fun LanguageTranslationPreviewCard(systemLanguage: String) {
  * password, even as masked dots whose *length* is itself a (weak) signal, is a legitimate
  * simplification over iOS, not an accidental parity miss.
  */
+/**
+ * PROFILE step — optional avatar/banner picker + bio, parity target iOS
+ * `StepProfileView`. Purely local capture: neither the pick nor the bio edit
+ * hits the network here — `POST /auth/register` carries none of these fields
+ * (verified against iOS's own `register()`), so [RegistrationViewModel.register]
+ * uploads them best-effort once authenticated (kdoc on
+ * `RegistrationViewModel.uploadProfileCompletionAssets`). Reuses
+ * [RecapSummaryCard] verbatim for the profile preview (iOS reuses the same
+ * `summaryItems` for both `StepProfileView` and `StepRecapView` — same
+ * information, same card, no near-duplicate string/composable).
+ *
+ * Deliberate simplification over iOS: the avatar does not overlap the banner
+ * (iOS offsets it -30pt over the banner's bottom edge). A plain stacked layout
+ * avoids Compose's offset/clip interaction inside a rounded, clipped container
+ * for a purely cosmetic flourish with no functional value.
+ */
+@Composable
+private fun ProfileStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    val context = LocalContext.current
+    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { context.contentResolver.readMediaUploadItem(it) }?.let(viewModel::onProfileImagePicked)
+    }
+    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { context.contentResolver.readMediaUploadItem(it) }?.let(viewModel::onBannerImagePicked)
+    }
+    val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_profile_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_profile_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(MeeshyPalette.Warning.copy(alpha = 0.1f))
+                .padding(MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                tint = MeeshyPalette.Warning,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = stringResource(R.string.registration_profile_optional_note),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+
+        ProfilePreviewCard(
+            state = state,
+            onAvatarClick = { avatarPicker.launch(imageOnly) },
+            onBannerClick = { bannerPicker.launch(imageOnly) },
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            Text(
+                text = stringResource(R.string.registration_profile_bio_title),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+            OutlinedTextField(
+                value = state.fields.bio,
+                onValueChange = viewModel::onBioChange,
+                enabled = !state.isSubmitting,
+                minLines = 3,
+                maxLines = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.registration_profile_bio_counter, state.fields.bio.length),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (state.fields.bio.length > PROFILE_BIO_SOFT_LIMIT) {
+                    MeeshyTheme.tokens.error
+                } else {
+                    MeeshyTheme.tokens.textSecondary
+                },
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        RecapSummaryCard(rows = state.summary)
+    }
+}
+
+/** Matches iOS `onboarding.step.profile.bio.counter`'s hardcoded "/150" ceiling — display-only, never blocks typing. */
+private const val PROFILE_BIO_SOFT_LIMIT = 150
+
+@Composable
+private fun ProfilePreviewCard(
+    state: RegistrationUiState,
+    onAvatarClick: () -> Unit,
+    onBannerClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundSecondary),
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().height(100.dp)) {
+            val banner = state.bannerImage
+            if (banner != null) {
+                AsyncImage(
+                    model = banner.bytes,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MeeshyPalette.Indigo500.copy(alpha = 0.3f),
+                                    MeeshyPalette.Indigo500.copy(alpha = 0.1f),
+                                ),
+                            ),
+                        ),
+                )
+            }
+            ProfileCameraBadge(
+                onClick = onBannerClick,
+                contentDescription = stringResource(R.string.registration_profile_banner_a11y),
+                background = Color.Black.copy(alpha = 0.5f),
+                size = 32.dp,
+                iconSize = 16.dp,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(MeeshySpacing.xs),
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            modifier = Modifier.padding(MeeshySpacing.md),
+        ) {
+            Box {
+                val avatar = state.profileImage
+                if (avatar != null) {
+                    AsyncImage(
+                        model = avatar.bytes,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(64.dp).clip(CircleShape),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = MeeshyPalette.Indigo500.copy(alpha = 0.5f),
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                }
+                ProfileCameraBadge(
+                    onClick = onAvatarClick,
+                    contentDescription = stringResource(R.string.registration_profile_photo_a11y),
+                    background = MeeshyPalette.Indigo500,
+                    size = 24.dp,
+                    iconSize = 12.dp,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
+            }
+            Column {
+                val fullName = "${state.fields.firstName} ${state.fields.lastName}".trim()
+                if (fullName.isNotEmpty()) {
+                    Text(
+                        text = fullName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                    )
+                }
+                if (state.fields.username.isNotEmpty()) {
+                    Text(
+                        text = "@${state.fields.username}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileCameraBadge(
+    onClick: () -> Unit,
+    contentDescription: String,
+    background: Color,
+    size: Dp,
+    iconSize: Dp,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.size(size).clip(CircleShape).background(background),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PhotoCamera,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+private fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
+    val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
+    val mimeType = getType(uri).orEmpty()
+    val fileName = profileMediaDisplayName(uri).orEmpty()
+    return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
+}
+
+private fun ContentResolver.profileMediaDisplayName(uri: Uri): String? =
+    runCatching {
+        query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
 @Composable
 private fun RecapStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
     var showTerms by remember { mutableStateOf(false) }
