@@ -8,9 +8,9 @@ Trois cycles de suite. Le défaut annoncé retourne à la file, avec sa raison i
 
 ## Ce qui était ouvert
 
-Les six routes de `routes/posts/comments.ts` et les quatre handlers de réaction socket ne
-consultaient **jamais** `Post.visibility`. Un utilisateur authentifié connaissant un `postId`
-pouvait, sur un post `PRIVATE` / `ONLY` / `FRIENDS` / `COMMUNITY` :
+Les six routes de `routes/posts/comments.ts`, le like/unlike REST du post et les quatre handlers de
+réaction socket ne consultaient **jamais** `Post.visibility`. Un utilisateur authentifié connaissant
+un `postId` pouvait, sur un post `PRIVATE` / `ONLY` / `FRIENDS` / `COMMUNITY` :
 
 | surface | ce qu'elle donnait |
 |---|---|
@@ -20,6 +20,7 @@ pouvait, sur un post `PRIVATE` / `ONLY` / `FRIENDS` / `COMMUNITY` :
 | `POST`/`DELETE .../like` | réaction persistée sur un commentaire du fil |
 | `comment:reaction-add` / `-remove` | idem par socket |
 | `post:reaction-add` / `-remove` | réaction sur le post lui-même |
+| `POST`/`DELETE /posts/:postId/like` | réaction REST sur le post lui-même |
 
 Différence de nature avec le cycle 28 : cette fuite est **tirée par l'appelant**, pas poussée. Elle
 ne demande aucun préalable — ni mention, ni relation, ni notification — seulement un identifiant.
@@ -66,6 +67,13 @@ désormais résolu **DEPUIS le commentaire**. Sans cela, un appelant annonçait 
 choix tout en visant le fil d'un post privé — le `postId` reçu n'est plus qu'une adresse de room et
 un segment de chemin.
 
+## Les deux transports répondent pareil
+
+`likePost` et `PostReactionService.addReaction` ne vérifient, eux aussi, que l'existence et le
+non-effacement du post. Gardier le seul chemin socket aurait fait dépendre l'ACL du **transport** :
+un client refusé sur `post:reaction-add` réussissait en repassant par `POST /posts/:postId/like`.
+Les deux reçoivent donc la même garde et le même refus indistinct.
+
 ## D3 — refuser sans confirmer
 
 `404` partout, jamais `403`, et `null` indistinct entre post absent, supprimé et invisible. Même
@@ -100,19 +108,21 @@ footgun ; le retrait suit donc la pose. À rouvrir si un cas d'usage réel appar
 
 ## Vérification
 
-- **43 tests neufs**, écrits AVANT l'implémentation, **19 rouges observés** :
+- **51 tests neufs**, écrits AVANT l'implémentation, **24 rouges observés** :
   - `__tests__/unit/services/posts/postThreadAccess.test.ts` — 22 cas (les six modes, l'auteur
     toujours admis sur son `PRIVATE`, le contact DM admis en lecture ET refusé en écriture, le post
     résolu depuis le commentaire, la visibilité inconnue qui restreint, la panne qui refuse, les
     court-circuits sans requête).
   - `__tests__/unit/routes/posts/comments-audience.test.ts` — 17 cas sur les cinq routes, dont
     « le `:postId` du chemin ne vaut rien » et « lire est ouvert là où écrire est refusé ».
+  - `__tests__/unit/routes/posts/interactions-audience.test.ts` — 8 cas sur le like/unlike REST,
+    dont « un contact DM non-ami est refusé, comme sur le chemin socket ».
   - 9 cas d'audience ajoutés aux deux suites de handlers socket, dont « le `postId` du payload
     n'est pas cru ».
-- **11 harnais ont dû déclarer leur audience.** C'est voulu, et c'est le même choix qu'au cycle 28 :
+- **15 harnais ont dû déclarer leur audience.** C'est voulu, et c'est le même choix qu'au cycle 28 :
   un double qui n'expose pas la tranche ACL échoue au lieu de rendre un verdict par défaut.
 - Le wrapper mort `_canUserViewPost` est retiré.
-- **Suite gateway complète : 607 suites, 15 731 tests, tout vert** (avant : 605 / 15 682).
+- **Suite gateway complète : 608 suites, 15 740 tests, tout vert** (avant : 605 / 15 682).
   `tsc --noEmit` propre. Couverture lignes **95,66 %**, en légère hausse.
 
 ## Reste ouvert après ce cycle
@@ -131,9 +141,6 @@ footgun ; le retrait suit donc la pose. À rouvrir si un cas d'usage réel appar
   vignette du post** (`resolvePostMedia`) sans test d'audience. Le cas exige une restriction
   postérieure à son commentaire (dés-amitié, édition de visibilité), donc plus étroit que ce cycle,
   mais c'est le même défaut : `filterPostAudience` s'y applique tel quel. **Prochain lot naturel.**
-- **`likePost` / `PostReactionService.addReaction` ne vérifient que l'existence du post** — le
-  chemin REST `POST /posts/:postId/like` reste sans garde d'audience, là où son jumeau socket vient
-  d'en recevoir une. Non traité ici pour ne pas mêler deux surfaces dans un même lot ; à faire.
 - **Les deux réparations de base attendent une exécution avec accès base**
   (`repair-mention-user-ids.ts`, `repair-tracking-link-created-by.ts`). À lancer SANS `--apply`
   d'abord. Action humaine — cette routine n'a aucun accès MongoDB.
