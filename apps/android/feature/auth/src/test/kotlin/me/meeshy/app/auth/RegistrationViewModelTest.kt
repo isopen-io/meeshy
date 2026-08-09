@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.auth.StepFill
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import org.junit.After
 import org.junit.Before
@@ -76,8 +77,9 @@ class RegistrationViewModelTest {
     ): Triple<RegistrationViewModel, FakeAuthApi, RealtimeSessionCoordinator> {
         val api = FakeAuthApi(registerResponse, availabilityResponse)
         val store = InMemoryTokenStore()
+        val teardown = mockk<SessionTeardown>(relaxed = true)
         val vm = RegistrationViewModel(
-            AuthRepository(api, store, SessionRepository(api, store)),
+            AuthRepository(api, store, SessionRepository(api, store), teardown),
             coordinator,
         )
         return Triple(vm, api, coordinator)

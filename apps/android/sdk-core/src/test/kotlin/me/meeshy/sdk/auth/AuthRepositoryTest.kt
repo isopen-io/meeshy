@@ -15,9 +15,19 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.SessionTeardown
 import org.junit.Test
 
 class AuthRepositoryTest {
+
+    private class RecordingSessionTeardown : SessionTeardown {
+        var wipeCallCount = 0
+            private set
+
+        override suspend fun wipe() {
+            wipeCallCount += 1
+        }
+    }
 
     private class FakeAuthApi(
         var response: ApiResponse<AuthSession>,
@@ -43,9 +53,10 @@ class AuthRepositoryTest {
     private fun repository(
         api: AuthApi,
         store: TokenStore,
+        teardown: SessionTeardown = RecordingSessionTeardown(),
     ): Pair<AuthRepository, SessionRepository> {
         val session = SessionRepository(api, store)
-        return AuthRepository(api, store, session) to session
+        return AuthRepository(api, store, session, teardown) to session
     }
 
     @Test
@@ -116,7 +127,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun logout_clearsTokensAndSession() {
+    fun logout_clearsTokensAndSession() = runTest {
         val store = InMemoryTokenStore(jwt = "j", sessionToken = "s")
         val (repo, session) = repository(FakeAuthApi(ApiResponse(success = false)), store)
         session.adopt(MeeshyUser(id = "u1", username = "atabeth"))
@@ -125,5 +136,16 @@ class AuthRepositoryTest {
 
         assertThat(store.isAuthenticated).isFalse()
         assertThat(session.currentUser.value).isNull()
+    }
+
+    @Test
+    fun logout_wipesEveryPerAccountCache() = runTest {
+        val store = InMemoryTokenStore(jwt = "j", sessionToken = "s")
+        val teardown = RecordingSessionTeardown()
+        val (repo, _) = repository(FakeAuthApi(ApiResponse(success = false)), store, teardown)
+
+        repo.logout()
+
+        assertThat(teardown.wipeCallCount).isEqualTo(1)
     }
 }

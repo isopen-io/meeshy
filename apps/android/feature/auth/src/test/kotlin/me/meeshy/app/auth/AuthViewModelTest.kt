@@ -1,6 +1,7 @@
 package me.meeshy.app.auth
 
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import org.junit.After
 import org.junit.Before
@@ -44,9 +46,10 @@ class AuthViewModelTest {
         response: ApiResponse<AuthSession>,
         store: InMemoryTokenStore = InMemoryTokenStore(),
         coordinator: RealtimeSessionCoordinator = mockk(relaxed = true),
+        teardown: SessionTeardown = mockk(relaxed = true),
     ): AuthViewModel {
         val api = FakeAuthApi(response)
-        return AuthViewModel(AuthRepository(api, store, SessionRepository(api, store)), coordinator)
+        return AuthViewModel(AuthRepository(api, store, SessionRepository(api, store), teardown), coordinator)
     }
 
     @Before
@@ -140,12 +143,25 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun logout_unbindsRealtimeFromTheSession() {
+    fun logout_unbindsRealtimeFromTheSession() = runTest(dispatcher) {
         val coordinator = mockk<RealtimeSessionCoordinator>(relaxed = true)
         val vm = viewModel(ApiResponse(success = false), store = InMemoryTokenStore(jwt = "jwt"), coordinator = coordinator)
 
         vm.logout()
+        advanceUntilIdle()
 
         verify { coordinator.onAuthenticatedChanged(false) }
+    }
+
+    @Test
+    fun logout_wipesEveryPerAccountCacheBeforeClearingTheAuthenticatedState() = runTest(dispatcher) {
+        val teardown = mockk<SessionTeardown>(relaxed = true)
+        val vm = viewModel(ApiResponse(success = false), store = InMemoryTokenStore(jwt = "jwt"), teardown = teardown)
+
+        vm.logout()
+        advanceUntilIdle()
+
+        coVerify { teardown.wipe() }
+        assertThat(vm.state.value.isAuthenticated).isFalse()
     }
 }
