@@ -4828,3 +4828,58 @@ toolchain dans ce sandbox — reconfirmé.
   handle — deux appels rapprochés à `setCurrentUser()` peuvent armer deux intervalles concurrents et donc
   appeler `initializeConnection()` deux fois. Confiance moyenne, impact faible (la connexion est
   idempotente côté `ensureConnection`), candidat pour la prochaine vague.
+
+## Vague 76 — `SocketIOOrchestrator.setCurrentUser()` : le timer de retry d'auth survivait à un second appel ou à `cleanup()` (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En
+tête de cycle, une PR de cette même routine (#2656, tentative de Vague 75 sur `ringtone.ts`) s'est révélée
+être un doublon d'une session concurrente déjà mergée sur `main` (#2655, commit `176cc3ed6`, elle-même
+Vague 75 — implémentation plus complète : 4 tests au lieu de 2, corrige en plus l'orphelinage des
+oscillateurs d'une boucle concurrente) — fermée sans merge par la revue automatisée, conformément à la règle
+de la routine de ne jamais dupliquer un fix déjà présent sur `main`. Branche resynchronisée sur `main` à
+jour, reprise directe du candidat mineur laissé en spec à la fin de la Vague 75 ci-dessus :
+`orchestrator.service.ts` `setCurrentUser()`. Backlog Android (Vague 70, reconfirmé bloqué —
+`gradle :feature:calls:help --offline` échoue toujours à résoudre `com.android.application:8.7.3`) et iOS
+(`CallManager.swift`, `actor CallEventQueue`, `reportNewIncomingCall`) toujours hors d'atteinte faute de
+toolchain dans ce sandbox.
+
+- **Pourquoi ce fichier est dans le périmètre de la routine calls** : bien que `orchestrator.service.ts` ne
+  soit pas un fichier calls-spécifique, `initializeConnection()`/`setCurrentUser()` établissent la connexion
+  Socket.IO dont dépend TOUT le signaling d'appel (offer/answer/ICE candidates, `call:*` events) — c'est la
+  même classe de bug (timer auto-programmé jamais annulé) que celle fermée sur `ringtone.ts` à la Vague 75,
+  et le candidat avait déjà été spécifié par cette session.
+- **Root cause confirmée par lecture directe** : `setCurrentUser()` (`apps/web/services/socketio/orchestrator.service.ts`)
+  arme, quand aucun token n'est encore disponible, un `setInterval` de retry (3 tentatives, 200ms) stocké
+  dans une variable LOCALE (`retryInterval`), jamais assignée à `this`. Deux effets :
+  1. **Deux appels rapprochés à `setCurrentUser()`** (ex. l'objet `user` du store se met à jour deux fois
+     avant que le token ne soit persisté) arment chacun leur propre intervalle sur le même cadencement
+     200ms. Quand un token apparaît, LES DEUX intervalles le détectent à leur prochain tick et appellent
+     chacun `initializeConnection()` — un appel en trop.
+  2. **`cleanup()` (appelé au logout)** n'avait aucune référence vers l'intervalle en cours — un logout
+     survenant pendant la fenêtre de retry (600ms max) laissait le timer armé ; s'il restait un token
+     résiduel ou qu'un nouveau apparaissait dans cette fenêtre, l'intervalle rappelait
+     `initializeConnection()` **après** le cleanup, ressuscitant une connexion que le logout était censé
+     avoir démontée — pas juste un gaspillage de cycles, un vrai défaut de cohérence session.
+- **Fix** : nouveau champ `authRetryInterval` (mirroir du `ringPatternTimeout` de la Vague 75) + méthode
+  privée symétrique `stopAuthRetry()`. Appelée (a) en tête de la branche retry de `setCurrentUser()`, pour
+  qu'un second appel ne puisse jamais laisser deux intervalles vivants côte à côte, et (b) dans `cleanup()`,
+  pour qu'un logout ne puisse plus jamais laisser un retry survivre à la destruction de la session.
+- **Tests** (TDD, RED confirmé avant fix — les 2 nouveaux tests échouaient : 2 appels à
+  `initializeConnection()` au lieu de 1 attendu sur le scénario double-`setCurrentUser()` ; 1 appel au lieu
+  de 0 attendu sur le scénario cleanup-mid-retry) : 2 nouveaux tests dans
+  `__tests__/services/socketio/orchestrator.service.test.ts` — describe `setCurrentUser` (annule un retry
+  encore en vol avant d'en armer un nouveau) et describe `cleanup` (annule un retry en vol, un logout ne
+  ressuscite pas la connexion).
+- **Vérification** : `orchestrator.service.test.ts` + `orchestrator-e2ee.test.ts` (2 suites / 110 tests)
+  vert ; sweep `__tests__/services/socketio/**` + `__tests__/components/video-call/**` +
+  `__tests__/components/video-calls/**` + `hooks/**` (152 suites / 2776 tests, 2774 passed + 2 skips
+  pré-existants sans rapport) vert. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) :
+  `bun install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client && bun run
+  build` sans erreur. `npx tsc --noEmit` sur `apps/web` : 0 nouvelle erreur imputable au diff (les 14 erreurs
+  `TS2349` sur `orchestrator.service.test.ts` sont préexistantes — confirmées identiques en comptage avec et
+  sans les 2 nouveaux tests, indépendantes de ce fix). `eslint` : même échec sandbox-only de config
+  circulaire que documenté aux vagues précédentes.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague). Aucun nouveau candidat web/gateway identifié au-delà du fix livré cette vague.
