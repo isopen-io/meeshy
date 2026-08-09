@@ -1,3 +1,144 @@
+# Cycle 42 — Une chaîne de trois ruptures : personne ne sait qu'un utilisateur a des clés
+
+Tête prise dans le « reste ouvert » du cycle 41, qui laissait `POST /signal/keys` inappelable
+depuis le web. L'enquête a confirmé ce défaut — et trouvé, en amont, que le corriger n'aurait rien
+changé à ce que l'utilisateur voit : **rien, nulle part, ne rapporte qu'un utilisateur a des
+clés.** Trois ruptures indépendantes sur la même chaîne, chacune suffisant seule à la couper.
+
+Le cycle 41 a rendu les clés distribuables (`GET /signal/keys/:userId` rendait du base64 décodable
+au lieu d'une liste d'octets décimaux). Ce cycle rend leur EXISTENCE observable.
+
+## R1 — La lecture visait quatre colonnes qu'aucune écriture n'alimente
+
+`PreferencesService.getEncryptionPreferences` dérivait `hasSignalKeys` de
+`User.signalIdentityKeyPublic`, et rendait `signalRegistrationId`, `signalPreKeyBundleVersion`,
+`lastKeyRotation` depuis les colonnes homonymes de `User`.
+
+**Aucun chemin n'écrit ces quatre colonnes.** Le seul écrivain de matériel de clé est
+`POST /signal/keys`, et il fait un `upsert` sur la table `SignalPreKeyBundle` — jamais sur `User`.
+Vérifié par balayage : hors de cette méthode et de ses tests, les quatre colonnes n'apparaissent
+que dans le schéma Prisma qui les déclare et dans un test d'intégration qui les écrit lui-même.
+Elles sont `null` pour tout le monde, depuis toujours. La méthode rendait donc `hasSignalKeys:
+false` à l'utilisateur iOS dont le bundle est à une ligne de là — celui-ci téléverse le sien au
+front montant de l'authentification, à **chaque** ouverture de session.
+
+La même méthode portait un second défaut, indépendant : elle lisait `encryptionPreference` dans le
+blob `application` de `UserPreferences`. Le champ est déclaré par `PrivacyPreferenceSchema` et
+écrit dans le blob **`privacy`** (`packages/shared/types/preferences/privacy.ts:30`) — l'unique
+chemin d'écriture est `PATCH /me/preferences/privacy`. Elle aurait rendu « optional » à
+l'utilisateur qui a choisi « always ».
+
+## R2 — Cette lecture n'était atteignable par personne
+
+`services/preferences/PreferencesService.ts` (479 lignes) n'est importé **que par son propre
+fichier de tests**. Aucune route ne l'instancie. Le DTO `EncryptionPreferencesDTO` décrivait donc
+une réponse qu'aucune requête ne pouvait obtenir, et ses ~300 lignes de tests restaient vertes en
+verrouillant les deux erreurs de R1 : les doubles Prisma rendaient précisément les colonnes
+mortes qu'on leur demandait, si bien que la suite prouvait la cohérence du mock, jamais celle du
+système.
+
+## R3 — Le champ que le web lisait ne traverse pas le fil
+
+`apps/web/components/settings/encryption-settings.tsx:42` dérivait tout le panneau — pastille,
+badge « Actif », ID d'enregistrement, date de rotation, présence du bouton « Générer les clés » —
+de `user?.signalRegistrationId`, pris sur l'objet `user` de `GET /auth/me`.
+
+`userSchema`, le schéma de réponse à travers lequel Fastify sérialise cette route, ne déclare
+**aucun** champ signal. fast-json-stringify n'ignore pas une propriété non déclarée : il la
+**retire**. Le champ ne peut pas arriver, quoi que fasse le handler. C'est le mécanisme du cycle 41
+dans son autre direction : là il coerçait (`String(Uint8Array)`), ici il ampute — et dans les deux
+cas sans lever, sans journaliser, sans que TypeScript relie le handler à son schéma.
+
+Les trois ruptures sont indépendantes : réparer R1 seule ne servirait rien (R2 rend le résultat
+inatteignable), réparer R1+R2 ne servirait rien au web (R3 le fait lire ailleurs).
+
+## Correctif — la ligne du bundle EST la source de vérité
+
+`GET /me/preferences/encryption` (nouvelle), adossée à `SignalPreKeyBundle` :
+
+```
+hasSignalKeys        ← la ligne existe et isActive
+signalRegistrationId ← bundle.registrationId, null sans bundle actif
+lastKeyRotation      ← bundle.lastRotatedAt, null sans bundle actif
+encryptionPreference ← blob privacy, validé par PrivacyPreferenceSchema.shape (pas de liste locale)
+```
+
+Le miroir sur `User` n'est pas réparé, il est **contourné** — le réparer demanderait une double
+écriture (donc une dérive possible) et une migration de rattrapage pour tous les bundles déjà
+téléversés. La table porte déjà la vérité : la route est juste pour tout utilisateur existant, le
+jour du déploiement, sans backfill.
+
+Côté web, `encryptionKeys` est un état serveur distinct des préférences (persisté par le store —
+un panneau rouvert affiche immédiatement le dernier statut connu, conformément au principe
+cache-first), synchronisé par `syncEncryptionKeys()` au montage du panneau, dans `syncAll()`, et
+après un `POST /signal/keys` réussi. Ce dernier appel remplaçait un `GET /auth/me` suivi d'un
+`setUser` : un aller-retour qui, par R3, ne pouvait rien rapporter de ce qu'il allait chercher.
+
+**Code mort retiré** : `getEncryptionPreferences` et `updateEncryptionPreference` (les deux seules
+méthodes de la classe morte que ce cycle remplace), leurs DTO, le type `EncryptionPreference`
+devenu orphelin, et les 117 lignes de tests qui les gardaient. Le reste de `PreferencesService`
+demeure mort — retrait à instruire séparément, il excède la famille traitée ici.
+
+## Preuve
+
+`me-preferences-encryption.test.ts` — 9 tests, **9 rouges avant correctif** (404 : la route
+n'existait pas). Le fichier **ne mocke délibérément pas** `@meeshy/shared/types/api-schemas`, à la
+différence de son voisin `me-preferences.test.ts` : le vrai sérialiseur tourne et toutes les
+assertions portent sur le corps parsé. Un test énumère les clés exactes de `data` — c'est ce qui
+vérifie que le schéma ne laisse pas fuiter de matériel de clé et qu'il ne retire rien d'attendu ;
+un autre assert que le handler ne touche **jamais** `prisma.user` (le double n'expose pas le
+modèle : un handler qui le lirait planterait au lieu de passer).
+
+Web : 4 tests neufs sur `syncEncryptionKeys` (dont « une panne réseau ne fait pas disparaître les
+clés »), et les tests de statut du panneau réécrits — ils injectaient `signalRegistrationId` dans
+l'objet `user`, c'est-à-dire dans le champ que R3 rend inatteignable, et restaient verts pendant
+que la production ne pouvait jamais l'afficher. L'un d'eux verrouille désormais l'inverse : un
+`signalRegistrationId` posé sur `user` ne doit **pas** faire passer le statut au vert.
+
+Suites complètes : gateway 630/630 (16 068 tests), web 512/512 (11 703 tests), `tsc --noEmit`
+propre sur les deux paquets (les erreurs `TS7031` préexistantes du web sont hors des fichiers
+touchés).
+
+## Reste ouvert après ce cycle
+
+- **Le web ne sait toujours pas générer de clés.** `encryption-settings.tsx` envoie `{}` à
+  `POST /signal/keys` ; le schéma de corps en exige six propriétés — 400 avant le handler. Le
+  correctif juste n'est pas d'ajouter un keygen : iOS ne dérive ses sessions que **localement**
+  (CryptoKit, à partir du seul `signedPreKeyPublic`), et le web n'a **aucun chemin de
+  déchiffrement**. Téléverser un bundle depuis le web ferait chiffrer les pairs iOS vers un
+  destinataire incapable de lire — une régression fonctionnelle, pas un progrès. Ce chantier est
+  « E2EE web de bout en bout » (WebCrypto X25519/Ed25519 + clés privées en IndexedDB + chemin de
+  déchiffrement), pas un correctif. Demi-correctif refusé, consigné entier. Le bouton reste donc
+  visible et sans effet pour un utilisateur web — état inchangé par ce cycle, désormais affiché
+  sur un statut qui, lui, dit la vérité.
+- **`signedPreKeySignature` n'est vérifiable par aucun pair.** iOS signe la pré-clé signée avec une
+  clé `Curve25519.Signing` (Ed25519) conservée sous `me.meeshy.e2ee.signingKey`, alors que
+  `identityKey` publié est une clé `Curve25519.KeyAgreement` (X25519) — deux clés distinctes. La
+  clé de vérification n'est publiée nulle part : le bundle n'a pas de champ pour elle. La signature
+  circule donc sans que quiconque puisse s'en servir. Défaut de protocole (champ de schéma +
+  déploiement client), hors de la famille traitée ici.
+- **Le reste de `PreferencesService` (479 lignes) est mort.** Une classe entière importée
+  seulement par ses tests. Ce cycle en a retiré les deux méthodes qu'il remplaçait ; le retrait du
+  reste demande de vérifier une à une les méthodes restantes contre leurs équivalents vivants.
+- **Les colonnes `User.signalIdentityKeyPublic` / `signalIdentityKeyPrivate` /
+  `signalRegistrationId` / `signalPreKeyBundleVersion` / `lastKeyRotation` sont mortes.** Plus
+  aucun lecteur après ce cycle, toujours aucun écrivain. `signalIdentityKeyPrivate` mérite une
+  attention à part : c'est un emplacement prévu pour une clé privée côté serveur, ce qu'un E2EE ne
+  devrait jamais stocker. À retirer du schéma (aucune migration MongoDB nécessaire), avec le
+  balayage des données résiduelles éventuelles.
+- Reconduits du cycle 41 : la pré-clé à usage unique n'est pas à usage unique (demande un pool +
+  un réapprovisionnement client) ; `POST /signal/session/establish` n'établit aucune session ;
+  `registrationId` iOS (1…65535) déborde le `maximum: 16383` documenté ;
+  `signal-protocol-routes.test.ts` mocke encore les schémas pour ses autres routes.
+- Reconduits du cycle 40 : doublons `Participant` en base non dénombrés ; « qui a le droit
+  d'épingler ? » ; asymétrie édition/suppression (cycle 38b) et appartenance active de l'auteur
+  (cycle 34) à arbitrer ensemble ; `attachments/metadata.ts:185` ; balayage `routes/calls.ts` ;
+  file d'attente de fan-out (cycle 32) ; fan-out `member_joined` sans borne (cycle 33b) ;
+  `getVisibilityFilteredRecipients` / `filterPostConsumers` (cycle 32) ;
+  `DELETE /admin/posts/:postId` (cycle 38) ; `@Display Name` ;
+  `createStoryCommentNotificationsBatch` ; les deux scripts de réparation de base ; `eslint`
+  inopérant sur le gateway (pas d'`eslint.config.js` depuis ESLint v9).
+
 # Cycle 41 — Le schéma de réponse ne VALIDE pas la sortie du handler : il la RÉÉCRIT
 
 Tête prise dans le « reste ouvert » du cycle 40, qui désignait `POST /signal/session/establish`
