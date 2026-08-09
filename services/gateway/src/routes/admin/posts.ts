@@ -8,6 +8,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { SoundCaptureService } from '../../services/posts/SoundCaptureService';
+import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -531,9 +532,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const { postId } = request.params;
       const { reason } = request.body ?? {};
 
+      // `type` / `visibility` / `visibilityUserIds` ne servent pas au retrait
+      // lui-même mais à l'annoncer : ils choisissent l'événement et refiltrent
+      // l'audience (`broadcastPostRemoval`). Prisma `select` : ce qui n'est pas
+      // demandé ici n'existe pas plus bas.
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, deletedAt: true, authorId: true }
+        select: { id: true, deletedAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
       });
 
       if (!post) {
@@ -557,6 +562,17 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       // POUR TOUJOURS (aucun hard-delete ne cible les non-stories) et gonfle
       // indéfiniment le `usageCount` qui trie la découverte.
       await new SoundCaptureService(fastify.prisma).releasePost(postId);
+
+      // Deuxième dette du même raccourci : écrire `deletedAt` sans passer par
+      // `PostService.deletePost`, c'est aussi n'annoncer le retrait à personne.
+      // Rien ne rejoue ces événements et aucun client ne refetch spontanément —
+      // sans ceci, un post retiré depuis la console restait affiché dans le fil
+      // de tous ses lecteurs, auteur compris.
+      broadcastPostRemoval(
+        fastify.socialEvents,
+        post,
+        (err) => fastify.log.warn({ err }, '[DELETE /admin/posts/:postId]: broadcast deletion failed')
+      );
 
       fastify.log.info({
         action: 'admin_post_delete',

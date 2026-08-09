@@ -14,6 +14,7 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
+import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -399,17 +400,14 @@ export function registerCoreRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast deletion via Socket.IO (use correct event based on post type)
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        if (result.type === 'STATUS') {
-          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast status deleted failed'));
-        } else if (result.type === 'STORY') {
-          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast story deleted failed'));
-        } else {
-          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast post deleted failed'));
-        }
-      }
+      // `deletePost` autorise « l'auteur OU un modérateur et plus » : l'acteur
+      // n'est donc pas forcément l'auteur, et c'est bien l'auteur que la
+      // diffusion attend (voir `broadcastPostRemoval`, invariant 1).
+      broadcastPostRemoval(
+        fastify.socialEvents,
+        { ...result, id: postId, visibilityUserIds: (result as any).visibilityUserIds },
+        (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
+      );
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
