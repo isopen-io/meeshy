@@ -23,6 +23,7 @@ import {
 } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -556,6 +557,20 @@ export function registerMessagesAdvancedRoutes(
         data: {
           deletedAt: new Date()
         }
+      });
+
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. Cette route ne
+      // recalculait PAS `lastMessageAt`, alors que les deux autres chemins de
+      // suppression le faisaient mot pour mot : supprimer le dernier message
+      // depuis iOS ou depuis la vue web — les deux clients qui passent par ici
+      // — laissait la liste des conversations triée sur un message devenu
+      // invisible. La liste vit désormais dans `applyMessageRemovalEffects`.
+      await applyMessageRemovalEffects(prisma, {
+        id: messageId,
+        conversationId,
+        content: existingMessage.content,
+        metadata: existingMessage.metadata,
       });
 
       conversationMessageStatsService.onMessageDeleted(

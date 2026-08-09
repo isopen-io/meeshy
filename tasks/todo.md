@@ -1,3 +1,128 @@
+# Cycle 43 — La piste laissée par le cycle 42 désignait un correctif qui aurait cassé la production
+
+Tête prise dans la « piste pour le cycle suivant » du cycle 42, qui l'énonçait précisément :
+`TrackingLink` porte un `messageId`, la suppression d'un message a quatre écrivains, aucun ne
+bascule `isActive: false`, « commencer par nommer la liste, pas par corriger les quatre sites ».
+
+Les deux moitiés de cette piste se sont vérifiées inégalement. La liste manquante était réelle, et
+plus creuse encore que décrite. **Mais le correctif tel qu'énoncé — désactiver
+`where: { messageId }` — aurait été une RÉGRESSION, sur le chemin le plus courant du produit.**
+
+## R1 — La colonne `messageId` ne désigne pas un propriétaire
+
+`findExistingTrackingLink(url, conversationId)` (`TrackingLinkService.ts:226`) rend à **tout**
+message de la conversation le lien déjà minté pour la même URL. Une ligne `TrackingLink` est donc
+**partagée** entre messages, et `messageId` n'en retient qu'un seul — lequel dépend du chemin :
+
+| chemin | écrivain | politique |
+|---|---|---|
+| envoi | `MessageProcessor.updateTrackingLinksWithMessageId` | filtre `messageId: null` → **premier** arrivé |
+| partage | `TrackingLinkService.updateTrackingLinksMessageId` | `updateMany` sans garde → **dernier** arrivé |
+
+Ce n'est donc pas un lien d'appartenance, c'est une trace de passage. Désactiver sur cette colonne
+aurait coupé, dans le cas « envoi », le lien qu'un **autre message toujours affiché** porte encore :
+il suffit qu'une URL soit citée deux fois dans une conversation et que le premier message parte.
+Dans le cas symétrique (un message qui réutilise un token minté avant lui), la même requête n'aurait
+rien fait du tout. Faux positif et faux négatif par la même colonne.
+
+La question qui décide n'est pas *à qui appartient ce lien* — personne ne le sait — mais **un
+message vivant le porte-t-il encore**. C'est un décompte de références, et il doit se faire sur les
+**deux** représentations d'un token, parce que les deux chemins de minting n'écrivent pas au même
+endroit : une syntaxe explicite `[[url]]` / `<url>` **réécrit** le contenu en `m+<token>` et ne
+touche pas les métadonnées ; une URL brute laisse le contenu intact et ne nomme le token que dans
+`metadata.trackingLinks`. Ne lire qu'une des deux laisserait la moitié des liens actifs pour
+toujours.
+
+## R2 — La liste manquante ne contenait pas que les liens
+
+En la reconstituant sur les quatre écrivains, une seconde divergence apparaît, plus visible pour
+l'utilisateur que la première :
+
+| effet | handler socket | `DELETE /messages/:id` | `DELETE /conversations/:id/messages/:id` | balayage vides |
+|---|---|---|---|---|
+| `deletedAt` | ✅ | ✅ | ✅ | ✅ |
+| pièces jointes | ✅ | ✅ | ✅ | s.o. |
+| recalcul `lastMessageAt` | ✅ | ✅ | ❌ | ❌ |
+| désactivation des `/l/<token>` | ❌ | ❌ | ❌ | ❌ |
+
+La colonne en défaut est **la route qu'emploient iOS et la vue web**. Supprimer le dernier message
+d'une conversation depuis un iPhone laissait donc la liste des conversations triée sur un message
+que plus personne ne peut voir — pendant que le même geste depuis le composer web (qui passe par le
+handler socket) la corrigeait. Le balayage des messages vides ne le recalculait pas davantage, et
+c'est lui qui retire précisément les messages fantômes susceptibles d'épingler l'ordre.
+
+## Correctif — `applyMessageRemovalEffects`
+
+`services/messaging/messageRemovalEffects.ts`, jumeau d'`applyPostRemovalEffects` et pour la même
+raison. Best-effort après un `deletedAt` déjà committé : une suppression réussie ne doit jamais
+devenir un 500.
+
+Trois gardes ferment chacune un faux positif distinct :
+
+1. **`targetType: 'EXTERNAL'`** — un lien `POST`/`REEL`/`STORY` appartient au contenu partagé, pas
+   au message qui le relaie ; son retrait est déjà tenu par `applyPostRemovalEffects`. Supprimer le
+   message qui partage un post ne doit pas casser le partage de ce post ailleurs.
+2. **`conversationId`** — un `m+<token>` recopié à la main depuis une autre conversation ne donne
+   aucun droit sur le lien d'en face.
+3. **Plus aucun message vivant ne le porte** — R1.
+
+Le décompte s'appuie sur un `findRaw` volontairement **large** (`m\+(t1|t2)` sans frontière de mot
+attrape aussi `m+t1x`), l'exactitude étant refaite en JS sur les documents rendus : un préfiltre
+trop large ne coûte que des lignes lues, un préfiltre trop étroit désactiverait un lien encore
+affiché. Même asymétrie sur les pannes — **si le décompte échoue, le lien reste ACTIF** : couper à
+tort casse un message vivant et rien ne le rouvre, laisser actif ne coûte qu'un clic compté en trop.
+
+Le recalcul de `lastMessageAt` est repris tel quel des deux chemins qui le tenaient, à une
+différence près : la garde CAS relit `lastMessageAt` **au plus près de son écriture** au lieu de le
+recevoir joint au message. C'est strictement plus juste (la fenêtre de course rétrécit au lieu de
+couvrir tout le handler) et les trois routes économisent la jointure. Il est exporté séparément
+sous `recomputeConversationLastMessageAt` : le balayage en lot n'a que cet effet-là à appliquer —
+un message au contenu blanc et sans attachement ne porte aucun lien — et une fois par conversation
+touchée, pas une fois par message.
+
+## Preuve
+
+`messageRemovalEffects.test.ts` — 16 tests. Le témoin central est **« un survivant protège le
+token »** : c'est lui, et lui seul, qui échouerait si quelqu'un revenait au filtre sur `messageId`.
+Il a son symétrique en métadonnées (un survivant qui n'a cité que l'URL brute), sans quoi le
+décompte ne verrait qu'une des deux représentations. Trois tests de plus sur la route iOS/web,
+dont le recalcul de `lastMessageAt` qu'elle ne faisait pas.
+
+Quatre tests existants ont dû être mis à jour — ils lisaient la valeur de garde sur la jointure
+`message.conversation`, que le correctif supprime. Deux d'entre eux échouaient d'ailleurs par
+**fuite de mock** et non par assertion : leur file `mockResolvedValueOnce` n'était plus consommée au
+même rythme, et la valeur restante contaminait le test suivant. Un rappel utile : une file `Once`
+dimensionnée sur le nombre d'appels d'un handler couple le test à sa structure interne.
+
+Suites : gateway 630/630 vertes, `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **`conversationMessageStatsService.onMessageDeleted` n'est appelé que par un chemin sur trois.**
+  Troisième colonne de la table de R2, délibérément laissée hors de ce cycle : contrairement aux
+  deux effets traités, elle exige du message des informations que les deux autres routes ne lisent
+  pas (types MIME des pièces jointes, `messageType`, contenu), et c'est un service de compteurs
+  dont les semantiques d'incrément/décrément méritent d'être vérifiées avant d'être diffusées à
+  trois appelants. La dérive de statistiques est réelle et mesurable ; le correctif est un cycle à
+  lui seul, pas un ajout en passant.
+- **`TrackingLink.messageId` reste une colonne trompeuse.** Ce cycle cesse de s'en servir pour
+  décider, mais ne la retire pas : `routes/admin/users.ts` et `system-rankings.ts` la lisent encore
+  pour de l'affichage. Elle mériterait soit un renommage disant ce qu'elle est (dernier/premier
+  message à avoir référencé le lien), soit le passage à une vraie table de jonction
+  message ↔ lien — laquelle rendrait le décompte de références exact au lieu de le reconstituer
+  depuis le texte.
+- **Le décompte relit le texte pour retrouver une relation.** Conséquence directe du point
+  précédent : `metadata.trackingLinks` et les `m+<token>` du contenu sont deux index dérivés qu'il
+  faut tenir d'accord. Une table de jonction supprimerait le `findRaw` et le préfiltre.
+- Reconduits du cycle 42 : E2EE web de bout en bout ; `signedPreKeySignature` invérifiable ; le
+  reste de `PreferencesService` (479 lignes) mort ; colonnes `User.signal*` mortes (dont
+  `signalIdentityKeyPrivate`, emplacement pour une clé privée côté serveur) ; audit du retrait d'un
+  post par l'auteur lui-même (décision produit).
+- Reconduits des cycles 40/41 : pré-clé à usage unique non unique ; `POST /signal/session/establish`
+  n'établit aucune session ; `registrationId` iOS déborde le `maximum` documenté ; doublons
+  `Participant` ; « qui a le droit d'épingler ? » ; asymétrie édition/suppression ; `eslint`
+  inopérant sur le gateway (pas d'`eslint.config.js` depuis ESLint v9).
+
 # Cycle 42 — Une chaîne de trois ruptures : personne ne sait qu'un utilisateur a des clés
 
 Tête prise dans le « reste ouvert » du cycle 41, qui laissait `POST /signal/keys` inappelable

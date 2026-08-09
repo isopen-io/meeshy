@@ -844,7 +844,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       coverage floor lowered, no existing test weakened). **Follow-up (deliberately deferred, not
       part of this slice):** wiring `SignupRegionInference` for a device-locale default (noted
       above).
-- [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
+- [x] Profile photo / banner / bio optional step; registration recap + terms acceptance —
       **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
       Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's
       advance decision for **all 8 steps**, a faithful port of iOS `RegistrationViewModel.canProceed`
@@ -952,8 +952,83 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       instead of duplicating it; instant-app — no spinner introduced; UDF — unchanged
       `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays reachable, the terms
       sheet dismisses via its close button/scrim/swipe; no tautological tests; no coverage floor
-      lowered, no existing test weakened). **Next slice:** PROFILE (photo/banner picker + compression
-      pipeline, the one remaining step) — the `OnboardingFlowView` Compose decomposition is now 7/8 done.
+      lowered, no existing test weakened). **PROFILE step field UI + post-registration upload shipped**
+      (slice `auth-profile-step-fields`, 2026-08-09) — slice 8/8, closing the `OnboardingFlowView`
+      Compose decomposition entirely. **RE-PROVEN, not re-scoped:** every prior run since
+      `auth-password-step-fields` flagged PROFILE as "the one step genuinely large enough it needs its
+      own photo/banner picker + compression pipeline" — re-reading the actual remaining surface (not the
+      note) before committing this run found the opposite: `feature/profile/AvatarBannerUploadViewModel`
+      already ships a fully tested pick → validate (`ImageUploadValidator`) → upload (`MediaRepository`)
+      → confirm (`UserRepository.updateAvatar`/`updateBanner`) pipeline for the Settings/Profile avatar
+      editor, and `RegistrationSummaryInput.bio` already existed unused since `registration-recap-summary`
+      — so the actual gap was two afternoons of wiring, not a new subsystem. No compression pipeline
+      exists anywhere in `apps/android` today (grepped `Bitmap.CompressFormat`/`BitmapFactory` — zero
+      production hits); the existing avatar/banner flow uploads raw picked bytes capped by
+      `ImageUploadTarget.{AVATAR,BANNER}.maxBytes` (8 MB / 12 MB) instead, which this slice reuses
+      as-is rather than inventing byte-shrinking Android never had. **Also re-verified against iOS
+      itself, not just its `RegistrationViewModel.@Published` fields:** `StepProfileView` never sends
+      `profileImage`/`bannerImage`/`bio` through `POST /auth/register` at all — `RegisterRequest` has no
+      such fields. iOS uploads them **after** authentication succeeds, via a separate
+      `OnboardingFlowView.uploadProfileCompletionAssets()` → `ProfileCompletionUploader`, best-effort and
+      independent per asset. Android mirrors this exactly rather than trying to smuggle the assets into
+      `RegisterRequest`. **Added (production, all `apps/android`):** `RegistrationFields.bio` (the one
+      genuinely core-relevant addition — feeds `RegistrationUiState.summary` via
+      `RegistrationSummaryInput(bio = fields.bio)`, wiring the already-shipped but previously-unused
+      `SummaryField.BIO` row for the first time); `RegistrationUiState.profileImage`/`bannerImage:
+      MediaUploadItem?` (kept OUTSIDE `fields` — unlike bio, nothing in `RegistrationStepGate` or
+      `RegistrationSummary` ever reads them, they only feed the post-registration upload); ViewModel
+      setters `onBioChange`/`onProfileImagePicked`/`onBannerImagePicked`; `RegistrationScreen.kt`
+      `ProfileStepBody` (optional-note banner, `ProfilePreviewCard` with two `PickVisualMedia` pickers +
+      `AsyncImage` previews off the picked bytes directly — Coil 2.7's built-in `ByteArrayMapper`, no
+      Uri persistence needed across step navigation — a bio `OutlinedTextField` with a 150-char soft
+      counter, matching iOS's display-only ceiling) + `RecapSummaryCard` **reused verbatim** for the
+      profile preview (iOS reuses the same `summaryItems` for both `StepProfileView` and
+      `StepRecapView` — same card, no near-duplicate string/composable). **Deliberate simplification
+      over iOS:** the avatar does not overlap the banner (iOS offsets it -30pt over the banner's bottom
+      edge) — a plain stacked layout sidesteps Compose's offset/clip interaction inside a rounded,
+      clipped container for a purely cosmetic flourish with zero functional value. **Post-registration
+      upload wiring** (`RegistrationViewModel.register()` → new `uploadProfileCompletionAssets`): fires
+      only after `authRepository.register()` returns `NetworkResult.Success` (by which point
+      `AuthRepository.storeSession` has already adopted the session, so the calls below are
+      authenticated) and before the final `isRegistered = true` flip. Avatar/banner go through the exact
+      same `ImageUploadValidator.validate` → `MediaRepository.upload` → `AvatarBannerUpload.
+      firstUploadedUrl` → `UserRepository.updateAvatar`/`updateBanner` sequence
+      `AvatarBannerUploadViewModel` already ships (not called directly — that ViewModel is scoped to the
+      profile screen's own uploading/error UI state, which this fire-and-forget call has no use for).
+      Bio goes through `UserRepository.enqueueProfileEdit` + waking `OutboxFlushWorker` on a non-null
+      `cmid` — the exact established optimistic + offline-durable path `SettingsViewModel`/
+      `ProfileViewModel` already use for profile edits (SOTA over iOS's online-only bio save), not a new
+      one invented for this slice. Every step wrapped in `try/catch` (rethrowing `CancellationException`)
+      so a failed upload never blocks `isRegistered` — proven by a dedicated test that throws inside
+      `mediaRepository.upload` and asserts `isRegistered` still flips true. **Deliberate divergence from
+      iOS's shape:** iOS fires this upload via a detached `Task` (survives the view's dismissal); Android
+      awaits it inline inside the same `viewModelScope.launch` before flipping `isRegistered`, because
+      `RegistrationScreen`'s `LaunchedEffect(state.isRegistered)` navigates away immediately on that flip,
+      which would cancel a sibling `launch` racing it — awaiting first trades iOS's marginally earlier UI
+      handoff for a guarantee the picked photo is never silently dropped. **+15 new/changed tests**
+      (`RegistrationStepContentTest.isImplemented_profile_isTrue` + the "every other step" sweep, now
+      permanently vacuous since all 8 steps are implemented; `RegistrationViewModelTest`:
+      `onBioChange`/`onProfileImagePicked`/`onBannerImagePicked`, bio summary include/omit, avatar upload
+      + confirm, banner upload + confirm, bio enqueue + wake-worker, no-assets skips every call, an
+      `ImageUploadValidator`-rejected empty pick skips upload, an explicit `NetworkResult.Failure` from
+      the upload call skips the confirm PATCH, and the exception-safety-net test). **Mutation (RED
+      proof):** the PROFILE-implemented test against the pre-slice `implemented` set failed **exactly**
+      `isImplemented_profile_isTrue` (10 run, 1 failed, no collateral); the full `RegistrationViewModel`
+      test file failed to *compile* against the pre-slice 2-arg constructor before the 3 new deps landed
+      — a stronger RED than a runtime failure. **Gate:** `./apps/android/meeshy.sh check` → **BUILD
+      SUCCESSFUL in 36s** (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks). Reviewer
+      **PASS** (diff `apps/android` only — `core/model` [`RegistrationFields.bio`,
+      `RegistrationStepContent.implemented`], `feature/auth` [`RegistrationViewModel` +3 constructor
+      deps + upload orchestration, `RegistrationScreen.kt` +3 composables + 2 private extensions, +8
+      locale strings ×4 locales, `build.gradle.kts` +2 deps: `work-runtime`, `coil-compose`],
+      `tasks/feature-parity.md`; SDK purity — the ViewModel orchestrates existing `:sdk-core`
+      repositories, no product rule added to `:sdk-core`/`:sdk-ui`; SSOT — reuses
+      `ImageUploadValidator`/`AvatarBannerUpload`/`MediaRepository`/`UserRepository.enqueueProfileEdit`/
+      `RecapSummaryCard` untouched, invents nothing; instant-app — no new blocking spinner, the existing
+      `isSubmitting` spinner just covers a little more work; UDF — unchanged `RegistrationViewModel` +
+      immutable `StateFlow`; no dead end — Back/skip unchanged; no tautological tests; no coverage floor
+      lowered, no existing test weakened). The **`OnboardingFlowView` Compose decomposition is now
+      complete (8/8 steps)** — every `RegistrationStep` has real field UI.
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +

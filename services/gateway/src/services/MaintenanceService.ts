@@ -7,6 +7,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
+import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -489,23 +490,34 @@ export class MaintenanceService {
       // Trouver les messages vides via MongoDB raw query :
       // content whitespace-only ($regex), pas de soft-delete, >24h,
       // et pas d'attachements liés (lookup + match vide)
-      const emptyMessageIds = await this.prisma.message.findRaw({
+      const emptyMessages = await this.prisma.message.findRaw({
         filter: {
           content: { $regex: '^\\s*$' },
           deletedAt: null,
           createdAt: { $lt: { $date: staleThreshold.toISOString() } },
         },
         options: {
-          projection: { _id: 1 },
+          // `conversationId` est projeté pour le recalcul de `lastMessageAt`,
+          // plus bas : sans lui, ce balayage retire le message mais laisse la
+          // conversation triée dessus.
+          projection: { _id: 1, conversationId: 1 },
         },
-      }) as unknown as Array<{ _id: { $oid: string } }>;
+      }) as unknown as Array<{ _id: { $oid: string }; conversationId?: { $oid: string } | string }>;
 
-      if (!emptyMessageIds.length) {
+      if (!emptyMessages.length) {
         logger.info('✅ [CLEANUP] Aucun message vide trouvé');
         return;
       }
 
-      const candidateIds = emptyMessageIds.map(m => m._id.$oid);
+      const conversationOf = new Map<string, string>();
+      for (const doc of emptyMessages) {
+        const conversationId = typeof doc.conversationId === 'string'
+          ? doc.conversationId
+          : doc.conversationId?.$oid;
+        if (conversationId) conversationOf.set(doc._id.$oid, conversationId);
+      }
+
+      const candidateIds = emptyMessages.map(m => m._id.$oid);
 
       // Filtrer ceux qui ont des attachements (relation MessageAttachment.messageId)
       const withAttachments = await this.prisma.messageAttachment.findMany({
@@ -530,6 +542,24 @@ export class MaintenanceService {
       });
 
       logger.info(`✅ [CLEANUP] ${result.count} messages vides soft-deleted`);
+
+      // Quatrième écrivain de `deletedAt` sur un message, et le seul en LOT.
+      // Il n'appelle pas `applyMessageRemovalEffects` : un message vide (contenu
+      // blanc, aucun attachement — c'est le critère de sélection) ne porte aucun
+      // `/l/<token>`, il n'y a donc rien à désactiver. Reste le curseur de la
+      // liste des conversations, qu'il laissait pointer sur le message fantôme
+      // qu'il venait justement de retirer. Dédupliqué par conversation : le
+      // recalcul est le même pour dix messages d'une même conversation.
+      const touchedConversations = [
+        ...new Set(toDelete.map((id) => conversationOf.get(id)).filter((id): id is string => Boolean(id))),
+      ];
+      for (const conversationId of touchedConversations) {
+        try {
+          await recomputeConversationLastMessageAt(this.prisma, conversationId);
+        } catch (error) {
+          logger.error(`❌ [CLEANUP] Recalcul lastMessageAt échoué pour conversation=${conversationId}:`, error);
+        }
+      }
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des messages vides:', error);
     }
