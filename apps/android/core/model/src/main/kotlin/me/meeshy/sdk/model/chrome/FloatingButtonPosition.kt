@@ -1,4 +1,4 @@
-package me.meeshy.ui.component.chrome
+package me.meeshy.sdk.model.chrome
 
 /**
  * Position d'un bouton flottant, NORMALISEE dans [0,1] sur les deux axes.

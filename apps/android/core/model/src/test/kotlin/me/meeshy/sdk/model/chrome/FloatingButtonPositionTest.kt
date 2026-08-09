@@ -1,4 +1,4 @@
-package me.meeshy.ui.component.chrome
+package me.meeshy.sdk.model.chrome
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
