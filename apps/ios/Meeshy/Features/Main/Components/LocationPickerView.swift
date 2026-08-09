@@ -378,6 +378,11 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     var selectedName: String? { willSet { objectWillChange.send() } }
     /// Catégorie MapKit du POI (`MKPointOfInterestCategory.rawValue`).
     var selectedCategory: String? { willSet { objectWillChange.send() } }
+    /// Composants du `CLPlacemark` conservés SÉPARÉMENT. `addressString` les
+    /// aplatit pour l'affichage ; la dégradation de précision a besoin de
+    /// choisir entre quartier, ville et région, ce qu'une chaîne jointe rend
+    /// impossible.
+    var selectedCoarseNames: PlaceCoarseNames = .empty { willSet { objectWillChange.send() } }
     var isGeocoding = false { willSet { objectWillChange.send() } }
     var searchResults: [MKMapItem] = [] { willSet { objectWillChange.send() } }
     var userLocation: CLLocationCoordinate2D? {
@@ -409,6 +414,14 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         guard let coordinate = selectedCoordinate else { return nil }
         return SharedPlace(latitude: coordinate.latitude, longitude: coordinate.longitude,
                            name: selectedName, address: addressString, category: selectedCategory)
+    }
+
+    /// Le lieu tel qu'il PARTIRA, précision appliquée. `selectedPlace` reste
+    /// brut : conserver le brut permet de changer de précision sans
+    /// re-géocoder.
+    func sharedPlace(at precision: LocationPrecision) -> SharedPlace? {
+        guard let place = selectedPlace else { return nil }
+        return precision.coarsen(place, names: selectedCoarseNames)
     }
 
     private let manager = CLLocationManager()
@@ -490,6 +503,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // ouvert ici l'aurait rouvert en trois exemplaires.
         if selectedName != nil { selectedName = nil }
         if selectedCategory != nil { selectedCategory = nil }
+        if selectedCoarseNames != .empty { selectedCoarseNames = .empty }
         geocodeTask?.cancel()
         // Hop `@MainActor` explicite : le type est désormais nonisolated, donc
         // ce `Task` n'hérite plus du main actor comme avant. Le géocodage écrit
@@ -509,15 +523,26 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
-            let address = placemarks?.first.map { placemark in
-                let parts = [placemark.name, placemark.thoroughfare, placemark.locality, placemark.country]
+            let placemark = placemarks?.first
+            let address = placemark.map { mark in
+                let parts = [mark.name, mark.thoroughfare, mark.locality, mark.country]
                     .compactMap { $0 }
                 return parts.reduce(into: [String]()) { acc, part in
                     if !acc.contains(part) { acc.append(part) }
                 }.joined(separator: ", ")
             }
+            // Composants captés dans le MÊME callback — la dégradation de
+            // précision en a besoin séparés, et une seconde requête de
+            // géocodage pour les obtenir serait gratuite.
+            let names = PlaceCoarseNames(
+                subLocality: placemark?.subLocality,
+                locality: placemark?.locality,
+                administrativeArea: placemark?.administrativeArea,
+                country: placemark?.country
+            )
             Task { @MainActor [weak self] in
                 self?.isGeocoding = false
+                self?.selectedCoarseNames = names
                 if let address { self?.addressString = address }
             }
         }
