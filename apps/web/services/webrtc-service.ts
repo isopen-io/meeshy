@@ -926,9 +926,18 @@ export class WebRTCService {
         streams: [stream],
       });
     } else {
-      // Reserve the video m-line without lighting the camera/LED.
+      // Reserve the video m-line without lighting the camera/LED. Still
+      // pre-associate it with `stream` (same as the sendVideo branch above):
+      // a sender's MSID/stream grouping is fixed at addTransceiver() time —
+      // replaceTrack() in enableVideoSend() later attaches the camera track
+      // but does NOT change that association. Without it, the mid-call
+      // audio→video upgrade renegotiates with no stream grouping, and the
+      // remote peer's ontrack event fires with an empty `event.streams`,
+      // silently dropping the upgrade (use-webrtc-p2p.ts's onTrack handler
+      // gates on `event.streams[0]`).
       this.videoTransceiver = this.peerConnection.addTransceiver('video', {
         direction: 'recvonly',
+        streams: [stream],
       });
     }
   }

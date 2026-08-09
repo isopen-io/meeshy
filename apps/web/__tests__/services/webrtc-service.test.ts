@@ -110,7 +110,8 @@ const setup = (overrides: Partial<WebRTCServiceConfig> = {}) => {
 describe('WebRTCService — transceiver pre-allocation', () => {
   it('reserves a recvonly video m-line for an audio-only call', () => {
     const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    const stream = makeStream({ audio: true });
+    service.addLocalMedia(stream, { sendVideo: false });
 
     // Audio is attached as a sendrecv transceiver carrying the live track.
     const audioCall = pc.addTransceiver.mock.calls.find(
@@ -118,7 +119,12 @@ describe('WebRTCService — transceiver pre-allocation', () => {
     );
     expect(audioCall?.[1]).toEqual(expect.objectContaining({ direction: 'sendrecv' }));
     // Video m-line is reserved recvonly (no camera) so it can be upgraded later.
-    expect(pc.addTransceiver).toHaveBeenCalledWith('video', { direction: 'recvonly' });
+    // It must ALSO be pre-associated with the call's MediaStream (same `streams`
+    // as the audio transceiver): a sender's stream association is fixed at
+    // addTransceiver() time, not by a later replaceTrack() — see the
+    // "mid-call A/V switch" test below for why an unassociated sender means
+    // the remote peer's ontrack event never carries streams[0].
+    expect(pc.addTransceiver).toHaveBeenCalledWith('video', { direction: 'recvonly', streams: [stream] });
   });
 
   it('sends video immediately when the call starts as video', () => {
@@ -200,6 +206,33 @@ describe('WebRTCService — mid-call A/V switch', () => {
     expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(camTrack);
     expect(videoTx.direction).toBe('sendrecv');
     expect(onLocalDescription).toHaveBeenCalledWith(expect.objectContaining({ type: 'offer' }));
+  });
+
+  it('groups the upgraded video track under the call stream so the remote ontrack event carries streams[0]', async () => {
+    // A sender's MSID/stream association is fixed at addTransceiver() time —
+    // replaceTrack() never changes it (WebRTC 1.0 spec). If the reserved
+    // recvonly video transceiver was created without `streams`, the track
+    // attached later by enableVideoSend() renegotiates with no stream
+    // grouping: the remote RTCPeerConnection's ontrack event fires with an
+    // empty `event.streams`, and use-webrtc-p2p.ts's `onTrack` handler
+    // (gated on `event.streams[0]`) silently drops the upgrade — the peer's
+    // camera never renders. This test locks the association to the exact
+    // stream instance passed to addLocalMedia.
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true });
+    service.addLocalMedia(stream, { sendVideo: false });
+
+    const videoCall = pc.addTransceiver.mock.calls.find(
+      (c) => c[0] === 'video'
+    );
+    expect(videoCall?.[1]).toEqual(expect.objectContaining({ streams: [stream] }));
+
+    const camTrack = makeTrack('video');
+    await service.enableVideoSend(camTrack as unknown as MediaStreamTrack);
+
+    // enableVideoSend() must not re-create the transceiver (that would
+    // reorder m-lines) — the pre-associated one is reused as-is.
+    expect(pc.addTransceiver.mock.calls.filter((c) => c[0] === 'video' || (c[0] as { kind?: string })?.kind === 'video')).toHaveLength(1);
   });
 
   it('downgrades video→audio: replaceTrack(null) + direction recvonly', async () => {
