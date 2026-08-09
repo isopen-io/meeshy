@@ -658,4 +658,111 @@ describe('VideoCallInterface (container)', () => {
       expect(replaceTrack).not.toHaveBeenCalledWith(processedTrack);
     });
   });
+
+  // Vague 76: neither handler held an in-flight guard, unlike its sibling
+  // `CallManager.handleAcceptCall` (Vague 33). A double-click/tap — or the
+  // adaptive-degradation controller's own resume()/suspend() racing a manual
+  // toggle (use-adaptive-degradation.ts) — before the first getUserMedia +
+  // replaceTrack round-trip settles let a second invocation acquire its own
+  // camera track. That second track gets appended to localStream / accepted
+  // by whichever replaceTrack resolves last, but the LOSING track is never
+  // referenced by anything that could stop it — an orphaned camera capture
+  // survives silently for the rest of the call (camera indicator stays lit).
+  describe('re-entrancy guards — a second invocation before the first settles must not leak a camera track', () => {
+    afterEach(() => {
+      webrtc.enableVideo.mockResolvedValue(undefined);
+      webrtc.disableVideo.mockResolvedValue(undefined);
+      // @ts-expect-error -- test-only cleanup of a property defined per-test below
+      delete navigator.mediaDevices;
+      storeState.localStream = null;
+      storeState.peerConnections = new Map();
+    });
+
+    it('handleToggleVideo: a second click before enableVideo resolves must not call enableVideo twice', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: false };
+      let resolveEnable: () => void = () => {};
+      webrtc.enableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveEnable = resolve; }),
+      );
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      expect(webrtc.enableVideo).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveEnable();
+        await Promise.resolve();
+      });
+
+      // The in-flight guard must release once settled — a THIRD, later click
+      // is a legitimate new toggle and must go through.
+      fireEvent.click(button);
+      expect(webrtc.enableVideo).toHaveBeenCalledTimes(2);
+    });
+
+    it('handleToggleVideo: a second click before disableVideo resolves must not call disableVideo twice', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+    });
+
+    it('handleSwitchCamera: a second click before getUserMedia resolves must not acquire a second camera track', async () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
+      const localStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+        removeTrack: jest.fn(),
+        addTrack: jest.fn(),
+      };
+      storeState.localStream = localStream as unknown as MediaStream;
+      storeState.peerConnections = new Map([
+        ['peer1', { getSenders: () => [{ track: { kind: 'video' }, replaceTrack: jest.fn().mockResolvedValue(undefined) }] }],
+      ]) as unknown as typeof storeState.peerConnections;
+
+      let resolveGetUserMedia: (stream: unknown) => void = () => {};
+      const getUserMedia = jest.fn(
+        () => new Promise((resolve) => { resolveGetUserMedia = resolve; }),
+      );
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest.fn().mockResolvedValue([{ kind: 'videoinput' }, { kind: 'videoinput' }]),
+          getUserMedia,
+        },
+      });
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveGetUserMedia({ getVideoTracks: () => [{}] });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    });
+  });
 });
