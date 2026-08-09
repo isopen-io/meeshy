@@ -19,6 +19,28 @@
  * voyait refuser dès qu'il passait par le composer (socket). Une règle de
  * permission recopiée n'est pas une règle : c'est quatre règles qui se
  * ressemblent le jour où on les écrit.
+ *
+ * ─── QUI APPELLE QUOI ────────────────────────────────────────────────────────
+ *
+ * Ces quatre entrées existent parce que quatre clients ont chacun choisi la
+ * leur. **Aucune n'est morte.** Avant d'en retirer une, relire ce tableau — et
+ * le re-vérifier, dans les QUATRE langages :
+ *
+ * | entrée                                    | client                                                              |
+ * |-------------------------------------------|---------------------------------------------------------------------|
+ * | socket `message:edit`                     | web (composer) — transport PRIMAIRE                                 |
+ * | `PUT /conversations/:id/messages/:msgId`  | web (vue d'édition, porte un sélecteur de langue)                   |
+ * | `PUT /messages/:messageId`                | iOS — `MeeshySDK/Services/MessageService.swift:133`                 |
+ * | `PATCH /messages/:messageId`              | Android — `sdk-core/.../outbox/OutboxFlushWorker.kt:161`            |
+ * |                                           | (rejeu des éditions faites HORS LIGNE)                              |
+ *
+ * Le cycle 35 a conclu que `PATCH` n'avait « aucun appelant de production »
+ * après avoir cherché côté web seulement, et a recommandé de la retirer. La
+ * déclaration Retrofit qui l'appelle — `@PATCH("messages/{id}")`,
+ * `core/network/.../api/MessageApi.kt:34` — n'a ni slash initial ni
+ * interpolation : elle échappe à tout motif écrit pour du TypeScript. La
+ * retirer aurait transformé chaque flush d'édition offline d'Android en 404,
+ * sans écran pour le dire. Voir `tasks/lessons.md`, leçon 88.
  */
 
 const PRIVILEGED_GLOBAL_ROLES = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);

@@ -1,3 +1,129 @@
+# Cycle 36 — Les cycles précédents ont unifié ce qu'une édition EXIGE, PRODUIT et PÉRIME. Pas ce qu'elle PUBLIE.
+
+Tête prise à l'endroit que le cycle 35 désignait. La consigne qu'il laissait s'est avérée
+**fausse**, et la vérifier avant de l'exécuter est le résultat le plus important de ce cycle.
+
+## Lot 0 — la consigne du cycle 35 aurait cassé la file offline d'Android
+
+Le cycle 35 concluait : « `PATCH /messages/:messageId` n'a toujours aucun appelant de production…
+**Tête sérieuse du prochain cycle** : la retirer, elle et son service client. »
+
+Il n'avait cherché l'appelant que côté **web**. Côté Android :
+
+```
+apps/android/sdk-core/.../outbox/OutboxFlushWorker.kt:161
+    when (apiCall { messageApi.edit(row.targetId, body) }) {
+apps/android/core/network/.../api/MessageApi.kt:34
+    @PATCH("messages/{id}")
+```
+
+**C'est le chemin par lequel Android rejoue les éditions faites hors ligne.** La retirer aurait
+transformé chaque flush d'édition offline en 404 — silencieusement, puisqu'un rejeu de file n'a pas
+d'écran pour se plaindre. Le transport n'est pas mort : il est le seul que ce client emploie.
+
+Ce que le cycle 35 avait vu est vrai pour une moitié seulement : **le client WEB** de cette route
+était mort. C'est lui, et lui seul, qui est retiré (lot C).
+
+La leçon tient en une ligne, écrite dans `lessons.md` : **« aucun appelant » ne se conclut pas d'une
+recherche sur un seul client.** Ce dépôt en porte quatre — web, iOS, Android, SDK Swift — et
+`grep` sur `.ts` n'en voit qu'un.
+
+## Lot A — deux transports sur quatre publiaient la traduction du texte d'AVANT
+
+Le cycle 35 a fermé cette fuite côté **cache mémoire** (`invalidateCacheForMessage`, désormais en
+tête de la retraduction). Elle restait grande ouverte sur le chemin le plus visible : la **réponse
+HTTP** et la charge **`message:edited`** diffusée à toute la conversation.
+
+Sur les deux routes REST d'édition, l'écriture du contenu ne vidait pas `translations`. Un **second**
+`update`, placé dans le bloc de retraduction, s'en chargeait — mais **après** la lecture qui compose
+la charge utile :
+
+| transport | `translations: null` dans l'écriture du contenu | charge utile composée avant l'invalidation |
+|---|---|---|
+| socket `message:edit` (PRIMAIRE) | oui | non — payload construit en mémoire |
+| `PATCH /messages/:messageId` (Android) | oui | non |
+| `PUT /messages/:messageId` (iOS) | **non** | **oui** |
+| `PUT /conversations/:id/messages/:messageId` (web) | **non** | **oui** |
+
+Les deux transports fautifs sont exactement ceux des deux clients à écran. La ligne relue portait le
+texte d'APRÈS et les traductions d'AVANT, et c'est cette paire qui partait vers tous les clients.
+
+Ce que ça donne pour un lecteur : le **Prisme Linguistique** fait que la plupart ne voient QUE la
+traduction. Un francophone dans une conversation anglaise recevait `message:edited` avec le nouveau
+texte anglais **et** l'ancienne traduction française — et son client affichait l'ancienne, présentée
+comme la traduction de la nouvelle. Jusqu'à ce que la retraduction asynchrone pousse la suivante :
+une fenêtre courte en secondes, permanente en pratique, et parfaitement invisible pour l'éditeur,
+qui lui voit l'original.
+
+L'invalidation **appartient à l'écriture du contenu** : un nouveau texte périme ses traductions à
+l'instant où il est écrit, pas trois `await` plus tard. Elle rejoint donc le `data` de l'écriture —
+déjà gardée par `deletedAt: null` — et le second `update` disparaît. C'est la même forme de
+correctif que le lot A du cycle 35 : la règle va là où le geste se produit, pas chez ses appelants.
+
+Les commentaires des deux routes **affirmaient l'inverse de ce que le code faisait** (« la
+retraduction qui précède a déjà invalidé `translations`, donc le payload reflète cet état : `[]` »).
+Un commentaire qui décrit un ordre que le code n'a pas est ce qui a permis au défaut de survivre à
+trois cycles de revue de ces mêmes routes. Corrigés tous les deux.
+
+## Lot B — la retraduction passe par l'entrée publique du service
+
+`retranslateMessageAsync` est l'entrée publique, et le handler socket l'emploie correctement. Les
+deux routes REST atteignaient `_processRetranslationAsync` — la méthode privée qu'elle expose —
+derrière un `as any`. Deux vocabulaires pour un même geste, dont un qui perce l'encapsulation et
+coûte une assertion de type que `fastify.translationService` (typé `MessageTranslationService`) rend
+inutile. Reste ouvert du cycle 35, fermé ici : deux `as any` en moins.
+
+## Lot C — le client web mort de la route PATCH
+
+`apps/web/services/messages.service.ts` retiré, avec son test. Le dépôt portait **deux** objets
+exportés sous le nom `messagesService` : celui de `services/conversations/messages.service.ts`
+(vivant — `markAsRead`, `getReadStatuses`, `getMessageStatusDetails`, importé par trois hooks) et
+celui-ci, réexporté par le barrel `@/services` mais importé par son seul fichier de test. Un
+développeur écrivant `import { messagesService } from '@/services'` obtenait silencieusement le
+mort. Les types `Message`, `CreateMessageDto`, `UpdateMessageDto` qu'il exportait n'avaient eux non
+plus aucun consommateur.
+
+C'est la moitié correcte de la consigne du cycle 35 — celle qui ne touche aucun client vivant.
+
+## Vérification
+
+- **9 tests neufs, écrits AVANT l'implémentation, 9 rouges observés** :
+  - `message-edit-stale-translation.test.ts` (neuf) — 6 cas sur `PUT /messages/:messageId` : la
+    réponse HTTP sans traduction périmée, la charge `message:edited` sans traduction périmée,
+    l'invalidation dans l'écriture du contenu sous la garde `deletedAt`, l'absence de fenêtre à
+    l'instant de la relecture, l'absence de seconde écriture, et l'appel à `retranslateMessageAsync`.
+  - `conversation-messages-advanced.test.ts` — 3 cas sur `PUT /conversations/:id/messages/:messageId`.
+  - Les deux harnais emploient un **fake Prisma STATEFUL** (les écritures mutent la ligne, les
+    lectures la rendent) : le défaut est un problème d'**ordre** entre écritures et lecture, qu'un
+    mock à valeur fixe ne peut pas exprimer — il rendrait la même valeur avant et après le
+    correctif, donc passerait au vert sans rien prouver. `transformTranslationsToArray` est laissé
+    **non mocké** dans le fichier neuf, pour la même raison : un mock rendant `[]` masque exactement
+    ce qu'on mesure.
+- **Suite gateway complète : 616 suites, 15 893 tests, tout vert** (cycle 35 : 615 / 15 884).
+  `tsc --noEmit` propre. Couverture lignes **95,66 %**, branches **89,05 %** — inchangée.
+
+## Reste ouvert après ce cycle
+
+- **`invalidateCacheForMessage` n'a plus d'appelant hors de la classe** (cycle 35) — gardé public
+  délibérément. À ne pas re-câbler depuis une route.
+- **`appartenance active de l'auteur`** — la question produit du cycle 34 attend toujours une
+  décision : un auteur qui a quitté une conversation peut encore éditer ses messages par les quatre
+  entrées.
+- **La file d'attente de fan-out** (D1 du cycle 32) — cinquième report, même raison : elle demande
+  de savoir ce que la troncature mesure en production, et cette routine n'a aucun accès aux logs.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b) — à arbitrer
+  avec la file, pas séparément.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`@Display Name` inextractible dans le domaine social** — dixième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`
+  (cycle 26).
+- **Les deux scripts de réparation de base** (`repair-mention-user-ids.ts`,
+  `repair-tracking-link-created-by.ts`) attendent une exécution avec accès MongoDB — action humaine.
+- **Piste ouverte par le lot 0** : les quatre transports d'édition existent parce que quatre clients
+  ont chacun choisi le leur. Aucun inventaire ne dit quel client emploie quelle route. Un tel
+  inventaire — même un simple tableau en tête de `messages-advanced.ts` — aurait évité l'erreur du
+  cycle 35, et évitera la prochaine. Candidat pour le cycle 37.
+
 # Cycle 35 — Les cycles précédents ont unifié ce qu'une édition EXIGE et ce qu'elle PRODUIT. Pas ce qu'elle PÉRIME.
 
 Tête prise dans le « reste ouvert » du cycle 34, à l'endroit qu'il désignait — la divergence
@@ -93,17 +219,17 @@ INFO, sur le bloc de **retraduction** — pas sur celui des mentions. Retiré.
   délibérément : c'est une capacité légitime du service, et sa docstring dit désormais l'inverse de
   ce qu'elle disait — la retraduction l'appelle elle-même, ce n'est pas une consigne aux appelants.
   À ne pas re-câbler depuis une route.
-- **`PATCH /messages/:messageId` n'a toujours aucun appelant de production** — `messagesService.updateMessage`
-  (web) n'est invoqué que par ses propres tests, vérifié à nouveau ce cycle. Une entrée d'écriture
-  sans écran est une surface d'attaque qui ne rend rien, et ce cycle vient encore de payer son prix
-  en parité (trois lots à vérifier sur quatre transports au lieu de trois). **Tête sérieuse du
-  prochain cycle** : la retirer, elle et son service client. Reportée ici parce que la retirer
-  DANS le même cycle que trois correctifs de comportement mélangerait une suppression de surface
-  publique à des correctifs qu'on veut pouvoir livrer seuls.
-- **`_processRetranslationAsync` est appelé via `(translationService as any)` par les deux routes
-  REST**, alors que `retranslateMessageAsync` est l'entrée publique prévue pour ça (le socket, lui,
-  l'emploie correctement). Deux vocabulaires pour un même geste, dont un qui perce l'encapsulation.
-  Mécanique à corriger, sans risque, candidat pour le prochain cycle.
+- ~~**`PATCH /messages/:messageId` n'a toujours aucun appelant de production** … **Tête sérieuse du
+  prochain cycle** : la retirer, elle et son service client.~~ **❌ CONSIGNE ERRONÉE — NE PAS
+  EXÉCUTER. Corrigée au cycle 36 (voir plus bas).** Le cycle 35 n'avait cherché l'appelant que
+  côté **web**. `apps/android/sdk-core/.../outbox/OutboxFlushWorker.kt:161` appelle
+  `messageApi.edit(...)` → `@PATCH("messages/{id}")`
+  (`apps/android/core/network/.../api/MessageApi.kt:34`) : **cette route est le chemin par lequel
+  Android rejoue les éditions faites hors ligne.** La retirer aurait cassé silencieusement la file
+  d'attente offline d'Android — l'édition serait partie en 404 au flush, sans écran pour le dire.
+  Seul le **client web** de cette route était mort, et c'est lui qui a été retiré au cycle 36.
+- ~~**`_processRetranslationAsync` est appelé via `(translationService as any)` par les deux routes
+  REST**~~ — **fait au cycle 36.** Les deux routes emploient désormais `retranslateMessageAsync`.
 - **`appartenance active de l'auteur`** — la question produit du cycle 34 attend toujours une
   décision : un auteur qui a quitté une conversation peut encore éditer ses messages par les quatre
   entrées.

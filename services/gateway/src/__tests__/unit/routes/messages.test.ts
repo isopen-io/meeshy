@@ -195,7 +195,7 @@ async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.decorate('translationService', {
-    _processRetranslationAsync: jest.fn().mockResolvedValue(undefined),
+    retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
   });
 
   app.decorate('socketIOHandler', { getManager: () => null });
