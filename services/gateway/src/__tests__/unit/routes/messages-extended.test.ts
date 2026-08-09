@@ -206,8 +206,17 @@ async function buildApp(opts: {
       findFirst: jest.fn().mockResolvedValue(opts.attachmentOverride ?? mockAttachment),
     },
     conversation: {
+      // Voir messages.test.ts : `applyMessageRemovalEffects` relit
+      // `lastMessageAt` lui-même au lieu de le recevoir joint au message.
+      findUnique: jest.fn().mockResolvedValue({
+        lastMessageAt: mockMessage.conversation.lastMessageAt,
+        createdAt: mockMessage.conversation.createdAt,
+      }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    trackingLink: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   });
 

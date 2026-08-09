@@ -3872,15 +3872,19 @@ describe('MessageHandler.handleMessageDelete', () => {
           .mockResolvedValueOnce({ createdAt: lastMsgDate }),
         update: jest.fn(async () => ({})),
       },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: {
+        findUnique: jest.fn(async () => message.conversation),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
 
     // Optimistic-concurrency guard: the write only lands while lastMessageAt is
-    // still the value read at handler start. A `message:new` committing in the
-    // gap advances lastMessageAt, the guard mismatches (updateMany count 0), and
-    // the cursor never regresses backward onto the just-deleted message.
+    // still the value `applyMessageRemovalEffects` read just before writing. A
+    // `message:new` committing in the gap advances lastMessageAt, the guard
+    // mismatches (updateMany count 0), and the cursor never regresses backward
+    // onto the just-deleted message.
     expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
       where: {
         id: message.conversationId,
@@ -3903,7 +3907,10 @@ describe('MessageHandler.handleMessageDelete', () => {
           .mockResolvedValueOnce(null),
         update: jest.fn(async () => ({})),
       },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: {
+        findUnique: jest.fn(async () => message.conversation),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
