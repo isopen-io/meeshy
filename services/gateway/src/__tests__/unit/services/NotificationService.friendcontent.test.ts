@@ -159,6 +159,14 @@ function makeFriendRequest(senderId: string, receiverId: string) {
   return { senderId, receiverId };
 }
 
+/** Amis en nombre — pour éprouver le plafond de fan-out et sa ligne témoin. */
+const friendAt = (n: number) => `607f1f77bcf86cd7994${String(n).padStart(5, '0')}`;
+
+const warnMock = () =>
+  (jest.requireMock('../../../utils/logger-enhanced') as {
+    notificationLogger: { warn: jest.Mock };
+  }).notificationLogger.warn;
+
 // -------------------------------------------------------
 // Tests
 // -------------------------------------------------------
@@ -465,7 +473,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       );
     });
 
-    it('test_createFriendContentNotificationsBatch_friendQueryCappedAt500', async () => {
+    it('test_createFriendContentNotificationsBatch_friendQueryCappedAt500PlusWitnessRow', async () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.createFriendContentNotificationsBatch({
@@ -475,8 +483,49 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       });
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 500 })
+        expect.objectContaining({ take: 501 })
       );
+    });
+
+    // Un auteur à plus de 500 amis est banal, et `take: 500` rendait le même
+    // tableau qu'il en ait 500 ou 50 000. La ligne témoin est le seul moyen de
+    // distinguer « tout le monde a reçu » de « on s'est arrêté là ».
+    it('test_createFriendContentNotificationsBatch_underCap_staysSilent', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue(
+        Array.from({ length: 500 }, (_, i) => makeFriendRequest(AUTHOR_ID, friendAt(i)))
+      );
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      expect(warnMock()).not.toHaveBeenCalled();
+    });
+
+    it('test_createFriendContentNotificationsBatch_witnessRowPresent_warnsAndDropsIt', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => makeFriendRequest(AUTHOR_ID, friendAt(i)))
+      );
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      expect(warnMock()).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ postId: POST_ID, authorId: AUTHOR_ID, cap: 500 })
+      );
+      // Le témoin compte, il ne diffuse pas : sans le `slice`, le plafond
+      // passerait silencieusement de 500 à 501.
+      const notified = (prisma.notification.create as jest.Mock).mock.calls.map(
+        (call) => call[0].data.userId
+      );
+      expect(notified).toHaveLength(500);
+      expect(notified).not.toContain(friendAt(500));
     });
 
     it('test_createFriendContentNotificationsBatch_friendQueryOrderedByUpdatedAtDesc', async () => {

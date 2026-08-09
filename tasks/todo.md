@@ -1,3 +1,99 @@
+# Cycle 32 — Le plafond de fan-out ne tenait ni son chiffre, ni sa parole
+
+Tête laissée par le cycle 31 : « **`getStoryNotificationRecipients` plafonne à 500 lignes par seau**
+sans le dire au destinataire ni au log. Sur un post viral, un fan-out silencieusement tronqué
+ressemble à un fan-out complet. **Tête du prochain cycle.** »
+
+Pris tel quel. Le défaut annoncé — le silence — était réel. En le branchant, un second est apparu
+dans les mêmes trois requêtes : le plafond ne comptait pas ce qu'il annonçait compter.
+
+## Lot A — le plafond payait les exclus sur son propre budget
+
+Deux des trois requêtes écartaient des gens **après** le `take`, pas dedans :
+
+| requête | écarté par la requête | écarté après coup |
+|---|---|---|
+| `postComment` | `commenterId` | **`authorId`** |
+| `postReaction` | `commenterId` | **`authorId`** |
+| `friendRequest` | — | `authorId` (structurel, voir plus bas) |
+
+Une ligne écartée après coup a quand même consommé sa place sous le plafond. Et l'auteur n'est pas
+un engagé quelconque de son propre fil : **c'est le plus prolifique**, parce que répondre à chacun
+de ses commentateurs est le comportement normal d'un auteur. Sur un post où l'auteur a répondu à
+tout le monde, ses propres réponses évinçaient donc, une pour une, des destinataires réels — en
+silence, et d'autant plus fort que le post marchait bien.
+
+**Correctif.** `authorId: { notIn: [commenterId, authorId] }` dans le `where`. Le plafond compte
+désormais des destinataires, plus des lignes dont une partie était jetée d'avance.
+
+**Les `filter` en aval RESTENT, et ce n'est pas une garde en double.** Ils ont un autre rôle : le
+`notIn` protège le **budget**, les `filter` tiennent la **postcondition** de la méthode — « ni
+l'auteur ni le commentateur ne sortent d'ici », vrai quelle que soit la clause `where` du jour.
+C'est ce qui distingue ce cas du `COMMUNITY` décoratif retiré au cycle 31 : là c'était une branche
+de décision inatteignable, ici c'est ce dont une méthode publique répond. Les deux tests qui
+l'encodaient (le commentateur qui a aussi réagi, l'auteur qui a commenté son propre post) sont
+tombés quand j'avais retiré les `filter` — ils avaient raison, ils sont restés.
+
+Sur `friendRequest` l'auteur ne peut PAS sortir par la requête : il ancre **chaque** ligne
+d'amitié. Sa présence y est structurelle, pas budgétaire — rien à corriger.
+
+## Lot B — le plafond était muet, et un plafond muet n'est pas un plafond
+
+`take: 500` rend exactement le même tableau que la base en ait 500 ou 50 000. Rien ne distingue
+« tout le monde a reçu » de « on s'est arrêté là » : ni le destinataire, ni l'auteur, ni
+l'exploitation. Sur le cas **pour lequel le plafond existe**, la troncature est invisible.
+
+**Correctif : une ligne témoin.** `take: FANOUT_ROW_CAP + 1`. La 501e ligne n'est jamais notifiée —
+elle est lue, comptée, puis jetée par un `slice`. C'est le seul moyen de faire dire au plafond
+qu'il a mordu. `getStoryNotificationRecipients` rend `truncated: { comments, reactions, friends }`,
+et `createStoryCommentNotificationsBatch` en tire un `notificationLogger.warn` nommant le post, le
+commentaire, les seaux touchés et le plafond en vigueur.
+
+**Portée du témoin, dite honnêtement.** Sur `friendRequest` (pas de `distinct`) il est **exact** :
+une 501e ligne existe si et seulement si la base en avait plus de 500. Sur les deux requêtes
+`distinct`, il reste un signal **suffisant** — il ne se déclenche jamais à tort, mais il peut se
+taire sur une troncature que la déduplication a repliée en deçà du plafond. Ce n'est pas gênant là
+où ça compte : le seau où la troncature est de loin la plus probable est celui des amitiés — un
+auteur à plus de 500 amis est banal, un post à plus de 500 commentateurs distincts ne l'est pas —
+et c'est précisément celui où le compte est exact.
+
+## Lot C — le même plafond muet sur `createFriendContentNotificationsBatch`
+
+Trouvé en cherchant les autres `take: 500`. Même requête d'amitiés, même silence, sur le fan-out
+de **publication** cette fois : un auteur à plus de 500 amis publie, et 500 sont prévenus sans que
+rien ne le dise. Même traitement, et le `warn` y est adossé au compte exact.
+
+`FANOUT_ROW_CAP` remplace les quatre littéraux `500` : le chiffre s'écrit une fois, avec la note qui
+explique le `+1`. Plus aucun `take: 500` en production dans le gateway.
+
+## Vérification
+
+- **15 tests neufs**, dont **13 rouges observés** avant implémentation (le 14e — « sous le plafond,
+  on se tait » — était vert d'emblée : il n'y avait alors aucun `warn` du tout, ce qui est
+  exactement le cas à verrouiller contre un futur `warn` trop bavard).
+- **4 assertions existantes** passent de `take: 500` à `501` — la ligne témoin change la forme des
+  requêtes, pas le nombre de destinataires — et **2 autres** cessent d'épingler l'ancienne forme
+  `NOT: { … : commenterId }`, désormais couverte plus largement par les assertions `notIn`.
+- Le témoin est éprouvé sur ses **trois** régimes : 500 lignes pile → pas de troncature ;
+  501 lignes → troncature signalée ; et dans les deux cas la 501e n'est jamais notifiée.
+
+## Reste ouvert après ce cycle
+
+- **La troncature ne remonte qu'au log.** Ni l'auteur du post ni les destinataires manquants ne
+  l'apprennent. La vraie sortie est la file de fond que le code appelle de ses vœux depuis
+  l'origine (`Future: large posts should use a background queue for fan-out`) — chantier de
+  contrat, pas correctif. Le `warn` est ce qui permet de savoir si ce chantier est urgent.
+- **Le témoin est sourd sur les requêtes `distinct`** quand la déduplication replie sous le
+  plafond (voir Lot B). Rendre le compte exact demanderait une requête de comptage séparée ; à
+  arbitrer si les logs montrent que les seaux `comments`/`reactions` mordent en vrai.
+- **`canUserInteractWithPost` reste amis stricts** — volontaire (décision 2026-07-08), inchangé.
+- **`getMentionsForMessage` / `getRecentMentionsForUser` sans écran** — inchangé depuis le cycle 27.
+- **`@Display Name` inextractible dans le domaine social** — sixième report.
+- **`eslint` inopérant sur le gateway** (pas d'`eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29 ; aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
+
+---
+
 # Cycle 31 — Deux tests d'admission pour une seule question, et le seau qui n'en avait aucun
 
 Tête laissée par le cycle 30 : « **Deux tests d'admission coexistent** : `filterPostAudience`

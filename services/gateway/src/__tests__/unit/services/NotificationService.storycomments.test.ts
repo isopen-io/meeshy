@@ -190,6 +190,11 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(result.previousCommenterIds).not.toContain(COMMENTER_ID);
     });
 
+    // L'auteur est désormais écarté DEUX fois, pour deux raisons distinctes : par
+    // la requête, pour qu'il ne dépense pas le budget du plafond (voir « le
+    // plafond tient son chiffre »), et ici, parce que « ni l'auteur ni le
+    // commentateur ne sortent de cette méthode » est sa postcondition — elle doit
+    // tenir quelle que soit la clause `where` du jour. Ce test tient le second.
     it('excludes story author from previousCommenterIds', async () => {
       // Story author also posted a prior comment
       prisma.postComment.findMany.mockResolvedValue([
@@ -243,7 +248,6 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
           where: expect.objectContaining({
             postId: POST_ID,
             deletedAt: null,
-            NOT: { authorId: COMMENTER_ID },
           }),
         })
       );
@@ -258,25 +262,27 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       );
     });
 
-    it('caps postComment query at 500 rows to bound fan-out on viral posts', async () => {
+    // Le `take` vaut 501 : 500 destinataires + une ligne témoin, jamais notifiée.
+    // Détail dans « le plafond se dénonce » plus bas.
+    it('caps postComment query at the fan-out row cap plus its witness row', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.postComment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 500 })
+        expect.objectContaining({ take: 501 })
       );
     });
 
-    it('caps friendRequest query at 500 rows to bound fan-out on popular authors', async () => {
+    it('caps friendRequest query at the fan-out row cap plus its witness row', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 500 })
+        expect.objectContaining({ take: 501 })
       );
     });
 
@@ -334,7 +340,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(result.previousCommenterIds).not.toContain(COMMENTER_ID);
     });
 
-    it('test_getStoryNotificationRecipients_postReactionQuery_excludesCommenterAndCapsAt500', async () => {
+    it('test_getStoryNotificationRecipients_postReactionQuery_scopedToPostAndCapped', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.postReaction.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
@@ -343,11 +349,8 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            postId: POST_ID,
-            NOT: { userId: COMMENTER_ID },
-          }),
-          take: 500,
+          where: expect.objectContaining({ postId: POST_ID }),
+          take: 501,
         })
       );
     });
@@ -1049,6 +1052,232 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ orderBy: { updatedAt: 'desc' } })
       );
+    });
+  });
+
+  // ======================================================
+  // Le plafond de fan-out : ce qu'il coûte, et ce qu'il dit
+  // ======================================================
+
+  describe('getStoryNotificationRecipients — le plafond tient son chiffre', () => {
+    // Les IDs jamais notifiables doivent sortir PAR LA REQUÊTE. Filtrés en aval,
+    // leurs lignes sont payées sur le budget du plafond — et l'auteur qui répond
+    // à chacun de ses commentateurs est l'engagé le plus prolifique de son fil.
+    it('test_getStoryNotificationRecipients_postCommentQuery_excludesAuthorAndCommenterInWhere', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      const where = prisma.postComment.findMany.mock.calls[0][0].where;
+      expect(where.authorId.notIn).toEqual(expect.arrayContaining([COMMENTER_ID, AUTHOR_ID]));
+    });
+
+    it('test_getStoryNotificationRecipients_postReactionQuery_excludesAuthorAndCommenterInWhere', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      const where = prisma.postReaction.findMany.mock.calls[0][0].where;
+      expect(where.userId.notIn).toEqual(expect.arrayContaining([COMMENTER_ID, AUTHOR_ID]));
+    });
+
+    it('test_getStoryNotificationRecipients_authorCommentsOnOwnPost_excludedOnce', async () => {
+      // commenterId === authorId : la liste d'exclusion ne doit pas dégénérer.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, AUTHOR_ID);
+
+      const where = prisma.postComment.findMany.mock.calls[0][0].where;
+      expect(where.authorId.notIn).toEqual([AUTHOR_ID]);
+    });
+  });
+
+  describe('getStoryNotificationRecipients — le plafond se dénonce', () => {
+    // Le +1 est un TÉMOIN, pas un élargissement : sans lui, `take: 500` rend le
+    // même tableau à 500 lignes et à 50 000, et une diffusion tronquée ressemble
+    // trait pour trait à une diffusion complète.
+    const otherUser = (n: number) => `607f1f77bcf86cd7994${String(n).padStart(5, '0')}`;
+
+    it('test_getStoryNotificationRecipients_queries_takeCapPlusWitnessRow', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(prisma.postComment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 501 })
+      );
+      expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 501 })
+      );
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 501 })
+      );
+    });
+
+    it('test_getStoryNotificationRecipients_underCap_reportsNoTruncation', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncated).toEqual({ comments: false, reactions: false, friends: false });
+    });
+
+    it('test_getStoryNotificationRecipients_exactlyCapRows_reportsNoTruncation', async () => {
+      // 500 lignes pile : la base a rendu tout ce qu'elle avait, rien n'est perdu.
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 500 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncated.comments).toBe(false);
+      expect(result.previousCommenterIds).toHaveLength(500);
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRowPresent_reportsCommentTruncation', async () => {
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncated.comments).toBe(true);
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRow_neverNotified', async () => {
+      // Le témoin sert à COMPTER, jamais à élargir la diffusion : la 501e ligne
+      // est lue puis jetée, sinon le plafond passerait silencieusement à 501.
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.previousCommenterIds).toHaveLength(500);
+      expect(result.previousCommenterIds).not.toContain(otherUser(500));
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRowPresent_reportsReactionTruncation', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ userId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncated.reactions).toBe(true);
+      expect(result.previousCommenterIds).toHaveLength(500);
+      expect(result.previousCommenterIds).not.toContain(otherUser(500));
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRowPresent_reportsFriendTruncation', async () => {
+      // Sans `distinct`, le témoin est EXACT sur ce seau — et c'est celui où la
+      // troncature est la plus probable : un auteur à plus de 500 amis est banal.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ senderId: AUTHOR_ID, receiverId: otherUser(i) }))
+      );
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncated.friends).toBe(true);
+      expect(result.friendIds).toHaveLength(500);
+      expect(result.friendIds).not.toContain(otherUser(500));
+    });
+  });
+
+  describe('createStoryCommentNotificationsBatch — la troncature remonte au log', () => {
+    const otherUser = (n: number) => `607f1f77bcf86cd7994${String(n).padStart(5, '0')}`;
+
+    const warnMock = () =>
+      (jest.requireMock('../../../utils/logger-enhanced') as {
+        notificationLogger: { warn: jest.Mock };
+      }).notificationLogger.warn;
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'someone',
+        displayName: 'Someone',
+        avatar: null,
+      });
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+      prisma.postReaction.findMany.mockResolvedValue([]);
+    });
+
+    it('test_createStoryCommentNotificationsBatch_noTruncation_staysSilent', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+
+      await service.createStoryCommentNotificationsBatch({
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        storyAuthorId: AUTHOR_ID,
+        commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
+      });
+
+      expect(warnMock()).not.toHaveBeenCalled();
+    });
+
+    it('test_createStoryCommentNotificationsBatch_truncatedFanout_warnsWithPostAndSources', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ senderId: AUTHOR_ID, receiverId: otherUser(i) }))
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        storyAuthorId: AUTHOR_ID,
+        commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
+      });
+
+      expect(warnMock()).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          postId: POST_ID,
+          commentId: COMMENT_ID,
+          cap: 500,
+          sources: ['friends'],
+        })
+      );
+    });
+
+    it('test_createStoryCommentNotificationsBatch_severalTruncatedBuckets_allNamed', async () => {
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ senderId: AUTHOR_ID, receiverId: otherUser(i) }))
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        storyAuthorId: AUTHOR_ID,
+        commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
+      });
+
+      const sources = warnMock().mock.calls[0][1].sources;
+      expect(sources).toEqual(expect.arrayContaining(['comments', 'friends']));
+      expect(sources).not.toContain('reactions');
     });
   });
 

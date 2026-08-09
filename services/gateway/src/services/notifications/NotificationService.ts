@@ -46,6 +46,27 @@ function formatDuration(ms: number): string {
 }
 
 /**
+ * Plafond de destinataires par seau de fan-out social. Borne le coût sur un post
+ * viral ou un auteur très suivi ; à terme ces diffusions devraient passer par une
+ * file de fond plutôt que par un plafond.
+ *
+ * Les requêtes prennent `FANOUT_ROW_CAP + 1` : la ligne excédentaire est un
+ * TÉMOIN, jamais un destinataire. Sans elle, `take: 500` rend exactement le même
+ * tableau que la base en ait 500 ou 50 000 — et une diffusion tronquée ressemble
+ * trait pour trait à une diffusion complète, précisément sur le cas pour lequel
+ * le plafond existe. Le témoin est lu, compté, puis jeté par le `slice`.
+ *
+ * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
+ * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
+ * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
+ * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
+ * déduplication a repliée en deçà du plafond. Le seau où la troncature est de
+ * loin la plus probable — un auteur à plus de 500 amis est banal — est celui où
+ * le compte est exact.
+ */
+const FANOUT_ROW_CAP = 500;
+
+/**
  * Lit une clé de metadata comme chaîne non vide pour le payload push (les
  * `data` APNs/FCM ne transportent que des chaînes). Retourne `''` quand la clé
  * est absente, nulle ou vide — ce que le client interprète comme « pas de
@@ -1746,19 +1767,30 @@ export class NotificationService {
     postId: string,
     authorId: string,
     commenterId: string
-  ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
-    // Cap at 500 rows to bound fan-out cost on viral posts.
-    // Future: large posts should use a background queue for fan-out.
+  ): Promise<{
+    authorId: string;
+    friendIds: string[];
+    previousCommenterIds: string[];
+    /** Quels seaux ont buté sur `FANOUT_ROW_CAP` — voir la note du constant. */
+    truncated: { comments: boolean; reactions: boolean; friends: boolean };
+  }> {
+    // Les IDs qui ne seront JAMAIS notifiés sortent PAR LA REQUÊTE, pas par un
+    // filtre en aval : sous le plafond, une ligne écartée après coup a quand même
+    // consommé sa place. Et l'auteur qui répond à chacun de ses commentateurs est
+    // l'engagé le plus prolifique de son propre fil — ses réponses évinçaient donc
+    // des destinataires réels du seau, en silence.
+    const excludedEngagerIds = Array.from(new Set([commenterId, authorId]));
+
     const [previousComments, friendRequests, reactors] = await Promise.all([
       this.prisma.postComment.findMany({
         where: {
           postId,
           deletedAt: null,
-          NOT: { authorId: commenterId },
+          authorId: { notIn: excludedEngagerIds },
         },
         distinct: ['authorId'],
         select: { authorId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.friendRequest.findMany({
@@ -1767,52 +1799,66 @@ export class NotificationService {
           OR: [{ senderId: authorId }, { receiverId: authorId }],
         },
         select: { senderId: true, receiverId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { updatedAt: 'desc' },
       }),
       // Include post reactors as thread-engaged participants (same bucket as prior commenters)
       this.prisma.postReaction.findMany({
         where: {
           postId,
-          NOT: { userId: commenterId },
+          userId: { notIn: excludedEngagerIds },
         },
         distinct: ['userId'],
         select: { userId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
 
+    const truncated = {
+      comments: previousComments.length > FANOUT_ROW_CAP,
+      reactions: reactors.length > FANOUT_ROW_CAP,
+      friends: friendRequests.length > FANOUT_ROW_CAP,
+    };
+
+    // Le `notIn` ci-dessus est ce qui protège le BUDGET ; les `filter` ci-dessous
+    // restent la POSTCONDITION de la méthode. Deux rôles distincts, pas une garde
+    // en double : la requête décide qui coûte une ligne, la méthode répond de ce
+    // qu'elle rend — « ni l'auteur ni le commentateur ne sortent d'ici » tient
+    // quelle que soit la clause `where` du jour.
+    const isNotifiableEngager = (id: string): boolean =>
+      id !== authorId && id !== commenterId;
+
     const rawPreviousCommenterIds = previousComments
+      .slice(0, FANOUT_ROW_CAP)
       .map((c: { authorId: string }) => c.authorId)
-      .filter((id: string) => id !== authorId);
+      .filter(isNotifiableEngager);
 
     // Merge reactor user IDs into the "thread engagement" bucket.
     // Reactors who also commented are deduplicated via Set — they still appear only once.
     const reactorIds = reactors
+      .slice(0, FANOUT_ROW_CAP)
       .map((r: { userId: string }) => r.userId)
-      .filter((id: string) => id !== authorId);
+      .filter(isNotifiableEngager);
 
-    const rawEngagedIds = Array.from(new Set([...rawPreviousCommenterIds, ...reactorIds]));
+    const previousCommenterIds = Array.from(
+      new Set([...rawPreviousCommenterIds, ...reactorIds])
+    );
 
-    const previousCommenterSet = new Set(rawEngagedIds);
+    const previousCommenterSet = new Set(previousCommenterIds);
 
-    const allFriendIds = friendRequests.flatMap(
-      (fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId]
-    ).filter((id: string) => id !== authorId);
+    // L'auteur ancre CHAQUE ligne d'amitié — l'écarter par la requête est
+    // impossible ici : sa présence est structurelle, pas budgétaire.
+    const allFriendIds = friendRequests
+      .slice(0, FANOUT_ROW_CAP)
+      .flatMap((fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId])
+      .filter(isNotifiableEngager);
 
     const friendIds = Array.from(new Set(allFriendIds)).filter(
-      (id: string) =>
-        id !== commenterId &&
-        id !== authorId &&
-        !previousCommenterSet.has(id)
+      (id: string) => !previousCommenterSet.has(id)
     );
 
-    const previousCommenterIds = rawEngagedIds.filter(
-      (id: string) => id !== commenterId
-    );
-
-    return { authorId, friendIds, previousCommenterIds };
+    return { authorId, friendIds, previousCommenterIds, truncated };
   }
 
   /**
@@ -1878,12 +1924,30 @@ export class NotificationService {
 
     if (!actor) return;
 
-    const { authorId, friendIds, previousCommenterIds } =
+    const { authorId, friendIds, previousCommenterIds, truncated } =
       await this.getStoryNotificationRecipients(
         params.postId,
         params.storyAuthorId,
         params.commenterId
       );
+
+    // Un plafond que personne ne peut observer n'est pas un plafond, c'est une
+    // perte : la diffusion s'arrête, et rien — ni le destinataire, ni l'auteur,
+    // ni l'exploitation — ne distingue « tout le monde a reçu » de « on s'est
+    // arrêté là ». Le seul canal disponible ici est le log ; il nomme le post,
+    // le commentaire, les seaux touchés et le plafond en vigueur, de quoi
+    // décider si ce post mérite une diffusion en file de fond.
+    const truncatedSources = Object.entries(truncated)
+      .filter(([, hit]) => hit)
+      .map(([source]) => source);
+    if (truncatedSources.length > 0) {
+      notificationLogger.warn('Story comment fan-out truncated by row cap', {
+        postId: params.postId,
+        commentId: params.commentId,
+        sources: truncatedSources,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
 
     // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
     // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
@@ -2333,15 +2397,28 @@ export class NotificationService {
 
     if (!author) return;
 
-    const friendRequests = await this.prisma.friendRequest.findMany({
+    const friendRequestRows = await this.prisma.friendRequest.findMany({
       where: {
         status: 'accepted',
         OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
       },
       select: { senderId: true, receiverId: true },
-      take: 500,
+      take: FANOUT_ROW_CAP + 1,
       orderBy: { updatedAt: 'desc' },
     });
+
+    // Requête sans `distinct` : la ligne témoin est ici un compte EXACT — elle
+    // existe si et seulement si l'auteur a plus de `FANOUT_ROW_CAP` amitiés
+    // acceptées. Elle est comptée puis jetée ; le plafond reste à sa valeur.
+    if (friendRequestRows.length > FANOUT_ROW_CAP) {
+      notificationLogger.warn('Friend content fan-out truncated by row cap', {
+        postId: params.postId,
+        authorId: params.authorId,
+        contentType: params.contentType,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
+    const friendRequests = friendRequestRows.slice(0, FANOUT_ROW_CAP);
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
