@@ -1,3 +1,145 @@
+# Cycle 39 — Le cycle 38b a unifié qui peut supprimer. Personne n'avait vérifié QUOI on mute.
+
+Tête prise dans le « reste ouvert » du cycle 38b, qui désignait l'épinglage comme candidat immédiat
+à la question du cycle 37. Le candidat désigné (`routes/messages.ts:779-788`) n'était pas
+l'épinglage mais la route `/history` — et l'enquête sur le geste d'épingler a rendu **autre chose,
+et de plus grave** : les deux moitiés du geste ne mutent pas le même objet.
+
+`PUT …/messages/:messageId/pin` **localise** le message dans la conversation avant d'écrire.
+`DELETE …/messages/:messageId/pin` ne l'a jamais fait.
+
+## Lot A — dépingler écrivait par identifiant seul
+
+```ts
+await prisma.message.update({ where: { id: messageId }, data: { pinnedAt: null, pinnedBy: null } });
+```
+
+Aucun `conversationId`. La seule chose vérifiée en amont est que l'appelant est membre actif de la
+conversation **de la route** — jamais que le message en fait partie. Il suffit donc d'être membre
+actif de N'IMPORTE QUELLE conversation pour dépingler le message de N'IMPORTE QUELLE autre, à
+condition d'en connaître l'id. Ce n'est pas une hypothèse de laboratoire : **tout ancien membre
+garde en cache local les identifiants de tous les messages qu'il a vus** avant de partir.
+
+Trois défauts sortent de la même ligne :
+
+1. **L'écriture croisée.** Une permission de conversation A produit une mutation dans la
+   conversation B.
+2. **La diffusion part au mauvais monde.** `message:unpinned` est émis vers
+   `conversation:${conversationId}` — celui de la ROUTE. Les clients réellement concernés ne
+   reçoivent rien : leur épingle reste affichée jusqu'au prochain chargement complet, sans qu'aucun
+   événement ne les détrompe. Le rejeu hors ligne (`enqueueOfflineMessageMutation`) est enfilé sur
+   la même mauvaise conversation.
+3. **Un identifiant inconnu rendait 500.** Prisma lève P2025, le `catch` le traduit en
+   `sendInternalError` — là où le jumeau qui épingle rend un 404 franc. Même geste, deux formes.
+
+Le correctif est la garde du jumeau, mot pour mot, avant toute écriture. Ce que ce cycle retient de
+sa forme : **tous les siblings du fichier la portaient déjà** — pin, `consume`, l'édition, la
+suppression, toutes localisent le message par `{ id, conversationId }`. Le dépinglage était la seule
+entrée du fichier à écrire par id seul. Un défaut n'a pas besoin d'être subtil pour survivre huit
+cycles : il lui suffit d'être le seul membre d'une famille à ne pas faire ce que toute la famille
+fait, dans une fonction assez courte pour qu'on la lise sans la comparer.
+
+Clients vérifiés dans les quatre langages (leçon 88) : iOS `MessageService.unpin`
+(`ConversationViewModel:3448`) et Android `MessageApi.unpin`. Aucun ne perd de capacité — le
+`conversationId` qu'ils envoient est toujours celui du message.
+
+## Lot B — quitter une conversation n'en fermait pas les accusés de lecture
+
+Question du cycle 37, reposée telle quelle sur une autre famille : **quelles appartenances sont
+jointes sans `isActive` ?** Un départ ne supprime pas la ligne `Participant`, il la passe à
+`isActive: false`. Quatre gardes ne filtraient pas dessus :
+
+| garde | ce qu'un ancien membre pouvait encore faire |
+|---|---|
+| `GET /messages/:messageId/status-details` | lire qui a lu / reçu un message |
+| `GET /attachments/:attachmentId/status-details` | lire qui a écouté / vu une pièce jointe |
+| `POST /attachments/:attachmentId/status` | **écrire** ses propres reçus d'écoute et de consultation |
+| `GET /messages/:messageId/read-status` | lire le statut de lecture d'un message |
+
+La troisième est celle qui se voit côté produit : un ancien membre **réapparaissait dans la liste
+« qui a écouté »** que consultent les membres restants. Une conversation qu'on a quittée continuait
+d'enregistrer notre passage.
+
+Ce qui rend ces quatre-là instructives, c'est leur voisinage. Dans `routes/message-read-status.ts`,
+**quatre gardes sur cinq** filtrent déjà `isActive: true` — la cinquième est la seule à ne pas le
+faire, dans le même fichier, à quelques dizaines de lignes. Dans `routes/messages.ts`, deux sur cinq
+filtraient. Ce n'est pas une règle absente du système : c'est une règle appliquée partout **sauf
+ici**, ce qu'aucune revue de diff ne voit et qu'aucun test ne mesurait.
+
+Aucune capacité vivante n'est retirée : `GET /conversations/:id/messages` exige déjà l'appartenance
+active, donc un ancien membre ne peut plus charger ce dont il consultait les statuts.
+
+## Lot C — la route `/history` retirée, pas réparée
+
+Le cycle 38b la désignait comme « une copie de la forme *rôle de conversation OU rôle du jeton* ».
+Elle en est bien une — la **quatrième**, divergente : rôles globaux lus dans le **jeton** et non en
+base, appartenance jointe **sans `isActive`**. Mais la réparer aurait été soigner une façade.
+
+`GET /messages/:messageId/history` promet l'historique des modifications d'un message. **Aucun
+historique n'est stocké** : le schéma Prisma n'a ni modèle d'édition, ni `previousContent`, ni
+`editHistory`. La route rendait `originalContent: message.content` — le contenu **courant**,
+présenté sous le nom de l'original — avec un `TODO: implémenter un système d'historique` juste
+au-dessus. Et aucun des quatre clients ne l'appelle (vérifié en TypeScript web, Swift SDK et app,
+Kotlin).
+
+Une route morte qui rend une donnée fausse sous un nom trompeur et porte une règle d'admission déjà
+périmée : les trois raisons pointent dans la même direction. Retirée, avec ses tests. Le jour où
+l'historique d'édition sera construit, il lui faudra un stockage et l'unité d'admission partagée —
+pas une cinquième copie.
+
+Retiré au passage : la jointure `participants` de `PUT /messages/:messageId`, devenue morte quand
+`admitMessageEdit` a repris la décision au cycle 33. Plus rien ne lisait son résultat ; elle
+continuait de coûter une jointure par édition, et de donner à lire une garde qui n'en était plus une.
+
+## Preuve
+
+15 tests neufs, RED→GREEN, **7 rouges observés** avant correctif :
+`conversation-message-pin.test.ts` (7) et `departed-member-status-gates.test.ts` (8). Les doubles
+Prisma de ces deux fichiers **discriminent réellement** — sur `conversationId` pour le premier, sur
+`isActive` pour le second. Un mock qui rend la même ligne quel que soit le `where` aurait laissé
+passer exactement les défauts mesurés ici ; c'est la précaution qui manquait aux harnais existants,
+dont les mocks rendent une liste de participants constante (raison pour laquelle aucun d'eux n'a
+jamais pu voir le Lot B).
+
+Suite gateway : **622/622 suites, 15 970 tests verts**, `tsc --noEmit` propre, couverture lignes
+**95,65 %**.
+
+## Reste ouvert après ce cycle
+
+- **Qui a le droit d'épingler ? Personne ne l'a jamais décidé.** Les deux routes n'exigent que
+  l'appartenance active : **tout membre peut épingler et dépingler n'importe quel message**, y
+  compris défaire l'épingle posée par un admin de conversation. C'est cohérent entre les deux
+  moitiés du geste, donc ce n'est pas un défaut au sens de ce cycle — mais c'est le seul geste de
+  conversation partagé qui n'a AUCUNE règle de rôle, là où WhatsApp et Telegram le réservent aux
+  admins en groupe. `PostService.pinPost` exige l'auteur, ce qui donne au dépôt deux réponses pour
+  un même verbe. **Tête sérieuse du prochain cycle si une décision produit est disponible** ; sinon
+  la laisser ouverte plutôt que trancher à l'aveugle — même arbitrage que l'asymétrie
+  édition/suppression du cycle 38b.
+- **La question du cycle 37 n'est toujours pas épuisée** — troisième cycle consécutif où elle rend
+  une famille entière. Restent à balayer, mêmes deux formes (rôle lu dans le jeton, appartenance
+  jointe sans `isActive`) : les **réactions**, les **membres de conversation**, le **partage de
+  lien** (`routes/conversations/sharing.ts`) et les **appels** (`routes/calls.ts` porte cinq
+  jointures d'appartenance dont l'audit reste à faire).
+- **`attachments/metadata.ts:185`** lit encore `registeredUser?.role` dans le jeton — dernier
+  survivant connu de cette forme dans la famille message, non touché ici faute de l'avoir instruit.
+- **L'asymétrie édition/suppression sur l'appartenance du non-auteur** (cycle 38b) et
+  **l'appartenance active de l'auteur** (cycle 34) attendent toujours le même arbitrage produit, et
+  devraient être tranchées ensemble.
+- **`DELETE /admin/posts/:postId` devrait déléguer à `PostService.deletePost`** (cycle 38) : les
+  `TrackingLink` d'un post retiré par la modération résolvent toujours, et aucune ligne
+  `AdminAuditLog` n'est écrite.
+- **La file d'attente de fan-out** (D1 du cycle 32) — huitième report, même raison : elle demande de
+  savoir ce que la troncature mesure en production, et cette routine n'a aucun accès aux logs.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b).
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`@Display Name` inextractible dans le domaine social** — treizième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`
+  (cycle 26).
+- **Les deux scripts de réparation de base** (`repair-mention-user-ids.ts`,
+  `repair-tracking-link-created-by.ts`) attendent une exécution avec accès MongoDB — action humaine.
+- **`eslint` ne peut pas tourner sur le gateway** : aucun `eslint.config.js` depuis la migration
+  ESLint v9. Condition préexistante, non couverte par la CI — qui ne gate que sur `test:coverage`.
+
 # Cycle 38b — Deux sessions ont livré le cycle 38 en parallèle, sur la MÊME question
 
 Le cycle 37 laissait une question précise : « quoi d'autre identifie l'acteur d'une mutation par une

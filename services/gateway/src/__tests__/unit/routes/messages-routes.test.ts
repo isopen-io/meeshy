@@ -1445,7 +1445,16 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
+  it('404 when message belongs to another conversation', async () => {
+    prisma.message.findFirst.mockResolvedValue(null);
+    const reply = makeReply();
+    await getHandler_()(makeReqWithMsg(), reply);
+    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found');
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
   it('happy path: unpins message and broadcasts via socket', async () => {
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
     prisma.message.update.mockResolvedValue({ id: MSG_ID });
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
@@ -1466,6 +1475,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it('error path → 500', async () => {
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
     prisma.message.update.mockRejectedValue(new Error('DB error'));
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
@@ -3099,6 +3109,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin — no socketIOHandl
     (noSocketFastify as any).socketIOHandler = null;
     registerMessagesRoutes(noSocketFastify, prisma as any, translationService, optionalAuth, requiredAuth);
     const handler = noSocketFastify._routes['DELETE']['/conversations/:id/messages/:messageId/pin'];
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
     prisma.message.update.mockResolvedValue({ id: MSG_ID });
     const reply = makeReply();
     await handler(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);

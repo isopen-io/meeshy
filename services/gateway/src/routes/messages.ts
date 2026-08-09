@@ -253,15 +253,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         },
         include: {
           sender: { select: { userId: true } },
-          attachments: { select: attachmentMediaSelect },
-          conversation: {
-            include: {
-              participants: {
-                where: { userId: userId },
-                select: { userId: true }
-              }
-            }
-          }
+          attachments: { select: attachmentMediaSelect }
         }
       });
 
@@ -765,75 +757,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour récupérer l'historique des modifications d'un message
-  fastify.get<{
-    Params: MessageParams;
-  }>('/messages/:messageId/history', {
-    preValidation: [requiredAuth],
-    preHandler: [validateParams(MessageParamsSchema)]
-  }, async (request, reply) => {
-    try {
-      const { messageId } = request.params;
-      const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
-
-      // Vérifier que le message existe et que l'utilisateur a accès
-      const message = await prisma.message.findFirst({
-        where: {
-          id: messageId
-        },
-        include: {
-          sender: {
-            select: { userId: true }
-          },
-          conversation: {
-            include: {
-              participants: {
-                where: { userId: userId },
-                select: { userId: true, role: true }
-              }
-            }
-          }
-        }
-      });
-
-      if (!message || !message.conversation.participants.length) {
-        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
-      }
-
-      // Seuls les modérateurs/admins ou l'auteur peuvent voir l'historique
-      const userMembership = message.conversation.participants[0];
-      const canViewHistory =
-        message.sender?.userId === userId ||
-        userMembership?.role === 'admin' ||
-        userMembership?.role === 'moderator' ||
-        authRequest.authContext.registeredUser?.role === 'ADMIN' ||
-        authRequest.authContext.registeredUser?.role === 'BIGBOSS' ||
-        authRequest.authContext.registeredUser?.role === 'MODERATOR';
-
-      if (!canViewHistory) {
-        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à voir l\'historique de ce message');
-      }
-
-      // Pour l'instant, retourner les informations de base
-      // TODO: Implémenter un système d'historique des modifications si nécessaire
-      const history = {
-        messageId: message.id,
-        originalContent: message.content,
-        isEdited: message.isEdited,
-        editedAt: message.editedAt,
-        createdAt: message.createdAt,
-        deletedAt: message.deletedAt
-      };
-
-      return sendSuccess(reply, history);
-
-    } catch (error) {
-      logger.error('Error fetching message history', error as Error);
-      return sendInternalError(reply, 'Erreur lors de la récupération de l\'historique du message');
-    }
-  });
-
   // Route pour récupérer les traductions d'un message
   fastify.get<{
     Params: MessageParams;
@@ -927,7 +850,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           conversation: {
             include: {
               participants: {
-                where: { userId: userId },
+                // `isActive: true` : quitter une conversation en ferme aussi
+                // les accusés de lecture. La ligne `Participant` laissée
+                // derrière par un départ répondait encore ici.
+                where: { userId: userId, isActive: true },
                 select: { userId: true }
               }
             }
@@ -985,7 +911,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               conversation: {
                 include: {
                   participants: {
-                    where: { userId: userId },
+                    // `isActive: true` — même règle que la garde du message :
+                    // un ancien membre ne lit plus, et n'écrit plus, les reçus
+                    // d'une conversation qu'il a quittée.
+                    where: { userId: userId, isActive: true },
                     select: { userId: true }
                   }
                 }
@@ -1052,7 +981,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               conversation: {
                 include: {
                   participants: {
-                    where: { userId: userId },
+                    // `isActive: true` — même règle que la garde du message :
+                    // un ancien membre ne lit plus, et n'écrit plus, les reçus
+                    // d'une conversation qu'il a quittée.
+                    where: { userId: userId, isActive: true },
                     select: { userId: true }
                   }
                 }

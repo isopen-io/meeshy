@@ -527,18 +527,6 @@ describe('POST /messages/:messageId/status — DB error', () => {
   });
 });
 
-describe('GET /messages/:messageId/history — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on DB error', async () => {
-    (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB crash'));
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
 describe('GET /messages/:messageId/translations — DB error', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });
