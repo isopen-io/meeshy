@@ -1,6 +1,7 @@
 package me.meeshy.app.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,14 +17,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -48,7 +57,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +88,9 @@ import me.meeshy.sdk.model.auth.RegistrationPrimaryAction
 import me.meeshy.sdk.model.auth.RegistrationPrimaryLabel
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.RegistrationStepContent
+import me.meeshy.sdk.model.auth.RegistrationSummaryRow
 import me.meeshy.sdk.model.auth.StepFill
+import me.meeshy.sdk.model.auth.SummaryField
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
@@ -100,14 +113,12 @@ import java.util.Locale
  * `RegistrationStepContentTest`).
  *
  * [RegistrationStep.PSEUDO], [RegistrationStep.PHONE], [RegistrationStep.EMAIL],
- * [RegistrationStep.IDENTITY], [RegistrationStep.PASSWORD] and [RegistrationStep.LANGUAGE]
- * have real field UI today (slices `auth-onboarding-shell`, `auth-phone-step-fields`,
- * `auth-email-step-fields`, `auth-identity-step-fields`, `auth-password-step-fields`,
- * `auth-language-step-fields`); every other step renders an inert "coming soon"
- * placeholder — never a dead end, since
- * [RegistrationLeadingAction.BACK] is always reachable off the first step. Each
- * subsequent step gets its own slice per the decomposition note in
- * `feature-parity.md` §A.
+ * [RegistrationStep.IDENTITY], [RegistrationStep.PASSWORD], [RegistrationStep.LANGUAGE] and
+ * [RegistrationStep.RECAP] have real field UI today (slices `auth-onboarding-shell`,
+ * `auth-phone-step-fields`, `auth-email-step-fields`, `auth-identity-step-fields`,
+ * `auth-password-step-fields`, `auth-language-step-fields`, `auth-recap-step-fields`); only
+ * [RegistrationStep.PROFILE] still renders an inert "coming soon" placeholder — never a dead
+ * end, since [RegistrationLeadingAction.BACK] is always reachable off the first step.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,6 +188,7 @@ fun RegistrationScreen(
                         RegistrationStep.IDENTITY -> IdentityStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.PASSWORD -> PasswordStepBody(state = state, viewModel = viewModel)
                         RegistrationStep.LANGUAGE -> LanguageStepBody(state = state, viewModel = viewModel)
+                        RegistrationStep.RECAP -> RecapStepBody(state = state, viewModel = viewModel)
                         // Each future per-step slice adds its own arm here, in lockstep
                         // with RegistrationStepContent's implemented set.
                         else -> Unit
@@ -1029,6 +1041,231 @@ private fun LanguageTranslationPreviewCard(systemLanguage: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MeeshyTheme.tokens.textPrimary,
         )
+    }
+}
+
+/**
+ * RECAP step — parity target: iOS `StepRecapView`
+ * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`): a summary card of
+ * every field collected so far, a terms-acceptance checkbox with a "read the terms" sheet, and
+ * the primary button (already wired by [RegistrationBottomBar] to
+ * [RegistrationViewModel.register] via [RegistrationNavModel.primaryAction]). Every decision is
+ * driven by already-shipped pure cores — [RegistrationUiState.summary] (`RegistrationSummary`,
+ * slice `registration-recap-summary`) for the rows and
+ * [me.meeshy.sdk.model.auth.RegistrationStepGate]'s RECAP arm
+ * (`fields.acceptTerms`, slice `registration-step-gate-core`) for the proceed gate — this
+ * Composable only renders the summary + binds the checkbox to
+ * [RegistrationViewModel.onAcceptTermsChange]. No skip affordance
+ * ([RegistrationNavModel.showSkip] is PROFILE-only, matches iOS having none for this step
+ * either); loading/error states are already rendered once, above every step body (the shared
+ * `state.errorMessage` banner in [RegistrationScreen]), so this body doesn't duplicate them the
+ * way iOS's `StepRecapView` does internally.
+ *
+ * **Deliberately no password row**, unlike iOS's recap (which appends a `••••••••` row built
+ * from `password.count` outside `summaryItems`): [RegistrationSummaryRow]'s
+ * [me.meeshy.sdk.model.auth.SummaryField] enum has no `PASSWORD` case — a deliberate call made
+ * two slices ago when `RegistrationSummary` shipped (`registration-recap-summary`,
+ * 2026-07-26), re-verified here rather than silently overridden. Never re-surfacing the
+ * password, even as masked dots whose *length* is itself a (weak) signal, is a legitimate
+ * simplification over iOS, not an accidental parity miss.
+ */
+@Composable
+private fun RecapStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
+    var showTerms by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.padding(top = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.registration_recap_header),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.registration_recap_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        RecapSummaryCard(rows = state.summary, modifier = Modifier.padding(top = MeeshySpacing.md))
+        RecapTermsCheckbox(
+            accepted = state.fields.acceptTerms,
+            enabled = !state.isSubmitting,
+            onToggle = { viewModel.onAcceptTermsChange(!state.fields.acceptTerms) },
+            onReadTerms = { showTerms = true },
+            modifier = Modifier.padding(top = MeeshySpacing.sm),
+        )
+    }
+
+    if (showTerms) {
+        RecapTermsSheet(onDismiss = { showTerms = false })
+    }
+}
+
+@Composable
+private fun RecapSummaryCard(rows: List<RegistrationSummaryRow>, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .padding(MeeshySpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Description,
+                contentDescription = null,
+                tint = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = stringResource(R.string.registration_recap_summary_title),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+        rows.forEach { row -> RecapSummaryRow(row) }
+    }
+}
+
+@Composable
+private fun RecapSummaryRow(row: RegistrationSummaryRow) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = row.field.icon(),
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = stringResource(row.field.labelRes()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = row.value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textPrimary,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Faithful port of iOS `summaryItems`'s per-field SF Symbol (`at`/`envelope.fill`/`person.fill`/`phone.fill`/`globe`). */
+private fun SummaryField.icon(): ImageVector = when (this) {
+    SummaryField.USERNAME -> Icons.Filled.AlternateEmail
+    SummaryField.EMAIL -> Icons.Filled.Email
+    SummaryField.NAME -> Icons.Filled.Person
+    SummaryField.PHONE -> Icons.Filled.Phone
+    SummaryField.LANGUAGES -> Icons.Filled.Language
+    SummaryField.BIO -> Icons.Filled.Description
+}
+
+private fun SummaryField.labelRes(): Int = when (this) {
+    SummaryField.USERNAME -> R.string.registration_recap_field_username
+    SummaryField.EMAIL -> R.string.registration_recap_field_email
+    SummaryField.NAME -> R.string.registration_recap_field_name
+    SummaryField.PHONE -> R.string.registration_recap_field_phone
+    SummaryField.LANGUAGES -> R.string.registration_recap_field_languages
+    SummaryField.BIO -> R.string.registration_recap_field_bio
+}
+
+@Composable
+private fun RecapTermsCheckbox(
+    accepted: Boolean,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    onReadTerms: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val acceptLabel = stringResource(R.string.registration_recap_terms_accept)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .toggleable(
+                value = accepted,
+                enabled = enabled,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() },
+            )
+            .padding(MeeshySpacing.md)
+            .semantics { contentDescription = acceptLabel },
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (accepted) MeeshyPalette.Success else Color.Transparent)
+                .border(2.dp, if (accepted) MeeshyPalette.Success else MeeshyTheme.tokens.inputBorder, RoundedCornerShape(6.dp)),
+        ) {
+            if (accepted) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp).align(Alignment.Center),
+                )
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            Text(
+                text = acceptLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+            Text(
+                text = stringResource(R.string.registration_recap_terms_read),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MeeshyPalette.Indigo500,
+                modifier = Modifier.clickable(enabled = enabled, onClick = onReadTerms),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecapTermsSheet(onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MeeshyTheme.tokens.backgroundPrimary) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+        ) {
+            Text(
+                text = stringResource(R.string.registration_recap_terms_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+            Text(
+                text = stringResource(R.string.registration_recap_terms_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.padding(top = MeeshySpacing.md, bottom = MeeshySpacing.lg),
+            )
+            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                Text(stringResource(R.string.registration_close))
+            }
+        }
     }
 }
 
