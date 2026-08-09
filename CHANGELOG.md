@@ -7,7 +7,17 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Gateway — une édition ne publie plus la traduction du texte d'AVANT.** Sur `PUT /messages/:messageId` (transport du client iOS) et sur `PUT /conversations/:id/messages/:messageId` (vue d'édition web), l'écriture du contenu ne vidait pas `translations` ; un second `update`, placé dans le bloc de retraduction, s'en chargeait — mais **après** la lecture qui compose la charge utile. La réponse HTTP et l'événement `message:edited` diffusé à toute la conversation emportaient donc le texte d'APRÈS accompagné des traductions d'AVANT. Le Prisme Linguistique fait que la plupart des lecteurs ne voient QUE la traduction : ils relisaient l'ancien message, présenté comme la traduction du nouveau, jusqu'à ce que la retraduction asynchrone pousse la suivante. L'invalidation rejoint l'écriture du contenu (déjà gardée par `deletedAt: null`), et le second `update` disparaît. Le handler socket `message:edit` et `PATCH /messages/:messageId` invalidaient déjà atomiquement — c'étaient les deux transports encore divergents. Les commentaires des deux routes affirmaient l'inverse de ce que le code faisait ; corrigés.
+
+### ♻️ Changed
+
+- **Gateway — les deux routes REST d'édition passent par `retranslateMessageAsync`**, l'entrée publique du `MessageTranslationService` déjà employée par le handler socket, au lieu d'atteindre la méthode privée `_processRetranslationAsync` derrière un `as any`. Deux assertions de type en moins, un seul vocabulaire pour un même geste.
+
 ### 🧹 Removed
+
+- **Web — `services/messages.service.ts` et son test retirés, dead code sans aucun appelant en production.** Le dépôt portait DEUX objets exportés sous le nom `messagesService` : celui de `services/conversations/messages.service.ts` (vivant : `markAsRead`, `getReadStatuses`, `getMessageStatusDetails`) et celui-ci, réexporté par le barrel `@/services` mais importé par son seul fichier de test. Un développeur écrivant `import { messagesService } from '@/services'` obtenait silencieusement le mort. Les types `Message`, `CreateMessageDto`, `UpdateMessageDto` qu'il exportait n'avaient eux non plus aucun consommateur.
 
 - **Web — `useVideoFilters.ts` (pipeline WebGL de filtres vidéo d'appel : température/luminosité/contraste/saturation/exposition) retiré, dead code sans aucun appelant en production** : le hook n'était exporté ni depuis le barrel public `components/video-calls/index.ts`, ni importé par `VideoCallInterface` ou tout autre composant — vérifié par recherche exhaustive sur l'ensemble du dépôt. Même classe que `useWebRTC.ts`, retiré en Vague 33 pour la même raison (footgun potentiel si jamais réexporté). La garde-barrel existante qui verrouille l'absence de `useWebRTC.ts` (`__tests__/components/video-calls/index.test.ts`) est étendue avec les deux mêmes assertions pour `useVideoFilters`, plutôt que dupliquée dans un nouveau fichier.
 

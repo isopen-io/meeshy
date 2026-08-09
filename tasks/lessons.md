@@ -1,42 +1,104 @@
 # Lessons
 
-## Leçon 88 — « aucun appelant » ne se conclut jamais d'un seul client (2026-08-09, routine messaging)
+## Leçon 88 — « aucun appelant » ne se conclut jamais d'une recherche sur un seul client (2026-08-09, routine messaging, cycle 36)
 
-Le « reste ouvert » du cycle 35 désignait comme tête sérieuse le retrait de
-`PATCH /messages/:messageId`, « sans aucun appelant de production », re-vérifié sur deux cycles
-consécutifs. La vérification était **exacte mais partielle** : elle avait mesuré
-`apps/web/services/messages.service.ts` — dont `updateMessage` n'est effectivement appelé que par ses
-propres tests — et conclu que la ROUTE était morte.
-
-Elle sert en réalité la lane `EDIT_MESSAGE` de la file d'attente hors ligne **Android**
-(`OutboxFlushWorker.kt:161` → `MessageApi.edit` → `@PATCH("messages/{id}")`). La retirer aurait cassé
-silencieusement la remise différée des éditions faites hors ligne sur un client entier — et de la
-pire manière, puisque l'outbox Android classe tout échec comme transitoire : cinq tentatives, puis
-abandon en laissant l'édition peinte localement et jamais appliquée côté serveur.
+Le cycle 35 a laissé au cycle suivant une consigne explicite : retirer `PATCH /messages/:messageId`,
+« qui n'a aucun appelant de production ». Il avait vérifié — mais uniquement côté **web**
+(`grep` sur `.ts`/`.tsx`), où le client était effectivement mort. Côté **Android**,
+`OutboxFlushWorker.kt:161` appelle `messageApi.edit(...)` → `@PATCH("messages/{id}")` : c'est le
+chemin par lequel Android **rejoue les éditions faites hors ligne**. Exécuter la consigne aurait
+transformé chaque flush d'édition offline en 404, silencieusement — un rejeu de file n'a pas d'écran
+pour se plaindre.
 
 **Leçons :**
-1. **Une route REST est une surface PUBLIQUE ; la question n'est pas « qui l'appelle dans le code que
-   je lis » mais « qui l'appelle dans le code que je ne lis pas ».** Ce dépôt a quatre consommateurs
-   d'API — `apps/web`, `apps/ios` + `packages/MeeshySDK`, `apps/android`, et la gateway pour
-   elle-même. Avant d'écrire « aucun appelant » au sujet d'un endpoint, grepper **le chemin de
-   l'URL** dans les quatre, pas le nom de la méthode d'un seul SDK. Les clients ne nomment pas leurs
-   méthodes pareil (`updateMessage` en TS, `edit` en Kotlin) : c'est le verbe + le chemin qui sont
-   partagés, donc c'est sur eux qu'on cherche.
-2. **Un constat de code mort se périme, et il faut le dater par CLIENT.** « Vérifié à nouveau ce
-   cycle » donnait au constat une autorité que sa méthode n'avait pas : re-mesurer trois fois le même
-   client ne le rend pas plus vrai. Un constat de non-usage doit énoncer **où** il a regardé, sans
-   quoi le cycle suivant hérite d'une conclusion sans son périmètre.
-3. **Le module le moins outillé est celui qui accumule les défauts les plus graves.** Android n'a
-   AUCUN job CI dans `.github/workflows/`, et le SDK n'est pas téléchargeable depuis cette routine
-   (`dl.google.com` refusé par la politique réseau). C'est précisément là qu'ont été trouvés le
-   défaut le plus sévère du cycle (l'outbox qui retente l'irréparable et bloque sa lane en FIFO) et
-   la croyance fausse qui a failli coûter une régression. **Un module sans CI n'est pas un module
-   stable : c'est un module dont personne ne mesure l'instabilité.**
-4. **Ne pas livrer ce qu'on ne peut pas prouver.** Le correctif Android était rédigeable de tête ;
-   il n'a pas été écrit, parce qu'aucun compilateur Kotlin n'était atteignable et qu'aucune CI ne
-   l'aurait rattrapé. Le défaut est consigné en tête du « reste ouvert » avec sa mesure complète et
-   le correctif esquissé — c'est ce qu'on livre quand on ne peut pas livrer le code.
 
+1. **Ce dépôt a quatre clients — web (`.ts`/`.tsx`), iOS (`.swift`), Android (`.kt`), SDK Swift —
+   et un `grep` par défaut n'en voit qu'un.** Avant d'écrire « aucun appelant » sur une route HTTP,
+   la recherche doit couvrir les quatre langages ET les deux formes d'appel : l'URL littérale
+   (`/messages/${id}`, `"/messages/\(id)"`) et la **déclaration déclarative** (`@PATCH("messages/{id}")`
+   de Retrofit), qui ne contient ni slash initial ni interpolation et échappe donc à la plupart des
+   motifs qu'on écrit spontanément. Chercher le **chemin sans slash initial** (`messages/{`,
+   `messages/`) autant que le chemin complet.
+
+2. **Une consigne héritée d'un cycle précédent se re-vérifie avant de s'exécuter, pas après.**
+   Le coût de la vérification était de deux `grep` ; le coût de la confiance aurait été une
+   régression silencieuse sur un chemin offline. Une routine qui se reprend elle-même de cycle en
+   cycle accumule ses propres erreurs à la vitesse où elle accumule ses réussites : **le reste
+   ouvert d'un cycle est une hypothèse, pas un ordre de travail.**
+
+3. **Corollaire de portée : une consigne fausse à moitié se coupe en deux, elle ne se jette pas.**
+   Le client web de cette route était bien mort — il a été retiré. La route, elle, reste. Rejeter la
+   consigne en bloc aurait perdu la moitié qui était juste.
+
+4. **Symptôme à reconnaître : un transport « sans appelant » qui porte quand même des correctifs de
+   parité.** Le cycle 35 a payé la parité de cette route sur trois lots tout en la déclarant morte.
+   Quand on soigne quelque chose qu'on croit mort, c'est en général qu'on se trompe sur l'un des
+   deux.
+
+## Leçon 88b — un commentaire qui décrit un ordre que le code n'a pas est un défaut de premier ordre (même cycle)
+
+Les deux routes REST d'édition portaient, au-dessus de la composition de leur charge utile :
+« La retraduction qui précède a déjà invalidé `translations` en base, donc le payload renvoyé
+reflète cet état : `[]`. » L'invalidation était en réalité placée **après** la lecture qui compose
+cette charge. La réponse HTTP et l'événement `message:edited` emportaient donc le nouveau texte avec
+les traductions de l'ancien — et le Prisme Linguistique fait que la plupart des lecteurs ne voient
+QUE la traduction.
+
+**Leçons :**
+
+1. **Un commentaire affirmant un ORDRE est une assertion vérifiable, et personne ne la vérifie.**
+   Trois cycles ont revu ces routes en lisant cette phrase comme un fait. Quand un commentaire dit
+   « X a déjà eu lieu », le réflexe doit être de localiser X dans le fichier, pas de le croire.
+2. **Un mock à valeur fixe ne peut pas tester un défaut d'ordre.** Il rend la même chose avant et
+   après le correctif : le test passe au vert sans rien prouver. Il faut un fake **stateful** —
+   les écritures mutent la ligne, les lectures la rendent — sinon on n'écrit pas un test, on écrit
+   une tautologie. Même règle pour les transformateurs de sortie : `transformTranslationsToArray`
+   mocké à `[]` masque exactement ce qu'on mesure.
+3. **La règle va où le geste se produit.** Un nouveau contenu périme ses traductions à l'instant où
+   il est écrit — l'invalidation appartient donc au `data` de l'écriture, pas à un second `update`
+   trois `await` plus loin. C'est la même forme que le lot A du cycle 35 (la purge appartient à la
+   retraduction, pas à ses appelants) : **tout ce qui est confié à un appelant sera oublié par le
+   quatrième.**
+
+
+## Leçon 88c — le module sans CI n'est pas stable, c'est le module dont personne ne mesure l'instabilité (même cycle, session parallèle)
+
+Deux sessions ont convergé sur la même découverte Android (leçon 88). En creusant le chemin qu'elle
+désigne — `OutboxFlushWorker` — le défaut le plus grave du cycle est apparu, et il n'a **pas** pu
+être corrigé :
+
+- `SendResult` documente le contrat (`TransientFailure` = « réseau coupé, 5xx, timeout » ;
+  `PermanentFailure` = « 4xx autre que 404 »), `ARCHITECTURE.md §5` l'exige nommément
+  (« transient-vs-permanent classification, 404-as-success »), et `ApiError` porte bien `httpStatus`.
+  **Quatorze des quinze senders l'ignorent** et écrasent tout échec en `TransientFailure`. Seul
+  `SEND_FRIEND_REQUEST` classe correctement — le patron existe déjà dans le dépôt, appliqué à une
+  lane sur quinze.
+- `OutboxDrainer` est en **FIFO strict** et une `TransientFailure` **arrête la lane**. Un 403
+  définitif (fenêtre d'édition dépassée, auteur retiré de la conversation) bloque donc tous les
+  messages suivants de cette conversation pendant 5 tentatives à backoff exponentiel — de l'ordre de
+  cinq minutes de blocage de tête de file pour une erreur qui ne guérira jamais.
+- À l'épuisement, `onExhausted` n'a aucun cas pour `EDIT_MESSAGE` / `DELETE_MESSAGE` (`else -> Unit`)
+  alors que `editOptimistic` a déjà peint l'édition localement : l'appareil montre le texte édité
+  pour toujours, le serveur n'a rien appliqué, personne d'autre ne le voit.
+
+**Leçons :**
+
+1. **Le module le moins outillé accumule les défauts les plus graves, et c'est mécanique.**
+   `.github/workflows/` ne contient **aucun** job Gradle : Android n'est vérifié par rien. Ce n'est
+   pas un hasard si c'est là qu'on trouve à la fois le défaut le plus sévère du cycle et la croyance
+   fausse qui a failli coûter une régression. Un module sans CI ne produit aucun signal — ni rouge,
+   ni vert — et l'absence de rouge se lit comme de la santé.
+2. **Ne pas livrer ce qu'on ne peut pas prouver.** Le correctif était rédigeable de tête. Il n'a pas
+   été écrit : `dl.google.com` est refusé par la politique réseau de l'environnement (403 sur
+   CONNECT), donc ni le SDK Android ni le dépôt Maven Google ne sont atteignables, `:sdk-core:test`
+   ne peut pas tourner, et aucune CI ne l'aurait rattrapé. Du Kotlin non compilé et non testé sur
+   `main` est une régression déguisée en correctif. **Ce qu'on livre quand on ne peut pas livrer le
+   code, c'est la mesure complète et le correctif esquissé** — consignés en tête du reste ouvert.
+3. **Vérifier qu'on PEUT prouver avant de choisir la tête du cycle, pas après l'avoir écrite.**
+   La faisabilité de la vérification (toolchain présent ? CI existante ?) fait partie du choix de la
+   cible, au même titre que la gravité du défaut. Ici, elle a fait basculer le cycle d'Android vers
+   la gateway — où le défaut jumeau (`PATCH /messages/:messageId` sans garde de vacuité) était, lui,
+   entièrement testable.
 
 ## Leçon 87 — quand deux écrivains d'un même champ divergent, c'est le PLUS DESTRUCTEUR qu'il faut lire en premier (2026-08-08, routine messaging)
 

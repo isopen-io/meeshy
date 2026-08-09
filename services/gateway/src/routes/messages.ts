@@ -333,13 +333,26 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // soit `deletedAt`), et l'API répondrait succès pour un message que le
       // client a déjà retiré. Miroir du garde `updateMany` du handler socket
       // `handleMessageEdit`.
+      //
+      // `translations: null` appartient à CETTE écriture, pas à une seconde plus
+      // bas : un nouveau contenu périme ses traductions à l'instant où il est
+      // écrit. Séparées, les deux écritures ouvraient une fenêtre — traversée
+      // par la réconciliation des mentions, le fan-out `mention:created` et la
+      // relecture qui compose la réponse — pendant laquelle la ligne portait le
+      // texte d'APRÈS et les traductions d'AVANT. La relecture tombait dedans :
+      // la réponse HTTP et la charge `message:edited` diffusée à toute la
+      // conversation emportaient la traduction du texte périmé, et le Prisme
+      // Linguistique fait que la plupart des lecteurs ne voient QUE celle-là.
+      // Les trois autres transports d'édition invalident déjà dans l'écriture
+      // du contenu ; celui-ci était le dernier à ne pas le faire.
       const editedAt = new Date();
       const editResult = await prisma.message.updateMany({
         where: { id: messageId, deletedAt: null },
         data: {
           content: editedContent,
           isEdited: true,
-          editedAt
+          editedAt,
+          translations: null
         }
       });
 
@@ -402,15 +415,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Déclencher la retraduction automatique du message modifié
+      // Déclencher la retraduction automatique du message modifié.
+      // L'invalidation de `translations` n'est plus faite ici : elle appartient
+      // à l'écriture du contenu, plus haut, et la faire deux fois rouvrirait la
+      // fenêtre que cette écriture vient de fermer.
       try {
-        // Invalider les traductions existantes (vider le JSON translations)
-        await prisma.message.update({
-          where: { id: messageId },
-          data: { translations: null }
-        });
-
-        // Créer un objet message pour la retraduction
         const messageForRetranslation = {
           id: messageId,
           content: editedContent,
@@ -419,11 +428,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           senderId: message.senderId
         };
 
-        // Déclencher la retraduction par l'entrée PUBLIQUE du service : le cast
-        // `(translationService as any)._processRetranslationAsync` qui vivait ici
-        // perçait l'encapsulation pour atteindre la méthode que
-        // `retranslateMessageAsync` expose déjà — et que le chemin socket, lui,
-        // employait correctement. Un geste, un seul vocabulaire.
+        // `retranslateMessageAsync` est l'entrée PUBLIQUE prévue pour ce geste —
+        // celle qu'emploie le handler socket. Les deux routes REST appelaient
+        // `_processRetranslationAsync` derrière un `as any`, c'est-à-dire le même
+        // geste sous un second vocabulaire, au prix d'une assertion de type qui
+        // perçait l'encapsulation du service.
         if (translationService) {
           await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
         } else {
@@ -439,9 +448,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // au contrat API consommé par iOS (`[APITextTranslation]`) et web. Sans
       // cette transformation, le client reçoit `translations: { "fr": {...} }`
       // au lieu d'un tableau et échoue au décodage ("Type mismatch for type
-      // Array<Any> at path data.translations"). La retraduction qui précède a
-      // déjà invalidé `translations` en base, donc le payload renvoyé reflète
-      // cet état : `[]`.
+      // Array<Any> at path data.translations"). L'ÉCRITURE DU CONTENU a déjà
+      // invalidé `translations` en base, donc cette relecture rapporte `null` et
+      // le payload reflète cet état : `[]`. Cette phrase créditait auparavant
+      // l'invalidation qui vivait dans le bloc de retraduction — placée APRÈS
+      // la relecture, elle arrivait trop tard pour la charge déjà composée.
       const transformedMessage = {
         ...updatedMessage,
         translations: transformTranslationsToArray(
