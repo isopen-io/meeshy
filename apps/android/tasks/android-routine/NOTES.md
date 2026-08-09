@@ -357,3 +357,78 @@ Append-only log of gotchas and decisions that save time next run.
   verbatim for `RecapTermsSheet`'s dismiss button instead of adding a near-duplicate
   `registration_recap_terms_close` string in ×4 locales. Different visual chrome, same meaning,
   one string — SSOT wins over "give every composable its own string for symmetry."
+
+## Slice `auth-profile-step-fields` (2026-08-09)
+- **A "too large for one slice" verdict repeated across four prior runs was never re-checked
+  against the actual remaining surface — it was re-typed from the previous run's note each time.**
+  Every "Next slice" pointer since `auth-password-step-fields` called PROFILE out as needing "its
+  own photo/banner picker + compression pipeline" without anyone grepping whether Android already
+  had one. It did: `feature/profile/AvatarBannerUploadViewModel` (picker → `ImageUploadValidator`
+  → `MediaRepository.upload` → `UserRepository.updateAvatar`/`updateBanner`) has shipped and been
+  fully tested since long before this routine started tracking PROFILE as a blocker. The actual
+  gap was wiring, not a subsystem. Re-reading the note is not re-proving the note — the routine's
+  own "RE-PROUVER" rule exists precisely because a stale note repeated verbatim by successive runs
+  accumulates false authority the longer it goes unchallenged.
+- **"No compression pipeline exists" turned out to be true, and that was fine.** iOS compresses
+  avatar/banner JPEGs (`jpegData(compressionQuality:)`, `AttachmentUploader.compress`) before
+  upload; Android's existing, already-shipped, already-tested avatar/banner flow uploads raw
+  picked bytes gated only by a per-target byte ceiling (`ImageUploadTarget.maxBytes`, 8 MB avatar
+  / 12 MB banner) and has done so in production for weeks without anyone building a compressor.
+  The lesson isn't "Android needs to catch up to iOS's compression" — it's that a feature-parity
+  note inferred from reading iOS's implementation can smuggle in an iOS-specific *technique*
+  (compress-then-upload) as if it were a required *capability* (upload-a-reasonably-sized-image).
+  Android already has the capability via a different, already-proven technique (size-cap instead
+  of compress). Re-verify against what the OTHER platform's code actually requires functionally,
+  not what its specific implementation happens to do.
+- **A step's captured-but-not-yet-sent local state is a real data-loss trap if the "send it later"
+  half is deferred without checking whether deferring is safe.** Early in this run's design the
+  plan was to ship PROFILE's field-capture UI first and defer the post-registration upload wiring
+  to a follow-up slice — mirroring how `auth-phone-step-fields`/`auth-language-step-fields`
+  legitimately deferred `SignupRegionInference` wiring. The difference: deferring a nice-to-have
+  auto-fill loses nothing a user typed; deferring PROFILE's upload would have silently discarded
+  a picked photo the user believed they'd set, the moment they tapped "Create account." Not every
+  "ship the field UI, defer the rest" precedent generalises — check whether what's deferred is an
+  enhancement or user data before reusing the shape.
+- **Reading iOS's `register()` line-by-line (not just its `@Published` properties) found that
+  `profileImage`/`bannerImage`/`bio` never travel through `POST /auth/register` at all** — a fact
+  invisible from the ViewModel's property list alone. iOS uploads them in a *separate* call chain
+  (`OnboardingFlowView.uploadProfileCompletionAssets` → `ProfileCompletionUploader`) fired only
+  after authentication succeeds, because the upload endpoints require a session that doesn't exist
+  yet during the wizard. This shaped the entire Android port: bio/images could NOT be bundled into
+  `RegistrationFields.toRegisterRequest()` (the pattern every prior field used), and instead needed
+  their own post-success hook in `register()`. Skimming a ViewModel's stored properties to infer
+  its wire contract misses this class of split; read the actual network call.
+- **Compose disposes step-local state on navigating away from a `when`-dispatched step body — a
+  picked `Uri` alone is not a safe place to hold data that must survive the user browsing back to
+  RECAP and returning to PROFILE.** `RegistrationScreen`'s step container is a plain
+  `when (state.currentStep)`, not a `Pager` keeping siblings alive off-screen; leaving PROFILE for
+  RECAP fully disposes `ProfileStepBody`'s composition, and any `remember { mutableStateOf(...) }`
+  in it resets on return. The fix was reading the picked file's bytes into a `MediaUploadItem`
+  eagerly at pick time (mirroring the existing `ProfileScreen.kt` picker-callback pattern) and
+  storing that in `RegistrationUiState` (ViewModel-owned, survives step navigation) rather than a
+  bare `Uri` plus composable-local preview state.
+- **Coil 2.7.0 ships a built-in `ByteArrayMapper`** (`coil.map.ByteArrayMapper`, confirmed by
+  unzipping the cached `coil-base-2.7.0-runtime.jar` rather than assuming) — `AsyncImage(model =
+  byteArray)` works with no custom `Fetcher`/`ComponentRegistry` needed. This sidestepped an
+  entire Context-injection-into-the-ViewModel design (to re-read a `Uri` at upload time) that would
+  otherwise have been needed purely to make local-picked-image preview work across step
+  navigation, and kept `RegistrationViewModel` fully testable with plain `MediaUploadItem` values
+  instead of a mocked `Context`/`ContentResolver`.
+- **Awaiting a fire-and-forget upload inline (instead of a detached coroutine) is sometimes the
+  correct Android port of an iOS `Task.detached`, not a corner cut.** iOS's `OnboardingFlowView`
+  fires the post-registration asset upload as a genuinely detached task because the view dismisses
+  itself ~1s later regardless. Android's `RegistrationScreen` has no such grace window —
+  `LaunchedEffect(state.isRegistered)` navigates away the instant `isRegistered` flips, and
+  `viewModelScope` is cancelled with it. A same-shaped detached-looking `launch` here would race
+  that teardown non-deterministically. Awaiting the upload inside the same `launch` that already
+  owns `register()`'s network call, before the final `_state.update`, trades a few hundred ms of
+  extra spinner time for a guarantee the picked photo is never dropped — verified by a dedicated
+  test that makes the upload throw and asserts `isRegistered` still ends up `true`.
+- **`git diff origin/main...HEAD --stat` returning empty while `git status --short` lists many
+  modified files is not a bug — it means nothing is committed yet.** Three-dot diff only compares
+  committed trees; uncommitted working-tree edits never appear in it regardless of how large the
+  diff will be once committed. Confirmed this by checking `git log -1` on local `main` vs.
+  `origin/main` first (they'd diverged — local `main` had picked up an unrelated, unpushed commit
+  from another concurrent worktree session, the exact shared-ref hazard `CLAUDE.md` already warns
+  about) before concluding the empty diff meant something was wrong; it didn't — it meant "not
+  committed yet," the expected state at that point in the run.

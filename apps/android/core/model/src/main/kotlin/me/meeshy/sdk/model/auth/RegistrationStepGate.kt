@@ -32,6 +32,8 @@ data class RegistrationFields(
     val confirmPassword: String = "",
     val systemLanguage: String = "",
     val regionalLanguage: String = "",
+    /** The PROFILE step's optional bio text — feeds the RECAP summary's [me.meeshy.sdk.model.auth.SummaryField.BIO] row. */
+    val bio: String = "",
     val acceptTerms: Boolean = false,
 )
 

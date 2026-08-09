@@ -54,7 +54,12 @@ class RegistrationStepContentTest {
     }
 
     @Test
-    fun isImplemented_everyStepOtherThanPseudoPhoneEmailIdentityPasswordLanguageAndRecap_isFalse() {
+    fun isImplemented_profile_isTrue() {
+        assertThat(RegistrationStepContent.isImplemented(RegistrationStep.PROFILE)).isTrue()
+    }
+
+    @Test
+    fun isImplemented_everyStepOtherThanPseudoPhoneEmailIdentityPasswordLanguageProfileAndRecap_isFalse() {
         val implementedSoFar = setOf(
             RegistrationStep.PSEUDO,
             RegistrationStep.PHONE,
@@ -62,6 +67,7 @@ class RegistrationStepContentTest {
             RegistrationStep.IDENTITY,
             RegistrationStep.PASSWORD,
             RegistrationStep.LANGUAGE,
+            RegistrationStep.PROFILE,
             RegistrationStep.RECAP,
         )
         RegistrationStep.ordered

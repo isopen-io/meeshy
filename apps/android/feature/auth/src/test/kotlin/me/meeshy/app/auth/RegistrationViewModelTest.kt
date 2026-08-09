@@ -1,6 +1,10 @@
 package me.meeshy.app.auth
 
+import androidx.work.WorkManager
+import androidx.work.WorkRequest
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +15,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.media.MediaRepository
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.AvailabilityResult
@@ -19,6 +25,8 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.LanguageStepSelection
@@ -28,11 +36,14 @@ import me.meeshy.sdk.model.auth.RegistrationPrimaryLabel
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.SummaryField
 import me.meeshy.sdk.model.auth.StepFill
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.InMemoryTokenStore
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
+import me.meeshy.sdk.user.UserRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -75,6 +86,9 @@ class RegistrationViewModelTest {
             data = AvailabilityResult(usernameAvailable = true, emailAvailable = true, phoneNumberAvailable = true),
         ),
         coordinator: RealtimeSessionCoordinator = mockk(relaxed = true),
+        mediaRepository: MediaRepository = mockk(relaxed = true),
+        userRepository: UserRepository = mockk(relaxed = true),
+        workManager: WorkManager = mockk(relaxed = true),
     ): Triple<RegistrationViewModel, FakeAuthApi, RealtimeSessionCoordinator> {
         val api = FakeAuthApi(registerResponse, availabilityResponse)
         val store = InMemoryTokenStore()
@@ -82,9 +96,23 @@ class RegistrationViewModelTest {
         val vm = RegistrationViewModel(
             AuthRepository(api, store, SessionRepository(api, store), teardown),
             coordinator,
+            mediaRepository,
+            userRepository,
+            workManager,
         )
         return Triple(vm, api, coordinator)
     }
+
+    private fun uploadedMedia(url: String) = UploadedMedia(
+        id = "m1",
+        url = url,
+        mimeType = "image/jpeg",
+        fileSize = 10,
+        width = null,
+        height = null,
+        durationMs = null,
+        thumbnailUrl = null,
+    )
 
     /** Drives the wizard to a state where RECAP's gate passes, without navigating. */
     private fun RegistrationViewModel.fillAllValid() {
@@ -620,6 +648,203 @@ class RegistrationViewModelTest {
         val expected =
             "${LanguageStepSelection.summaryLabel("fr")} / ${LanguageStepSelection.summaryLabel("es")}"
         assertThat(languages).isEqualTo(expected)
+    }
+
+    // ---- PROFILE step wiring (bio + picked assets) ---------------------------
+
+    @Test
+    fun onBioChange_updatesFieldsBio() {
+        val (vm, _, _) = scenario()
+        vm.onBioChange("Building bridges across languages")
+        assertThat(vm.state.value.fields.bio).isEqualTo("Building bridges across languages")
+    }
+
+    @Test
+    fun onProfileImagePicked_updatesState() {
+        val (vm, _, _) = scenario()
+        val item = MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = "avatar.jpg", mimeType = "image/jpeg")
+        vm.onProfileImagePicked(item)
+        assertThat(vm.state.value.profileImage).isSameInstanceAs(item)
+    }
+
+    @Test
+    fun onBannerImagePicked_updatesState() {
+        val (vm, _, _) = scenario()
+        val item = MediaUploadItem(bytes = byteArrayOf(4, 5, 6), fileName = "banner.jpg", mimeType = "image/jpeg")
+        vm.onBannerImagePicked(item)
+        assertThat(vm.state.value.bannerImage).isSameInstanceAs(item)
+    }
+
+    @Test
+    fun summary_includesBio_whenNonBlank() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid()
+        vm.onBioChange("Building bridges")
+        assertThat(vm.state.value.summary.map { it.field }).contains(SummaryField.BIO)
+        assertThat(vm.state.value.summary.first { it.field == SummaryField.BIO }.value)
+            .isEqualTo("Building bridges")
+    }
+
+    @Test
+    fun summary_omitsBio_whenBlank() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid() // never calls onBioChange
+        assertThat(vm.state.value.summary.map { it.field }).doesNotContain(SummaryField.BIO)
+    }
+
+    // ---- register() post-registration profile-completion upload -------------
+    // Mirrors iOS `ProfileCompletionUploader`: `POST /auth/register` carries none
+    // of these (avatar/banner/bio aren't RegisterRequest fields), so they upload
+    // only once authenticated — right after this success branch — reusing the
+    // same validate -> upload -> confirm primitives `AvatarBannerUploadViewModel`
+    // already ships for the post-registration profile-edit screen, plus the
+    // established `enqueueProfileEdit` + wake-the-worker path for the bio.
+
+    @Test
+    fun register_onRecapValid_withProfileImage_uploadsAndAppliesAvatar() = runTest(dispatcher) {
+        val mediaRepository = mockk<MediaRepository>()
+        val userRepository = mockk<UserRepository>(relaxed = true)
+        val item = MediaUploadItem(bytes = ByteArray(10), fileName = "avatar.jpg", mimeType = "image/jpeg")
+        coEvery { mediaRepository.upload(listOf(item)) } returns
+            NetworkResult.Success(listOf(uploadedMedia("https://cdn.meeshy.me/avatar.jpg")))
+
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            mediaRepository = mediaRepository,
+            userRepository = userRepository,
+        )
+        vm.fillAllValid()
+        vm.onProfileImagePicked(item)
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        coVerify { mediaRepository.upload(listOf(item)) }
+        coVerify { userRepository.updateAvatar("https://cdn.meeshy.me/avatar.jpg") }
+        assertThat(vm.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun register_onRecapValid_withBannerImage_uploadsAndAppliesBanner() = runTest(dispatcher) {
+        val mediaRepository = mockk<MediaRepository>()
+        val userRepository = mockk<UserRepository>(relaxed = true)
+        val item = MediaUploadItem(bytes = ByteArray(10), fileName = "banner.jpg", mimeType = "image/jpeg")
+        coEvery { mediaRepository.upload(listOf(item)) } returns
+            NetworkResult.Success(listOf(uploadedMedia("https://cdn.meeshy.me/banner.jpg")))
+
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            mediaRepository = mediaRepository,
+            userRepository = userRepository,
+        )
+        vm.fillAllValid()
+        vm.onBannerImagePicked(item)
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        coVerify { userRepository.updateBanner("https://cdn.meeshy.me/banner.jpg") }
+    }
+
+    @Test
+    fun register_onRecapValid_withBio_enqueuesProfileEditAndWakesWorker() = runTest(dispatcher) {
+        val userRepository = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepository.enqueueProfileEdit(UpdateProfileRequest(bio = "Building bridges")) } returns "cmid_1"
+        val workManager = mockk<WorkManager>(relaxed = true)
+
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            userRepository = userRepository,
+            workManager = workManager,
+        )
+        vm.fillAllValid()
+        vm.onBioChange("Building bridges")
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        coVerify { userRepository.enqueueProfileEdit(UpdateProfileRequest(bio = "Building bridges")) }
+        verify { workManager.enqueue(any<WorkRequest>()) }
+    }
+
+    @Test
+    fun register_onRecapValid_withNoProfileAssets_skipsUploadCalls() = runTest(dispatcher) {
+        val mediaRepository = mockk<MediaRepository>(relaxed = true)
+        val userRepository = mockk<UserRepository>(relaxed = true)
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            mediaRepository = mediaRepository,
+            userRepository = userRepository,
+        )
+        vm.fillAllValid() // bio left blank, no images picked
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.upload(any()) }
+        coVerify(exactly = 0) { userRepository.updateAvatar(any()) }
+        coVerify(exactly = 0) { userRepository.updateBanner(any()) }
+        coVerify(exactly = 0) { userRepository.enqueueProfileEdit(any()) }
+    }
+
+    @Test
+    fun register_onRecapValid_withInvalidProfileImage_skipsUpload() = runTest(dispatcher) {
+        val mediaRepository = mockk<MediaRepository>(relaxed = true)
+        val empty = MediaUploadItem(bytes = ByteArray(0), fileName = "empty.jpg", mimeType = "image/jpeg")
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            mediaRepository = mediaRepository,
+        )
+        vm.fillAllValid()
+        vm.onProfileImagePicked(empty)
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.upload(any()) }
+    }
+
+    @Test
+    fun register_onRecapValid_uploadReturnsFailure_skipsConfirmAndStillMarksRegistered() = runTest(dispatcher) {
+        val mediaRepository = mockk<MediaRepository>()
+        val userRepository = mockk<UserRepository>(relaxed = true)
+        val item = MediaUploadItem(bytes = ByteArray(4), fileName = "avatar.jpg", mimeType = "image/jpeg")
+        coEvery { mediaRepository.upload(listOf(item)) } returns
+            NetworkResult.Failure(ApiError(message = "server down"))
+
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            mediaRepository = mediaRepository,
+            userRepository = userRepository,
+        )
+        vm.fillAllValid()
+        vm.onProfileImagePicked(item)
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { userRepository.updateAvatar(any()) }
+        assertThat(vm.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun register_onRecapValid_uploadFailure_stillMarksRegistered() = runTest(dispatcher) {
+        val mediaRepository = mockk<MediaRepository>()
+        val item = MediaUploadItem(bytes = ByteArray(4), fileName = "avatar.jpg", mimeType = "image/jpeg")
+        coEvery { mediaRepository.upload(any()) } throws RuntimeException("network down")
+
+        val (vm, _, _) = scenario(
+            ApiResponse(success = true, data = session()),
+            mediaRepository = mediaRepository,
+        )
+        vm.fillAllValid()
+        vm.onProfileImagePicked(item)
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isRegistered).isTrue()
+        assertThat(vm.state.value.isSubmitting).isFalse()
     }
 
     // ---- nav chrome derivation (RegistrationNav wiring) ---------------------
