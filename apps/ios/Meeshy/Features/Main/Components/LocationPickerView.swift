@@ -32,8 +32,18 @@ struct LocationPickerView: View {
     /// `saturationBoost` aux hex — cette dérivation reproduit donc
     /// `conversation.colorPalette.accent` à l'identique, sans imposer un
     /// nouveau paramètre aux sept sites d'appel.
-    private var secondaryAccent: String {
-        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
+    ///
+    /// STOCKÉE, pas calculée : `hueShiftedHex` construit deux `UIColor` et un
+    /// `Scanner` à chaque appel, et le body en fait huit usages (pin, dégradé
+    /// du CTA, badge, deux boutons flottants, icônes de résultats). En
+    /// propriété calculée, chaque re-rendu déclenché par un déplacement de
+    /// carte refaisait tout ce travail.
+    private let secondaryAccent: String
+
+    init(accentColor: String, onSelect: @escaping (SharedPlace) -> Void) {
+        self.accentColor = accentColor
+        self.secondaryAccent = DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
+        self.onSelect = onSelect
     }
 
     private var precision: LocationPrecision { preferencesStore.preferences.precision }
