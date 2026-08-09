@@ -63,8 +63,21 @@ public fun MeeshyMenuFab(
     items: List<RadialMenuItem>,
     modifier: Modifier = Modifier,
     fabIcon: ImageVector = Icons.Filled.Add,
+    /**
+     * Etat HISSE, optionnel. Quand l'appelant le fournit, c'est LUI qui decide de
+     * l'ouverture : sans cela, un conteneur qui affiche/masque ce menu en demande
+     * deux taps a l'utilisateur — un pour le faire apparaitre replie, un second pour
+     * le deplier — la ou iOS n'en demande qu'un.
+     */
+    expandedOverride: Boolean? = null,
+    onExpandedChange: ((Boolean) -> Unit)? = null,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var internalExpanded by remember { mutableStateOf(false) }
+    val expanded = expandedOverride ?: internalExpanded
+    val setExpanded: (Boolean) -> Unit = { value ->
+        internalExpanded = value
+        onExpandedChange?.invoke(value)
+    }
     val fabRotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
         animationSpec = tween(260, easing = EaseOutBack),
@@ -93,7 +106,7 @@ public fun MeeshyMenuFab(
                 MenuItemRow(
                     item = item,
                     onClick = {
-                        expanded = false
+                        setExpanded(false)
                         item.onSelect()
                     },
                     modifier = Modifier.graphicsLayer {
@@ -109,7 +122,7 @@ public fun MeeshyMenuFab(
         }
 
         FloatingGradientFab(
-            onClick = { expanded = !expanded },
+            onClick = { setExpanded(!expanded) },
             icon = fabIcon,
             contentDescription = null,
             modifier = Modifier.graphicsLayer { rotationZ = fabRotation },

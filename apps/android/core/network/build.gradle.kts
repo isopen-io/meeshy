@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.core.network"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26

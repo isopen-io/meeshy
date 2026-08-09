@@ -28,9 +28,24 @@ import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
+import javax.inject.Inject
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.net.SessionExpiryNotifier
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Ou l'utilisateur a range ses deux boutons flottants. Injecte ici et passe a
+     * [MeeshyApp] : c'est un singleton Hilt, pas un ViewModel.
+     */
+    @Inject
+    lateinit var floatingButtonPositions: FloatingButtonPositionStore
+
+    /** Emet quand la passerelle refuse l'identite : [MeeshyApp] y deconnecte. */
+    @Inject
+    lateinit var sessionExpiry: SessionExpiryNotifier
+
 
     private var launchRoute by mutableStateOf<String?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
@@ -46,6 +61,8 @@ class MainActivity : ComponentActivity() {
             LocalizedContent(languageCode = languageCode) {
                 MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
                     MeeshyApp(
+                        floatingButtonPositions = floatingButtonPositions,
+                        sessionExpiry = sessionExpiry,
                         launchRoute = launchRoute,
                         onLaunchRouteConsumed = { launchRoute = null },
                     )

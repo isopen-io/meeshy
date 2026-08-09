@@ -56,4 +56,5 @@
     <string name="call_channel_description">Appels vocaux et vidéo entrants</string>
     <string name="call_incoming_audio">Appel entrant</string>
     <string name="call_incoming_video">Appel vidéo entrant</string>
+    <string name="a11y_floating_menu">Menu de navigation</string>
 </resources>
