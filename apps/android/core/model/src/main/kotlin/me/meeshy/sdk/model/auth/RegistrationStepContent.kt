@@ -23,6 +23,7 @@ object RegistrationStepContent {
             RegistrationStep.IDENTITY,
             RegistrationStep.PASSWORD,
             RegistrationStep.LANGUAGE,
+            RegistrationStep.PROFILE,
             RegistrationStep.RECAP,
         )
 

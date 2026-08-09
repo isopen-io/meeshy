@@ -63,6 +63,13 @@
     <string name="registration_language_regional_tab">Idioma regional</string>
     <string name="registration_language_search_hint">Buscar um idioma…</string>
     <string name="registration_language_example_title">Como funciona</string>
+    <string name="registration_profile_header">Mostre o seu melhor lado</string>
+    <string name="registration_profile_subtitle">Uma boa foto e uma capa cuidada abrem todas as portas — é assim que você conhece as melhores pessoas, perto e longe.</string>
+    <string name="registration_profile_optional_note">Opcional — mas um perfil cuidado causa melhor impressão</string>
+    <string name="registration_profile_bio_title">Bio (opcional)</string>
+    <string name="registration_profile_bio_counter">%1$d/150 caracteres</string>
+    <string name="registration_profile_photo_a11y">Adicionar uma foto de perfil</string>
+    <string name="registration_profile_banner_a11y">Adicionar uma foto de capa</string>
     <string name="registration_recap_header">Quase lá!</string>
     <string name="registration_recap_subtitle">Confira se está tudo certo antes de criar sua conta.</string>
     <string name="registration_recap_summary_title">Seu perfil em um relance</string>

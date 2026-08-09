@@ -63,6 +63,13 @@
     <string name="registration_language_regional_tab">Regional language</string>
     <string name="registration_language_search_hint">Search a language…</string>
     <string name="registration_language_example_title">How it works</string>
+    <string name="registration_profile_header">Put your best self forward</string>
+    <string name="registration_profile_subtitle">A great photo and a polished banner open every door — it\'s how you meet the best people, near and far.</string>
+    <string name="registration_profile_optional_note">Optional — but a polished profile makes a better first impression</string>
+    <string name="registration_profile_bio_title">Bio (optional)</string>
+    <string name="registration_profile_bio_counter">%1$d/150 characters</string>
+    <string name="registration_profile_photo_a11y">Add a profile photo</string>
+    <string name="registration_profile_banner_a11y">Add a banner photo</string>
     <string name="registration_recap_header">Almost there!</string>
     <string name="registration_recap_subtitle">Double-check everything looks right before you create your account.</string>
     <string name="registration_recap_summary_title">Your profile at a glance</string>
