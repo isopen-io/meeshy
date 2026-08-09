@@ -904,6 +904,56 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `./apps/android/meeshy.sh check` (`assembleDebug testDebugUnitTest`) → **BUILD SUCCESSFUL in 9m38s**
       (every module; `RegistrationViewModelTest` 32/32, `RegistrationSummaryTest` 18/18). Diff =
       `apps/android` only (1 new source + 1 new test + edits to the wizard VM/its test + tracking docs).
+      **RECAP step field UI shipped** (slice `auth-recap-step-fields`, 2026-08-09) — slice 7 of the
+      `OnboardingFlowView` Compose decomposition, closing the "registration recap + terms acceptance"
+      half of this checklist item (the "profile photo / banner / bio" half — PROFILE — is still `[ ]`,
+      the one step genuinely large enough it needs its own photo/banner picker + compression pipeline).
+      New `feature/auth/RegistrationScreen.kt` `RecapStepBody` — header/subtitle, a `RecapSummaryCard`
+      rendering `RegistrationUiState.summary`'s rows (icon + localized label per
+      `SummaryField`, faithful port of iOS `summaryItems`'s SF Symbols: `at`→`AlternateEmail`,
+      `envelope.fill`→`Email`, `person.fill`→`Person`, `phone.fill`→`Phone`, `globe`→`Language`), and a
+      `RecapTermsCheckbox` (`Modifier.toggleable(role = Role.Checkbox)` for correct a11y semantics,
+      mirrors iOS's `.accessibilityAddTraits(.isSelected)` intent) bound verbatim to the already-shipped
+      `RegistrationViewModel.onAcceptTermsChange` — no new ViewModel/core code needed, the RECAP gate
+      (`RegistrationStepGate.canProceed`'s `fields.acceptTerms` arm) and the register-button wiring
+      (`RegistrationNavModel.primaryAction == REGISTER` → `viewModel.register()`) were already correct
+      and already tested, the same "wiring-only" shape as every step since `auth-identity-step-fields`.
+      A "Read the terms" link opens a `RecapTermsSheet` (`ModalBottomSheet`, same established pattern as
+      `CountryPickerSheet`) with the terms body text ported from iOS's `termsSheet`. **Deliberately no
+      password row**: iOS's recap appends a `••••••••` row (`String(repeating: "•", count:
+      min(password.count, 10))`) outside `summaryItems`; Android's `RegistrationSummaryRow`/
+      `SummaryField` (shipped `registration-recap-summary`, 2026-07-26) has no `PASSWORD` case — a
+      decision made and tested two slices before this one, re-verified here (not silently overridden)
+      rather than re-opening the core to add a field only this step would ever read. Never re-surfacing
+      the password, even as masked dots whose *length* leaks a weak signal, is treated as a legitimate
+      simplification over iOS. **SSOT reuse:** the terms sheet's close button reuses the existing
+      `registration_close` string (already used by the top bar's leading-Close icon) rather than adding
+      a near-duplicate "Fermer"/"Close" string. **No skip affordance** (`RegistrationNavModel.showSkip`
+      is PROFILE-only, matches iOS `StepRecapView` having none). Loading/error states are NOT
+      re-implemented inside the step body (unlike iOS, which branches internally) — the wizard's shared
+      `state.errorMessage` banner (above every step body since `auth-onboarding-shell`) and the bottom
+      bar's `loading` param already cover both, so RECAP stays as thin as every other field-UI step.
+      **+2 core tests** (`RegistrationStepContentTest.isImplemented_recap_isTrue`; the "every other
+      step" sweep renamed to exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD+LANGUAGE+RECAP). **Mutation
+      (RED proof):** the new test against the pre-slice `implemented` set (still only `{PSEUDO, PHONE,
+      EMAIL, IDENTITY, PASSWORD, LANGUAGE}`) failed **exactly** `isImplemented_recap_isTrue` (8 run, 1
+      failed, no collateral) before the one-line core change landed. **Zero new ViewModel tests
+      needed** — `RegistrationViewModelTest` already exercises `onAcceptTermsChange`/`register()`/
+      `summary` end-to-end; re-ran unmodified and stayed green (52/52) — the regression proof for this
+      Compose-wiring-only slice, per `TDD-COVERAGE.md`'s exemption for `@Composable` glue. **Gate:**
+      `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 23s** (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only — `core/model`
+      [1-line `implemented` set change, no new files], `feature/auth` [+9 composables/helpers in
+      `RegistrationScreen.kt`, the `when` arm, ×13 locale strings ×4 locales], `tasks/feature-parity.md`;
+      SDK purity — `RegistrationStepContent` stays a stateless `:core:model` lookup, every new Composable
+      is ordinary UI glue over the already-shipped `RegistrationSummary`/`RegistrationStepGate`/
+      `RegistrationViewModel` cores, no shared-singleton-plus-product-rule combo; SSOT — reuses every
+      existing recap/terms/register wiring untouched, re-implements no rule, reuses `registration_close`
+      instead of duplicating it; instant-app — no spinner introduced; UDF — unchanged
+      `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays reachable, the terms
+      sheet dismisses via its close button/scrim/swipe; no tautological tests; no coverage floor
+      lowered, no existing test weakened). **Next slice:** PROFILE (photo/banner picker + compression
+      pipeline, the one remaining step) — the `OnboardingFlowView` Compose decomposition is now 7/8 done.
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +

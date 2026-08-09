@@ -63,6 +63,19 @@
     <string name="registration_language_regional_tab">Langue régionale</string>
     <string name="registration_language_search_hint">Chercher une langue…</string>
     <string name="registration_language_example_title">Comment ça marche</string>
+    <string name="registration_recap_header">Presque fini !</string>
+    <string name="registration_recap_subtitle">Vérifie que tout est correct avant de créer ton compte.</string>
+    <string name="registration_recap_summary_title">Ton profil en un coup d\'œil</string>
+    <string name="registration_recap_field_username">Nom d\'utilisateur</string>
+    <string name="registration_recap_field_email">E-mail</string>
+    <string name="registration_recap_field_name">Nom</string>
+    <string name="registration_recap_field_phone">Téléphone</string>
+    <string name="registration_recap_field_languages">Langues</string>
+    <string name="registration_recap_field_bio">Bio</string>
+    <string name="registration_recap_terms_accept">J\'accepte les conditions d\'utilisation et la politique de confidentialité</string>
+    <string name="registration_recap_terms_read">Lire les conditions</string>
+    <string name="registration_recap_terms_title">Conditions d\'utilisation</string>
+    <string name="registration_recap_terms_body">Bienvenue sur Meeshy ! En utilisant notre application, tu acceptes les conditions suivantes :\n\n1. UTILISATION RESPONSABLE\nMeeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illégal.\n\n2. TON COMPTE\nTu es responsable de ton compte. Garde ton mot de passe secret !\n\n3. TES DONNÉES\nOn protège tes données avec le chiffrement de bout en bout. Tes messages sont privés.\n\n4. TRADUCTION\nLa traduction est automatique et peut ne pas être parfaite. C\'est un outil, pas une science exacte !\n\n5. RESPECT\nTraite les autres comme tu voudrais être traité. On est une communauté !\n\nOn est ensemble !</string>
 
     <string name="guest_join_title">Rejoindre la conversation</string>
     <string name="guest_join_subtitle">Créez une identité temporaire pour rejoindre</string>

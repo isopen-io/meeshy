@@ -63,6 +63,19 @@
     <string name="registration_language_regional_tab">Regional language</string>
     <string name="registration_language_search_hint">Search a language…</string>
     <string name="registration_language_example_title">How it works</string>
+    <string name="registration_recap_header">Almost there!</string>
+    <string name="registration_recap_subtitle">Double-check everything looks right before you create your account.</string>
+    <string name="registration_recap_summary_title">Your profile at a glance</string>
+    <string name="registration_recap_field_username">Username</string>
+    <string name="registration_recap_field_email">Email</string>
+    <string name="registration_recap_field_name">Name</string>
+    <string name="registration_recap_field_phone">Phone</string>
+    <string name="registration_recap_field_languages">Languages</string>
+    <string name="registration_recap_field_bio">Bio</string>
+    <string name="registration_recap_terms_accept">I accept the Terms of Service and Privacy Policy</string>
+    <string name="registration_recap_terms_read">Read the terms</string>
+    <string name="registration_recap_terms_title">Terms of Service</string>
+    <string name="registration_recap_terms_body">Welcome to Meeshy! By using our app, you agree to the following terms:\n\n1. RESPONSIBLE USE\nMeeshy is built to connect people in a positive way. No offensive or illegal content.\n\n2. YOUR ACCOUNT\nYou\'re responsible for your account. Keep your password secret!\n\n3. YOUR DATA\nWe protect your data with end-to-end encryption. Your messages are private.\n\n4. TRANSLATION\nTranslation is automatic and may not be perfect. It\'s a tool, not an exact science!\n\n5. RESPECT\nTreat others the way you\'d like to be treated. We\'re a community!\n\nWe\'re in this together!</string>
 
     <string name="guest_join_title">Join the conversation</string>
     <string name="guest_join_subtitle">Create a temporary identity to join</string>

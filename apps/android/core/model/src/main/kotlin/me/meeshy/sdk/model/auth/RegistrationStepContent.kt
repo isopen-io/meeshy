@@ -23,6 +23,7 @@ object RegistrationStepContent {
             RegistrationStep.IDENTITY,
             RegistrationStep.PASSWORD,
             RegistrationStep.LANGUAGE,
+            RegistrationStep.RECAP,
         )
 
     /** True when [step] renders real field UI (vs. an inert placeholder). */
