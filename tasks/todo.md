@@ -224,6 +224,19 @@ lit désormais (`attachments: { select: { id: true } }`) — sans elles, la gard
 - **L'inventaire « quel client emploie quelle route »**, que la session ci-dessus propose pour le
   cycle 37, est appuyé par cette session : les deux ont dû le reconstruire à la main, chacune de son
   côté, pour la même route.
+- **`Test Python (translator)` se fige au teardown et heurte le plafond de 30 min — flake
+  préexistant, observé sur ce cycle.** La suite atteint **99 % des tests, tous PASSED, en 8 min 40**
+  — soit exactement le temps du même job sur main (#9012 : 8 min 30) — puis reste bloquée 21 minutes
+  de plus sans produire une ligne. Ce n'est donc pas un échec d'assertion ni une lenteur : c'est un
+  **gel après la fin effective de la session**. La dernière ligne du journal avant le silence est
+  `RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited` — une coroutine
+  d'`AsyncMock` jamais attendue, qui survit à la session et empêche pytest de rendre la main ; le
+  runner finit par tuer `uv` et `pytest` en processus orphelins. Piste : chercher les `AsyncMock`
+  dont le retour n'est pas `await`é (ou les `MagicMock` employés là où un `AsyncMock` est attendu) et
+  ajouter une fermeture explicite de boucle au teardown. **Sans accès à un rerun de job** (l'API
+  refuse `rerun_failed_jobs` et `cancel_workflow_run` à cette intégration), la seule relance possible
+  depuis cette routine est un commit vide — coûteux et bruyant. Deux actions humaines : corriger le
+  mock fautif, et ouvrir les droits de rerun à l'intégration.
 
 ---
 
