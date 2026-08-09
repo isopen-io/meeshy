@@ -406,15 +406,19 @@ export function registerParticipantsRoutes(
           where: { conversationId, isActive: true, type: 'user', userId: { notIn: [userId, currentUserId!] } },
           select: { userId: true },
         });
-        for (const member of existingMembers) {
-          if (member.userId) {
-            notificationService.createMemberJoinedNotification({
-              recipientUserId: member.userId,
-              newMemberUserId: userId,
-              conversationId,
-              joinMethod: 'invited' as const,
-            }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
-          }
+        // Une seule diffusion pour toute l'audience : le profil du nouveau
+        // membre, la conversation et l'effectif sont les mêmes pour chacun, et
+        // le mute se demande en une requête. La boucle d'appels unitaires qui
+        // précédait les relisait par destinataire.
+        const recipientUserIds = existingMembers
+          .map((member) => member.userId)
+          .filter((id): id is string => !!id);
+        if (recipientUserIds.length > 0) {
+          notificationService.createMemberJoinedNotificationsBatch(recipientUserIds, {
+            newMemberUserId: userId,
+            conversationId,
+            joinMethod: 'invited' as const,
+          }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
         }
       }
 

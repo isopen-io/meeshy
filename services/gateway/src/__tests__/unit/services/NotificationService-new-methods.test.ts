@@ -80,8 +80,17 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
+    participant: {
+      count: jest.fn(),
+    },
     userPreferences: {
       findUnique: jest.fn(),
+    },
+    // Les notifications d'appartenance passent par le mute par conversation
+    // (cf. `mutedRecipients.ts`) : sans ce modèle, la lecture lève au lieu de
+    // rendre « personne n'a coupé le son ».
+    userConversationPreferences: {
+      findMany: jest.fn(),
     },
   };
 
@@ -134,6 +143,8 @@ describe('NotificationService — New Methods', () => {
     jest.useFakeTimers();
 
     prisma = new PrismaClient();
+    prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+    prisma.participant.count.mockResolvedValue(0);
     service = new NotificationService(prisma);
 
     mockIO = {

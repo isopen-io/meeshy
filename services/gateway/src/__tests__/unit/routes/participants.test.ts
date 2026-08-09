@@ -75,6 +75,7 @@ function createMockNotificationService() {
   return {
     createAddedToConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
+    createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     createRemovedFromConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberRemovedNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberRoleChangedNotification: jest.fn<any>().mockResolvedValue(undefined),
@@ -975,15 +976,18 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(ns.createMemberJoinedNotification).toHaveBeenCalledTimes(2);
-      expect(ns.createMemberJoinedNotification).toHaveBeenCalledWith(
-        expect.objectContaining({
-          recipientUserId: member1Id,
+      // Une arrivée, un appel : le profil du nouveau membre, le titre de la
+      // conversation et l'effectif sont identiques pour tous les destinataires.
+      expect(ns.createMemberJoinedNotificationsBatch).toHaveBeenCalledTimes(1);
+      expect(ns.createMemberJoinedNotificationsBatch).toHaveBeenCalledWith(
+        [member1Id, member2Id],
+        {
           newMemberUserId: TARGET_USER_ID,
           conversationId: VALID_CONV_ID,
           joinMethod: 'invited',
-        })
+        }
       );
+      expect(ns.createMemberJoinedNotification).not.toHaveBeenCalled();
     });
 
     it('should not crash when notificationService is undefined', async () => {
@@ -1021,7 +1025,7 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(ns.createMemberJoinedNotification).not.toHaveBeenCalled();
+      expect(ns.createMemberJoinedNotificationsBatch).not.toHaveBeenCalled();
     });
 
     it('should handle notification errors gracefully (addedToConversation)', async () => {
@@ -1051,7 +1055,7 @@ describe('registerParticipantsRoutes', () => {
     it('should handle notification errors gracefully (memberJoined)', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
       const ns = createMockNotificationService();
-      ns.createMemberJoinedNotification.mockRejectedValue(new Error('push failed'));
+      ns.createMemberJoinedNotificationsBatch.mockRejectedValue(new Error('push failed'));
       const request = createPostRequest({ server: { notificationService: ns } });
       const memberId = '507f1f77bcf86cd799439066';
       mockPrisma.participant.findFirst
