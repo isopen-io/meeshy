@@ -29,9 +29,14 @@ class RegistrationStepContentTest {
     }
 
     @Test
-    fun isImplemented_everyStepOtherThanPseudoAndPhone_isFalse() {
+    fun isImplemented_email_isTrue() {
+        assertThat(RegistrationStepContent.isImplemented(RegistrationStep.EMAIL)).isTrue()
+    }
+
+    @Test
+    fun isImplemented_everyStepOtherThanPseudoPhoneAndEmail_isFalse() {
         RegistrationStep.ordered
-            .filter { it != RegistrationStep.PSEUDO && it != RegistrationStep.PHONE }
+            .filter { it != RegistrationStep.PSEUDO && it != RegistrationStep.PHONE && it != RegistrationStep.EMAIL }
             .forEach { step ->
                 assertThat(RegistrationStepContent.isImplemented(step)).isFalse()
             }

@@ -3237,3 +3237,28 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   `RegistrationSummaryInput(...)` call site simply never named it. A green gate proves the *tested*
   behaviour, not that every accepted parameter is actually wired — re-reading a core's full input struct
   against its real call site (not just its test file) is the only way to catch this class of gap.
+
+## Slice `auth-email-step-fields` (2026-08-09)
+- **When a step's decision layer was fully built two slices ago "ahead of its UI", the wiring slice
+  can legitimately need zero new ViewModel/core tests — verify that's true by re-running the existing
+  suite, don't treat "no new VM tests" as a red flag on its own.** `signup-availability-probe`
+  (2026-07-25) already shipped `onEmailChange`/`onEmailAvailability` and the debounced probe pipeline
+  with full behavioural coverage; this slice only had to teach `RegistrationScreen` to render a field
+  bound to state that was already correct. The regression proof is re-running
+  `RegistrationViewModelTest` unmodified and confirming it's still 52/52 — a Compose-only slice with a
+  passing *existing* suite is stronger evidence of "nothing broke" than a slice that had to touch the
+  ViewModel at all.
+  - **A missing capability (no skip button) is itself a decision worth verifying against both iOS and
+  the local gate, not just omitting by default.** PHONE has `skipPhone` + an in-content skip button;
+  EMAIL's gate (`SignupAvailabilityPolicy.emailStepCanProceed`) has no skip arm whatsoever. Before
+  concluding "EMAIL doesn't need a skip button", both `RegistrationStepGate`'s EMAIL arm (no
+  `skipEmail` state, no `||` short-circuit) and iOS `StepEmailView` (no skip control) were checked —
+  matching absences on both sides is what makes "no skip" a faithful port rather than an
+  accidentally-dropped affordance. Wiring a skip button that calls into a gate with no skip escape
+  would have been worse than not wiring one at all (a dead button whose tap silently does nothing).
+- **The RED-test-against-the-old-set trick doubles as its own mutation proof when a core is a single
+  `Set` literal.** Writing `isImplemented_email_isTrue` before touching
+  `RegistrationStepContent.implemented` and running it against the *unmodified* production code is
+  simultaneously "prove RED" and "prove the mutation (reverting the one-line change) fails exactly this
+  test" — no separate revert-then-rerun step needed when the production change is a single-line set
+  literal with no other logic to accidentally break.

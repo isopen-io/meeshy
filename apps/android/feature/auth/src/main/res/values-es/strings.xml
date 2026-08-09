@@ -29,6 +29,11 @@
     <string name="registration_phone_choose_country">Elegir país</string>
     <string name="registration_phone_country_picker_title">Elegir un país</string>
     <string name="registration_phone_country_search_hint">Buscar país o código</string>
+    <string name="registration_email_header">¿Cuál es tu correo?</string>
+    <string name="registration_email_subtitle">Lo usamos para proteger tu cuenta.</string>
+    <string name="registration_email_label">Correo electrónico</string>
+    <string name="registration_email_available">Correo disponible</string>
+    <string name="registration_email_taken">Este correo ya está en uso</string>
 
     <string name="guest_join_title">Unirse a la conversación</string>
     <string name="guest_join_subtitle">Crea una identidad temporal para unirte</string>
