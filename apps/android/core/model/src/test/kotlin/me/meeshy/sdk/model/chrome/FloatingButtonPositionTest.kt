@@ -80,3 +80,46 @@ class FloatingButtonPositionTest {
         assertFalse(FloatingButtonPosition.DEFAULT_RIGHT.isLeft)
     }
 }
+
+/**
+ * Le deplacement lui-meme : convertir un delta en PIXELS, tel que le systeme de
+ * gestes le fournit, en position NORMALISEE.
+ *
+ * Extrait du composable pour etre verifiable sans instrumentation — le projet n'a
+ * aucune infrastructure de test Compose, et l'introduire pour ce lot depasserait
+ * son perimetre. Toute la logique vit donc ici, le composable ne faisant plus que
+ * dessiner et deleguer.
+ */
+class FloatingButtonDragTest {
+
+    @Test
+    fun `a pixel delta becomes a normalised offset`() {
+        val moved = applyDragDelta(
+            current = FloatingButtonPosition(0f, 0.5f),
+            deltaXPx = 100f, deltaYPx = 0f,
+            travelXPx = 1000f, travelYPx = 2000f,
+        )
+        assertEquals(0.1f, moved.x, 0.001f)
+        assertEquals(0.5f, moved.y, 0.001f)
+    }
+
+    @Test
+    fun `dragging past the edge is clamped, never off-screen`() {
+        val moved = applyDragDelta(
+            current = FloatingButtonPosition(0.9f, 0.9f),
+            deltaXPx = 5000f, deltaYPx = 5000f,
+            travelXPx = 1000f, travelYPx = 2000f,
+        )
+        assertEquals(1f, moved.x, 0.001f)
+        assertEquals(1f, moved.y, 0.001f)
+    }
+
+    // Ecran mesure a zero (premiere composition, ou fenetre repliee): diviser par
+    // le parcours ferait une division par zero et propagerait NaN jusqu'au layout.
+    @Test
+    fun `a zero travel axis leaves the position untouched instead of producing NaN`() {
+        val current = FloatingButtonPosition(0.3f, 0.4f)
+        val moved = applyDragDelta(current, deltaXPx = 50f, deltaYPx = 50f, travelXPx = 0f, travelYPx = 0f)
+        assertEquals(current, moved)
+    }
+}

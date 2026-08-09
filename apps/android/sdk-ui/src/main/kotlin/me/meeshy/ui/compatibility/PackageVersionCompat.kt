@@ -2,6 +2,8 @@ package me.meeshy.ui.compatibility
 
 import android.content.pm.PackageInfo
 import android.os.Build
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.systemBars
 
 /**
  * Couche de compatibilite Oreo (API 26) -> Android 17 (API 37).
@@ -44,3 +46,19 @@ public fun PackageInfo.versionCodeCompat(): Long =
         longVersionCode = { longVersionCode },
         legacyVersionCode = { @Suppress("DEPRECATION") versionCode },
     )
+
+/**
+ * Les marges a respecter pour poser un element flottant.
+ *
+ * `targetSdk 36` impose l'edge-to-edge : le contenu passe SOUS les barres systeme.
+ * Un bouton place sans ces marges tomberait sous la barre de gestes, ou il est
+ * materiellement inatteignable.
+ *
+ * Pas de garde de version ici, et c'est deliberé : `WindowInsets.systemBars` est
+ * disponible des le plancher du projet. La regle du dossier vaut dans les deux sens
+ * — on n'ecrit pas de shim pour une API qui existe deja en API 26.
+ */
+@androidx.compose.runtime.Composable
+public fun systemBarsInsetsCompat(): androidx.compose.foundation.layout.PaddingValues =
+    androidx.compose.foundation.layout.WindowInsets.systemBars
+        .asPaddingValues()

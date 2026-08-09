@@ -67,3 +67,28 @@ public fun decodePosition(raw: String?, fallback: FloatingButtonPosition): Float
     if (x.isNaN() || y.isNaN()) return fallback
     return clampToBounds(FloatingButtonPosition(x, y))
 }
+
+/**
+ * Applique un deplacement exprime en PIXELS a une position NORMALISEE.
+ *
+ * [travelXPx] / [travelYPx] sont la course utile : la taille du conteneur moins
+ * celle du bouton. C'est elle, et non la largeur d'ecran, qui fait la conversion —
+ * sinon le bouton deborderait d'une demi-largeur a chaque extremite.
+ *
+ * Une course NULLE laisse l'axe intact au lieu de diviser par zero : l'ecran est
+ * mesure a zero a la premiere composition, et un NaN propage la se traduirait par un
+ * bouton qui disparait du layout.
+ */
+public fun applyDragDelta(
+    current: FloatingButtonPosition,
+    deltaXPx: Float,
+    deltaYPx: Float,
+    travelXPx: Float,
+    travelYPx: Float,
+): FloatingButtonPosition =
+    clampToBounds(
+        FloatingButtonPosition(
+            x = if (travelXPx <= 0f) current.x else current.x + deltaXPx / travelXPx,
+            y = if (travelYPx <= 0f) current.y else current.y + deltaYPx / travelYPx,
+        ),
+    )
