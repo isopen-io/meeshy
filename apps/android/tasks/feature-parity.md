@@ -506,7 +506,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (every module compiled). Diff = `apps/android` only. **Follow-up:** the paged `OnboardingFlowView`
       Compose screen (per-step field composables + `InteractiveProgressBar` bar row + bottom-bar
       Back/Skip/Next-or-Register) binding this VM. *(The availability-debounce network layer feeding the
-      `on…Availability` seam is now **DONE** — see the next entry.)*
+      `on…Availability` seam is now **DONE** — see the next entry.)* **Scope note (2026-08-09):** this
+      "paged `OnboardingFlowView` Compose scaffold" has been the recurring "Next slice" recommendation
+      across 15+ runs since 2026-07-25 without ever being picked — evaluated again this run and it is
+      genuinely too large for one slice, not merely under-prioritized: `feature/auth` today has only
+      `LoginScreen`/`GuestJoinScreen`, zero registration-wizard UI, and all 8 `RegistrationStep` arms
+      (PSEUDO/PHONE/EMAIL/IDENTITY/PASSWORD/LANGUAGE/PROFILE/RECAP) need distinct field UI — PROFILE
+      alone needs a photo/banner picker + compression pipeline. Every decision core is done and tested
+      (`RegistrationStepGate`/`RegistrationStepNavigator`/`RegistrationProgressBar`/`RegistrationNav`/
+      `RegistrationSummary` + this VM) — remaining work is Compose wiring only (exempt from the JVM
+      coverage gate per `TDD-COVERAGE.md`), but "wiring only" still spans 8 screens. **Recommendation
+      for whichever run finally takes this on:** split into named sub-slices the same way
+      `category-picker-create` was carved out of a similarly-vague bundle — e.g. `auth-onboarding-shell`
+      (the pager/progress-bar/nav-chrome container wired to the existing VM, PSEUDO step only, reachable
+      from a new "Sign up" link on `LoginScreen` so it's never orphaned) as slice 1, then one slice per
+      remaining step. Do **not** keep re-listing "the OnboardingFlowView Compose scaffold" as a single
+      bullet in future "Next slice" notes — it has proven itself unpickable at that grain.
 - [x] **App-side availability-debounce network probe** — **shipped** (slice `signup-availability-probe`,
       2026-07-25). Closes the last orphan seam of the registration wizard: the three
       `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real
@@ -849,7 +864,48 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       no token/session), and the `GuestJoinViewModel` + `GuestJoinScreen` (`:feature:auth`, reached via a
       `meeshy://join/{identifier}` deep link) orchestrating preview → form → join with retry, an
       account-required sign-in steer, and a failed join that keeps every edit. +30 tests, mutation-proven.
-- [ ] Login/logout teardown wiping E2EE keys and per-user caches
+- [x] Login/logout teardown wiping E2EE keys and per-user caches — **shipped** (slice
+      `session-logout-teardown`, 2026-08-09). None of Meeshy's on-device stores are namespaced by
+      userId (Room DB, category/draft DataStores), so a second account signing in on a shared device
+      would otherwise inherit the previous account's conversations, messages, stories, call history,
+      friends, categories and unsent draft text — a real cross-account privacy leak, parity with iOS
+      `RootView`'s logout branch (`CacheCoordinator.reset()` + friendship-cache clear,
+      `apps/ios/Meeshy/App/MeeshyApp.swift`, part-13 audit: "wiping is mandatory to prevent
+      cross-account leaks"). **Added (production, all `apps/android`):** (1)
+      `:sdk-core/session/SessionTeardown.wipe()` — the single account-teardown seam: clears every Room
+      table (`MeeshyDatabase.clearAllTables()`, dispatched off-main since it's a blocking Room call) +
+      the category-catalogue snapshot (`CategorySnapshotStore.clearAll()`, new) + every conversation
+      draft (`ConversationDraftStore.clearAll()`, new) — idempotent, safe to call twice. (2)
+      `AuthRepository.logout()` is now `suspend`, awaits `sessionTeardown.wipe()` after clearing
+      tokens/session, so the caller may treat the device as clean the instant the call returns; wired
+      into DI (`SdkModule.providesSessionTeardown`). (3) `AuthViewModel.logout()` wraps the call in
+      `viewModelScope.launch` (kept a synchronous public signature — no navigation call-site changes in
+      `MeeshyApp.kt`). **E2EE note:** Android carries no client-side Signal/identity-key store yet
+      (unlike iOS's Keychain-backed one) — `wipe()` is the seam where that clear will land once one
+      exists; nothing to wipe today, so this box is closed on the caches half, tracked-open on the key
+      half until E2EE key material lands client-side. **Deliberately out of scope:** the theme/language/
+      notification/media-download/privacy DataStores were audited and left un-wiped — device-level UX
+      preferences, several server-synced, not per-account content (mirrors iOS: `UserPreferencesManager`
+      values aren't part of `CacheCoordinator.reset()` either); re-scope if that judgment call changes.
+      **+9 behavioural tests:** `CategorySnapshotStoreTest` +2 (in-memory + DataStore `clearAll` resets
+      to a cold cache), `ConversationDraftStoreTest` +2 (in-memory + DataStore `clearAll` empties every
+      draft), `SessionTeardownTest` +4 (new file, Robolectric + in-memory Room: wipes a seeded outbox
+      row / resets the category snapshot / empties every draft / idempotent on a second call),
+      `AuthRepositoryTest` +1 (`logout` invokes the teardown exactly once), `AuthViewModelTest` +1
+      (`logout` wipes before the authenticated state clears, end-to-end through the live coroutine).
+      **Mutation (RED proof):** dropping the category/draft clears from `wipe()` (keeping only the Room
+      clear) fails **exactly** the 2 tests asserting those two stores post-wipe (3 run, 2 failed), the
+      Room-wipe and idempotency tests staying green; restored after. **Gate:** `./apps/android/meeshy.sh
+      check` → `BUILD SUCCESSFUL` (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks).
+      Reviewer **PASS** (diff `apps/android` only — 1 new core + 1 new test file + 2 store `clearAll`
+      methods + 2 store tests + `AuthRepository`/`AuthViewModel` wiring + 3 adapted test call sites +
+      DI provider + tracking docs; SDK purity — `SessionTeardown` is `:sdk-core` repository-adjacent
+      plumbing alongside `OutboxRepository`/`CategoryRepository`, no product "when" decision, it always
+      wipes on logout; SSOT — one teardown seam, reuses the existing stores' own persistence, no
+      reimplementation; no tautological tests — the recording/mock fakes assert call counts and
+      resulting store state, not literals the test itself set; no coverage floor lowered, no existing
+      test weakened — the two adapted tests keep their original assertions, only their execution
+      mechanics catch up with the new suspend/async signature).
 - [ ] Splash screen with brand animation + minimum display duration
 
 ## B. Conversations list
@@ -1071,9 +1127,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       assigns; blank name is inert). **Mutation (RED proof):** dropping the blank-name guard fails
       **exactly** the blank-name test (36 run, 1 failed, no collateral), restored after. **Remaining
       follow-up:** the `TagInputField` composable + `allTags` corpus hydration + a dedicated tags write
-      path (no wire field for conversation tags yet — `ApiConversation` doesn't carry `tags`), and the
-      category expand/collapse list UI (the section splitter already groups by category; the
-      expand/collapse *toggle* affordance itself is still unbuilt).
+      path (no wire field for conversation tags yet — `ApiConversation` doesn't carry `tags`).
+      **Correction (2026-08-09):** the previous note above claiming "the expand/collapse *toggle*
+      affordance itself is still unbuilt" was stale/never re-proven against the actual code —
+      `CollapsibleSection` (`:sdk-ui`, commit `560dce4e9`, phase-4 design system) has shipped a working
+      `clickable { expanded = !expanded }` header + chevron-rotate + `AnimatedVisibility` body since its
+      very first commit, and `ConversationListScreen` already wraps every section — PINNED, every
+      CATEGORY, and the ALL catch-all alike — in one. Tapping any section header already
+      collapses/expands it; state survives recomposition via `rememberSaveable`. **No further work
+      needed here** — re-verified by reading the component + its single git history entry before
+      touching anything, not by trusting the note. Lesson for the routine file: a "Next slice" note is a
+      hypothesis, not a fact — grep/read the actual component before spending a run on it.
 - [x] Create direct/group conversation via user search; add participants —
       FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
       `UserRepository.searchUsers`), multi-sélection avec chips persistants

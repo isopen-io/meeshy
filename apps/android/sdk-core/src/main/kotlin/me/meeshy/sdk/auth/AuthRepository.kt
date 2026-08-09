@@ -9,6 +9,7 @@ import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.SessionTeardown
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +19,7 @@ class AuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val tokenStore: TokenStore,
     private val sessionRepository: SessionRepository,
+    private val sessionTeardown: SessionTeardown,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -47,9 +49,16 @@ class AuthRepository @Inject constructor(
         sessionRepository.refresh()
     }
 
-    fun logout() {
+    /**
+     * Ends the session and wipes every per-account cache ([SessionTeardown]) so a
+     * different account signing in on this device never inherits the previous
+     * account's data. The wipe is awaited before returning — the caller may treat
+     * the device as clean the moment this suspend call completes.
+     */
+    suspend fun logout() {
         tokenStore.clear()
         sessionRepository.clear()
+        sessionTeardown.wipe()
     }
 
     private fun storeSession(session: AuthSession) {
