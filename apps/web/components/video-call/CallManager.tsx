@@ -53,8 +53,6 @@ export function CallManager() {
     removeParticipant,
     updateParticipant,
     reset,
-    removeRemoteStream,
-    removePeerConnection,
     startHeartbeat,
     stopHeartbeat,
     joinRequest,
@@ -403,23 +401,27 @@ export function CallManager() {
         mode: event.mode
       });
 
-      // Use userId for WebRTC cleanup (peer connections and streams are tracked by userId)
-      const userIdForCleanup = event.userId || (event as unknown).anonymousId;
-
-      if (userIdForCleanup) {
-        // Remove their stream and peer connection (tracked by userId)
-        removeRemoteStream(userIdForCleanup);
-        removePeerConnection(userIdForCleanup);
-      } else {
-        console.warn('⚠️ [CallManager] No userId or anonymousId for cleanup!', event);
-      }
-
-      // Remove participant from call (tracked by database participantId)
+      // WebRTC-level teardown (peer connection, remote stream, and
+      // use-webrtc-p2p's per-participant maps) is owned exclusively by
+      // VideoCallInterface's own CALL_PARTICIPANT_LEFT listener — it delays
+      // 2s and snapshots the connection at leave-time to detect a
+      // same-session rejoin within that grace window, and clears the
+      // WebRTCService/remoteDescriptionSetRef/iceCandidateQueueRef/
+      // offerInFlightRef entries `useWebRTCP2P.removeParticipant` owns, not
+      // just the store's peer connection object. CallManager's listener is
+      // attached unconditionally on mount (before any call is active) and
+      // therefore always fires FIRST — closing the RTCPeerConnection here
+      // too raced ahead of that grace window: a rejoin's fresh offer
+      // arriving within it found `use-webrtc-p2p.ts`'s maps still stale
+      // (pointing at the connection just closed here) and got misrouted
+      // through the renegotiation branch against an already-closed
+      // connection, permanently failing the reconnect. This handler now
+      // only updates the participant list (database-participantId-keyed).
       removeParticipant(event.participantId);
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [removeParticipant, removeRemoteStream, removePeerConnection]
+    [removeParticipant]
   );
 
   /**
