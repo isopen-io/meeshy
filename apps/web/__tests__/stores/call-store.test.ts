@@ -419,6 +419,40 @@ describe('CallStore', () => {
         expect(state.remoteStreams.get('participant-1')).toBe(stream1);
         expect(state.remoteStreams.get('participant-2')).toBe(stream2);
       });
+
+      it('should stop tracks of the previous stream when replacing it for the same participant', () => {
+        // Mirrors renegotiation (ICE restart, mid-call A/V switch): the RTCPeerConnection's
+        // ontrack handler calls addRemoteStream(participantId, event.streams[0]) again with a
+        // new MediaStream carrying the new tracks. Without this guard the old stream's tracks
+        // are never stopped — a leaked capture/decode pipeline for the lifetime of the call.
+        const oldStream = new MockMediaStream() as unknown as MediaStream;
+        const oldTrack = new MockMediaStreamTrack('video');
+        (oldStream as any).tracks.push(oldTrack);
+
+        const newStream = new MockMediaStream() as unknown as MediaStream;
+
+        act(() => {
+          useCallStore.getState().addRemoteStream('participant-1', oldStream);
+          useCallStore.getState().addRemoteStream('participant-1', newStream);
+        });
+
+        expect(oldTrack.stopped).toBe(true);
+        expect(useCallStore.getState().remoteStreams.get('participant-1')).toBe(newStream);
+      });
+
+      it('should not stop tracks when the same stream is reported again for the same participant', () => {
+        const stream = new MockMediaStream() as unknown as MediaStream;
+        const track = new MockMediaStreamTrack('video');
+        (stream as any).tracks.push(track);
+
+        act(() => {
+          useCallStore.getState().addRemoteStream('participant-1', stream);
+          useCallStore.getState().addRemoteStream('participant-1', stream);
+        });
+
+        expect(track.stopped).toBe(false);
+        expect(useCallStore.getState().remoteStreams.get('participant-1')).toBe(stream);
+      });
     });
 
     describe('removeRemoteStream', () => {
