@@ -1,3 +1,102 @@
+# Cycle 38 — Un retrait de contenu doit s'annoncer, et s'annoncer au bon monde.
+
+Tête prise exactement où le cycle 37 la posait : « quoi d'autre identifie l'acteur d'une mutation par
+une propriété de l'objet muté plutôt que par le contexte d'authentification ? ». La réponse est
+arrivée en **miroir** — le défaut trouvé est l'exact inverse de celui cherché : ici c'est le
+**contexte d'authentification qui était passé là où une propriété de l'objet est attendue**. Même
+famille, même cause (acteur et cible ont longtemps coïncidé), sens opposé.
+
+## Lot A — la suppression modérée s'annonçait au graphe social du MODÉRATEUR
+
+`DELETE /posts/:postId` autorise « l'auteur, OU un modérateur et plus » (`PostService.deletePost`,
+`canModerate`). Les trois diffusions de retrait reçoivent ensuite un `authorId` dont
+`SocialEventsHandler` se sert pour **déplier un graphe social** (`getFriendIds` /
+`getVisibilityFilteredRecipients`) et pour ajouter la feed room de cette personne aux destinataires.
+
+La route y passait `authContext.registeredUser.id`.
+
+| qui | ce qu'il devrait recevoir | ce qu'il recevait |
+|---|---|---|
+| l'auteur du post retiré | `post:deleted` | **rien** |
+| ses amis, qui ont le post au fil | `post:deleted` | **rien** |
+| les amis du modérateur | rien | `post:deleted` d'un post qu'ils n'ont pas |
+
+Rien ne rejoue ces événements et aucun client ne refetch spontanément : le post restait **affiché
+dans le fil de tous ses lecteurs, auteur compris**, jusqu'à un rafraîchissement manuel. Le retrait
+était committé en base et invisible partout où il comptait. Seuls les spectateurs du détail étaient
+épargnés, par `ROOMS.post(postId)` — qui, lui, ne dépend d'aucune identité.
+
+**Le chemin voisin portait déjà la bonne lecture.** `DELETE /posts/:postId/comments/:commentId`
+(`comments.ts`) relit `post.authorId` en base avant de diffuser, pour cette raison exacte. Troisième
+cycle consécutif où le correctif existait à quelques fichiers de distance sans qu'aucun test ne le
+relie à son jumeau (leçon 90).
+
+## Lot B — la console d'administration ne s'annonçait à personne
+
+`DELETE /admin/posts/:postId` écrit `deletedAt` **sans passer par `PostService.deletePost`**. La
+route porte déjà un commentaire sur ce que ce raccourci a coûté une fois : les usages de sons,
+jamais libérés, corrigés par un cycle précédent. Le même raccourci laissait tomber toute la
+diffusion — `post:deleted` / `story:deleted` / `status:deleted` ne partaient **jamais** depuis
+l'admin. Un post retiré par la modération restait vivant à l'écran de chacun.
+
+La route ne sélectionnait d'ailleurs pas de quoi le faire : son `select` s'arrêtait à
+`{ id, deletedAt, authorId }`, sans `type` (qui choisit l'événement) ni `visibility` /
+`visibilityUserIds` (qui refiltrent l'audience d'un STATUS).
+
+## Le seam — `broadcastPostRemoval`
+
+Trois familles de contenu vivent dans la même table `Post` et voyagent sur trois événements
+distincts, parce que les clients s'y abonnent séparément. **Choisir le bon est une règle, pas un
+détail d'appel** — et elle n'a aucune raison d'exister en deux exemplaires quand les deux routes
+retirent le même objet. `services/gateway/src/socketio/broadcastPostRemoval.ts` la porte une fois,
+avec ses deux invariants écrits noir sur blanc (l'audience se déplie depuis l'AUTEUR ; la visibilité
+accompagne le STATUS), et reste best-effort : le retrait est committé quand il s'exécute.
+
+## Vérification
+
+- **8 tests neufs, écrits AVANT l'implémentation, 6 rouges observés** :
+  - Lot A — 3 rouges (`Received: …032` là où `…031` était attendu, sur POST / STORY / STATUS) et
+    **1 vert délibéré** : l'auteur qui supprime lui-même. Sans ce témoin, les trois autres passeraient
+    au vert avec n'importe quel identifiant : c'est lui qui prouve que le test mesure « l'auteur » et
+    pas « une chaîne ».
+  - Lot B — 3 rouges à `Number of calls: 0` (aucune diffusion n'existait) et 1 vert : une instance
+    sans `socialEvents` décoré (serveur Socket.IO non monté) supprime sans broncher.
+- **Un test existant asseyait l'ancien comportement** (`core-extended.test.ts`) — sa fixture rendait
+  un document soft-deleté **sans `authorId`**, ce que Prisma ne fait jamais. Fixture rendue fidèle,
+  assertion conservée.
+- **Suite gateway complète : 619 suites, 15 921 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture lignes **95,66 %** (inchangée), branches 89,03 %. `broadcastPostRemoval.ts` : 100 %
+  lignes / 100 % branches. `routes/admin/posts.ts` : 99,11 %. `routes/posts/core.ts` : 95,18 %.
+- Aucun changement de format sur le fil : le payload portait déjà `authorId`, il porte désormais le
+  bon. Vérifié qu'aucun client ne le lit — iOS (`SocialSocketManager` → `payload.postId`), web
+  (`data.postId` / `data.storyId`), Android (aucun modèle ne décode le champ).
+
+## Reste ouvert après ce cycle
+
+- **Tête sérieuse du prochain cycle — `DELETE /admin/posts/:postId` devrait déléguer à
+  `PostService.deletePost`.** Ce cycle a fermé la 2ᵉ omission de ce raccourci ; il en reste **deux,
+  vérifiées** : (1) les `TrackingLink` du post ne sont **pas désactivés** — les liens de partage d'un
+  post retiré par la modération **continuent de résoudre** (`isLinkActive` ne regarde que
+  `isActive`/`expiresAt`, jamais le `deletedAt` de la cible) ; (2) **aucune ligne `AdminAuditLog`**
+  n'est écrite, là où `deletePost` en écrit une pour toute suppression non-auteur — la route se
+  contente d'un `fastify.log.info`. Le blocage à lever d'abord : `deletePost` ne distingue pas
+  « introuvable » de « déjà supprimé » (filtre `NOT_DELETED` → `null` dans les deux cas) alors que la
+  route rend 404 vs 400, et construire `PostService` dans ce fichier fait construire `MediaService`
+  au montage. Piste : garder le `findUnique` de pré-contrôle pour la sémantique HTTP, déléguer le
+  retrait.
+- **`PUT /posts/:postId` passe l'acteur là où l'auteur est attendu** (3 diffusions +
+  `reconcilePostMentions`). **Ce n'est pas un défaut aujourd'hui** : `updatePost` lève `FORBIDDEN`
+  pour tout non-auteur, décision produit explicite (« un modérateur ne peut PAS modifier un poste »).
+  C'est une **coïncidence, pas une garantie** — exactement la configuration qui a produit le lot A et
+  le lot A du cycle 37. À rendre inconditionnel le jour où cette règle bouge, pas avant : aucun test
+  ne peut distinguer les deux tant que le service les fait coïncider.
+- Le reste du backlog du cycle 37 est inchangé : appartenance active de l'auteur, file d'attente de
+  fan-out (D1 du cycle 32, 7ᵉ report), borne de concurrence de `member_joined`,
+  `getVisibilityFilteredRecipients` / `filterPostConsumers` qui ne se citent pas, `@Display Name`
+  social, `createStoryCommentNotificationsBatch`, les deux scripts de réparation de base.
+- **`eslint` ne peut toujours pas tourner sur le gateway** (pas d'`eslint.config.js` depuis ESLint
+  v9). Condition préexistante ; la CI ne gate que sur `test:coverage`.
+
 # Cycle 37 — Les cycles précédents ont unifié QUI peut éditer. Le reste du système croyait encore que l'éditeur est l'auteur.
 
 Tête prise dans le « reste ouvert » du cycle 36, mais pas à l'endroit qu'il désignait : son candidat
