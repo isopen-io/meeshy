@@ -1,7 +1,11 @@
 /**
  * Unit tests for message routes (messages.ts)
- * Tests GET/PUT/DELETE /messages/:messageId, status, history, translations,
+ * Tests GET/PUT/DELETE /messages/:messageId, status, translations,
  * status-details, and attachment routes.
+ *
+ * `GET /messages/:messageId/history` a été retirée : aucune donnée
+ * d'historique n'existe en base, aucun des quatre clients ne l'appelait, et
+ * elle portait une quatrième copie — divergente — de la règle d'admission.
  *
  * @jest-environment node
  */
@@ -428,39 +432,6 @@ describe('POST /messages/:messageId/status', () => {
       method: 'POST', url: '/messages/' + MSG_ID + '/status',
       payload: { status: 'read' },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-  });
-});
-
-// ─── GET /messages/:messageId/history ─────────────────────────────────────────
-
-describe('GET /messages/:messageId/history', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 404 when message not found', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it('returns 403 when user lacks history permission', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
-      ...mockMessage,
-      sender: { userId: 'other-user' },
-      conversation: {
-        ...mockMessage.conversation,
-        participants: [{ userId: USER_ID, role: 'member' }],
-      },
-    });
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns 200 with history (message author can view)', async () => {
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
   });

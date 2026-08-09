@@ -81,7 +81,10 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           conversation: {
             include: {
               participants: {
-                where: { userId: userId },
+                // `isActive: true` : les quatre gardes voisines de ce fichier
+                // filtraient déjà l'appartenance active ; celle-ci était la
+                // seule à répondre encore à qui a quitté la conversation.
+                where: { userId: userId, isActive: true },
                 select: { userId: true }
               }
             }

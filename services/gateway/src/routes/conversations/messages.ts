@@ -2239,6 +2239,23 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
+      // Localiser le message DANS la conversation, comme le fait déjà le jumeau
+      // qui épingle — et comme le font `consume`, l'édition et la suppression.
+      // Cette entrée était la seule du fichier à écrire par id seul : être
+      // membre actif de N'IMPORTE QUELLE conversation suffisait alors à
+      // dépingler le message de N'IMPORTE QUELLE autre, pour qui en connaît
+      // l'id — ce que tout ancien membre garde en cache local. La diffusion
+      // partait vers la conversation de la ROUTE, jamais vers celle du message :
+      // les clients réellement concernés gardaient l'épingle affichée jusqu'au
+      // prochain chargement complet, sans qu'aucun événement ne les détrompe.
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId },
+        select: { id: true }
+      });
+      if (!message) {
+        return sendNotFound(reply, 'Message not found');
+      }
+
       await prisma.message.update({
         where: { id: messageId },
         data: { pinnedAt: null, pinnedBy: null }
