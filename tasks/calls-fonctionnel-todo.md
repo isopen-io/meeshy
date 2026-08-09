@@ -4829,7 +4829,72 @@ toolchain dans ce sandbox — reconfirmé.
   appeler `initializeConnection()` deux fois. Confiance moyenne, impact faible (la connexion est
   idempotente côté `ensureConnection`), candidat pour la prochaine vague.
 
-## Vague 76 — `SocketIOOrchestrator.setCurrentUser()` : le timer de retry d'auth survivait à un second appel ou à `cleanup()` (2026-08-09)
+## Vague 76 — `VideoCallInterface`: `handleToggleVideo`/`handleSwitchCamera` sans garde de ré-entrance — un double-tap fuit une capture caméra orpheline (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En
+tête de cycle, revue des PR ouvertes de la routine via `list_pull_requests` — la seule trouvée (#2656,
+« cancel the recursive ring-pattern timer on stop() ») s'est avérée un doublon exact du fix déjà mergé en
+Vague 75 via une PR concurrente (#2655, commit `176cc3ed` — même mécanisme `ringPatternTimeout`/
+`stopRingPattern()`, vérifié ligne à ligne contre `main`) ; fermée avec commentaire explicatif plutôt que
+mergée, pour éviter un diff no-op en conflit avec l'entrée Vague 75 déjà présente dans ce fichier. Audit
+dédié (subagent, lecture directe) du périmètre web/gateway ensuite. Backlog iOS/Android toujours hors
+d'atteinte faute de toolchain dans ce sandbox (reconfirmé : `xcodebuild`/`swift` absents, `gradle` présent
+mais non testé à nouveau ce cycle).
+
+- **Root cause confirmée par lecture directe** : `VideoCallInterface.tsx` — `handleToggleVideo` (bouton
+  micro/caméra manuel) et `handleSwitchCamera` (bascule avant/arrière) sont tous deux des handlers `async`
+  wirés directement sur un `onClick` (`CallControls.tsx`, sans `disabled` pendant l'opération) et n'avaient
+  **aucune** garde de ré-entrance — contrairement à leur cousin `CallManager.handleAcceptCall`
+  (`acceptingCallIdRef`, Vague 33) qui suit exactement ce patron pour la même classe de risque. Le chemin
+  `handleToggleVideo → enableVideo() (use-webrtc-p2p.ts) → getUserMedia() + replaceTrack() par pair
+  (webrtc-service.ts)` est une fenêtre asynchrone de plusieurs centaines de ms à &gt;1s, sans aucun verrou
+  intermédiaire (le garde `makingOffer` de `negotiate()` ne protège que l'étape SDP, pas
+  `localStream.addTrack()`/`sender.replaceTrack()` en amont). Deux invocations concurrentes (double-tap,
+  plausible sur mobile faute de feedback « busy » visuel — OU le contrôleur `use-adaptive-degradation.ts`
+  qui appelle le même `enableVideo()`/`disableVideo()` de façon totalement indépendante et non synchronisée
+  dès que la qualité du lien récupère/se dégrade, cf. `VideoCallInterface.tsx` L157-169) acquièrent chacune
+  leur propre piste caméra via `getUserMedia()`, toutes deux ajoutées au même `localStream` /
+  `replaceTrack()`-ées sur le même transceiver — la dernière à résoudre « gagne ». La piste PERDANTE n'est
+  plus référencée par rien capable de l'arrêter : `disableVideoSend()` ne stoppe que `sender.track` (le
+  gagnant), donc l'autre reste une capture caméra orpheline vivante pour tout le reste de l'appel (voyant
+  caméra allumé sans raison visible, CPU/bande passante gaspillés) — un défaut visible-vie-privée réel
+  (« j'ai coupé ma caméra mais le voyant reste allumé »). `handleSwitchCamera` porte exactement le même
+  trou : la Vague 58 avait déjà durci son chemin d'erreur (stopper `newStream` si `replaceTrack` échoue,
+  `let newStream` local à l'appel) mais cette garde est PAR INVOCATION, donc inopérante contre une seconde
+  invocation concurrente qui acquiert sa propre piste sans jamais apprendre l'existence de la première.
+- **Fix** : deux nouveaux `useRef(false)` (`videoToggleInFlightRef`, `cameraSwitchInFlightRef`), même
+  patron que `acceptingCallIdRef` — vérifié/posé à `true` en tout début de handler (`if (ref.current) return;
+  ref.current = true;`), remis à `false` dans un `finally` enveloppant l'intégralité du corps existant (pas
+  seulement le bloc `try` interne de `handleToggleVideo`, pour que le garde couvre aussi `setControls`/
+  l'émission socket qui suivent l'`await`). Aucune autre ligne de logique métier modifiée — le corps de
+  chaque handler reste identique, seul le garde d'entrée/sortie change.
+- **Tests** (TDD, RED confirmé avant fix — les 3 nouveaux tests échouaient tous sur `toHaveBeenCalledTimes(1)`
+  reçu `2`, doublement prédit par le root cause) : nouveau describe dans
+  `VideoCallInterface.test.tsx` → « re-entrancy guards » (3 tests, même style que le describe
+  `handleSwitchCamera` déjà présent — promesses contrôlables manuellement pour figer l'état « en vol ») —
+  un second clic avant qu'`enableVideo()` ne résolve n'appelle `enableVideo` qu'une fois (et un TROISIÈME
+  clic après résolution est bien traité comme un nouveau toggle légitime, prouvant que le garde se relâche) ;
+  même chose pour `disableVideo()` ; un second clic sur « switch camera » avant que `getUserMedia()` ne
+  résolve n'appelle `getUserMedia` qu'une fois.
+- **Vérification** : `VideoCallInterface.test.tsx` (22 tests) vert ; sweep
+  `video-call|use-webrtc|use-call|use-adaptive-degradation` complet (37 suites / 309 tests) vert.
+  `bun install --ignore-scripts` + `packages/shared && npx prisma generate --generator client && bun run
+  build` (prérequis CLAUDE.md, sandbox sans `node_modules` au démarrage) sans erreur. `npx tsc --noEmit` sur
+  `apps/web` : nombre d'erreurs identique avant/après le diff (11 sur `VideoCallInterface.tsx`, 1610 au
+  total — vérifié par `git stash`/`stash pop` — aucune nouvelle, toutes préexistantes sur le pattern
+  `(socket as unknown).emit(...)`). `eslint` : même échec sandbox-only de config circulaire que documenté
+  aux vagues précédentes (65/67/68/69/72/73/74/75), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable) ;
+  `orchestrator.service.ts` `setCurrentUser()` `setInterval` non mémorisé (Vague 75, confiance
+  moyenne/impact faible, non repris ce cycle) ; audit noté par le subagent de cette vague sans confirmation
+  complète — `enableVideo()`/`disableVideo()` (`use-webrtc-p2p.ts`) n'ont pas de synchronisation MUTUELLE
+  (enable-vs-disable, pas seulement enable-vs-enable) au-delà du garde posé ici côté `VideoCallInterface` ;
+  plausible mais non tracé exhaustivement, candidat pour une vague dédiée si un chemin d'appel direct au
+  hook (hors `VideoCallInterface`) apparaît.
+
+## Vague 77 — `SocketIOOrchestrator.setCurrentUser()` : le timer de retry d'auth survivait à un second appel ou à `cleanup()` (2026-08-09)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En
 tête de cycle, une PR de cette même routine (#2656, tentative de Vague 75 sur `ringtone.ts`) s'est révélée
