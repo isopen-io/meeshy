@@ -1979,11 +1979,14 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
     /// The hand-off must unconditionally hop to the MainActor via `Task`.
     func test_cxAnswerCallAction_heldUntilConnected() throws {
         let src = try callManagerSource()
-        guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
+        // Corps équilibré, pas `prefix(1600)` : `holdPendingAnswerAction`
+        // vit à 2 778 caractères de l'accolade, derrière le préambule qui
+        // explique les correctifs 2026-07-02 et 07-03.
+        guard let bodyFragment = DeclarationBodyScanner.body(
+            containing: "perform action: CXAnswerCallAction", in: src
+        ) else {
             XCTFail("CXAnswerCallAction handler not found"); return
         }
-        let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        let bodyFragment = String(src[bodyStart...].prefix(1600))
 
         XCTAssertTrue(bodyFragment.contains("holdPendingAnswerAction(action)"),
             "CXAnswerCallAction: the action must be handed to the manager (holdPendingAnswerAction) " +
@@ -2048,12 +2051,19 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    private func handlerBody(_ src: String, marker: String, length: Int = 2000) throws -> String {
-        guard let range = src.range(of: marker) else {
+    /// Corps ENTIER du handler, accolades équilibrées.
+    ///
+    /// Prenait auparavant `prefix(2000)` : une fenêtre devinée, que chaque
+    /// commentaire ajouté au-dessus du code surveillé repoussait hors de
+    /// portée. Le garde `callUUID` de `CXEndCallAction` s'est retrouvé à
+    /// 2 399 caractères de l'accolade et la garde a viré au rouge alors que le
+    /// code de production était juste. Le paramètre `length` a disparu : un
+    /// corps équilibré n'a pas de longueur à deviner.
+    private func handlerBody(_ src: String, marker: String) throws -> String {
+        guard let body = DeclarationBodyScanner.body(containing: marker, in: src) else {
             XCTFail("\(marker) handler not found"); return ""
         }
-        let bodyStart = src[range.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        return String(src[bodyStart...].prefix(length))
+        return body
     }
 
     func test_activeCallUUID_isFileprivate_soCallKitDelegateProxyCanReadIt() throws {
@@ -2119,7 +2129,10 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
     /// guard's own comment push the guard past the other handlers' default 2000-char
     /// window.
     func test_cxAnswerCallAction_guardsOnActiveCallUUIDBeforeHoldingAnswerAction() throws {
-        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXAnswerCallAction", length: 3500)
+        // `length: 3500` a disparu : c'était une fenêtre déjà élargie à la main
+        // une première fois quand le handler avait grossi. Le corps équilibré
+        // rend ce rattrapage inutile.
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXAnswerCallAction")
         let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
         let holdOffset = body.range(of: "manager.holdPendingAnswerAction(action)")?.lowerBound
         XCTAssertNotNil(guardOffset, "CXAnswerCallAction must guard on action.callUUID == manager.activeCallUUID")

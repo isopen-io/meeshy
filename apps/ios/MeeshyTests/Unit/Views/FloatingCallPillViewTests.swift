@@ -329,12 +329,13 @@ final class FloatingCallPillViewTests: XCTestCase {
 
     func test_muteButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
-        guard let range = source.range(of: "private var muteButton") else {
+        // Corps équilibré, pas une fenêtre de 1 000 caractères :
+        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // trop — et la garde virait au rouge sur du code parfaitement juste.
+        guard let vicinity = DeclarationBodyScanner.body(containing: "private var muteButton", in: source) else {
             XCTFail("FloatingCallPillView must define muteButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
             "The mute button must apply .callToggleAccessibility so VoiceOver exposes the " +
@@ -345,12 +346,13 @@ final class FloatingCallPillViewTests: XCTestCase {
 
     func test_speakerButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
-        guard let range = source.range(of: "private var speakerButton") else {
+        // Corps équilibré, pas une fenêtre de 1 000 caractères :
+        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // trop — et la garde virait au rouge sur du code parfaitement juste.
+        guard let vicinity = DeclarationBodyScanner.body(containing: "private var speakerButton", in: source) else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
             "The speaker button must apply .callToggleAccessibility so VoiceOver exposes the " +
