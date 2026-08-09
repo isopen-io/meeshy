@@ -5,6 +5,22 @@
     <string name="login_password_label">Password</string>
     <string name="login_button">Log in</string>
     <string name="login_error_required">Username and password are required</string>
+    <string name="login_signup_prompt">Don\'t have an account?</string>
+    <string name="login_signup_link">Sign up</string>
+
+    <string name="registration_close">Close</string>
+    <string name="registration_back">Back</string>
+    <string name="registration_pseudo_header">A username all your own</string>
+    <string name="registration_pseudo_subtitle">Pick the name the world will remember.</string>
+    <string name="registration_username_label">Username</string>
+    <string name="registration_username_available">Username available</string>
+    <string name="registration_username_taken">Username already taken</string>
+    <string name="registration_next">Next</string>
+    <string name="registration_continue">Continue</string>
+    <string name="registration_create_account">Create account</string>
+    <string name="registration_skip_step">Skip this step</string>
+    <string name="registration_step_placeholder_title">More to come</string>
+    <string name="registration_step_placeholder_body">This step isn\'t built yet — tap Back to continue.</string>
 
     <string name="guest_join_title">Join the conversation</string>
     <string name="guest_join_subtitle">Create a temporary identity to join</string>

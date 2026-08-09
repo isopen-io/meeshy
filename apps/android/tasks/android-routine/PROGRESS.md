@@ -1,5 +1,54 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **registration wizard's pager/progress-bar/nav-chrome shell** landed (slice
+> `auth-onboarding-shell`, feature-parity §A — slice 1 of the `OnboardingFlowView` Compose scaffold
+> decomposition recorded by the previous run, PSEUDO step only). Re-proven before picking: grepped
+> `apps/android/feature/auth/` — only `LoginScreen.kt`/`GuestJoinScreen.kt` existed, zero registration
+> UI, and `LoginScreen` had no path to it (confirmed by reading the file, not the note). Every decision
+> the shell needed (`RegistrationStepGate`, `RegistrationStepNavigator`, `RegistrationProgressBar`,
+> `RegistrationNav`, `RegistrationViewModel`) was already shipped and tested — this slice is the first
+> real consumer. **Added (production, all `apps/android`):** (1) `feature/auth/RegistrationScreen.kt` —
+> a dumb Compose renderer over `RegistrationUiState`: top bar (Close on PSEUDO / Back otherwise, iOS
+> `OnboardingFlowView.topBar` parity, `n/8` position pill), an 8-segment tappable progress row
+> (`RegistrationStep.ordered` × `state.fill(step)` → colour + jump-back-only tap gate, mirrors iOS
+> `InteractiveProgressBar`), bottom bar (`MeeshyPrimaryButton` driven by `RegistrationNavModel` —
+> label/enabled/loading, `register()` on RECAP else `next()`; skip button PROFILE-only). PSEUDO is the
+> only step with real content (username field + available/taken hint off
+> `RegistrationFields.usernameAvailable`); every other step renders an inert "coming soon" placeholder.
+> (2) **New pure `:core:model/auth/RegistrationStepContent.isImplemented(step): Boolean`** — the single
+> SSOT deciding real-content vs. placeholder per step (today: PSEUDO only), so a future per-step slice
+> extends one `Set` + adds one `when` arm in lockstep instead of the two drifting apart. (3)
+> `LoginScreen` gains a "Sign up" link (`onSignUp: () -> Unit = {}`, default keeps every existing call
+> site source-compatible) → `MeeshyApp.kt`'s new `Routes.REGISTRATION` route. **No dead end:** a
+> placeholder step's Next stays correctly disabled (its untouched `RegistrationFields` never satisfies
+> `RegistrationStepGate.canProceed` for PHONE/EMAIL/IDENTITY/PASSWORD/LANGUAGE) but Back is always
+> reachable off the first step, all the way out via Close — verified by reading `phoneStepCanProceed`
+> etc., not assumed. **+2 behavioural tests:** `RegistrationStepContentTest` (pseudo implemented=true;
+> every other of the 7 steps implemented=false). **Mutation (RED proof):** widening `implemented` to
+> `RegistrationStep.entries.toSet()` fails **exactly** `isImplemented_everyStepOtherThanPseudo_isFalse`
+> (2 run, 1 failed, no collateral); RED first proven by the suite failing to compile against the absent
+> `RegistrationStepContent`. **The rest of the slice is Compose wiring only** (exempt from the JVM
+> coverage gate per `TDD-COVERAGE.md`, and explicitly pre-approved as such by the prior run's scope
+> note) — verified by the full, unmodified `RegistrationViewModelTest` suite staying green (45/45)
+> alongside the new screen, proving zero regression to the decision layer it reads. **Gate:**
+> `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full `assembleDebug` + all-module
+> `testDebugUnitTest`, 943 tasks). Reviewer **PASS** (diff `apps/android` only — `core/model` [+1 new
+> core + 1 new test], `feature/auth` [+1 new screen, `LoginScreen` link, ×4 locale strings], `app` [+1
+> route]; SDK purity — `RegistrationStepContent` is a stateless `:core:model` lookup, the Composable
+> dispatch stays app-side; SSOT — reuses every existing decision core, re-implements none; UDF —
+> unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — verified above; no
+> tautological tests; no coverage floor lowered, no existing test weakened). **Next slice:** slice 2 of
+> the onboarding wizard — the PHONE step field UI (country picker + skip, needs
+> `RegistrationStepContent.implemented` to gain `PHONE` + a `RegistrationScreen` `when` arm), OR the §C
+> **inverted-list** message layout (bottom-anchored `reverseLayout` — re-proven this run: `ChatScreen.kt`
+> line 487's `LazyColumn` still has no `reverseLayout`, manages "scroll to bottom" via
+> `InitialScrollTarget.of`/`isNearBottom`/`animateScrollToItem(lastIndex)` instead; genuinely large —
+> touches `PinnedDayHeader.governingDayMillis`'s scan direction, the `LOAD_OLDER_THRESHOLD` trigger
+> polarity, and every index-based `LaunchedEffect` in a 2000+ line file — evaluate whether it decomposes
+> the same way the onboarding wizard did, or document a sub-slice breakdown, before committing a run to
+> it), OR the `TagInputField` composable + `allTags` corpus hydration (still blocked on a new `tags`
+> wire field on `ApiConversation`), OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-08-09 the **logout/account-switch cache teardown** landed (slice `session-logout-teardown`,
 > feature-parity §A Auth — "Login/logout teardown wiping E2EE keys and per-user caches", a `[ ]`
 > untouched, security-flagged gap: none of Meeshy's on-device stores are namespaced by userId, so a
