@@ -31,6 +31,7 @@ const MESSAGE_ID = '507f1f77bcf86cd799439013';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439011';
 const SENDER_PARTICIPANT_ID = '507f1f77bcf86cd799439099';
 const USER_ID = 'user-extra-1';
+const ANONYMOUS_PARTICIPANT_ID = '507f1f77bcf86cd799439088';
 
 // ---------------------------------------------------------------------------
 // Module-level mocks (must be declared before imports, hoisted by Jest)
@@ -718,7 +719,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       deliveredCount: 1,
       readCount: 0
     });
-    mockPrisma.participant.findMany.mockResolvedValue([{ userId: USER_ID }]);
+    mockPrisma.participant.findMany.mockResolvedValue([{ id: PARTICIPANT_ID, userId: USER_ID }]);
   });
 
   it('returns 200 "Aucune action requise" when caller is the message sender (self-delivery no-op)', async () => {
@@ -833,5 +834,26 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     expect(response.json().data).toMatchObject({ message: 'Message marqué comme livré' });
     expect(emitMock).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
     expect(mockMarkMessagesAsReceived).toHaveBeenCalledTimes(1);
+  });
+
+  // This fan-out used to skip every participant with no `User` row, so an
+  // anonymous participant — the population a share-link conversation is made of
+  // — received no peer receipt at all. It is now addressed by the id its
+  // personal room is named after, the one `AuthHandler` joins it to.
+  it('reaches a participant with no account by its participant id', async () => {
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: ANONYMOUS_PARTICIPANT_ID, userId: null }
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: url(),
+      headers: { authorization: AUTH_HEADER }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ioChain.to).toHaveBeenCalledWith(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+    expect(emitMock).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
   });
 });
