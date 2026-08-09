@@ -11,6 +11,11 @@ import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import { processExplicitLinks } from '../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
+import {
+  admitEditedContent,
+  isEditedContentRefused,
+  EMPTY_EDIT_REFUSAL_MESSAGE,
+} from '../services/messaging/messageEditContent';
 import { TrackingLinkService } from '../services/TrackingLinkService';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
@@ -287,18 +292,26 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           : sendNotFound(reply, 'Message not found or you are not authorized to modify it');
       }
 
-      // Permettre l'édition de messages sans contenu si le message a des attachements
-      const messageHasAttachments = message.attachments && message.attachments.length > 0;
-      if ((!content || content.trim().length === 0) && !messageHasAttachments) {
-        return sendBadRequest(reply, 'Message content cannot be empty (unless attachments are included)');
-      }
-
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`) : un
+      // message ne peut pas devenir vide, sauf si une pièce jointe le porte.
+      //
       // `content` est OPTIONNEL dans `UpdateMessageBodySchema` — retirer la
       // légende d'un message à pièce jointe consiste précisément à l'omettre.
       // Le `content.trim()` qui vivait plus bas jetait alors un TypeError, que
-      // le catch traduisait en 500 : le seul cas que la garde ci-dessus autorise
-      // explicitement était le seul que l'écriture ne savait pas traiter.
-      const trimmedContent = content?.trim() ?? '';
+      // le catch traduisait en 500 : le seul cas que la garde autorise
+      // explicitement était le seul que l'écriture ne savait pas traiter. C'est
+      // pourquoi l'unité rend le texte À ÉCRIRE en même temps que son verdict —
+      // il n'y a plus de `trim` d'appelant pour diverger d'elle.
+      const contentAdmission = admitEditedContent({
+        content,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(contentAdmission)) {
+        return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
+      }
+
+      const trimmedContent = contentAdmission.content;
 
       // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
       // l'écriture, exactement comme à l'envoi et comme sur les deux autres
@@ -406,9 +419,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           senderId: message.senderId
         };
 
-        // Déclencher la retraduction via la méthode privée existante
+        // Déclencher la retraduction par l'entrée PUBLIQUE du service : le cast
+        // `(translationService as any)._processRetranslationAsync` qui vivait ici
+        // perçait l'encapsulation pour atteindre la méthode que
+        // `retranslateMessageAsync` expose déjà — et que le chemin socket, lui,
+        // employait correctement. Un geste, un seul vocabulaire.
         if (translationService) {
-          await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+          await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
         } else {
           logger.warn('MessageTranslationService non disponible, retraduction non effectuée');
         }

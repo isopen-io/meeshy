@@ -19,6 +19,11 @@ import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
 import { processExplicitLinks } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import {
+  admitEditedContent,
+  isEditedContentRefused,
+  EMPTY_EDIT_REFUSAL_MESSAGE,
+} from '../../services/messaging/messageEditContent';
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
@@ -179,12 +184,17 @@ export function registerMessagesAdvancedRoutes(
           : sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
       }
 
-      // Validation du contenu : le contenu vide n'est autorisé que si le
-      // message porte des pièces jointes (suppression de légende). Parité avec
-      // le chemin socket (MessageHandler.handleMessageEdit).
-      const hasAttachments = existingMessage.attachments && existingMessage.attachments.length > 0;
-      if ((!content || content.trim().length === 0) && !hasAttachments) {
-        return sendBadRequest(reply, 'Message content cannot be empty');
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`) : le
+      // contenu vide n'est admis que si une pièce jointe porte le message
+      // (retrait de légende). La règle vivait ici dépliée, en trois exemplaires
+      // sur les quatre transports — dont un qui ne l'avait pas du tout.
+      const editedContent = admitEditedContent({
+        content,
+        hasAttachments: (existingMessage.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(editedContent)) {
+        return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
       }
 
       // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
@@ -193,7 +203,7 @@ export function registerMessagesAdvancedRoutes(
       // brut. Un seul point d'appel, désormais, pour les deux transports.
       const processedContent = await processExplicitLinks({
         trackingLinkService,
-        content: content.trim(),
+        content: editedContent.content,
         conversationId,
         messageId,
         createdBy: userId,
@@ -341,8 +351,12 @@ export function registerMessagesAdvancedRoutes(
           senderId: existingMessage.senderId
         };
 
-        // Déclencher la retraduction via la méthode privée existante
-        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+        // Déclencher la retraduction par l'entrée PUBLIQUE du service : le cast
+        // `(translationService as any)._processRetranslationAsync` qui vivait ici
+        // perçait l'encapsulation pour atteindre la méthode que
+        // `retranslateMessageAsync` expose déjà — et que le chemin socket, lui,
+        // employait correctement. Un geste, un seul vocabulaire.
+        await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
         logger.info(`Edit - Retranslation queued for message ${messageId}`);
 
       } catch (translationError) {
@@ -589,11 +603,18 @@ export function registerMessagesAdvancedRoutes(
           messageId: { type: 'string', description: 'Message ID to edit' }
         }
       },
+      // `minLength: 1` a vécu ici, et se trompait dans les deux sens : trois
+      // espaces le satisfont (le message partait VIDÉ, voir `admitEditedContent`)
+      // tandis que la chaîne vide LÉGITIME — celle qui retire la légende d'un
+      // message à pièce jointe — était refusée au transport ANDROID seul.
+      // La vacuité se décide APRÈS `trim` et en connaissant les pièces jointes ;
+      // le schéma ne garde donc que le plafond, en parité avec
+      // `EditMessageBodySchema`.
       body: {
         type: 'object',
         required: ['content'],
         properties: {
-          content: { type: 'string', description: 'Updated message content', minLength: 1 }
+          content: { type: 'string', description: 'Updated message content', maxLength: 10000 }
         }
       },
       response: {
@@ -646,7 +667,10 @@ export function registerMessagesAdvancedRoutes(
                 }
               }
             }
-          }
+          },
+          // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
+          // pièce jointe qui autorise un texte vide (retrait de légende).
+          attachments: { select: { id: true } }
         }
       });
 
@@ -685,13 +709,28 @@ export function registerMessagesAdvancedRoutes(
           : sendForbidden(reply, 'Vous ne pouvez modifier que vos propres messages');
       }
 
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`), désormais
+      // énoncé une seule fois pour les quatre transports. Cette entrée était la
+      // seule SANS garde : trois espaces suffisaient à vider un message, et un
+      // `message:edited` vide partait vers toute la conversation par-dessus le
+      // texte déjà écrasé.
+      const editedContent = admitEditedContent({
+        content,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(editedContent)) {
+        return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
+      }
+
       // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
       // l'écriture, comme sur les deux autres transports d'édition. Ce PATCH est
-      // celui du client WEB (`messages.service.ts`) : il écrivait les crochets
-      // en dur, pour toujours, là où le même texte ENVOYÉ produit un lien.
+      // celui du client ANDROID (`OutboxFlushWorker`, lane `EDIT_MESSAGE`) : il
+      // écrivait les crochets en dur, pour toujours, là où le même texte ENVOYÉ
+      // produit un lien.
       const processedContent = await processExplicitLinks({
         trackingLinkService,
-        content: content.trim(),
+        content: editedContent.content,
         conversationId: message.conversationId,
         messageId,
         createdBy: userId,
@@ -774,7 +813,7 @@ export function registerMessagesAdvancedRoutes(
           senderId: message.senderId
         };
 
-        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+        await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
       } catch (translationError) {
         logger.error('Erreur lors de la retraduction', translationError);
         // Ne pas faire échouer l'édition si la retraduction échoue

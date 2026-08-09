@@ -1,5 +1,43 @@
 # Lessons
 
+## Leçon 88 — « aucun appelant » ne se conclut jamais d'un seul client (2026-08-09, routine messaging)
+
+Le « reste ouvert » du cycle 35 désignait comme tête sérieuse le retrait de
+`PATCH /messages/:messageId`, « sans aucun appelant de production », re-vérifié sur deux cycles
+consécutifs. La vérification était **exacte mais partielle** : elle avait mesuré
+`apps/web/services/messages.service.ts` — dont `updateMessage` n'est effectivement appelé que par ses
+propres tests — et conclu que la ROUTE était morte.
+
+Elle sert en réalité la lane `EDIT_MESSAGE` de la file d'attente hors ligne **Android**
+(`OutboxFlushWorker.kt:161` → `MessageApi.edit` → `@PATCH("messages/{id}")`). La retirer aurait cassé
+silencieusement la remise différée des éditions faites hors ligne sur un client entier — et de la
+pire manière, puisque l'outbox Android classe tout échec comme transitoire : cinq tentatives, puis
+abandon en laissant l'édition peinte localement et jamais appliquée côté serveur.
+
+**Leçons :**
+1. **Une route REST est une surface PUBLIQUE ; la question n'est pas « qui l'appelle dans le code que
+   je lis » mais « qui l'appelle dans le code que je ne lis pas ».** Ce dépôt a quatre consommateurs
+   d'API — `apps/web`, `apps/ios` + `packages/MeeshySDK`, `apps/android`, et la gateway pour
+   elle-même. Avant d'écrire « aucun appelant » au sujet d'un endpoint, grepper **le chemin de
+   l'URL** dans les quatre, pas le nom de la méthode d'un seul SDK. Les clients ne nomment pas leurs
+   méthodes pareil (`updateMessage` en TS, `edit` en Kotlin) : c'est le verbe + le chemin qui sont
+   partagés, donc c'est sur eux qu'on cherche.
+2. **Un constat de code mort se périme, et il faut le dater par CLIENT.** « Vérifié à nouveau ce
+   cycle » donnait au constat une autorité que sa méthode n'avait pas : re-mesurer trois fois le même
+   client ne le rend pas plus vrai. Un constat de non-usage doit énoncer **où** il a regardé, sans
+   quoi le cycle suivant hérite d'une conclusion sans son périmètre.
+3. **Le module le moins outillé est celui qui accumule les défauts les plus graves.** Android n'a
+   AUCUN job CI dans `.github/workflows/`, et le SDK n'est pas téléchargeable depuis cette routine
+   (`dl.google.com` refusé par la politique réseau). C'est précisément là qu'ont été trouvés le
+   défaut le plus sévère du cycle (l'outbox qui retente l'irréparable et bloque sa lane en FIFO) et
+   la croyance fausse qui a failli coûter une régression. **Un module sans CI n'est pas un module
+   stable : c'est un module dont personne ne mesure l'instabilité.**
+4. **Ne pas livrer ce qu'on ne peut pas prouver.** Le correctif Android était rédigeable de tête ;
+   il n'a pas été écrit, parce qu'aucun compilateur Kotlin n'était atteignable et qu'aucune CI ne
+   l'aurait rattrapé. Le défaut est consigné en tête du « reste ouvert » avec sa mesure complète et
+   le correctif esquissé — c'est ce qu'on livre quand on ne peut pas livrer le code.
+
+
 ## Leçon 87 — quand deux écrivains d'un même champ divergent, c'est le PLUS DESTRUCTEUR qu'il faut lire en premier (2026-08-08, routine messaging)
 
 Audit ciblé du cœur temps-réel TS (env Linux, pas de Xcode). Suite immédiate du cycle 20 :

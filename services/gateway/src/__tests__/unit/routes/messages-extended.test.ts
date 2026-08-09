@@ -214,7 +214,7 @@ async function buildApp(opts: {
     }
   } else {
     app.decorate('translationService', {
-      _processRetranslationAsync: jest.fn().mockResolvedValue(undefined),
+      retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
     });
   }
 

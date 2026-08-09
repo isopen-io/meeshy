@@ -58,6 +58,11 @@ import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/Men
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import { processExplicitLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import {
+  admitEditedContent,
+  isEditedContentRefused,
+  EMPTY_EDIT_REFUSAL_MESSAGE,
+} from '../../services/messaging/messageEditContent';
 import { emitMentionCreated } from '../emitMentionCreated';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
@@ -704,9 +709,15 @@ export class MessageHandler {
         return;
       }
 
-      const hasAttachments = message.attachments && message.attachments.length > 0;
-      if (!validated.content.trim() && !hasAttachments) {
-        this._sendGenericError(callback, 'Message content cannot be empty', socket);
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`), énoncé
+      // une seule fois pour les quatre transports d'édition.
+      const contentAdmission = admitEditedContent({
+        content: validated.content,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(contentAdmission)) {
+        this._sendGenericError(callback, EMPTY_EDIT_REFUSAL_MESSAGE, socket);
         return;
       }
 
@@ -718,7 +729,7 @@ export class MessageHandler {
       // ensuite le SEUL en circulation : base, mentions, retraduction, payload.
       const editedContent = await processExplicitLinks({
         trackingLinkService: this.trackingLinkService,
-        content: validated.content.trim(),
+        content: contentAdmission.content,
         conversationId: message.conversationId,
         messageId: validated.messageId,
         createdBy: userId,

@@ -169,7 +169,7 @@ async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.decorate('translationService', {
-    _processRetranslationAsync: jest.fn<any>().mockResolvedValue(undefined),
+    retranslateMessageAsync: jest.fn<any>().mockResolvedValue(undefined),
   });
 
   const io = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
@@ -268,7 +268,7 @@ describe('PUT /messages/:messageId — les obligations d\'une édition ne dépen
     expect(mockReconcileEditedMentions).toHaveBeenCalledWith(expect.objectContaining({
       content: 'regarde m+tok3n @bob',
     }));
-    expect((app as any).translationService._processRetranslationAsync).toHaveBeenCalledWith(
+    expect((app as any).translationService.retranslateMessageAsync).toHaveBeenCalledWith(
       MSG_ID,
       expect.objectContaining({ content: 'regarde m+tok3n @bob' })
     );
