@@ -459,12 +459,19 @@ describe('useVideoCall', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle rapid multiple startCall invocations', async () => {
+    it('should ignore rapid re-invocations while a call is already starting', async () => {
+      // Regression test — before the startCallInFlightRef guard, three rapid
+      // invocations (double-click, or a re-render firing the handler twice)
+      // acquired THREE separate camera/mic streams and the last getUserMedia
+      // to resolve overwrote window.__preauthorizedMediaStream, silently
+      // orphaning the earlier streams (nothing ever called stop() on them —
+      // the camera/mic indicator stayed lit for the rest of the session).
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockDirectConversation })
       );
 
-      // Start multiple calls rapidly
+      // Start multiple calls rapidly, before the first getUserMedia call
+      // (an unresolved promise here) settles.
       await act(async () => {
         const p1 = result.current.startCall();
         const p2 = result.current.startCall();
@@ -472,8 +479,52 @@ describe('useVideoCall', () => {
         await Promise.all([p1, p2, p3]);
       });
 
-      // Each should have been processed (though in practice would be deduplicated)
-      expect(mockGetUserMedia).toHaveBeenCalledTimes(3);
+      // Only the first invocation should reach getUserMedia/call:initiate —
+      // the other two are dropped by the in-flight guard.
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+      expect(mockEmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('should allow a new startCall once the previous one has resolved via its ack', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-222', mode: 'p2p', iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledTimes(2);
+    });
+
+    it('should allow a new startCall after the previous one failed on getUserMedia', async () => {
+      mockGetUserMedia.mockRejectedValueOnce(new Error('boom'));
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      mockGetUserMedia.mockResolvedValueOnce(mockMediaStream);
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledTimes(1);
     });
 
     it('should handle conversation change during call initiation', async () => {

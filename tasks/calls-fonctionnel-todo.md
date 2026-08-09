@@ -5158,3 +5158,57 @@ sandbox, reconfirmé ce cycle. Reprise directe du candidat #1 laissé en spec à
   cette vague) ; candidat iOS `CallManager.selectCamera(id:)` (Vague 78, prêt, sandbox sans toolchain Swift,
   reconfirmé cette vague) ; `use-video-call.ts` `startCall()` sans garde de ré-entrance (Vague 79, confiance
   moyenne, non repris ce cycle).
+
+## Vague 81 — `use-video-call.ts` `startCall()` sans garde de ré-entrance, orphelinant un flux caméra/micro sur double invocation (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. En tête
+de cycle, `list_pull_requests` a remonté un PR ouvert de cette routine (#2671, Vague 80, tous les checks CI
+verts — `Build (bun)`, `Test web`, `Test gateway`, `Test shared`, `Prisma`, `Security`, `Quality (bun)`,
+etc. —, `mergeable_state: clean`) : mergé en premier (squash) per la règle de la routine de ne jamais empiler
+un nouveau cycle sur un backlog non fermé. Branche `claude/upbeat-dirac-q6wfqh` recréée depuis `origin/main`
+post-merge. Toolchains iOS (`xcodebuild`/`swift` absents) et Android (`gradle` présent mais aucun SDK Android
+sous `/opt`) reconfirmées hors d'atteinte dans ce sandbox. Repris le candidat #1 laissé spécifié à la fin de
+la Vague 79 (confiance moyenne à l'époque, confirmé ligne à ligne cette vague avant implémentation) :
+`use-video-call.ts` `startCall()`.
+
+- **Root cause confirmée par lecture directe** : `startCall()` n'a aucune garde de ré-entrance, contrairement
+  à ses cousins de la même famille de bug déjà corrigés dans cette codebase — `acceptingCallIdRef`
+  (`CallManager.tsx`, Vague 33), `videoToggleInFlightRef`/`cameraSwitchInFlightRef`
+  (`VideoCallInterface.tsx`, Vague 76). Un double-clic sur le bouton d'appel (ou un double rendu déclenchant
+  le handler deux fois) avant que le premier aller-retour `getUserMedia` + `call:initiate` ne se résolve
+  déclenchait DEUX capture caméra/micro distinctes ; la seconde à se résoudre écrasait sans discussion
+  `window.__preauthorizedMediaStream` (ligne `(window as any).__preauthorizedMediaStream = stream`), sans
+  jamais appeler `stop()` sur les pistes de la première — orphelinant silencieusement une capture caméra/
+  micro pour le reste de la session (indicateur caméra/micro du navigateur resté allumé). Un test existant
+  (`should handle rapid multiple startCall invocations`) documentait ce comportement bogué comme acceptable
+  (« each should have been processed (though in practice would be deduplicated) », 3 appels `getUserMedia`
+  attendus) — signe que le trou était connu mais non corrigé.
+- **Fix** : nouveau `startCallInFlightRef` (`useRef(false)`), posé synchroniquement après les deux validations
+  précoces (conversation nulle / non-directe, qui ne consomment aucune ressource et ne doivent donc pas être
+  bloquées par la garde) et avant tout `await`. Contrairement à ses cousins, la garde ne peut PAS être un
+  simple `try/finally` autour de toute la fonction : l'accusé de réception de `socket.emit` arrive de façon
+  asynchrone via callback, bien après que la fonction async englobante ait déjà retourné (Socket.IO ack-style,
+  pas de Promise) — un `finally` sur la fonction lèverait la garde immédiatement après l'appel synchrone à
+  `emit()`, pendant que la requête est encore en vol. La garde est donc levée explicitement sur chacun des
+  chemins de sortie : le retour anticipé « socket non connecté », le `catch` de `getUserMedia`, et en tête du
+  callback d'accusé de réception (succès ou échec confondus).
+- **Tests** (TDD, RED confirmé avant fix) : le test existant documentant le bug (`should handle rapid
+  multiple startCall invocations`) renommé et réécrit (`should ignore rapid re-invocations while a call is
+  already starting`) pour asserter le comportement corrigé — RED confirmé sur le code d'avant fix
+  (`toHaveBeenCalledTimes(1)` reçoit 3). Deux nouveaux tests couvrant chaque chemin de levée de la garde :
+  un nouvel appel est accepté après qu'un précédent se soit résolu via son ack (succès), et après qu'un
+  précédent ait échoué sur `getUserMedia` (rejet) — les deux verts avant et après fix (aucune régression sur
+  le chemin nominal), confirmant que la garde ne bloque jamais un appel légitime suivant, seulement les
+  doublons pendant que l'un est déjà en vol.
+- **Vérification** : `use-video-call.test.tsx` (30 tests, +2 net) vert. Sweep complet
+  `video-call|use-webrtc|use-call|orchestrator` (40 suites / 418 tests) vert. Prérequis CLAUDE.md rejoués
+  (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`, puis `packages/shared && npx
+  prisma generate --generator client && bun run build` sans erreur. `npx tsc --noEmit` sur `apps/web` : 1181
+  erreurs avant et après le diff (`git stash`/`stash pop`), zéro nouvelle. `eslint` : même échec sandbox-only
+  de config circulaire que documenté aux vagues précédentes (65/67/68/69/72-80), non bloquant, indépendant de
+  ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (spec prête, non corrigées faute de toolchain vérifiable, reconfirmé
+  cette vague) ; candidat iOS `CallManager.selectCamera(id:)` (Vague 78, prêt, sandbox sans toolchain Swift,
+  reconfirmé cette vague).
