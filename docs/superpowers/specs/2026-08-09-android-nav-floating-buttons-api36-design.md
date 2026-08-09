@@ -170,8 +170,18 @@ Position stockée **normalisée** (0–1) comme iOS (`ButtonPosition`), ce qui l
 taille d'écran et de la rotation. Drag via `detectDragGestures`, aimantation au bord le plus proche
 au relâchement, position persistée en `DataStore` sous deux clés distinctes (gauche, droite).
 
-`DataStore` est **déjà en place** — `androidx.datastore:datastore-preferences` 1.1.1, module
-`core/datastore/` : on s'y branche, on n'introduit pas de mécanisme de persistance concurrent.
+`DataStore` est **déjà en place**, mais pas où on l'attendrait : le module `core/datastore/` est un
+**placeholder vide** (« Populated in Phase 3 »). Les stores réels vivent dans `sdk-core` —
+`ThemeStore`, `PrivacyPreferencesStore`, `CategorySnapshotStore` — et suivent tous le même patron,
+que la position des boutons reprendra à l'identique :
+
+1. une **interface** (`FloatingButtonPositionStore`) ;
+2. une implémentation **en mémoire** pour les tests ;
+3. une implémentation **DataStore** (`DataStoreFloatingButtonPositionStore`) ;
+4. un **codec pur** de décodage, qui dégrade vers la valeur par défaut sur donnée corrompue au lieu
+   de planter (comme `appThemeModeFromStorage`) ;
+5. un `@Provides @Singleton` dans `SdkModule`, avec son propre
+   `preferencesDataStoreFile("meeshy_floating_buttons")`.
 
 La logique de position vit dans une **unité pure** (normalisation, aimantation, bornage aux insets),
 testable sans UI ; le composable ne fait que l'appeler et dessiner.
