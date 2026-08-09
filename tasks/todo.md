@@ -117,11 +117,15 @@ double.
   atomique : deux envois concurrents dans la même conversation peuvent encore s'écraser l'un
   l'autre. Seuls les scalaires sont atomiques. C'est la limite structurelle que ce cycle **ne**
   franchit pas.
-- **Les messages système de `CallService` ne sont comptés par personne.** Deux `message.create`
-  contournent `MessagingService`. À trancher comme une question produit — un message système
-  DOIT-il entrer dans `totalMessages` ? — et non en passant : `recompute()`, lui, les compte.
-  **Candidat sérieux pour le prochain cycle**, parce que la divergence incrément/recalcul y est du
-  même genre que celle que ce cycle vient de fermer.
+- **Les messages SYSTÈME ne sont comptés par personne.** Trois `message.create` contournent
+  `MessagingService` : deux dans `CallService` (récapitulatifs d'appel) et un dans
+  `routes/conversation-encryption.ts` (« chiffrement activé »). Aucun n'incrémente — mais
+  `recompute()`, lui, les compte : la même divergence incrément/recalcul que ce cycle vient de
+  fermer, à ceci près qu'elle repose sur une question produit non tranchée. Un message système
+  DOIT-il entrer dans `totalMessages` ? Les deux réponses sont défendables ; ce qui ne l'est pas,
+  c'est que l'incrément et le recalcul en donnent chacun une. **Candidat sérieux pour le prochain
+  cycle** — et il faut trancher AVANT de câbler, sans quoi on aligne le comptage sur un
+  `recompute()` dont personne n'a validé le choix.
 - Reconduits du cycle 43 : `TrackingLink.messageId` reste une colonne trompeuse (renommage ou table
   de jonction) ; le décompte de références relit le texte pour retrouver une relation.
 - Reconduits des cycles 40-42 : E2EE web de bout en bout ; `signedPreKeySignature` invérifiable ; le
