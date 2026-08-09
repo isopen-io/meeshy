@@ -33,11 +33,11 @@ export interface MentionCreatedParams {
  * (`broadcastNewMessage`).
  *
  * L'éventail vivait déplié dans le seul `MessageHandler.handleMessageEdit`.
- * La route REST d'édition — transport PRIMAIRE du client iOS, qui édite via
- * `PUT /messages/:id` — n'émettait rien : nommer quelqu'un depuis un iPhone ne
- * lui parvenait jamais en direct. Un point d'appel unique, donc, plutôt que
- * deux blocs qu'un troisième transport aurait la même occasion de ne pas
- * recopier.
+ * Aucune des trois routes REST d'édition n'émettait rien : nommer quelqu'un en
+ * éditant depuis un iPhone (`PUT /messages/:messageId`, `routes/messages.ts`)
+ * ou depuis le web (`PATCH /messages/:messageId`) ne lui parvenait jamais en
+ * direct. Un point d'appel unique, donc, plutôt que quatre blocs qu'un
+ * cinquième transport aurait la même occasion de ne pas recopier.
  *
  * La garde d'auto-mention vit ICI : l'auteur sait qu'il vient de se nommer, et
  * c'est une garde qu'un nouvel écrivain oublierait.

@@ -312,8 +312,10 @@ export function registerMessagesAdvancedRoutes(
 
       // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL. La diffusion
       // qui suit ne fan qu'à `conversation:<id>` : quelqu'un que cette édition
-      // vient de nommer n'y est pas forcément. Ce transport est PRIMAIRE pour
-      // iOS (`PUT /messages/:id`) et n'émettait rien du tout.
+      // vient de nommer n'y est pas forcément. Cette route est la forme
+      // CONVERSATION-scopée de l'édition ; le client iOS, lui, emploie
+      // `PUT /messages/:messageId` (`routes/messages.ts`) — que les cycles
+      // précédents ont désigné ici par erreur, et qui a reçu le même câblage.
       emitMentionCreated({
         io: socketIOHandler?.getManager()?.getIO(),
         newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
@@ -671,14 +673,28 @@ export function registerMessagesAdvancedRoutes(
         }
       }
 
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture, comme sur les deux autres transports d'édition. Ce PATCH est
+      // celui du client WEB (`messages.service.ts`) : il écrivait les crochets
+      // en dur, pour toujours, là où le même texte ENVOYÉ produit un lien.
+      const processedContent = await processExplicitLinks({
+        trackingLinkService,
+        content: content.trim(),
+        conversationId: message.conversationId,
+        messageId,
+        createdBy: userId,
+        onError: (err) => logger.error('Error processing tracking links in patch edit', err),
+      });
+
       // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
       // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
+      const editedAt = new Date();
       const updatedMessage = await prisma.message.update({
         where: { id: messageId },
         data: {
-          content: content.trim(),
+          content: processedContent,
           isEdited: true,
-          editedAt: new Date(),
+          editedAt,
           translations: null
         },
         include: {
@@ -695,13 +711,47 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
+      // Ce que cette édition doit aux gens qu'elle NOMME. Même unité que le
+      // sibling PUT et que le chemin socket : le lot est RECOMPOSÉ, et seuls
+      // les ENTRANTS sont notifiés. Ce transport ne touchait aucune mention —
+      // éditer « salut @alice » en « salut @bob » depuis le web laissait Alice
+      // mentionnée et ne nommait jamais Bob.
+      const editedMentions = await reconcileEditedMentions({
+        prisma,
+        mentionService: fastify.mentionService,
+        notificationService: fastify.notificationService,
+        message: { id: messageId, conversationId: message.conversationId, senderId: message.senderId },
+        content: processedContent,
+        editorUserId: userId,
+        onError: (err) => logger.error('Patch edit - Error processing mentions', err)
+      });
+      // Même garde que le sibling PUT : quand la réconciliation n'a RIEN pu
+      // établir, la valeur persistée que porte `updatedMessage` est la bonne,
+      // et un `[]` recopié effacerait un surlignage vivant.
+      if (editedMentions.reconciled) {
+        (updatedMessage as { validatedMentions?: string[] }).validatedMentions = [...editedMentions.validatedUsernames];
+      }
+
+      // `mention:created` aux seuls ENTRANTS, dans leur salon PERSONNEL : la
+      // diffusion qui suit ne fan qu'à `conversation:<id>`.
+      emitMentionCreated({
+        io: socketIOHandler?.getManager()?.getIO(),
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId,
+        conversationId: message.conversationId,
+        editorUserId: userId,
+        content: processedContent,
+        timestamp: editedAt,
+        onError: (err) => logger.error('Patch edit - mention:created fanout failed', err),
+      });
+
       // Déclencher la retraduction automatique du message modifié (parité avec le sibling PUT)
       try {
         const translationService = fastify.translationService;
 
         const messageForRetranslation = {
           id: messageId,
-          content: content.trim(),
+          content: processedContent,
           originalLanguage: message.originalLanguage,
           conversationId: message.conversationId,
           senderId: message.senderId
