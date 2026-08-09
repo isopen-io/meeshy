@@ -7,7 +7,7 @@ import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
-import { SoundCaptureService } from '../../services/posts/SoundCaptureService';
+import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 // Middleware d'autorisation admin
@@ -556,23 +556,30 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         }
       });
 
-      // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`,
-      // qui est le seul endroit où les usages de sons sont libérés. Sans cet
-      // appel, un post non-STORY supprimé par un modérateur garde ses usages
-      // POUR TOUJOURS (aucun hard-delete ne cible les non-stories) et gonfle
-      // indéfiniment le `usageCount` qui trie la découverte.
-      await new SoundCaptureService(fastify.prisma).releasePost(postId);
-
       // Deuxième dette du même raccourci : écrire `deletedAt` sans passer par
       // `PostService.deletePost`, c'est aussi n'annoncer le retrait à personne.
       // Rien ne rejoue ces événements et aucun client ne refetch spontanément —
       // sans ceci, un post retiré depuis la console restait affiché dans le fil
       // de tous ses lecteurs, auteur compris.
+      //
+      // Émis AVANT les effets durables : `deletedAt` est déjà committé, donc le
+      // retrait est vrai, et cette diffusion ne s'attend pas (elle rend `void`).
+      // Derrière deux écritures best-effort, elle partait après leurs
+      // aller-retours base — de la latence pure sur le seul effet que quelqu'un
+      // regarde en temps réel.
       broadcastPostRemoval(
         fastify.socialEvents,
         post,
         (err) => fastify.log.warn({ err }, '[DELETE /admin/posts/:postId]: broadcast deletion failed')
       );
+
+      // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`.
+      // Tout ce qu'un retrait doit écrire en base — ligne d'audit, coupure des
+      // liens de partage, libération des usages de sons — vit désormais dans
+      // `applyPostRemovalEffects`, partagé avec le service. Les trois effets
+      // ont été rattrapés ici un par un, à des cycles d'intervalle, parce que
+      // rien ne nommait la liste : il n'y a plus qu'un endroit à tenir.
+      await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason });
 
       fastify.log.info({
         action: 'admin_post_delete',
