@@ -1,3 +1,131 @@
+# Cycle 35 — Les cycles précédents ont unifié ce qu'une édition EXIGE et ce qu'elle PRODUIT. Pas ce qu'elle PÉRIME.
+
+Tête prise dans le « reste ouvert » du cycle 34, à l'endroit qu'il désignait — la divergence
+restante « sur ce que l'édition ÉCRIT » entre les quatre transports. En allant la mesurer, elle
+s'est avérée être la moins grave des trois choses qui se tenaient là.
+
+Les quatre entrées d'édition sont, depuis les cycles 33/34 : le handler socket `message:edit`
+(transport PRIMAIRE), `PUT /conversations/:id/messages/:messageId` (la vue d'édition web, qui porte
+un sélecteur de langue), `PUT /messages/:messageId` (le client iOS) et `PATCH /messages/:messageId`
+(sans appelant de production — voir le reste ouvert).
+
+## Lot A — la traduction du texte d'AVANT survivait à l'édition, sur trois transports sur quatre
+
+`translationCache` est un LRU de 1000 entrées **sans TTL**, servi **avant** la base par
+`getTranslation` (ligne 3022) et par `_processTranslationsAsync` (ligne 510). Une édition invalide
+`Message.translations` en base ; l'entrée mémoire, elle, survivait. Un lecteur recevait donc la
+traduction du texte d'avant pour le texte d'après — jusqu'à l'éviction LRU, c'est-à-dire au bout de
+mille autres messages traduits, donc potentiellement jamais sur une instance calme.
+
+La purge existait — `invalidateCacheForMessage`, ajoutée par un cycle antérieur — et elle était
+câblée à **un seul** des quatre transports :
+
+| transport | `translations: null` en base | purge du cache mémoire |
+|---|---|---|
+| socket `message:edit` (PRIMAIRE) | oui | **non** |
+| `PUT /messages/:messageId` (iOS) | oui | **non** |
+| `PATCH /messages/:messageId` | oui | **non** |
+| `PUT /conversations/:id/messages/:messageId` | oui | oui |
+
+La cause tient dans la docstring de la méthode : « **must be called before** triggering a
+re-translation ». Une obligation adressée aux appelants est une obligation que le quatrième
+appelant oubliera — c'est le même patron que les cycles 33b et 34 ont fermé sur le mute et sur
+l'admission, à ceci près qu'ici la consigne était écrite noir sur blanc et que trois appelants sur
+quatre ne l'ont jamais lue.
+
+La purge appartient à la **retraduction**, pas à ses appelants : « retraduire » signifie exactement
+que l'ancien résultat ne vaut plus. Elle est donc en tête de `_processRetranslationAsync`, **avant
+tout `await` et avant tout court-circuit** — un contenu vidé ou un message introuvable ne relance
+aucune traduction mais périme l'ancienne exactement pareil, et rien ne repasserait l'effacer. La
+purge explicite de la route est retirée dans le même mouvement : la garder ferait repartir la règle
+à deux exemplaires.
+
+Le test qui compte n'est pas « la purge a été appelée » mais celui écrit côté **LECTURE** :
+après une retraduction, `getTranslation` ne rend plus le texte d'avant.
+
+## Lot B — omettre la langue réétiquetait le message en français
+
+`originalLanguage` est **optionnel** dans `EditMessageBodySchema`. La route le déstructurait avec un
+défaut `= 'fr'` et le re-persistait **inconditionnellement**. Une édition qui ne revendiquait aucune
+langue écrivait donc `originalLanguage: 'fr'` sur un message anglais — **et** relançait la
+retraduction en annonçant « fr » comme langue source, ce qui produit du charabia dans toutes les
+langues cibles de la conversation.
+
+Le champ n'est pas décoratif sur cette route : c'est la seule des quatre servie par une vue qui
+porte un sélecteur de langue (`EditMessageView`, `selectedLanguage`). Le défaut n'est donc pas
+« écrire la colonne », c'est **écrire une valeur que personne n'a revendiquée**. Omettre veut dire
+« je n'affirme rien sur la langue », pas « c'est du français ». La colonne n'est plus touchée quand
+le corps est muet ; la retraduction repart de la valeur stockée. Le comportement quand le corps la
+déclare — canonicalisation `fr-FR` → `fr`, codes irréductibles verbatim — est inchangé, et ses deux
+tests préexistants le verrouillent toujours.
+
+## Lot C — la dernière écriture d'édition sans garde de concurrence
+
+`prisma.message.update({ where: { id } })` réussit quel que soit `deletedAt`. Une suppression
+concurrente entre la lecture (qui, elle, filtre `deletedAt: null`) et l'écriture faisait
+**ressusciter** la ligne avec un contenu neuf, et `message:edited` partait vers des clients qui
+l'avaient déjà retirée. Les trois autres transports portaient déjà la garde ; celle-ci était la
+dernière sans. Elle prend la même, et le `P2025` que Prisma lève alors devient un **404** — pas un
+500, qui ferait retenter un client qui n'a rien à retenter — exactement comme sur le sibling
+`PATCH /messages/:messageId`, dont la traduction d'erreur est reprise telle quelle.
+
+## Nettoyage
+
+`logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====')` tournait à chaque édition, au niveau
+INFO, sur le bloc de **retraduction** — pas sur celui des mentions. Retiré.
+
+## Vérification
+
+- **9 tests neufs**, écrits AVANT l'implémentation, **9 rouges observés** :
+  - `MessageTranslationService.branches.test.ts` — 5 cas : la purge déclenchée par
+    `retranslateMessageAsync` lui-même, l'isolement aux autres messages, la purge malgré le
+    court-circuit sur contenu vide, la purge malgré un message introuvable (le `catch` de l'unité
+    avale — la purge doit donc précéder la lecture), et la conséquence exprimée côté LECTURE.
+  - `conversation-messages-advanced.test.ts` — 4 cas : la colonne laissée intacte quand le corps
+    l'omet, la retraduction repartant de la langue stockée, la garde `deletedAt: null` sur
+    l'écriture, le 404 plutôt que le 500 quand elle mord.
+- **Suite gateway complète : 615 suites, 15 884 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture globale lignes **95,66 %**, branches 89,05 %.
+
+## Reste ouvert après ce cycle
+
+- **`invalidateCacheForMessage` n'a plus d'appelant hors de la classe.** Gardé public
+  délibérément : c'est une capacité légitime du service, et sa docstring dit désormais l'inverse de
+  ce qu'elle disait — la retraduction l'appelle elle-même, ce n'est pas une consigne aux appelants.
+  À ne pas re-câbler depuis une route.
+- **`PATCH /messages/:messageId` n'a toujours aucun appelant de production** — `messagesService.updateMessage`
+  (web) n'est invoqué que par ses propres tests, vérifié à nouveau ce cycle. Une entrée d'écriture
+  sans écran est une surface d'attaque qui ne rend rien, et ce cycle vient encore de payer son prix
+  en parité (trois lots à vérifier sur quatre transports au lieu de trois). **Tête sérieuse du
+  prochain cycle** : la retirer, elle et son service client. Reportée ici parce que la retirer
+  DANS le même cycle que trois correctifs de comportement mélangerait une suppression de surface
+  publique à des correctifs qu'on veut pouvoir livrer seuls.
+- **`_processRetranslationAsync` est appelé via `(translationService as any)` par les deux routes
+  REST**, alors que `retranslateMessageAsync` est l'entrée publique prévue pour ça (le socket, lui,
+  l'emploie correctement). Deux vocabulaires pour un même geste, dont un qui perce l'encapsulation.
+  Mécanique à corriger, sans risque, candidat pour le prochain cycle.
+- **`appartenance active de l'auteur`** — la question produit du cycle 34 attend toujours une
+  décision : un auteur qui a quitté une conversation peut encore éditer ses messages par les quatre
+  entrées.
+- **La file d'attente de fan-out** (D1 du cycle 32) — quatrième report, même raison : elle demande
+  de savoir ce que la troncature mesure en production, et cette routine n'a aucun accès aux logs.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b) — à arbitrer
+  avec la file, pas séparément.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`@Display Name` inextractible dans le domaine social** — neuvième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`
+  (cycle 26). Même classe de défaut que le lot B de ce cycle — un défaut de valeur là où l'absence
+  aurait dû ne rien affirmer — et il reste ouvert.
+- **Les deux scripts de réparation de base** (`repair-mention-user-ids.ts`,
+  `repair-tracking-link-created-by.ts`) attendent une exécution avec accès MongoDB — action humaine.
+  S'y ajoute désormais un troisième candidat : les `Message.originalLanguage` déjà réétiquetés en
+  `'fr'` par le lot B avant ce correctif restent faux en base. Non réparable automatiquement — rien
+  ne distingue un « fr » écrit par le défaut d'un « fr » légitime.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29, aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
+
+---
+
 # Cycle 34b — La sourdine échouait FERMÉ, et un éventail tombé emportait ses deux frères
 
 Numéroté **34b** : une session parallèle a livré son cycle 34 pendant celui-ci (« ce qu'une édition
