@@ -488,6 +488,22 @@ const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATI
  * carnet — et elle est nommée pour que le seuil de saturation soit LE MÊME que
  * celui écrit dans le `take` : une constante partagée ne peut pas dériver du
  * test qui la surveille.
+ *
+ * Les requêtes prennent `FANOUT_ROW_CAP + 1`. La ligne excédentaire est un
+ * TÉMOIN, jamais un destinataire : elle est lue, comptée, puis jetée par un
+ * `slice`, de sorte que la borne de DIFFUSION reste à sa valeur pendant que sa
+ * saturation devient dicible. Sans elle, il faudrait déduire la troncature de
+ * « la requête a rendu autant de lignes que la borne » — ce qui déclare tronqué
+ * un seau de très exactement `FANOUT_ROW_CAP` engagés, alors qu'il est complet,
+ * et fait crier au loup à chaque publication d'un auteur à exactement 500 amis.
+ *
+ * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
+ * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
+ * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
+ * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
+ * déduplication a repliée en deçà de la borne. Le seau où la troncature est de
+ * loin la plus probable — un auteur à plus de 500 amis est banal, un post à plus
+ * de 500 commentateurs distincts ne l'est pas — est celui où le compte est exact.
  */
 const FANOUT_ROW_CAP = 500;
 
@@ -1776,16 +1792,24 @@ export class NotificationService {
   ): Promise<StoryNotificationRecipients> {
     // Cap at FANOUT_ROW_CAP rows to bound fan-out cost on viral posts.
     // Future: large posts should use a background queue for fan-out.
+    //
+    // Les IDs qui ne seront JAMAIS notifiés sortent PAR LA REQUÊTE, pas par un
+    // filtre en aval : sous la borne, une ligne écartée après coup a quand même
+    // consommé sa place. Et l'auteur qui répond à chacun de ses commentateurs est
+    // l'engagé le plus prolifique de son propre fil — ses réponses évinçaient donc
+    // des destinataires réels du seau, en silence.
+    const excludedEngagerIds = Array.from(new Set([commenterId, authorId]));
+
     const [previousComments, friendRequests, reactors] = await Promise.all([
       this.prisma.postComment.findMany({
         where: {
           postId,
           deletedAt: null,
-          NOT: { authorId: commenterId },
+          authorId: { notIn: excludedEngagerIds },
         },
         distinct: ['authorId'],
         select: { authorId: true },
-        take: FANOUT_ROW_CAP,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.friendRequest.findMany({
@@ -1794,18 +1818,18 @@ export class NotificationService {
           OR: [{ senderId: authorId }, { receiverId: authorId }],
         },
         select: { senderId: true, receiverId: true },
-        take: FANOUT_ROW_CAP,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { updatedAt: 'desc' },
       }),
       // Include post reactors as thread-engaged participants (same bucket as prior commenters)
       this.prisma.postReaction.findMany({
         where: {
           postId,
-          NOT: { userId: commenterId },
+          userId: { notIn: excludedEngagerIds },
         },
         distinct: ['userId'],
         select: { userId: true },
-        take: FANOUT_ROW_CAP,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -1815,10 +1839,17 @@ export class NotificationService {
     // n'apprend jamais rien. La saturation est donc nommée dans le retour — pour
     // que l'appelant puisse en tenir compte — et consignée ici, pour qu'elle
     // soit observable ailleurs que dans le silence d'un utilisateur.
+    //
+    // Le verdict se lit sur la LIGNE TÉMOIN (`take` = borne + 1), pas sur
+    // « autant de lignes que la borne » : un seau qui compte exactement
+    // `FANOUT_ROW_CAP` engagés est COMPLET, et le déclarer tronqué ferait crier
+    // au loup à chaque publication d'un auteur à exactement 500 amis. C'est ce
+    // que la note ci-dessus demande — distinguer « complet » de « s'arrête à la
+    // borne » — et `>=` échouait précisément au point où les deux se touchent.
     const truncatedBuckets = [
-      previousComments.length >= FANOUT_ROW_CAP ? 'previousComments' as const : null,
-      friendRequests.length >= FANOUT_ROW_CAP ? 'friendRequests' as const : null,
-      reactors.length >= FANOUT_ROW_CAP ? 'reactors' as const : null,
+      previousComments.length > FANOUT_ROW_CAP ? 'previousComments' as const : null,
+      friendRequests.length > FANOUT_ROW_CAP ? 'friendRequests' as const : null,
+      reactors.length > FANOUT_ROW_CAP ? 'reactors' as const : null,
     ].filter((bucket): bucket is FanoutBucket => bucket !== null);
 
     if (truncatedBuckets.length > 0) {
@@ -1830,33 +1861,41 @@ export class NotificationService {
       });
     }
 
+    // Le `notIn` plus haut est ce qui protège le BUDGET ; les `filter` ci-dessous
+    // restent la POSTCONDITION de la méthode. Deux rôles distincts, pas une garde
+    // en double : la requête décide qui coûte une ligne, la méthode répond de ce
+    // qu'elle rend — « ni l'auteur ni le commentateur ne sortent d'ici » tient
+    // quelle que soit la clause `where` du jour.
+    const isNotifiableEngager = (id: string): boolean =>
+      id !== authorId && id !== commenterId;
+
     const rawPreviousCommenterIds = previousComments
+      .slice(0, FANOUT_ROW_CAP)
       .map((c: { authorId: string }) => c.authorId)
-      .filter((id: string) => id !== authorId);
+      .filter(isNotifiableEngager);
 
     // Merge reactor user IDs into the "thread engagement" bucket.
     // Reactors who also commented are deduplicated via Set — they still appear only once.
     const reactorIds = reactors
+      .slice(0, FANOUT_ROW_CAP)
       .map((r: { userId: string }) => r.userId)
-      .filter((id: string) => id !== authorId);
+      .filter(isNotifiableEngager);
 
-    const rawEngagedIds = Array.from(new Set([...rawPreviousCommenterIds, ...reactorIds]));
-
-    const previousCommenterSet = new Set(rawEngagedIds);
-
-    const allFriendIds = friendRequests.flatMap(
-      (fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId]
-    ).filter((id: string) => id !== authorId);
-
-    const friendIds = Array.from(new Set(allFriendIds)).filter(
-      (id: string) =>
-        id !== commenterId &&
-        id !== authorId &&
-        !previousCommenterSet.has(id)
+    const previousCommenterIds = Array.from(
+      new Set([...rawPreviousCommenterIds, ...reactorIds])
     );
 
-    const previousCommenterIds = rawEngagedIds.filter(
-      (id: string) => id !== commenterId
+    const previousCommenterSet = new Set(previousCommenterIds);
+
+    // L'auteur ancre CHAQUE ligne d'amitié — l'écarter par la requête est
+    // impossible ici : sa présence est structurelle, pas budgétaire.
+    const allFriendIds = friendRequests
+      .slice(0, FANOUT_ROW_CAP)
+      .flatMap((fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId])
+      .filter(isNotifiableEngager);
+
+    const friendIds = Array.from(new Set(allFriendIds)).filter(
+      (id: string) => !previousCommenterSet.has(id)
     );
 
     return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
@@ -1925,6 +1964,9 @@ export class NotificationService {
 
     if (!actor) return;
 
+    // La saturation des seaux est consignée par `getStoryNotificationRecipients`
+    // lui-même — là où elle est constatée, donc pour TOUS ses appelants et pas
+    // seulement pour celui-ci.
     const { authorId, friendIds, previousCommenterIds } =
       await this.getStoryNotificationRecipients(
         params.postId,
@@ -2387,13 +2429,13 @@ export class NotificationService {
 
     if (!author) return;
 
-    const friendRequests = await this.prisma.friendRequest.findMany({
+    const friendRequestRows = await this.prisma.friendRequest.findMany({
       where: {
         status: 'accepted',
         OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
       },
       select: { senderId: true, receiverId: true },
-      take: FANOUT_ROW_CAP,
+      take: FANOUT_ROW_CAP + 1,
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -2401,13 +2443,19 @@ export class NotificationService {
     // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
     // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
     // structurel, pas ponctuel, d'où la trace.
-    if (friendRequests.length >= FANOUT_ROW_CAP) {
+    //
+    // Requête sans `distinct` : la ligne témoin y est un compte EXACT — elle
+    // existe si et seulement si l'auteur a PLUS de `FANOUT_ROW_CAP` amitiés
+    // acceptées. Elle est comptée, puis jetée par le `slice` : la borne de
+    // diffusion reste à sa valeur, seule sa saturation devient dicible.
+    if (friendRequestRows.length > FANOUT_ROW_CAP) {
       notificationLogger.warn('Fan-out de publication tronqué à la borne', {
         postId: params.postId,
         authorId: params.authorId,
         cap: FANOUT_ROW_CAP,
       });
     }
+    const friendRequests = friendRequestRows.slice(0, FANOUT_ROW_CAP);
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';

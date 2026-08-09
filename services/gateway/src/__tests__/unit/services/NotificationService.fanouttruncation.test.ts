@@ -17,6 +17,13 @@
  * l'appelant puisse en tenir compte) et consignée dans le log (pour qu'elle soit
  * observable en production).
  *
+ * Le verdict se lit sur une LIGNE TÉMOIN : chaque requête prend `borne + 1`, et
+ * la ligne excédentaire est comptée puis jetée — jamais notifiée. D'où les
+ * fixtures à `FANOUT_ROW_CAP + 1` : « la requête a rendu autant de lignes que la
+ * borne » ne suffit pas à conclure, puisqu'un seau de très exactement
+ * `FANOUT_ROW_CAP` engagés est COMPLET. Le cas est verrouillé plus bas — sans
+ * lui, un auteur à exactement 500 amis crierait au loup à chaque publication.
+ *
  * @jest-environment node
  */
 
@@ -135,9 +142,24 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
       expect(warnedTruncations()).toHaveLength(0);
     });
 
-    it('nomme le seau des commentateurs quand il sature la borne', async () => {
+    // Le point exact où « complet » et « s'arrête à la borne » se touchent, et
+    // où déduire la troncature du seul « autant de lignes que la borne » se
+    // trompe : ces 500 engagés SONT toute l'audience du fil.
+    it('ne signale rien quand un seau compte très exactement la borne', async () => {
       prisma.postComment.findMany.mockResolvedValue(
         idsOfLength(FANOUT_ROW_CAP, 'c-').map((authorId) => ({ authorId }))
+      );
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncatedBuckets).toEqual([]);
+      expect(warnedTruncations()).toHaveLength(0);
+      expect(result.previousCommenterIds).toHaveLength(FANOUT_ROW_CAP);
+    });
+
+    it('nomme le seau des commentateurs quand il sature la borne', async () => {
+      prisma.postComment.findMany.mockResolvedValue(
+        idsOfLength(FANOUT_ROW_CAP + 1, 'c-').map((authorId) => ({ authorId }))
       );
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
@@ -147,10 +169,10 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
 
     it('nomme le seau des amis, et celui des réacteurs, quand ils saturent', async () => {
       prisma.friendRequest.findMany.mockResolvedValue(
-        idsOfLength(FANOUT_ROW_CAP, 'f-').map((id) => ({ senderId: AUTHOR_ID, receiverId: id }))
+        idsOfLength(FANOUT_ROW_CAP + 1, 'f-').map((id) => ({ senderId: AUTHOR_ID, receiverId: id }))
       );
       prisma.postReaction.findMany.mockResolvedValue(
-        idsOfLength(FANOUT_ROW_CAP, 'r-').map((userId) => ({ userId }))
+        idsOfLength(FANOUT_ROW_CAP + 1, 'r-').map((userId) => ({ userId }))
       );
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
@@ -162,7 +184,7 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
 
     it('consigne la troncature avec le post et le seau concernés', async () => {
       prisma.postComment.findMany.mockResolvedValue(
-        idsOfLength(FANOUT_ROW_CAP, 'c-').map((authorId) => ({ authorId }))
+        idsOfLength(FANOUT_ROW_CAP + 1, 'c-').map((authorId) => ({ authorId }))
       );
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
@@ -177,7 +199,7 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
   describe('createFriendContentNotificationsBatch', () => {
     it('consigne la troncature du graphe ami — ce sont toujours les mêmes qui n’apprennent rien', async () => {
       prisma.friendRequest.findMany.mockResolvedValue(
-        idsOfLength(FANOUT_ROW_CAP, 'f-').map((id) => ({ senderId: AUTHOR_ID, receiverId: id }))
+        idsOfLength(FANOUT_ROW_CAP + 1, 'f-').map((id) => ({ senderId: AUTHOR_ID, receiverId: id }))
       );
       prisma.notification.create.mockResolvedValue({
         id: 'n-1',
