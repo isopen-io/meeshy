@@ -21,6 +21,14 @@
     <string name="registration_skip_step">Pular esta etapa</string>
     <string name="registration_step_placeholder_title">Em breve</string>
     <string name="registration_step_placeholder_body">Esta etapa ainda não está pronta — toque em Voltar para continuar.</string>
+    <string name="registration_phone_header">Proteja sua conta</string>
+    <string name="registration_phone_subtitle">Opcional — ajuda a recuperar sua conta.</string>
+    <string name="registration_phone_number_label">Número de telefone</string>
+    <string name="registration_phone_available">Número disponível</string>
+    <string name="registration_phone_taken">Este número já está em uso</string>
+    <string name="registration_phone_choose_country">Escolher país</string>
+    <string name="registration_phone_country_picker_title">Escolher um país</string>
+    <string name="registration_phone_country_search_hint">Buscar país ou código</string>
 
     <string name="guest_join_title">Entrar na conversa</string>
     <string name="guest_join_subtitle">Crie uma identidade temporária para entrar</string>

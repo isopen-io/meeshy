@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.RegistrationLeadingAction
@@ -121,6 +122,12 @@ class RegistrationViewModelTest {
         assertThat(s.isSubmitting).isFalse()
     }
 
+    @Test
+    fun initialState_defaultsToThePriorityCountry() {
+        val (vm, _, _) = scenario()
+        assertThat(vm.state.value.fields.countryIso).isEqualTo(CountryCatalog.priority.first())
+    }
+
     // ---- field edits + availability -----------------------------------------
 
     @Test
@@ -167,6 +174,24 @@ class RegistrationViewModelTest {
         vm.onPhoneChange("0123456789")
         vm.onPhoneAvailability(true)
         vm.onPhoneChange("0123456780")
+        assertThat(vm.state.value.fields.phoneAvailable).isNull()
+    }
+
+    @Test
+    fun onCountryChange_updatesCountryIso() {
+        val (vm, _, _) = scenario()
+        vm.onCountryChange("US")
+        assertThat(vm.state.value.fields.countryIso).isEqualTo("US")
+    }
+
+    @Test
+    fun onCountryChange_afterPhoneProbed_invalidatesStaleAvailability() {
+        val (vm, _, _) = scenario()
+        vm.onPhoneChange("0123456789")
+        vm.onPhoneAvailability(true)
+
+        vm.onCountryChange("US")
+
         assertThat(vm.state.value.fields.phoneAvailable).isNull()
     }
 
@@ -367,6 +392,33 @@ class RegistrationViewModelTest {
         assertThat(sent.lastName).isNull()
     }
 
+    @Test
+    fun register_sendsDialCodePrefixedPhoneAndCountry() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid() // phoneNumber = "0123456789", default country "FR"
+        // Advance via next() (gate-respecting), not skip() — skip() force-clears the PHONE step.
+        repeat(RegistrationStep.total) { vm.next() }
+        vm.register()
+        advanceUntilIdle()
+
+        val sent = api.captured.single()
+        assertThat(sent.phoneNumber).isEqualTo("+330123456789") // "+33" dial code + fillAllValid's digits verbatim
+        assertThat(sent.phoneCountryCode).isEqualTo("FR")
+    }
+
+    @Test
+    fun register_whenPhoneStepWasSkipped_sendsNullPhoneFields() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid()
+        repeat(RegistrationStep.total) { vm.skip() } // force-advance clears the phone at the PHONE step
+        vm.register()
+        advanceUntilIdle()
+
+        val sent = api.captured.single()
+        assertThat(sent.phoneNumber).isNull()
+        assertThat(sent.phoneCountryCode).isNull()
+    }
+
     // ---- debounced availability probe ---------------------------------------
 
     @Test
@@ -435,13 +487,23 @@ class RegistrationViewModelTest {
     }
 
     @Test
-    fun validPhone_afterDebounce_probesWithDigitsOnly() = runTest(dispatcher) {
+    fun validPhone_afterDebounce_probesWithDefaultCountryDialCodePrefixed() = runTest(dispatcher) {
         val (vm, api, _) = scenario()
-        vm.onPhoneChange("+33 6 12 34 56 78")
+        vm.onPhoneChange("6 12 34 56 78") // national digits only — the picker supplies the dial code
         advanceUntilIdle()
 
-        assertThat(api.availabilityCalls).containsExactly(Triple(null, null, "33612345678"))
+        assertThat(api.availabilityCalls).containsExactly(Triple(null, null, "+33612345678"))
         assertThat(vm.state.value.fields.phoneAvailable).isTrue()
+    }
+
+    @Test
+    fun validPhone_afterDebounce_probesWithTheSelectedCountryDialCode() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onCountryChange("US")
+        vm.onPhoneChange("650 555 1234")
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).containsExactly(Triple(null, null, "+16505551234"))
     }
 
     // ---- recap summary wiring ------------------------------------------------
@@ -472,6 +534,15 @@ class RegistrationViewModelTest {
         vm.skip() // PHONE -> EMAIL, clears the number + marks skipped
 
         assertThat(vm.state.value.summary.map { it.field }).doesNotContain(SummaryField.PHONE)
+    }
+
+    @Test
+    fun summary_phoneValue_isPrefixedWithTheSelectedCountryDialCode() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid() // default country "FR", phoneNumber = "0123456789"
+
+        assertThat(vm.state.value.summary.first { it.field == SummaryField.PHONE }.value)
+            .isEqualTo("+33 0123456789")
     }
 
     // ---- regional (secondary) language wiring --------------------------------

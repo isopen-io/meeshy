@@ -24,9 +24,14 @@ class RegistrationStepContentTest {
     }
 
     @Test
-    fun isImplemented_everyStepOtherThanPseudo_isFalse() {
+    fun isImplemented_phone_isTrue() {
+        assertThat(RegistrationStepContent.isImplemented(RegistrationStep.PHONE)).isTrue()
+    }
+
+    @Test
+    fun isImplemented_everyStepOtherThanPseudoAndPhone_isFalse() {
         RegistrationStep.ordered
-            .filter { it != RegistrationStep.PSEUDO }
+            .filter { it != RegistrationStep.PSEUDO && it != RegistrationStep.PHONE }
             .forEach { step ->
                 assertThat(RegistrationStepContent.isImplemented(step)).isFalse()
             }
