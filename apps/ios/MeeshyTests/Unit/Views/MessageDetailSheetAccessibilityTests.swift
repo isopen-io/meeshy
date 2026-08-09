@@ -24,25 +24,46 @@ final class MessageDetailSheetAccessibilityTests: XCTestCase {
 
     // MARK: - languageRowAccessibilityLabel (pure, unit-tested directly)
 
+    /// Les libellés attendus sont RÉSOLUS par le catalogue, jamais écrits en
+    /// dur.
+    ///
+    /// Ces trois tests comparaient à du français littéral. Ils ne passaient que
+    /// tant que les clés manquaient au catalogue et que le `defaultValue`
+    /// français fuyait dans toutes les langues — le défaut même que le cliquet
+    /// existe pour empêcher. Dès que `message-detail.a11y.language.shown` est
+    /// entrée au catalogue (2026-08-09), le simulateur anglais a rendu
+    /// « translation shown » et le test a viré au rouge sans qu'aucun
+    /// comportement n'ait changé. Ce qui se teste ici, c'est la COMPOSITION
+    /// « nom de langue, état », pas le contenu d'une traduction.
     func test_languageRowAccessibilityLabel_translating_announcesInProgress() {
         let label = MessageDetailSheet.languageRowAccessibilityLabel(
             languageName: "Español", isSelected: false, isTranslating: true, hasTranslation: false
         )
-        XCTAssertEqual(label, "Español, traduction en cours")
+        let expected = String(
+            format: String(localized: "message-detail.a11y.language.translating",
+                           defaultValue: "%@, traduction en cours", bundle: .main),
+            "Español"
+        )
+        XCTAssertEqual(label, expected)
+        XCTAssertTrue(label.contains("Español"))
     }
 
     func test_languageRowAccessibilityLabel_hasTranslationAndSelected_announcesShown() {
         let label = MessageDetailSheet.languageRowAccessibilityLabel(
             languageName: "English", isSelected: true, isTranslating: false, hasTranslation: true
         )
-        XCTAssertEqual(label, "English, traduction affichée")
+        let state = String(localized: "message-detail.a11y.language.shown",
+                           defaultValue: "traduction affichée", bundle: .main)
+        XCTAssertEqual(label, "English, \(state)")
     }
 
     func test_languageRowAccessibilityLabel_hasTranslationNotSelected_announcesAvailable() {
         let label = MessageDetailSheet.languageRowAccessibilityLabel(
             languageName: "Deutsch", isSelected: false, isTranslating: false, hasTranslation: true
         )
-        XCTAssertEqual(label, "Deutsch, traduction disponible")
+        let state = String(localized: "message-detail.a11y.language.available",
+                           defaultValue: "traduction disponible", bundle: .main)
+        XCTAssertEqual(label, "Deutsch, \(state)")
     }
 
     func test_languageRowAccessibilityLabel_noTranslation_announcesTranslateAction() {
