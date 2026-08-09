@@ -487,10 +487,10 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       );
     });
 
-    // Un auteur à plus de 500 amis est banal, et `take: 500` rendait le même
-    // tableau qu'il en ait 500 ou 50 000. La ligne témoin est le seul moyen de
-    // distinguer « tout le monde a reçu » de « on s'est arrêté là ».
-    it('test_createFriendContentNotificationsBatch_underCap_staysSilent', async () => {
+    // Le cycle 32 a rendu la troncature observable ; la ligne témoin la rend
+    // EXACTE. Un auteur à exactement 500 amis a un seau COMPLET — le déclarer
+    // tronqué le ferait crier au loup à chacune de ses publications.
+    it('test_createFriendContentNotificationsBatch_exactlyCapFriends_staysSilent', async () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue(
         Array.from({ length: 500 }, (_, i) => makeFriendRequest(AUTHOR_ID, friendAt(i)))
       );
@@ -499,12 +499,13 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         postId: POST_ID,
         authorId: AUTHOR_ID,
         contentType: 'POST',
+        visibility: 'PUBLIC',
       });
 
       expect(warnMock()).not.toHaveBeenCalled();
     });
 
-    it('test_createFriendContentNotificationsBatch_witnessRowPresent_warnsAndDropsIt', async () => {
+    it('test_createFriendContentNotificationsBatch_witnessRow_countedThenDropped', async () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue(
         Array.from({ length: 501 }, (_, i) => makeFriendRequest(AUTHOR_ID, friendAt(i)))
       );
@@ -513,13 +514,14 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         postId: POST_ID,
         authorId: AUTHOR_ID,
         contentType: 'POST',
+        visibility: 'PUBLIC',
       });
 
       expect(warnMock()).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ postId: POST_ID, authorId: AUTHOR_ID, cap: 500 })
       );
-      // Le témoin compte, il ne diffuse pas : sans le `slice`, le plafond
+      // Le témoin compte, il ne diffuse pas : sans le `slice`, la borne
       // passerait silencieusement de 500 à 501.
       const notified = (prisma.notification.create as jest.Mock).mock.calls.map(
         (call) => call[0].data.userId

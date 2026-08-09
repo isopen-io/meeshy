@@ -46,27 +46,6 @@ function formatDuration(ms: number): string {
 }
 
 /**
- * Plafond de destinataires par seau de fan-out social. Borne le coût sur un post
- * viral ou un auteur très suivi ; à terme ces diffusions devraient passer par une
- * file de fond plutôt que par un plafond.
- *
- * Les requêtes prennent `FANOUT_ROW_CAP + 1` : la ligne excédentaire est un
- * TÉMOIN, jamais un destinataire. Sans elle, `take: 500` rend exactement le même
- * tableau que la base en ait 500 ou 50 000 — et une diffusion tronquée ressemble
- * trait pour trait à une diffusion complète, précisément sur le cas pour lequel
- * le plafond existe. Le témoin est lu, compté, puis jeté par le `slice`.
- *
- * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
- * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
- * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
- * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
- * déduplication a repliée en deçà du plafond. Le seau où la troncature est de
- * loin la plus probable — un auteur à plus de 500 amis est banal — est celui où
- * le compte est exact.
- */
-const FANOUT_ROW_CAP = 500;
-
-/**
  * Lit une clé de metadata comme chaîne non vide pour le payload push (les
  * `data` APNs/FCM ne transportent que des chaînes). Retourne `''` quand la clé
  * est absente, nulle ou vide — ce que le client interprète comme « pas de
@@ -502,6 +481,49 @@ const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
 ]);
 
 const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
+
+/**
+ * Borne appliquée à chaque lecture de graphe qui alimente un fan-out de
+ * notification. Elle tient le coût sur un post viral ou un auteur à très grand
+ * carnet — et elle est nommée pour que le seuil de saturation soit LE MÊME que
+ * celui écrit dans le `take` : une constante partagée ne peut pas dériver du
+ * test qui la surveille.
+ *
+ * Les requêtes prennent `FANOUT_ROW_CAP + 1`. La ligne excédentaire est un
+ * TÉMOIN, jamais un destinataire : elle est lue, comptée, puis jetée par un
+ * `slice`, de sorte que la borne de DIFFUSION reste à sa valeur pendant que sa
+ * saturation devient dicible. Sans elle, il faudrait déduire la troncature de
+ * « la requête a rendu autant de lignes que la borne » — ce qui déclare tronqué
+ * un seau de très exactement `FANOUT_ROW_CAP` engagés, alors qu'il est complet,
+ * et fait crier au loup à chaque publication d'un auteur à exactement 500 amis.
+ *
+ * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
+ * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
+ * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
+ * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
+ * déduplication a repliée en deçà de la borne. Le seau où la troncature est de
+ * loin la plus probable — un auteur à plus de 500 amis est banal, un post à plus
+ * de 500 commentateurs distincts ne l'est pas — est celui où le compte est exact.
+ */
+const FANOUT_ROW_CAP = 500;
+
+/** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
+type FanoutBucket = 'previousComments' | 'friendRequests' | 'reactors';
+
+/**
+ * Les trois seaux d'un fan-out de commentaire, et ce qu'on n'a PAS pu lire.
+ *
+ * `truncatedBuckets` distingue « ce seau est complet » de « ce seau s'arrête à
+ * la borne » — deux listes identiques en apparence, dont une seule dit la
+ * vérité sur l'audience réelle. Sans ce champ, un fan-out silencieusement
+ * tronqué se lit exactement comme un fan-out exhaustif.
+ */
+type StoryNotificationRecipients = {
+  authorId: string;
+  friendIds: string[];
+  previousCommenterIds: string[];
+  truncatedBuckets: FanoutBucket[];
+};
 
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
@@ -1767,15 +1789,12 @@ export class NotificationService {
     postId: string,
     authorId: string,
     commenterId: string
-  ): Promise<{
-    authorId: string;
-    friendIds: string[];
-    previousCommenterIds: string[];
-    /** Quels seaux ont buté sur `FANOUT_ROW_CAP` — voir la note du constant. */
-    truncated: { comments: boolean; reactions: boolean; friends: boolean };
-  }> {
+  ): Promise<StoryNotificationRecipients> {
+    // Cap at FANOUT_ROW_CAP rows to bound fan-out cost on viral posts.
+    // Future: large posts should use a background queue for fan-out.
+    //
     // Les IDs qui ne seront JAMAIS notifiés sortent PAR LA REQUÊTE, pas par un
-    // filtre en aval : sous le plafond, une ligne écartée après coup a quand même
+    // filtre en aval : sous la borne, une ligne écartée après coup a quand même
     // consommé sa place. Et l'auteur qui répond à chacun de ses commentateurs est
     // l'engagé le plus prolifique de son propre fil — ses réponses évinçaient donc
     // des destinataires réels du seau, en silence.
@@ -1815,13 +1834,34 @@ export class NotificationService {
       }),
     ]);
 
-    const truncated = {
-      comments: previousComments.length > FANOUT_ROW_CAP,
-      reactions: reactors.length > FANOUT_ROW_CAP,
-      friends: friendRequests.length > FANOUT_ROW_CAP,
-    };
+    // Une liste rendue à la borne exacte est INDISCERNABLE d'une liste
+    // complète : le seau paraît entier, et le destinataire au-delà de la borne
+    // n'apprend jamais rien. La saturation est donc nommée dans le retour — pour
+    // que l'appelant puisse en tenir compte — et consignée ici, pour qu'elle
+    // soit observable ailleurs que dans le silence d'un utilisateur.
+    //
+    // Le verdict se lit sur la LIGNE TÉMOIN (`take` = borne + 1), pas sur
+    // « autant de lignes que la borne » : un seau qui compte exactement
+    // `FANOUT_ROW_CAP` engagés est COMPLET, et le déclarer tronqué ferait crier
+    // au loup à chaque publication d'un auteur à exactement 500 amis. C'est ce
+    // que la note ci-dessus demande — distinguer « complet » de « s'arrête à la
+    // borne » — et `>=` échouait précisément au point où les deux se touchent.
+    const truncatedBuckets = [
+      previousComments.length > FANOUT_ROW_CAP ? 'previousComments' as const : null,
+      friendRequests.length > FANOUT_ROW_CAP ? 'friendRequests' as const : null,
+      reactors.length > FANOUT_ROW_CAP ? 'reactors' as const : null,
+    ].filter((bucket): bucket is FanoutBucket => bucket !== null);
 
-    // Le `notIn` ci-dessus est ce qui protège le BUDGET ; les `filter` ci-dessous
+    if (truncatedBuckets.length > 0) {
+      notificationLogger.warn('Fan-out de commentaire tronqué à la borne', {
+        postId,
+        authorId,
+        buckets: truncatedBuckets,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
+
+    // Le `notIn` plus haut est ce qui protège le BUDGET ; les `filter` ci-dessous
     // restent la POSTCONDITION de la méthode. Deux rôles distincts, pas une garde
     // en double : la requête décide qui coûte une ligne, la méthode répond de ce
     // qu'elle rend — « ni l'auteur ni le commentateur ne sortent d'ici » tient
@@ -1858,7 +1898,7 @@ export class NotificationService {
       (id: string) => !previousCommenterSet.has(id)
     );
 
-    return { authorId, friendIds, previousCommenterIds, truncated };
+    return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
   }
 
   /**
@@ -1924,30 +1964,15 @@ export class NotificationService {
 
     if (!actor) return;
 
-    const { authorId, friendIds, previousCommenterIds, truncated } =
+    // La saturation des seaux est consignée par `getStoryNotificationRecipients`
+    // lui-même — là où elle est constatée, donc pour TOUS ses appelants et pas
+    // seulement pour celui-ci.
+    const { authorId, friendIds, previousCommenterIds } =
       await this.getStoryNotificationRecipients(
         params.postId,
         params.storyAuthorId,
         params.commenterId
       );
-
-    // Un plafond que personne ne peut observer n'est pas un plafond, c'est une
-    // perte : la diffusion s'arrête, et rien — ni le destinataire, ni l'auteur,
-    // ni l'exploitation — ne distingue « tout le monde a reçu » de « on s'est
-    // arrêté là ». Le seul canal disponible ici est le log ; il nomme le post,
-    // le commentaire, les seaux touchés et le plafond en vigueur, de quoi
-    // décider si ce post mérite une diffusion en file de fond.
-    const truncatedSources = Object.entries(truncated)
-      .filter(([, hit]) => hit)
-      .map(([source]) => source);
-    if (truncatedSources.length > 0) {
-      notificationLogger.warn('Story comment fan-out truncated by row cap', {
-        postId: params.postId,
-        commentId: params.commentId,
-        sources: truncatedSources,
-        cap: FANOUT_ROW_CAP,
-      });
-    }
 
     // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
     // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
@@ -2374,8 +2399,15 @@ export class NotificationService {
      * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
      */
     excludeUserIds?: string[];
-    /** Post visibility — used to filter recipients (same rules as Socket.IO broadcast). */
-    visibility?: string;
+    /**
+     * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
+     *
+     * **Requis**, comme sur les trois lots voisins depuis les cycles 28 et 31.
+     * L'omission n'était pas anodine ici : le défaut `PUBLIC` fait retomber un
+     * post `PRIVATE` — ou un `EXCEPT` et sa liste noire — sur l'énumération
+     * complète des amis, avec extrait et vignette. La faute appartient au build.
+     */
+    visibility: string | null | undefined;
     /** User IDs list for ONLY/EXCEPT visibility modes. */
     visibilityUserIds?: string[];
   }): Promise<void> {
@@ -2407,14 +2439,19 @@ export class NotificationService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    // Requête sans `distinct` : la ligne témoin est ici un compte EXACT — elle
-    // existe si et seulement si l'auteur a plus de `FANOUT_ROW_CAP` amitiés
-    // acceptées. Elle est comptée puis jetée ; le plafond reste à sa valeur.
+    // Le tri est `updatedAt desc` et la borne est fixe : chez un auteur qui la
+    // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
+    // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
+    // structurel, pas ponctuel, d'où la trace.
+    //
+    // Requête sans `distinct` : la ligne témoin y est un compte EXACT — elle
+    // existe si et seulement si l'auteur a PLUS de `FANOUT_ROW_CAP` amitiés
+    // acceptées. Elle est comptée, puis jetée par le `slice` : la borne de
+    // diffusion reste à sa valeur, seule sa saturation devient dicible.
     if (friendRequestRows.length > FANOUT_ROW_CAP) {
-      notificationLogger.warn('Friend content fan-out truncated by row cap', {
+      notificationLogger.warn('Fan-out de publication tronqué à la borne', {
         postId: params.postId,
         authorId: params.authorId,
-        contentType: params.contentType,
         cap: FANOUT_ROW_CAP,
       });
     }
@@ -2427,7 +2464,9 @@ export class NotificationService {
     const media = await this.resolvePostMedia(params.postId);
     const mediaType = params.mediaType ?? media?.mediaType;
 
-    const visibility = params.visibility ?? 'PUBLIC';
+    // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
+    // défaut ci-dessous (l'énumération des amis), jamais sur une ouverture.
+    const visibility = params.visibility;
     const visibilityUserIds = params.visibilityUserIds ?? [];
     const visibilityUserIdSet = new Set(visibilityUserIds);
 

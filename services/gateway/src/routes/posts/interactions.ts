@@ -118,15 +118,17 @@ export function registerInteractionRoutes(
             emoji,
           }, post.authorId);
         } else {
+          // L'audience du broadcast vient de `postAcl`, la tranche déjà chargée
+          // plus haut pour la garde d'interaction — pas d'un cast sur la forme
+          // rendue par `likePost`, qui laissait un `?? 'PUBLIC'` décider de la
+          // diffusion si le champ manquait à l'appel.
           socialEvents.broadcastPostLiked({
             postId,
             userId: authContext.registeredUser.id,
             emoji,
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId,
-            (post as { visibility?: string }).visibility ?? 'PUBLIC',
-            (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
+          }, post.authorId, postAcl.visibility, postAcl.visibilityUserIds,
           ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
         }
       }
@@ -220,15 +222,15 @@ export function registerInteractionRoutes(
             emoji: '❤️',
           }, post.authorId);
         } else {
+          // Même source que le jumeau `POST` : la tranche ACL chargée pour la
+          // garde, jamais un défaut reconstruit au point d'appel.
           socialEvents.broadcastPostUnliked({
             postId,
             userId: authContext.registeredUser.id,
             emoji: '❤️',
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId,
-            (post as { visibility?: string }).visibility ?? 'PUBLIC',
-            (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
+          }, post.authorId, postAcl.visibility, postAcl.visibilityUserIds,
           ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
         }
       }

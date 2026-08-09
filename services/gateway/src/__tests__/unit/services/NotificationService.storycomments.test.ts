@@ -1126,7 +1126,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
-      expect(result.truncated).toEqual({ comments: false, reactions: false, friends: false });
+      expect(result.truncatedBuckets).toEqual([]);
     });
 
     it('test_getStoryNotificationRecipients_exactlyCapRows_reportsNoTruncation', async () => {
@@ -1138,7 +1138,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
-      expect(result.truncated.comments).toBe(false);
+      expect(result.truncatedBuckets).not.toContain('previousComments');
       expect(result.previousCommenterIds).toHaveLength(500);
     });
 
@@ -1150,7 +1150,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
-      expect(result.truncated.comments).toBe(true);
+      expect(result.truncatedBuckets).toContain('previousComments');
     });
 
     it('test_getStoryNotificationRecipients_witnessRow_neverNotified', async () => {
@@ -1176,7 +1176,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
-      expect(result.truncated.reactions).toBe(true);
+      expect(result.truncatedBuckets).toContain('reactors');
       expect(result.previousCommenterIds).toHaveLength(500);
       expect(result.previousCommenterIds).not.toContain(otherUser(500));
     });
@@ -1191,93 +1191,9 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
-      expect(result.truncated.friends).toBe(true);
+      expect(result.truncatedBuckets).toContain('friendRequests');
       expect(result.friendIds).toHaveLength(500);
       expect(result.friendIds).not.toContain(otherUser(500));
-    });
-  });
-
-  describe('createStoryCommentNotificationsBatch — la troncature remonte au log', () => {
-    const otherUser = (n: number) => `607f1f77bcf86cd7994${String(n).padStart(5, '0')}`;
-
-    const warnMock = () =>
-      (jest.requireMock('../../../utils/logger-enhanced') as {
-        notificationLogger: { warn: jest.Mock };
-      }).notificationLogger.warn;
-
-    beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue({
-        username: 'someone',
-        displayName: 'Someone',
-        avatar: null,
-      });
-      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
-        Promise.resolve(makeNotif(data.type))
-      );
-      prisma.postReaction.findMany.mockResolvedValue([]);
-    });
-
-    it('test_createStoryCommentNotificationsBatch_noTruncation_staysSilent', async () => {
-      prisma.postComment.findMany.mockResolvedValue([]);
-      prisma.friendRequest.findMany.mockResolvedValue([
-        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
-      ]);
-
-      await service.createStoryCommentNotificationsBatch({
-        postId: POST_ID,
-        commentId: COMMENT_ID,
-        storyAuthorId: AUTHOR_ID,
-        commenterId: COMMENTER_ID,
-        visibility: 'PUBLIC',
-      });
-
-      expect(warnMock()).not.toHaveBeenCalled();
-    });
-
-    it('test_createStoryCommentNotificationsBatch_truncatedFanout_warnsWithPostAndSources', async () => {
-      prisma.postComment.findMany.mockResolvedValue([]);
-      prisma.friendRequest.findMany.mockResolvedValue(
-        Array.from({ length: 501 }, (_, i) => ({ senderId: AUTHOR_ID, receiverId: otherUser(i) }))
-      );
-
-      await service.createStoryCommentNotificationsBatch({
-        postId: POST_ID,
-        commentId: COMMENT_ID,
-        storyAuthorId: AUTHOR_ID,
-        commenterId: COMMENTER_ID,
-        visibility: 'PUBLIC',
-      });
-
-      expect(warnMock()).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          postId: POST_ID,
-          commentId: COMMENT_ID,
-          cap: 500,
-          sources: ['friends'],
-        })
-      );
-    });
-
-    it('test_createStoryCommentNotificationsBatch_severalTruncatedBuckets_allNamed', async () => {
-      prisma.postComment.findMany.mockResolvedValue(
-        Array.from({ length: 501 }, (_, i) => ({ authorId: otherUser(i) }))
-      );
-      prisma.friendRequest.findMany.mockResolvedValue(
-        Array.from({ length: 501 }, (_, i) => ({ senderId: AUTHOR_ID, receiverId: otherUser(i) }))
-      );
-
-      await service.createStoryCommentNotificationsBatch({
-        postId: POST_ID,
-        commentId: COMMENT_ID,
-        storyAuthorId: AUTHOR_ID,
-        commenterId: COMMENTER_ID,
-        visibility: 'PUBLIC',
-      });
-
-      const sources = warnMock().mock.calls[0][1].sources;
-      expect(sources).toEqual(expect.arrayContaining(['comments', 'friends']));
-      expect(sources).not.toContain('reactions');
     });
   });
 

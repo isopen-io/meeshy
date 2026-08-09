@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { CallNotification } from './CallNotification';
 import { CallWaitingBanner } from './CallWaitingBanner';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
+import { CallErrorBoundary } from '@/components/video-calls/CallErrorBoundary';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
@@ -1127,7 +1128,9 @@ export function CallManager() {
 
       {/* Active Call Interface */}
       {isInCall && currentCall && user?.id && (
-        <VideoCallInterface callId={currentCall.id} />
+        <CallErrorBoundary>
+          <VideoCallInterface callId={currentCall.id} />
+        </CallErrorBoundary>
       )}
     </>
   );

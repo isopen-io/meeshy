@@ -1,15 +1,17 @@
-# Cycle 32 — Le plafond de fan-out ne tenait ni son chiffre, ni sa parole
+# Cycle 32b — Addendum d'une session parallèle
 
-Tête laissée par le cycle 31 : « **`getStoryNotificationRecipients` plafonne à 500 lignes par seau**
-sans le dire au destinataire ni au log. Sur un post viral, un fan-out silencieusement tronqué
-ressemble à un fan-out complet. **Tête du prochain cycle.** »
+Deux sessions ont livré le cycle 32 en parallèle, sur la même tête (« la troncature est muette »).
+Le cycle 32 ci-dessous est **le plus large** — il porte en plus les lots B et C sur les défauts
+permissifs — et sa forme sur la troncature est la meilleure sur deux points, gardés tels quels :
+le type nommé (`FanoutBucket` / `StoryNotificationRecipients`), et le log placé **dans**
+`getStoryNotificationRecipients` plutôt que chez un appelant, ce qui le rend vrai pour tous.
+Cette session s'aligne dessus et n'apporte que ce qui manquait. (Leçon d'intégration du cycle 23,
+reprise au 25b : comparer défaut par défaut, jamais « qui est arrivé en premier ».)
 
-Pris tel quel. Le défaut annoncé — le silence — était réel. En le branchant, un second est apparu
-dans les mêmes trois requêtes : le plafond ne comptait pas ce qu'il annonçait compter.
+## Ce que l'addendum ajoute — 1. la borne payait ses exclus sur son propre budget
 
-## Lot A — le plafond payait les exclus sur son propre budget
-
-Deux des trois requêtes écartaient des gens **après** le `take`, pas dedans :
+Défaut que le cycle 32 n'a pas touché, et qui est **antérieur** à la question de la troncature :
+deux des trois requêtes écartaient des gens **après** le `take`, pas dedans.
 
 | requête | écarté par la requête | écarté après coup |
 |---|---|---|
@@ -17,80 +19,157 @@ Deux des trois requêtes écartaient des gens **après** le `take`, pas dedans :
 | `postReaction` | `commenterId` | **`authorId`** |
 | `friendRequest` | — | `authorId` (structurel, voir plus bas) |
 
-Une ligne écartée après coup a quand même consommé sa place sous le plafond. Et l'auteur n'est pas
-un engagé quelconque de son propre fil : **c'est le plus prolifique**, parce que répondre à chacun
-de ses commentateurs est le comportement normal d'un auteur. Sur un post où l'auteur a répondu à
-tout le monde, ses propres réponses évinçaient donc, une pour une, des destinataires réels — en
-silence, et d'autant plus fort que le post marchait bien.
+Une ligne écartée après coup a quand même consommé sa place sous la borne. Et l'auteur n'est pas un
+engagé quelconque de son propre fil : **c'est le plus prolifique**, parce que répondre à chacun de
+ses commentateurs est le comportement normal d'un auteur. Sur un post où l'auteur a répondu à tout
+le monde, ses propres réponses évinçaient donc, une pour une, des destinataires réels — en silence,
+et d'autant plus fort que le post marchait bien. La borne annonçait 500 destinataires et en servait
+moins, sans que rien ne le dise.
 
-**Correctif.** `authorId: { notIn: [commenterId, authorId] }` dans le `where`. Le plafond compte
+**Correctif.** `authorId: { notIn: [commenterId, authorId] }` dans le `where`. La borne compte
 désormais des destinataires, plus des lignes dont une partie était jetée d'avance.
 
-**Les `filter` en aval RESTENT, et ce n'est pas une garde en double.** Ils ont un autre rôle : le
-`notIn` protège le **budget**, les `filter` tiennent la **postcondition** de la méthode — « ni
-l'auteur ni le commentateur ne sortent d'ici », vrai quelle que soit la clause `where` du jour.
-C'est ce qui distingue ce cas du `COMMUNITY` décoratif retiré au cycle 31 : là c'était une branche
-de décision inatteignable, ici c'est ce dont une méthode publique répond. Les deux tests qui
-l'encodaient (le commentateur qui a aussi réagi, l'auteur qui a commenté son propre post) sont
-tombés quand j'avais retiré les `filter` — ils avaient raison, ils sont restés.
+**Les `filter` en aval RESTENT, et ce n'est pas une garde en double.** Le `notIn` protège le
+**budget** ; les `filter` tiennent la **postcondition** de la méthode publique — « ni l'auteur ni le
+commentateur ne sortent d'ici », vrai quelle que soit la clause `where` du jour. C'est ce qui
+distingue ce cas du `COMMUNITY` décoratif retiré au cycle 31 : là c'était une branche de décision
+inatteignable, ici c'est ce dont une méthode répond. Les deux tests qui l'encodaient sont tombés
+quand je les avais retirés — ils avaient raison, ils sont restés.
 
 Sur `friendRequest` l'auteur ne peut PAS sortir par la requête : il ancre **chaque** ligne
 d'amitié. Sa présence y est structurelle, pas budgétaire — rien à corriger.
 
-## Lot B — le plafond était muet, et un plafond muet n'est pas un plafond
+## Ce que l'addendum ajoute — 2. la ligne témoin, parce que `>=` crie au loup à la borne
 
-`take: 500` rend exactement le même tableau que la base en ait 500 ou 50 000. Rien ne distingue
-« tout le monde a reçu » de « on s'est arrêté là » : ni le destinataire, ni l'auteur, ni
-l'exploitation. Sur le cas **pour lequel le plafond existe**, la troncature est invisible.
+Le cycle 32 déduit la troncature de « la requête a rendu **autant** de lignes que la borne »
+(`length >= FANOUT_ROW_CAP`). C'est un signal juste dans l'esprit, faux au point exact où son propre
+commentaire promet de trancher : un seau de **très exactement** 500 engagés est COMPLET, et il est
+déclaré tronqué. Sur le seau des amis, la conséquence n'est pas théorique — un auteur à exactement
+500 amis émet un `warn` de troncature à **chacune** de ses publications, pour toujours.
 
-**Correctif : une ligne témoin.** `take: FANOUT_ROW_CAP + 1`. La 501e ligne n'est jamais notifiée —
-elle est lue, comptée, puis jetée par un `slice`. C'est le seul moyen de faire dire au plafond
-qu'il a mordu. `getStoryNotificationRecipients` rend `truncated: { comments, reactions, friends }`,
-et `createStoryCommentNotificationsBatch` en tire un `notificationLogger.warn` nommant le post, le
-commentaire, les seaux touchés et le plafond en vigueur.
+**Correctif : `take: FANOUT_ROW_CAP + 1`.** La ligne excédentaire est un **témoin**, jamais un
+destinataire — lue, comptée, puis jetée par un `slice`. La borne de diffusion ne bouge pas d'un
+destinataire ; seul le verdict devient exact, et le test passe de `>=` à `>`.
 
 **Portée du témoin, dite honnêtement.** Sur `friendRequest` (pas de `distinct`) il est **exact** :
 une 501e ligne existe si et seulement si la base en avait plus de 500. Sur les deux requêtes
-`distinct`, il reste un signal **suffisant** — il ne se déclenche jamais à tort, mais il peut se
-taire sur une troncature que la déduplication a repliée en deçà du plafond. Ce n'est pas gênant là
-où ça compte : le seau où la troncature est de loin la plus probable est celui des amitiés — un
-auteur à plus de 500 amis est banal, un post à plus de 500 commentateurs distincts ne l'est pas —
-et c'est précisément celui où le compte est exact.
+`distinct`, il reste un signal **suffisant** — jamais déclenché à tort, mais capable de se taire sur
+une troncature que la déduplication a repliée en deçà de la borne. Ce n'est pas gênant là où ça
+compte : le seau où la troncature est de loin la plus probable est celui des amitiés — un auteur à
+plus de 500 amis est banal, un post à plus de 500 commentateurs distincts ne l'est pas — et c'est
+précisément celui où le compte est exact.
 
-## Lot C — le même plafond muet sur `createFriendContentNotificationsBatch`
+## Vérification de l'addendum
 
-Trouvé en cherchant les autres `take: 500`. Même requête d'amitiés, même silence, sur le fan-out
-de **publication** cette fois : un auteur à plus de 500 amis publie, et 500 sont prévenus sans que
-rien ne le dise. Même traitement, et le `warn` y est adossé au compte exact.
+- **15 tests neufs**, dont **13 rouges observés** avant implémentation (le 15e — « sous la borne, on
+  se tait » — était vert d'emblée : il n'y avait alors aucun `warn` du tout, ce qui est exactement le
+  cas à verrouiller contre un futur `warn` trop bavard).
+- **Les 4 tests du cycle 32 qui nourrissaient exactement `FANOUT_ROW_CAP` lignes** passent à
+  `FANOUT_ROW_CAP + 1` : sous la sémantique du témoin, 500 lignes veut dire « complet ». Le cas
+  « exactement 500 → aucune troncature » devient un test à part entière — c'est le point que `>=`
+  manquait.
+- Le témoin est éprouvé sur ses **trois** régimes : 500 pile → pas de troncature ; 501 → troncature
+  signalée ; et dans les deux cas la 501e n'est jamais notifiée.
 
-`FANOUT_ROW_CAP` remplace les quatre littéraux `500` : le chiffre s'écrit une fois, avec la note qui
-explique le `+1`. Plus aucun `take: 500` en production dans le gateway.
+## Reste ouvert après l'addendum
+
+- **La file d'attente de fan-out** reste la tête du prochain cycle, telle que le cycle 32 la pose
+  (D1) — inchangé, et mieux instrumenté : le verdict de troncature ne remonte plus de faux positifs,
+  donc ce que les logs mesureront sera lisible tel quel.
+- Tout le reste ouvert du cycle 32 ci-dessous est inchangé.
+
+---
+
+# Cycle 32 — Une troncature muette, et les défauts permissifs que le cycle précédent n'avait pas atteints
+
+Deux têtes prises ensemble, parce qu'elles se sont révélées être la même question posée à deux
+étages. Celle laissée par le cycle 31 (livré en parallèle par une autre session, mergé en premier,
+et repris tel quel ici — sa forme était la bonne) : « **`getStoryNotificationRecipients` plafonne à
+500 lignes par seau** sans le dire au destinataire ni au log. Sur un post viral, un fan-out
+silencieusement tronqué ressemble à un fan-out complet. **Tête du prochain cycle.** »
+
+Et ce que ce cycle 31 n'avait pas atteint : il a rendu `visibility` requis sur un lot, mais le
+défaut permissif vivait aussi chez l'appelant, dans trois autres lots, et sur huit méthodes de
+diffusion temps réel.
+
+## Lot A — la borne était légitime, son silence ne l'était pas
+
+Quatre lectures bornées à 500 alimentent les fan-out de notification. Une liste rendue à la borne
+exacte est **indiscernable** d'une liste complète : le seau paraît entier, et le 501e destinataire
+n'apprend jamais rien. Le cas le plus net n'est même pas le post viral mais
+`createFriendContentNotificationsBatch` : tri `updatedAt desc`, borne fixe, donc chez un auteur qui
+dépasse durablement la borne ce sont **toujours les mêmes** — les contacts les plus anciens — qui
+n'apprennent aucune de ses publications. Un silence structurel, pas un incident.
+
+Correctif dans la ligne du corollaire du cycle 27 (« une valeur vide *établie* et une valeur vide
+*qu'on n'a pas pu établir* doivent être DISTINGUABLES dans le type de retour ») : la borne devient
+`FANOUT_ROW_CAP`, partagée par les quatre `take` — une constante ne peut pas dériver du test qui la
+surveille — la saturation entre dans le type de retour (`truncatedBuckets: FanoutBucket[]`) et dans
+le log (`postId`, `authorId`, seaux, borne).
+
+## Lot B — le défaut permissif ne vit pas que dans la signature
+
+`SocialEventsHandler` portait `visibility: string = 'PUBLIC'` et `visibilityUserIds: string[] = []`
+sur **huit** méthodes de diffusion et sur l'énumérateur `getVisibilityFilteredRecipients` lui-même.
+Un appelant qui les omettait diffusait un post `PRIVATE` à tous les amis de l'auteur, ou un `EXCEPT`
+sans sa liste noire.
+
+Aucun appelant de production ne les omettait — et c'est exactement l'argument : le retrait ne coûte
+rien, la conservation coûte le premier oubli. Les deux paramètres deviennent requis ; le build a
+lui-même désigné les deux harnais qui s'appuyaient sur le défaut.
+`createFriendContentNotificationsBatch` reçoit le même traitement que ses trois lots voisins.
+
+## Lot C — et il se réinstalle chez l'appelant
+
+Le cycle 31 a rendu `visibility` requis sur `createStoryCommentNotificationsBatch` ; son unique
+appelant passait `post.visibility ?? 'PUBLIC'`. Le défaut avait simplement changé d'étage, hors de
+vue du build. Même motif dans `routes/posts/interactions.ts`, deux fois, avec un cast en prime :
+`(post as { visibility?: string }).visibility ?? 'PUBLIC'` — alors que `postAcl`, la tranche ACL
+autoritative, est chargée **trois lignes plus haut** pour la garde d'interaction. Le cast disait que
+la forme rendue par `likePost` n'était pas sûre de porter le champ ; la réponse n'était pas de
+deviner une valeur, mais de lire celle qu'on avait déjà.
+
+## D1 — pourquoi le lot A ne va pas jusqu'à la file d'attente
+
+Le commentaire du code propose depuis longtemps « a background queue for fan-out ». Ce cycle ne la
+construit pas : une file change le modèle de livraison (ordre, reprise, idempotence) et mérite son
+propre cycle. Rendre la troncature **observable** est ce qui manquait pour pouvoir décider — on ne
+sait aujourd'hui ni à quelle fréquence la borne est atteinte, ni sur quels seaux.
+
+## D2 — ce qui n'a PAS été refait après la session parallèle
+
+Le cycle 31 a été livré deux fois, en parallèle. La branche arrivée première portait la meilleure
+forme sur trois points (le contrat `Set | null` de la lecture DM, qui distingue la panne de
+l'absence ; le refus du seul résidu plutôt que de tout le lot ; les 14 fixtures qui verrouillent
+l'accord des deux formes cas par cas), et son choix assumé de relire les co-membres plutôt que de
+recopier une règle d'admission localement est défendable. Elle est gardée telle quelle : ce cycle ne
+réécrit rien de ce qu'elle a livré, il prend la suite là où elle s'arrête.
 
 ## Vérification
 
-- **15 tests neufs**, dont **13 rouges observés** avant implémentation (le 14e — « sous le plafond,
-  on se tait » — était vert d'emblée : il n'y avait alors aucun `warn` du tout, ce qui est
-  exactement le cas à verrouiller contre un futur `warn` trop bavard).
-- **4 assertions existantes** passent de `take: 500` à `501` — la ligne témoin change la forme des
-  requêtes, pas le nombre de destinataires — et **2 autres** cessent d'épingler l'ancienne forme
-  `NOT: { … : commenterId }`, désormais couverte plus largement par les assertions `notIn`.
-- Le témoin est éprouvé sur ses **trois** régimes : 500 lignes pile → pas de troncature ;
-  501 lignes → troncature signalée ; et dans les deux cas la 501e n'est jamais notifiée.
+- **6 tests neufs** (`__tests__/unit/services/NotificationService.fanouttruncation.test.ts`),
+  **5 rouges observés** : la saturation de chacun des trois seaux, le log qui nomme le post et le
+  seau, la borne du graphe ami côté publication — et les deux cas sous la borne qui ne doivent RIEN
+  consigner (sans eux, un log inconditionnel passerait les autres).
+- **Suite gateway complète : 612 suites, 15 789 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture lignes **95,67 %** (95,66 % avant).
+- Le lot B et le lot C ne changent aucun comportement observable : ils déplacent au build ce qui
+  n'était protégé que par la discipline des appelants. Aucun test neuf ne peut en témoigner — la
+  suite existante sert de filet, et les deux harnais que le compilateur a fait tomber sont la preuve
+  que la garde mord.
 
 ## Reste ouvert après ce cycle
 
-- **La troncature ne remonte qu'au log.** Ni l'auteur du post ni les destinataires manquants ne
-  l'apprennent. La vraie sortie est la file de fond que le code appelle de ses vœux depuis
-  l'origine (`Future: large posts should use a background queue for fan-out`) — chantier de
-  contrat, pas correctif. Le `warn` est ce qui permet de savoir si ce chantier est urgent.
-- **Le témoin est sourd sur les requêtes `distinct`** quand la déduplication replie sous le
-  plafond (voir Lot B). Rendre le compte exact demanderait une requête de comptage séparée ; à
-  arbitrer si les logs montrent que les seaux `comments`/`reactions` mordent en vrai.
-- **`canUserInteractWithPost` reste amis stricts** — volontaire (décision 2026-07-08), inchangé.
-- **`getMentionsForMessage` / `getRecentMentionsForUser` sans écran** — inchangé depuis le cycle 27.
-- **`@Display Name` inextractible dans le domaine social** — sixième report.
-- **`eslint` inopérant sur le gateway** (pas d'`eslint.config.js` en flat config) — inchangé depuis
-  le cycle 29 ; aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
+- **La file d'attente de fan-out** (cf. D1). La troncature est désormais mesurable ; le prochain pas
+  est de regarder ce qu'elle mesure avant de choisir entre file, pagination et borne relevée.
+  **Tête du prochain cycle si rien de plus grave n'apparaît.**
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers` traitent une visibilité inconnue de la
+  même façon (retomber sur les amis), mais par deux chemins qui ne se citent pas.** L'un est un
+  énumérateur, l'autre un test d'admission — les fusionner serait la faute du cycle 28 ; les faire
+  se référencer mutuellement suffirait.
+- **`@Display Name` reste inextractible dans le domaine social** — sixième report.
+- **`eslint` inopérant sur le gateway** (pas de `eslint.config.js` en flat config) — inchangé depuis
+  le cycle 29, aucune passe de lint n'a donc pu tourner sur ce cycle non plus.
 
 ---
 
