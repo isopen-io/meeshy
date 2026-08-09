@@ -8,7 +8,7 @@
 import { PrismaClient, PostVisibility } from '@meeshy/shared/prisma/client';
 import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
-import { NOT_DELETED } from './postIncludes';
+import { NOT_DELETED } from './softDelete';
 
 export type PostVisibilityRecord = {
   authorId: string;

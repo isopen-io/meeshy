@@ -30,7 +30,11 @@ import { Prisma } from '@meeshy/shared/prisma/client';
  * Soft-deleted posts always carry a real `deletedAt` date (`isSet:true`) and so
  * remain excluded.
  */
-export const NOT_DELETED = { isSet: false };
+import { NOT_DELETED } from './softDelete';
+
+// Ré-exporté ici : la plupart des appelants tiennent déjà `postIncludes` pour
+// leurs formes de `select`/`include` et lisent le prédicat au même endroit.
+export { NOT_DELETED };
 
 export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
