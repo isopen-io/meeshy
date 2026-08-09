@@ -40,9 +40,36 @@ struct LocationPickerView: View {
     /// carte refaisait tout ce travail.
     private let secondaryAccent: String
 
+    /// Le couple primaire/accent RENDU LISIBLE sur la carte.
+    ///
+    /// `colorFor(context:)` mélange trois couleurs de palette ; sur certaines
+    /// combinaisons le résultat est terne (vérifié au simulateur : une
+    /// conversation directe rend un bleu-gris à 30 % de saturation). Posé sur
+    /// une carte claire, un glyphe de cette teinte se lit mal — et depuis que
+    /// les styles satellite et hybride existent, le fond peut être n'importe
+    /// quoi. `adaptedColor` plafonne la luminosité à 0,60 en clair et la
+    /// plancher à 0,70 en sombre tout en gardant la teinte : l'identité de la
+    /// conversation reste, le contraste devient garanti.
+    private struct OnMapColors { let primary: String; let accent: String }
+    private let onMapLight: OnMapColors
+    private let onMapDark: OnMapColors
+    private var onMap: OnMapColors { isDark ? onMapDark : onMapLight }
+
     init(accentColor: String, onSelect: @escaping (SharedPlace) -> Void) {
+        let accent = DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
         self.accentColor = accentColor
-        self.secondaryAccent = DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
+        self.secondaryAccent = accent
+        // Les deux variantes sont calculées ICI, une fois : les résoudre dans
+        // `body` ferait quatre conversions UIColor à chaque déplacement de
+        // carte.
+        self.onMapLight = OnMapColors(
+            primary: DynamicColorGenerator.adaptedColor(accentColor, for: .light),
+            accent: DynamicColorGenerator.adaptedColor(accent, for: .light)
+        )
+        self.onMapDark = OnMapColors(
+            primary: DynamicColorGenerator.adaptedColor(accentColor, for: .dark),
+            accent: DynamicColorGenerator.adaptedColor(accent, for: .dark)
+        )
         self.onSelect = onSelect
     }
 
@@ -58,11 +85,15 @@ struct LocationPickerView: View {
                     if viewModel.isLocationRefused {
                         locationDeniedBanner
                     }
+                    // DANS le flux, sous la barre — pas en calque séparé avec un
+                    // décalage deviné. Une constante aurait dû anticiper la
+                    // hauteur de la barre, qui grandit avec le Dynamic Type :
+                    // aux tailles d'accessibilité elle serait repassée
+                    // par-dessus la colonne, c'est-à-dire le bug d'origine.
+                    floatingControls
                     Spacer()
                     bottomCard
                 }
-
-                floatingControls
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -145,17 +176,18 @@ struct LocationPickerView: View {
             // with Dynamic Type would detach it from the point it marks (74i/86i).
             Image(systemName: "mappin.circle.fill")
                 .font(.system(size: 36))
-                .foregroundStyle(Color(hex: accentColor), Color(hex: secondaryAccent).opacity(0.35))
-                .shadow(color: Color(hex: secondaryAccent).opacity(0.45), radius: 6, y: 3)
+                .foregroundStyle(Color(hex: onMap.primary), Color(hex: onMap.accent).opacity(0.35))
+                .shadow(color: Color(hex: onMap.accent).opacity(0.45), radius: 6, y: 3)
         }
         .ignoresSafeArea(edges: .bottom)
     }
 
     // MARK: - Contrôles flottants
 
-    /// Colonne trailing ancrée SOUS la barre de recherche. Elle s'efface quand
-    /// des résultats s'affichent : la liste a alors la priorité visuelle, et
-    /// c'est le seul recouvrement accepté.
+    /// Colonne trailing posée SOUS la barre de recherche, dans le flux du
+    /// `VStack` — donc toujours dégagée, quelle que soit la hauteur qu'atteint
+    /// la barre. Elle s'efface quand des résultats s'affichent : la liste a
+    /// alors la priorité visuelle, et c'est le seul recouvrement accepté.
     private var floatingControls: some View {
         VStack(spacing: 10) {
             controlButton(
@@ -176,12 +208,12 @@ struct LocationPickerView: View {
             }
         }
         .padding(.trailing, 16)
-        // 8 (top de la barre) + ~44 (hauteur de la barre) + 12 de respiration.
-        // Le bandeau de refus de localisation s'insère SOUS la barre dans la
-        // même colonne : quand il est là, la pile descend d'autant, sinon les
-        // deux se chevaucheraient.
-        .padding(.top, viewModel.isLocationRefused ? 124 : 64)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .padding(.top, 12)
+        // Cadre pleine largeur pour ancrer la colonne à droite. La zone vide à
+        // gauche ne capte rien (aucun fond, aucun `contentShape`), la carte
+        // reste donc déplaçable dessous — même patron que la barre de recherche
+        // juste au-dessus.
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .opacity(viewModel.searchResults.isEmpty ? 1 : 0)
         .allowsHitTesting(viewModel.searchResults.isEmpty)
         .animation(.easeInOut(duration: 0.18), value: viewModel.searchResults.isEmpty)
@@ -201,7 +233,7 @@ struct LocationPickerView: View {
                 // à lire : le mettre à l'échelle du Dynamic Type le décrocherait
                 // de la grille de contrôles (doctrine 86i).
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: secondaryAccent))
+                .foregroundColor(Color(hex: onMap.accent))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle())
                 .clipShape(Circle())
@@ -342,10 +374,17 @@ struct LocationPickerView: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
+                    // Couleurs SÉMANTIQUES, pas les tokens du thème : cette
+                    // carte est du verre posé sur la carte, dont le fond est
+                    // devenu imprévisible avec les styles satellite et hybride.
+                    // `theme.textMuted` (indigo à 40 %) disparaissait sur une
+                    // imagerie satellite sombre. `.primary`/`.secondary`
+                    // s'adaptent à la vibrance du matériau — c'est déjà ce que
+                    // fait `LocationFullscreenView` sur sa propre carte du bas.
                     if let title = displayedTitle {
                         Text(title)
                             .font(MeeshyFont.relative(13, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundColor(.primary)
                             .lineLimit(2)
                     } else if viewModel.isGeocoding {
                         HStack(spacing: 6) {
@@ -353,25 +392,25 @@ struct LocationPickerView: View {
                                 .scaleEffect(0.7)
                             Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse...", bundle: .main))
                                 .font(MeeshyFont.relative(12))
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundColor(.secondary)
                         }
                     } else {
                         Text(String(localized: "location.move-prompt", defaultValue: "Deplacez la carte pour choisir", bundle: .main))
                             .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundColor(.secondary)
                     }
 
                     if let place = displayedPlace {
                         HStack(spacing: 6) {
                             Text(formattedCoordinates(of: place))
                                 .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundColor(.secondary)
                             Text(verbatim: "·")
                                 .font(MeeshyFont.relative(10))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundColor(.secondary)
                             Text(LocationSharingLabels.precisionBadge(precision))
                                 .font(MeeshyFont.relative(10, weight: .semibold))
-                                .foregroundColor(Color(hex: secondaryAccent))
+                                .foregroundColor(Color(hex: onMap.accent))
                         }
                     }
                 }
