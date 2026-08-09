@@ -91,19 +91,36 @@ corriger disent le contraire.
 
 - `routes/conversations/core.ts:1129` et `participants.ts:403` adressent des `User.id` venus de la
   charge utile de création / de la route : aucun anonyme n'y transite. Sains.
-- `utils/callEndedFanout.ts` filtre `userId: { not: null }` **dans le `where` Prisma**. Même classe
-  de défaut, domaine différent (`call:ended`) : à instruire avec le reste de la chaîne d'appel
-  (`CallEventsHandler` a huit `if (!userId) return` du même genre), pas en marge de ce cycle.
+- `utils/callEndedFanout.ts` filtre `userId: { not: null }` **dans le `where` Prisma**. Ressemblance
+  trompeuse : instruit et **écarté comme correct**, voir ci-dessous.
+
+## `callEndedFanout` ressemblait au sixième site — c'est le seul filtre légitime
+
+Le même `userId: { not: null }`, la même forme, et pourtant l'inverse. Ce que l'en-tête du fichier
+énonce déjà tranche : « l'audience de terminaison doit toujours refléter l'audience d'invitation ».
+Et `call:initiated` (`CallEventsHandler`, requête `conversationParticipants`) porte **exactement le
+même filtre**. Un participant sans compte n'est jamais sonné, donc n'a aucune sonnerie à faire taire :
+aligner ce fan-out sur la règle générale n'aurait pas corrigé un manque, il aurait diffusé
+`call:ended` à quelqu'un qui n'a jamais reçu `call:initiated`.
+
+Le cas qui semblait rester est déjà couvert. Un anonyme **peut** rejoindre l'appel — `CallService.joinCall`
+admet sur le seul `Participant.id`, et la bulle « appel en cours » lui parvient comme un message
+ordinaire — mais dès qu'il a rejoint, il est dans `ROOMS.call(callId)`, la première room de la liste.
+
+Ce qui manquait était donc la raison écrite, pas le correctif : elle est maintenant dans le fichier,
+pour que le prochain passage sur la règle `userId ?? id` ne re-litige pas ce site.
+
+**La question de produit qu'il soulève reste ouverte et n'est pas un bug** : faut-il sonner un invité
+de lien partagé ? Aujourd'hui non — et c'est cohérent, il n'a pas de jeton de push. À trancher côté
+produit, pas côté correctif.
 
 ## Piste pour le cycle suivant
 
-`utils/callEndedFanout.ts:31` — `where: { ..., userId: { not: null } }`. Un participant sans compte
-présent dans une conversation où un appel se termine ne reçoit pas `call:ended` : son UI d'appel
-reste ouverte sur un appel fini. Le décider demande d'abord de répondre à **une question de produit
-que ce cycle n'a pas tranchée** : un invité de lien partagé peut-il rejoindre un appel ? Si oui, le
-filtre est un défaut symétrique de ceux corrigés ici et `CallEventsHandler` en porte huit variantes ;
-si non, le filtre est correct et c'est le commentaire qui manque. Ne pas corriger avant d'avoir lu
-`CallService` sur l'admission des anonymes.
+Aucune piste ouverte sur les rooms personnelles : les 60 sites `ROOMS.user(` sont triés, les cinq
+fautifs corrigés, le sixième instruit et justifié. La prochaine tête est à prendre ailleurs — les
+points hérités des cycles 19/24 restent en tête de file (extraction des mentions du chemin de lien
+qui écrit `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ; les pièces
+jointes du chemin de lien n'entrent pas dans le pipeline audio).
 
 ---
 
