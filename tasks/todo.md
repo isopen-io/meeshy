@@ -1,3 +1,107 @@
+# Cycle 37 — Les cycles précédents ont unifié QUI peut éditer. Le reste du système croyait encore que l'éditeur est l'auteur.
+
+Tête prise dans le « reste ouvert » du cycle 36, mais pas à l'endroit qu'il désignait : son candidat
+— l'inventaire « quel client emploie quelle route » — **existe déjà**. Il a été écrit en tête de
+`services/messaging/messageEditAdmission.ts` (section « QUI APPELLE QUOI », les quatre entrées avec
+leur client et le fichier exact) par le cycle qui a écrit la leçon 88. Vérifier avant d'exécuter,
+deuxième cycle consécutif où c'est le premier geste utile.
+
+Reste alors la vraie question que les cycles 33 à 36 ont ouverte sans la refermer : **ils ont changé
+qui peut éditer un message. Qu'est-ce qui, ailleurs, tenait encore l'ancienne réponse pour acquise ?**
+
+## Lot A — la file de rejeu hors ligne excluait l'AUTEUR au lieu de l'ÉDITEUR
+
+`enqueueForOfflineParticipants` exclut l'acteur : on ne rejoue pas à quelqu'un l'événement qu'il
+vient de produire. Le handler socket `message:edit` — transport PRIMAIRE — désignait cet acteur par
+`message.senderId`, le `Participant.id` de l'**auteur**.
+
+Les deux coïncidaient tant qu'on ne pouvait éditer que ses propres messages. `admitMessageEdit`
+(cycles 33/34) rend explicitement `asModerator: true` pour un éditeur non-auteur : depuis, la
+personne exclue n'est plus l'acteur, c'est **la cible**.
+
+| qui | ce qu'il devrait recevoir | ce qu'il recevait |
+|---|---|---|
+| l'auteur, hors ligne, dont on modère le message | l'édition, au rejeu | **rien, jamais** |
+| le modérateur qui édite | rien | rien (exclu par sa présence, par accident) |
+
+Le second n'était couvert que par le hasard : `connectedUsers.has(queueKey)` écarte tout participant
+connecté, et un éditeur qui parle par socket l'est. L'exclusion par identité ne servait plus qu'à
+écarter la seule personne qu'il fallait servir.
+
+Ce que ça donne pour un lecteur : rien ne rejoue l'événement et aucun client ne refetch
+spontanément. La copie locale de l'auteur garde donc le texte d'**avant** modération — c'est-à-dire
+exactement le contenu que la modération retirait — pendant que toute la conversation lit le texte
+corrigé. Divergence permanente entre deux clients d'une même conversation, invisible des deux côtés :
+le modérateur voit son geste appliqué, l'auteur n'a aucune raison de douter de ce qu'il lit.
+
+**Le jumeau portait déjà le correctif.** `handleMessageDelete`, quinze lignes plus bas dans le même
+fichier, écrit noir sur blanc : « Skip the DELETER, not the author. A moderator/admin may delete
+another user's message (`message.senderId` is the author's participant id, not the actor's) ». Le
+raisonnement était disponible, formulé, à portée de regard — et il n'avait **aucun test**, donc rien
+ne l'a jamais rapproché de son frère.
+
+## Lot B — la cause : un paramètre nommé d'après une valeur, pas d'après un rôle
+
+Le helper privé était positionnel, et son deuxième paramètre s'appelait `senderParticipantId`. Ce nom
+ne décrit pas ce que la fonction en fait (exclure l'acteur) mais ce que l'appelant avait sous la
+main (l'auteur du message). Un appelant qui cherche quoi passer trouve `message.senderId` et le
+passe : le nom du paramètre **valide** le geste au lieu de le questionner.
+
+Il devient un paramètre-objet nommé d'après le RÔLE — `actorParticipantId` / `actorUserId`, comme
+l'unité partagée qu'il enveloppe et qui documente déjà les deux monnaies. Le chemin de suppression y
+gagne `actorUserId` en plus de son `Participant.id` : l'admin GLOBAL qui n'est pas participant n'a
+pas de ligne à charger (`participants[0]?.id` vaut `undefined`, donc n'exclut personne) mais a
+toujours un `User.id`.
+
+## Lot C — la docstring qui affirmait la règle d'avant
+
+L'en-tête de `handleMessageEdit` annonçait encore « Permissions: only the message author can edit
+their own message ». Depuis les cycles 33/34, c'est faux. C'est cette phrase qui rendait
+`message.senderId` cohérent au relecteur : si seul l'auteur édite, alors l'auteur EST l'acteur, et le
+code se lit juste. Corrigée pour renvoyer à `admitMessageEdit`.
+
+## Vérification
+
+- **3 tests neufs, écrits AVANT l'implémentation, 1 rouge observé** (les deux autres sont des
+  verrous sur du comportement déjà correct) :
+  - « queues the edit for the OFFLINE AUTHOR when a moderator edits their message » — **rouge :
+    `Number of calls: 0`**, la file ne recevait rien du tout.
+  - « never queues the edit back to the EDITOR, by identity rather than by presence » — l'acteur est
+    retiré de `connectedUsers` exprès : sans cela le test ne distingue pas l'exclusion par identité
+    de l'exclusion par présence, et passerait au vert quel que soit le correctif.
+  - le jumeau côté suppression, qui verrouille enfin le correctif que ce chemin portait sans test.
+- `makeHandler` accepte désormais un `deliveryQueue` — sans lui `enqueueForOfflineParticipants`
+  retourne immédiatement, et **aucun** des trois tests ne pourrait rien mesurer.
+- **Suite gateway complète : 616 suites, 15 896 tests, tout vert** (cycle 36 : 616 / 15 893 — les 3
+  tests neufs, exactement). `tsc --noEmit` propre. Couverture lignes **95,66 %**, branches
+  **89,05 %** — inchangée. `MessageHandler.ts` : 98,21 % lignes, 96,42 % branches.
+
+## Reste ouvert après ce cycle
+
+- **Le candidat du cycle 36 est clos** : l'inventaire des quatre transports vit en tête de
+  `messageEditAdmission.ts`. Ne pas le réécrire ailleurs.
+- **Piste ouverte par ce cycle** : les cycles 33/34 ont élargi QUI peut éditer. Le lot A est le
+  premier endroit trouvé qui tenait encore l'ancienne réponse. La question à reposer telle quelle au
+  prochain cycle : **quoi d'autre, dans le gateway, identifie l'acteur d'une mutation par une
+  propriété de l'objet muté plutôt que par le contexte d'authentification ?** Chercher les
+  `message.senderId`, `post.authorId`, `conversation.createdBy` passés là où un `userId` de requête
+  est attendu.
+- **`appartenance active de l'auteur`** — la question produit du cycle 34 attend toujours une
+  décision : un auteur qui a quitté une conversation peut encore éditer ses messages par les quatre
+  entrées.
+- **La file d'attente de fan-out** (D1 du cycle 32) — sixième report, même raison : elle demande de
+  savoir ce que la troncature mesure en production, et cette routine n'a aucun accès aux logs.
+- **Le fan-out `member_joined` n'a toujours aucune borne** de concurrence (cycle 33b) — à arbitrer
+  avec la file, pas séparément.
+- **`getVisibilityFilteredRecipients` et `filterPostConsumers`** ne se citent toujours pas (cycle 32).
+- **`invalidateCacheForMessage` n'a plus d'appelant hors de la classe** (cycle 35) — gardé public
+  délibérément. À ne pas re-câbler depuis une route.
+- **`@Display Name` inextractible dans le domaine social** — onzième report.
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel** à défaut `PUBLIC`
+  (cycle 26).
+- **Les deux scripts de réparation de base** (`repair-mention-user-ids.ts`,
+  `repair-tracking-link-created-by.ts`) attendent une exécution avec accès MongoDB — action humaine.
+
 # Cycle 36 — Les cycles précédents ont unifié ce qu'une édition EXIGE, PRODUIT et PÉRIME. Pas ce qu'elle PUBLIE.
 
 Tête prise à l'endroit que le cycle 35 désignait. La consigne qu'il laissait s'est avérée
