@@ -18,6 +18,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
 import { processExplicitLinks } from '../../services/messaging/messageLinks';
+import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
@@ -146,59 +147,27 @@ export function registerMessagesAdvancedRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      // Vérifier la restriction temporelle (24 heures max pour les utilisateurs normaux)
-      const isAuthor = existingMessage.sender?.userId === userId;
-      const messageAge = Date.now() - new Date(existingMessage.createdAt).getTime();
-      const twentyFourHoursInMs = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`messageEditAdmission`). C'est cette route qui portait la règle la plus
+      // complète — fenêtre de 24h pour l'auteur, privilège de rôle GLOBAL,
+      // modérateur membre actif admis sur le message d'autrui — et c'est donc
+      // elle que l'unité partagée reprend. Les trois autres entrées n'en
+      // tenaient qu'une partie chacune, et pas la même.
+      const admission = await admitMessageEdit({
+        prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: existingMessage.sender?.userId,
+          conversationId,
+          createdAt: existingMessage.createdAt,
+        },
+        onError: (err) => logger.error('Edit - admission lookup failed', err),
+      });
 
-      if (isAuthor && messageAge > twentyFourHoursInMs) {
-        // Le privilège de contournement de la fenêtre 24h est un rôle GLOBAL
-        // (User.role : ADMIN/BIGBOSS/MODERATOR), PAS le rôle de conversation
-        // (Participant.role : admin/moderator/member, minuscules) qu'expose
-        // `existingMessage.sender.role`. Comparer ce rôle participant minuscule
-        // aux constantes globales majuscules ne matchait jamais — le bypass
-        // était du code mort et tout auteur privilégié était bloqué à tort au-
-        // delà de 24h. Parité avec le chemin socket (`handleMessageEdit`) et
-        // `handleMessageDelete` : on lit le rôle global de l'auteur (== userId).
-        const authorRecord = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { role: true },
-        });
-        const authorGlobalRole = authorRecord?.role;
-        const hasSpecialPrivileges =
-          authorGlobalRole === 'MODERATOR' || authorGlobalRole === 'ADMIN' || authorGlobalRole === 'BIGBOSS';
-
-        if (!hasSpecialPrivileges) {
-          return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');
-        }
-      }
-
-      // Vérifier les permissions : l'auteur peut modifier, ou les modérateurs/admins/créateurs
-      let canModify = isAuthor;
-
-      if (!canModify) {
-        // Vérifier si l'utilisateur est modérateur/admin/créateur dans cette conversation
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: conversationId,
-            userId: userId,
-            isActive: true
-          },
-          include: {
-            user: {
-              select: { role: true }
-            }
-          }
-        });
-
-        if (membership) {
-          const userRole = membership.user.role;
-          canModify = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
-        }
-      }
-
-      if (!canModify) {
-        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
+      if (isEditRefused(admission)) {
+        return admission.reason === 'edit-window-expired'
+          ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
+          : sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
       }
 
       // Validation du contenu : le contenu vide n'est autorisé que si le
@@ -628,9 +597,14 @@ export function registerMessagesAdvancedRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      // Vérifier que le message existe et appartient à l'utilisateur
+      // `deletedAt: null` manquait ici : ce transport lisait — puis réécrivait —
+      // un message SUPPRIMÉ. Un `update` par id réussit quel que soit
+      // `deletedAt`, donc la ligne ressuscitait avec un contenu neuf, un
+      // `message:edited` partait vers des clients qui l'avaient déjà retirée, et
+      // l'API répondait succès. Les trois autres entrées gardaient déjà leur
+      // lecture ; celle-ci était la dernière sans garde.
       const message = await prisma.message.findFirst({
-        where: { id: messageId },
+        where: { id: messageId, deletedAt: null },
         include: {
           sender: {
             select: { userId: true }
@@ -652,25 +626,35 @@ export function registerMessagesAdvancedRoutes(
         return sendNotFound(reply, 'Message introuvable');
       }
 
-      // Vérifier que l'utilisateur est l'auteur du message
-      if (message.sender?.userId !== userId) {
-        return sendForbidden(reply, 'Vous ne pouvez modifier que vos propres messages');
-      }
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`messageEditAdmission`). Cette entrée n'imposait AUCUNE fenêtre de 24h
+      // et n'admettait aucun modérateur, là où la route conversation-scopée fait
+      // les deux — pour le même geste, sur le même message.
+      //
+      // L'appartenance à la conversation n'est plus vérifiée pour l'AUTEUR : les
+      // trois autres entrées tiennent l'authorship pour suffisant, et rendre la
+      // règle commune plus stricte que les trois transports vivants serait une
+      // restriction neuve déguisée en unification. « Un auteur qui a quitté la
+      // conversation peut-il encore éditer ? » est une question produit à
+      // trancher pour les quatre à la fois, pas en passant sur celle-ci.
+      const admission = await admitMessageEdit({
+        prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          createdAt: message.createdAt,
+        },
+        onError: (err) => logger.error('Patch edit - admission lookup failed', err),
+      });
 
-      // Vérifier que l'utilisateur est membre de la conversation
-      // Pour la conversation globale "meeshy", l'accès est autorisé
-      if (message.conversation.identifier !== "meeshy") {
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: message.conversationId,
-            userId: userId,
-            isActive: true
-          }
-        });
-
-        if (!membership) {
-          return sendForbidden(reply, 'Unauthorized access to this conversation');
+      if (isEditRefused(admission)) {
+        if (admission.reason === 'edit-window-expired') {
+          return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');
         }
+        return admission.reason === 'not-a-member'
+          ? sendForbidden(reply, 'Unauthorized access to this conversation')
+          : sendForbidden(reply, 'Vous ne pouvez modifier que vos propres messages');
       }
 
       // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
@@ -688,9 +672,14 @@ export function registerMessagesAdvancedRoutes(
 
       // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
       // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
+      // Garde de concurrence optimiste, jumelle de celle du sibling
+      // `PUT /messages/:messageId` : une suppression concurrente entre la
+      // lecture et cette écriture ferait sinon ressusciter la ligne. Prisma
+      // accepte un filtre non-unique aux côtés de l'id et lève P2025 quand rien
+      // ne matche — traduit en 404 plus bas, pas en 500.
       const editedAt = new Date();
       const updatedMessage = await prisma.message.update({
-        where: { id: messageId },
+        where: { id: messageId, deletedAt: null },
         data: {
           content: processedContent,
           isEdited: true,
@@ -788,6 +777,12 @@ export function registerMessagesAdvancedRoutes(
       return sendSuccess(reply, messageResponse);
 
     } catch (error) {
+      // P2025 = la garde `deletedAt: null` de l'écriture a mordu : le message a
+      // été supprimé entre la lecture et l'écriture. Ce n'est pas une panne, et
+      // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
+      if ((error as { code?: string })?.code === 'P2025') {
+        return sendNotFound(reply, 'Message introuvable');
+      }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');
     }

@@ -158,6 +158,9 @@ async function buildApp(): Promise<FastifyInstance> {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),
       findMany: jest.fn<any>().mockResolvedValue([{ userId: USER_ID }]),
     },
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue({ role: 'USER' }),
+    },
     messageAttachment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({}),
@@ -283,5 +286,78 @@ describe('PUT /messages/:messageId — les obligations d\'une édition ne dépen
     expect((app as any).prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ content: '' }),
     }));
+  });
+});
+
+/**
+ * Le droit d'éditer ne dépend pas non plus du transport. Ce `PUT` — celui
+ * qu'emploie iOS — n'imposait AUCUNE fenêtre de 24h là où le socket et la route
+ * conversation-scopée la refusaient, et n'admettait aucun modérateur là où l'UI
+ * web en propose un. Un iPhone éditait un message de trois ans ; le même geste
+ * depuis le web échouait.
+ */
+describe('PUT /messages/:messageId — l\'admission à l\'édition est celle des autres transports', () => {
+  let app: FastifyInstance;
+
+  const stale = { ...existingMessage, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockProcessExplicitLinks.mockImplementation(async (params: any) => params.content);
+    mockReconcileEditedMentions.mockResolvedValue({
+      validatedUsernames: [], validatedUserIds: [], newlyMentionedUserIds: [], reconciled: true,
+    });
+    app = await buildApp();
+  });
+
+  afterEach(async () => { await app.close(); });
+
+  it('refuse l\'auteur au-delà de 24h, et n\'écrit rien', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValue(stale);
+
+    const res = await editRequest(app, 'trop tard');
+
+    expect(res.statusCode).toBe(403);
+    expect((app as any).prisma.message.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rouvre la fenêtre à un auteur au rôle GLOBAL privilégié', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValue(stale);
+    (app as any).prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+
+    const res = await editRequest(app, 'correction tardive');
+
+    expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.message.updateMany).toHaveBeenCalled();
+  });
+
+  it('admet un modérateur GLOBAL membre actif sur le message de quelqu\'un d\'autre', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValue({
+      ...existingMessage,
+      sender: { ...existingMessage.sender, userId: 'user-someone-else' },
+    });
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, user: { role: 'MODERATOR' } });
+
+    const res = await editRequest(app, 'contenu modéré');
+
+    expect(res.statusCode).toBe(200);
+    // La lecture ne doit plus ENCODER la règle : tant qu'elle filtre
+    // `sender: { userId }`, aucun modérateur ne peut être admis — la ligne
+    // n'arrive jamais jusqu'à la décision. La politique se décide, elle ne se
+    // cache pas dans un `where`.
+    const where = (app as any).prisma.message.findFirst.mock.calls[0][0].where;
+    expect(where).toEqual({ id: MSG_ID, deletedAt: null });
+  });
+
+  it('refuse un simple membre sur le message de quelqu\'un d\'autre — 404, comme avant, sans révéler que le message existe', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValue({
+      ...existingMessage,
+      sender: { ...existingMessage.sender, userId: 'user-someone-else' },
+    });
+
+    const res = await editRequest(app, 'pas le mien');
+
+    expect(res.statusCode).toBe(404);
+    expect((app as any).prisma.message.updateMany).not.toHaveBeenCalled();
   });
 });
