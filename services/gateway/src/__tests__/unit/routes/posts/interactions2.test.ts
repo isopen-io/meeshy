@@ -118,6 +118,10 @@ function makePrisma() {
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      findFirst: jest.fn<any>().mockResolvedValue({
+        authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+      }),
     },
   } as any;
 }

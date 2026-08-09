@@ -122,8 +122,22 @@ function createMockPrisma() {
   return {
     post: {
       findUnique: jest.fn(),
+      // Tranche ACL lue par `loadPostAcl` — la garde d'audience de
+      // handleAddReaction / handleRemoveReaction.
+      findFirst: jest.fn(),
+    },
+    postComment: {
+      findFirst: jest.fn(),
     },
     friendRequest: {
+      findFirst: jest.fn(),
+    },
+    communityMember: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    participant: {
+      findMany: jest.fn(),
       findFirst: jest.fn(),
     },
   } as any;
@@ -211,6 +225,13 @@ describe('PostReactionHandler', () => {
       visibility: 'PUBLIC',
       visibilityUserIds: [],
       deletedAt: null,
+    });
+    // Même post vu par la garde d'audience (tranche ACL, sans deletedAt : le
+    // soft-delete vit dans le `where` de `loadPostAcl`).
+    mockPrisma.post.findFirst.mockResolvedValue({
+      authorId: ANOTHER_USER_ID,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
     });
 
     handler = new PostReactionHandler({
@@ -994,6 +1015,104 @@ describe('PostReactionHandler', () => {
         success: false,
         error: 'User not authenticated',
       });
+    });
+  });
+  // ===== Audience du post — réagir est une INTERACTION =====
+
+  describe('audience du post', () => {
+    /**
+     * `post:join` refusait déjà l'abonnement à la room d'un post restreint
+     * (`canUserViewPost`), mais `post:reaction-add` / `-remove` n'ont jamais
+     * consulté la visibilité : réagir ne passe pas par la room, il suffit de
+     * connaître le `postId`. La réaction persistée remontait ensuite dans les
+     * agrégats du post et notifiait son auteur.
+     */
+    it('test_handleAddReaction_privatePost_deniesAndNeverReachesService', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PRIVATE',
+        visibilityUserIds: [],
+      });
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    it('test_handleAddReaction_friendsPostOfNonFriend_denies', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        authorId: ANOTHER_USER_ID,
+        visibility: 'FRIENDS',
+        visibilityUserIds: [],
+      });
+      mockPrisma.friendRequest.findFirst.mockResolvedValue(null);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+    });
+
+    it('test_handleAddReaction_friendsPostOfFriend_allows', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        authorId: ANOTHER_USER_ID,
+        visibility: 'FRIENDS',
+        visibilityUserIds: [],
+      });
+      mockPrisma.friendRequest.findFirst.mockResolvedValue({ id: 'fr-1' });
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenCalled();
+    });
+
+    it('test_handleAddReaction_deletedOrMissingPost_denies', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue(null);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    it('test_handleRemoveReaction_privatePost_deniesAndNeverReachesService', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PRIVATE',
+        visibilityUserIds: [],
+      });
+
+      await handler.handleRemoveReaction(socket as any, data, callback);
+
+      expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
   });
 });

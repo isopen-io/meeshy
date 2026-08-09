@@ -12,6 +12,7 @@ import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInterna
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { loadPostAcl, canUserInteractWithPost } from '../../services/posts/postVisibility';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
@@ -62,6 +63,15 @@ export function registerInteractionRoutes(
       const { postId } = request.params;
       const parsed = LikeSchema.safeParse(request.body ?? {});
       const emoji = parsed.success ? parsed.data.emoji : '❤️';
+
+      // Aimer est une INTERACTION : `likePost` (comme `PostReactionService`)
+      // ne vérifie que l'existence et le non-effacement du post, jamais son
+      // audience. Même garde et même refus indistinct que le jumeau socket
+      // `post:reaction-add` — sinon l'ACL dépendrait du transport.
+      const postAcl = await loadPostAcl(prisma, postId);
+      if (!postAcl || !(await canUserInteractWithPost(prisma, postAcl, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
 
       // Idempotent via clientMutationId. `likePost` is naturally
       // idempotent at the storage layer (the reaction set keeps a
@@ -160,6 +170,14 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
+
+      // Retirer reste une interaction avec le post — même garde que la pose,
+      // pour que l'ACL ne dépende pas du sens du geste.
+      const postAcl = await loadPostAcl(prisma, postId);
+      if (!postAcl || !(await canUserInteractWithPost(prisma, postAcl, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+
       // Idempotent via clientMutationId. Unlike is also naturally
       // idempotent — re-running over an already-unliked post is a
       // no-op — but recording the mutation prevents the broadcast

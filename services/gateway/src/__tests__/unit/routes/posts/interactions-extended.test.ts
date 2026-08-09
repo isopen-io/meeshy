@@ -99,6 +99,10 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
     post: {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      findFirst: jest.fn().mockResolvedValue({
+        authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+      }),
     },
   } as any;
   app.decorate('prisma', prisma);

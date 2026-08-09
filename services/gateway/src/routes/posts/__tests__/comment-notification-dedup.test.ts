@@ -71,9 +71,23 @@ const notif = {
 const prismaPostFindUnique = jest.fn<() => Promise<unknown>>();
 const prismaCommentFindUnique = jest.fn<() => Promise<unknown>>();
 
+/**
+ * Audience déclarée PUBLIC : les routes du fil consultent désormais
+ * `Post.visibility` avant d'écrire (`loadPostAcl`). Ce fichier porte sur la
+ * PRIORITÉ entre notifications (user_mentioned > comment_reply > post_comment),
+ * pas sur le droit de voir — couvert par `unit/routes/posts/comments-audience`.
+ */
+const PUBLIC_ACL = { authorId: 'user-bob', visibility: 'PUBLIC', visibilityUserIds: [] };
+
 const prisma = {
-  post: { findUnique: prismaPostFindUnique },
-  postComment: { findUnique: prismaCommentFindUnique },
+  post: {
+    findUnique: prismaPostFindUnique,
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(PUBLIC_ACL),
+  },
+  postComment: {
+    findUnique: prismaCommentFindUnique,
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: 'post-1', post: PUBLIC_ACL }),
+  },
 } as unknown as PrismaClient;
 
 const COMMENTER_ID = 'user-commenter';
