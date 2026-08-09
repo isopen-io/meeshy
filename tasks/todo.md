@@ -228,6 +228,122 @@ C'est la moitié correcte de la consigne du cycle 35 — celle qui ne touche auc
   inventaire — même un simple tableau en tête de `messages-advanced.ts` — aurait évité l'erreur du
   cycle 35, et évitera la prochaine. Candidat pour le cycle 37.
 
+# Cycle 36b — Addendum d'une session parallèle : ce que l'édition ÉCRIT, et le module qu'on ne peut pas prouver
+
+Deux sessions ont livré leur cycle 36 en parallèle. **Les deux ont trouvé indépendamment le même
+fait Android** (lot 0 ci-dessous / leçon 88) : `PATCH /messages/:messageId` porte la lane
+`EDIT_MESSAGE` de la file offline d'Android et ne doit pas être retirée. La convergence vaut
+confirmation ; le récit du lot 0 de la session ci-dessus est gardé, celui de cette session est retiré
+au profit du sien.
+
+Les deux têtes n'ont **aucune intersection de défaut** : l'une porte sur ce que l'édition **PUBLIE**
+(traductions périmées dans la réponse HTTP et la charge `message:edited`), l'autre sur ce qu'elle a
+le droit d'**ÉCRIRE**. Le seul recouvrement est le nettoyage `_processRetranslationAsync` →
+`retranslateMessageAsync`, que les deux sessions ont fait au même endroit et à l'identique — fusionné
+en gardant les commentaires de la session ci-dessus. (Leçon d'intégration du cycle 23 : comparer
+défaut par défaut, jamais « qui est arrivé en premier ».)
+
+## Lot A — le quatrième transport laissait une édition VIDER un message
+
+`admitEditedContent` (`services/messaging/messageEditContent.ts`), jumeau de `admitMessageEdit` :
+celui-ci dit QUI peut éditer, le neuf dit ce que l'édition a le droit d'**écrire**. La règle est
+courte — un message ne peut pas devenir vide, à moins qu'une pièce jointe ne le porte à elle seule
+(retrait de légende) — et elle vivait recopiée à trois endroits sur quatre transports. Le quatrième,
+celui d'Android, ne la portait pas du tout :
+
+| entrée                                     | garde de vacuité | vide + pièce jointe |
+|--------------------------------------------|------------------|---------------------|
+| socket `message:edit` (PRIMAIRE)           | oui              | admis               |
+| `PUT /conversations/:id/messages/:mid`     | oui              | admis               |
+| `PUT /messages/:messageId` (iOS)           | oui              | admis               |
+| **`PATCH /messages/:messageId` (ANDROID)** | **aucune**       | **refusé**          |
+
+Sa seule protection était le `minLength: 1` de son schéma JSON, **et il se trompait dans les deux
+sens à la fois** :
+
+- **trois espaces le satisfont.** Le `.trim()` de la ligne suivante les réduisait à la chaîne vide,
+  et la ligne partait en base avec `content: ""`. C'est un `update`, pas un patch partiel : le texte
+  d'origine était déjà écrasé, et un `message:edited` **vide** s'en allait vers tous les clients de
+  la conversation. La sortie RED du test le montre littéralement —
+  `data: {"content": "", "isEdited": true, "translations": null}`.
+- **il refusait en même temps la chaîne vide LÉGITIME**, celle qui retire la légende d'un message à
+  pièce jointe, que les trois autres transports acceptent : un utilisateur Android ne pouvait pas
+  effacer une légende.
+
+Une garde qui compte les caractères **bruts** ne décide jamais de ce qu'elle croit décider : c'est le
+contenu **après `trim`** qui part en base, et c'est donc lui, et lui seul, que la règle doit regarder.
+
+L'unité rend le contenu à écrire **en même temps que** le verdict. C'est délibéré, et c'est ce qui
+empêche la divergence de repousser : le `.trim()` recopié chez chaque appelant est exactement
+l'endroit où le transport iOS avait déjà jeté un `TypeError` sur un `content` absent (traduit en 500
+par le catch). Un appelant qui obtient son texte de l'unité ne peut plus diverger d'elle. Les trois
+`.trim()` d'appelant et les deux formulations différentes du même refus disparaissent avec.
+
+Le schéma JSON du PATCH ne garde que le plafond (`maxLength: 10000`, parité avec
+`EditMessageBodySchema`) : un schéma de corps ne peut pas connaître les pièces jointes. La route les
+lit désormais (`attachments: { select: { id: true } }`) — sans elles, la garde ne peut pas trancher.
+
+## Vérification
+
+- **21 tests neufs**, écrits AVANT l'implémentation, **RED observé sur les deux niveaux** : les tests
+  d'unité échouent à la résolution du module quand l'implémentation est retirée ; les tests de route
+  montrent l'écriture fautive (`prisma.message.update` appelé avec `content: ""`).
+- `messageEditContent.test.ts` — 12 cas : refus du vide / des espaces seuls / des blancs non-espace
+  (tabulation, saut de ligne) / d'un `content` absent ou `null` sans pièce jointe ; admission des
+  mêmes AVEC pièces jointes ; bords retirés, blancs intérieurs préservés.
+- `conversation-messages-advanced.test.ts` — 5 cas sur le PATCH, dont celui qui compte : les espaces
+  seuls refusés **et le message épargné** (`update` jamais appelé).
+
+## Reste ouvert propre à cette session
+
+- **ANDROID — la file d'attente hors ligne retente ce que le serveur n'acceptera JAMAIS, et bloque
+  la file pendant qu'elle le fait.** Défaut le plus grave trouvé ce cycle ; **non corrigé, faute de
+  pouvoir le prouver** (leçon 88c). **Tête du prochain cycle qui disposera d'un toolchain Android.**
+  - `SendResult` documente le contrat, `ARCHITECTURE.md §5` l'exige (« transient-vs-permanent
+    classification, 404-as-success »), `ApiError` porte `httpStatus` — et **quatorze des quinze
+    senders l'ignorent**, écrasant tout échec en `TransientFailure`. Seul `SEND_FRIEND_REQUEST`
+    classe correctement, via `FriendRequestSend.classify` : le patron existe déjà, appliqué à une
+    lane sur quinze.
+  - `OutboxDrainer` est en **FIFO strict** et une `TransientFailure` **arrête la lane**. Un 403
+    définitif (fenêtre de 24 h dépassée, auteur retiré de la conversation) bloque donc tous les
+    messages suivants de cette conversation pendant `MAX_ATTEMPTS = 5` tentatives, backoff
+    exponentiel WorkManager depuis 10 s — de l'ordre de **cinq minutes** de blocage de tête de file
+    pour une erreur qui ne guérira pas.
+  - À l'épuisement, `onExhausted` n'a **aucun cas** pour `EDIT_MESSAGE` / `DELETE_MESSAGE`
+    (`else -> Unit`), alors que `editOptimistic` a déjà peint l'édition dans le cache local :
+    l'appareil montre le texte édité **pour toujours**, le serveur n'a jamais rien appliqué, personne
+    d'autre ne le voit. Divergence locale silencieuse et définitive.
+  - Correctif esquissé : un classificateur pur partagé (`OutboxDelivery.classify`) sur le patron de
+    `FriendRequestSend` — permanents `{400, 403, 404, 422}`, 404 → `Success` pour les suppressions
+    idempotentes, tout le reste transitoire (garder 401/409/429 transitoires est délibéré : un blip
+    d'authentification ou un rate-limit ne doit pas jeter la file) — appliqué aux quatorze sites,
+    plus un `onExhausted` qui re-hydrate la conversation pour EDIT/DELETE.
+- **Aucun toolchain Android n'est disponible depuis cette routine, et aucune CI ne couvre Android.**
+  `dl.google.com` est refusé par la politique réseau de l'environnement (403 sur CONNECT) : ni le SDK
+  Android ni le dépôt Maven Google ne sont atteignables, `:sdk-core:test` ne peut pas tourner. Et
+  `.github/workflows/` ne contient **aucun** job Gradle. **Deux actions humaines distinctes :**
+  (a) ajouter un job CI Android — sans quoi ce module restera hors de portée de cette routine
+  indéfiniment, et c'est la condition qui débloque tout le reste ouvert Android ci-dessus ;
+  (b) corriger le défaut depuis une machine outillée.
+- **L'inventaire « quel client emploie quelle route »**, que la session ci-dessus propose pour le
+  cycle 37, est appuyé par cette session : les deux ont dû le reconstruire à la main, chacune de son
+  côté, pour la même route.
+- **`Test Python (translator)` se fige au teardown et heurte le plafond de 30 min — flake
+  préexistant, observé sur ce cycle.** La suite atteint **99 % des tests, tous PASSED, en 8 min 40**
+  — soit exactement le temps du même job sur main (#9012 : 8 min 30) — puis reste bloquée 21 minutes
+  de plus sans produire une ligne. Ce n'est donc pas un échec d'assertion ni une lenteur : c'est un
+  **gel après la fin effective de la session**. La dernière ligne du journal avant le silence est
+  `RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited` — une coroutine
+  d'`AsyncMock` jamais attendue, qui survit à la session et empêche pytest de rendre la main ; le
+  runner finit par tuer `uv` et `pytest` en processus orphelins. Piste : chercher les `AsyncMock`
+  dont le retour n'est pas `await`é (ou les `MagicMock` employés là où un `AsyncMock` est attendu) et
+  ajouter une fermeture explicite de boucle au teardown. **Sans accès à un rerun de job** (l'API
+  refuse `rerun_failed_jobs` et `cancel_workflow_run` à cette intégration), la seule relance possible
+  depuis cette routine est un commit vide — coûteux et bruyant. Deux actions humaines : corriger le
+  mock fautif, et ouvrir les droits de rerun à l'intégration.
+
+---
+
 # Cycle 35 — Les cycles précédents ont unifié ce qu'une édition EXIGE et ce qu'elle PRODUIT. Pas ce qu'elle PÉRIME.
 
 Tête prise dans le « reste ouvert » du cycle 34, à l'endroit qu'il désignait — la divergence

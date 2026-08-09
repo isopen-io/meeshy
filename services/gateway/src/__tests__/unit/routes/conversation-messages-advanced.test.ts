@@ -1681,8 +1681,13 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(fastify._mockEmit).not.toHaveBeenCalled();
     });
 
-    // Ce PATCH est le transport d'édition du client WEB
-    // (`messages.service.ts` → `apiService.patch('/messages/:id')`). Il vivait
+    // Ce PATCH est le transport d'édition du client ANDROID :
+    // `OutboxFlushWorker` (lane `EDIT_MESSAGE`) → `MessageApi.edit` →
+    // `@PATCH("messages/{id}")`. Le web possède bien un
+    // `messagesService.updateMessage` qui pointe ici, mais AUCUN écran ne
+    // l'appelle — d'où la croyance, portée par plusieurs cycles, que cette
+    // route était morte et pouvait être retirée. La retirer aurait cassé la
+    // remise différée des éditions faites hors ligne sur Android. Il vivait
     // à côté de son jumeau `PUT /conversations/:id/messages/:messageId` sans
     // rien partager avec lui : ni traitement des liens, ni réconciliation des
     // mentions. Deux routes, même verbe métier, deux comportements.
@@ -1903,6 +1908,103 @@ describe('registerMessagesAdvancedRoutes', () => {
       );
       expect(mockSendNotFound).toHaveBeenCalled();
       expect(mockSendInternalError).not.toHaveBeenCalled();
+    });
+
+    // ─── Ce qu'une édition a le droit d'ÉCRIRE ──────────────────────────────
+    //
+    // Les trois autres transports refusent une édition qui viderait un message
+    // sans pièce jointe (`MessageHandler.handleMessageEdit`,
+    // `PUT /conversations/:id/messages/:messageId`, `PUT /messages/:messageId`).
+    // Celui-ci ne portait AUCUNE garde : sa seule protection était le
+    // `minLength: 1` du schéma JSON, que trois espaces satisfont — et que le
+    // `.trim()` de la ligne suivante réduit à la chaîne vide.
+    describe('contenu vide — la garde qui manquait au quatrième transport', () => {
+      it('refuse une édition faite d\'espaces seuls sur un message SANS pièce jointe', async () => {
+        prisma.message.findFirst.mockResolvedValue(makePatchTarget({ attachments: [] }));
+
+        const reply = makeReply();
+        await getPatchHandler(fastify)(
+          makeRequest({ params: { messageId: MSG_ID }, body: { content: '   ' } }),
+          reply
+        );
+
+        expect(mockSendBadRequest).toHaveBeenCalledWith(
+          reply,
+          expect.stringContaining('empty')
+        );
+        // Ce qui compte n'est pas le code de retour mais le message ÉPARGNÉ :
+        // sans cette garde, la ligne partait en base avec un contenu vide et un
+        // `message:edited` vide s'en allait vers tous les clients.
+        expect(prisma.message.update).not.toHaveBeenCalled();
+      });
+
+      it('refuse tabulations et sauts de ligne au même titre que les espaces', async () => {
+        prisma.message.findFirst.mockResolvedValue(makePatchTarget({ attachments: [] }));
+
+        await getPatchHandler(fastify)(
+          makeRequest({ params: { messageId: MSG_ID }, body: { content: '\t\n ' } }),
+          makeReply()
+        );
+
+        expect(prisma.message.update).not.toHaveBeenCalled();
+      });
+
+      it('ADMET une édition vide quand le message porte des pièces jointes (retrait de légende)', async () => {
+        // Le défaut jouait dans les DEUX sens : `minLength: 1` interdisait
+        // aussi de retirer la légende d'un message à pièce jointe, que les
+        // trois autres transports autorisent.
+        prisma.message.findFirst.mockResolvedValue(
+          makePatchTarget({ attachments: [{ id: 'att-1' }] })
+        );
+        prisma.message.update.mockResolvedValue({
+          id: MSG_ID,
+          content: '',
+          translations: null,
+          sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+        });
+
+        await getPatchHandler(fastify)(
+          makeRequest({ params: { messageId: MSG_ID }, body: { content: '' } }),
+          makeReply()
+        );
+
+        expect(mockSendBadRequest).not.toHaveBeenCalled();
+        expect(mockSendSuccess).toHaveBeenCalled();
+      });
+
+      it('écrit le contenu débarrassé de ses bords, comme les trois autres', async () => {
+        prisma.message.findFirst.mockResolvedValue(makePatchTarget({ attachments: [] }));
+        prisma.message.update.mockResolvedValue({
+          id: MSG_ID,
+          content: 'bonjour',
+          translations: null,
+          sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+        });
+
+        await getPatchHandler(fastify)(
+          makeRequest({ params: { messageId: MSG_ID }, body: { content: '  bonjour  ' } }),
+          makeReply()
+        );
+
+        expect(prisma.message.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ content: 'bonjour' }) })
+        );
+      });
+
+      it('lit les pièces jointes du message — sans elles, la garde ne peut pas trancher', async () => {
+        prisma.message.findFirst.mockResolvedValue(makePatchTarget({ attachments: [] }));
+
+        await getPatchHandler(fastify)(
+          makeRequest({ params: { messageId: MSG_ID }, body: { content: 'texte' } }),
+          makeReply()
+        );
+
+        expect(prisma.message.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            include: expect.objectContaining({ attachments: { select: { id: true } } }),
+          })
+        );
+      });
     });
   });
 
