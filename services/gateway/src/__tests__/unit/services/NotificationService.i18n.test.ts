@@ -94,7 +94,8 @@ function makeContentHarness(usersById: Record<string, any>) {
         (where.id.in as string[]).map(id => ({ id, ...(usersById[id] ?? {}) })),
     },
     conversation: { findUnique: async () => null },
-    userPreferences: { findUnique: async () => null },
+    post: { findFirst: async () => ({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
+      userPreferences: { findUnique: async () => null },
     userConversationPreferences: { findMany: async () => [] },
     notification: {
       create: async (args: any) => { created.push(args.data); return { id: 'n1', ...args.data, createdAt: new Date() }; },
@@ -169,6 +170,7 @@ describe('login new device', () => {
     const pushed: any[] = [];
     const prisma: any = {
       user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [] },
+      post: { findFirst: async () => ({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
       userPreferences: { findUnique: async () => null },
       notification: { create: async (a: any) => ({ id: 'n', ...a.data, createdAt: new Date() }), count: async () => 0 },
       conversation: { findUnique: async () => null },

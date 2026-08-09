@@ -39,6 +39,7 @@ import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
 import { filterPostAudience } from '../posts/postAudience';
+import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 
 function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
@@ -1602,6 +1603,40 @@ export class NotificationService {
   // COMMENT_REACTION
   // ==============================================
 
+  /**
+   * Le destinataire d'une notification du FIL a-t-il encore le droit de voir le
+   * post qui la porte ?
+   *
+   * Les trois notifications à destinataire unique du fil (réponse, like et
+   * réaction sur commentaire) visent quelqu'un qui A pu commenter — donc admis
+   * À CE MOMENT-LÀ. Rien ne garantit qu'il le soit encore : une dés-amitié ou
+   * une édition de visibilité le sort de l'audience sans toucher à son
+   * commentaire. Ce qui partirait alors n'est pas un ping : la réponse porte
+   * l'extrait du contenu d'un TIERS et la vignette du post.
+   *
+   * La garde RÉSOUT le post elle-même plutôt que d'exiger un paramètre
+   * `visibility` de ses appelants (le choix du cycle 28 pour les lots de
+   * mention) : ces trois méthodes sont invoquées en fire-and-forget APRÈS la
+   * réponse HTTP/socket, donc la requête supplémentaire ne coûte rien
+   * d'observable — et une garde sans paramètre ne peut pas être désarmée par
+   * omission, pas même par un appelant futur qui ignorerait la règle.
+   *
+   * Audience de CONSOMMATION (amis ∪ contacts DM) : être informé d'un contenu
+   * qu'on a le droit de lire dans le fil est la même question que le lire.
+   *
+   * **En panne ou post introuvable, on REFUSE.** Une notification manquée se
+   * rattrape en ouvrant le post ; un extrait poussé ne se rappelle pas.
+   */
+  private async canNotifyAboutPost(postId: string, recipientId: string): Promise<boolean> {
+    try {
+      const postAcl = await loadPostAcl(this.prisma, postId);
+      if (!postAcl) return false;
+      return await canUserConsumePost(this.prisma, postAcl, recipientId);
+    } catch {
+      return false;
+    }
+  }
+
   async createCommentReactionNotification(params: {
     commentAuthorId: string;
     reactorUserId: string;
@@ -1625,6 +1660,8 @@ export class NotificationService {
     if (!this.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
       return;
     }
+
+    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return;
 
     const reactor = await this.prisma.user.findUnique({
       where: { id: params.reactorUserId },
@@ -3055,6 +3092,8 @@ export class NotificationService {
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
+    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return null;
+
     const actor = await this.prisma.user.findUnique({
       where: { id: params.actorId },
       select: { username: true, displayName: true, avatar: true },
@@ -3134,6 +3173,8 @@ export class NotificationService {
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
+
+    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return null;
 
     const actor = await this.prisma.user.findUnique({
       where: { id: params.actorId },

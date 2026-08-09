@@ -1,3 +1,87 @@
+# Cycle 30 — Les notifications du fil suivaient l'auteur du commentaire, pas l'audience du post
+
+Suite directe du cycle 29, sur la tête qu'il avait lui-même désignée : « `createCommentReplyNotification`
+et `createCommentLikeNotification` ne filtrent pas leur destinataire unique. **Prochain lot naturel.** »
+
+## Ce qui était ouvert
+
+Trois notifications à destinataire UNIQUE visent l'auteur d'un commentaire :
+`createCommentReplyNotification`, `createCommentLikeNotification` et
+`createCommentReactionNotification` (chemin socket).
+
+Leur destinataire A pu commenter — donc il était admis **à ce moment-là**. Rien ne garantit qu'il
+le soit encore : une dés-amitié, ou une édition de visibilité via `PUT /posts/:postId`, le sort de
+l'audience **sans toucher à son commentaire**. Les deux événements sont ordinaires.
+
+Ce qui partait alors sur son écran verrouillé n'est pas un ping :
+
+| notification | ce qu'elle portait |
+|---|---|
+| `comment_reply` | `replyPreview` — un extrait du contenu d'un **TIERS** — plus `parentCommentPreview` et la **vignette du post** (`resolvePostMedia` → `firstAttachmentUrl`, `postThumbnailUrl`) |
+| `comment_like` | cette même vignette de post restreint |
+| `comment_reaction` | un lien de tap vers un post qui le refuserait |
+
+Le cycle 29 avait fermé la lecture et l'écriture du fil ; il restait ce qui en découle.
+
+## D1 — la garde résout le post elle-même
+
+Le cycle 28 avait tranché l'inverse pour les lots de mention : `visibility` **requis** en paramètre,
+pour que TypeScript refuse l'appel incomplet à la compilation. Ici le choix est l'autre, et pour une
+raison mesurable : ces trois méthodes sont invoquées en **fire-and-forget APRÈS la réponse**
+HTTP/socket (toutes leurs invocations sont suivies d'un `.catch()` détaché). La requête
+supplémentaire ne coûte donc rien d'observable, là où le cycle 28 gardait un chemin d'écriture chaud.
+
+Et une garde sans paramètre ne peut pas être **désarmée par omission** — pas même par un appelant
+futur qui ignorerait la règle. C'est la même propriété que D2 du cycle 28 visait, obtenue sans
+élargir l'API de trois méthodes.
+
+`canNotifyAboutPost(postId, recipientId)` : `loadPostAcl` puis `canUserConsumePost`. Audience de
+**consommation** (amis ∪ contacts DM) — être informé d'un contenu qu'on a le droit de lire dans le
+fil est la même question que le lire. **En panne ou post introuvable, on REFUSE** : une notification
+manquée se rattrape en ouvrant le post, un extrait poussé ne se rappelle pas.
+
+## D2 — `NOT_DELETED` sort de `postIncludes`
+
+Brancher la garde a fait tomber **16 suites** de `NotificationService` d'un coup. Le diagnostic est
+plus intéressant que le symptôme : `postVisibility` importait `NOT_DELETED` depuis `postIncludes`,
+qui construit ses `Prisma.validator` **au chargement du module**. Les harnais de notification
+doublent le client Prisma et n'ont aucune raison de connaître les formes d'`include` des posts —
+ils cassaient sur un import qu'ils n'avaient pas demandé.
+
+Corriger les 16 harnais aurait masqué le vrai défaut : un module d'ACL feuille ne doit pas dépendre
+d'un module de formes. `NOT_DELETED` vit désormais dans `services/posts/softDelete.ts`, re-exporté
+par `postIncludes` pour ses appelants historiques. **16 rouges → 6**, et les 6 restants sont la
+vraie déclaration d'audience.
+
+## Vérification
+
+- **11 tests neufs** (`__tests__/unit/services/NotificationService.threadaudience.test.ts`),
+  **6 rouges observés** : le destinataire dés-ami, le post devenu `PRIVATE`, la liste `ONLY`, le
+  post introuvable qui refuse, l'auteur toujours admis sur son propre `PRIVATE`, le `PUBLIC` qui
+  n'interroge pas le graphe — et deux verrous qui vérifient que la **vignette n'est même pas lue**
+  quand le destinataire est hors audience.
+- **7 harnais** complètent leur double : audience du post, et `PostVisibility` (le module d'ACL
+  compare `post.visibility` à l'enum Prisma — un double qui ne l'expose pas fait valoir `undefined`
+  à toute comparaison, donc refuser).
+- **Suite gateway complète : 609 suites, 15 751 tests, tout vert.** `tsc --noEmit` propre.
+  Couverture lignes **95,66 %**.
+
+## Reste ouvert après ce cycle
+
+- **Deux tests d'admission coexistent** : `filterPostAudience` (lots de mention, amis stricts) et
+  `canUserConsumePost` (fil + notifications unitaires, amis ∪ contacts DM). Un contact DM non-ami
+  reçoit donc une notification de réponse mais pas de mention. L'écart est **conservateur** (sous-
+  livraison, jamais fuite) et les deux formes diffèrent — lot de candidats arbitraires contre
+  destinataire unique déjà engagé. Les unifier demande de re-décider si `filterPostAudience` doit
+  admettre les contacts DM. **Candidat sérieux pour le prochain cycle.**
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel à défaut `PUBLIC`** —
+  annoncé par les cycles 28 et 29, toujours ouvert. Mécanique, sans risque.
+- **`@Display Name` reste inextractible dans le domaine social** — quatrième report.
+- Les autres points du cycle 29 (réparations base à lancer à la main, suppression de branche
+  distante impossible depuis cette routine, `eslint` inopérant sur le gateway) sont inchangés.
+
+---
+
 # Cycle 29 — Le fil d'un post n'héritait d'aucune de ses règles d'audience
 
 Tête laissée par le cycle 28 :
