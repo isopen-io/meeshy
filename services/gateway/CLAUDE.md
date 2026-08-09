@@ -75,10 +75,17 @@ Server → Client: message:new, reaction:added, typing:start
 ### Room Organization
 ```typescript
 ROOMS.conversation(id)  // conversation:${id}
-ROOMS.user(id)          // user:${id}
+ROOMS.user(id)          // user:${id} — id = participant.userId ?? participant.id
 ROOMS.feed(id)          // feed:${id}
 ROOMS.call(id)          // call:${id}
 ```
+
+**Room personnelle d'un participant : `userId ?? id`.** Un participant sans ligne
+`User` rejoint `ROOMS.user(participant.id)` — l'adresser par `userId` seul saute
+une room qui existe. Ne pas réécrire la règle : utiliser `participantUserRooms()`
+ou `emitToConversationParticipants()` (`socketio/emitToConversationParticipants.ts`).
+Le `select` Prisma doit charger `id` **et** `userId`. Détail et exceptions :
+`src/socketio/README.md` § « Quel `id` passer a `ROOMS.user()` ? ».
 
 ### Connection Maps
 ```typescript
