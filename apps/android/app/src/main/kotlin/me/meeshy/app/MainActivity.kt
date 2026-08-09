@@ -30,6 +30,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
 import javax.inject.Inject
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.net.SessionExpiryNotifier
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -40,6 +41,10 @@ class MainActivity : ComponentActivity() {
      */
     @Inject
     lateinit var floatingButtonPositions: FloatingButtonPositionStore
+
+    /** Emet quand la passerelle refuse l'identite : [MeeshyApp] y deconnecte. */
+    @Inject
+    lateinit var sessionExpiry: SessionExpiryNotifier
 
 
     private var launchRoute by mutableStateOf<String?>(null)
@@ -57,6 +62,7 @@ class MainActivity : ComponentActivity() {
                 MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
                     MeeshyApp(
                         floatingButtonPositions = floatingButtonPositions,
+                        sessionExpiry = sessionExpiry,
                         launchRoute = launchRoute,
                         onLaunchRouteConsumed = { launchRoute = null },
                     )

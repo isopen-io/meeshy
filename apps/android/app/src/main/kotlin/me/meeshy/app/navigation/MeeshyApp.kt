@@ -104,6 +104,7 @@ import androidx.compose.foundation.layout.size
 import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.net.SessionExpiryNotifier
 
 object Routes {
     const val LOGIN = "login"
@@ -243,6 +244,7 @@ private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
 @Composable
 fun MeeshyApp(
     floatingButtonPositions: FloatingButtonPositionStore,
+    sessionExpiry: SessionExpiryNotifier,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
 ) {
@@ -296,6 +298,15 @@ fun MeeshyApp(
     // incoming-call screen (the Android analogue of iOS CallManager.shared observed
     // at RootView). Reads the live destination per offer so a second offer mid-call
     // yields no route (call-waiting stays with CallViewModel's banner).
+    // Session expiree: la passerelle a refuse l'identite hors route d'auth. Sans
+    // ceci, l'ecran affichait « verifiez votre connexion » alors que le reseau
+    // fonctionnait, et l'utilisateur n'avait aucun moyen de comprendre qu'il devait
+    // se reconnecter. La deconnexion vide la session, donc `startDestination`
+    // bascule sur LOGIN.
+    LaunchedEffect(Unit) {
+        sessionExpiry.expirations.collect { authViewModel.logout() }
+    }
+
     LaunchedEffect(Unit) {
         incomingCallViewModel.incomingOffers.collect { offer ->
             LaunchRouter.routeIncomingSocketOffer(offer, navController.currentDestination?.route)
