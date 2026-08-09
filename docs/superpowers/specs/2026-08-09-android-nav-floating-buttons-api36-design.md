@@ -114,7 +114,7 @@ Chaque helper est testé aux deux bornes : au-dessus du seuil et en dessous.
 | `targetSdk` | 35 | 36 |
 | `minSdk` | 26 | 26 (inchangé) |
 | AGP | 8.7.3 | 8.13 |
-| Gradle wrapper | 8.11.1 | minimum exigé par AGP 8.13, à lire dans ses release notes avant d'écrire le wrapper (non figé ici : la valeur n'a pas été vérifiée) |
+| Gradle wrapper | 8.11.1 | **8.13** (minimum exigé par AGP 8.13, vérifié dans ses release notes) |
 | SDK local | `platforms;android-35` | + `platforms;android-36`, `android-37.0`, `build-tools;37.x` |
 | AVD | API 35 | AVD API 36 **conservé en plus** d'un AVD API 35 |
 | JDK | 17 | 17 (inchangé) |
@@ -134,6 +134,17 @@ pas supprimé** : il devient le contenu déployé du bouton droit, avec ses 8 en
 
 Conformément à la règle de pureté SDK du projet, le composable est agnostique : il reçoit positions,
 lambdas et contenu. Le mapping « quel bouton → quelle route » reste app-side, dans `MeeshyApp.kt`.
+
+**Contrainte d'ancrage relevée en revue.** Le FAB actuel est monté dans le slot
+`Scaffold(floatingActionButton = { if (showMenuFab) MeeshyMenuFab(...) })`
+(`MeeshyApp.kt:270`). Ce slot **positionne lui-même** son contenu : il est structurellement
+incompatible avec un bouton librement déplaçable. Les deux boutons quittent donc le slot et sont
+posés dans le `Box` qui enveloppe le `NavHost` (`MeeshyApp.kt:276`), au-dessus de lui, avec un
+`offset` piloté par la position stockée. Le slot `floatingActionButton` du `Scaffold` est laissé
+vide.
+
+La condition de visibilité **existe déjà** et est réutilisée telle quelle :
+`showMenuFab = currentRoute in tabRoutes` (`MeeshyApp.kt:229`).
 
 | | Bouton gauche | Bouton droit |
 |---|---|---|
@@ -158,6 +169,9 @@ aujourd'hui — pas dans une conversation ouverte, un appel ou le composeur de s
 Position stockée **normalisée** (0–1) comme iOS (`ButtonPosition`), ce qui la rend indépendante de la
 taille d'écran et de la rotation. Drag via `detectDragGestures`, aimantation au bord le plus proche
 au relâchement, position persistée en `DataStore` sous deux clés distinctes (gauche, droite).
+
+`DataStore` est **déjà en place** — `androidx.datastore:datastore-preferences` 1.1.1, module
+`core/datastore/` : on s'y branche, on n'introduit pas de mécanisme de persistance concurrent.
 
 La logique de position vit dans une **unité pure** (normalisation, aimantation, bornage aux insets),
 testable sans UI ; le composable ne fait que l'appeler et dessiner.
@@ -218,7 +232,11 @@ iOS : `./apps/ios/meeshy.sh test`.
 - **Aimantation contre gestes système** : un bouton collé au bord bas peut entrer en conflit avec la
   navigation gestuelle ; le bornage doit tenir compte de la barre de gestes.
 - **Avatar absent** : le bouton droit porte l'avatar ; il faut un repli explicite (initiales ou
-  icône) sans quoi le bouton principal de navigation apparaît vide.
+  icône) sans quoi le bouton principal de navigation apparaît vide. Relevé en revue :
+  `AuthState` (`AuthViewModel.kt:19`) n'expose que `username`, **pas** d'URL d'avatar — la source
+  reste à identifier dans `sdk-core` à l'implémentation, et le repli sur initiales dérivées de
+  `username` est donc le chemin par défaut, pas le cas dégradé. Le compteur, lui, existe :
+  `NotificationsViewModel.unreadCount`.
 - **Échéance Play du 31 août 2026** : si le lot ne peut pas être livré à temps, `targetSdk 36` peut
   être extrait en PR minimale et livré seul — c'est la partie contrainte par une date externe.
 
