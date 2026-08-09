@@ -22,11 +22,12 @@ const mockCreatePost = jest.fn<any>().mockResolvedValue({
 });
 const mockGetPostById = jest.fn<any>().mockResolvedValue({ id: 'post-001', content: 'Hello', type: 'POST' });
 const mockUpdatePost = jest.fn<any>().mockResolvedValue({ id: 'post-001', content: 'Updated', type: 'POST' });
-// `deletePost` rend le document Prisma soft-deleté, `authorId` compris — la
-// route s'en sert pour déplier l'audience du retrait. Ici l'acteur EST l'auteur
-// (`USER_ID`, déclaré plus bas : littéral obligatoire à cette hauteur de fichier).
+// `deletePost` rend le document Prisma soft-deleté ENTIER — `id` et `authorId`
+// compris, dont la route se sert pour annoncer le retrait et déplier son
+// audience. Ici l'acteur EST l'auteur (`USER_ID`/`POST_ID`, déclarés plus bas :
+// littéraux obligatoires à cette hauteur de fichier).
 const mockDeletePost = jest.fn<any>().mockResolvedValue({
-  authorId: '507f1f77bcf86cd799439011', type: 'POST', visibility: 'PUBLIC',
+  id: '507f1f77bcf86cd799439022', authorId: '507f1f77bcf86cd799439011', type: 'POST', visibility: 'PUBLIC',
 });
 
 jest.mock('../../../../services/PostService', () => ({
@@ -543,7 +544,7 @@ describe('DELETE /posts/:postId — POST type with socialEvents', () => {
   afterAll(async () => { await app.close(); });
 
   it('calls broadcastPostDeleted for POST type', async () => {
-    mockDeletePost.mockResolvedValueOnce({ authorId: USER_ID, type: 'POST', visibility: 'PUBLIC' });
+    mockDeletePost.mockResolvedValueOnce({ id: POST_ID, authorId: USER_ID, type: 'POST', visibility: 'PUBLIC' });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}` });
     expect(res.statusCode).toBe(200);
     expect(se.broadcastPostDeleted).toHaveBeenCalledWith(POST_ID, USER_ID);

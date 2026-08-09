@@ -405,7 +405,7 @@ export function registerCoreRoutes(
       // diffusion attend (voir `broadcastPostRemoval`, invariant 1).
       broadcastPostRemoval(
         fastify.socialEvents,
-        { ...result, id: postId, visibilityUserIds: (result as any).visibilityUserIds },
+        result,
         (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
       );
 
