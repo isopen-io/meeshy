@@ -1,5 +1,82 @@
 # Progress — state & what to do next
 
+> On 2026-08-09 the **registration wizard's PHONE step field UI** landed (slice
+> `auth-phone-step-fields`, feature-parity §A — slice 2 of the `OnboardingFlowView` Compose
+> decomposition, "Phone entry with searchable country-code picker (skippable)" flipped `[x]`).
+> Re-proven before picking: read `RegistrationScreen.kt` — only `PSEUDO` was in
+> `RegistrationStepContent.implemented`, `PHONE` still rendered the inert placeholder, confirming the
+> prior run's "Next slice" note. Every decision core the step needed was already shipped and tested
+> (`CountryCatalog` since 2026-07-20, `SignupAvailabilityPolicy.phoneStepCanProceed`,
+> `RegistrationStepGate`'s PHONE arm, `RegistrationSummary`'s already-present-but-unwired
+> `phoneDialCode` input) — this slice is the first real consumer plus three small, directly-required
+> wiring fixes. **Added (production, all `apps/android`):** (1) `feature/auth/RegistrationScreen.kt`
+> gains `PhoneStepBody` — a country chip (flag + dial code) opening `CountryPickerSheet` (a
+> `ModalBottomSheet` search list over `CountryCatalog.build`/`.search`, display-name resolver =
+> `java.util.Locale("", iso).displayCountry`, closing the `auth-country-catalog` slice's
+> `java.util.Locale`-backed-wiring follow-up), the phone-digits `OutlinedTextField`, an available/taken
+> indicator (mirrors `PseudoStepBody`'s pattern), and an in-content Skip button — `RegistrationScreen`'s
+> `when` arm now also dispatches `RegistrationStep.PHONE`, and `RegistrationStepContent.implemented`
+> gains `PHONE` alongside `PSEUDO`. The Skip button is deliberately inline, not the bottom-bar one:
+> `RegistrationNavModel.showSkip` is `false` for PHONE by design (its KDoc already documented "the PHONE
+> step carries its own in-content skip affordance, mirroring iOS" from the `registration-nav-chrome`
+> slice, unconsumed until now). **(2) New `RegistrationFields.countryIso`** (`:core:model`, default
+> `CountryCatalog.priority.first()` = `"FR"`, mirrors iOS `RegistrationViewModel.selectedCountry`) feeds
+> three sites that needed it to be a *complete* slice, not just a decorative picker: **the debounced
+> availability probe now sends the E.164 dial-code-prefixed number**
+> (`CountryCatalog.dialCode(countryIso) + digits`, was digits-only before this slice) — a real,
+> pre-existing parity gap: the gateway's `/auth/check-availability` route comment documents "E.164
+> format" and falls back to inferring the country from geo-IP when the number carries no explicit
+> country context, so a French user picking a non-FR country would have probed under the wrong
+> assumption; **`RegistrationViewModel.toRegisterRequest()` now sends the two new nullable
+> `RegisterRequest.phoneNumber`/`phoneCountryCode` wire fields** (`:core:model/Auth.kt`, `null` when
+> skipped/blank — faithful port of iOS `register()`'s `fullPhone`/`phoneCountryCode` construction, an
+> orphan gap since `RegisterRequest` never carried phone at all); and **the recap's
+> `RegistrationSummaryInput.phoneDialCode`** (a field `RegistrationSummary` already accepted since the
+> `auth-onboarding-shell` slice but no caller ever populated) is now wired from `CountryCatalog.dialCode`.
+> **SOTA over iOS:** `onCountryChange` invalidates a stale `phoneAvailable` — iOS's `selectedCountry`
+> setter never does, so switching the dial-code country after an already-confirmed probe can silently
+> let the wizard proceed under the wrong country there; Android never lets that verdict survive a country
+> change (no auto re-probe fires though, mirroring iOS — editing the phone digits again re-triggers the
+> existing debounced pipeline). **Deliberately out of scope:** iOS's phone-ownership/recovery-hint
+> (`phoneOwnership`, `phoneRecoverySuggested`, the "on dirait ton ancien compte" card on a taken number)
+> — a distinct, larger capability needing its own decision core, not part of "field UI + skip".
+> **+7 behavioural VM tests** (`RegistrationViewModelTest`: default-country init; `onCountryChange`
+> updates the field and invalidates a stale probe; the debounced probe sends the selected country's
+> E.164 dial code, both the default-FR and an explicitly-picked-US case; `register()` sends the
+> dial-code-prefixed number + ISO when the step was filled, and `null`/`null` when it was skipped; the
+> recap's phone row carries the dial-code prefix) **+1 `RegistrationStepContentTest`** (`PHONE` now
+> implemented, the "every other step" sweep updated to exclude it too). **One existing probe test
+> adapted, not weakened:** the old `validPhone_afterDebounce_probesWithDigitsOnly` typed a dial code
+> straight into the phone field (`"+33 6 12 34 56 78"`) because no country picker existed yet — that
+> input no longer represents a realistic interaction now that the picker supplies the dial code
+> separately, so the test was split into the two dial-code-aware tests above; the new assertions are
+> **stricter** (they check the E.164 `+`-prefixed wire value the server actually needs, not a
+> digits-only string the old code silently under-delivered). **Mutation (RED proof):** reverting the
+> probe to digits-only (dropping the `CountryCatalog.dialCode(...) + ` prefix) fails **exactly** the two
+> dial-code probe tests (52 run, 2 failed, no collateral); restored after. **Gate:**
+> `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full `assembleDebug` + all-module
+> `testDebugUnitTest`, 943 tasks). Reviewer **PASS** (diff `apps/android` only — `core/model`
+> [`RegistrationFields` +1 field, `RegisterRequest` +2 fields, `RegistrationStepContent` +1 entry, no new
+> files], `feature/auth` [+2 composables in `RegistrationScreen.kt`, `RegistrationViewModel.kt` wiring,
+> ×4 locale strings], `tasks/feature-parity.md`; SDK purity — `CountryCatalog`/`RegistrationSummary`
+> stay pure `:core:model` decision cores untouched in shape, the new Composables are ordinary UI glue
+> reading ViewModel state, `onCountryChange`/probe wiring is ordinary ViewModel plumbing (not a
+> shared-singleton-plus-product-rule combo); SSOT — reuses `CountryCatalog`, `RegistrationSummary`,
+> `SignupFieldValidation.phoneDigits`, re-implements none; instant-app — no spinner introduced; UDF —
+> unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — the picker sheet dismisses
+> cleanly, Skip and Back both remain reachable; no tautological tests; no coverage floor lowered, no
+> existing test weakened — only adapted for a deliberate, documented behaviour change). **Next slice:**
+> the EMAIL step field UI (needs no new core — `SignupAvailabilityPolicy.emailStepCanProceed` +
+> the existing probe are already wired), OR IDENTITY (first/last name, needs no new core either), OR the
+> §C **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header` — re-verify `ChatScreen.kt` line ~487 before committing a run to it, the
+> "genuinely large" verdict from two runs ago is itself a hypothesis to re-check), OR the `TagInputField`
+> composable + `allTags` corpus hydration (still blocked on a new `tags` wire field on `ApiConversation`),
+> OR the tracked **Kover 90% coverage-gate infra**. **Hygiene note (recurring, still unaddressed):**
+> `PROGRESS.md`/`NOTES.md` are both well past the ~1500-line archival threshold in `ROUTINE.md` §Hygiène
+> (unaddressed since at least the `session-logout-teardown` run) — flagging again rather than bundling an
+> archive pass into this slice's commit, per the hygiene section's "separate, dedicated commit" rule.
+
 > On 2026-08-09 the **registration wizard's pager/progress-bar/nav-chrome shell** landed (slice
 > `auth-onboarding-shell`, feature-parity §A — slice 1 of the `OnboardingFlowView` Compose scaffold
 > decomposition recorded by the previous run, PSEUDO step only). Re-proven before picking: grepped

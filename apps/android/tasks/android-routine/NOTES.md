@@ -3201,3 +3201,39 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   tests, but that's not licence to skip verification: re-running the existing VM suite after wiring the
   screen on top of it is what confirms the new UI didn't have to (and didn't) change any tested
   decision behaviour underneath.
+
+## Slice `auth-phone-step-fields` (2026-08-09)
+- **Branch from `origin/main`, never local `main`, in a shared multi-worktree checkout.** This session's
+  `Étape 0` ran `git fetch origin main && git merge --ff-only origin/main` on the *routine* branch
+  (`ops/android-ios-parity-routine`), which fast-forwards that branch's view of `origin/main` but does
+  **not** touch the local `main` ref itself. `git checkout -b claude/apps/android/<slice-id> main` then
+  silently branched off a local `main` that was ~150 commits stale (missing the previous run's merged
+  PR #2684) — caught only because the freshly-created `RegistrationStepContent.kt` file didn't exist on
+  the new branch. Fix: `git checkout -b <branch> origin/main` explicitly, every time, in this worktree
+  setup — never bare `main`. Cheap to verify: after creating the branch, spot-check one file/symbol you
+  know landed in the immediately-prior merged PR before writing any code.
+- **A pure core field with a default nobody reads yet is a real signal the SSOT was built ahead of its
+  consumer, not dead code.** `RegistrationSummaryInput.phoneDialCode` had existed since
+  `auth-onboarding-shell` with a `""` default and zero callers passing it — exactly the same
+  "already-shipped, unconsumed" shape as `ConversationCategoryPicker` before `category-picker-create`.
+  Grepping for a pure core's fields that are always defaulted at every call site is a fast way to find
+  a slice's real remaining surface before assuming a decision needs building from scratch.
+- **Adding a real country picker to a field that previously accepted "type anything, including the dial
+  code" is a genuine, minor breaking change to the field's contract — proving it via the debounced-probe
+  test's expected value is what caught the arithmetic, not review.** The old test typed
+  `"+33 6 12 34 56 78"` as a single blob (there was no separate country control) and asserted a
+  digits-only probe. Once the dial code moves to its own picker, the phone `OutlinedTextField` can only
+  ever hold national digits — re-typing the OLD test's input into the new field's semantics would silently
+  probe a garbled number. Rewriting the test to the new, realistic input (national digits only) and
+  asserting the E.164 `+`-prefixed combination is what the gateway's `/auth/check-availability` comment
+  documents ("E.164 format") — catching along the way that concatenating a French trunk-prefix `"0"` into
+  `dialCode + digits` (`"+330123456789"`, not `"+33123456789"`) is iOS's existing behaviour too (verified
+  by reading `RegistrationViewModel.swift`'s `checkPhoneAvailability` before "fixing" it) — a faithful
+  port preserves iOS's real behaviour, quirks included, rather than silently correcting them as an
+  uncredited scope-creep fix.
+- **A field the pure core already supports but no production caller populates is invisible to
+  `./meeshy.sh check`** — `RegistrationSummaryInput.phoneDialCode` compiled and passed every existing
+  test for weeks while permanently `""` in production, because `RegistrationUiState.summary`'s
+  `RegistrationSummaryInput(...)` call site simply never named it. A green gate proves the *tested*
+  behaviour, not that every accepted parameter is actually wired — re-reading a core's full input struct
+  against its real call site (not just its test file) is the only way to catch this class of gap.

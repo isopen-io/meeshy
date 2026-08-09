@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.AvailabilityIntent
+import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.RegistrationFields
 import me.meeshy.sdk.model.auth.RegistrationNav
@@ -86,9 +87,9 @@ data class RegistrationUiState(
 
     /**
      * The recap card's rows for the RECAP step — [RegistrationSummary] over the
-     * fields already collected. Country dial code / regional language / bio are not
-     * yet gathered by the wizard, so their optional rows stay collapsed until those
-     * steps are wired; the pure core supports them the moment they are.
+     * fields already collected. Bio isn't gathered by the wizard yet, so its
+     * optional row stays collapsed until the PROFILE step is wired; the pure core
+     * supports it the moment it is.
      */
     val summary: List<RegistrationSummaryRow>
         get() = RegistrationSummary.rows(
@@ -97,6 +98,7 @@ data class RegistrationUiState(
                 email = fields.email,
                 firstName = fields.firstName,
                 lastName = fields.lastName,
+                phoneDialCode = CountryCatalog.dialCode(fields.countryIso).orEmpty(),
                 phoneNumber = fields.phoneNumber,
                 skipPhone = fields.skipPhone,
                 systemLanguage = fields.systemLanguage,
@@ -148,8 +150,9 @@ class RegistrationViewModel @Inject constructor(
         launchProbe(emailInput, SignupAvailabilityPolicy::emailIntent, ::onEmailAvailability) {
             authRepository.checkAvailability(email = it).getOrNull()?.emailAvailable
         }
-        launchProbe(phoneInput, SignupAvailabilityPolicy::phoneIntent, ::onPhoneAvailability) {
-            authRepository.checkAvailability(phoneNumber = it).getOrNull()?.phoneNumberAvailable
+        launchProbe(phoneInput, SignupAvailabilityPolicy::phoneIntent, ::onPhoneAvailability) { digits ->
+            val dialCode = CountryCatalog.dialCode(_state.value.fields.countryIso).orEmpty()
+            authRepository.checkAvailability(phoneNumber = dialCode + digits).getOrNull()?.phoneNumberAvailable
         }
     }
 
@@ -167,6 +170,18 @@ class RegistrationViewModel @Inject constructor(
         phoneInput.value = value
         editFields { it.copy(phoneNumber = value, phoneAvailable = null) }
     }
+
+    /**
+     * The PHONE step's country picker: picking a country changes the E.164 number a
+     * previously-confirmed [RegistrationFields.phoneAvailable] was probed for, so — like
+     * every other `on…Change` edit — it invalidates that stale verdict rather than letting
+     * the gate proceed on an answer that belonged to a different dial code. SOTA over iOS:
+     * `RegistrationViewModel.selectedCountry` never invalidates `phoneAvailable`, so a
+     * country switch after an already-confirmed number can silently proceed under the wrong
+     * country there. No new probe is fired automatically here (mirrors iOS); editing the
+     * phone field again re-triggers the debounced pipeline.
+     */
+    fun onCountryChange(iso: String) = editFields { it.copy(countryIso = iso, phoneAvailable = null) }
 
     fun onFirstNameChange(value: String) = editFields { it.copy(firstName = value) }
 
@@ -293,12 +308,23 @@ class RegistrationViewModel @Inject constructor(
     }
 }
 
-private fun RegistrationFields.toRegisterRequest(): RegisterRequest = RegisterRequest(
-    username = SignupFieldValidation.normalizedUsername(username),
-    email = SignupFieldValidation.normalizedEmail(email),
-    password = password,
-    firstName = firstName.trim().ifBlank { null },
-    lastName = lastName.trim().ifBlank { null },
-    systemLanguage = systemLanguage.ifBlank { null },
-    regionalLanguage = regionalLanguage.trim().ifBlank { null },
-)
+/**
+ * iOS `register()`'s `fullPhone = phoneNumber.isEmpty ? nil : selectedCountry.dialCode +
+ * phoneNumber.filter(isNumber)`: a skipped or never-filled number sends neither wire field,
+ * otherwise the E.164 dial-code-prefixed number travels with the selected country's ISO code.
+ */
+private fun RegistrationFields.toRegisterRequest(): RegisterRequest {
+    val digits = SignupFieldValidation.phoneDigits(phoneNumber)
+    val hasPhone = !skipPhone && digits.isNotEmpty()
+    return RegisterRequest(
+        username = SignupFieldValidation.normalizedUsername(username),
+        email = SignupFieldValidation.normalizedEmail(email),
+        password = password,
+        firstName = firstName.trim().ifBlank { null },
+        lastName = lastName.trim().ifBlank { null },
+        systemLanguage = systemLanguage.ifBlank { null },
+        regionalLanguage = regionalLanguage.trim().ifBlank { null },
+        phoneNumber = if (hasPhone) CountryCatalog.dialCode(countryIso).orEmpty() + digits else null,
+        phoneCountryCode = if (hasPhone) countryIso else null,
+    )
+}

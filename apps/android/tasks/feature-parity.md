@@ -546,9 +546,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       no regression to the decision layer the new screen reads. `./apps/android/meeshy.sh check` →
       BUILD SUCCESSFUL (full `assembleDebug` + all-module `testDebugUnitTest`, 943 tasks). Diff =
       `apps/android` only (`core/model` [+1 core, +1 test], `feature/auth` [+1 screen, `LoginScreen`
-      link, ×4 locale strings], `app` [+1 route]). **Follow-up:** slice 2 is the PHONE step field UI
-      (country picker + skip), then EMAIL/IDENTITY/PASSWORD/LANGUAGE/PROFILE/RECAP in turn — each adds
-      its step to `RegistrationStepContent.implemented` + a `when` arm in `RegistrationScreen`.
+      link, ×4 locale strings], `app` [+1 route]). **Slice 2 shipped** (`auth-phone-step-fields`,
+      2026-08-09) — the PHONE step's field UI (country picker + phone field + skip); see the phone-entry
+      bullet above for the full writeup. **Follow-up:** EMAIL/IDENTITY/PASSWORD/LANGUAGE/PROFILE/RECAP in
+      turn — each adds its step to `RegistrationStepContent.implemented` + a `when` arm in
+      `RegistrationScreen`.
 - [x] **App-side availability-debounce network probe** — **shipped** (slice `signup-availability-probe`,
       2026-07-25). Closes the last orphan seam of the registration wizard: the three
       `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real
@@ -573,7 +575,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:sdk-core:testDebugUnitTest` + `:core:model:testDebugUnitTest` green in isolation +
       `:app:assembleDebug` → BUILD SUCCESSFUL (whole graph). Diff = `apps/android` only. **Follow-up:** the
       username-suggestion strip (surface `AvailabilityResult.suggestions`), and the Compose onboarding screen.
-- [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
+- [x] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
       (faithful port of iOS `CountryPicker`,
       `packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/CountryPicker.swift`). Holds the verbatim
@@ -592,8 +594,44 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `isoForPhoneNumber` tie-break (`minWith(compareBy(rank, iso))` → `minOrNull()`) fails **exactly**
       `isoForPhoneNumber_prefersPriorityCountryOnSharedDialCode` (29 run, 1 failed, no collateral).
       `:core:model:testDebugUnitTest` green + full `:app:assembleDebug` → BUILD SUCCESSFUL. Diff =
-      `apps/android` only. **Follow-up:** the app-side searchable picker sheet + phone-field composable
-      (needs the registration wizard scaffold) and `java.util.Locale`-backed display-name wiring.
+      `apps/android` only. **App-side UI shipped** (slice `auth-phone-step-fields`, 2026-08-09 — slice 2
+      of the onboarding wizard's per-step Compose UI, see the `auth-onboarding-shell` scope note below):
+      `RegistrationScreen`'s new `PhoneStepBody` (`RegistrationStep.PHONE` now in
+      `RegistrationStepContent.implemented` alongside `PSEUDO`) — a country chip (flag + dial code)
+      opening `CountryPickerSheet` (a `ModalBottomSheet` list driven by `CountryCatalog.build`/`.search`,
+      name resolver = `java.util.Locale("", iso).displayCountry`, closing the display-name follow-up),
+      the phone-digits field, the available/taken indicator (mirrors `PseudoStepBody`), and an in-content
+      Skip button (`RegistrationNavModel.showSkip` is deliberately `false` for PHONE — the step carries
+      its own affordance, matching iOS `StepPhoneView`'s inline "Passer cette étape", not the PROFILE-only
+      bottom-bar skip). **New `RegistrationFields.countryIso`** (`:core:model`, default
+      `CountryCatalog.priority.first()` = `"FR"`, mirrors iOS `selectedCountry`) feeds three sites: (1)
+      the debounced availability probe now sends the E.164 dial-code-prefixed number
+      (`CountryCatalog.dialCode(countryIso) + digits`, was digits-only — a real parity bug fix, since the
+      gateway's `/auth/check-availability` documents E.164 input and previously inferred the country from
+      geo-IP alone); (2) `toRegisterRequest()` now sends `RegisterRequest.phoneNumber`/`phoneCountryCode`
+      (both new nullable wire fields, `null` when skipped/empty, faithful port of iOS `register()`'s
+      `fullPhone`); (3) the recap's `RegistrationSummaryInput.phoneDialCode` (a field the pure core
+      already supported, unwired until now). **SOTA over iOS:** `onCountryChange` invalidates a
+      stale `phoneAvailable` (iOS's `selectedCountry` never does, so switching country after an
+      already-confirmed probe can silently proceed under the wrong country there) — no auto re-probe
+      fires (mirrors iOS; editing the phone field again re-triggers the debounced pipeline). Phone
+      ownership/recovery-hint (iOS's `phoneOwnership`/`phoneRecoverySuggested`, shown on a taken number)
+      is a distinct, larger capability with no Android decision core yet — deliberately out of scope.
+      **+7 behavioural tests** (`RegistrationViewModelTest`: default-country init, `onCountryChange`
+      updates the field + invalidates a stale probe, the debounced probe sends the selected country's
+      dial code (default FR and a picked US case), `register()` sends the dial-code-prefixed number +
+      ISO on a filled step and `null`/`null` when the PHONE step was skipped, the recap's phone value
+      carries the dial-code prefix) + 1 `RegistrationStepContentTest` (`PHONE` now implemented). One
+      existing probe test adapted (not weakened) to the new contract — a country picker means the phone
+      field only ever holds national digits, so a test that typed the dial code straight into the field
+      no longer represents a realistic input; the assertion itself grew stricter (asserts the E.164
+      `+`-prefixed wire value, not a digits-only string). Mutation (RED proof): reverting the probe to
+      digits-only fails **exactly** the two dial-code probe tests (52 run, 2 failed, no collateral).
+      `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 943 tasks). Diff = `apps/android` only (`core/model` [+2 fields on existing
+      types, no new files], `feature/auth` [+2 composables, ViewModel wiring, ×4 locale strings]).
+      **Follow-up:** phone-ownership/recovery-hint (needs a new decision core), then EMAIL/IDENTITY/
+      PASSWORD/LANGUAGE/PROFILE/RECAP field UI in turn per the `auth-onboarding-shell` decomposition.
 - [~] First/last name capture; password strength meter + requirements checklist —
       **requirements-checklist + confirm-gate cores shipped** (slice `auth-password-requirements`,
       2026-07-21). The strength *meter* score (`PasswordStrength`, 0..5 bands) already existed; this

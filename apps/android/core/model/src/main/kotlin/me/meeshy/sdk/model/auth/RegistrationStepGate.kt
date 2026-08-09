@@ -14,6 +14,13 @@ import me.meeshy.sdk.model.PasswordEntry
 data class RegistrationFields(
     val username: String = "",
     val usernameAvailable: Boolean? = null,
+    /**
+     * The PHONE step's selected dial-code country (iOS `selectedCountry`), defaulting to
+     * [CountryCatalog.priority]'s head (`"FR"`, mirrors `CountryPicker.countries[0]`). Display-only
+     * for the gate (the digit-count check in [SignupFieldValidation.isPhoneValidLocally] never reads
+     * it) — it feeds the E.164 probe/register payload and the recap's dial-code prefix instead.
+     */
+    val countryIso: String = CountryCatalog.priority.first(),
     val phoneNumber: String = "",
     val phoneAvailable: Boolean? = null,
     val skipPhone: Boolean = false,
