@@ -1,13 +1,15 @@
 package me.meeshy.ui.component.chrome
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +100,7 @@ public fun MeeshyFloatingButtons(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun DraggableFloatingButton(
     position: FloatingButtonPosition,
@@ -125,15 +128,35 @@ private fun DraggableFloatingButton(
                     y = (shown.y * travelYPx).roundToInt(),
                 )
             }
-            .size(FloatingButtonSize)
+            // Taille MINIMALE, pas fixe : le contenu du bouton droit devient un menu
+            // deploye de plusieurs entrees, qu'un `.size(56.dp)` clippait — seule la
+            // premiere entree apparaissait. `unbounded` laisse la colonne depasser
+            // le gabarit du bouton tout en gardant la cible tactile au repos.
+            .defaultMinSize(minWidth = FloatingButtonSize, minHeight = FloatingButtonSize)
+            // Aligne du COTE ou le bouton se trouve : centre, un menu deploye contre
+            // le bord droit sortait de l'ecran et ses libelles etaient coupes.
+            .wrapContentSize(
+                align = if (position.isLeft) Alignment.BottomStart else Alignment.BottomEnd,
+                unbounded = true,
+            )
             .semantics { this.contentDescription = contentDescription }
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onTap() }, onLongPress = { onLongPress() })
-            }
+            // combinedClickable et NON un second detectTapGestures : deux
+            // pointerInput concurrents se disputent le meme evenement, et un simple
+            // tap finissait par etre traite comme un glissement — observe sur
+            // emulateur, les deux boutons derivaient de leur place a chaque appui.
+            // combinedClickable applique le touch slop standard, et apporte en prime
+            // le retour tactile et l'activation au clavier.
+            .combinedClickable(
+                onClick = onTap,
+                onLongClick = onLongPress,
+            )
             .pointerInput(travelXPx, travelYPx) {
                 detectDragGestures(
                     onDragEnd = {
-                        // Aimantation au bord, uniquement au relachement.
+                        // Aimantation au bord, uniquement au relachement, et
+                        // uniquement si le doigt a REELLEMENT parcouru quelque
+                        // chose : sans cette garde, un effleurement reecrit la
+                        // position stockee.
                         dragged?.let { onPositionChange(snapToNearestEdge(it)) }
                         dragged = null
                     },

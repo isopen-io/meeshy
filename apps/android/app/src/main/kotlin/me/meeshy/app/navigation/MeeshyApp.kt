@@ -752,8 +752,15 @@ fun MeeshyApp(
                     )
                 },
                 rightContent = {
+                    // Etat HISSE: le menu s'ouvre du premier tap, comme sur iOS.
+                    // Sans cela, MeeshyMenuFab garde son propre etat et il faut deux
+                    // taps — un pour l'afficher replie, un pour le deplier.
                     if (menuExpanded) {
-                        MeeshyMenuFab(items = radialItems)
+                        MeeshyMenuFab(
+                            items = radialItems,
+                            expandedOverride = true,
+                            onExpandedChange = { menuExpanded = it },
+                        )
                     } else {
                         MeeshyInitialsButton(username = authState.username)
                     }
