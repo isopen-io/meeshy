@@ -998,13 +998,15 @@ export class MessageHandler {
       // Skip the DELETER, not the author. A moderator/admin may delete another
       // user's message (`message.senderId` is the author's participant id, not
       // the actor's) — passing the author here skipped the offline author, who
-      // then never learns their moderated message was removed. The deleter's own
-      // participant id is the conversation-scoped row loaded above; when the
-      // deleter is a global admin who is NOT a participant it is undefined, which
-      // skips nobody (the online deleter is already excluded by the presence check).
-      // `userId` accompagne désormais le `Participant.id` : l'admin GLOBAL qui
-      // n'est pas participant n'a pas de ligne à charger, mais il a toujours un
-      // `User.id`, et l'exclusion tient alors sans dépendre de sa présence.
+      // then never learns their moderated message was removed.
+      //
+      // Les DEUX monnaies d'identité de l'acteur sont passées, et elles se
+      // relaient : le `Participant.id` vient de la ligne conversation-scopée
+      // lue plus haut, qui est `undefined` pour un admin GLOBAL non-participant
+      // — lequel a toujours un `User.id`. L'exclusion ne dépend donc jamais du
+      // fait que l'acteur soit connecté. Les deux espaces d'id ne se croisant
+      // pas, en passer deux ne sur-exclut personne : ils désignent la même
+      // personne.
       const deleterParticipantId = message.conversation.participants[0]?.id;
       this._enqueueOfflineEventForParticipants({
         conversationId: message.conversationId,
