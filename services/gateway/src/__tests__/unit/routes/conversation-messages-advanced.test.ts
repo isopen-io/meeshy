@@ -1508,6 +1508,124 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
       expect(fastify._mockEmit).not.toHaveBeenCalled();
     });
+
+    // Ce PATCH est le transport d'édition du client WEB
+    // (`messages.service.ts` → `apiService.patch('/messages/:id')`). Il vivait
+    // à côté de son jumeau `PUT /conversations/:id/messages/:messageId` sans
+    // rien partager avec lui : ni traitement des liens, ni réconciliation des
+    // mentions. Deux routes, même verbe métier, deux comportements.
+    const makePatchTarget = (overrides: any = {}) => ({
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'Salut @alice',
+      originalLanguage: 'fr',
+      senderId: PART_ID,
+      sender: { userId: USER_ID },
+      conversation: { identifier: 'meeshy', participants: [] },
+      ...overrides,
+    });
+
+    const makeMentionService = (username: string, userId: string) => ({
+      extractMentionsWithParticipants: jest.fn().mockReturnValue([username]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map([[username, { id: userId, username }]])),
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [userId] }),
+      createMentions: jest.fn<any>().mockResolvedValue(undefined),
+    });
+
+    it('réconcilie les mentions du texte édité, comme son jumeau PUT', async () => {
+      fastify.mentionService = makeMentionService('bob', 'user-bob');
+      prisma.mention.findMany.mockResolvedValue([{ mentionedUserId: 'user-alice' }]);
+      prisma.message.findFirst.mockResolvedValue(makePatchTarget());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'processed content',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Salut @bob' } }),
+        makeReply()
+      );
+
+      // Alice sort, Bob entre — un lot RECOMPOSÉ, pas complété.
+      expect(prisma.mention.deleteMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { messageId: MSG_ID, mentionedUserId: { in: ['user-alice'] } } })
+      );
+      expect(fastify.mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, ['user-bob']);
+    });
+
+    it('émet `mention:created` dans le salon PERSONNEL de l\'entrant', async () => {
+      fastify.mentionService = makeMentionService('bob', 'user-bob');
+      prisma.mention.findMany.mockResolvedValue([]);
+      prisma.message.findFirst.mockResolvedValue(makePatchTarget());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'processed content',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Salut @bob' } }),
+        makeReply()
+      );
+
+      expect(fastify._mockTo).toHaveBeenCalledWith('user:user-bob');
+      expect(fastify._mockEmit).toHaveBeenCalledWith('mention:created', expect.objectContaining({
+        messageId: MSG_ID,
+        mentionedUserId: 'user-bob',
+      }));
+    });
+
+    it('transforme les liens traçables AVANT l\'écriture, et ne fait circuler que le contenu traité', async () => {
+      prisma.message.findFirst.mockResolvedValue(makePatchTarget());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'processed content',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Regarde <https://example.com>' } }),
+        makeReply()
+      );
+
+      expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(expect.objectContaining({
+        content: 'Regarde <https://example.com>',
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+        createdBy: USER_ID,
+      }));
+      expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ content: 'processed content' }),
+      }));
+      expect(fastify.translationService._processRetranslationAsync).toHaveBeenCalledWith(
+        MSG_ID,
+        expect.objectContaining({ content: 'processed content' })
+      );
+    });
+
+    it('n\'écrase pas `validatedMentions` quand la réconciliation n\'a rien pu établir', async () => {
+      fastify.mentionService = null;
+      prisma.message.findFirst.mockResolvedValue(makePatchTarget());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'processed content',
+        validatedMentions: ['alice'],
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      await getPatchHandler(fastify)(
+        makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Salut @alice' } }),
+        makeReply()
+      );
+
+      const payload = mockSendSuccess.mock.calls[0][1] as any;
+      expect(payload.validatedMentions).toEqual(['alice']);
+    });
   });
 
   // ─── GET /conversations/:id/reactions ────────────────────────────────────
