@@ -8,7 +8,7 @@
  * @module hooks/conversations/use-video-call
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
@@ -45,6 +45,21 @@ interface UseVideoCallReturn {
 export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCallReturn {
   const { user } = useAuth();
 
+  // A double-click (or a re-render firing the click handler twice) before the
+  // first getUserMedia + call:initiate round-trip settles used to acquire a
+  // SECOND camera/mic stream and overwrite window.__preauthorizedMediaStream
+  // with it, orphaning the first stream — nothing ever calls stop() on it, so
+  // the camera/mic indicator stayed lit for the rest of the session. Same
+  // failure family as videoToggleInFlightRef/cameraSwitchInFlightRef
+  // (VideoCallInterface.tsx) and acceptingCallIdRef (CallManager.tsx). Unlike
+  // those, the guard can't be a plain try/finally around the whole function:
+  // socket.emit's ack fires asynchronously via callback, well after the
+  // outer async function has already returned, so the ref is only cleared
+  // explicitly on every exit path below (early return, catch, and inside the
+  // ack callback) — never by a finally block, which would clear it while the
+  // request is still in flight.
+  const startCallInFlightRef = useRef(false);
+
   /**
    * Démarre un appel vidéo
    */
@@ -58,6 +73,11 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       toast.error('Calls are only available for direct conversations');
       return;
     }
+
+    if (startCallInFlightRef.current) {
+      return;
+    }
+    startCallInFlightRef.current = true;
 
     const isVideo = type === 'video';
     let stream: MediaStream | null = null;
@@ -75,6 +95,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       if (!socket?.connected) {
         toast.error('Connection error. Please try again.');
         stopPreauthorizedStream(stream);
+        startCallInFlightRef.current = false;
         return;
       }
 
@@ -89,6 +110,11 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       };
 
       socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (ack: CallInitiateAck) => {
+        // Whichever way the ack resolves, the attempt this ref was guarding
+        // against re-entrancy is over — clear it first so it can't be left
+        // stuck true by an early return below.
+        startCallInFlightRef.current = false;
+
         // The gateway can reject call:initiate (callee busy/blocked/offline,
         // rate-limited, validation error). Without handling this branch the
         // pre-authorized camera/mic stream stays hot forever — the only
@@ -134,6 +160,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         toast.success('Starting call...');
       });
     } catch (error: unknown) {
+      startCallInFlightRef.current = false;
       stopPreauthorizedStream(stream);
       handleMediaError(error);
     }
