@@ -201,8 +201,18 @@ suivi, vérifie sa taille (`wc -l`) :
   par défaut — vérifie au premier archivage, ne suppose pas) : si le fichier dépasse ~1500 lignes,
   garde les **~300 DERNIÈRES lignes** (les plus récentes) et déplace le DÉBUT — le plus ancien —
   vers `<même-dossier>/<nom>-archive-<AAAA-MM>.md`, en laissant un lien en tête vers l'archive.
-- Dans les deux cas, l'archivage est un **commit séparé et dédié**
-  (`chore(tasks): archive <fichier>`), jamais mélangé à un commit de slice/item.
+- Dans les deux cas, l'archivage est un **incrément séparé et dédié**
+  (`chore(tasks): archive <fichier>`), jamais mélangé à un commit de slice/item. `PROGRESS.md` et
+  `NOTES.md` vivent sous `apps/android/` : leur archivage passe par le flux normal PR + CI +
+  squash-merge de la lane Android (diff `apps/android`-only), **pas** un push direct — contrairement
+  à `tasks/lane-cursor.md`/`tasks/ios-debt-routine-progress.md` qui, eux, sont hors `apps/android/`
+  et `apps/ios/` et se poussent directement (cf. §Choix de la lane). Après un run d'archivage pur
+  (ni slice ni item), `tasks/lane-cursor.md` ne bouge pas — pas de commit vide pour un `lane`/
+  `android_streak`/`last_run` inchangé.
+- **Le scan de reprise après interruption (§Étape 0 point 5) reste obligatoire même quand tu
+  penses partir sur un run d'archivage pur** — fais-le AVANT de choisir l'archivage, pas après
+  coup. C'est le seul check bon marché qui pourrait révéler un vrai blocage passant devant la
+  hygiène (l'itération 10 l'a fait après coup et est tombée juste, mais l'ordre correct est avant).
 - Ne touche jamais `apps/android/tasks/feature-parity.md` de cette façon — c'est un checklist
   d'état, pas un journal ; il ne grossit que par ajout de nouvelles capacités découvertes, à un
   rythme lent.
