@@ -187,6 +187,12 @@ suivi, vérifie sa taille (`wc -l`) :
   aucune tautologie.
 - Jamais de merge sur CI rouge, jamais de baisse d'un seuil de couverture existant, jamais de
   secrets/`local.properties` committés.
+- **`gh pr merge --squash --delete-branch` échoue en code de sortie non-zéro dans ce setup
+  multi-worktree** (`fatal: 'main' is already used by worktree ...`) dès que `main` est déjà
+  checkouté ailleurs — le merge réussit pourtant côté serveur, seul le nettoyage local de la
+  branche échoue. Ne pas interpréter ce code de sortie comme un échec de merge : vérifie toujours
+  via `gh pr view --json state,mergedAt`, et si besoin supprime la branche remote séparément
+  (`git push origin --delete <branche>`) plutôt que de compter sur `--delete-branch`.
 - SDK purity partout — `packages/MeeshySDK/CLAUDE.md` côté iOS, dépendances `:sdk-core`/`:sdk-ui`
   (`apps/android/ARCHITECTURE.md §2`, `decisions.md` ADR-003) côté Android.
 - Un incrément par run. Preuve avant fix. Aucune question à l'utilisateur si la réponse est dans
