@@ -350,31 +350,51 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   };
 
+  // Re-entrancy guards: neither handler held one, unlike their sibling
+  // `CallManager.handleAcceptCall` (Vague 33). A double-click/tap — or the
+  // adaptive-degradation controller's own resume()/suspend() (see
+  // use-adaptive-degradation.ts) racing a manual toggle — before the first
+  // getUserMedia + replaceTrack round-trip settles let a second invocation
+  // acquire its own camera track. Whichever replaceTrack/store-write resolves
+  // last "wins"; the LOSING track is never referenced by anything that could
+  // stop it, leaking an orphaned camera capture for the rest of the call
+  // (camera indicator stays lit with nothing consuming the feed).
+  const videoToggleInFlightRef = useRef(false);
+  const cameraSwitchInFlightRef = useRef(false);
+
   const handleToggleVideo = async () => {
-    const newEnabled = !controls.videoEnabled;
+    if (videoToggleInFlightRef.current) return;
+    videoToggleInFlightRef.current = true;
     try {
-      // Real audio↔video switch: acquire/release the camera and renegotiate
-      // (FaceTime-style asymmetric) instead of merely toggling track.enabled.
-      if (newEnabled) {
-        await enableVideo();
-      } else {
-        await disableVideo();
+      const newEnabled = !controls.videoEnabled;
+      try {
+        // Real audio↔video switch: acquire/release the camera and renegotiate
+        // (FaceTime-style asymmetric) instead of merely toggling track.enabled.
+        if (newEnabled) {
+          await enableVideo();
+        } else {
+          await disableVideo();
+        }
+      } catch (error) {
+        logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
+        toast.error(t('calls.toasts.videoSwitchFailed'));
+        return;
       }
-    } catch (error) {
-      logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
-      toast.error(t('calls.toasts.videoSwitchFailed'));
-      return;
-    }
 
-    setControls({ videoEnabled: newEnabled });
+      setControls({ videoEnabled: newEnabled });
 
-    const socket = meeshySocketIOService.getSocket();
-    if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+      const socket = meeshySocketIOService.getSocket();
+      if (socket) {
+        (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+      }
+    } finally {
+      videoToggleInFlightRef.current = false;
     }
   };
 
   const handleSwitchCamera = async () => {
+    if (cameraSwitchInFlightRef.current) return;
+    cameraSwitchInFlightRef.current = true;
     let newStream: MediaStream | null = null;
     try {
       if (!localStream) return;
@@ -418,6 +438,8 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       newStream?.getVideoTracks().forEach((track) => track.stop());
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
       toast.error(t('calls.toasts.cameraSwitchFailed'));
+    } finally {
+      cameraSwitchInFlightRef.current = false;
     }
   };
 
