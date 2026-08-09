@@ -7,6 +7,8 @@ import MeeshyUI
 import os
 
 struct LocationPickerView: View {
+    /// Couleur PRIMAIRE de la conversation — les appelants passent
+    /// `conversation.accentColor`, qui est `colorPalette.primary`.
     let accentColor: String
     /// Émet un lieu COMPLET (coordonnées + nom + adresse + catégorie POI),
     /// pas de simples coordonnées nues : c'est ce que jetait l'ancienne
@@ -18,9 +20,23 @@ struct LocationPickerView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
+    @ObservedObject private var preferencesStore = LocationSharingPreferencesStore.shared
     @State private var searchText = ""
     @State private var mapTarget: MapTarget?
     @State private var didCenterOnUser = false
+    @State private var isShowingSettings = false
+
+    /// Couleur d'ACCENT de la conversation, dérivée du primaire par la formule
+    /// officielle du SDK. `DynamicColorGenerator.colorFor(context:)` calcule
+    /// `accent = shiftHue(primary, -30°)` et n'applique jamais
+    /// `saturationBoost` aux hex — cette dérivation reproduit donc
+    /// `conversation.colorPalette.accent` à l'identique, sans imposer un
+    /// nouveau paramètre aux sept sites d'appel.
+    private var secondaryAccent: String {
+        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
+    }
+
+    private var precision: LocationPrecision { preferencesStore.preferences.precision }
 
     var body: some View {
         NavigationStack {
@@ -35,6 +51,8 @@ struct LocationPickerView: View {
                     Spacer()
                     bottomCard
                 }
+
+                floatingControls
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -47,6 +65,9 @@ struct LocationPickerView: View {
                         .font(MeeshyFont.relative(16, weight: .bold))
                         .accessibilityAddTraits(.isHeader)
                 }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                LocationSharingSettingsSheet(accentColor: accentColor)
             }
             .onAppear { viewModel.requestPermission() }
             .onReceive(viewModel.userLocationUpdates) { loc in
@@ -100,6 +121,11 @@ struct LocationPickerView: View {
         AdaptiveInteractiveMap(
             target: mapTarget,
             annotationCoordinate: viewModel.selectedCoordinate,
+            style: preferencesStore.preferences.mapStyle,
+            // Les contrôles système se rendent en haut-trailing, SOUS la barre
+            // de recherche flottante — c'est exactement là que le bouton de
+            // recentrage devenait inatteignable. On pose les nôtres.
+            defaultControls: false,
             onRegionChange: { center in
                 viewModel.updateSelectedLocation(center)
             }
@@ -109,10 +135,75 @@ struct LocationPickerView: View {
             // with Dynamic Type would detach it from the point it marks (74i/86i).
             Image(systemName: "mappin.circle.fill")
                 .font(.system(size: 36))
-                .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
-                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
+                .foregroundStyle(Color(hex: accentColor), Color(hex: secondaryAccent).opacity(0.35))
+                .shadow(color: Color(hex: secondaryAccent).opacity(0.45), radius: 6, y: 3)
         }
         .ignoresSafeArea(edges: .bottom)
+    }
+
+    // MARK: - Contrôles flottants
+
+    /// Colonne trailing ancrée SOUS la barre de recherche. Elle s'efface quand
+    /// des résultats s'affichent : la liste a alors la priorité visuelle, et
+    /// c'est le seul recouvrement accepté.
+    private var floatingControls: some View {
+        VStack(spacing: 10) {
+            controlButton(
+                icon: "info.circle",
+                label: String(localized: "location.settings.open", defaultValue: "Réglages de partage de position", bundle: .main)
+            ) {
+                isShowingSettings = true
+            }
+
+            controlButton(
+                icon: "location.fill",
+                label: String(localized: "location.recenter", defaultValue: "Recentrer sur ma position", bundle: .main)
+            ) {
+                viewModel.centerOnUser()
+                if let loc = viewModel.userLocation {
+                    mapTarget = MapTarget(center: loc, latitudinalMeters: 500, longitudinalMeters: 500)
+                }
+            }
+        }
+        .padding(.trailing, 16)
+        // 8 (top de la barre) + ~44 (hauteur de la barre) + 12 de respiration.
+        // Le bandeau de refus de localisation s'insère SOUS la barre dans la
+        // même colonne : quand il est là, la pile descend d'autant, sinon les
+        // deux se chevaucheraient.
+        .padding(.top, viewModel.isLocationRefused ? 124 : 64)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .opacity(viewModel.searchResults.isEmpty ? 1 : 0)
+        .allowsHitTesting(viewModel.searchResults.isEmpty)
+        .animation(.easeInOut(duration: 0.18), value: viewModel.searchResults.isEmpty)
+    }
+
+    private func controlButton(
+        icon: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            Image(systemName: icon)
+                // Chrome de carte ancré à une taille d'écran fixe, pas du texte
+                // à lire : le mettre à l'échelle du Dynamic Type le décrocherait
+                // de la grille de contrôles (doctrine 86i).
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Color(hex: secondaryAccent))
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle())
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                // Cible tactile Apple HIG (44 pt) sans grossir le disque
+                // visible (40 pt). L'ORDRE compte : `frame` d'abord, puis
+                // `contentShape` — l'inverse découperait la zone tactile sur
+                // le disque de 40 et la cible resterait sous-dimensionnée.
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .accessibilityLabel(label)
     }
 
     // MARK: - Search Bar
@@ -121,7 +212,7 @@ struct LocationPickerView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
             TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu...", bundle: .main), text: $searchText)
@@ -194,9 +285,9 @@ struct LocationPickerView: View {
                             // a scalable font would overflow the frame (doctrine 86i).
                             // Decorative — the place name carries the meaning.
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundColor(Color(hex: secondaryAccent))
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color(hex: accentColor).opacity(0.1)))
+                            .background(Circle().fill(Color(hex: secondaryAccent).opacity(0.12)))
                             .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -241,8 +332,8 @@ struct LocationPickerView: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    if let address = viewModel.addressString {
-                        Text(address)
+                    if let title = displayedTitle {
+                        Text(title)
                             .font(MeeshyFont.relative(13, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(2)
@@ -260,10 +351,18 @@ struct LocationPickerView: View {
                             .foregroundColor(theme.textMuted)
                     }
 
-                    if let coord = viewModel.selectedCoordinate {
-                        Text(String(format: "%.5f, %.5f", coord.latitude, coord.longitude))
-                            .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
-                            .foregroundColor(theme.textMuted)
+                    if let place = displayedPlace {
+                        HStack(spacing: 6) {
+                            Text(formattedCoordinates(of: place))
+                                .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
+                                .foregroundColor(theme.textMuted)
+                            Text(verbatim: "·")
+                                .font(MeeshyFont.relative(10))
+                                .foregroundColor(theme.textMuted)
+                            Text(LocationSharingLabels.precisionBadge(precision))
+                                .font(MeeshyFont.relative(10, weight: .semibold))
+                                .foregroundColor(Color(hex: secondaryAccent))
+                        }
                     }
                 }
 
@@ -273,65 +372,38 @@ struct LocationPickerView: View {
             // as a single element instead of three disjoint fragments.
             .accessibilityElement(children: .combine)
 
-            HStack(spacing: 12) {
-                Button {
-                    viewModel.centerOnUser()
-                    if let loc = viewModel.userLocation {
-                        mapTarget = MapTarget(
-                            center: loc, latitudinalMeters: 500, longitudinalMeters: 500
+            Button {
+                guard let place = displayedPlace else { return }
+                Logger(subsystem: "me.meeshy.app", category: "location")
+                    .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public) precision=\(self.precision.rawValue, privacy: .public)")
+                onSelect(place)
+                HapticFeedback.success()
+                dismiss()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(MeeshyFont.relative(14, weight: .bold))
+                    Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            // Le dégradé de la CONVERSATION : primaire vers
+                            // accent, pas primaire vers lui-même atténué.
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryAccent)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
                         )
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "location.circle.fill")
-                            .font(MeeshyFont.relative(14))
-                        Text(String(localized: "location.my-position", defaultValue: "Ma position", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .semibold))
-                    }
-                    .foregroundColor(Color(hex: accentColor))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(hex: accentColor).opacity(0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                }
-
-                Button {
-                    guard let place = viewModel.selectedPlace else { return }
-                    Logger(subsystem: "me.meeshy.app", category: "location")
-                        .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public)")
-                    onSelect(place)
-                    HapticFeedback.success()
-                    dismiss()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                            .font(MeeshyFont.relative(14, weight: .bold))
-                        Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
-                            .font(MeeshyFont.relative(13, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.8)],
-                                    startPoint: .leading, endPoint: .trailing
-                                )
-                            )
-                            .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 6, y: 3)
-                    )
-                }
-                .disabled(viewModel.selectedCoordinate == nil)
-                .opacity(viewModel.selectedCoordinate == nil ? 0.5 : 1)
+                        .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 6, y: 3)
+                )
             }
+            .disabled(displayedPlace == nil)
+            .opacity(displayedPlace == nil ? 0.5 : 1)
         }
         .padding(16)
         // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
@@ -341,6 +413,33 @@ struct LocationPickerView: View {
         .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
+    }
+
+    /// Ce qui PARTIRA, précision appliquée. La carte du bas montre exactement
+    /// ce que le destinataire recevra — pas une valeur brute qui serait
+    /// dégradée en silence au moment du tap.
+    private var displayedPlace: SharedPlace? {
+        viewModel.sharedPlace(at: precision)
+    }
+
+    /// Nom ET adresse, dédupliqués. Ne montrer que l'adresse perdrait le nom du
+    /// quartier aux niveaux grossiers (« Gros-Caillou » disparaîtrait derrière
+    /// « Paris, France ») ; ne montrer que le nom perdrait l'adresse complète
+    /// au niveau exact.
+    private var displayedTitle: String? {
+        guard let place = displayedPlace else { return nil }
+        let parts = [place.name, place.address].compactMap { $0 }.filter { !$0.isEmpty }
+        let deduped = parts.reduce(into: [String]()) { acc, part in
+            if !acc.contains(part) { acc.append(part) }
+        }
+        return deduped.isEmpty ? nil : deduped.joined(separator: " · ")
+    }
+
+    /// Le nombre de décimales suit le niveau : afficher `20.00000` pour une
+    /// valeur arrondie au degré près suggérerait une précision disparue.
+    private func formattedCoordinates(of place: SharedPlace) -> String {
+        let places = precision.decimalPlaces ?? 5
+        return String(format: "%.\(places)f, %.\(places)f", place.latitude, place.longitude)
     }
 }
 
