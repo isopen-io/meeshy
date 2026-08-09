@@ -620,7 +620,11 @@ export class MessageHandler {
    * Mirrors the REST PUT /messages/:messageId logic but operates over socket
    * so the edit is propagated without an HTTP round-trip.
    *
-   * Permissions: only the message author can edit their own message.
+   * Permissions: `admitMessageEdit` — l'auteur pendant 24h, ET tout membre
+   * actif porteur d'un rôle GLOBAL privilégié (MODERATOR/ADMIN/BIGBOSS), sans
+   * fenêtre. Cette ligne annonçait encore « seul l'auteur peut éditer », ce que
+   * le code avait cessé de faire : c'est en la lisant qu'on a laissé la file de
+   * rejeu hors ligne exclure l'auteur en croyant exclure l'acteur.
    * Anonymous users cannot edit (no stable identity → no ownership proof).
    */
   async handleMessageEdit(
@@ -843,9 +847,24 @@ export class MessageHandler {
         (err) => handlerLogger.warn('conversation preview fanout (edit) failed', { error: err })
       );
 
-      this._enqueueOfflineEventForParticipants(
-        message.conversationId, message.senderId, 'edited', validated.messageId, editedPayload
-      ).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      // Skip the EDITOR, not the author. Depuis que `admitMessageEdit` admet un
+      // modérateur sur le message d'autrui, les deux ne sont plus la même
+      // personne : `message.senderId` est le `Participant.id` de l'AUTEUR. Le
+      // passer ici sautait l'auteur hors ligne, qui n'apprenait alors JAMAIS
+      // que son message avait été modéré — rien ne rejoue l'événement et aucun
+      // client ne refetch spontanément, donc sa copie gardait le texte
+      // d'avant-modération pendant que toute la conversation lisait le texte
+      // corrigé. Le seul destinataire que le geste concerne vraiment était le
+      // seul exclu. `userId` est l'éditeur, et c'est un `User.id` réel :
+      // l'anonyme est refusé en tête de ce handler. Jumeau du même correctif
+      // dans `handleMessageDelete`.
+      this._enqueueOfflineEventForParticipants({
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'edited',
+        messageId: validated.messageId,
+        payload: editedPayload,
+      }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -990,14 +1009,24 @@ export class MessageHandler {
       // Skip the DELETER, not the author. A moderator/admin may delete another
       // user's message (`message.senderId` is the author's participant id, not
       // the actor's) — passing the author here skipped the offline author, who
-      // then never learns their moderated message was removed. The deleter's own
-      // participant id is the conversation-scoped row loaded above; when the
-      // deleter is a global admin who is NOT a participant it is undefined, which
-      // skips nobody (the online deleter is already excluded by the presence check).
+      // then never learns their moderated message was removed.
+      //
+      // Les DEUX monnaies d'identité de l'acteur sont passées, et elles se
+      // relaient : le `Participant.id` vient de la ligne conversation-scopée
+      // lue plus haut, qui est `undefined` pour un admin GLOBAL non-participant
+      // — lequel a toujours un `User.id`. L'exclusion ne dépend donc jamais du
+      // fait que l'acteur soit connecté. Les deux espaces d'id ne se croisant
+      // pas, en passer deux ne sur-exclut personne : ils désignent la même
+      // personne.
       const deleterParticipantId = message.conversation.participants[0]?.id;
-      this._enqueueOfflineEventForParticipants(
-        message.conversationId, deleterParticipantId, 'deleted', validated.messageId, deletedPayload
-      ).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
+      this._enqueueOfflineEventForParticipants({
+        conversationId: message.conversationId,
+        actorParticipantId: deleterParticipantId,
+        actorUserId: userId,
+        eventType: 'deleted',
+        messageId: validated.messageId,
+        payload: deletedPayload,
+      }).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:delete processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -1394,17 +1423,31 @@ export class MessageHandler {
    * entries on reconnect, so the recipient's cached message stays on the
    * pre-edit content (or a "deleted" message stays visible) until an
    * unrelated full refetch of that conversation happens to occur.
+   *
+   * L'exclusion porte sur l'ACTEUR — celui qui édite ou supprime — et sur
+   * personne d'autre. Le paramètre s'appelait `senderParticipantId`, et ce nom
+   * décrivait l'auteur du message : les deux coïncident tant qu'on ne peut
+   * toucher que ses propres messages, et divergent dès qu'un modérateur
+   * intervient. `handleMessageEdit` passait effectivement `message.senderId`,
+   * si bien que l'auteur hors ligne — le seul destinataire que la modération
+   * concerne vraiment — était le seul que le rejeu sautait. Un paramètre-objet
+   * nommé d'après le RÔLE (`actor…`) plutôt que d'après une valeur qu'on avait
+   * sous la main est ce qui rend le prochain appel lisible au premier coup
+   * d'œil.
    */
-  private async _enqueueOfflineEventForParticipants(
-    conversationId: string,
-    senderParticipantId: string | null | undefined,
-    eventType: 'edited' | 'deleted',
-    messageId: string,
-    payload: Record<string, unknown>
-  ): Promise<void> {
+  private async _enqueueOfflineEventForParticipants(params: {
+    conversationId: string;
+    /** `Participant.id` de l'acteur, quand le transport le connaît. */
+    actorParticipantId?: string | null;
+    /** `User.id` de l'acteur. Les deux espaces d'id ne se croisent jamais. */
+    actorUserId?: string | null;
+    eventType: 'edited' | 'deleted';
+    messageId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
-      { conversationId, actorParticipantId: senderParticipantId, eventType, messageId, payload }
+      params
     );
   }
 

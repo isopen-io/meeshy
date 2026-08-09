@@ -300,6 +300,7 @@ interface HandlerOptions {
   privacyPreferencesService?: any;
   agentClient?: any;
   stats?: { messages_processed: number; errors: number };
+  deliveryQueue?: any;
 }
 
 function makeHandler(opts: HandlerOptions = {}) {
@@ -324,6 +325,7 @@ function makeHandler(opts: HandlerOptions = {}) {
     readStatusService: opts.readStatusService ?? makeMockReadStatusService(),
     privacyPreferencesService: opts.privacyPreferencesService ?? makeMockPrivacyPreferencesService(),
     agentClient: opts.agentClient ?? null,
+    deliveryQueue: opts.deliveryQueue ?? null,
   };
 
   return { handler: new MessageHandler(deps), io, prisma, messagingService, stats, connectedUsers, socketToUser };
@@ -3586,6 +3588,77 @@ describe('MessageHandler.handleMessageEdit', () => {
     (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
     await expect(handler.handleMessageEdit(socket, makeEditData())).resolves.not.toThrow();
   });
+
+  // ─── File de rejeu hors ligne : l'ÉDITEUR n'est plus l'AUTEUR ──────────────
+  //
+  // `admitMessageEdit` admet un modérateur sur le message d'autrui. L'exclusion
+  // de la file hors ligne portait, elle, sur `message.senderId` — l'AUTEUR. Le
+  // seul destinataire que la modération concerne vraiment était donc le seul
+  // que le rejeu sautait.
+  describe('offline replay queue — the actor is the EDITOR, not the author', () => {
+    function makeModeratedSetup(opts: { moderatorOnline: boolean }) {
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+      const { connectedUsers, socketToUser } = makeAuthenticatedSetup({
+        id: 'user-mod',
+        userId: 'user-mod',
+        participantId: 'participant-mod',
+        displayName: 'Mod',
+      });
+      // L'auteur `user-1` n'est JAMAIS dans la carte de présence : il est hors
+      // ligne, donc c'est la file de rejeu — et elle seule — qui lui apprendra
+      // que son message a été modéré.
+      const presence = opts.moderatorOnline ? connectedUsers : new Map<string, SocketUser>();
+
+      const enqueue: any = jest.fn(async () => undefined);
+      const prisma = makeMockPrisma({
+        message: {
+          findFirst: jest.fn(async () => makeExistingMessage()),
+          updateMany: jest.fn(async () => ({ count: 1 })),
+        },
+        participant: {
+          // Admission : membre actif porteur d'un rôle GLOBAL privilégié.
+          findFirst: jest.fn(async () => ({ id: 'participant-mod', user: { role: 'MODERATOR' } })),
+          // Audience du fan-out hors ligne.
+          findMany: jest.fn(async () => [
+            { id: 'participant-1', userId: 'user-1' },
+            { id: 'participant-mod', userId: 'user-mod' },
+          ]),
+        },
+      });
+
+      const { handler } = makeHandler({
+        connectedUsers: presence as any,
+        socketToUser,
+        prisma,
+        deliveryQueue: { enqueue },
+      });
+      (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
+
+      return { handler, enqueue, socket: makeSocket() };
+    }
+
+    it('queues the edit for the OFFLINE AUTHOR when a moderator edits their message', async () => {
+      const { handler, enqueue, socket } = makeModeratedSetup({ moderatorOnline: true });
+
+      await handler.handleMessageEdit(socket, makeEditData(), jest.fn());
+
+      expect(enqueue).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ eventType: 'edited', messageId: 'aabbccddee1122334455aabb' })
+      );
+    });
+
+    it('never queues the edit back to the EDITOR, by identity rather than by presence', async () => {
+      // Le modérateur est absent de la carte de présence : si l'exclusion ne
+      // tenait qu'à `connectedUsers`, il recevrait le rejeu de sa propre action.
+      const { handler, enqueue, socket } = makeModeratedSetup({ moderatorOnline: false });
+
+      await handler.handleMessageEdit(socket, makeEditData(), jest.fn());
+
+      expect(enqueue).not.toHaveBeenCalledWith('user-mod', expect.anything());
+      expect(enqueue).toHaveBeenCalledWith('user-1', expect.anything());
+    });
+  });
 });
 
 // ============================================================
@@ -3868,5 +3941,55 @@ describe('MessageHandler.handleMessageDelete', () => {
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await expect(handler.handleMessageDelete(socket, makeDeleteData())).resolves.not.toThrow();
+  });
+
+  // Le jumeau de la file de rejeu côté édition : un modérateur supprime le
+  // message d'autrui, et c'est l'AUTEUR — hors ligne — qui doit l'apprendre.
+  // Ce chemin portait déjà la correction ; il n'avait aucun test pour la tenir.
+  it('queues the deletion for the OFFLINE AUTHOR when a conversation admin deletes their message', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { socketToUser } = makeAuthenticatedSetup({
+      id: 'user-mod',
+      userId: 'user-mod',
+      participantId: 'participant-mod',
+      displayName: 'Mod',
+    });
+    const message = makeMessageForDelete({
+      conversation: {
+        createdAt: new Date('2025-01-01'),
+        lastMessageAt: new Date('2026-02-01'),
+        participants: [{ id: 'participant-mod', role: 'admin' }],
+      },
+    });
+    const enqueue: any = jest.fn(async () => undefined);
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn().mockResolvedValueOnce(message).mockResolvedValueOnce(null),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      participant: {
+        findMany: jest.fn(async () => [
+          { id: 'participant-1', userId: 'user-1' },
+          { id: 'participant-mod', userId: 'user-mod' },
+        ]),
+      },
+    });
+    // Personne dans la carte de présence : l'exclusion de l'acteur doit tenir
+    // à son IDENTITÉ, pas au fait qu'il soit connecté.
+    const { handler } = makeHandler({
+      connectedUsers: new Map<string, SocketUser>() as any,
+      socketToUser,
+      prisma,
+      deliveryQueue: { enqueue },
+    });
+
+    await handler.handleMessageDelete(makeSocket(), makeDeleteData(), jest.fn());
+
+    expect(enqueue).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ eventType: 'deleted', messageId: message.id })
+    );
+    expect(enqueue).not.toHaveBeenCalledWith('user-mod', expect.anything());
   });
 });
