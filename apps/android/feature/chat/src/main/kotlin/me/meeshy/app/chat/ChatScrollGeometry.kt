@@ -2,12 +2,13 @@ package me.meeshy.app.chat
 
 /**
  * Which end of the rendered [ChatListItem] list currently holds the newest
- * message. [TopDown] is the app's only mode today (oldest content at index 0,
- * newest at the last index); [BottomUp] describes the eventual bottom-anchored
- * flip (`LazyColumn(reverseLayout = true)` fed a reversed item list, so
- * storage order runs newest-to-oldest) that the §C list-inversion rewrite will
- * introduce. See `apps/android/tasks/android-routine/PROGRESS.md`'s
- * "§C inverted-list rewrite" note for the full decomposition this prepares.
+ * message. [BottomUp] is [ChatScreen]'s shipped mode (`LazyColumn(reverseLayout
+ * = true)` fed `listItems.asReversed()`, so the rendered list runs
+ * newest-to-oldest and the newest message sits at index 0, pinned to the
+ * bottom edge); [TopDown] (oldest content at index 0, newest at the last
+ * index) is kept as the pre-flip mode, still exercised by every function's
+ * original test coverage. See `apps/android/tasks/android-routine/PROGRESS.md`'s
+ * "§C inverted-list rewrite" note for the full decomposition this completes.
  */
 enum class ChatListOrientation {
     TopDown,
@@ -21,10 +22,10 @@ enum class ChatListOrientation {
  * off `LazyListState`/`listItems` and returns a plain index or boolean — zero
  * Compose dependency.
  *
- * [ChatScreen] only ever passes [ChatListOrientation.TopDown] today, byte-for-
- * byte reproducing its pre-existing ad-hoc arithmetic; the
- * [ChatListOrientation.BottomUp] arm is proven correct here, in isolation,
- * ahead of the screen actually switching to a `reverseLayout` list.
+ * [ChatScreen] wires every call site through [ChatListOrientation.BottomUp]
+ * (the shipped `reverseLayout` list); the [ChatListOrientation.TopDown] arm
+ * stays fully tested as the pre-flip behaviour every function reproduced
+ * byte-for-byte before the screen switched over.
  */
 object ChatScrollGeometry {
 
@@ -75,6 +76,39 @@ object ChatScrollGeometry {
         return when (orientation) {
             ChatListOrientation.TopDown -> edgeIndex <= LOAD_OLDER_THRESHOLD
             ChatListOrientation.BottomUp -> edgeIndex >= lastIndex - LOAD_OLDER_THRESHOLD
+        }
+    }
+
+    /**
+     * Which of `LazyListState`'s two Compose-native readings — the lowest
+     * visible index ([firstVisibleIndex]) or the highest ([lastVisibleIndex])
+     * — currently sits at the chat's BOTTOM edge (nearest the newest
+     * message). In [ChatListOrientation.TopDown] the newest message renders
+     * last, so the highest visible index is the bottom edge; under
+     * `reverseLayout` ([ChatListOrientation.BottomUp]) the newest message is
+     * row 0, so the lowest visible index is the bottom edge instead. Feed the
+     * result straight into [isNearBottom]'s `edgeIndex`.
+     */
+    fun bottomEdgeIndex(firstVisibleIndex: Int, lastVisibleIndex: Int, orientation: ChatListOrientation): Int {
+        return when (orientation) {
+            ChatListOrientation.TopDown -> lastVisibleIndex
+            ChatListOrientation.BottomUp -> firstVisibleIndex
+        }
+    }
+
+    /**
+     * The mirror of [bottomEdgeIndex]: which reading currently sits at the
+     * chat's OLD (top-of-screen) edge. A chat list always shows its oldest
+     * content at the visual top regardless of orientation (the two
+     * reversals — item order + `reverseLayout` — cancel), so this also
+     * doubles as "the topmost visible row" for [PinnedDayHeader]. Feed the
+     * result into [isNearOldEnd]'s `edgeIndex` and
+     * [PinnedDayHeader.governingDayMillis]'s `topIndex`.
+     */
+    fun topEdgeIndex(firstVisibleIndex: Int, lastVisibleIndex: Int, orientation: ChatListOrientation): Int {
+        return when (orientation) {
+            ChatListOrientation.TopDown -> firstVisibleIndex
+            ChatListOrientation.BottomUp -> lastVisibleIndex
         }
     }
 }

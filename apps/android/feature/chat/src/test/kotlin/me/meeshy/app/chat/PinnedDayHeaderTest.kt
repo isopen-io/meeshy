@@ -102,4 +102,54 @@ class PinnedDayHeaderTest {
         val header = items.filterIsInstance<ChatListItem.DayHeader>().first().dayMillis
         assertThat(PinnedDayHeader.governingDayMillis(items, messageIndex)).isEqualTo(header)
     }
+
+    @Test
+    fun `TopDown is the default orientation, unchanged from the orientation-less overload`() {
+        assertThat(PinnedDayHeader.governingDayMillis(twoDayItems, 1, ChatListOrientation.TopDown))
+            .isEqualTo(PinnedDayHeader.governingDayMillis(twoDayItems, 1))
+    }
+
+    // -- BottomUp (reverseLayout) -----------------------------------------
+    //
+    // Reversing item order flips a day header from BEFORE its day's messages
+    // to AFTER them (`[DayHeader(d1), m1, DayHeader(d2), m2, m3]` reversed is
+    // `[m3, m2, DayHeader(d2), m1, DayHeader(d1)]`), so the governing search
+    // must scan UP toward the end of the list instead of down toward 0.
+
+    private val reversedTwoDayItems = twoDayItems.asReversed()
+
+    @Test
+    fun `BottomUp -- a message pins the day header that now sits after it`() {
+        // reversed = [m3@0, m2@1, DayHeader(d2)@2, m1@3, DayHeader(d1)@4]
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, 0, ChatListOrientation.BottomUp))
+            .isEqualTo(d2)
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, 1, ChatListOrientation.BottomUp))
+            .isEqualTo(d2)
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, 3, ChatListOrientation.BottomUp))
+            .isEqualTo(d1)
+    }
+
+    @Test
+    fun `BottomUp -- the day header itself as the topmost row floats nothing`() {
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, 2, ChatListOrientation.BottomUp))
+            .isNull()
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, 4, ChatListOrientation.BottomUp))
+            .isNull()
+    }
+
+    @Test
+    fun `BottomUp -- a top index past the end clamps to the earliest header and floats nothing`() {
+        // reversed[4] is DayHeader(d1) — the reversed list's last row is always
+        // the earliest section's own inline header, so clamping there behaves
+        // like already being scrolled to the very top of history.
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, 99, ChatListOrientation.BottomUp))
+            .isNull()
+    }
+
+    @Test
+    fun `BottomUp -- an empty list or negative index has no governing day`() {
+        assertThat(PinnedDayHeader.governingDayMillis(emptyList(), 0, ChatListOrientation.BottomUp)).isNull()
+        assertThat(PinnedDayHeader.governingDayMillis(reversedTwoDayItems, -1, ChatListOrientation.BottomUp))
+            .isNull()
+    }
 }

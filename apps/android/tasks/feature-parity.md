@@ -1807,6 +1807,39 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tranche 2, quand `BottomUp` a un appelant réel). Reste : sous-tranche 2 (le flip visible —
       `reverseLayout = true` + liste inversée + rebrancher les 4 sites restants sur `BottomUp`) et
       sous-tranche 3 (vérification IME on-device) — décomposition complète dans PROGRESS.md.
+      **Inverted-list sub-slice 2 (the visible flip) done** (slice `chat-inverted-list-flip`,
+      2026-08-10) : `ChatScreen`'s `LazyColumn` gagne `reverseLayout = true` + `listItems.asReversed()`
+      (`renderedItems`, une vue paresseuse — les deux renversements s'annulent, l'ordre de lecture
+      visuel reste identique) ; les 7 comportements dépendants de la direction (scroll initial,
+      auto-scroll sur nouveau message, jump recherche, jump réponse citée, `isNearBottom`, le pilier
+      `PinnedDayHeader`, le déclencheur load-older) sont tous rebranchés sur `ChatListOrientation.
+      BottomUp`. Deux nouvelles fonctions pures dans `ChatScrollGeometry` (`bottomEdgeIndex`/
+      `topEdgeIndex`) traduisent la paire `firstVisibleItemIndex`/`lastVisibleItemIndex()` Compose en
+      bord bas/bord ancien sémantique — le seul endroit qui connaît le sens du flip, mutation-prouvées
+      (inverser une branche casse exactement les 2 tests discriminants pour chacune).
+      `PinnedDayHeader.governingDayMillis` gagne un overload orienté : le renversement d'ordre inverse
+      aussi chaque bloc `[DayHeader, messages...]` en `[messages..., DayHeader]`, donc le scan `BottomUp`
+      remonte (`top..lastIndex`) au lieu de descendre (`top downTo 0`) — mutation-prouvé (inverser les
+      deux branches du `when` casse exactement les 6 tests discriminants, TopDown et BottomUp). Le
+      spinner « chargement d'historique » est déplacé de AVANT à APRÈS `items(renderedItems)` dans le
+      scope du `LazyColumn` (le plus haut index Compose rend en haut visuel sous `reverseLayout`).
+      +14 tests (`ChatScrollGeometryTest`/`PinnedDayHeaderTest`/`InitialScrollTargetTest`), tous
+      mutation-prouvés. **Vérifié on-device** (émulateur `meeshy_pixel8`, conversation réelle avec
+      ~40+ messages historiques) : atterrissage initial sur le message le plus récent, `load-older`
+      déclenché en remontant (Today → Saturday 4 July en 5 swipes, aucun crash), pastille de jour
+      flottante affichant le bon jour pendant le défilement, FAB « scroll to bottom » apparaît/
+      disparaît correctement selon `isNearBottom`, jump de recherche (`REPRO-B-1638`, 1/1, surbrillance
+      exacte), et auto-scroll vers le bas à l'envoi d'un message propre. Zéro crash sur toute la passe
+      (logcat vérifié). **Inverted-list sub-slice 3 (vérification IME on-device) done — confirmée
+      gratuite, aucun code nécessaire** (2026-08-10) : sur le même émulateur/conversation, ouvrir le
+      clavier logiciel (tap sur le champ `Message`) redimensionne la liste sans aucune logique
+      dédiée — le bord bas de la liste inversée (index 0, le plus récent) reste naturellement ancré
+      juste au-dessus du composer/clavier, exactement le bénéfice attendu d'une liste inversée. Envoi
+      d'un message texte (`ime-verify-flip-c3`) **clavier toujours ouvert** : auto-scroll vers le bas
+      correct, le nouveau message apparaît immédiatement au-dessus du composer, aucun glitch visuel.
+      Fermeture du clavier (`KEYCODE_BACK`) : la liste reprend sa hauteur pleine proprement, le
+      dernier message reste ancré en bas. Zéro crash (logcat vérifié, aucun `FATAL EXCEPTION`).
+      **§C inverted-list rewrite complet (3/3 sous-tranches)**.
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of

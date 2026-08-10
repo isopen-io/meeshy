@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=chat-scroll-geometry
+lane=ANDROID android_streak=3 last_run=chat-inverted-list-ime-verify

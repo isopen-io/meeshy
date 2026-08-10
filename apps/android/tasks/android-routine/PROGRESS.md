@@ -9,6 +9,119 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 3 (IME on-device verification) landed —
+> confirmed free, exactly as the decomposition predicted, zero production code changed** (item
+> `chat-inverted-list-ime-verify`, feature-parity §C — the routine's own standing "sub-slice 3,
+> likely free, verification-only" candidate from the prior 2 runs). **RE-PROUVEN before starting**:
+> re-read the sub-slice 2 entry above plus the `## §C inverted-list rewrite — concrete decomposition`
+> section to confirm sub-slice 3 was still genuinely open (not silently done by a concurrent
+> session) — `feature-parity.md`'s §C bullet still listed it as the sole remaining item, and
+> `git branch -r`/`gh pr list --state open` turned up no in-flight work on it (the two branches
+> touched in the last 24h, `claude/apps/android/feed-composer-media-attachments` and
+> `claude/apps/ios/inline-video-top-controls`, were both already merged — PRs #2759 and #2767). No
+> code changes were anticipated by the decomposition and none were needed. **Verified on-device**
+> (emulator `meeshy_pixel8`, already running/idle, host load ~6-8 — light, no contention this run):
+> built + installed the current `main` APK (already carrying the sub-slice 2 flip via commit
+> `2e1d03178`) over the existing session, opened the same real conversation used for sub-slice 2's
+> own verification (~40+ historical messages, `flip-test-verify` marker still present from that
+> run). (1) Tapping the `Message` composer field opens the soft keyboard; the list resizes with
+> **zero dedicated IME-handling code** — the reversed list's bottom edge (index 0, the newest
+> content) stays naturally anchored just above the composer/keyboard, exactly the benefit the
+> decomposition predicted for an inverted list, no `imePadding`/`Scaffold` adjustment needed. (2)
+> Sent a new text message (`ime-verify-flip-c3`) **with the keyboard still open**: auto-scroll-to-
+> newest fires correctly, the new bubble appears immediately above the composer with no visual
+> glitch — confirms behaviour #2 (auto-scroll-on-new-message) composes cleanly with the IME, not
+> just in isolation. (3) Dismissing the keyboard (`KEYCODE_BACK`) restores the list to full height
+> cleanly, the newest message stays anchored at the bottom. Zero crashes across the whole sequence
+> (`adb logcat` checked for `FATAL EXCEPTION`/`AndroidRuntime` — none from the app). Emulator
+> returned to the home screen afterward (idle, not mid-app), device-side screenshots/dumps cleaned
+> up. **feature-parity.md's §C inverted-list bullet now records all 3 sub-slices done — the §C
+> inverted-list rewrite is complete.** No `apps/android` production code changed this run (pure
+> verification pass), so this run's diff is `apps/android/tasks/` docs only (`feature-parity.md` +
+> this file) — still `apps/android`-only per the merge gate, no PR-worthy production risk. **Next
+> slice candidates (not attempted this run)**: chunked/resumable large-video TUS upload
+> (checkpoint store, HEAD recovery, survives app kill — still the largest/riskiest open candidate);
+> video capture fast-follow to the Feed composer's camera-capture slice (`ACTION_VIDEO_CAPTURE`,
+> same `FileProvider`/grant pattern, smaller now that the permission-grant lesson is written down);
+> files/location/audio/per-post-language attachments for the Feed composer; widgets/PiP (still
+> zero `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check).
+
+> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 2 (the actual visible flip) landed**
+> (slice `chat-inverted-list-flip`, feature-parity §C — this run's own decomposition from the
+> previous iteration, sub-slice 2 of 2 code sub-slices; sub-slice 3 is verification-only).
+> **RE-PROUVEN before starting**: re-grepped `apps/android` for `reverseLayout` — zero hits,
+> confirming the flip genuinely hadn't landed yet; re-read `ChatScreen.kt`'s 3050 lines and the
+> `## §C inverted-list rewrite — concrete decomposition` section below (written last iteration) to
+> confirm all 7 index-dependent behaviours it lists are still exactly as described. **Shipped
+> (production, all `apps/android`)**: `ChatScreen`'s `LazyColumn` gains `reverseLayout = true` fed
+> `renderedItems = listItems.asReversed()` (a cheap `List` VIEW, not a copy — the item-order
+> reversal and `reverseLayout`'s own bottom-anchored direction cancel, so the on-screen reading
+> order stays oldest-top/newest-bottom, unchanged). All 7 behaviours (initial scroll target,
+> auto-scroll-on-new-message, search-hit jump, quoted-reply jump, `isNearBottom`, the
+> `PinnedDayHeader` pill, the load-older trigger) are rewired from `ChatListOrientation.TopDown` to
+> `ChatListOrientation.BottomUp`. Two new pure functions land in `ChatScrollGeometry`:
+> `bottomEdgeIndex`/`topEdgeIndex(firstVisibleIndex, lastVisibleIndex, orientation)` — the single
+> place that translates Compose's own first/last-visible-index pair into the chat's semantic
+> bottom-edge/old-edge readings, which swap under `reverseLayout` (TopDown's bottom edge is the
+> *highest* visible index; BottomUp's is the *lowest*, and vice-versa for the old edge). Both
+> `InitialScrollTarget.of` and `PinnedDayHeader.governingDayMillis` gain an orientation-aware
+> overload (the single-arg forms kept as thin `TopDown`-defaulting wrappers, zero behaviour change
+> for existing callers/tests). **The one genuinely new piece of logic, not just rewiring**:
+> `PinnedDayHeader`'s governing-day scan direction. Reversing item order also reverses each day's
+> `[DayHeader, message...]` block into `[message..., DayHeader]` — the header now sits AFTER the
+> rows it governs, not before — so the `BottomUp` arm scans forward (`top..items.lastIndex`)
+> instead of backward (`top downTo 0`). Worked out on paper against a concrete 2-day example before
+> writing the implementation (documented in the function's own doc comment), then verified by the
+> mutation test below. The "loading older" spinner `item(key = "loading-older")` moves from BEFORE
+> `items(renderedItems)` to AFTER it in the `LazyColumn` scope — under `reverseLayout` the highest
+> Compose item index renders at the visual top, so it now correctly floats above the oldest
+> currently-loaded message instead of the newest. **+14 tests** across `ChatScrollGeometryTest` (4:
+> `bottomEdgeIndex`/`topEdgeIndex`, both orientations), `PinnedDayHeaderTest` (5: the new
+> orientation-aware overload's `BottomUp` scan, including the "clamp past the end lands on the
+> earliest header, floats nothing" edge case), `InitialScrollTargetTest` (5: the orientation-aware
+> overload, including empty-list and single-message). **Mutation-proven, all 3 new/changed pure
+> surfaces**: swapping `bottomEdgeIndex`'s two branches fails exactly the 2 discriminating tests
+> (`TopDown`/`BottomUp` "the bottom edge is..."); swapping `topEdgeIndex`'s fails exactly the other
+> 2; swapping `PinnedDayHeader`'s scan-direction branches fails exactly 6 tests spanning both
+> orientations. Each mutation applied via a scratch Python edit + `cp` backup (not `git checkout --`,
+> which would have discarded the real uncommitted diff alongside the mutation — caught and redone
+> correctly after the first attempt clobbered the legitimate changes; see lessons). **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
+> all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff `apps/android` only, all
+> under `:feature:chat` — 4 production files edited [`ChatScreen.kt`, `ChatScrollGeometry.kt`,
+> `PinnedDayHeader.kt`, `InitialScrollTarget.kt`], 3 test files extended; SDK purity — everything
+> stays inside `:feature:chat`, same grain as the sibling pure objects; SSOT — orientation threading
+> reuses the sub-slice-1 `ChatListOrientation` enum verbatim, zero re-implementation; no coverage
+> floor lowered; no tautological tests). **On-device verification — the actual differentiator for
+> this slice, done properly this run** (emulator `meeshy_pixel8`, already-booted and idle, shared
+> host load ~17-30 — moderate, not the earlier-documented ~450 contention spike): installed the
+> freshly built debug APK over the existing session (`adb install -r -d`, preserves login/data),
+> opened a real conversation with 40+ historical messages. Confirmed, screenshot-by-screenshot: (1)
+> cold-open lands exactly on the newest message at the bottom, zero manual scroll; (2) swiping
+> toward history 5× triggers `loadOlder()` repeatedly, paginating from "Today" back to "Saturday 4
+> July" with zero crashes (logcat checked for `FATAL EXCEPTION`/`AndroidRuntime` — none from the
+> app); (3) the floating `PinnedDayHeaderPill` shows the correct governing day ("Saturday 4 July")
+> while scrolled into history — the on-device proof the new scan-direction logic is actually
+> correct, not just internally consistent; (4) the "scroll to bottom" FAB appears when scrolled into
+> history and disappears at the bottom (`isNearBottom`/`bottomEdgeIndex` correct); tapping it
+> animates smoothly back to the exact same newest message; (5) in-conversation search for
+> `REPRO-B-1638` reports "1/1" and highlights the exact matching bubble (the `renderedItems.
+> indexOfFirst` jump, content-driven and orientation-agnostic by construction, confirmed for real);
+> (6) sending a new own message ("flip-test-verify") auto-scrolls to reveal it at the bottom with no
+> manual action (auto-scroll-on-new-message, reusing the same `isNearBottom`/`bottomIndex`
+> primitives already proven by (4)). Quoted-reply jump not separately exercised on-device — it is
+> the exact same `renderedItems.indexOfFirst` + `animateScrollToItem` shape as the search jump
+> already proven in (5), sharing 100% of its code path. Emulator left idle at the home screen
+> afterward (not mid-app/mid-keyboard) to avoid disrupting other concurrent sessions sharing the
+> host. **feature-parity.md's §C inverted-list bullet records sub-slice 2 as done**, still listing
+> sub-slice 3 (IME on-device verification, expected to be "free" per the decomposition note) as the
+> sole remaining item. **Next slice candidates (not attempted this run)**: sub-slice 3 (soft-
+> keyboard/IME resize interaction on-device check — likely free, verification-only, no new logic
+> expected); chunked/resumable large-video TUS upload; video capture fast-follow to the Feed
+> composer's camera-capture slice (`ACTION_VIDEO_CAPTURE`); files/location/audio/per-post-language
+> attachments for the Feed composer; PROGRESS.md is back under the ~1500-line archive threshold
+> after the prior run's archiving pass, no action needed yet.
+
 > On 2026-08-10 **the §C inverted-list rewrite's sub-slice 1 (safe prep) landed** (slice
 > `chat-scroll-geometry`, feature-parity §C — this run's own prior-run decomposition, picked up
 > rather than re-deferred). **RE-PROUVEN before starting**: re-grepped `apps/android` for
