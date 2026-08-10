@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
@@ -26,6 +27,7 @@ import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -54,6 +56,7 @@ class FeedViewModelTest {
     private val repository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
+    private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -71,7 +74,7 @@ class FeedViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
-        return FeedViewModel(repository, session, socialSocket, config)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader)
     }
 
     @Test
@@ -216,7 +219,7 @@ class FeedViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
-        return FeedViewModel(repository, session, socialSocket, config)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader)
     }
 
     @Test
@@ -697,6 +700,82 @@ class FeedViewModelTest {
         val s = vm.state.value
         assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
         assertThat(s.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `publishPost with attached media sends the media ids alongside the content`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
+        }
+    }
+
+    @Test
+    fun `publishPost with blank text and only media sends a null content, not an empty string`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "", visibility = "PUBLIC", mediaIds = listOf("m1"))
+
+        coVerify(exactly = 1) {
+            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        }
+    }
+
+    @Test
+    fun `a media-only publish is prepended to the feed like any other`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "   ", visibility = "PUBLIC", mediaIds = listOf("m1"))
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
+    }
+
+    // --- Composer media upload (uploadMedia) ---
+
+    @Test
+    fun `uploadMedia delegates to the feed media uploader and returns its result`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        val items = listOf(MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.jpg", mimeType = "image/jpeg"))
+        val uploaded = listOf(
+            UploadedMedia(
+                id = "m1",
+                url = "https://cdn.meeshy.me/m1.jpg",
+                mimeType = "image/jpeg",
+                fileSize = 10,
+                width = null,
+                height = null,
+                durationMs = null,
+                thumbnailUrl = null,
+            ),
+        )
+        coEvery { feedMediaUploader.upload(items) } returns NetworkResult.Success(uploaded)
+
+        val result = vm.uploadMedia(items)
+
+        assertThat(result).isEqualTo(NetworkResult.Success(uploaded))
+        coVerify(exactly = 1) { feedMediaUploader.upload(items) }
+    }
+
+    @Test
+    fun `uploadMedia propagates an uploader failure unchanged`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        val items = listOf(MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.jpg", mimeType = "image/jpeg"))
+        val failure = NetworkResult.Failure(ApiError("offline"))
+        coEvery { feedMediaUploader.upload(items) } returns failure
+
+        assertThat(vm.uploadMedia(items)).isEqualTo(failure)
     }
 
     // --- Fullscreen media gallery (openImageViewer / dismissImageViewer) ---

@@ -3158,9 +3158,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       head the socket `post:created` path already uses — visible at the top instantly, WITHOUT bumping
       the "N new posts" banner (that's for arrivals from others), and defensively deduped against the
       gateway's own `post:created` echo of this same publish (`state.posts.any { it.id == id }` already
-      true by the time the echo lands). **Still open** (attachments/photos/camera/files/location/audio,
-      per-post language override, the Réel⇄Post toggle, durable-outbox queueing for offline resilience —
-      each a separately-scoped follow-up, not attempted this run).
+      true by the time the echo lands). **Photo/video attachments sub-slice now done too** (slice
+      `feed-composer-media-attachments`, 2026-08-10): the composer sheet gained an attach-media tile
+      (system `PickVisualMedia`/`PickMultipleVisualMedia`, routed single-vs-multi by the pure
+      `FeedMediaPicker.modeFor` — the Feed counterpart of `StoryMediaPicker`) that uploads through
+      `FeedMediaUploader` (`post`-context TUS, the Feed counterpart of `StoryMediaUploader`, consuming
+      the `TusUploadRepository` foundation the story-media-tus-upload slice built — never the legacy
+      `MessageAttachment`-producing path). `FeedComposerDraft` gained `mediaIds`/`withMedia`/`withoutMedia`/
+      `remainingMediaSlots`/`isMediaFull` (`MAX_MEDIA = 10`, parity with the story composer) and the
+      publish gate is now non-blank text **or** at least one attached media (mirror of iOS
+      `!composerText.isEmpty || !pendingAttachments.isEmpty`) — a media-only post is now possible, and
+      its blank content is sent as `null`, never `""`. Verified end-to-end on a real device against the
+      live gateway (not just unit tests): logcat confirmed the real TUS `POST`+`PATCH` round-trip
+      (`uploadcontext=post`), the `POST /api/v1/posts` body carrying the real returned `mediaIds`, and a
+      direct `GET` of the created post confirming the media persisted with a working `fileUrl`/
+      `thumbnailUrl` and Prisme translations generated — the test post was deleted afterward. **Still
+      open**: camera capture (no existing pattern anywhere in the Android app yet — no `TakePicture`
+      contract/`FileProvider` wiring, a materially bigger increment deliberately deferred rather than
+      rushed), files, location, audio+transcription, per-post language override, the Réel⇄Post toggle,
+      durable-outbox queueing for offline resilience (media upload itself has no offline-retry path yet
+      either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
+      consistent, not a new gap) — each a separately-scoped follow-up.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket

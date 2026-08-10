@@ -2,6 +2,84 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **the Feed post composer's photo/video attachment sub-slice landed** (slice
+> `feed-composer-media-attachments`, feature-parity §F — the routine's own suggested next candidate,
+> "correctly scoped to consume [the previous run's] `TusUploadRepository`/`TusUploadContext.POST`
+> rather than `MediaRepository`"). **RE-PROVEN before starting**: re-read `FeedComposerDraft`/
+> `FeedComposerSheet`/`FeedViewModel` — confirmed the text-only slice's own "Still open" note (no
+> attachments) was accurate, `TusUploadRepository`/`TusUploadContext.POST` genuinely exist and are
+> unused by Feed, and `PostRepository.create()` already accepts `mediaIds` (only `FeedComposerSheet`/
+> `FeedComposerDraft`/`FeedViewModel` needed wiring). **Shipped (production, all `apps/android`)**: a
+> new attach-media tile in `FeedComposerSheet` (system `PickVisualMedia`/`PickMultipleVisualMedia`,
+> mirroring `StoryComposerScreen`'s exact picker-launcher pattern byte-for-byte) routed single-vs-multi
+> by a new pure `FeedMediaPicker.modeFor` (`:feature:feed`, the Feed counterpart of `StoryMediaPicker`)
+> uploading through a new `FeedMediaUploader` (`:feature:feed`, binds the generic `TusUploadRepository`
+> to `TusUploadContext.POST` — the Feed counterpart of `StoryMediaUploader`, same SDK-purity split).
+> `FeedComposerDraft` gained `mediaIds: List<String>` + `withMedia`/`withoutMedia`/`remainingMediaSlots`/
+> `isMediaFull` (`MAX_MEDIA = 10`, parity with the story composer's own cap) and **the publish gate is
+> now non-blank text OR at least one attached media** (mirror of iOS composer's
+> `!composerText.isEmpty || !pendingAttachments.isEmpty` — a media-only post is now possible).
+> `FeedViewModel.publishPost` gained a `mediaIds` param (default `emptyList()`, so every pre-existing
+> call site is untouched) and now sends `content.ifBlank { null }` instead of always sending the raw
+> string, so a media-only post never exercises a stricter non-blank-content gateway validation with an
+> empty string; a new `uploadMedia(items)` plain suspend delegate exposes `FeedMediaUploader` to the
+> Composable (no `_state` mutation — the sheet owns its own upload-in-flight spinner via `remember`,
+> same split as the text-only slice's own local-state design, just without a dedicated ViewModel for
+> the sheet). **+27 tests**: `FeedComposerDraftTest` media block (12 — fresh-draft-empty,
+> `withMedia` appends/accumulates/caps-at-10, `withoutMedia` removes/inert-on-unknown-id,
+> `remainingMediaSlots`/`isMediaFull` at the boundary, media-only/text-only/both publish-request
+> variants), `FeedMediaPickerTest` (8, mirror of `StoryMediaPickerTest` — None/Single/Multiple routing
+> at every boundary), `FeedMediaUploaderTest` (2, mirror of `StoryMediaUploaderTest` — delegates tagged
+> `POST`, propagates failure unchanged), `FeedViewModelTest` (+5 — `publishPost` sends `mediaIds`
+> alongside content, blank text + media sends `content: null` not `""`, a media-only publish prepends
+> like any other, `uploadMedia` delegates to `FeedMediaUploader` and propagates success/failure
+> unchanged). **Mutation-proven, both axes**: (a) dropping the `|| mediaIds.isNotEmpty()` clause from
+> `canPublish` failed **exactly** the 2 tests asserting a media-only draft can publish, the other 75
+> `FeedComposerDraftTest`/`FeedViewModelTest` cases stayed green; (b) reverting
+> `content.ifBlank { null }` back to the bare `content` failed **exactly** the 2 tests asserting the
+> null-not-empty-string behavior, the other 52 `FeedViewModelTest` cases stayed green; both reverted
+> and re-run clean. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff
+> `apps/android` only — 2 new `:feature:feed` files [`FeedMediaPicker.kt`, `FeedMediaUploader.kt`] + 2
+> new test files, `FeedComposerDraft.kt`/`FeedComposerSheet.kt`/`FeedScreen.kt`/`FeedViewModel.kt`
+> edited + 2 existing test files extended, 4 locale `strings.xml` [en/fr/es/pt,
+> `FeedStringLocalizationParityTest` green]; SDK purity — both new files live in `:feature:feed`, the
+> "attachments upload as `post`-context TUS" decision stays app-side exactly like the story composer's
+> own precedent; SSOT — `TusUploadRepository`/`MediaUploadItem`/`UploadedMedia` reused verbatim, the
+> `readMediaUploadItem`/`displayName` `ContentResolver` extension duplicated per this codebase's own
+> existing 3-copy convention [`StoryComposerScreen`/`RegistrationScreen`/`ProfileScreen`], not a new
+> pattern; no coverage floor lowered; no tautological tests). **Verified end-to-end on-device against
+> the live gateway** (`meeshy_pixel8`, API 35, already-authenticated session) — not just compiled or
+> unit-tested: pushed a locally-generated JPEG into the emulator's media store, opened the composer,
+> tapped the new attach tile (launched the real system `PhotoPickerActivity`), selected the photo,
+> confirmed via `adb logcat` the genuine TUS round-trip (`POST /api/v1/uploads` with
+> `Upload-Metadata` decoding to `uploadcontext=post`, 201 + `Location` header, `PATCH` of the full body,
+> 200 with a real `PostMedia`-backed `attachment.id`), watched the thumbnail render in the composer
+> with a working remove ("x") overlay and **Publish flip enabled from a media-only draft** (blank text,
+> confirming the OR-gate live, not just unit-tested), typed text, tapped Publish, and confirmed via
+> logcat the `POST /api/v1/posts` body carried `"mediaIds":["<the real uploaded id>"]` and the 201
+> response echoed back the post with its `media` array populated (real `fileUrl`/`thumbnailUrl`).
+> Cross-checked directly against the gateway API (`curl` with the session's own bearer token, bypassing
+> the client entirely): a direct `GET` of the created post confirmed the content, the Prisme
+> translations (fr/es/ar/pt all generated), and the media array all persisted correctly server-side.
+> **One genuine investigation dead-end, resolved and NOT a bug in this diff**: the published post did
+> not visually appear at the head of the on-device Friends-feed scroll position across several
+> screenshots (including after a full cold relaunch, ruling out a stale in-memory `realtimeHead`) —
+> traced via a direct `GET posts/feed` call (the exact endpoint `feedStream()` uses) which confirmed
+> the post genuinely IS present in the server's feed response, just not the top-ranked item despite
+> having the most recent `createdAt` of the returned page — i.e. the gateway's feed ordering is not a
+> strict `createdAt DESC` and this diff never touches `feedStream`/`getFeed`/any ranking logic, so this
+> is a pre-existing, out-of-scope server-side ranking behavior, not a regression. (Separately noticed
+> but NOT investigated further, also clearly pre-existing: the "Friends"/"Discover" tab toggle appeared
+> to show identical content in this pass — worth a dedicated RE-PROVEN look in a future run, not
+> asserted as a bug here since it wasn't chased to a root cause.) Test artifact (the pushed JPEG, the
+> created post) cleaned up after verification (`adb shell rm`, `DELETE /api/v1/posts/:id`).
+> **Next slice candidates (not attempted this run)**: chunked/resumable large-video TUS upload
+> (checkpoint store, HEAD recovery, survives app kill); the §C inverted-list rewrite decomposition
+> (still deferred without an attempt, several runs running); the §M `NotificationChannel` taxonomy gap
+> (2 channels vs. ~80 backend types); the noticed-not-chased Friends/Discover tab content question
+> above; camera capture for the Feed composer (needs a genuinely new `TakePicture`/`FileProvider`
+> pattern, not yet established anywhere in the Android app).
 > On 2026-08-10 **a real story-media wire-format bug got found and fixed** (slice
 > `story-media-tus-upload`, feature-parity §E — routine iteration 23, re-scoping the previously
 > planned "§F Feed attachments fast-follow"). **RE-PROUVEN before choosing anything**: the last
