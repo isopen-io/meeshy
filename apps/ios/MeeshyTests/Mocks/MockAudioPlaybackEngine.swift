@@ -21,6 +21,15 @@ final class MockAudioPlaybackEngine: AudioPlaybackEngineDriving {
     var attachmentId: String?
     var onPlaybackFinished: (() -> Void)?
 
+    /// When `false`, `play(urlString:)` does NOT flip `isPlaying` to `true`. Lets
+    /// tests simulate the engine never reporting a started-playing edge across a
+    /// `play()` call — e.g. two consecutive `advanceQueue()` transitions with no
+    /// intervening `isPlayingPublisher` tick, isolating background-task pairing
+    /// logic (`ConversationAudioCoordinator.beginAdvanceBackgroundTask()`'s own
+    /// defensive end-before-begin) from the `isPlaying==true` sink that normally
+    /// closes the task. Defaults `true` to preserve existing test behavior.
+    var autoPlayOnPlayCall = true
+
     private(set) var playCallCount = 0
     private(set) var lastPlayedUrl: String?
     private(set) var stopCallCount = 0
@@ -34,7 +43,7 @@ final class MockAudioPlaybackEngine: AudioPlaybackEngineDriving {
         playCallCount += 1
         lastPlayedUrl = urlString
         currentUrl = urlString
-        isPlaying = true
+        if autoPlayOnPlayCall { isPlaying = true }
     }
 
     func playLocal(url: URL) { play(urlString: url.absoluteString) }

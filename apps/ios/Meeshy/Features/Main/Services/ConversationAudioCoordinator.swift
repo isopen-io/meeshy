@@ -399,6 +399,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
     private func startCurrentHead() {
         guard !CallManager.shared.isCallActiveForAudioGuard else {
             Self.log.info("startCurrentHead() ignored: a CallKit call is active")
+            // A pending advance-queue background task (opened by advanceQueue()
+            // before calling this method) would otherwise never see the
+            // isPlaying==true edge that normally ends it — engine.play() is never
+            // reached. Ending it here covers ALL callers of startCurrentHead(),
+            // not just advanceQueue().
+            endAdvanceBackgroundTask()
             return
         }
         guard let head = queue.first else {

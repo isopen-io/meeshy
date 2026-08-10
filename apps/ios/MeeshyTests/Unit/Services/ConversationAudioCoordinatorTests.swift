@@ -549,16 +549,34 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
     // MARK: - Task 6 — Background task covers queue-advance transition
 
+    /// Drains the main queue via an `expectation` + `DispatchQueue.main.async` —
+    /// `advanceQueue()` runs inside `Task { @MainActor … }` from
+    /// `onPlaybackFinished`, so a synchronous assertion right after
+    /// `simulateFinishPlayback()` can observe stale state before that hop runs.
+    private func drainMainQueue() {
+        let exp = expectation(description: "drain main queue")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+    }
+
+    /// Strengthened per code review: the begin stub now returns INCREASING
+    /// identifiers (a fixed `rawValue: 42` stub cannot distinguish "some end was
+    /// called" from "the end call was paired with the correct begin"), and the
+    /// end stub RECORDS every identifier it receives so the test can assert
+    /// exact begin/end pairing, not just call counts.
     func test_advanceQueue_wrapsNextTrackStartInBackgroundTask() {
         let engine = MockAudioPlaybackEngine()
         let sut = ConversationAudioCoordinator(engine: engine)
-        var beginCount = 0
-        var endCount = 0
+        var nextRawId: UIBackgroundTaskIdentifier.RawValue = 1
+        var beganIds: [UIBackgroundTaskIdentifier] = []
+        var endedIds: [UIBackgroundTaskIdentifier] = []
         sut.beginBackgroundTaskProvider = { _ in
-            beginCount += 1
-            return UIBackgroundTaskIdentifier(rawValue: 42)
+            let id = UIBackgroundTaskIdentifier(rawValue: nextRawId)
+            nextRawId += 1
+            beganIds.append(id)
+            return id
         }
-        sut.endBackgroundTaskProvider = { _ in endCount += 1 }
+        sut.endBackgroundTaskProvider = { id in endedIds.append(id) }
 
         let now = Date()
         let make = { (id: String) in
@@ -571,18 +589,102 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
         engine.simulateFinishPlayback()   // fin de « a » → advanceQueue → play(« b »)
 
-        // `advanceQueue()` est déclenché via `Task { @MainActor … }` depuis
-        // `onPlaybackFinished` — drainer la file principale avant de lire
-        // `beginCount` pour laisser ce saut asynchrone s'exécuter.
-        let beginExp = expectation(description: "begin background task")
-        DispatchQueue.main.async { beginExp.fulfill() }
-        wait(for: [beginExp], timeout: 1.0)
-        XCTAssertEqual(beginCount, 1, "La transition a→b doit être couverte par un background task")
+        drainMainQueue()
+        XCTAssertEqual(beganIds.count, 1, "La transition a→b doit être couverte par un background task")
         // Le mock repasse isPlaying=true dans play() → la fin de tâche est
         // déclenchée par le sink isPlayingPublisher (asynchrone MainActor).
-        let exp = expectation(description: "end background task")
-        DispatchQueue.main.async { exp.fulfill() }
-        wait(for: [exp], timeout: 1.0)
-        XCTAssertEqual(endCount, 1)
+        drainMainQueue()
+        XCTAssertEqual(endedIds, beganIds,
+                       "le end doit recevoir EXACTEMENT l'identifiant du dernier begin, pas un identifiant arbitraire")
+    }
+
+    /// Code review finding: the two-advance case with NO intervening
+    /// `isPlaying==true` edge (e.g. degraded network — the engine never actually
+    /// reports having started before the next transition fires) must still end
+    /// the FIRST task before beginning the second — `beginAdvanceBackgroundTask()`
+    /// calls `endAdvanceBackgroundTask()` defensively before requesting a new id.
+    /// `engine.autoPlayOnPlayCall = false` neutralizes the mock's `play()` (which
+    /// normally flips `isPlaying = true`, see `MockAudioPlaybackEngine.swift`) so
+    /// the `isPlayingPublisher` sink never fires between the two advances — this
+    /// isolates `beginAdvanceBackgroundTask()`'s own pairing logic from that sink.
+    /// This test is a characterization test: `beginAdvanceBackgroundTask()`
+    /// already called `endAdvanceBackgroundTask()` unconditionally before Task 6's
+    /// review, so this passes on the existing implementation — it pins the
+    /// contract against regression rather than proving a fix.
+    func test_advanceQueue_twoAdvancesWithoutIsPlayingEdge_endsPriorTaskBeforeNextBegin() {
+        let engine = MockAudioPlaybackEngine()
+        engine.autoPlayOnPlayCall = false
+        let sut = ConversationAudioCoordinator(engine: engine)
+        var nextRawId: UIBackgroundTaskIdentifier.RawValue = 1
+        var trace: [String] = []
+        sut.beginBackgroundTaskProvider = { _ in
+            let id = UIBackgroundTaskIdentifier(rawValue: nextRawId)
+            nextRawId += 1
+            trace.append("begin:\(id.rawValue)")
+            return id
+        }
+        sut.endBackgroundTaskProvider = { id in trace.append("end:\(id.rawValue)") }
+
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b"), make("c")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        engine.simulateFinishPlayback()   // a → b : begin #1 ; isPlaying suppressed, no end via sink
+        drainMainQueue()
+        engine.simulateFinishPlayback()   // b → c : begin #2, but must end #1 FIRST (defensive cleanup)
+        drainMainQueue()
+
+        XCTAssertEqual(trace, ["begin:1", "end:1", "begin:2"],
+                       "begin #2 must be preceded by ending exactly the id opened by begin #1")
+    }
+
+    /// Code review finding 1: `advanceQueue()` calls `beginAdvanceBackgroundTask()`
+    /// unconditionally before `startCurrentHead()`, but `startCurrentHead()`'s
+    /// FIRST statement is the CallKit guard — if a track finishes while a Meeshy
+    /// call is active, the task was opened but `engine.play()` is never reached,
+    /// so the `isPlaying==true` sink never fires and nothing ever ends the task
+    /// (only the ~30s OS expiration eventually would). Fix: the CallKit guard's
+    /// `else` branch in `startCurrentHead()` now ends the pending task before
+    /// returning — this covers ALL callers of `startCurrentHead()`, not just
+    /// `advanceQueue()`. Verified via the `testOverrideCallActive` DEBUG seam
+    /// already used by `test_play_whileCallActive_isNoOp` etc.
+    func test_startCurrentHead_whileCallActive_endsPendingBackgroundTask() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        var beginCount = 0
+        var endCount = 0
+        sut.beginBackgroundTaskProvider = { _ in
+            beginCount += 1
+            return UIBackgroundTaskIdentifier(rawValue: 7)
+        }
+        sut.endBackgroundTaskProvider = { _ in endCount += 1 }
+
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+
+        CallManager.shared.testOverrideCallActive = true
+        defer { CallManager.shared.testOverrideCallActive = false }
+
+        engine.simulateFinishPlayback()   // a finishes mid-call → advanceQueue → begin, then startCurrentHead blocked
+        drainMainQueue()
+        drainMainQueue()
+
+        XCTAssertEqual(beginCount, 1, "the transition still opens a background task before hitting the CallKit guard")
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "engine.play() must never be reached while a CallKit call is active")
+        XCTAssertEqual(endCount, 1,
+                       "the CallKit guard's early return must end the task it cannot hand off to the isPlaying sink")
     }
 }
