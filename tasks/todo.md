@@ -126,8 +126,8 @@ peuvent donc pas savoir si la couche de transformation a laissé passer la donn�
 trou que la leçon 105 : ces 2 témoins sont le SEUL garde-fou de cette couche.
 
 **Gate** : `@meeshy/shared` **50 fichiers / 1 484 tests**, 0 échec. Web **515 suites / 11 745
-tests** (21 skipped), 0 échec. Gateway **647 suites / 16 323 tests**, 0 échec, couverture lignes
-**95,77 %**. `tsc --noEmit` gateway : 0 erreur. `tsc --noEmit` web : **1 190 erreurs avant comme
+tests** (21 skipped), 0 échec. Gateway **648 suites / 16 332 tests**, 0 échec, couverture lignes
+**95,78 %** (mesuré sur l'état MERGÉ, qui inclut le cycle 61 de l'autre session). `tsc --noEmit` gateway : 0 erreur. `tsc --noEmit` web : **1 190 erreurs avant comme
 après** — condition préexistante non gatée par la CI, zéro erreur introduite (mesuré par
 `git stash`, avant/après identiques au unité près). Swift : **non exécuté localement** — aucune
 chaîne Swift sur ce conteneur Linux ; les 4 témoins `ConversationPrismeRankOrderTests` sont validés

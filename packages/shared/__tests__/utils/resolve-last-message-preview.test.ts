@@ -85,7 +85,7 @@ describe('resolveLastMessagePreview — correspondance dans le prisme', () => {
   })
 })
 
-describe('resolveLastMessagePreview — la langue d\'origine est canonique', () => {
+describe("resolveLastMessagePreview — la langue d'origine concourt à son RANG", () => {
   it("rend l'aperçu brut quand le message EST déjà dans une langue du lecteur", () => {
     expect(
       resolveLastMessagePreview({
