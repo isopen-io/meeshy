@@ -223,6 +223,53 @@ class RegistrationViewModelTest {
         assertThat(vm.state.value.fields.phoneAvailable).isNull()
     }
 
+    // ---- username suggestion strip --------------------------------------------
+
+    @Test
+    fun onUsernameSuggestions_setsFieldSuggestions() {
+        val (vm, _, _) = scenario()
+        vm.onUsernameSuggestions(listOf("ada1", "ada_lovelace"))
+        assertThat(vm.state.value.fields.usernameSuggestions).containsExactly("ada1", "ada_lovelace").inOrder()
+    }
+
+    @Test
+    fun editingUsername_invalidatesStaleSuggestions() {
+        val (vm, _, _) = scenario()
+        vm.onUsernameChange("atabeth")
+        vm.onUsernameSuggestions(listOf("atabeth1", "atabeth_"))
+        assertThat(vm.state.value.fields.usernameSuggestions).isNotEmpty()
+
+        vm.onUsernameChange("atabeth2")
+
+        assertThat(vm.state.value.fields.usernameSuggestions).isEmpty()
+    }
+
+    @Test
+    fun selectUsernameSuggestion_setsUsernameAndMarksAvailable() {
+        val (vm, _, _) = scenario()
+        vm.onUsernameChange("taken")
+        vm.onUsernameSuggestions(listOf("takenlover", "takenfan"))
+
+        vm.selectUsernameSuggestion("takenlover")
+
+        assertThat(vm.state.value.fields.username).isEqualTo("takenlover")
+        assertThat(vm.state.value.fields.usernameAvailable).isTrue()
+        assertThat(vm.state.value.fields.usernameSuggestions).isEmpty()
+        assertThat(vm.state.value.canProceed).isTrue()
+    }
+
+    @Test
+    fun selectUsernameSuggestion_thenEditingAgain_invalidatesTheOptimisticAvailability() {
+        val (vm, _, _) = scenario()
+        vm.onUsernameChange("taken")
+        vm.onUsernameSuggestions(listOf("takenlover"))
+        vm.selectUsernameSuggestion("takenlover")
+
+        vm.onUsernameChange("takenlover2")
+
+        assertThat(vm.state.value.fields.usernameAvailable).isNull()
+    }
+
     // ---- next() --------------------------------------------------------------
 
     @Test
@@ -460,6 +507,30 @@ class RegistrationViewModelTest {
     }
 
     @Test
+    fun availableUsername_afterDebounce_leavesSuggestionsEmpty() = runTest(dispatcher) {
+        val (vm, _, _) = scenario() // default verdict: available, no suggestions echoed
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.fields.usernameSuggestions).isEmpty()
+    }
+
+    @Test
+    fun takenUsername_afterDebounce_appliesSuggestions() = runTest(dispatcher) {
+        val (vm, _, _) = scenario(
+            availabilityResponse = ApiResponse(
+                success = true,
+                data = AvailabilityResult(usernameAvailable = false, suggestions = listOf("atabeth1", "atabeth_")),
+            ),
+        )
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.fields.usernameAvailable).isFalse()
+        assertThat(vm.state.value.fields.usernameSuggestions).containsExactly("atabeth1", "atabeth_").inOrder()
+    }
+
+    @Test
     fun invalidUsername_afterDebounce_neverProbesAndStaysUnknown() = runTest(dispatcher) {
         val (vm, api, _) = scenario()
         vm.onUsernameChange("a") // below the 2-char local minimum
@@ -502,6 +573,15 @@ class RegistrationViewModelTest {
 
         assertThat(api.availabilityCalls).hasSize(1)
         assertThat(vm.state.value.fields.usernameAvailable).isNull()
+    }
+
+    @Test
+    fun probeFailure_leavesSuggestionsEmpty() = runTest(dispatcher) {
+        val (vm, _, _) = scenario(availabilityResponse = ApiResponse(success = false, error = "network"))
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.fields.usernameSuggestions).isEmpty()
     }
 
     @Test

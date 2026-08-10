@@ -171,7 +171,14 @@ class RegistrationViewModel @Inject constructor(
 
     init {
         launchProbe(usernameInput, SignupAvailabilityPolicy::usernameIntent, ::onUsernameAvailability) {
-            authRepository.checkAvailability(username = it).getOrNull()?.usernameAvailable
+            // Sets both the verdict and its accompanying suggestions from the one round-trip
+            // (mirrors iOS `checkUsernameAvailability`, which assigns `usernameAvailable` and
+            // `usernameSuggestions` from the same response) — the shared `launchProbe` plumbing
+            // only carries the verdict back to `apply`, so the suggestions ride along as a
+            // side effect of this probe closure instead of a second channel.
+            val result = authRepository.checkAvailability(username = it).getOrNull()
+            onUsernameSuggestions(result?.suggestions.orEmpty())
+            result?.usernameAvailable
         }
         launchProbe(emailInput, SignupAvailabilityPolicy::emailIntent, ::onEmailAvailability) {
             authRepository.checkAvailability(email = it).getOrNull()?.emailAvailable
@@ -184,7 +191,7 @@ class RegistrationViewModel @Inject constructor(
 
     fun onUsernameChange(value: String) {
         usernameInput.value = value
-        editFields { it.copy(username = value, usernameAvailable = null) }
+        editFields { it.copy(username = value, usernameAvailable = null, usernameSuggestions = emptyList()) }
     }
 
     fun onEmailChange(value: String) {
@@ -243,6 +250,28 @@ class RegistrationViewModel @Inject constructor(
     fun onEmailAvailability(available: Boolean?) = updateFields { it.copy(emailAvailable = available) }
 
     fun onPhoneAvailability(available: Boolean?) = updateFields { it.copy(phoneAvailable = available) }
+
+    /**
+     * Network-probe seam: the availability layer reports the alternate handles the
+     * server offered alongside a taken-username verdict (iOS `usernameSuggestions`).
+     * Same [updateFields] rationale as [onUsernameAvailability] — a background verdict
+     * must not clear a surfaced [RegistrationUiState.errorMessage].
+     */
+    fun onUsernameSuggestions(suggestions: List<String>) = updateFields { it.copy(usernameSuggestions = suggestions) }
+
+    /**
+     * The PSEUDO step's suggestion-strip tap (iOS `RegistrationViewModel.selectSuggestion`):
+     * adopts a server-offered handle as the username. The server already confirmed this
+     * exact value is available when it offered it, so this optimistically marks
+     * [RegistrationFields.usernameAvailable] `true` immediately — mirroring iOS, which does
+     * the same — rather than waiting a full debounce window to re-confirm a verdict already
+     * known. [usernameInput] is updated too so a later edit's `distinctUntilChanged` compares
+     * against this value, not the stale one the user typed before tapping a suggestion.
+     */
+    fun selectUsernameSuggestion(suggestion: String) {
+        usernameInput.value = suggestion
+        editFields { it.copy(username = suggestion, usernameAvailable = true, usernameSuggestions = emptyList()) }
+    }
 
     /** iOS `nextStep()`: advance one step only when the proceed gate passes. */
     fun next() {

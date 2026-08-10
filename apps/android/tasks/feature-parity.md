@@ -373,7 +373,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:app:assembleDebug` → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the
       app-side `MagicLinkView` composable (email field → `AuthService.requestMagicLink` → waiting
       step driving `MagicLinkCountdown` off a 1 s `Flow`) + the `meeshy://` deep-link handler.
-- [~] 8-step gamified registration wizard (username/email/phone live availability + suggestions) —
+- [x] 8-step gamified registration wizard (username/email/phone live availability + suggestions) —
       **local-validation gate + availability-debounce policy core shipped** (slice
       `auth-signup-availability-local-gate`, 2026-07-21). Pure `:core:model` `SignupFieldValidation` +
       `SignupAvailabilityPolicy` + `AvailabilityIntent` (faithful port of iOS `RegistrationViewModel`:
@@ -399,9 +399,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up (network probe now DONE — slice
       `signup-availability-probe`, 2026-07-25):** `AuthApi.checkAvailability` + `AuthRepository.checkAvailability`
       + the three debounced probe pipelines in `RegistrationViewModel` now drive these cores off the 1 s
-      debounce, feeding the `on…Availability` seam. Remaining: the wizard step composables (username/email/
-      phone fields) + the username-suggestion strip.
-- [~] Interactive step progress bar with jump-back to completed steps —
+      debounce, feeding the `on…Availability` seam. **Both remaining follow-ups now DONE**: the 8 wizard
+      step composables shipped across `auth-onboarding-shell` through `auth-profile-step-fields`
+      (2026-08-09, see the bullets below); **the username-suggestion strip shipped** (slice
+      `auth-username-suggestion-strip`, 2026-08-10) — closing the last open gap, box flips to `[x]`.
+      Re-proven before picking: grepped `usernameSuggestions`/`selectUsernameSuggestion` across
+      `apps/android` — zero production hits, confirming this specific follow-up (unlike the composables,
+      already done) was still open. **Added (production, all `apps/android`):**
+      `RegistrationFields.usernameSuggestions: List<String>` (`:core:model`, alongside
+      `usernameAvailable`, mirrors iOS `RegistrationViewModel.usernameSuggestions` sourced from
+      `AvailabilityResult.suggestions`); `RegistrationViewModel.onUsernameSuggestions` (background-verdict
+      setter via `updateFields`, same errorMessage-preserving rationale as `onUsernameAvailability`) +
+      `selectUsernameSuggestion` (iOS `selectSuggestion` port — adopts the handle, optimistically marks it
+      available since the server already confirmed it when offering it, clears the list); the username
+      probe pipeline in `init{}` now applies both the verdict and its suggestions from the one
+      `checkAvailability` round-trip (a side effect inside the `launchProbe` closure — the shared
+      generic plumbing only carries one value back to `apply`, mirrors iOS `checkUsernameAvailability`
+      setting both `@Published` properties from the same response); `onUsernameChange` now also clears
+      `usernameSuggestions` (extends the existing "invalidate stale verdict on edit" SOTA convention to
+      suggestions, stronger than iOS which only clears them inside the debounced sink's locally-invalid
+      guard). `RegistrationScreen.kt`'s new `UsernameSuggestionStrip` (`FlowRow` of Material3
+      `SuggestionChip`s, warning-tinted card + lightbulb icon — parity target iOS `StepPseudoView.
+      suggestionsCard`) renders under `PseudoStepBody`'s availability indicator whenever the list is
+      non-empty, dispatching taps to `selectUsernameSuggestion`. **+7 behavioural tests**
+      (`RegistrationViewModelTest`: direct setter, edit-invalidates, select-suggestion marks
+      available+clears list+unlocks `canProceed`, re-editing after a select re-invalidates, taken-username
+      probe applies suggestions, available-username probe leaves them empty, failed probe leaves them
+      empty). **Mutation (RED proof):** reverting `selectUsernameSuggestion`'s optimistic
+      `usernameAvailable = true` to `null` fails **exactly** `selectUsernameSuggestion_
+      setsUsernameAndMarksAvailable` (71 run, 1 failed, no collateral); RED was also proven first by the
+      suite failing to **compile** against the absent production members. `./apps/android/meeshy.sh check`
+      → `BUILD SUCCESSFUL` (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks). Reviewer
+      **PASS** (diff `apps/android` only — `core/model` [`RegistrationFields` +1 field, no new files],
+      `feature/auth` [`RegistrationViewModel` +2 setters + probe wiring, `RegistrationScreen.kt` +1
+      composable, ×4 locale strings ×4 locales]; SDK purity — `usernameSuggestions` is inert data on an
+      existing `:core:model` type, the "select a suggestion" decision is ordinary ViewModel plumbing (same
+      grain as the sibling `on…Change` setters), the Compose strip is UI glue; SSOT — reuses
+      `AvailabilityResult.suggestions` untouched, no re-implementation; instant-app — no spinner
+      introduced; UDF — unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — the strip
+      is purely additive under the existing field; no tautological tests; no coverage floor lowered, no
+      existing test weakened). **Bookkeeping correction (not new work this slice):** re-verifying this
+      area found the three sibling bullets below (progress bar, bottom-bar nav, ViewModel wiring) were
+      still marked `[~]` despite their own text already documenting completion — `auth-onboarding-shell`
+      (2026-08-09) shipped the composables/wiring those bullets describe, but nobody flipped the checkbox
+      afterwards. Corrected alongside this slice's own change since it was directly re-verified in the
+      course of this run's research, not left to accumulate further staleness.
+- [x] Interactive step progress bar with jump-back to completed steps —
       **step-set + progress-bar decision core shipped** (slice `registration-progress-bar-core`,
       2026-07-22). Pure `:core:model` `RegistrationStep` (8-step ordinal enum: `PSEUDO`..`RECAP`
       by `index`, + `ordered`/`total`/`fromIndex`) + `RegistrationProgressBar` (fill partition +
@@ -431,7 +474,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Follow-up:** the app-side `InteractiveProgressBar` composable (an accent-coloured tappable
       bar row wired to `RegistrationProgressBar.fill`/`jumpTarget` → `currentStep`) + the
       `nextStep`/`previousStep`/`skipCurrentStep` bottom-bar navigation core (a separate box).
-- [~] Bottom-bar step navigation (next / previous / skip) — **step-transition decision core shipped**
+- [x] Bottom-bar step navigation (next / previous / skip) — **step-transition decision core shipped**
       (slice `registration-step-navigation-core`, 2026-07-22). Pure `:core:model`
       `RegistrationStepNavigator` + `SkipOutcome` — faithful port of iOS `RegistrationViewModel`
       (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`): `nextStep()` (gated on
@@ -476,7 +519,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `showSkip_isTrueOnlyOnTheProfileStep` (1 failed, no collateral). `./apps/android/meeshy.sh check` →
       BUILD SUCCESSFUL (full `assembleDebug` + all module tests; `RegistrationNavTest` 16/16,
       `RegistrationViewModelTest` 45/45). Diff = `apps/android` only.
-- [~] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
+- [x] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
       (slice `registration-wizard-viewmodel`, 2026-07-25). The first app-side wiring that turns the
       shipped registration cores from orphan logic into a real observable wizard. New
       `:feature:auth/RegistrationViewModel` (`@HiltViewModel`) + immutable `RegistrationUiState`
