@@ -267,5 +267,12 @@ suivi, vérifie sa taille (`wc -l`) :
   « Blocked » de chaque lane), puis continue sur l'item suivant en attendant.
 - `git status`/`git log` avant toute action destructrice — le worktree est potentiellement
   partagé avec d'autres agents en parallèle.
+- **Ne lance JAMAIS d'agent enfant** (itération 27 : un run a tenté de lancer un sous-agent pour
+  un sujet iOS hors mandat juste après son propre merge). Le choix et le lancement d'un slice/item
+  sont le rôle de l'ORCHESTRATEUR (le niveau au-dessus de ce run), jamais du run lui-même — un seul
+  incrément par run reste la règle même si un « bon candidat suivant » saute aux yeux. De plus, ce
+  run et un éventuel enfant partageraient le MÊME worktree : deux processus git concurrents dessus
+  garantissent une collision. Une fois ton run conclu (mergé ou bloqué), termine — liste les
+  candidats suivants dans ton rapport, ne les lance pas.
 
 Commence maintenant : Étape 0, puis choix de lane, puis premier run.
