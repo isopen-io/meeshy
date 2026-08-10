@@ -14,6 +14,10 @@ import os
 /// stale edit.
 public enum RealtimeMessageMutation: Sendable, Equatable {
     case edited(messageId: String, content: String, editedAt: Date)
+    /// `message:edited` porteur d'un résumé d'appel : la transition live →
+    /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
+    /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
+    case callNoticeUpdated(messageId: String, content: String, callSummaryJson: Data?, serverUpdatedAt: Date)
     case deleted(messageId: String, deletedAt: Date)
     case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?, maxCount: Int?)
     case reactionRemoved(messageId: String, emoji: String, participantId: String?)
@@ -1072,11 +1076,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
-        await realtimeMessagePersistor?(.edited(
-            messageId: msg.id,
-            content: msg.content,
-            editedAt: apiMessage.editedAt ?? Date()
-        ))
+        await realtimeMessagePersistor?(Self.mutation(for: apiMessage, content: msg.content))
         _messagesDidChange.send(msg.conversationId)
         // If the edited message is the conversation's last message, the list-row
         // preview still shows the pre-edit text — refresh it in place.
@@ -1336,6 +1336,32 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
         }
         return updated
+    }
+
+    /// Classe un `message:edited` : un message porteur d'un résumé d'appel
+    /// décrit la fin de l'appel, pas une édition utilisateur. Le confondre avec
+    /// `.edited` poserait « modifié » sur un avis d'appel et écraserait le
+    /// résumé — même distinction que `ConversationSocketHandler` applique déjà
+    /// sur la conversation ouverte. Pure + testable.
+    nonisolated static func mutation(
+        for apiMessage: APIMessage, content: String
+    ) -> RealtimeMessageMutation {
+        guard let callSummary = apiMessage.callSummary else {
+            // L'horloge SERVEUR, jamais celle de l'appareil : `markEdited`
+            // compare cet instant au précédent pour rejeter les échos
+            // désordonnés, ce qui n'a de sens qu'entre horloges comparables.
+            return .edited(
+                messageId: apiMessage.id,
+                content: content,
+                editedAt: apiMessage.editedAt ?? Date()
+            )
+        }
+        return .callNoticeUpdated(
+            messageId: apiMessage.id,
+            content: content,
+            callSummaryJson: try? JSONEncoder().encode(callSummary),
+            serverUpdatedAt: apiMessage.updatedAt ?? apiMessage.editedAt ?? Date()
+        )
     }
 
     // MARK: - Conversation lifecycle (persisted)

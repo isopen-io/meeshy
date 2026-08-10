@@ -148,6 +148,50 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertNil(messages, "les messages de la conversation supprimée doivent partir avec elle")
     }
 
+    // MARK: - Classement d'un message:edited
+
+    func test_mutation_plainEdit_isClassifiedAsEdited() {
+        let mutation = ConversationSyncEngine.mutation(
+            for: TestFactories.makeAPIMessage(id: "m1", content: "corrigé"), content: "corrigé"
+        )
+        guard case let .edited(messageId, content, _) = mutation else {
+            return XCTFail("un message sans résumé d'appel est une édition")
+        }
+        XCTAssertEqual(messageId, "m1")
+        XCTAssertEqual(content, "corrigé")
+    }
+
+    /// Un `message:edited` porteur d'un résumé d'appel décrit la fin de
+    /// l'appel. Le traiter comme une édition poserait « modifié » sur l'avis
+    /// d'appel — c'est exactement la distinction que fait déjà le handler de
+    /// la conversation ouverte, et le relais doit la reproduire.
+    func test_mutation_callNotice_isNotClassifiedAsAnEdit() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let apiMessage = try decoder.decode(APIMessage.self, from: Data("""
+        {
+            "id": "m-call", "conversationId": "c1", "senderId": "s1",
+            "content": "Appel", "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:05:00Z",
+            "metadata": {
+                "callId": "call-1", "initiatorId": "s1", "callType": "audio",
+                "outcome": "completed", "durationSeconds": 272,
+                "bytesEstimated": false, "isLive": false
+            }
+        }
+        """.utf8))
+        XCTAssertNotNil(apiMessage.callSummary)
+
+        let mutation = ConversationSyncEngine.mutation(for: apiMessage, content: "Appel · 04:32")
+
+        guard case let .callNoticeUpdated(messageId, content, json, _) = mutation else {
+            return XCTFail("un résumé d'appel ne doit JAMAIS devenir une édition")
+        }
+        XCTAssertEqual(messageId, "m-call")
+        XCTAssertEqual(content, "Appel · 04:32")
+        XCTAssertNotNil(json)
+    }
+
     // MARK: - realtimeMessagePersistor (table canonique)
 
     func test_messageEditedRelay_forwardsEditToTheCanonicalStore() async throws {

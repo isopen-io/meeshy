@@ -151,6 +151,11 @@ final class DependencyContainer {
             switch mutation {
             case let .edited(messageId, content, editedAt):
                 try await persistence.markEdited(localId: messageId, newContent: content, editedAt: editedAt)
+            case let .callNoticeUpdated(messageId, content, callSummaryJson, serverUpdatedAt):
+                try await persistence.applyCallNoticeUpdate(
+                    localId: messageId, content: content,
+                    callSummaryJson: callSummaryJson, serverUpdatedAt: serverUpdatedAt
+                )
             case let .deleted(messageId, deletedAt):
                 try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt)
             case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount):

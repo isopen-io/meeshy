@@ -164,6 +164,10 @@ struct iPadRootView: View {
                 // personne n'est sink'é sur `socialSocket.storyCreated` → la
                 // story n'arrive jamais dans `storyGroups`.
                 storyViewModel.subscribeToSocketEvents()
+                // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
+                // écrivain disque des posts, commentaires et réactions.
+                // `arm()` est idempotent — jamais désarmé (miroir de RootView).
+                DependencyContainer.shared.feedSocketHandler.arm()
                 await ConversationSyncEngine.shared.startSocketRelay()
 
                 Task.detached(priority: .background) {
