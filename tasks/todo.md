@@ -1,3 +1,144 @@
+# Cycle 63 — « Toutes les sessions ont été déconnectées » était faux
+
+> **Collision de numérotation, résolue à la main — même patron que celle du relevé ci-dessous.**
+> Ce relevé a été écrit sous le numéro 62 avant que `main` ne porte déjà un cycle 62 (« La langue
+> d'origine rétrogradait la langue primaire du lecteur »). Ce ne sont PAS deux versions d'une même
+> question : l'autre traite le Prisme de la ligne de liste, celle-ci la révocation de session. Le
+> relevé arrivé sur `main` le premier garde le 62 ; celui-ci prend le 63. **Les deux sont
+> conservés intégralement — rien n'a été fusionné ni écrasé.**
+
+## Contrainte d'environnement (identique au cycle 61, revérifiée)
+
+Même conteneur Linux distant. `tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane
+Android reste **matériellement impossible** ici : `curl https://dl.google.com/...` rend un code
+`000` (CONNECT refusé par la politique réseau), donc pas de `sdkmanager`, pas de
+`platforms;android-35`, pas de `./apps/android/meeshy.sh check` — le seul gate de cette lane. Ni
+macOS ni Xcode pour la lane IOS_DETTE. **`tasks/lane-cursor.md` n'a donc PAS été touché** : la lane
+Android reprend telle quelle au prochain run sur une machine capable de la construire.
+
+Ce cycle a travaillé la seule lane gatable ici — gateway + web — sur une capacité qui est autant du
+temps réel que de la sécurité.
+
+## Le défaut
+
+**`auth:session-revoked` n'avait aucun émetteur.** L'événement est déclaré dans
+`packages/shared/types/socketio-events.ts:539` avec une énumération `reason`
+(`password_changed | logout_all_devices | admin_revoke`) écrite exactement pour les appelants
+ci-dessous, et le web l'écoute depuis qu'il existe (`connection.service.ts:225`). La moitié serveur
+n'a simplement jamais été écrite : `grep -rn "AUTH_SESSION_REVOKED\|auth:session-revoked"
+services/gateway/src` rendait **zéro**.
+
+Or **une socket ne s'authentifie qu'une fois, à la connexion, et n'est plus jamais revérifiée**
+(`AuthHandler._authenticateJWTUser`). Invalider `UserSession` en base ne ferme donc rien du tout :
+l'appareil révoqué continue de recevoir `message:new`, `conversation:updated`, `reaction:added` et
+tout le reste, indéfiniment.
+
+Deux chemins de révocation TOTALE étaient concernés, et ce sont précisément les deux chemins de
+reprise de compte — ceux qu'on emprunte quand on pense être compromis :
+
+1. **`GET /auth/revoke-all-sessions`** — le lien « ce n'était pas moi » envoyé par email sur une
+   connexion suspecte. Il affichait *« All sessions disconnected — N session(s) have been
+   revoked »* alors qu'aucune n'avait été déconnectée.
+2. **`POST /auth/reset-password`** — `PasswordResetService.completePasswordReset` invalide
+   **toutes** les sessions dans la transaction qui écrit le nouveau hash de mot de passe
+   (`PasswordResetService.ts:418`). L'intrus qui tenait une socket ouverte continuait de lire les
+   conversations de sa victime après la réinitialisation.
+
+**Et la chaîne web s'arrêtait elle aussi à mi-parcours.** `SocketIOOrchestrator.onSessionRevoked`
+traduit l'événement serveur en `meeshy:session-revoked` sur `window` — un événement DOM plutôt
+qu'un appel direct, pour éviter un import circulaire entre la couche socket et le store d'auth. **Rien
+ne l'écoutait** (`grep -rn "meeshy:session-revoked" apps/web` ne rendait que l'émetteur). L'onglet
+journalisait un avertissement, lançait l'événement dans le vide et restait « connecté », jeton en
+localStorage.
+
+## Le correctif
+
+**Un point d'appel unique**, `socketio/disconnectRevokedSessions.ts` : émet
+`auth:session-revoked` sur chaque socket de `ROOMS.user(userId)`, puis `disconnect(true)`.
+
+- **L'émission n'est pas le contrôle, la déconnexion l'est.** `disconnect(true)` ferme la connexion
+  sous-jacente, pas seulement le namespace ; un client modifié ignorerait l'event. L'event précède
+  la fermeture pour qu'un client conforme purge sa session locale — même ordre que
+  `AuthHandler` pour `auth:token-expired`.
+- **Best-effort, ne lève jamais.** La révocation est déjà commise quand l'éventail part : une
+  socket morte ou un adaptateur indisponible ne doit pas transformer une réinitialisation réussie
+  en 500. Isolation par socket : un appareil déjà parti n'épargne pas les autres.
+- Côté web, `components/common/SessionRevocationHandler.tsx` monté une fois au layout racine
+  termine la chaîne : il écoute `meeshy:session-revoked` et appelle `useAuthStore.logout()` — le
+  seul chemin de déconnexion du store, pas une seconde copie.
+- `completePasswordReset` rend désormais `userId` en cas de succès **et uniquement là** : la route
+  est la seule couche qui puisse couper les sockets, et elle ne peut pas le faire si on ne lui dit
+  pas de qui il s'agit. Il ne quitte jamais le serveur — un témoin le vérifie (`never leaks the
+  reset user id to the caller`).
+
+## Portée : ce qui N'A PAS été branché, et pourquoi
+
+`DELETE /sessions/:sessionId` et `DELETE /sessions` (« déconnecter mes autres appareils »)
+**n'appellent pas** cet éventail, délibérément. Ces deux-là **épargnent une session**, et rien ne
+permet aujourd'hui de savoir laquelle : une socket enregistrée s'authentifie avec le seul JWT
+(`extractJWTToken`), alors que `UserSession.sessionToken` stocke le hash d'un **autre** jeton,
+opaque et longue durée (`generateSessionToken()`), qu'aucun client ne transmet au handshake — le
+web n'envoie que `auth: { token }` (`connection.service.ts:107`).
+
+Deux fausses pistes écartées, plutôt que livrées à moitié :
+
+- **Adresser tout `ROOMS.user(userId)` quand même** : déconnecterait l'appareil depuis lequel
+  l'utilisateur fait justement le ménage.
+- **Hacher le JWT à l'authentification de la socket pour reconnaître l'appelant** : un client qui
+  rafraîchit son JWT par REST sans reconnecter sa socket porterait un hash périmé, et se
+  déconnecterait lui-même. Le pont manquant est côté client (transmettre le `sessionToken` au
+  handshake), donc multi-plateforme — hors d'atteinte d'un cycle gatable ici.
+
+## Vérification
+
+- `disconnectRevokedSessions` : 6 témoins neufs, écrits AVANT l'implémentation, RED observé
+  (`Cannot find module '../disconnectRevokedSessions'`). Couvrent l'ordre émettre-puis-fermer, la
+  charge utile, l'isolation par socket, l'échec de `fetchSockets`, et le no-op sans `io` / sans
+  `userId` (aucun `io.in('user:')` ne doit partir).
+- Routes : 3 témoins sur `revoke-all-sessions`, 3 sur `reset-password`, RED observé sur les deux
+  (`rooms` vide au lieu de `['user:usr-123']`). Ils vérifient aussi que la révocation se confirme
+  quand aucun Socket.IO n'est câblé et quand l'éventail échoue.
+- `PasswordResetService` : 1 témoin sur le `userId` rendu, RED observé.
+- Web : 4 témoins sur `SessionRevocationHandler`, RED observé (module absent). Couvrent le
+  désabonnement au démontage — un remontage ne doit pas déconnecter deux fois.
+
+## Reste ouvert après ce cycle
+
+- **`DELETE /sessions/:sessionId` et `DELETE /sessions` ne coupent toujours aucune socket.** Le
+  chantier est le pont client : transmettre le `sessionToken` au handshake (web, iOS, Android) pour
+  qu'une socket sache de quelle `UserSession` elle relève. Tant qu'il n'existe pas, révoquer un
+  appareil depuis la liste des sessions le laisse en ligne jusqu'à expiration de son JWT.
+- **L'auth REST ne vérifie pas `UserSession.isValid`** : un JWT non expiré reste accepté après
+  révocation (`middleware/auth.ts` ne consulte la table que sur le chemin JWT-expiré-plus-session-
+  de-confiance). C'est un arbitrage assumé du JWT sans état, mais il mérite d'être nommé : la
+  révocation ne mord sur REST qu'à l'expiration du jeton. Le fermer coûterait une lecture par
+  requête — **décision de conception, à instruire séparément.**
+- **La suppression de compte ne révoque aucune session** (`routes/me/delete-account.ts` bascule
+  `isActive`/`deletedAt` sans toucher `UserSession`) et ne coupe aucune socket. Le cycle de vie y
+  est différent (période de grâce, annulation possible) : brancher l'éventail y demande d'abord de
+  trancher ce que devient la socket d'un compte en attente de suppression.
+- **`auth:session-revoked` n'est écouté ni par iOS ni par Android.** `grep -rn
+  "auth:session-revoked" packages/MeeshySDK apps/ios apps/android` rend zéro. Le serveur ferme
+  désormais leur socket — ce qui est le contrôle — mais leur session locale n'est pas purgée : ils
+  se reconnecteront avec un JWT encore valide. Lot mobile, non gatable ici.
+- **L'éventail est attendu (`await`) avant la réponse HTTP.** Voulu : le client ne doit pas
+  s'entendre dire « c'est fait » avant que les sockets soient fermées. `fetchSockets()` est borné
+  par le `requestsTimeout` de l'adaptateur, donc sans risque de blocage indéfini — mais c'est une
+  hypothèse sur l'adaptateur, à revoir si un jour on en change.
+- **Audit croisé des émetteurs par room personnelle : rien à corriger.** Le point porté depuis le
+  cycle 44 (« `emitConversationPreviewUpdate` et les autres émetteurs par room personnelle n'ont pas
+  été audités contre la même clé ») a été instruit par `grep -rn "ROOMS.user("` sur tout le
+  gateway. `emitConversationPreviewUpdate` passe par `participantUserRooms`. Les trois sites qui
+  n'adressent que `.userId` sont justes et documentés : `callEndedFanout` (exception écrite dans le
+  fichier), `conversations/core.ts:1056` (DM, donc deux comptes), `MessageReadStatusService:1080`
+  (préférence stockée, inexistante sans compte). **Point retiré du backlog.**
+- Les points hérités des cycles précédents restent ouverts tels quels (compilation locale des 20
+  suites rouges, `timeout-minutes` du job `quality`, borne de la passe soft-delete,
+  `softDeleteRetentionMs` mort, `createStoryCommentNotificationsBatch` à `visibility` optionnel,
+  arbitrage `delete-for-me` du cycle 12, `eslint` gateway sans config v9).
+
+---
+
 # Cycle 62 — La langue d'origine rétrogradait la langue primaire du lecteur
 
 > **Collision de numérotation, résolue à la main.** Deux sessions ont tourné en parallèle depuis le
@@ -167,6 +308,7 @@ son plus gros consommateur.
 
 ---
 
+---
 ---
 
 # Cycle 61 — Un message de lien de partage n'arrivait sur aucun mobile

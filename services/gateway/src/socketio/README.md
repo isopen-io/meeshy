@@ -412,6 +412,41 @@ participant sans compte n'est jamais sonne. La raison est ecrite dans le fichier
 
 ---
 
+## Revocation de session — couper la socket, pas seulement la ligne en base
+
+`disconnectRevokedSessions.ts` ferme **toutes** les sockets d'un utilisateur
+apres que **toutes** ses sessions ont ete invalidees en base.
+
+Une socket s'authentifie **une seule fois**, a la connexion, et n'est plus
+jamais reverifiee. Invalider `UserSession` ne ferme donc rien : l'appareil
+revoque continue de recevoir `message:new`, `conversation:updated` et tout le
+reste, indefiniment. C'est ce qui se passait — `auth:session-revoked` etait
+declare dans `packages/shared` et ecoute par le web, sans aucun emetteur cote
+serveur.
+
+**Deux appelants, et deux seulement :**
+
+| Chemin | Raison emise |
+|--------|--------------|
+| `GET /auth/revoke-all-sessions` (lien « ce n'etait pas moi ») | `logout_all_devices` |
+| `POST /auth/reset-password` | `password_changed` |
+
+Tous deux invalident **chaque** session du compte, sans exception : « toutes les
+sockets de `ROOMS.user(userId)` » est donc exactement l'ensemble revoque.
+
+**Ne PAS y brancher `DELETE /sessions/:sessionId` ni `DELETE /sessions`.** Ces
+deux-la epargnent une session, et rien ne permet aujourd'hui de savoir laquelle :
+une socket enregistree s'authentifie avec le seul JWT, alors que
+`UserSession.sessionToken` stocke le hash d'un autre jeton, opaque et longue
+duree, qu'aucun client ne transmet au handshake. Les y brancher deconnecterait
+l'appareil depuis lequel l'utilisateur fait le menage.
+
+L'emission n'est pas le controle, la deconnexion l'est : `disconnect(true)`
+ferme la connexion sous-jacente. L'event qui la precede est une courtoisie pour
+qu'un client conforme purge sa session locale — un client modifie l'ignorerait.
+
+---
+
 ## Maps de Connexion
 
 ### connectedUsers: Map<string, SocketUser>
