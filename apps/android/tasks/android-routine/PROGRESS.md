@@ -2,6 +2,52 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **the Flux/Conversations floating-button toggle got fixed** (slice
+> `feed-conversation-toggle`, feature-parity §Q, user-directed mid-session — the user reported
+> "le toggle feed et conversation ne semble pas encore fonctionner" while reviewing the just-
+> shipped launcher icon). **RE-PROVEN via code read, not the report alone**: read
+> `MeeshyApp.kt`'s `onLeftTap` — it unconditionally called
+> `navController.navigate(Routes.FEED) { popUpTo(...){saveState=true}; launchSingleTop=true;
+> restoreState=true }` regardless of `currentRoute`, so a second tap while already on the Flux
+> was a no-op (the only way back to Conversations was the system Back gesture). Cross-checked
+> against iOS `RootView.draggableFloatingButtons.onLeftTap`
+> (`apps/ios/Meeshy/Features/Main/Views/RootView.swift:1748-1756`): `showFeed.toggle()` — a
+> genuine two-way toggle on the SAME button, confirming this was a real behavioural gap, not a
+> misreading of the bug report. **Fix**: extracted the target-route decision into a pure,
+> tested function `leftButtonTapTarget(currentRoute: String?): String` (same pattern as the
+> file's own pre-existing `menuItemLabelKeys()` — a `@Composable`-adjacent decision pulled out
+> for JVM testability) — `Routes.CONVERSATIONS` when already on `Routes.FEED`, `Routes.FEED`
+> otherwise (including `null`, the cold-start case) — and wired it into `onLeftTap`. Also swapped
+> the button's icon between `Icons.Filled.Home` (active, on the Flux) and `Icons.Outlined.Home`
+> (inactive) — the closest Android analogue to iOS's icon swap (static glyph vs. the breathing
+> `AnimatedLogoView` when `showFeed == true`; no ported equivalent of that animated logo exists
+> on Android yet, noted as a gap rather than attempted this run). **+4
+> `LeftButtonTapTargetTest`** (Conversations→Feed; Feed→Conversations; any other tab→Feed;
+> null→Feed). **Mutation (RED proof)**: temporarily hardcoded `leftButtonTapTarget` to always
+> return `Routes.FEED` (the exact pre-fix behaviour) and re-ran — failed **exactly** `from Feed,
+> a tap targets Conversations`, the other 3 cases stayed green (correctly unaffected) — then
+> restored and re-ran clean. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL in
+> 23s`** (970 tasks). **Verified visually on-device** (not just the JVM test): installed the
+> debug APK on `meeshy_pixel8` (API 35, already-authenticated session from a prior run), tapped
+> the left button from Conversations → landed on Feed (title "Feed", the Friends/Discover
+> toggle + bookmark icon the user was praising, both visible), icon flipped outline→filled;
+> tapped the SAME button again → landed back on Conversations, icon flipped filled→outline —
+> the exact round-trip that was broken before this fix, confirmed with real screenshots at each
+> step. **`feature-parity.md`'s "Feed overlay shell..." bullet flipped `[ ]`→`[~]`** with the fix
+> noted + a called-out, not-hidden architectural deviation from iOS (Android navigates via
+> `NavHost` full-screen swap; iOS shows the Flux as an animated `ZStack` overlay over the still-
+> mounted conversation list — functionally equivalent toggle semantics, different mechanism).
+> **Scope note**: the user's session also raised two larger, already-tracked gaps this run did
+> NOT attempt — "Create post" (feature-parity §F, unchecked: Android's Flux has zero way to
+> compose a genuine post, only `StatusComposerSheet` for ephemeral mood statuses; iOS already
+> has a full `FeedComposerSheet`/`composerOverlay` in `FeedView.swift` to port from) and a
+> written proposal for porting Android's Friends/Discover status-feed toggle
+> (`StatusFeedModeToggle`, `feature/feed/StatusBarView.kt` — an Android-only innovation, iOS
+> never surfaced it) to iOS — delivered as a design write-up in the session response, not code,
+> per the user's own framing ("propose quelque chose"). Both are real, concretely-scoped
+> candidates for a future run, not new findings needing a fresh feature-parity.md line (both
+> already have one).
+>
 > On 2026-08-10 **the app launcher icon landed** (slice `app-launcher-icon`, feature-parity
 > §Q, user-directed run — the app had shipped with the generic Android robot icon since the
 > project's inception; not a single line anywhere flagged it because the integral iOS audit
