@@ -64,6 +64,21 @@ describe('broadcastLinkMessage — les trois audiences', () => {
     expect(emit).toHaveBeenCalledWith('link:message:new', PAYLOAD);
   });
 
+  // `link:message:new` n'a jamais eu qu'UN auditeur : le web. iOS
+  // (`MessageSocketManager.swift`) et Android (`MessageSocketManager.kt`)
+  // n'écoutent que `message:new`, si bien qu'un message envoyé par lien de
+  // partage — le SEUL transport d'envoi d'un participant anonyme — n'arrivait
+  // en temps réel sur aucun des deux, y compris chez les membres inscrits de la
+  // conversation. Le message canonique part donc aussi, DÉBALLÉ : c'est la
+  // forme que `message:new` transporte partout ailleurs.
+  it('annonce AUSSI le message canonique `message:new`, déballé', async () => {
+    const { manager, emit } = makeManager();
+
+    await call(manager);
+
+    expect(emit).toHaveBeenCalledWith('message:new', PAYLOAD.message);
+  });
+
   it('enfile le message pour les participants hors ligne', async () => {
     const { manager, enqueueOfflineLinkMessage } = makeManager();
 
@@ -154,6 +169,22 @@ describe('broadcastLinkMessage — indépendance des audiences', () => {
     await call(manager, onError);
 
     expect(onError).toHaveBeenCalledWith(boom);
+    expect(enqueueOfflineLinkMessage).toHaveBeenCalled();
+    expect(emitUnreadCountsToRecipients).toHaveBeenCalled();
+  });
+
+  // `getIO()` est déclaré nullable : avant que le serveur Socket.IO soit
+  // monté (boot, worker, test), il n'y a pas de room à servir. Les trois
+  // autres audiences ne dépendent pas de lui et doivent partir quand même.
+  it('sert les deux autres audiences quand aucun serveur Socket.IO n\'est monté', async () => {
+    const { manager, enqueueOfflineLinkMessage, emitUnreadCountsToRecipients } = makeManager({
+      getIO: () => null,
+    });
+    const onError = jest.fn();
+
+    await call(manager, onError);
+
+    expect(onError).not.toHaveBeenCalled();
     expect(enqueueOfflineLinkMessage).toHaveBeenCalled();
     expect(emitUnreadCountsToRecipients).toHaveBeenCalled();
   });

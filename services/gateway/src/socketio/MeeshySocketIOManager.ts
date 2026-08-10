@@ -73,6 +73,7 @@ import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
+import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
@@ -89,8 +90,17 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
-  if (eventType === 'link-message') return SERVER_EVENTS.LINK_MESSAGE_NEW;
   return SERVER_EVENTS.MESSAGE_NEW;
+}
+
+// What one queued entry actually puts on the wire. Every eventType replays as a
+// single event EXCEPT 'link-message', which owes the same two events the live
+// room emit owes — see `linkMessageEmissions`. A recipient who was offline when
+// a share-link guest wrote is precisely the one this had to reach: the live
+// emit had already gone out without them.
+function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
+  if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
+  return [{ event: _drainedEventName(entry.eventType), payload: entry.payload }];
 }
 
 export interface SocketUser {
@@ -456,7 +466,9 @@ export class MeeshySocketIOManager {
       // here is impossible (loose emit, same as the previous raw-Socket path).
       const userRoom = this.io.to(ROOMS.user(userId)) as unknown as { emit: (event: string, payload: unknown) => void };
       for (const entry of pending) {
-        userRoom.emit(_drainedEventName(entry.eventType), entry.payload);
+        for (const emission of _drainedEmissions(entry)) {
+          userRoom.emit(emission.event, emission.payload);
+        }
       }
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
       userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });

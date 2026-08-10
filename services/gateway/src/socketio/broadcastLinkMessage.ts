@@ -1,4 +1,5 @@
-import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { linkMessageEmissions } from './linkMessageEmissions';
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
@@ -29,9 +30,13 @@ export interface LinkMessageManager {
  * A new message has to reach THREE audiences here, plus the one signal it owes
  * back to its own author:
  *
- *  1. participants connected right now → the `conversation:<id>` room emit;
- *  2. participants who are OFFLINE right now → the delivery queue, replayed as
- *     `link:message:new` by `_drainPendingMessages` on their next connection;
+ *  1. participants connected right now → the `conversation:<id>` room emit,
+ *     under BOTH `link:message:new` (the envelope the web listens to) and the
+ *     canonical `message:new` (the only creation event iOS and Android listen
+ *     to) — see `linkMessageEmissions` for why one event was never enough;
+ *  2. participants who are OFFLINE right now → the delivery queue, replayed
+ *     under those same two events by `_drainPendingMessages` on their next
+ *     connection;
  *  3. every recipient's unread badge → `conversation:unread-updated`;
  *  4. the SENDER's own delivery checkmark → `read-status:updated`, emitted after
  *     the online recipients have been marked `received`.
@@ -89,7 +94,15 @@ export async function broadcastLinkMessage(params: {
   if (!manager) return;
 
   try {
-    manager.getIO()?.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, payload);
+    const room = manager.getIO()?.to(ROOMS.conversation(conversationId));
+    // DEUX events, pas un — cf. `linkMessageEmissions` : `link:message:new`
+    // n'est écouté que par le web, et l'envoi par lien est le seul transport
+    // d'un participant anonyme.
+    if (room) {
+      for (const emission of linkMessageEmissions(payload)) {
+        room.emit(emission.event, emission.payload);
+      }
+    }
   } catch (error) {
     onError?.(error);
   }
