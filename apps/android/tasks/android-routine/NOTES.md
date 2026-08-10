@@ -601,3 +601,51 @@ Append-only log of gotchas and decisions that save time next run.
   follow-up across two note paragraphs. Worth re-reading the bullet's exact follow-up sentence (singular
   vs plural "follow-ups") before assuming one slice closes it — this one did, but it wasn't obvious
   without checking.
+
+## Slice `conversation-mark-unread` (2026-08-10)
+- **A "genuinely large, decompose next time" standing candidate re-flagged across 2+ runs is not
+  the only place to look before defaulting to a brand-new area slice — sweep the CURRENT area's own
+  "Reste" follow-up notes for a smaller, already-scoped gap first.** With Auth §A's fully-local items
+  exhausted and the §C inverted-list rewrite re-confirmed large for a second run in a row (still no
+  concrete decomposition attempted — see the flag in this run's own PROGRESS.md entry), the reflex
+  would be either to force a premature §C sub-slice or jump straight to a fresh Conversations/Chat
+  item. A cheaper first move: grep the SAME area's (§B here) own bullets for a "done ... X pending"
+  Reste note naming a concrete, small, already-understood action. The swipe-actions bullet's "mute/
+  lock/mark-unread/block/hide pending" list named exactly this — `mark-unread` had been sitting there
+  unaddressed with zero grep hits anywhere in `apps/android`, even though the backend route and iOS's
+  own implementation already existed, ready to port.
+- **A "swipe action pending" Reste note can describe a genuinely swipe-gesture-specific gap, not a
+  whole-feature gap — check whether the same action already lives elsewhere (e.g. the context menu)
+  before assuming zero coverage.** `mute` and `lock` both appear in the swipe-actions "pending" list,
+  yet `mute` was already fully shipped via the context menu (`onToggleMute`) — Android's swipe surface
+  is a deliberately reduced 2-direction affordance (leading=pin, trailing=archive), with the full
+  action set living in the long-press menu. This meant `mark-unread`'s swipe-list mention was NOT
+  proof the whole feature was missing — a separate grep against context-menu code was needed to find
+  the real gap (context menu had zero mark-unread coverage; swipe intentionally still won't).
+- **A shared outbox coalescing key across two mutation KINDS (not just repeats of the same kind) has
+  two valid shapes, and the codebase already had a working helper for one of them.** iOS's
+  `UserStateMutation.markAsRead`/`.markAsUnread` share one string coalescing key with always-replace
+  (last-write-wins) semantics — the newest of either kind always survives, dispatched even if it
+  happens to match the last-synced server state. Android's `OutboxCoalescer` already had a second,
+  more precise shape for exactly this "two opposite terminal states of one field" case —
+  `terminalToggle` (built for block/unblock and pin/unpin): an opposite-kind pending row is
+  ANNIHILATED (not replaced), only a same-kind repeat gets replaced. Traced both by hand across a
+  few interleavings before picking: on a true two-state toggle they always converge to the same
+  final synced outcome, but `terminalToggle` additionally skips a redundant network round-trip on a
+  fast undo (mark-read then immediately mark-unread with nothing flushed yet → annihilate → zero
+  calls sent, vs iOS's replace-only approach which still fires one no-op "mark unread" the gateway
+  would just ignore). Reusing the existing precedent (not inventing an iOS-style shared-key
+  mechanism Android never had) was both simpler and marginally more efficient — worth checking
+  whether an existing coalescing helper already models a new cross-kind relationship before assuming
+  iOS's exact mechanism needs porting 1:1.
+- **`OutboxFlushWorker.buildSenders()` is a plain `mapOf`, not the compiler-enforced-complete `when`
+  `OutboxLaneMap.assignmentFor` uses** — adding `OutboxKind.MARK_UNREAD` to the enum required the
+  compiler to force an update to `OutboxLaneMap`'s exhaustive `when` (caught immediately at compile
+  time) but did NOT force any update to `buildSenders()`'s non-exhaustive map (a forgotten sender
+  would silently compile and only surface as a stuck outbox row at runtime — the exact bug class
+  `OutboxLaneMap.sharedDrainLanes` was built to prevent for the DRAIN side, but nothing analogous
+  exists for the SEND side). This run's own sender was added correctly and verified via the full
+  local gate (a stuck mark-unread row would have shown up as the mutation-proof test failing
+  differently, or just never having reached "Success" — it didn't), but the structural gap itself
+  (no exhaustiveness guard on `buildSenders()`) is worth flagging as a real candidate for a future
+  hygiene pass rather than silently living with it a second time.

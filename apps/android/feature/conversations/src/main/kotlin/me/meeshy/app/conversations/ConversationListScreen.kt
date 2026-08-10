@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.filled.MarkChatUnread
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -178,6 +179,7 @@ fun ConversationListScreen(
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
+                                onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
                                 onAssignCategory = { viewModel.reassignCategory(conversation.id, it) },
                                 onCreateCategory = { viewModel.createCategoryAndAssign(conversation.id, it) },
@@ -313,6 +315,7 @@ private fun ConversationRow(
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
@@ -359,6 +362,7 @@ private fun ConversationRow(
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
+            onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
             onCreateCategory = onCreateCategory,
@@ -403,6 +407,7 @@ private fun ConversationRowContent(
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
@@ -533,6 +538,7 @@ private fun ConversationRowContent(
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
+            onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
             onCreateCategory = onCreateCategory,
@@ -555,6 +561,7 @@ private fun ConversationContextMenu(
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
@@ -594,6 +601,12 @@ private fun ConversationContextMenu(
                 text = { Text(stringResource(R.string.conversations_action_mark_read)) },
                 leadingIcon = { Icon(Icons.Filled.MarkChatRead, contentDescription = null) },
                 onClick = { onMarkRead(); onDismiss() },
+            )
+        } else {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_mark_unread)) },
+                leadingIcon = { Icon(Icons.Filled.MarkChatUnread, contentDescription = null) },
+                onClick = { onMarkUnread(); onDismiss() },
             )
         }
         if (hasDraft) {

@@ -191,6 +191,12 @@ class OutboxFlushWorker @AssistedInject constructor(
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },
+        OutboxKind.MARK_UNREAD to MutationSender { row ->
+            when (apiCall { conversationApi.markUnread(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
         OutboxKind.UPDATE_CONVERSATION_PREFS to MutationSender { row ->
             val prefs = runCatching { json.decodeFromString<ConversationPrefsPayload>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }

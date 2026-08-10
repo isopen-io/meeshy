@@ -663,6 +663,37 @@ class ConversationListViewModelTest {
         verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 
+    @Test
+    fun mark_unread_calls_the_repository_and_schedules_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.markUnreadOptimistic("c1") }
+        verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun mark_unread_no_op_does_not_schedule_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns false
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
+        advanceUntilIdle()
+
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
     private fun star(conversationId: String, messageId: String = "m-$conversationId") =
         StarredMessage(messageId = messageId, conversationId = conversationId)
 

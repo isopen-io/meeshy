@@ -240,6 +240,11 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.markReadOptimistic(id) }
     }
 
+    /** Marks a conversation unread from the list (context menu, offered only on a read row). */
+    fun markUnread(id: String) {
+        runPrefMutation { repository.markUnreadOptimistic(id) }
+    }
+
     /**
      * Reassigns a conversation to the user category [targetCategoryId] (context-menu
      * "move to category" / drag-to-category, parity iOS `setCategory`). The pure

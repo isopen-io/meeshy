@@ -29,6 +29,7 @@ private class FakeConversationApi(
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
     override suspend fun updatePreferences(
         id: String,
         body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
@@ -52,6 +53,7 @@ private class RecordingSettingsApi(
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
     override suspend fun updatePreferences(
         id: String,
         body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
@@ -132,6 +134,58 @@ class ConversationRepositoryTest {
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
     }
 
+    @Test
+    fun `markUnreadOptimistic hints an unread count of 1 and queues a MARK_UNREAD`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 0)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markUnreadOptimistic("c1")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(1)
+        val row = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.MARK_UNREAD)
+    }
+
+    @Test
+    fun `markUnreadOptimistic is a no-op when the conversation is already unread`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markUnreadOptimistic("c1")
+
+        assertThat(applied).isFalse()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(4)
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
+
+    @Test
+    fun `markUnreadOptimistic returns false for an unknown conversation id`() = runTest {
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = emptyList())),
+        )
+        repo.refresh()
+
+        val applied = repo.markUnreadOptimistic("missing")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
 
     @Test
     fun `setPinnedOptimistic flips the cached pref and queues a snapshot mutation`() = runTest {
