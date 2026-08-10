@@ -1411,9 +1411,21 @@ class ConversationViewModel: ObservableObject {
                 case .audio:
                     positionMs = consumption.lastPlayPositionMs
                     complete = consumption.listenedComplete
+                    if !complete, let seconds = Self.seedResumePositionSeconds(
+                        positionMs: positionMs,
+                        hasLocalPosition: AudioPlaybackPositionStore.shared.position(for: attachment.id) != nil
+                    ) {
+                        AudioPlaybackPositionStore.shared.save(seconds, for: attachment.id)
+                    }
                 case .video:
                     positionMs = consumption.lastWatchPositionMs
                     complete = consumption.watchedComplete
+                    if !complete, let seconds = Self.seedResumePositionSeconds(
+                        positionMs: positionMs,
+                        hasLocalPosition: VideoPlaybackPositionStore.shared.position(for: attachment.id) != nil
+                    ) {
+                        VideoPlaybackPositionStore.shared.save(seconds, for: attachment.id)
+                    }
                 default:
                     continue
                 }
@@ -1430,6 +1442,18 @@ class ConversationViewModel: ObservableObject {
                 MediaConsumptionStore.shared.record(fraction: fraction, complete: complete, for: attachment.id)
             }
         }
+    }
+
+    /// Pure decision: should the server-synced position seed the LOCAL resume
+    /// store for this attachment? Never overwrites an existing local position
+    /// — a further-along (or intentionally abandoned) local position always
+    /// wins over a server value that may simply be stale. Returns the seconds
+    /// value to seed, or `nil` when there is nothing to seed. The resumability
+    /// dead-zone (too close to either edge) is re-checked at PLAYBACK time by
+    /// the engine itself, so it is deliberately not duplicated here.
+    nonisolated static func seedResumePositionSeconds(positionMs: Int?, hasLocalPosition: Bool) -> Double? {
+        guard !hasLocalPosition, let positionMs, positionMs > 0 else { return nil }
+        return Double(positionMs) / 1000
     }
 
     func loadMessages() async {
