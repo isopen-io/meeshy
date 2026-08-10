@@ -105,6 +105,7 @@ import androidx.compose.foundation.layout.size
 import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
 import me.meeshy.ui.component.chrome.MeeshySplashScreen
 import kotlinx.coroutines.launch
+import me.meeshy.app.BuildConfig
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.net.SessionExpiryNotifier
 
@@ -822,6 +823,12 @@ fun MeeshyApp(
         if (showSplash) {
             MeeshySplashScreen(
                 tagline = stringResource(R.string.splash_tagline),
+                versionLabel = stringResource(
+                    R.string.splash_version_label,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE.toString(),
+                ),
+                credit = stringResource(R.string.brand_signature_credit),
                 modifier = Modifier.fillMaxSize(),
             )
         }

@@ -777,3 +777,26 @@ Append-only log of gotchas and decisions that save time next run.
   coupling: a code comment pointing at the source-of-truth file plus copying the literal
   numbers, the same non-runtime "kept in lockstep by convention" relationship the launcher
   icon's own vector XML already has with its legacy PNG generator script.
+- **A slice's OWN "deliberately deferred, documented not silent" scope note is a hypothesis
+  about acceptable risk, not a closed decision — a human with context can still overrule it,
+  and should be taken seriously when they do.** The first on-device verification pass showed
+  logo + wordmark + tagline exactly as scoped, with the footer signature explicitly written off
+  in this very file's own "Deliberately scoped simpler than iOS" note. The user caught it anyway
+  ("Il manque la signature avec les details de version!") — the port (iOS `BrandSignature.swift`)
+  turned out fully specified and genuinely cheap (three text lines + a small reused draw call),
+  so the right response was to build it before merging, not to defend the original scope
+  decision or push it to a follow-up slice. The general pattern: writing down *why* something
+  was skipped is good practice and not the same as it being *right* to skip — it just makes the
+  disagreement, when one arrives, fast to resolve instead of requiring re-derivation from
+  scratch. Also reinforced: the shared `StackedDashesMark` extraction (draw logic factored out of
+  `SplashLogo` before the footer was added) paid off immediately — the small static footer mark
+  needed zero new drawing code, just a second call site at `progress = 1f`.
+- **Pixel-sampling a background gradient's corners is not sufficient to prove "this is the
+  splash" once the same background component is shared app-wide.** A capture believed to show
+  the Compose splash (distinct top-left/bottom-right gradient stops, ruling out the flat
+  system-splash color) turned out to be the fully-loaded conversations screen — `MeeshyBackground`
+  is "the root background of every top-level screen," so ANY of them produces the same corner
+  signature. The pixel check correctly rules out "still the system splash" but cannot by itself
+  distinguish "the new splash composable" from "any other screen using the same shared
+  background." Confirm with content that's unique to the screen under test (the "Meeshy" wordmark
+  text, or the footer signature text), not just background color sampling.

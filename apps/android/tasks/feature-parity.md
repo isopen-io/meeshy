@@ -1379,30 +1379,42 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       animated "stacked-dashes" logo (`SplashLogo`/`SplashLogoGeometry`, staggered bar reveal,
       same source geometry as the launcher icon's `ic_launcher_foreground.xml` so the two brand
       surfaces never drift) + gradient "Meeshy" wordmark + tagline (en/fr/es/pt, iOS's exact
-      copy). `MeeshyApp.kt` shows it for a 1200ms floor (parity iOS `minSplashDuration`) via a
-      plain `Box` overlay on top of the already-composing Scaffold/NavHost — no gating of
-      `startDestination`, since `AuthViewModel.isAuthenticated` already resolves synchronously.
+      copy) + a footer `BrandSignature` (version line "Meeshy {versionName} · {versionCode}",
+      "Services CEO" credit, small static brand mark tinted `MeeshyPalette.Error` — port of iOS
+      `BrandSignature.swift`, reusing the same `StackedDashesMark` draw call the animated logo
+      uses at `progress = 1f`, so the two brand-mark renders can never drift). `MeeshyApp.kt`
+      shows it for a 1200ms floor (parity iOS `minSplashDuration`) via a plain `Box` overlay on
+      top of the already-composing Scaffold/NavHost — no gating of `startDestination`, since
+      `AuthViewModel.isAuthenticated` already resolves synchronously.
       **Deliberately scoped simpler than iOS, documented not silent:** no pulsing ambient-orb
-      animation (the static orbs already shipped in `MeeshyBackground` are reused as-is); no
-      footer brand signature; the floor is a pure minimum-display-duration timer, not a
-      readiness gate combining boot work the way iOS's `.task` block does (cache hydration +
-      socket handshake) — Android has no equivalent async boot phase yet to additionally gate
-      on, tracked as a future follow-up once one exists. +19 tests: `SplashLogoGeometryTest`
+      animation (the static orbs already shipped in `MeeshyBackground` are reused as-is); the
+      floor is a pure minimum-display-duration timer, not a readiness gate combining boot work
+      the way iOS's `.task` block does (cache hydration + socket handshake) — Android has no
+      equivalent async boot phase yet to additionally gate on, tracked as a future follow-up
+      once one exists. +21 tests: `SplashLogoGeometryTest`
       (11, bar geometry invariants + stagger-progress math, mutation-proven — dropping the
-      stagger offset fails exactly the one discriminating test), `SplashThemeGuardTest` (5,
-      manifest/theme/resource/gradle-catalog/`MainActivity` source guards, mirror of
-      `LauncherIconManifestGuardTest`, mutation-proven — reverting the manifest theme attribute
-      fails exactly the expected test). **Verified visually on-device** (not just compiled):
-      installed on `meeshy_pixel8` (API 35), captured the OS-level system splash (flat
-      Indigo950 + white glyph) and, further into the same cold start, the Compose splash in its
-      real 1200ms window (gradient background, ambient glow, fully-revealed stacked-dashes logo,
-      gradient "Meeshy" wordmark, "Break the language barrier" tagline) — confirmed via pixel
-      sampling (corner colors match `MeeshyGradients.mainBackground(dark=true)` exactly, not the
-      flat system-splash color) across three consecutive captures. One methodological note: an
-      early single-shot capture landed at literally `progress≈0` of the logo's own 600ms
-      entrance (cold-start jitter on a resource-contended dev box, not a product bug) — isolated
-      with a temporary debug fill (reverted before commit) proving both sizing and draw calls
-      were correct, then reconfirmed clean via a wider capture window.
+      stagger offset fails exactly the one discriminating test), `SplashThemeGuardTest` (7,
+      manifest/theme/resource/gradle-catalog/`MainActivity`/version-string/wiring source guards,
+      mirror of `LauncherIconManifestGuardTest`, mutation-proven twice — reverting the manifest
+      theme attribute fails exactly the expected test; hardcoding `versionLabel` instead of
+      sourcing `BuildConfig` fails exactly the expected test). **Verified visually on-device**
+      (not just compiled): installed on `meeshy_pixel8` (API 35), captured the OS-level system
+      splash (flat Indigo950 + white glyph) and, further into the same cold start, the Compose
+      splash in its real 1200ms window (gradient background, ambient glow, fully-revealed
+      stacked-dashes logo, gradient "Meeshy" wordmark, "Break the language barrier" tagline,
+      AND the footer signature "Meeshy 0.1.0 · 1" / "Services CEO" / small red brand mark) —
+      confirmed via pixel sampling (corner colors match `MeeshyGradients.mainBackground(dark=
+      true)` exactly, not the flat system-splash color) and direct visual read of the rendered
+      footer text. Two methodological notes: (1) an early single-shot capture landed at
+      literally `progress≈0` of the logo's own 600ms entrance (cold-start jitter on a
+      resource-contended dev box, not a product bug) — isolated with a temporary debug fill
+      (reverted before commit) proving both sizing and draw calls were correct; (2) the footer
+      signature was caught missing from the FIRST verification pass — a user correction mid-run
+      ("Il manque la signature avec les details de version!") against this same slice's own
+      documented "no footer brand signature" scope cut, added before merge rather than deferred
+      to a follow-up, since the component (iOS `BrandSignature.swift`) and its exact copy
+      ("Services CEO", version/build format) were already fully specified and cheap to port
+      once flagged.
 
 ## B. Conversations list
 - [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
