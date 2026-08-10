@@ -72,9 +72,15 @@ internal struct _InlineOverlayControls: View {
     }
 
     // MARK: - Top Bar (expand + speed)
+    //
+    // Cluster centrée horizontalement (au lieu de deux ancres opposées
+    // top-leading/top-trailing) — parité visuelle avec le pattern
+    // TikTok/Reels d'un petit groupe de contrôles flottant centré en haut
+    // du canvas vidéo. Les deux boutons restent inchangés (icônes, taps,
+    // style) ; seul le positionnement change.
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 10) {
             if controls.contains(.expand), let onExpand {
                 Button {
                     onExpand()
@@ -87,7 +93,6 @@ internal struct _InlineOverlayControls: View {
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
             }
-            Spacer()
             if controls.contains(.speed) {
                 Button {
                     manager.cycleSpeed()
@@ -102,6 +107,7 @@ internal struct _InlineOverlayControls: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Center Controls (skip + play/pause)
