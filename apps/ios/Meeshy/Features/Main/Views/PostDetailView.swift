@@ -1477,14 +1477,34 @@ struct PostDetailView: View {
                     thumbnailColor: repost.authorColor
                 )
                 AudioAvailabilityResolver(attachment: repostAudio, autoDownload: true) { availability, onDownload in
-                    AudioPlayerView(
-                        attachment: repostAudio,
-                        context: .feedPost,
-                        accentColor: repost.authorColor,
-                        transcription: nil,
-                        availability: availability,
-                        onDownload: onDownload
-                    )
+                    CoordinatedAudioPlayer(
+                        attachmentId: repostAudio.id,
+                        nowPlayingName: repost.author,
+                        nowPlayingArtworkURL: repost.authorAvatarURL,
+                        makeQueuedAudio: {
+                            QueuedAudio(
+                                attachmentId: repostAudio.id,
+                                messageId: repost.id,
+                                conversationId: repost.id,
+                                fileUrl: repostAudio.fileUrl,
+                                durationMs: repostAudio.duration ?? 0,
+                                senderName: repost.author,
+                                senderAvatarURL: repost.authorAvatarURL,
+                                receivedAt: repost.timestamp
+                            )
+                        }
+                    ) { external, onPlay in
+                        AudioPlayerView(
+                            attachment: repostAudio,
+                            context: .feedPost,
+                            accentColor: repost.authorColor,
+                            transcription: nil,
+                            availability: availability,
+                            onDownload: onDownload,
+                            externalPlayer: external,
+                            onPlayRequest: onPlay
+                        )
+                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 12)
@@ -1855,25 +1875,45 @@ struct PostDetailView: View {
         case .audio:
             let audioAttachment = media.toMessageAttachment()
             AudioAvailabilityResolver(attachment: audioAttachment, autoDownload: true) { availability, onDownload in
-                AudioPlayerView(
-                    attachment: audioAttachment,
-                    context: .feedPost,
-                    accentColor: media.thumbnailColor,
-                    transcription: media.transcription,
-                    translatedAudios: media.translatedAudios,
-                    onFullscreen: {
-                        guard let post = displayPost else { return }
-                        audioFullscreen = .fromFeed(
-                            media: media,
-                            author: ProfileSheetUser.from(feedPost: post),
-                            originalLanguage: post.originalLanguage,
-                            caption: post.content,
-                            createdAt: post.timestamp
+                CoordinatedAudioPlayer(
+                    attachmentId: audioAttachment.id,
+                    nowPlayingName: displayPost?.author ?? "",
+                    nowPlayingArtworkURL: displayPost?.authorAvatarURL,
+                    makeQueuedAudio: {
+                        QueuedAudio(
+                            attachmentId: audioAttachment.id,
+                            messageId: displayPost?.id ?? audioAttachment.id,
+                            conversationId: displayPost?.id ?? audioAttachment.id,
+                            fileUrl: audioAttachment.fileUrl,
+                            durationMs: audioAttachment.duration ?? 0,
+                            senderName: displayPost?.author ?? "",
+                            senderAvatarURL: displayPost?.authorAvatarURL,
+                            receivedAt: displayPost?.timestamp ?? audioAttachment.createdAt
                         )
-                    },
-                    availability: availability,
-                    onDownload: onDownload
-                )
+                    }
+                ) { external, onPlay in
+                    AudioPlayerView(
+                        attachment: audioAttachment,
+                        context: .feedPost,
+                        accentColor: media.thumbnailColor,
+                        transcription: media.transcription,
+                        translatedAudios: media.translatedAudios,
+                        onFullscreen: {
+                            guard let post = displayPost else { return }
+                            audioFullscreen = .fromFeed(
+                                media: media,
+                                author: ProfileSheetUser.from(feedPost: post),
+                                originalLanguage: post.originalLanguage,
+                                caption: post.content,
+                                createdAt: post.timestamp
+                            )
+                        },
+                        availability: availability,
+                        onDownload: onDownload,
+                        externalPlayer: external,
+                        onPlayRequest: onPlay
+                    )
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
