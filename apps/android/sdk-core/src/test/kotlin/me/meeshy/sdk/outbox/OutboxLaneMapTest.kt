@@ -46,9 +46,15 @@ class OutboxLaneMapTest {
     }
 
     @Test
-    fun `each remaining kind maps to its own dedicated shared lane`() {
+    fun `read receipt and mark-unread share the read-receipt lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.READ_RECEIPT))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.MARK_UNREAD))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))
+    }
+
+    @Test
+    fun `each remaining kind maps to its own dedicated shared lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_CONVERSATION_PREFS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_PREFS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_PROFILE))

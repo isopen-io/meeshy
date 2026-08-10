@@ -49,6 +49,13 @@ interface ConversationApi {
     @POST("conversations/{id}/mark-as-read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
 
+    // POST /conversations/{id}/mark-unread (gateway routes/conversations/messages.ts):
+    // moves the read cursor back before the latest message so the conversation
+    // reappears with 1 unread message. Distinct route from markRead's — the
+    // gateway never registered a symmetric "mark-as-unread" alias.
+    @POST("conversations/{id}/mark-unread")
+    suspend fun markUnread(@Path("id") id: String): ApiResponse<Unit>
+
     @PUT("user-preferences/conversations/{id}")
     suspend fun updatePreferences(
         @Path("id") id: String,
