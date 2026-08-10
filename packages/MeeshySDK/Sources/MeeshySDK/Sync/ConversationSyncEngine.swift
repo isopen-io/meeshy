@@ -2,6 +2,28 @@ import Foundation
 import Combine
 import os
 
+// MARK: - Realtime message mutations
+
+/// A real-time mutation of an already-persisted message, expressed without any
+/// storage vocabulary so the engine stays agnostic of the host app's store.
+/// The host maps each case onto its canonical table (GRDB `messages`).
+///
+/// Every case is idempotent by construction on the receiving side: the same
+/// broadcast may reach both this relay and the open conversation's own socket
+/// handler, and replaying it must not double-count a reaction or resurrect a
+/// stale edit.
+public enum RealtimeMessageMutation: Sendable, Equatable {
+    case edited(messageId: String, content: String, editedAt: Date)
+    /// `message:edited` porteur d'un résumé d'appel : la transition live →
+    /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
+    /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
+    case callNoticeUpdated(messageId: String, content: String, callSummaryJson: Data?, serverUpdatedAt: Date)
+    case deleted(messageId: String, deletedAt: Date)
+    case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?, maxCount: Int?)
+    case reactionRemoved(messageId: String, emoji: String, participantId: String?)
+    case consumed(messageId: String, viewOnceCount: Int)
+}
+
 // MARK: - Protocol
 
 public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
@@ -136,6 +158,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     public var apiMessagePersistor: (@Sendable ([APIMessage]) async -> Void)? {
         get { stateQueue.sync { _apiMessagePersistor } }
         set { stateQueue.sync { _apiMessagePersistor = newValue } }
+    }
+
+    /// Sibling of `apiMessagePersistor` for the mutations that carry no
+    /// `APIMessage` payload: edit, delete, reaction add/remove and view-once
+    /// consumption. Those four broadcasts only ever reached `cache.messages`
+    /// (a namespace the conversation screen does not render) — the canonical
+    /// GRDB table was refreshed by the REST refetch on reopen alone, so
+    /// offline the timeline still showed the pre-edit text, the deleted
+    /// bubble and the missing reaction. Installed by the host app, which owns
+    /// the store; `nil` in tests that only exercise the cache surfaces.
+    private var _realtimeMessagePersistor: (@Sendable (RealtimeMessageMutation) async -> Void)?
+    public var realtimeMessagePersistor: (@Sendable (RealtimeMessageMutation) async -> Void)? {
+        get { stateQueue.sync { _realtimeMessagePersistor } }
+        set { stateQueue.sync { _realtimeMessagePersistor = newValue } }
     }
 
     // Cooldown between successive delta syncs. The gateway delta endpoint
@@ -879,6 +915,35 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Conversation metadata updated (title, avatar, description, …).
+        // `ConversationStoreSocketBridge` routes the same broadcast to the RAM
+        // store; this relay is what makes it survive a cold start.
+        messageSocket.conversationUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleConversationUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // Conversation deleted server-side — drop the row (and its messages)
+        // from the persisted cache, not only from the RAM store.
+        messageSocket.conversationDeleted
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleConversationDeleted(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // `message:consumed` (vue unique consommée) reçu conversation FERMÉE :
+        // sans ce relais, seule la conversation ouverte marquait le message
+        // consommé — le rouvrir hors-ligne réaffichait un média déjà brûlé.
+        messageSocket.messageConsumed
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleMessageConsumed(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in
@@ -1011,6 +1076,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
+        await realtimeMessagePersistor?(Self.mutation(for: apiMessage, content: msg.content))
         _messagesDidChange.send(msg.conversationId)
         // If the edited message is the conversation's last message, the list-row
         // preview still shows the pre-edit text — refresh it in place.
@@ -1022,10 +1088,12 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let callId = await cache.messages.load(for: event.conversationId).snapshot()?
             .first(where: { $0.id == event.messageId })?.callSummary?.callId
 
+        let deletedAt = Date()
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            msg.deletedAt = Date()
+            msg.deletedAt = deletedAt
             msg.content = ""
         }
+        await realtimeMessagePersistor?(.deleted(messageId: event.messageId, deletedAt: deletedAt))
         if let callId {
             await CallTranscriptStore.shared.invalidate(for: callId)
         }
@@ -1106,16 +1174,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
         guard let convId = event.conversationId else { return }
+        let reaction = MeeshyReaction(
+            messageId: event.messageId,
+            participantId: event.participantId,
+            emoji: event.emoji
+        )
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
-            let reaction = MeeshyReaction(
-                messageId: event.messageId,
-                participantId: event.participantId,
-                emoji: event.emoji
-            )
             if !msg.reactions.contains(where: { $0.emoji == reaction.emoji && $0.participantId == reaction.participantId }) {
                 msg.reactions.append(reaction)
             }
         }
+        await realtimeMessagePersistor?(.reactionAdded(
+            messageId: event.messageId,
+            reactionId: reaction.id,
+            emoji: event.emoji,
+            participantId: event.participantId,
+            maxCount: event.aggregation?.count
+        ))
         _messagesDidChange.send(convId)
     }
 
@@ -1124,6 +1199,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
             msg.reactions.removeAll { $0.emoji == event.emoji && $0.participantId == event.participantId }
         }
+        await realtimeMessagePersistor?(.reactionRemoved(
+            messageId: event.messageId,
+            emoji: event.emoji,
+            participantId: event.participantId
+        ))
         _messagesDidChange.send(convId)
     }
 
@@ -1256,6 +1336,100 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
         }
         return updated
+    }
+
+    /// Classe un `message:edited` : un message porteur d'un résumé d'appel
+    /// décrit la fin de l'appel, pas une édition utilisateur. Le confondre avec
+    /// `.edited` poserait « modifié » sur un avis d'appel et écraserait le
+    /// résumé — même distinction que `ConversationSocketHandler` applique déjà
+    /// sur la conversation ouverte. Pure + testable.
+    nonisolated static func mutation(
+        for apiMessage: APIMessage, content: String
+    ) -> RealtimeMessageMutation {
+        guard let callSummary = apiMessage.callSummary else {
+            // L'horloge SERVEUR, jamais celle de l'appareil : `markEdited`
+            // compare cet instant au précédent pour rejeter les échos
+            // désordonnés, ce qui n'a de sens qu'entre horloges comparables.
+            return .edited(
+                messageId: apiMessage.id,
+                content: content,
+                editedAt: apiMessage.editedAt ?? Date()
+            )
+        }
+        return .callNoticeUpdated(
+            messageId: apiMessage.id,
+            content: content,
+            callSummaryJson: try? JSONEncoder().encode(callSummary),
+            serverUpdatedAt: apiMessage.updatedAt ?? apiMessage.editedAt ?? Date()
+        )
+    }
+
+    // MARK: - Conversation lifecycle (persisted)
+
+    /// `conversation:updated` relayed into the PERSISTED list. The RAM
+    /// `ConversationStore` already applied it (via `ConversationStoreSocketBridge`)
+    /// but nothing wrote it to disk: a rename received while the list screen was
+    /// gone came back to its old title on the next cold start.
+    ///
+    /// The merge runs INSIDE the cache mutation closure so a concurrent
+    /// `userState` write (read receipt, pin) can't be clobbered by a row rebuilt
+    /// from a pre-read snapshot. The pre-read exists only to skip the write —
+    /// and the `_conversationsDidChange` fan-out — when nothing changed.
+    private func handleConversationUpdated(_ event: ConversationUpdatedEvent) async {
+        let storeEvent = ConversationStoreSocketBridge.mapConversationUpdated(event)
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard Self.applyingConversationUpdate(storeEvent, to: list) != nil else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            Self.applyingConversationUpdate(storeEvent, to: conversations) ?? conversations
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// Apply a `conversation:updated` payload to a cached list, returning `nil`
+    /// when the event changes nothing. Delegates the per-row rule to
+    /// `ConversationStore.merging` so the persisted list and the RAM store can
+    /// never disagree. Re-sorts only when `lastMessageAt` moved — the cache
+    /// invariant is "sorted by `lastMessageAt` DESC" (cf. `saveSorted`), and
+    /// `sorted(by:)` is not stable, so re-sorting on a metadata-only change
+    /// would shuffle rows sharing a timestamp for nothing.
+    nonisolated static func applyingConversationUpdate(
+        _ event: ConversationUpdatedStoreEvent,
+        to conversations: [MeeshyConversation]
+    ) -> [MeeshyConversation]? {
+        guard let index = conversations.firstIndex(where: { $0.id == event.conversationId }),
+              let merged = ConversationStore.merging(conversations[index], with: event)
+        else { return nil }
+        var updated = conversations
+        updated[index] = merged
+        guard merged.lastMessageAt != conversations[index].lastMessageAt else { return updated }
+        return updated.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    /// `conversation:deleted` relayed into the PERSISTED list. Without it the
+    /// row survived on disk and the next cold start resurrected a conversation
+    /// the server no longer knows — inopenable, and only killed by a manual
+    /// pull-to-refresh. Its message cache goes with it, mirroring the removal
+    /// path of `deltaSyncCore`.
+    private func handleConversationDeleted(_ event: ConversationDeletedSocketEvent) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard list.contains(where: { $0.id == event.conversationId }) else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            conversations.filter { $0.id != event.conversationId }
+        }
+        await cache.messages.invalidate(for: event.conversationId)
+        _conversationsDidChange.send()
+        await recomputeTotalUnread()
+    }
+
+    /// `message:consumed` for a CLOSED conversation. `ConversationSocketHandler`
+    /// covers the open one; without this relay a view-once media burnt on
+    /// another device stayed viewable here until the next REST refetch.
+    private func handleMessageConsumed(_ event: MessageConsumedEvent) async {
+        await realtimeMessagePersistor?(.consumed(
+            messageId: event.messageId,
+            viewOnceCount: event.viewOnceCount
+        ))
+        _messagesDidChange.send(event.conversationId)
     }
 
     // MARK: - Local-First Updates

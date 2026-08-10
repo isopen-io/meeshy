@@ -631,6 +631,12 @@ struct RootView: View {
             // sur les publishers de SocialSocketManager → les stories des
             // amis n'arrivent jamais dans `storyGroups` en temps réel.
             storyViewModel.subscribeToSocketEvents()
+            // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
+            // écrivain disque de post:created/updated/reposted, des
+            // commentaires et des réactions. Armé par `FeedView` et désarmé à
+            // sa disparition, il ratait tout ce qui arrivait ailleurs dans
+            // l'app. `arm()` est idempotent — jamais désarmé.
+            DependencyContainer.shared.feedSocketHandler.arm()
 
             // Start SyncEngine socket relay
             await ConversationSyncEngine.shared.startSocketRelay()
