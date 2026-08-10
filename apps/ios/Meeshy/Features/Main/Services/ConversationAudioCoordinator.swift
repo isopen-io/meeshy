@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Combine
 import MeeshyUI
 import MeeshySDK
@@ -340,6 +341,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func close() {
         engine.stop()
+        endAdvanceBackgroundTask()
         queue = []
         queueCount = 0
         history = []
@@ -359,6 +361,37 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func isActive(attachmentId: String) -> Bool {
         activeContext?.attachmentId == attachmentId
+    }
+
+    // MARK: - Background task d'avance de file
+    //
+    // Entre deux pistes, le moteur peut toucher le réseau (cache miss). App en
+    // background, dès que l'audio se tait, l'OS peut suspendre le process AVANT
+    // le démarrage de la piste suivante — la file mourrait sur place. La
+    // transition est donc couverte par un beginBackgroundTask court, terminé au
+    // premier front isPlaying==true (ou à la fermeture/expiration).
+
+    var beginBackgroundTaskProvider: (@escaping () -> Void) -> UIBackgroundTaskIdentifier = { handler in
+        UIApplication.shared.beginBackgroundTask(
+            withName: "meeshy.audio.queue-advance", expirationHandler: handler
+        )
+    }
+    var endBackgroundTaskProvider: (UIBackgroundTaskIdentifier) -> Void = { id in
+        UIApplication.shared.endBackgroundTask(id)
+    }
+    private var advanceTaskId: UIBackgroundTaskIdentifier = .invalid
+
+    private func beginAdvanceBackgroundTask() {
+        endAdvanceBackgroundTask()
+        advanceTaskId = beginBackgroundTaskProvider { [weak self] in
+            Task { @MainActor in self?.endAdvanceBackgroundTask() }
+        }
+    }
+
+    private func endAdvanceBackgroundTask() {
+        guard advanceTaskId != .invalid else { return }
+        endBackgroundTaskProvider(advanceTaskId)
+        advanceTaskId = .invalid
     }
 
     // MARK: - Internals
@@ -399,7 +432,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
             // Stop engine explicitly — without this, audio continues after the mini-player vanishes.
             engine.stop()
             activeContext = nil
+            endAdvanceBackgroundTask()
         } else {
+            beginAdvanceBackgroundTask()
             startCurrentHead()
         }
     }
@@ -419,6 +454,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
             guard let self else { return }
             Task { @MainActor in self.advanceQueue() }
         }
+        engine.isPlayingPublisher
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.endAdvanceBackgroundTask() }
+            .store(in: &cancellables)
     }
 
     private func wireAuthLogoutHook() {

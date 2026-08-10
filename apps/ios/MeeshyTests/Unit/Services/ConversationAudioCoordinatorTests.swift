@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import Combine
 @testable import Meeshy
 import MeeshySDK
@@ -544,5 +545,44 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         sut.playNext()
         XCTAssertEqual(sut.queuePosition.index, 1)
         XCTAssertEqual(sut.queuePosition.count, 3)
+    }
+
+    // MARK: - Task 6 — Background task covers queue-advance transition
+
+    func test_advanceQueue_wrapsNextTrackStartInBackgroundTask() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        var beginCount = 0
+        var endCount = 0
+        sut.beginBackgroundTaskProvider = { _ in
+            beginCount += 1
+            return UIBackgroundTaskIdentifier(rawValue: 42)
+        }
+        sut.endBackgroundTaskProvider = { _ in endCount += 1 }
+
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        engine.simulateFinishPlayback()   // fin de « a » → advanceQueue → play(« b »)
+
+        // `advanceQueue()` est déclenché via `Task { @MainActor … }` depuis
+        // `onPlaybackFinished` — drainer la file principale avant de lire
+        // `beginCount` pour laisser ce saut asynchrone s'exécuter.
+        let beginExp = expectation(description: "begin background task")
+        DispatchQueue.main.async { beginExp.fulfill() }
+        wait(for: [beginExp], timeout: 1.0)
+        XCTAssertEqual(beginCount, 1, "La transition a→b doit être couverte par un background task")
+        // Le mock repasse isPlaying=true dans play() → la fin de tâche est
+        // déclenchée par le sink isPlayingPublisher (asynchrone MainActor).
+        let exp = expectation(description: "end background task")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+        XCTAssertEqual(endCount, 1)
     }
 }
