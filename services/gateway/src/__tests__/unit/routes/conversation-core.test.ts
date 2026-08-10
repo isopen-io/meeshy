@@ -78,7 +78,13 @@ jest.mock('../../../utils/etag', () => ({
   sendWithETag: (...args: any[]) => mockSendWithETag(...args),
 }));
 
+// `resolveUserLanguagesOrdered` garde son implémentation RÉELLE : c'est la
+// seule autorité du dépôt sur l'ordre du Prisme (systemLanguage →
+// regionalLanguage → customDestinationLanguage → deviceLocale) et sur la
+// normalisation des codes. Le doubler ici transformerait les témoins d'aperçu
+// traduit en tautologies.
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as Record<string, unknown>),
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
 }));
 
@@ -732,6 +738,146 @@ describe('registerCoreRoutes', () => {
       const content = reply._body.data[0].lastMessage.content as string;
       expect(content).toBe('a'.repeat(299) + '😀');
       expect(() => encodeURIComponent(content)).not.toThrow();
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Prisme Linguistique — l'aperçu de la ligne de liste
+    //
+    // « Le prisme s'applique à TOUT le contenu — messages texte, transcriptions
+    // audio, métadonnées, previews. » La liste était la seule surface où il ne
+    // s'appliquait pas : cette route ne transportait NI les traductions du
+    // dernier message NI sa langue d'origine, si bien que le résolveur client
+    // (`MeeshyConversation.resolvedLastMessagePreview`) — écrit, testé, livré —
+    // ne pouvait QUE rendre le texte brut de l'expéditeur.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const makeTranslatedLastMessage = (
+      content: string,
+      translations: Record<string, unknown>,
+      originalLanguage = 'en',
+    ) => ({
+      ...makeLastMessage(content),
+      originalLanguage,
+      translations,
+    });
+
+    const translationJson = (text: string, extra: Record<string, unknown> = {}) => ({
+      text,
+      translationModel: 'medium',
+      createdAt: new Date(),
+      ...extra,
+    });
+
+    const frenchViewer = (overrides: any = {}) =>
+      makeRequest({
+        query: {},
+        authContext: {
+          isAuthenticated: true,
+          userId: USER_ID,
+          registeredUser: {
+            id: USER_ID,
+            role: 'USER',
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+          isAnonymous: false,
+          sessionToken: null,
+          ...overrides,
+        },
+      });
+
+    it("expose la traduction du dernier message dans la langue du lecteur", async () => {
+      const conv = makeConversation({
+        messages: [
+          makeTranslatedLastMessage('Hello', {
+            fr: translationJson('Bonjour'),
+            es: translationJson('Hola'),
+          }),
+        ],
+      });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(frenchViewer(), reply);
+
+      const row = reply._body.data[0];
+      expect(row.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+      expect(row.lastMessageOriginalLanguage).toBe('en');
+      expect(row.lastMessage.content).toBe('Hello');
+    });
+
+    it("n'expose aucune traduction hors du prisme du lecteur", async () => {
+      const conv = makeConversation({
+        messages: [makeTranslatedLastMessage('Hello', { es: translationJson('Hola') })],
+      });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(frenchViewer(), reply);
+
+      expect(reply._body.data[0].lastMessageTranslations).toBeNull();
+      expect(reply._body.data[0].lastMessageOriginalLanguage).toBe('en');
+    });
+
+    it('suit les QUATRE niveaux du prisme, locale appareil comprise', async () => {
+      const conv = makeConversation({
+        messages: [makeTranslatedLastMessage('Hello', { de: translationJson('Guten Tag') })],
+      });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const reply = makeReply();
+      await getListHandler(
+        fastify,
+      )(
+        frenchViewer({
+          registeredUser: {
+            id: USER_ID,
+            role: 'USER',
+            systemLanguage: null,
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: 'de-DE',
+          },
+        }),
+        reply,
+      );
+
+      expect(reply._body.data[0].lastMessageTranslations).toEqual({ de: 'Guten Tag' });
+    });
+
+    it('laisse les deux champs à null quand le dernier message n a aucune traduction', async () => {
+      const conv = makeConversation({ messages: [makeLastMessage('Hello')] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(frenchViewer(), reply);
+
+      expect(reply._body.data[0].lastMessageTranslations).toBeNull();
+      expect(reply._body.data[0].lastMessageOriginalLanguage).toBeNull();
+    });
+
+    it('laisse les deux champs à null quand la conversation n a aucun message', async () => {
+      const conv = makeConversation({ messages: [] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(frenchViewer(), reply);
+
+      expect(reply._body.data[0].lastMessage).toBeNull();
+      expect(reply._body.data[0].lastMessageTranslations).toBeNull();
+      expect(reply._body.data[0].lastMessageOriginalLanguage).toBeNull();
+    });
+
+    it('charge `translations` et `originalLanguage` dans le select du dernier message', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await getListHandler(fastify)(frenchViewer(), makeReply());
+
+      const select = prisma.conversation.findMany.mock.calls[0][0].select.messages.select;
+      expect(select.translations).toBe(true);
+      expect(select.originalLanguage).toBe(true);
     });
 
     it('keeps null title for direct conversation', async () => {

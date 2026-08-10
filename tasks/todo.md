@@ -1,3 +1,170 @@
+# Cycle 60 — L'aperçu de la liste ne parlait la langue de personne
+
+Le backlog du cycle 59 laissait un candidat nommé en tête : `updateTrackingLinksMessageId`
+(chemin de PARTAGE) « écrase sans aucune garde », et maintenant que le cycle 59 a rendu le binder
+du chemin d'ENVOI réellement écrivant, « les deux se disputent la colonne pour de bon ».
+
+**Ce cycle ne l'a pas pris, et l'écarte du backlog.** La dispute est réelle et sans conséquence :
+un balayage de `TrackingLink.messageId` sur tout le dépôt — gateway, web, `packages/shared`, SDK
+iOS — ne rend **aucun lecteur**. Trois chemins écrivent la colonne, zéro ne la lit. Le
+`messageRemovalEffects.ts` qui documente le défaut explique lui-même pourquoi il ne s'y fie pas
+(un `TrackingLink` est PARTAGÉ par URL, la colonne ne désigne pas de propriétaire) et dérive la
+propriété du contenu des messages vivants. Ajouter une garde à un écrivain que personne ne lit,
+c'est 20 lignes pour zéro défaut observable. Le vrai reste : la colonne est morte, et c'est ça
+qu'un cycle futur devrait trancher — la remplir correctement OU la retirer.
+
+La question posée à la place : **quel contenu le client sait afficher mais ne reçoit jamais ?**
+
+## Le défaut
+
+Le principe fondateur du produit dit : « le prisme s'applique à TOUT le contenu — messages texte,
+transcriptions audio, métadonnées, **previews** ». La ligne de la liste de conversations était la
+seule surface où il ne s'appliquait pas.
+
+Pas faute de client. Le SDK iOS porte depuis longtemps :
+
+- `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` — la résolution du Prisme
+  ligne par ligne, avec la règle #3 (« ne jamais retomber sur `translations.first` ») ;
+- ses **douze** témoins (`ConversationPrismeResolutionTests.swift`) ;
+- `LastMessageFacet.translations` / `.originalLanguage`, membres d'une facette conçue pour que les
+  onze champs `lastMessage*` s'écrivent en bloc.
+
+Rien de tout cela ne recevait de données par le chemin REST. Le `select` du dernier message dans
+`GET /conversations` ne chargeait **ni `Message.translations` ni `Message.originalLanguage`**, et
+`APIConversationLastMessage` n'avait aucun champ où les décoder. La documentation du champ SDK
+l'écrivait elle-même :
+
+> *« When the gateway starts shipping these in `/conversations` it will be wired through the
+> API → domain converter; until then the field stays `nil` and the list falls back to the raw
+> `lastMessagePreview`. »*
+
+Elle renvoyait à un contournement applicatif, `ConversationListViewModel.attachLastMessageTranslations`,
+qui **n'existe nulle part dans le dépôt** — la seule occurrence de ce nom est la phrase qui le cite.
+
+Le chemin socket, lui, est bien câblé : `ConversationSyncEngine.previewTranslations(from:)` dérive
+la carte du `message:new` reçu. Il ne comble rien pour autant — les traductions arrivent **après**
+le message, par `message:translation`, si bien que l'`APIMessage` du `message:new` les porte
+rarement.
+
+**Conséquence** : à chaque démarrage à froid et à chaque rafraîchissement de liste, toutes les
+lignes affichent le dernier message dans la langue de son expéditeur. Un francophone voyait
+« Hey, are you free tonight? » sur une conversation que le serveur avait pourtant traduite, et dont
+il lirait la version française une fois la conversation ouverte.
+
+## Le correctif
+
+`GET /conversations` porte désormais, au niveau conversation, `lastMessageOriginalLanguage` et
+`lastMessageTranslations` — une carte `{ langue: aperçu }`.
+
+Elle n'est pas le contenu brut de la colonne. Quatre exclusions
+(`routes/conversations/utils/last-message-preview.ts`), chacune fermant un cas distinct :
+
+| Exclusion | Ce qu'elle évite |
+|---|---|
+| hors prisme du LECTEUR | envoyer les N langues de la conversation pour un champ dont le client lit UNE valeur |
+| langue d'origine | elle EST déjà `lastMessage.content` |
+| traduction **chiffrée** (`isEncrypted`) | son `text` est un cryptogramme — du base64 dans la liste |
+| `text` non exploitable | la colonne est un JSON libre côté Mongo |
+
+Le prisme du lecteur est résolu **une fois par page** par `resolveUserLanguagesOrdered` (seule
+autorité du dépôt sur l'ordre `systemLanguage → regionalLanguage → customDestinationLanguage →
+deviceLocale`), depuis l'utilisateur déjà chargé et mis en cache par le middleware d'auth :
+**aucune requête supplémentaire** sur ce hot path. Et `Message.translations` est une colonne JSON
+du **même document** — pas une relation — donc le `select` élargi ne coûte ni jointure ni requête.
+
+Rendu `null` et jamais `{}` quand il ne reste rien : le client doit pouvoir retomber sur
+l'original, ce qui EST la règle #3.
+
+Deux détails qui ne sont pas des détails :
+
+- **`truncateMessagePreview` et son plafond déménagent** dans le module du nouveau constructeur.
+  La troncature de l'aperçu a maintenant un propriétaire unique, et une traduction de 5 000
+  caractères ne peut plus contourner un plafond posé pour le seul `content`.
+- **Le spread `...msg` est déstructuré.** Sans ça, `translations` (blob complet, une entrée par
+  langue, avec modèle, score et champs de chiffrement) partait dans chaque ligne de liste.
+
+Côté SDK, le câblage que la doc annonçait : `APIConversation` décode les deux clés,
+`toConversation` les pose sur le domaine en minuscules — même convention que le chemin socket,
+sans quoi la résolution dépendrait du chemin par lequel la ligne est arrivée.
+
+## Plan
+- [x] T1 — bootstrap (leçon 102b) : `bun install --ignore-scripts`, `prisma generate`, build shared
+- [x] T2 — instruire le candidat hérité, puis l'écarter sur preuve (zéro lecteur de la colonne)
+- [x] T3 — chercher ce que le client sait afficher et ne reçoit jamais
+- [x] T4 — RED : 12 témoins de source + 6 de route
+- [x] T5 — GREEN : `buildLastMessagePreviewTranslations`, `select` élargi, sérialisation
+- [x] T6 — schéma de réponse + son témoin (le strip de `fast-json-stringify` est invisible en unit)
+- [x] T7 — SDK : décodage + câblage vers le résolveur, 6 témoins Swift
+- [x] T8 — sondes de fidélité en sept temps
+- [x] T9 — gates : suite gateway complète, `tsc --noEmit`, suite `@meeshy/shared`
+- [x] T10 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Rouge observé avant correctif** : les 6 témoins de route échouent sur un `main` sans le
+correctif (sonde 7 : les deux champs retirés de la ligne → 5 rouges ; `select` amputé → 1 rouge).
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| `select` sans `translations`/`originalLanguage` | **1** |
+| exclusion de la langue d'origine retirée | 1 |
+| garde `isEncrypted` retirée | 1 |
+| `{}` rendu au lieu de `null` | 3 |
+| troncature retirée | 2 |
+| prisme du LECTEUR ignoré (toutes langues servies) | **5** |
+| les deux champs retirés de la ligne (le défaut d'origine) | **5** |
+
+La première ligne est celle qui apprend quelque chose : **un seul témoin** voit le `select`
+amputé, parce que tous les autres injectent la donnée dans le double Prisma et ne peuvent donc pas
+savoir si la route l'a demandée. C'est la même famille de trou que la leçon 105 (« une convention
+tenue par les APPELANTS n'est pas testée par ce qui la consomme ») : un témoin de forme est ici le
+SEUL garde-fou possible, et le retirer au motif qu'il « teste l'implémentation » rouvrirait le
+défaut en silence.
+
+**Gate** : suite gateway complète **647 suites / 16 317 tests, 0 échec** (baseline du cycle 59 :
+646 / 16 300). `@meeshy/shared` : suite complète **49 fichiers / 1 464 tests**, 0 échec. `tsc --noEmit` gateway : 0 erreur.
+Swift : **non exécuté localement** — aucune chaîne Swift sur ce conteneur Linux ; les 6 témoins
+`ConversationListPrismeWiringTests.swift` sont validés par `sdk-tests.yml` en CI.
+
+## Reste ouvert après ce cycle
+
+- **`emitConversationPreviewUpdate` n'emporte pas le prisme.** Le fanout `conversation:updated`
+  (édition/suppression) pose `lastMessagePreview` sans traductions ; une ligne rafraîchie par ce
+  chemin retombe donc sur l'original jusqu'à la synchro suivante. Le faire correctement demande un
+  payload PAR DESTINATAIRE — les participants d'une conversation n'ont pas le même prisme — ce qui
+  change la forme de l'émetteur (aujourd'hui une seule charge, N rooms). Question de conception, pas
+  correctif : c'est pourquoi ce cycle ne l'a pas bâclée.
+- **`routes/conversations/search.ts` construit son propre `lastMessage` à la main** et reste hors
+  prisme. Deux chemins, une règle, un seul l'applique — exactement la forme de dérive que le dépôt
+  combat ailleurs. À aligner, avec la même carte et le même constructeur.
+- **Le web rend toujours `lastMessage.content` brut** (`formatLastMessage`,
+  `components/conversations/conversation-item/message-formatting.tsx`). Les deux champs sont
+  désormais sur le fil ; il manque le résolveur côté web, jumeau de
+  `resolvedLastMessagePreview`. Candidat direct pour le prochain cycle.
+- **`TrackingLink.messageId` est une colonne morte** : trois écrivains, zéro lecteur (mesuré sur
+  tout le dépôt). Le candidat « garde manquante sur le binder du chemin de partage » est retiré du
+  backlog au profit de celui-ci — la remplir correctement OU la retirer.
+- **Un participant ANONYME n'a pas de prisme sur ce chemin.** `viewerLanguages` est dérivé de
+  `authContext.registeredUser`, absent d'un contexte anonyme : la carte est donc toujours `null`
+  pour lui et sa ligne retombe sur l'original. C'est le comportement d'AVANT, pas une régression —
+  mais `Participant.language` existe et pourrait le servir. Non fait : le prisme d'un participant
+  sans compte est un choix produit (une seule langue ? la locale de l'appareil via
+  `X-Device-Locale` ?) que ce cycle n'avait pas à trancher seul.
+- **Aucune traduction rétroactive de l'aperçu.** Un message dont la traduction arrive après coup
+  ne rafraîchit pas la ligne de liste tant que le client ne refait pas de `GET /conversations` (ou
+  ne reçoit pas un nouveau message) — c'est le point précédent (`emitConversationPreviewUpdate`)
+  vu depuis l'utilisateur.
+- Hérités et non traités : `MaintenanceService.cleanupOrphanedAttachments` reste inerte,
+  délibérément (leçon 90.4 — un essai à blanc contre la base de production est le préalable) ; les
+  ~12 copies inline de l'idiome `unsetOrNull` ne sont pas migrées ; les messages d'appel écrits
+  avant le cycle 58 restent invisibles ; l'arbitrage `delete-for-me` du cycle 12 attend une
+  validation humaine ; `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js`
+  depuis ESLint v9).
+
+---
+
 # Cycle 59 — Les anonymes n'entraient plus dans leur propre conversation
 
 Le backlog du cycle 58 laissait un candidat nommé : le prédicat défensif

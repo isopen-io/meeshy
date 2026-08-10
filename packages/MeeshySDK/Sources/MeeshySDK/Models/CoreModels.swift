@@ -123,11 +123,19 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// the list row can resolve the preview in the viewer's preferred
     /// language without a per-row GRDB lookup.
     ///
-    /// Currently populated by the in-memory message cache attach path
-    /// (see `ConversationListViewModel.attachLastMessageTranslations`).
-    /// When the gateway starts shipping these in `/conversations` it will
-    /// be wired through the API → domain converter; until then the field
-    /// stays `nil` and the list falls back to the raw `lastMessagePreview`.
+    /// Deux sources, désormais :
+    /// - REST — `GET /conversations` expédie `lastMessageTranslations`, déjà
+    ///   restreint par le gateway aux langues du prisme du lecteur et tronqué au
+    ///   plafond d'aperçu ; `APIConversation.toDomain()` le câble ici. C'est le
+    ///   chemin du démarrage à froid, celui où la ligne n'avait AUCUNE
+    ///   traduction disponible et retombait toujours sur le texte de
+    ///   l'expéditeur.
+    /// - Socket — `ConversationSyncEngine.previewTranslations(from:)` dérive la
+    ///   même carte du `message:new` reçu, via `LastMessageFacet`.
+    ///
+    /// `nil` reste un état normal (aucune traduction vers une langue du prisme,
+    /// ou message déjà dans cette langue) : la liste affiche alors
+    /// `lastMessagePreview` brut, ce qui EST la règle #3 du Prisme.
     ///
     /// `[String: String]` (not `[APITextTranslation]`) is intentional:
     /// `APITextTranslation` is `Decodable`-only, but `MeeshyConversation`

@@ -69,7 +69,12 @@ public struct LastMessageFacet: Sendable {
     ///   les messages sans texte (photo, vocal), où l'appelant fournit le libellé
     ///   média localisé plutôt qu'une ligne vide.
     /// - Parameter translations: `[langue: contenu]` déjà résolues, pour que le
-    ///   Prisme s'applique à la ligne sans attendre la synchro suivante.
+    ///   Prisme s'applique à la ligne sans attendre la synchro suivante. Le
+    ///   chemin REST n'en dépend plus : `GET /conversations` expédie désormais
+    ///   `lastMessageTranslations`, déjà restreint aux langues du prisme du
+    ///   lecteur, que `APIConversation.toConversation` pose directement sur la
+    ///   ligne. Ce paramètre reste la source du chemin SOCKET, où les
+    ///   traductions arrivent avec (ou après) le `message:new`.
     /// - Parameters id, at: identité SERVEUR, quand elle diffère de celle de la
     ///   ligne locale — à l'accusé d'envoi, le message optimiste porte encore son
     ///   `cid_…` et l'horodatage de l'appareil.
