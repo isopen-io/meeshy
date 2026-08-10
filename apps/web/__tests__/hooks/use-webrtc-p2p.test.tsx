@@ -45,6 +45,7 @@ const mockSetIceServers = jest.fn();
 const mockSetNegotiationRole = jest.fn();
 const mockEnableVideoSend = jest.fn();
 const mockDisableVideoSend = jest.fn();
+const mockSwitchVideoSendTrack = jest.fn();
 const mockApplyVideoEncoding = jest.fn();
 const mockSetJitterBufferTargets = jest.fn();
 
@@ -64,6 +65,7 @@ jest.mock('@/services/webrtc-service', () => ({
     setNegotiationRole: mockSetNegotiationRole,
     enableVideoSend: mockEnableVideoSend,
     disableVideoSend: mockDisableVideoSend,
+    switchVideoSendTrack: mockSwitchVideoSendTrack,
     applyVideoEncoding: mockApplyVideoEncoding,
     setJitterBufferTargets: mockSetJitterBufferTargets,
     close: mockClose,
@@ -666,6 +668,71 @@ describe('useWebRTCP2P', () => {
       );
 
       await expect(result.current.enableVideo()).rejects.toThrow();
+      expect(getUserMedia).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('switchCamera (Vague 95 — front/back camera flip)', () => {
+    it('acquires a new track and swaps it on the single peer (no clone needed)', async () => {
+      const camTrack = { kind: 'video', id: 'cam-back', clone: jest.fn() };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      const getUserMedia = jest.fn().mockResolvedValue(camStream);
+      (global.navigator as any).mediaDevices = { getUserMedia };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      await act(async () => {
+        await result.current.switchCamera('environment');
+      });
+
+      expect(getUserMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ video: expect.objectContaining({ facingMode: 'environment' }) })
+      );
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(camTrack);
+      expect(camTrack.clone).not.toHaveBeenCalled(); // single peer → no clone
+    });
+
+    it('gives the first peer the literal track and every other peer a clone (group call)', async () => {
+      const camTrack = { kind: 'video', id: 'cam-front', clone: jest.fn(() => ({ kind: 'video', id: 'clone' })) };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockResolvedValue(camStream),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+        await result.current.createOffer(`${mockTargetUserId}-2`);
+      });
+      mockSwitchVideoSendTrack.mockClear();
+
+      await act(async () => {
+        await result.current.switchCamera('user');
+      });
+
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledTimes(2);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(camTrack);
+      expect(camTrack.clone).toHaveBeenCalledTimes(1);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'clone' })
+      );
+    });
+
+    it('rejects without touching the camera when no peer connection exists yet', async () => {
+      const getUserMedia = jest.fn();
+      (global.navigator as any).mediaDevices = { getUserMedia };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await expect(result.current.switchCamera('environment')).rejects.toThrow();
       expect(getUserMedia).not.toHaveBeenCalled();
     });
   });
