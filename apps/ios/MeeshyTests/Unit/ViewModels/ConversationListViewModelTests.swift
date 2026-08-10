@@ -3212,12 +3212,88 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(sut.typingUsernames["g1"], "the row clears once the last typer stops")
     }
 
-    func test_typingDisplayName_pickIsDeterministicAndNilWhenEmpty() {
-        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: nil))
-        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: [:]))
-        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Alice"]), "Alice")
-        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Bob", "u2": "Alice"]), "Alice",
-                       "several typers → deterministic (sorted) single-name pick for the single-name row API")
+    func test_typingSelection_pickIsDeterministicAndNilWhenEmpty() {
+        XCTAssertNil(ConversationListViewModel.typingSelection(for: nil))
+        XCTAssertNil(ConversationListViewModel.typingSelection(for: [:]))
+        XCTAssertEqual(
+            ConversationListViewModel.typingSelection(for: ["u1": .init(username: "alice", displayName: "Alice")])?.displayName,
+            "Alice"
+        )
+        XCTAssertEqual(
+            ConversationListViewModel.typingSelection(for: [
+                "u1": .init(username: "bob", displayName: "Bob"),
+                "u2": .init(username: "alice", displayName: "Alice")
+            ])?.displayName,
+            "Alice",
+            "several typers → deterministic (sorted) single-name pick for the single-name row API"
+        )
+    }
+
+    // MARK: - Typing: pseudo brut pour la pastille de synchronisation
+
+    /// La ligne affiche le NOM ; la pastille affiche le PSEUDO. Les deux
+    /// désignent la même personne — un « Alice Martin écrit » en liste et un
+    /// « @bob » en pastille pour la même conversation serait incohérent.
+    func test_typingStarted_publishesTheHandleAlongsideTheDisplayName() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice_handle", displayName: "Alice Martin", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["conv1"], "Alice Martin")
+        XCTAssertEqual(sut.typingUsers["conv1"], "alice_handle")
+    }
+
+    /// Sans `displayName` transmis, le handle sert aux deux — la pastille ne
+    /// doit pas rester vide pour autant.
+    func test_typingStarted_withoutDisplayName_fallsBackToTheHandle() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "charlie", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsers["conv1"], "charlie")
+    }
+
+    func test_typingStopped_removesTheHandle() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        await drainMainQueue()
+        socket.typingStopped.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertNil(sut.typingUsers["conv1"])
+    }
+
+    /// Un membre qui s'arrête ne doit pas vider la pastille tant qu'un autre
+    /// écrit : les deux dérivations restent alignées sur le même frappeur.
+    func test_typingStopped_inGroup_keepsTheRemainingTyperOnBothDerivations() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        socket.typingStarted.send(TypingEvent(userId: "ub", username: "bob", displayName: "Bob", conversationId: "g1"))
+        await drainMainQueue()
+        socket.typingStopped.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["g1"], "Bob")
+        XCTAssertEqual(sut.typingUsers["g1"], "bob")
+    }
+
+    func test_typingUsers_tracksConversationsIndependently() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        socket.typingStarted.send(TypingEvent(userId: "u2", username: "bob", displayName: "Bob", conversationId: "conv2"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
 }
 

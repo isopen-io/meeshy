@@ -1327,7 +1327,7 @@ struct ConversationView: View {
             // Connection status banner
             VStack {
                 Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                ConnectionBanner()
+                ConnectionBanner(activeConversationId: { viewModel.conversationId })
                 Spacer()
             }
             .zIndex(98)

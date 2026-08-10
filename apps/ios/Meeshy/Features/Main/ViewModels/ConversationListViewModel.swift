@@ -62,11 +62,17 @@ class ConversationListViewModel: ObservableObject {
     /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
     /// changed re-evaluates its body. The full list does NOT re-render.
     @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName (derived view of `typers`)
-    /// Per-user source of truth: conversationId → (userId → displayName). The
+    /// conversationId → PSEUDO du frappeur retenu pour cette conversation.
+    /// Dérivé du même choix que `typingUsernames`, donc désignant toujours la
+    /// même personne : la ligne de liste affiche son nom, la pastille de
+    /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
+    /// comme deux personnes en train d'écrire.
+    @Published private(set) var typingUsers: [String: String] = [:]
+    /// Per-user source of truth: conversationId → (userId → frappeur). The
     /// public `typingUsernames` is derived from this so a `typing:stop` from ONE
     /// member of a group no longer wipes the whole row's indicator while OTHER
     /// members are still typing (displayed "personne n'écrit" ≠ real "B écrit").
-    private var typers: [String: [String: String]] = [:]
+    private var typers: [String: [String: TypingUser]] = [:]
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
@@ -675,8 +681,11 @@ class ConversationListViewModel: ObservableObject {
                 // "<You> écrit…" on your own conversation row. Mirror the per-conversation
                 // guard in ConversationSocketHandler.
                 guard event.userId != currentUserId else { return }
-                typers[event.conversationId, default: [:]][event.userId] = event.preferredDisplayName
-                typingUsernames[event.conversationId] = Self.typingDisplayName(for: typers[event.conversationId])
+                typers[event.conversationId, default: [:]][event.userId] = TypingUser(
+                    username: event.username,
+                    displayName: event.preferredDisplayName
+                )
+                refreshTypingDerivations(for: event.conversationId)
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -1010,22 +1019,39 @@ class ConversationListViewModel: ObservableObject {
             return
         }
         typers[conversationId] = convTypers
-        typingUsernames[conversationId] = Self.typingDisplayName(for: convTypers)
+        refreshTypingDerivations(for: conversationId)
     }
 
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
         typingUsernames.removeValue(forKey: conversationId)
+        typingUsers.removeValue(forKey: conversationId)
         typers.removeValue(forKey: conversationId)
     }
 
-    /// Picks the single name surfaced on the row from the set of current typers.
-    /// The row API is single-name; sorting keeps the choice deterministic (and
-    /// stable across re-renders) when several members type at once.
-    nonisolated static func typingDisplayName(for typers: [String: String]?) -> String? {
+    /// Réaligne les deux vues publiques sur le frappeur retenu. Une seule
+    /// sélection les alimente : la ligne et la pastille désignent donc toujours
+    /// la même personne.
+    private func refreshTypingDerivations(for conversationId: String) {
+        let selection = Self.typingSelection(for: typers[conversationId])
+        typingUsernames[conversationId] = selection?.displayName
+        typingUsers[conversationId] = selection?.username
+    }
+
+    /// Un frappeur : son handle (`@pseudo`) et son nom d'affichage. Le gateway
+    /// transmet les deux ; les deux surfaces n'en montrent pas le même.
+    struct TypingUser: Equatable, Sendable {
+        let username: String
+        let displayName: String
+    }
+
+    /// Picks the single typer surfaced for a conversation. The row API is
+    /// single-name; sorting keeps the choice deterministic (and stable across
+    /// re-renders) when several members type at once.
+    static func typingSelection(for typers: [String: TypingUser]?) -> TypingUser? {
         guard let typers, !typers.isEmpty else { return nil }
-        return typers.values.sorted().first
+        return typers.values.sorted { ($0.displayName, $0.username) < ($1.displayName, $1.username) }.first
     }
 
     // MARK: - Badge Sync
