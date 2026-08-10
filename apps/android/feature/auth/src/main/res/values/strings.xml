@@ -7,6 +7,9 @@
     <string name="login_error_required">Username and password are required</string>
     <string name="login_signup_prompt">Don\'t have an account?</string>
     <string name="login_signup_link">Sign up</string>
+    <string name="login_other_account">Other account</string>
+    <string name="login_remove_account">Remove this account</string>
+    <string name="login_saved_accounts">Saved accounts</string>
 
     <string name="registration_close">Close</string>
     <string name="registration_back">Back</string>

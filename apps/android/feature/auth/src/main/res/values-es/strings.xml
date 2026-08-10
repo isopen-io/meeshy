@@ -7,6 +7,9 @@
     <string name="login_error_required">El nombre de usuario y la contraseña son obligatorios</string>
     <string name="login_signup_prompt">¿No tienes una cuenta?</string>
     <string name="login_signup_link">Regístrate</string>
+    <string name="login_other_account">Otra cuenta</string>
+    <string name="login_remove_account">Eliminar esta cuenta</string>
+    <string name="login_saved_accounts">Cuentas guardadas</string>
 
     <string name="registration_close">Cerrar</string>
     <string name="registration_back">Atrás</string>

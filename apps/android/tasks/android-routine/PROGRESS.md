@@ -2,6 +2,87 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 the **saved-account picker's app-side UI landed** (slice
+> `auth-saved-account-picker-ui`, feature-parity §A, the pure core's own follow-up, tracked since
+> `auth-saved-account-picker-core` on 2026-07-21). **RE-PROVEN before picking, not the §C rewrite
+> re-typed from prior "Next slice" notes:** with the registration wizard, username suggestions, and
+> device-locale wiring all closed, this run first re-verified the §C inverted-list message layout
+> candidate against the real `ChatScreen.kt` (3050 lines) rather than accepting its "genuinely large"
+> verdict on faith — confirmed genuinely large this time: the list has no `reverseLayout`, and
+> bottom-anchoring is instead simulated via 7+ interacting `LaunchedEffect`s (auto-scroll-on-new,
+> load-older-on-top-threshold, unread-boundary one-shot scroll, search-jump, quoted-reply-jump,
+> pinned-day-header derivation) that all assume today's oldest-first top-down order — porting to a
+> true inverted list (iOS's own `MessageListViewController` uses a genuinely flipped
+> `CGAffineTransform(scaleX: 1, y: -1)` UICollectionView) would touch every one of them plus
+> `buildChatListItems`' day-grouping, not a one-slice change. Left un-re-scoped rather than force a
+> premature decomposition — no fresh sub-slice boundary was obvious from this read alone, next run
+> should attempt one before deferring again. `TagInputField` re-confirmed still blocked (grepped
+> `ApiConversation` for `tags`, still absent). Chose the saved-account picker instead: its own
+> "Follow-up" text was fully self-contained (composable + a store + 4 wiring points), needed **no**
+> new backend endpoint (unlike OTP/magic-link/email-recovery/phone-recovery, whose follow-ups all
+> require net-new `AuthApi` methods this run confirmed don't exist yet — grepped `verifyEmailWithCode`
+> /`resendVerificationEmail`/`requestMagicLink`/`requestPasswordReset`/`forgotPasswordPhone*` across
+> `apps/android`, zero production hits outside docs), and re-reading iOS `LoginView.swift` line-by-line
+> (not just `AuthManager`) confirmed the exact UI shape to port: `showPicker` gates a list/selected-
+> account sub-state from the plain form, `.contextMenu` removes a row, tapping a row prefills
+> `username` and jumps focus to a **second**, distinct `accountPassword` field. **Added (production,
+> all `apps/android`):** `sdk-core/auth/SavedAccountsStore.kt` — `SavedAccountsStore` interface +
+> `InMemorySavedAccountsStore` + `SharedPrefsSavedAccountsStore`, byte-for-byte the same shape as the
+> already-shipped `StarredMessagesStore`/`SharedPrefsStarredMessagesStore` (JSON list under one
+> SharedPreferences key, corrupt blob → empty, idempotent mutation skips the write via a referential
+> check) — always exposes an already-`SavedAccounts.sorted` list so no caller re-sorts. `SavedAccount`
+> (`:core:model`) gained `@Serializable` (no shape change) to round-trip through the store.
+> `SdkModule.providesSavedAccountsStore()` mirrors the Starred binding. `AuthViewModel` gains a 3rd/4th
+> constructor dep (`SavedAccountsStore`, `CacheClock` — reused, not new), seeds `AuthUiState.
+> savedAccounts` **synchronously** from `store.accounts.value` at construction (cache-first, matches
+> the SharedPrefs read being synchronous — no spinner needed) then collects the store's flow for live
+> updates; `AuthUiState.showPicker` is a pure derivation over `SavedAccounts.showPicker`. Five new
+> transitions: `selectAccount`/`deselectAccount`/`useAnotherAccount`/`backToSavedAccounts`/
+> `removeAccount`. `login()`'s success branch now also `store.upsert`s the freshly-authenticated user
+> (id/username/displayName/avatar + `cacheClock.nowMillis()` — **not** the server's `lastActiveAt`;
+> re-reading iOS `upsertSavedAccount` confirmed it stamps `Date()` at upsert time, not an echoed
+> server field); a failed login upserts nothing. `logout()` re-seeds `savedAccounts` from the store
+> after resetting the rest of `AuthUiState` — the list is cross-account, so it must **not** reset to
+> the type's `emptyList()` default the way every other field does, and `SessionTeardown.wipe()`
+> (re-read to confirm) never touches it either, matching iOS's `AuthManager.logout()` never touching
+> `savedAccounts`. **Deliberate simplifications over iOS, called out, not silent:** (1) reused
+> Android's single existing `password` field for the selected-account flow instead of porting iOS's
+> second `accountPassword` `@State` — Android's login submission was already keyed off one field, so
+> duplicating it would have been a workaround, not a port; (2) `.contextMenu` (long-press) → a visible
+> trailing close-icon button on `SavedAccountRow` — Compose has no first-class context-menu primitive,
+> and a visible affordance is equally discoverable; (3) avatar renders initials-only via the existing
+> `MeeshyAvatar` (no `avatarUrl` image loading) — consistent with every other Android surface
+> (contacts, chat, calls all use initials-only `MeeshyAvatar` today; grepped, zero `AsyncImage`-backed
+> avatars anywhere in `apps/android`), so adding image loading for just this screen would have been
+> new scope, not parity. `LoginScreen.kt` decomposed into `SavedAccountsPicker`/`SavedAccountRow`/
+> `SelectedAccountForm`/`NormalLoginForm` (was a single 128-line composable). **+10 new
+> `AuthViewModelTest`, +7 new `SharedPrefsSavedAccountsStoreTest`.** **Mutation (RED proof):**
+> commenting out the `store.upsert(...)` call inside `login()`'s success branch fails **exactly**
+> `login_success_upsertsTheAccountIntoTheSavedAccountsStore` (19 run, 1 failed, no collateral); the
+> store's own suite was RED-proven by the whole file failing to compile against the absent
+> `SharedPrefsSavedAccountsStore` first. **Gate:** `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL in 5s`** (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks).
+> Reviewer **PASS** (diff `apps/android` only — `core/model` [`SavedAccount` +`@Serializable`],
+> `sdk-core` [new `auth/SavedAccountsStore.kt` + 1 `SdkModule` binding], `feature/auth`
+> [`AuthViewModel` +5 transitions +2 constructor deps, `LoginScreen.kt` decomposed, ×3 strings ×4
+> locales]; SDK purity — the store is a stateless durability seam at `StarredMessagesStore`'s exact
+> grain, no product rule; the product decisions stay in `AuthViewModel`; SSOT — reuses `SavedAccounts`'
+> pure transforms/`MeeshyAvatar`/`CacheClock`/`login_password_label` untouched; instant-app —
+> cache-first synchronous seed, no spinner; UDF — unchanged `AuthViewModel` shape, immutable
+> `StateFlow<AuthUiState>`; no dead end; no tautological tests; no coverage floor lowered).
+> **feature-parity.md's "Username/password login with saved-account picker" bullet flips `[~]` →
+> `[x]`.** **Next slice (no single obvious pick — re-verify each before committing a run):** with the
+> saved-account picker now closed, Auth §A's remaining non-wizard items are all blocked on a missing
+> `AuthApi` endpoint this run confirmed absent (server environment selector is the one exception —
+> fully local, no backend call, follow-up is a `LoginScreen` composable + a DataStore config store
+> driving `apiBaseUrl` at app launch — the next best candidate) — OTP verification, magic-link,
+> email/phone recovery all need new `POST /auth/...` wiring before their Compose UI can land. The §C
+> inverted-list (re-verified genuinely large this run, see above — attempt a concrete sub-slice
+> decomposition next time rather than deferring again), `TagInputField` (still blocked), and the Kover
+> coverage-gate infra remain the other three standing candidates. Also weigh moving on to
+> Conversations/Chat per the `Auth → Conversations → Chat → Feed → Stories → Calls → the rest` build
+> order, now that Auth's cheaply-shippable items are thinning out.
+>
 > On 2026-08-10 **device-locale inference was wired into the registration wizard's init** (slice
 > `auth-signup-region-inference-wiring`, feature-parity §A, the "Country auto-detection +
 > region→language inference at signup" bullet's own follow-up, tracked since

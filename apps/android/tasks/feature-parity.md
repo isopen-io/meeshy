@@ -275,7 +275,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 > only when the feature is implemented **and** verified.
 
 ## A. Auth & Onboarding
-- [~] Username/password login with saved-account picker (multi-account, one-tap switch) —
+- [x] Username/password login with saved-account picker (multi-account, one-tap switch) —
       **saved-account list core shipped** (slice `auth-saved-account-picker-core`, 2026-07-21).
       Pure `:core:model` `SavedAccount` + `SavedAccounts` (faithful port of iOS `AuthManager`'s
       saved-account logic, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`, +
@@ -303,9 +303,47 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       unrelated reds this diff never touches: the documented `:sdk-core` DataStore parallel-load flake —
       green in isolation — and a **newly-noted deterministic** `:feature:profile` `ProfileHeaderBuilderTest`
       failure that reproduces on clean `origin/main`; see the ⚠ follow-up below.) Diff = `apps/android`
-      only. **Follow-up:** the app-side `LoginView` picker composable + a DataStore-backed saved-account
-      store (observing `SavedAccounts.sorted`, wiring `upsert` on login / `remove` on delete / `find` on
-      one-tap select → password focus), and the "other account" toggle driving `showPicker`.
+      only. **Follow-up shipped** (slice `auth-saved-account-picker-ui`, 2026-08-10): the app-side
+      `LoginScreen` picker UI + a SharedPreferences-backed `SavedAccountsStore` (`:sdk-core`, mirrors
+      `StarredMessagesStore` — JSON-encoded list under one key, always exposes an already-
+      `SavedAccounts.sorted` list, never a password/token). `AuthViewModel` seeds `AuthUiState.
+      savedAccounts` synchronously from the store's `StateFlow.value` at construction (cache-first, no
+      spinner) then collects it for live updates; `showPicker` is a pure derivation
+      (`SavedAccounts.showPicker(savedAccounts, showNormalLogin)`). New transitions: `selectAccount`
+      (tap a row → prefill username, clear password, iOS `selectedAccount`/one-tap-select),
+      `deselectAccount` (back arrow → return to the list), `useAnotherAccount` (→ the plain form, iOS
+      `showNormalLogin = true`), `backToSavedAccounts`, `removeAccount` (→ `store.remove`).
+      `login()` on success now also `store.upsert`s the freshly-authenticated user
+      (id/username/displayName/avatar + `CacheClock.nowMillis()` — iOS stamps `Date()` at
+      `upsertSavedAccount`, not the server's `lastActiveAt`) so it appears in the picker on the next
+      cold start; a failed login never upserts. `logout()` re-seeds `savedAccounts` from the store
+      after resetting the rest of the state — the list is cross-account and deliberately **not**
+      wiped by `SessionTeardown` (same rule as iOS: `AuthManager.logout()` never touches
+      `savedAccounts`), so a picker with 2 remembered accounts survives a logout. **Deliberate
+      Android-idiomatic divergence:** iOS surfaces row removal via a `.contextMenu` (long-press);
+      Compose has no first-class context-menu primitive, so `LoginScreen`'s `SavedAccountRow` uses a
+      visible trailing close-icon button instead — same capability, platform-native discovery, called
+      out rather than silently diverging. **+10 new `AuthViewModelTest`** (initial state seeded from
+      the store + `showPicker` both ways; select prefills + clears; deselect returns to the picker;
+      "other account" toggle; back-to-picker; remove drops from state; login success upserts with the
+      injected clock's value; login failure upserts nothing; logout preserves the list) **+7 new
+      `SharedPrefsSavedAccountsStoreTest`** (empty on fresh install, upsert prepends/re-sorts,
+      survives a fresh store construction, remove drops/is inert on an unknown id, a corrupt blob
+      degrades to empty — mirrors `SharedPrefsStarredMessagesStoreTest`). Mutation (RED proof):
+      commenting out the `store.upsert(...)` call inside `login()`'s success branch fails **exactly**
+      `login_success_upsertsTheAccountIntoTheSavedAccountsStore` (19 run, 1 failed, no collateral).
+      **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full `assembleDebug` +
+      all-module `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only —
+      `core/model` [`SavedAccount` gains `@Serializable`, no shape change], `sdk-core`
+      [new `auth/SavedAccountsStore.kt` + 1 `SdkModule` binding], `feature/auth`
+      [`AuthViewModel` +4 transitions +1 constructor dep, `LoginScreen.kt` decomposed into
+      `SavedAccountsPicker`/`SavedAccountRow`/`SelectedAccountForm`/`NormalLoginForm`, ×3 strings ×4
+      locales]; SDK purity — `SavedAccountsStore` is a stateless durability seam at the same grain as
+      `StarredMessagesStore`, no product rule; the product decisions (when to show the picker, upsert
+      on login, remove on tap) stay in the `:feature:auth` ViewModel; SSOT — reuses `SavedAccounts`'
+      pure transforms, `MeeshyAvatar`, `CacheClock`, `login_password_label` untouched; instant-app —
+      cache-first synchronous seed, no spinner; UDF — unchanged `AuthViewModel` shape, immutable
+      `StateFlow<AuthUiState>`; no dead end; no tautological tests; no coverage floor lowered).
 - ⚠ **Pre-existing red on main (needs a dedicated repair slice):** `:feature:profile`
       `ProfileHeaderBuilderTest` fails deterministically on clean `origin/main` — `presence is away when
       disconnected and idle past the window` + `last seen carries the parsed instant for an away user`
