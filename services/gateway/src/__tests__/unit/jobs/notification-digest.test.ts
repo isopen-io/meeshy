@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { NotificationDigestJob } from '../../../jobs/notification-digest';
+import { matchesNotificationWhere } from '../../helpers/notification-where';
 
 const unread = (overrides: Record<string, unknown> = {}) => ({
   id: 'n1',
@@ -156,6 +157,27 @@ describe('NotificationDigestJob — doWork edge cases', () => {
   it('exits early when there are no unread notifications', async () => {
     const { prisma, emailService, magicLinkService } = makeMocks();
     prisma.notification.findMany.mockResolvedValue([]);
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    await job.runNow();
+
+    expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('ne relance personne pour une notification dont le message éphémère a expiré', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    const rows = [
+      {
+        userId: 'user-1',
+        isRead: false,
+        expiresAt: new Date(Date.now() - 60_000),
+        delivery: { emailSent: false },
+      },
+    ];
+    prisma.notification.findMany.mockImplementation((args: any) =>
+      Promise.resolve(rows.filter((r) => matchesNotificationWhere(r as any, args?.where)))
+    );
     const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
 
     await job.runNow();

@@ -55,6 +55,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { notificationRoutes } from '../../../routes/notifications';
+import { matchesNotificationWhere } from '../../helpers/notification-where';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -218,6 +219,31 @@ describe('GET /notifications', () => {
 
     const call = pr.notification.findMany.mock.calls[0][0];
     expect(call.where.isRead).toBeUndefined();
+  });
+
+  it('hides a notification whose ephemeral message has expired — list and total alike', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    const rows = [
+      makeNotification({ id: 'alive', isRead: false, expiresAt: null }),
+      makeNotification({
+        id: 'expired',
+        isRead: false,
+        expiresAt: new Date(Date.now() - 60_000),
+      }),
+    ];
+    pr.notification.findMany.mockImplementation((args: any) =>
+      Promise.resolve(rows.filter((r) => matchesNotificationWhere(r as any, args?.where)))
+    );
+    pr.notification.count.mockImplementation((args: any) =>
+      Promise.resolve(rows.filter((r) => matchesNotificationWhere(r as any, args?.where)).length)
+    );
+
+    const req = makeRequest({ query: { offset: 0, limit: 20, unreadOnly: false } });
+    const result: any = await route.handler(req, reply);
+
+    expect(result.data.map((n: any) => n.id)).toEqual(['alive']);
+    expect(result.pagination.total).toBe(1);
   });
 
   it('returns 500 on service error', async () => {

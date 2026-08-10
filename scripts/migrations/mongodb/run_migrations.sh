@@ -101,6 +101,7 @@ MIGRATIONS=(
     "007_migrate_snake_case_to_camel_case.js"
     "008_add_email_verification_code.js"
     "009_partial_index_post_originalRepostOfId.js"
+    "010_notification_expiry_index.js"
 )
 
 # Filter to specific migration if requested
