@@ -349,10 +349,22 @@ export class MessageTranslationService extends EventEmitter {
       // `MessagingService.handleMessage` — ex: `POST /translate-blocking`
       // (cas nouveau message) — donc il porte sa propre copie du flip plutôt
       // que d'hériter de celui de `runMessagePostSaveEffects`.
-      await this.prisma.conversation.updateMany({
-        where: { id: messageData.conversationId, firstMessageSentAt: null },
-        data: { firstMessageSentAt: new Date() }
-      });
+      //
+      // Isolé dans son propre try/catch, contrairement au reste de cette
+      // fonction : le message ET le bump `lastMessageAt` ci-dessus ont DÉJÀ
+      // committé avec succès à ce stade. Laisser une panne ici remonter au
+      // catch englobant transformerait un envoi réussi en 500 côté route
+      // (`POST /translate-blocking`) — exactement ce que le commentaire
+      // jumeau de `runMessagePostSaveEffects.ts` interdit ("aucune ne doit
+      // transformer un envoi réussi en 500").
+      try {
+        await this.prisma.conversation.updateMany({
+          where: { id: messageData.conversationId, firstMessageSentAt: null },
+          data: { firstMessageSentAt: new Date() }
+        });
+      } catch (flipError) {
+        logger.error(`❌ Erreur flip firstMessageSentAt: ${flipError}`);
+      }
 
       return message;
     } catch (error) {

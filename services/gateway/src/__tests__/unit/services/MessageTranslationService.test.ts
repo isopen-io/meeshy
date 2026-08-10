@@ -260,6 +260,47 @@ describe('MessageTranslationService', () => {
       });
     });
 
+    it('still saves and returns the message when the firstMessageSentAt flip rejects — a non-critical DB hiccup must never turn a successful send into a failure', async () => {
+      const messageData: MessageData = {
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en'
+      };
+
+      mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-123' });
+      mockPrisma.message.create.mockResolvedValue({
+        id: 'msg-789',
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en',
+        createdAt: new Date()
+      });
+      mockPrisma.conversation.update.mockResolvedValue({});
+      mockPrisma.conversation.updateMany.mockRejectedValue(new Error('flip down'));
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.message.findFirst.mockResolvedValue({
+        id: 'msg-789',
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en'
+      });
+
+      const result = await translationService.handleNewMessage(messageData);
+
+      // The message was already saved and lastMessageAt already bumped —
+      // neither must be undone or hidden behind a thrown exception just
+      // because the guarded flip failed after them.
+      expect(result.messageId).toBe('msg-789');
+      expect(result.status).toBe('message_saved');
+      expect(mockPrisma.message.create).toHaveBeenCalled();
+      expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { lastMessageAt: expect.any(Date) } })
+      );
+    });
+
     it('should create conversation if it does not exist', async () => {
       const messageData: MessageData = {
         conversationId: 'new-conv-123',
