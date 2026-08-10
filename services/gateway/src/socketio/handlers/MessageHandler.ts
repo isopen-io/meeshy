@@ -674,6 +674,9 @@ export class MessageHandler {
           content: true,
           originalLanguage: true,
           createdAt: true,
+          // Lu pour la réconciliation des mentions : une mention ajoutée en
+          // éditant un message éphémère ne doit pas survivre à ce message.
+          expiresAt: true,
           // Lu pour la réconciliation des liens : `metadata` est un blob
           // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
           // `location`.
@@ -804,7 +807,12 @@ export class MessageHandler {
         prisma: this.prisma,
         mentionService: this.mentionService,
         notificationService: this.notificationService,
-        message: { id: message.id, conversationId: message.conversationId, senderId: message.senderId },
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          expiresAt: message.expiresAt,
+        },
         content: editedContent,
         editorUserId: userId,
         onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),

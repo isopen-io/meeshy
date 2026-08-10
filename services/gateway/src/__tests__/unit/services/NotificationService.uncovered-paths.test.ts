@@ -233,21 +233,10 @@ describe('NotificationService — Uncovered Paths', () => {
   // createTranslationReadyNotification
   // ==============================================
 
-  describe('createTranslationReadyNotification', () => {
-    it('should create notification', async () => {
-      prisma.conversation.findUnique.mockResolvedValue({ title: 'Conv', type: 'direct' });
-      prisma.userPreferences.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue(mockNotif('translation_ready'));
-
-      const result = await service.createTranslationReadyNotification({
-        recipientUserId: 'user-1',
-        messageId: 'msg-1',
-        conversationId: 'conv-1',
-      });
-
-      expect(result).toBeDefined();
-    });
-  });
+  // `createTranslationReadyNotification` a été retiré : aucun appelant de
+  // production ne l'atteignait, et ce test était son unique invocation dans
+  // tout le dépôt. Un test qui est le seul appelant de son sujet ne mesure pas
+  // du code vivant — il en entretient l'apparence.
 
   // ==============================================
   // createReplyNotification

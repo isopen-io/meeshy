@@ -533,8 +533,29 @@ describe('reconcileEditedMentions', () => {
         messageContent: 'salut @alice',
         conversationId: 'conv-1',
         messageId: 'msg-1',
+        // Témoin : un message ordinaire transmet `null`, jamais une échéance
+        // inventée — le champ voyage TOUJOURS, pour que son absence ne puisse
+        // pas se confondre avec « ce chemin ne le sait pas ».
+        messageExpiresAt: null,
       },
       ['u-alice', 'u-sender']
+    );
+  });
+
+  it('une mention ajoutée en ÉDITANT un message éphémère hérite de son échéance', async () => {
+    const prisma = makeEditPrisma();
+    const notificationService = makeNotifier();
+    const expiresAt = new Date('2026-08-10T12:00:00Z');
+
+    await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: { ...MESSAGE, expiresAt }, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      ['u-alice'],
+      expect.objectContaining({ messageExpiresAt: expiresAt }),
+      expect.anything()
     );
   });
 

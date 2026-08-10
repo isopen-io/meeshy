@@ -90,6 +90,17 @@ export enum NotificationTypeEnum {
   // ===== TRANSLATION/AUDIO EVENTS =====
   TRANSLATION_COMPLETED = 'translation_completed',
   TRANSLATION_FAILED = 'translation_failed',
+  /**
+   * AUCUN PRODUCTEUR. Le gateway ne crée jamais de notification de ce type —
+   * `createTranslationReadyNotification` a été retiré en 2026-08 après
+   * vérification qu'aucun appelant de production ne l'atteignait. La valeur
+   * reste déclarée parce que le SDK iOS la décode et qu'un client déployé ne
+   * doit pas buter dessus, PAS parce que la fonctionnalité existe.
+   *
+   * À ne pas confondre avec le message ZMQ `translation_ready`
+   * (`services/gateway/src/services/zmq-translation/types.ts`), bien vivant :
+   * il annonce une traduction au gateway, il ne notifie personne.
+   */
   TRANSLATION_READY = 'translation_ready',
   TRANSCRIPTION_COMPLETED = 'transcription_completed',
   TRANSCRIPTION_FAILED = 'transcription_failed',
