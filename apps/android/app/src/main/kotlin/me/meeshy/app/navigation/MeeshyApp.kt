@@ -7,12 +7,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -189,7 +189,7 @@ internal fun menuItemLabelKeys(): List<String> = listOf(
     "tab_calls",
     "tab_activity",
     "menu_contacts",
-    "tab_profile",
+    "menu_settings",
 )
 
 /**
@@ -220,11 +220,11 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
     val messages = stringResource(R.string.tab_messages)
     val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
-    val profile = stringResource(R.string.tab_profile)
+    val settings = stringResource(R.string.menu_settings)
     val newConversation = stringResource(R.string.menu_new_conversation)
     val reels = stringResource(R.string.menu_reels)
     val contacts = stringResource(R.string.menu_contacts)
-    return remember(messages, calls, activity, profile, newConversation, reels, contacts) {
+    return remember(messages, calls, activity, settings, newConversation, reels, contacts) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -245,7 +245,7 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
             RadialMenuItem(Icons.Filled.People, contacts, MeeshyPalette.PinnedBlue) {
                 navController.navigate(Routes.CONTACTS)
             },
-            RadialMenuItem(Icons.Filled.Settings, profile, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
+            RadialMenuItem(Icons.Filled.Settings, settings, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
         )
     }
 }
@@ -793,12 +793,13 @@ fun MeeshyApp(
                 leftContentDescription = stringResource(R.string.tab_feed),
                 rightContentDescription = stringResource(R.string.a11y_floating_menu),
                 leftContent = {
-                    // Filled quand le Flux est la destination active (on peut taper
-                    // pour en repartir), outline sinon (un tap y mene) — le seul
-                    // signal visuel de bascule que ce bouton porte, faute d'un
-                    // equivalent Android au logo anime iOS de `showFeed == true`.
+                    // Icone de FLUX, pas de maison : ce bouton mene au Feed (et aux
+                    // Reels par appui long), une maison promettait un "home" qui
+                    // n'existe pas. Filled quand le Flux est la destination active
+                    // (on peut taper pour en repartir), outline sinon (un tap y
+                    // mene) — le seul signal visuel de bascule que ce bouton porte.
                     Icon(
-                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.Home else Icons.Outlined.Home,
+                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.DynamicFeed else Icons.Outlined.DynamicFeed,
                         contentDescription = null,
                         tint = MeeshyPalette.Success,
                     )

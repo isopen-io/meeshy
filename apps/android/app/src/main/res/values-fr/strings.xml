@@ -10,9 +10,11 @@
     <string name="tab_feed">Fil d\'actualité</string>
     <string name="tab_activity">Activité</string>
     <string name="tab_profile">Profil</string>
+    <string name="tab_calls">Appels</string>
     <string name="menu_new_conversation">Nouveau</string>
     <string name="menu_reels">Réels</string>
     <string name="menu_contacts">Contacts</string>
+    <string name="menu_settings">Réglages</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bon retour</string>
