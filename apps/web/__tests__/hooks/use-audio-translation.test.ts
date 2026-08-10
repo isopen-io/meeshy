@@ -215,6 +215,61 @@ describe('useAudioTranslation', () => {
     });
   });
 
+  describe('reactive auto-selection when a translation arrives after mount', () => {
+    it('updates selectedLanguage automatically when a preferred-language translation arrives via socket', () => {
+      let progressiveListener: ((data: any) => void) | undefined;
+      mockOnAudioTranslationsProgressive.mockImplementation((listener) => {
+        progressiveListener = listener;
+        return jest.fn();
+      });
+
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranscription: makeTranscription({ language: 'de' }),
+            userLanguages: ['fr', 'en'],
+            // Pas de initialTranslations : aucune traduction au montage.
+          })
+        )
+      );
+
+      expect(result.current.selectedLanguage).toBe('original');
+
+      act(() => {
+        progressiveListener?.(makeTranslationEventData({ language: 'fr' }));
+      });
+
+      expect(result.current.selectedLanguage).toBe('fr');
+    });
+
+    it('does not override an explicit user selection when a later translation arrives', () => {
+      let progressiveListener: ((data: any) => void) | undefined;
+      mockOnAudioTranslationsProgressive.mockImplementation((listener) => {
+        progressiveListener = listener;
+        return jest.fn();
+      });
+
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranscription: makeTranscription({ language: 'de' }),
+            userLanguages: ['fr', 'en'],
+          })
+        )
+      );
+
+      act(() => {
+        result.current.setSelectedLanguage('original');
+      });
+
+      act(() => {
+        progressiveListener?.(makeTranslationEventData({ language: 'fr' }));
+      });
+
+      expect(result.current.selectedLanguage).toBe('original');
+    });
+  });
+
   describe('currentAudioUrl', () => {
     it('returns attachmentFileUrl for original language', () => {
       const { result } = renderHook(() =>

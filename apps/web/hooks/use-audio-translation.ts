@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { SocketIOTranslatedAudio, AttachmentTranslations } from '@meeshy/shared/types';
 import type { AudioTranslationEventData } from '@meeshy/shared/types/socketio-events';
 import { toSocketIOTranslation } from '@meeshy/shared/types';
@@ -112,18 +112,40 @@ export function useAudioTranslation({
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
 
-  // Auto-sélection de la langue selon les préférences utilisateur
-  const initialLanguage = useMemo(() => {
-    if (!userLanguages?.length || initialTranslatedAudios.length === 0) return 'original';
-    const originalLang = initialTranscription?.language;
-    if (originalLang && userLanguages.includes(originalLang)) return 'original';
-    for (const lang of userLanguages) {
-      if (initialTranslatedAudios.find(t => t.targetLanguage === lang && t.url)) return lang;
-    }
-    return 'original';
-  }, [userLanguages, initialTranslatedAudios, initialTranscription?.language]);
+  // Auto-sélection de la langue selon les préférences utilisateur — logique
+  // partagée entre le seed initial et la ré-évaluation réactive ci-dessous.
+  const resolveAutoLanguage = useCallback(
+    (audios: readonly SocketIOTranslatedAudio[]): string => {
+      if (!userLanguages?.length || audios.length === 0) return 'original';
+      const originalLang = initialTranscription?.language;
+      if (originalLang && userLanguages.includes(originalLang)) return 'original';
+      for (const lang of userLanguages) {
+        if (audios.find(t => t.targetLanguage === lang && t.url)) return lang;
+      }
+      return 'original';
+    },
+    [userLanguages, initialTranscription?.language]
+  );
 
-  const [selectedLanguage, setSelectedLanguage] = useState<string>(initialLanguage);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() =>
+    resolveAutoLanguage(initialTranslatedAudios)
+  );
+
+  // Suit un choix EXPLICITE de l'utilisateur (tap sur un pill) — tant qu'il
+  // n'a pas eu lieu, la langue continue de suivre Prisme automatiquement
+  // quand une nouvelle traduction arrive après le montage (cas le plus
+  // courant : audio fraîchement envoyé/reçu, traduction encore en cours).
+  const hasManualSelectionRef = useRef(false);
+
+  const handleSetSelectedLanguage = useCallback((language: string) => {
+    hasManualSelectionRef.current = true;
+    setSelectedLanguage(language);
+  }, []);
+
+  useEffect(() => {
+    if (hasManualSelectionRef.current) return;
+    setSelectedLanguage(resolveAutoLanguage(translatedAudios));
+  }, [translatedAudios, resolveAutoLanguage]);
 
   // S'abonner à la transcription seule (Phase 1: avant traduction)
   useEffect(() => {
@@ -406,7 +428,7 @@ export function useAudioTranslation({
     isTranslating,
     translationError,
     selectedLanguage,
-    setSelectedLanguage,
+    setSelectedLanguage: handleSetSelectedLanguage,
     currentAudioUrl,
     currentAudioDuration,
     requestTranscription,
