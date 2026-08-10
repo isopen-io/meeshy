@@ -96,6 +96,7 @@
     <string name="feed_composer_visibility_friends">Amis</string>
     <string name="feed_composer_visibility_private">Privé</string>
     <string name="feed_composer_attach_media">Ajouter une photo ou une vidéo</string>
+    <string name="feed_composer_take_photo">Prendre une photo</string>
     <string name="feed_composer_remove_media">Supprimer le média</string>
     <string name="feed_composer_media_limit">Vous pouvez joindre jusqu\'à %1$d éléments</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>

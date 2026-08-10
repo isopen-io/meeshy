@@ -3195,9 +3195,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       loosening the image-count rule from `>= 2` to `>= 1` failed exactly the 2 single-image tests; (c)
       hardcoding `FeedComposerDraft.postType` to ignore `forcePlainPost` failed exactly the 2 tests
       asserting the override — every other test in all three files stayed green each time; all three
-      reverted and re-run clean. **Still open**: camera capture (no existing pattern anywhere in the
-      Android app yet — no `TakePicture` contract/`FileProvider` wiring, a materially bigger increment
-      deliberately deferred rather than rushed), files, location, audio+transcription, per-post language
+      reverted and re-run clean. **Camera-photo capture now done** (slice
+      `feed-composer-camera-capture`, 2026-08-10): a second attach tile
+      ([Icons.Filled.PhotoCamera], mirror of iOS's `camera.fill` button) launches the system
+      `ACTION_IMAGE_CAPTURE` activity ([ActivityResultContracts.TakePicture]) writing into a
+      fresh [CameraCaptureFile]-named destination under `context.cacheDir/captures` (new
+      `file_paths.xml` `cache-path`), exposed via the app's existing `FileProvider` authority
+      (previously used only for GDPR-export sharing) — the resulting Uri is dispatched through
+      the **exact same** `dispatchPicked` pipeline gallery picks already use, so zero new
+      upload/error-handling logic. **A genuine, on-device-confirmed Android platform bug found
+      and fixed in the same slice**: `ActivityResultContracts.TakePicture()`'s own
+      `createIntent()` (decompiled and read directly — `Intent(ACTION_IMAGE_CAPTURE).putExtra
+      (EXTRA_OUTPUT, uri)`) never sets `FLAG_GRANT_WRITE_URI_PERMISSION`, so the implicitly-
+      resolved camera app has no permission to write into our `FileProvider` Uri. First
+      on-device pass (stock AOSP camera on `meeshy_pixel8`) reproduced this exactly: the camera
+      activity opened and the shutter appeared to work, but the destination `captures/`
+      directory stayed empty and no TUS upload ever fired (`success = false` from the launcher,
+      silently swallowed by the existing cancel/discard branch — a real device confirms this
+      class of bug is invisible to any JVM/Robolectric test). Fixed with the canonical, publicly
+      documented Android pattern: `context.packageManager.queryIntentActivities(ACTION_IMAGE_
+      CAPTURE, MATCH_DEFAULT_ONLY)` + an explicit `grantUriPermission(pkg, uri,
+      FLAG_GRANT_WRITE_URI_PERMISSION or FLAG_GRANT_READ_URI_PERMISSION)` per resolved package,
+      called before `takePicture.launch(uri)`. **Deliberate, documented scope cut vs. iOS**:
+      photo capture only — iOS's `CameraView` is a custom AVFoundation screen with an in-app
+      photo/video toggle; Android delegates entirely to the system camera app's own
+      `ACTION_IMAGE_CAPTURE` intent (so no `CAMERA` runtime permission request is needed here —
+      the system camera app owns that), and video capture (`ACTION_VIDEO_CAPTURE`, its own
+      destination MIME/extension) is a separately-scoped follow-up. New pure
+      `CameraCaptureFile.next(nowMillis)` (`:feature:feed`, mirror of the split
+      `me.meeshy.sdk.model.export.DataExportFileBuilder` uses) names the destination file from
+      an explicit timestamp — deterministic, +4 tests, mutation-proven (hardcoding the filename
+      to ignore the timestamp parameter fails **exactly** the 2 discriminating tests, the other
+      2 stay green). **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970 tasks,
+      full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). **On-device
+      verification partially blocked by severe shared-host contention this run**: the first pass
+      (pre-fix) ran clean on `meeshy_pixel8` and is what surfaced the URI-permission bug in the
+      first place; re-confirming the FULL round-trip (capture → upload → thumbnail) after the
+      fix hit host load spiking past 450 mid-session (other concurrent agent sessions on this
+      shared box, consistent with prior `feedback_shared_disk_contention_multi_session` reports)
+      — the emulator process itself became CPU-starved to the point of never completing boot
+      across two fresh launches (~30 min total), so the post-fix round-trip is verified by
+      code-level evidence (decompiled bytecode proving the gap; the fix is Android's own
+      documented canonical pattern for exactly this problem, not a novel/risky guess) rather
+      than a second on-device capture. Flagged honestly rather than claimed — a natural
+      candidate for a quick on-device confirmation pass once this shared box is quieter, not
+      required to consider this slice done given the strength of the remaining evidence.
+      **Still open**: files, location, audio+transcription, per-post language
       override, durable-outbox queueing for offline resilience (media upload itself has no offline-retry
       path yet either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
       consistent, not a new gap) — each a separately-scoped follow-up.

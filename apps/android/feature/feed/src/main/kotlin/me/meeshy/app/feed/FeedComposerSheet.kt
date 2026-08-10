@@ -1,7 +1,10 @@
 package me.meeshy.app.feed
 
 import android.content.ContentResolver
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,6 +66,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import java.io.File
 
 /**
  * The feed-post composer — the "texte seul" first sub-slice of feature-parity
@@ -77,15 +83,19 @@ import me.meeshy.ui.theme.MeeshyTheme
  * in-flight spinner tile while uploading, then the real thumbnail, so the
  * publish gate only unlocks once media is genuinely attachable server-side.
  *
- * **Deliberate, documented scope cut vs. iOS** (routine's own "photo/caméra
- * d'abord" framing — this slice ships the photo/video half only): no camera
- * capture, file, location or audio attachments, no emoji picker, no per-post
- * language override — iOS's `composerOverlay` toolbar of 6 glyphes. Each is a
- * real, separately-scoped follow-up. Camera capture specifically has no
- * existing pattern anywhere else in the Android app yet (no `TakePicture`
- * contract, no `FileProvider` wiring) — a materially bigger increment than
- * reusing the already-proven gallery-picker pattern the story composer
- * established, so it stays out of this slice rather than being rushed in.
+ * Camera-photo capture (`onCamera`, [Icons.Filled.PhotoCamera] tile) mirrors iOS's
+ * `camera.fill` button — one system `ACTION_IMAGE_CAPTURE` activity
+ * ([ActivityResultContracts.TakePicture]) writing into a fresh [CameraCaptureFile]-named
+ * destination the composer creates via the app's [FileProvider] authority, then dispatched
+ * through the exact same [dispatchPicked] pipeline as a gallery pick — zero new upload/error
+ * logic. **Deliberate, documented scope cut vs. iOS**: photo only, no in-composer video capture
+ * ([CameraView]'s `.video` case) — iOS opens a custom AVFoundation capture screen with a
+ * photo/video toggle; Android delegates to the system camera app's own `ACTION_IMAGE_CAPTURE`
+ * intent, so no camera runtime permission is needed here (the system camera app owns that), and
+ * video capture is a separately-scoped follow-up (`ACTION_VIDEO_CAPTURE`, its own destination
+ * MIME/extension). File, location or audio attachments and the emoji picker or per-post language
+ * override remain unshipped too — iOS's `composerOverlay` toolbar of 6 glyphes, each a real,
+ * separately-scoped follow-up.
  *
  * Every text/visibility/media-id decision lives in the pure
  * [FeedComposerDraft]; this Composable holds one in `remember` (plus the
@@ -157,6 +167,54 @@ fun FeedComposerSheet(
         }
     }
 
+    // Camera-photo capture: TakePicture() writes into a Uri WE provide (unlike the gallery
+    // pickers above, which hand one back), so the destination file/Uri is created up front and
+    // held only long enough to resolve the callback — cleared either way so a second tap always
+    // starts from a fresh destination.
+    var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    val takePicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { success: Boolean ->
+        val uri = cameraCaptureUri
+        cameraCaptureUri = null
+        if (success && uri != null) {
+            dispatchPicked(listOf(uri))
+        } else {
+            // Cancelled/failed capture: the destination file may exist empty or not at all —
+            // FileProvider.delete() is a no-op either way, never worth surfacing an error for.
+            uri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+        }
+    }
+
+    fun launchCamera() {
+        if (FeedMediaPicker.modeFor(draft.remainingMediaSlots) == FeedMediaPickMode.None) {
+            onMediaError(mediaLimitMessage)
+            return
+        }
+        val capturesDir = File(context.cacheDir, "captures").apply { mkdirs() }
+        val file = File(capturesDir, CameraCaptureFile.next(System.currentTimeMillis()))
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        // ActivityResultContracts.TakePicture()'s own Intent(ACTION_IMAGE_CAPTURE) carries the
+        // destination Uri as a plain EXTRA_OUTPUT — it does NOT set FLAG_GRANT_WRITE_URI_PERMISSION,
+        // so an implicitly-resolved camera app has no permission to write into our FileProvider Uri
+        // unless we grant it ourselves first (confirmed on-device: without this, the stock AOSP
+        // camera silently fails to save and the launcher resolves `success = false`). Canonical
+        // Android pattern: grant every activity that CAN resolve the capture intent, since the
+        // system picks one of them at launch time and we can't know which in advance.
+        val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        context.packageManager
+            .queryIntentActivities(captureIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            .forEach { resolveInfo ->
+                context.grantUriPermission(
+                    resolveInfo.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+        cameraCaptureUri = uri
+        takePicture.launch(uri)
+    }
+
     fun removeMedia(id: String) {
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }
@@ -204,6 +262,7 @@ fun FeedComposerSheet(
                 isUploading = isUploadingMedia,
                 canAddMore = !draft.isMediaFull,
                 onAdd = ::launchMediaPicker,
+                onCamera = ::launchCamera,
                 onRemove = ::removeMedia,
             )
         }
@@ -211,12 +270,13 @@ fun FeedComposerSheet(
 }
 
 /**
- * The attach-media affordance plus the picked-photo/video thumbnail strip —
- * always shows the attach tile first (disabled once [canAddMore] is false or
- * while [isUploading]), then each attached [media] item with a remove
- * overlay, then an in-flight spinner tile while a pick is uploading. Pure
- * Compose glue: every id/list decision it renders came from the already
- * pure/tested [FeedComposerDraft]/upload result upstream.
+ * The attach-media/take-photo affordances plus the picked-photo/video
+ * thumbnail strip — always shows the gallery and camera tiles first (both
+ * disabled once [canAddMore] is false or while [isUploading]), then each
+ * attached [media] item with a remove overlay, then an in-flight spinner
+ * tile while a pick is uploading. Pure Compose glue: every id/list decision
+ * it renders came from the already pure/tested [FeedComposerDraft]/upload
+ * result upstream.
  */
 @Composable
 private fun MediaAttachmentsRow(
@@ -224,6 +284,7 @@ private fun MediaAttachmentsRow(
     isUploading: Boolean,
     canAddMore: Boolean,
     onAdd: () -> Unit,
+    onCamera: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Row(
@@ -233,9 +294,10 @@ private fun MediaAttachmentsRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val attachEnabled = canAddMore && !isUploading
         IconButton(
             onClick = onAdd,
-            enabled = canAddMore && !isUploading,
+            enabled = attachEnabled,
             modifier = Modifier
                 .size(56.dp)
                 .clip(RoundedCornerShape(MeeshyRadius.md))
@@ -245,7 +307,23 @@ private fun MediaAttachmentsRow(
             Icon(
                 imageVector = Icons.Filled.Image,
                 contentDescription = stringResource(R.string.feed_composer_attach_media),
-                tint = if (canAddMore && !isUploading) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
+                tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
+            )
+        }
+
+        IconButton(
+            onClick = onCamera,
+            enabled = attachEnabled,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(MeeshyTheme.tokens.inputBackground)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.md)),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PhotoCamera,
+                contentDescription = stringResource(R.string.feed_composer_take_photo),
+                tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
             )
         }
 

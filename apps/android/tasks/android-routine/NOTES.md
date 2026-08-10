@@ -1010,3 +1010,48 @@ Append-only log of gotchas and decisions that save time next run.
   `testImplementation(libs.androidx.test.ext.junit)` was added to `:app`'s own `build.gradle.kts` —
   check the target module's existing test dependencies before assuming a working pattern from a
   sibling module (`:sdk-core`) ports over for free.
+
+## Slice `feed-composer-camera-capture` (2026-08-10)
+- **`ActivityResultContracts.TakePicture()`'s own `Intent` never grants URI write permission to
+  the resolved camera app — this is invisible to any JVM/Robolectric test and only showed up on a
+  real device.** Decompiling the AndroidX `activity` jar (`javap -p -c` on the class extracted
+  from the local Gradle cache — `unzip` the `activity-<version>-runtime.jar`, no source jar was on
+  hand) showed `createIntent()` is exactly `Intent(ACTION_IMAGE_CAPTURE).putExtra(EXTRA_OUTPUT,
+  uri)` — no `FLAG_GRANT_WRITE_URI_PERMISSION`/`FLAG_GRANT_READ_URI_PERMISSION`. Since
+  `ACTION_IMAGE_CAPTURE` is an *implicit* intent (the OS decides which camera app resolves it,
+  the caller doesn't know in advance), the caller must grant permission to every possible
+  resolved package itself: `context.packageManager.queryIntentActivities(intent,
+  MATCH_DEFAULT_ONLY)` then `context.grantUriPermission(pkg, uri, FLAG_GRANT_WRITE_URI_PERMISSION
+  or FLAG_GRANT_READ_URI_PERMISSION)` per result, called BEFORE `launcher.launch(uri)`. Without
+  it, the on-device symptom is silent and easy to misread as "it worked": the camera activity
+  opens fine, the shutter appears to capture, control returns to the caller — but the destination
+  file never gets written (confirmed via `adb shell run-as <pkg> ls <cacheDir>/captures/` staying
+  empty) and the launcher's callback resolves `success = false`, which a reasonable "cancelled/
+  failed → discard" branch swallows without any visible error. Reading the actual bytecode instead
+  of trusting a mental model of "FileProvider + `android:grantUriPermissions="true"` must be
+  enough" (it isn't, on its own, for an *implicit* intent) was what actually resolved this — worth
+  reaching for `javap`/decompilation on a `-runtime.jar` from `~/.gradle/caches/*/transforms/*`
+  whenever a first-party AndroidX contract's exact behaviour matters and the source jar isn't
+  handy.
+- **A stuck/CPU-starved Android emulator under severe host contention doesn't just run slow — it
+  can wedge into a state where it never boots, and won't self-recover once the host's own load
+  average drops back down.** Mid-run, `uptime`'s 1-min load average spiked past 450 (other
+  concurrent agent sessions on this shared box — same class of contention the project's
+  `feedback_shared_disk_contention_multi_session` note already documents). The running emulator
+  process survived the spike but its `qemu-system-aarch64` process accumulated essentially zero
+  incremental CPU time over several minutes even AFTER the host's load average recovered to a
+  healthy ~3 — i.e. the process itself was wedged, not merely waiting its turn. A fresh `kill -9`
+  on the qemu **and** its crashpad handler, followed by a clean `emulator -avd ...` relaunch, was
+  required — simply waiting longer or re-polling `sys.boot_completed` against the SAME stuck
+  process never would have recovered. Confirm via `ps aux` sampling twice a few seconds apart
+  (CPU-time column barely moving despite healthy host load = wedged, not just slow) before
+  deciding to kill-and-restart vs. keep waiting.
+- **When on-device re-verification is blocked by genuine, confirmed environmental contention
+  (not flaky test-writing) after a real, substantive attempt, document the specific gap and its
+  evidence honestly in the tracking file rather than either (a) silently claiming a full on-device
+  pass that didn't happen, or (b) stalling the whole run indefinitely chasing a shared resource
+  outside this run's control.** The pre-fix on-device pass (which is what surfaced the URI-
+  permission bug above) DID complete cleanly; only the post-fix confirmation pass got blocked.
+  Distinguishing and stating precisely which half of the on-device story is proven vs. which half
+  rests on code-level evidence (decompiled bytecode + Android's own documented canonical fix
+  pattern) is more useful to the next reader than either extreme.
