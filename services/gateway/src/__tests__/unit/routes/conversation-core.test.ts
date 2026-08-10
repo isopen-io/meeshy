@@ -165,6 +165,7 @@ const makePrisma = (): any => ({
       participants: [],
     }),
     update: jest.fn().mockResolvedValue({ id: CONV_ID, participants: [] }),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     delete: jest.fn(),
     count: jest.fn().mockResolvedValue(0),
   },
@@ -1181,6 +1182,57 @@ describe('registerCoreRoutes', () => {
 
       expect(mockCreateError).toHaveBeenCalledWith('USER_BLOCKED');
       expect(mockSendErrorResponse).toHaveBeenCalled();
+    });
+
+    it('flips firstMessageSentAt and notifies the creator when the recipient re-initiates a silent empty DM', async () => {
+      mockValidateSchema.mockReturnValue({ type: 'direct', participantIds: [OTHER_USER_ID] });
+      const existingDirect = {
+        id: CONV_ID,
+        type: 'direct',
+        title: null,
+        createdAt: new Date('2026-08-01'),
+        firstMessageSentAt: null,
+        participants: [
+          { userId: OTHER_USER_ID, role: 'creator' },
+          { userId: USER_ID, role: 'member' },
+        ],
+      };
+      prisma.conversation.findFirst.mockResolvedValue(existingDirect);
+      prisma.conversation.updateMany.mockResolvedValue({ count: 1 });
+
+      await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
+
+      expect(prisma.conversation.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: CONV_ID, firstMessageSentAt: null }),
+          data: expect.objectContaining({ firstMessageSentAt: expect.any(Date) }),
+        })
+      );
+      expect(fastify._mockTo).toHaveBeenCalledWith(`user:${OTHER_USER_ID}`);
+      expect(fastify._mockEmit).toHaveBeenCalledWith(
+        'conversation:new',
+        expect.objectContaining({ conversationId: CONV_ID, creatorId: OTHER_USER_ID })
+      );
+    });
+
+    it('does not flip firstMessageSentAt when the caller is already the creator (re-fetching own empty DM)', async () => {
+      mockValidateSchema.mockReturnValue({ type: 'direct', participantIds: [OTHER_USER_ID] });
+      const existingDirect = {
+        id: CONV_ID,
+        type: 'direct',
+        title: null,
+        createdAt: new Date('2026-08-01'),
+        firstMessageSentAt: null,
+        participants: [
+          { userId: USER_ID, role: 'creator' },
+          { userId: OTHER_USER_ID, role: 'member' },
+        ],
+      };
+      prisma.conversation.findFirst.mockResolvedValue(existingDirect);
+
+      await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
+
+      expect(prisma.conversation.updateMany).not.toHaveBeenCalled();
     });
 
     it('happy path: creates conversation and broadcasts CONVERSATION_NEW', async () => {

@@ -970,6 +970,41 @@ export function registerCoreRoutes(
           }
         });
         if (existingDirect) {
+          const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
+          const creatorParticipant = existingDirect.participants.find((p: any) => p.role === 'creator');
+          const isEmptyDirect = existingDirect.type === 'direct' && !existingDirect.firstMessageSentAt;
+
+          if (isEmptyDirect && creatorParticipant && callerParticipant?.role !== 'creator') {
+            // Le destinataire silencieux réinitie lui-même la conversation —
+            // intention mutuelle aussi explicite qu'un message. On la rend
+            // visible désormais des deux côtés (Prisme design doc 2026-08-04).
+            const flip = await prisma.conversation.updateMany({
+              where: { id: existingDirect.id, firstMessageSentAt: null },
+              data: { firstMessageSentAt: new Date() }
+            });
+            if (flip.count > 0) {
+              existingDirect.firstMessageSentAt = new Date();
+              try {
+                const socketIOHandler = fastify.socketIOHandler;
+                const io = socketIOHandler?.getManager()?.getIO();
+                if (io && creatorParticipant.userId) {
+                  io.to(ROOMS.user(creatorParticipant.userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
+                    conversationId: existingDirect.id,
+                    conversationType: existingDirect.type,
+                    title: existingDirect.title,
+                    creatorId: creatorParticipant.userId,
+                    participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
+                    createdAt: existingDirect.createdAt instanceof Date
+                      ? existingDirect.createdAt.toISOString()
+                      : String(existingDirect.createdAt)
+                  });
+                }
+              } catch (broadcastError) {
+                logger.error('error broadcasting CONVERSATION_NEW on DM reinitiation', { error: broadcastError });
+              }
+            }
+          }
+
           return sendSuccess(reply, {
             ...existingDirect,
             title: existingDirect.title || null
