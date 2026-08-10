@@ -41,6 +41,7 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 ### Regles critiques du Prisme
 1. **Si aucune traduction ne matche la langue preferee, afficher le contenu original (retourner `nil`).** Ne JAMAIS tomber sur `translations.first` comme fallback — l'absence de traduction vers la langue preferee signifie que le contenu est deja dans cette langue.
 2. **La locale appareil entre en 4e priorité (Prisme étendu 2026-05-26)** — après `systemLanguage`, `regionalLanguage`, `customDestinationLanguage`. Elle ne les supplante jamais. iOS l'injecte via header `X-Device-Locale` ; gateway la persiste opportunément dans `User.deviceLocale`.
+3. **La langue d'origine concourt à son RANG dans le prisme, jamais comme court-circuit (2026-08-10).** Un résolveur parcourt les langues du lecteur DANS L'ORDRE ; la première servie gagne — par une traduction, ou parce que le message est déjà écrit dedans. Ne JAMAIS écrire « si la langue d'origine appartient au prisme ⇒ afficher l'original » : cette formulation rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un rang inférieur, ce que produit mécaniquement la locale appareil (règle 2). Prisme `['fr','en']`, message anglais, traduction française disponible ⇒ **« Bonjour »**, jamais « Hello ». Sources de vérité jumelles : `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`) et `MeeshyConversation.resolvedLastMessagePreview` (`packages/MeeshySDK/.../CoreModels.swift`) — toute évolution touche les deux.
 
 ## Architecture
 
