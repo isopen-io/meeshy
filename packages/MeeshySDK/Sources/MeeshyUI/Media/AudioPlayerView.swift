@@ -24,6 +24,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// caller must opt back in per attachment, it never carries across tracks.
     @Published public var shouldLoop = false
 
+    /// Profil de session transmis au MediaSessionCoordinator. Défaut
+    /// `.transient` (fail-safe : un moteur oublié duck comme avant, sans
+    /// jamais voler la carte Now Playing). Seul le moteur possédé par le
+    /// ConversationAudioCoordinator (app) opte pour `.content`.
+    public var sessionProfile: AudioSessionProfile = .transient
+
     public var onPlaybackFinished: (() -> Void)?
 
     /// BUG A (round 4) — opaque permission predicate consulted BEFORE any
@@ -147,7 +153,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func acquireSession() async {
         guard !sessionRequested else { return }
         sessionRequested = true
-        try? await MediaSessionCoordinator.shared.request(role: .playback)
+        try? await MediaSessionCoordinator.shared.request(
+            role: .playback, playbackOptions: sessionProfile.categoryOptions
+        )
     }
 
     /// Libère la session via le coordinator (refcompté : désactive au count 0).
@@ -302,6 +310,37 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             stretchTracker.begin(positionMs)
             startProgressTimer()
         }
+    }
+
+    /// Pause explicite pour interruption système / changement de route.
+    /// Contrairement à `togglePlayPause()`, sans effet si le player a déjà
+    /// été mis en pause par le système (le toggle RELANCERAIT dans ce cas).
+    public func pause() {
+        guard player != nil, isPlaying else { return }
+        player?.pause()
+        isPlaying = false
+        timer?.invalidate()
+        stretchTracker.pause(positionMs)
+        reportListenProgress(complete: false)
+        persistPosition()
+    }
+
+    /// Reprise après interruption système : la session a pu être désactivée
+    /// par l'OS — la réactiver de façon synchrone (call-aware, sans toucher
+    /// le refcount) avant de relancer le player conservé.
+    public func resumeFromInterruption() {
+        guard let player, !isPlaying else { return }
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
+        MediaSessionCoordinator.shared.activatePlaybackSync(
+            options: sessionProfile.categoryOptions
+        )
+        PlaybackCoordinator.shared.willStartPlaying(audio: self)
+        player.rate = Float(speed.rawValue)
+        player.play()
+        isPlaying = true
+        listenStartTime = listenStartTime ?? Date()
+        stretchTracker.begin(positionMs)
+        startProgressTimer()
     }
 
     public func seek(to fraction: Double) {

@@ -168,7 +168,10 @@ public actor MediaSessionCoordinator {
     }
 
     /// Active AVAudioSession pour le rôle demandé.
-    public func request(role: AudioRole) async throws {
+    public func request(
+        role: AudioRole,
+        playbackOptions: AVAudioSession.CategoryOptions = [.duckOthers]
+    ) async throws {
         installSystemObserversIfNeeded()
         // Never reconfigure the shared session while a VoIP call owns it (would
         // mute the mic). The refcount still tracks holders so balancing across
@@ -177,7 +180,7 @@ public actor MediaSessionCoordinator {
             let session = AVAudioSession.sharedInstance()
             switch role {
             case .playback:
-                try session.setCategory(.playback, mode: .default, options: [.duckOthers])
+                try session.setCategory(.playback, mode: .default, options: playbackOptions)
             case .record:
                 try session.setCategory(.record, mode: .default)
             case .playAndRecord:
