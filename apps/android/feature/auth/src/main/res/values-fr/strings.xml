@@ -107,4 +107,22 @@
     <string name="guest_join_preview_error">Ce lien n\'a pas pu être ouvert</string>
     <string name="guest_join_requires_account">Ce lien nécessite un compte.</string>
     <string name="guest_join_sign_in">Se connecter</string>
+
+    <!-- Account recovery -->
+    <string name="login_forgot_password">Mot de passe oublié ?</string>
+    <string name="login_magic_link">Lien magique</string>
+    <string name="auth_back">Retour</string>
+    <string name="auth_back_to_login">Retour à la connexion</string>
+    <string name="auth_email_label">Email</string>
+    <string name="auth_forgot_title">Réinitialiser le mot de passe</string>
+    <string name="auth_forgot_subtitle">Saisissez votre adresse email et nous vous enverrons un lien de réinitialisation.</string>
+    <string name="auth_forgot_send">Envoyer le lien</string>
+    <string name="auth_forgot_sent">Si un compte existe pour %1$s, un lien de réinitialisation a été envoyé. Vérifiez votre boîte mail.</string>
+    <string name="auth_magic_title">Lien magique</string>
+    <string name="auth_magic_subtitle">Connectez-vous sans mot de passe : nous vous envoyons un lien de connexion à usage unique.</string>
+    <string name="auth_magic_send">Envoyer le lien magique</string>
+    <string name="auth_magic_sent">Lien envoyé à %1$s. Ouvrez-le sur cet appareil pour vous connecter.</string>
+    <string name="auth_magic_countdown">Lien valide pendant %1$s</string>
+    <string name="auth_magic_expired">Le lien a expiré. Envoyez-en un nouveau.</string>
+    <string name="auth_magic_resend">Renvoyer le lien</string>
 </resources>

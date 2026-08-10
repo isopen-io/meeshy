@@ -39,6 +39,18 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
     }
 
 /**
+ * Variante pour les enveloppes SANS champ `data` (`{"success":true}`) — p.ex. les
+ * endpoints anti-enumeration (forgot-password) qui ne renvoient jamais de corps.
+ * [apiCall] exige `data != null`, ce qui transformait ces succes en
+ * "Unknown error" ; ici le succes de l'enveloppe suffit.
+ */
+suspend fun apiCallUnit(block: suspend () -> ApiResponse<Unit>): NetworkResult<Unit> =
+    apiCall {
+        val response = block()
+        if (response.success && response.data == null) response.copy(data = Unit) else response
+    }
+
+/**
  * Run a raw `retrofit2.Response` call whose result rides in a response **header**
  * rather than the JSON body (e.g. a TUS session `POST` returning its session URL as
  * a `Location` header on `201 Created`, with no body — [ApiResponse]/[apiCall]

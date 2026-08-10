@@ -38,7 +38,9 @@ import kotlinx.coroutines.delay
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.GuestJoinScreen
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ForgotPasswordScreen
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.auth.MagicLinkScreen
 import me.meeshy.app.auth.RegistrationScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
@@ -116,6 +118,8 @@ import me.meeshy.sdk.net.SessionExpiryNotifier
 object Routes {
     const val LOGIN = "login"
     const val REGISTRATION = "register"
+    const val FORGOT_PASSWORD = "forgot-password"
+    const val MAGIC_LINK = "magic-link"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
     fun guestJoin(identifier: String): String = "join/$identifier"
@@ -386,7 +390,15 @@ fun MeeshyApp(
                         }
                     },
                     onSignUp = { navController.navigate(Routes.REGISTRATION) },
+                    onForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
+                    onMagicLink = { navController.navigate(Routes.MAGIC_LINK) },
                 )
+            }
+            composable(Routes.FORGOT_PASSWORD) {
+                ForgotPasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.MAGIC_LINK) {
+                MagicLinkScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.REGISTRATION) {
                 RegistrationScreen(

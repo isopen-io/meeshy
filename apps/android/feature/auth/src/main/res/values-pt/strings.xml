@@ -107,4 +107,22 @@
     <string name="guest_join_preview_error">Não foi possível abrir este link</string>
     <string name="guest_join_requires_account">Este link requer uma conta.</string>
     <string name="guest_join_sign_in">Entrar</string>
+
+    <!-- Account recovery -->
+    <string name="login_forgot_password">Esqueceu a senha?</string>
+    <string name="login_magic_link">Link mágico</string>
+    <string name="auth_back">Voltar</string>
+    <string name="auth_back_to_login">Voltar ao login</string>
+    <string name="auth_email_label">E-mail</string>
+    <string name="auth_forgot_title">Redefinir senha</string>
+    <string name="auth_forgot_subtitle">Digite seu e-mail e enviaremos um link de redefinição.</string>
+    <string name="auth_forgot_send">Enviar link</string>
+    <string name="auth_forgot_sent">Se existir uma conta para %1$s, um link foi enviado. Verifique sua caixa de entrada.</string>
+    <string name="auth_magic_title">Link mágico</string>
+    <string name="auth_magic_subtitle">Entre sem senha: enviaremos um link de acesso de uso único.</string>
+    <string name="auth_magic_send">Enviar link mágico</string>
+    <string name="auth_magic_sent">Link enviado para %1$s. Abra-o neste dispositivo para entrar.</string>
+    <string name="auth_magic_countdown">Link válido por %1$s</string>
+    <string name="auth_magic_expired">O link expirou. Envie um novo.</string>
+    <string name="auth_magic_resend">Reenviar link</string>
 </resources>

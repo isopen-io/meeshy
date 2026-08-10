@@ -44,6 +44,23 @@ class AuthRepository @Inject constructor(
     ): NetworkResult<AvailabilityResult> =
         apiCall { authApi.checkAvailability(username, email, phoneNumber) }
 
+    /**
+     * Demande l'email de reinitialisation de mot de passe. Le gateway repond
+     * TOUJOURS succes (anti-enumeration) : un echec ici est un probleme de
+     * transport, jamais "cet email n'existe pas".
+     */
+    suspend fun requestPasswordReset(email: String): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.forgotPassword(me.meeshy.sdk.net.api.ForgotPasswordRequest(email)) }
+
+    /**
+     * Demande un magic link de connexion sans mot de passe. Retourne la validite
+     * du lien en secondes (seed du compte a rebours), avec un defaut prudent si le
+     * gateway n'en renvoie pas.
+     */
+    suspend fun requestMagicLink(email: String): NetworkResult<Int> =
+        apiCall { authApi.requestMagicLink(me.meeshy.sdk.net.api.MagicLinkRequestBody(email)) }
+            .map { it.expiresInSeconds ?: DEFAULT_MAGIC_LINK_VALIDITY_SECONDS }
+
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
         sessionRepository.refresh()
@@ -65,5 +82,10 @@ class AuthRepository @Inject constructor(
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
         sessionRepository.adopt(session.user)
+    }
+
+    private companion object {
+        /** Validite par defaut si le gateway omet expiresInSeconds (60 s cote serveur). */
+        const val DEFAULT_MAGIC_LINK_VALIDITY_SECONDS: Int = 60
     }
 }
