@@ -650,6 +650,24 @@ describe('useWebRTCP2P', () => {
 
       expect(mockDisableVideoSend).toHaveBeenCalled();
     });
+
+    // Vague 86: no peer connection has been created yet (call still ringing —
+    // the caller's own createOffer hasn't run, or the callee hasn't received
+    // an offer signal). Silently resolving here means handleToggleVideo
+    // (VideoCallInterface) treats it as a success and flips controls.videoEnabled
+    // to true — the UI reports video as active while no camera track was ever
+    // acquired or attached to anything.
+    it('enableVideo rejects without touching the camera when no peer connection exists yet', async () => {
+      const getUserMedia = jest.fn();
+      (global.navigator as any).mediaDevices = { getUserMedia };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await expect(result.current.enableVideo()).rejects.toThrow();
+      expect(getUserMedia).not.toHaveBeenCalled();
+    });
   });
 
   describe('Cleanup', () => {
