@@ -2,6 +2,95 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **the Feed post composer's text-only sub-slice landed** (slice
+> `feed-post-composer-text`, feature-parity §F, the routine's own suggested next candidate — the
+> §F "Create post" checkbox had been unchecked since the audit, and Android's Flux had zero way to
+> compose a genuine post, only `StatusComposerSheet` for ephemeral mood statuses). **RE-PROVEN
+> before starting**: grepped `apps/android/feature/feed` for `postRepository.create(` usage outside
+> tests — none; `FeedScreen.kt`'s `TopAppBar` `actions` held only the bookmark icon, no compose
+> affordance anywhere in the Flux; confirmed the gap was real, not stale. **Shipped (production, all
+> `apps/android`)**: a new `FeedComposerPlaceholder` row (iOS parity: `FeedView.composerPlaceholder`)
+> pinned above the post list, opening `FeedComposerSheet` — a `ModalBottomSheet` reusing the exact
+> shape `StatusComposerSheet` already established for a feed composer on this codebase (visibility
+> pill row + text field + Cancel/Publish header), rather than porting iOS's custom full-screen
+> `ZStack` overlay 1:1 (documented "closest available equivalent" deviation, same pattern this
+> codebase already used for the saved-account picker and the left-button icon swap). Pure
+> `FeedComposerDraft`/`FeedPostVisibility` (`:feature:feed`, PUBLIC/FRIENDS/PRIVATE — a strict subset
+> of iOS's `postVisibility` Menu, no per-user audience) owns the publish gate (non-blank trimmed
+> text — this first sub-slice is genuinely text-only, no attachment escape hatch yet) and the
+> trimmed body actually sent. `FeedViewModel.publishPost(content, visibility)` calls the
+> **already-existing, previously test-only** `PostRepository.create(type = "POST", ...)` — the
+> network call is the source of truth (mirrors `StatusesViewModel.setStatus`'s own "confirm first,
+> nothing to roll back" philosophy, not a synthetic optimistic post card, since building one would
+> need the current-user avatar/display-name plumbing explicitly deferred this run). A new
+> `FeedRealtimeReducer.created(state, post)` prepends the network-confirmed `ApiPost` to the SAME
+> realtime head the socket `post:created` path (`accept`) already uses — visible at the top
+> instantly — but, unlike `accept`, **never** bumps `newPostsCount` (the post is already visible;
+> there is nothing to acknowledge for content the viewer just wrote) and is defensively idempotent
+> against the gateway's own `post:created` echo of this same publish landing moments later via
+> `accept` (`state.posts.any { it.id == id }` already true by then, so `accept` is correctly a
+> no-op — no duplicate render, no second banner bump). **Deliberate, documented scope cuts** (per
+> the routine prompt's own "texte seul d'abord" framing): no photo/camera/file/location/audio
+> attachments, no emoji picker, no per-post composer language override, no Réel⇄Post
+> classification (never applicable to text-only), and **no durable-outbox queueing** — unlike iOS's
+> own `enqueueDurableTextPost` (U1 ST3), a post typed while offline is lost rather than durably
+> queued; Android's `OutboxKind` has no `CREATE_POST` lane yet, a concretely-scoped follow-up.
+> **+35 tests**: `FeedComposerDraftTest` (12 — publish gate on empty/whitespace/non-blank/cleared
+> text, `trimmedContent`, visibility default + transition + wire values, publish-request
+> null-on-blank / carries-trimmed-body-and-visibility), `FeedRealtimeReducerTest` `created` (6 —
+> prepend, never-bumps-banner, stacks above a prior socket arrival, blank-id inert, idempotent
+> against its own later socket echo, releases a stale tombstone on republish), `FeedViewModelTest`
+> `publishPost` (6 — sends content/type/visibility to the repository, successful publish prepends
+> to the feed, never raises the banner, failure/exception surface `errorMessage` without touching
+> the feed, the socket echo of a just-published post is not rendered twice) plus the pre-existing
+> suites' green re-run. **Mutation (RED proof), both axes**: (a) hardcoding
+> `FeedComposerDraft.canPublish` to always `true` failed **exactly** the 4 tests asserting the gate
+> (empty / whitespace-only / cleared-back-to-empty / blank-draft-yields-no-request), the other 8
+> stayed green; (b) adding `newPostsCount = state.newPostsCount + 1` inside `created()` failed
+> **exactly** the 5 tests asserting no-banner-bump — 3 at the reducer level, 2 at the VM integration
+> level (never-raises-the-banner, socket-echo-not-duplicated) — every other test in both files
+> stayed green; both reverted and re-run clean. **Gate**: `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`).
+> Reviewer **PASS** (diff `apps/android` only — 2 new `:feature:feed` files + 1 new test file, 3
+> existing files edited [`FeedRealtimeHead.kt`, `FeedViewModel.kt`, `FeedScreen.kt`] + 2 existing
+> test files extended, 4 locale `strings.xml` [en/fr/es/pt, `FeedStringLocalizationParityTest`
+> green]; SDK purity — both new files live in `:feature:feed`, not `:sdk-core`/`:sdk-ui`, matching
+> `StatusComposerDraft`/`StatusComposerSheet`'s own precedent for a feed composer; SSOT — reused
+> `PostRepository.create()`, `MeeshyTheme`/`MeeshyPalette` tokens, and the exact `ModalBottomSheet`
+> shape wholesale, zero re-implementation; no coverage floor lowered; no tautological tests).
+> **Verified on-device, partially**: installed the debug APK on `meeshy_pixel8` (API 35,
+> already-authenticated session) — screenshotted the composer placeholder row rendering above the
+> Flux ("Share something with the world…"), tapping it opening `FeedComposerSheet` with the
+> Public/Friends/Private pill row and "What's on your mind?" placeholder, typing text flipping
+> Publish from muted to accent-indigo (the gate live), and tapping Publish dismissing the sheet.
+> Confirmed via `adb logcat` that Publish fired the real `POST https://gate.meeshy.me/api/v1/posts`
+> with the typed content and the gateway returned `201`/`success:true` with the correct
+> `content`/`visibility`/`author` echoed back — the integration is genuinely wired end-to-end, not
+> just compiling. **The final screenshot was initially inconclusive, then confirmed clean once the
+> box calmed down**: partway through this pass the shared dev box's load average spiked to 600–900+
+> (confirmed via `ps aux`/`uptime` — concurrent iOS Simulator + `jest-worker` processes from other
+> sessions on this shared multi-agent box, not this change), producing repeated genuine ANR dialogs
+> on cold start (`/data/anr/anr_*` traces confirmed the app was stuck inside `DexFile.openDexFile`
+> during process startup — classloading contention, nothing in this diff's code path) and one capture
+> mid-spike showed the freshly-published card as a near-invisible sliver (only 2 of its 4 stats-row
+> icons in a `uiautomator dump`, no visible author/content pixels on close crop) — read at the time as
+> a possible rendering bug specific to a network-fresh `ApiPost`. Once the load average dropped back
+> under 20 (a background poll loop confirmed this), a clean cold relaunch + navigation to the Flux
+> showed the published post rendering **perfectly**: correct author ("Andre Tabeth"), avatar,
+> "1 h" relative time, and — bonus confirmation the Prisme pipeline round-tripped end to end —
+> the English original auto-translated server-side and displayed in French ("Test du flux de
+> publication") with the full 🇬🇧/🇫🇷/🇧🇷 language strip. Confirms the earlier collapsed-card capture
+> was purely a partial/incomplete GPU-compositor frame under extreme host contention, not a logic bug
+> — consistent with (1) the render path (`FeedPostBuilder.build` → `PostCard`) being the exact same,
+> already-shipped pipeline the existing `post:created` socket-arrival tests already exercise
+> (`FeedViewModelTest`'s "a realtime post arrives at the head..." suite, green, unchanged by this
+> diff) — `created()` differs from `accept()` only in the banner-count field, proven by the mutation
+> test above; and (2) the confirmed real network round-trip. Full on-device pass now closed cleanly.
+> **Next slice candidates (not attempted this run)**: the §F attachments fast-follow (photo/camera
+> first, matching the composer toolbar's own left-to-right priority); the §C inverted-list rewrite
+> decomposition (now several runs deferred without an attempt); the §M `NotificationChannel`
+> taxonomy gap (2 channels shipped vs. ~80 backend types); a `CREATE_POST` `OutboxKind` lane for
+> offline durability (this slice's own documented scope cut).
 > On 2026-08-10 **the branded splash screen landed** (slice `splash-screen`, feature-parity §A,
 > the routine's own suggested next candidate — foundational, scoped, reusable component).
 > **RE-PROVEN before starting** (the finding dated from a prior iteration): re-confirmed the gap

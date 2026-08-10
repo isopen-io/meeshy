@@ -800,3 +800,55 @@ Append-only log of gotchas and decisions that save time next run.
   distinguish "the new splash composable" from "any other screen using the same shared
   background." Confirm with content that's unique to the screen under test (the "Meeshy" wordmark
   text, or the footer signature text), not just background color sampling.
+
+## Slice `feed-post-composer-text` (2026-08-10)
+- **`adb shell input tap` needs coordinates in the screenshot's REAL pixel dimensions, not the
+  dimensions a viewing tool displays it at — mixing the two silently mis-taps.** A screenshot
+  captured at 1080×2400 (`adb exec-out screencap -p`) was shown back at a scaled-down 900×2000;
+  reading a tap target's position off the DISPLAYED image and sending it to `adb shell input tap`
+  verbatim (unscaled) lands roughly 17% short on both axes. One tap forgot to scale the y-coordinate
+  specifically (scaled x, forgot y) and silently hit "Cancel"/the scrim instead of "Publish" —
+  the sheet closed, looking superficially like success, but no network call fired and no post
+  appeared. Always multiply BOTH axes by the same real/displayed ratio before tapping, and verify
+  the fix by capturing a screenshot immediately after a tap that's supposed to change state (an
+  empty text field or a still-open sheet after a "successful" Cancel-that-was-meant-to-be-Publish
+  is the tell).
+- **A `uiautomator dump` accessibility-tree snapshot is not a reliable oracle for "did this render
+  correctly" under load — cross-check against raw pixels before concluding a rendering bug.** A
+  freshly-published post's card appeared to render with only 2 of its 4 stats-row icons
+  (Like/Bookmark, no Comments/Reposts) and no author/content text at all in the dump, which read
+  at first like a genuine `PostCard`/`FeedPostBuilder` bug specific to a network-fresh `ApiPost`
+  (vs. a cache-hydrated one). Before concluding that, the same region was pixel-cropped and
+  zoomed directly from the screenshot — the "card" was a near-invisible rounded-corner sliver with
+  no visible icon glyphs either, consistent with an incomplete/partial GPU compositor frame under
+  severe host contention, not a logic bug (see the load-average finding below). uiautomator's own
+  dump completeness is not guaranteed once the device itself is struggling to keep up.
+- **`uptime`/`ps aux` are cheap, decisive tools for telling "my code is broken" apart from "this
+  shared box is out of capacity" before chasing a rendering mystery.** A repeating "Meeshy isn't
+  responding" ANR on cold start, right after a successful, logcat-confirmed `POST /api/v1/posts`
+  201 response, initially looked like it might be caused by the newly-added `publishPost`/
+  `FeedRealtimeReducer.created` code path. Pulling the actual `/data/anr/anr_*` trace (`adb root`
+  + `adb shell cat`) showed the main thread blocked inside `DexFile.openDexFile`/classloading
+  during process **startup** — before any app code, let alone this diff's code, runs — and
+  `uptime` showed the load average climbing past 600 (confirmed via `ps aux` to be concurrent iOS
+  Simulator + `jest-worker` processes from OTHER sessions on this shared multi-agent dev box, not
+  this session's own work). Multiple older `/data/anr/anr_*` traces predating this session's start
+  time were also present, confirming the ANR pattern was already recurring before this change
+  existed. Two minutes of `adb shell cat /data/anr/<latest>` was far cheaper than continuing to
+  fight the emulator, and gave a confident, evidence-based "this is environmental" verdict instead
+  of an anxious guess.
+- **When a shared box is genuinely too contended for a final visual check, document the gap
+  honestly rather than silently claiming a full pass or stalling indefinitely — and go back for it
+  once the box recovers rather than treating the documented gap as a permanent excuse.** The one
+  specific remaining check (the newly-published post rendering at the head of the list, fully
+  painted) didn't get a clean, trustworthy capture while load average was climbing past 900. Rather
+  than merge on indirect evidence alone, a background poll loop (`until load < 20; do sleep 5; done`)
+  was left running while CI and documentation work continued in parallel; once it fired (load back
+  under 20), a fresh cold relaunch + navigation gave a clean, fully-painted capture of the exact same
+  post — author, avatar, relative time, and the Prisme-translated content with its language strip all
+  correct. This confirmed the earlier "collapsed card" (2 of 4 stats-row icons in a `uiautomator
+  dump`, a near-invisible sliver on pixel crop) was a genuine partial/incomplete compositor frame
+  under extreme contention, not a rendering bug in the new code — the same evidence-gathering
+  instinct (pixel-crop before concluding a logic bug; `uptime`/`ps aux` before chasing a phantom)
+  that flagged the gap in the first place is what resolved it, just deferred until the environment
+  cooperated instead of forced through a broken one.

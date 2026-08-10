@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,8 +59,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,6 +115,7 @@ fun FeedScreen(
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
@@ -152,6 +156,10 @@ fun FeedScreen(
             // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
             // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
             StatusBarView()
+            // Composer placeholder (iOS parity: FeedView.composerPlaceholder, positioned
+            // above the post list). Text-only first sub-slice (feature-parity §F) — tapping
+            // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
+            FeedComposerPlaceholder(onClick = { composerDraft = FeedComposerDraft() })
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
                 onRefresh = viewModel::refresh,
@@ -257,6 +265,51 @@ fun FeedScreen(
                 val message = if (result.isSuccess) savedMessage else saveFailedMessage
                 Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()
             },
+        )
+    }
+
+    composerDraft?.let { seed ->
+        FeedComposerSheet(
+            initialDraft = seed,
+            onPublish = { request ->
+                viewModel.publishPost(content = request.content, visibility = request.visibility)
+                composerDraft = null
+            },
+            onDismiss = { composerDraft = null },
+        )
+    }
+}
+
+/**
+ * The tappable "share something with the world" row above the post list — iOS parity:
+ * `FeedView.composerPlaceholder`. Deliberately simpler than iOS's version (no live
+ * avatar or "+" attachment menu — this first sub-slice is text-only, see
+ * [FeedComposerSheet]'s own doc comment for the deferred follow-ups) — a rounded
+ * input-styled row that opens the composer sheet on tap.
+ */
+@Composable
+private fun FeedComposerPlaceholder(onClick: () -> Unit) {
+    val a11yLabel = stringResource(R.string.feed_composer_open_label)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg)
+            .padding(bottom = MeeshySpacing.sm)
+            .clip(RoundedCornerShape(MeeshyRadius.lg))
+            .background(MeeshyTheme.tokens.inputBackground)
+            .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.lg))
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = a11yLabel
+                role = Role.Button
+            }
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.feed_composer_open_placeholder),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textMuted,
         )
     }
 }

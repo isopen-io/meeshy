@@ -15,6 +15,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -273,6 +274,36 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 postRepository.toggleBookmark(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Publish a text-only post: the pure [FeedComposerDraft]/[FeedPostPublishRequest]
+     * already validated [content]/[visibility] before calling this (the publish gate is
+     * that draft's SSOT, not re-checked here — mirror of [StatusesViewModel.setStatus]
+     * trusting its own [StatusPublishRequest]). Port of iOS `FeedViewModel.createPost`'s
+     * direct (non-durable) path: confirmed by the network before the post is shown, so
+     * there is nothing to roll back on failure. A successful create is prepended to the
+     * realtime head via [FeedRealtimeReducer.created] — visible at the top instantly,
+     * without raising the "new posts" banner. **Deliberate, documented scope cut**: no
+     * durable-outbox queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a
+     * post typed while offline is lost rather than durably queued; a tracked follow-up
+     * once Android's `OutboxKind` gains a `CREATE_POST` lane.
+     */
+    fun publishPost(content: String, visibility: String) {
+        viewModelScope.launch {
+            try {
+                when (val result = postRepository.create(content = content, type = "POST", visibility = visibility)) {
+                    is NetworkResult.Success ->
+                        realtimeHead.update { FeedRealtimeReducer.created(it, result.data) }
+                    is NetworkResult.Failure ->
+                        _state.update { it.copy(errorMessage = result.error.message) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

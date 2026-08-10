@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -25,7 +26,9 @@ import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -610,6 +613,90 @@ class FeedViewModelTest {
         vm.toggleBookmark("p1")
 
         coVerify(exactly = 1) { repository.toggleBookmark("p1") }
+    }
+
+    // --- Create post (publishPost) ---
+
+    @Test
+    fun `publishPost sends the content, POST type and chosen visibility to the repository`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hello world", type = "POST", visibility = "FRIENDS")
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hello world", visibility = "FRIENDS")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hello world", type = "POST", visibility = "FRIENDS")
+        }
+    }
+
+    @Test
+    fun `a successfully published post is prepended to the feed immediately`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
+    }
+
+    @Test
+    fun `a successfully published post never raises the new-posts banner — it is already visible`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        assertThat(vm.state.value.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a publish failure surfaces the error message and leaves the feed untouched`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
+        } returns NetworkResult.Failure(ApiError(message = "network down"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        val s = vm.state.value
+        assertThat(s.errorMessage).isEqualTo("network down")
+        assertThat(s.posts.map { it.id }).containsExactly("1")
+    }
+
+    @Test
+    fun `a publish exception surfaces its message and leaves the feed untouched`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
+        } throws RuntimeException("boom")
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        val s = vm.state.value
+        assertThat(s.errorMessage).isEqualTo("boom")
+        assertThat(s.posts.map { it.id }).containsExactly("1")
+    }
+
+    @Test
+    fun `the server echo of a just-published post via the socket is not rendered twice`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
+        } returns NetworkResult.Success(post("new"))
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        // The gateway broadcasts `post:created` back to the author too.
+        postCreated.emit(SocketPostCreatedData(post("new")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(0)
     }
 
     // --- Fullscreen media gallery (openImageViewer / dismissImageViewer) ---
