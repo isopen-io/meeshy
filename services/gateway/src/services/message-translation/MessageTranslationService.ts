@@ -340,6 +340,20 @@ export class MessageTranslationService extends EventEmitter {
         data: { lastMessageAt: new Date() }
       });
 
+      // Flip gardé, séparé du bump ci-dessus — celui-ci doit rester
+      // inconditionnel, il pilote l'ordre de liste/le curseur/le delta sync
+      // pour TOUS les messages, pas seulement le premier. Ne concerne que les
+      // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
+      // "pas le premier message" ou "conversation non concernée" — no-op.
+      // Ce chemin (`_saveMessageToDatabase`) crée le message HORS
+      // `MessagingService.handleMessage` — ex: `POST /translate-blocking`
+      // (cas nouveau message) — donc il porte sa propre copie du flip plutôt
+      // que d'hériter de celui de `runMessagePostSaveEffects`.
+      await this.prisma.conversation.updateMany({
+        where: { id: messageData.conversationId, firstMessageSentAt: null },
+        data: { firstMessageSentAt: new Date() }
+      });
+
       return message;
     } catch (error) {
       logger.error(`❌ Erreur sauvegarde message: ${error}`);

@@ -49,7 +49,10 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
 
 function makePrisma() {
   return {
-    conversation: { update: jest.fn<any>().mockResolvedValue(undefined) },
+    conversation: {
+      update: jest.fn<any>().mockResolvedValue(undefined),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
   } as any;
 }
 
@@ -80,6 +83,30 @@ describe('runMessagePostSaveEffects — les trois effets', () => {
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: CONV_ID },
       data: { lastMessageAt: expect.any(Date) },
+    });
+  });
+
+  it('flippe firstMessageSentAt via un updateMany gardé, distinct du bump inconditionnel', async () => {
+    const prisma = makePrisma();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    // Le bump `update` reste inconditionnel — pas de `where.firstMessageSentAt`.
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: CONV_ID },
+      data: { lastMessageAt: expect.any(Date) },
+    });
+    // Le flip est un `updateMany` SÉPARÉ, gardé sur `firstMessageSentAt: null`
+    // (`count: 0` = pas le premier message ou conversation non concernée).
+    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: CONV_ID, firstMessageSentAt: null },
+      data: { firstMessageSentAt: expect.any(Date) },
     });
   });
 
@@ -281,6 +308,30 @@ describe('runMessagePostSaveEffects — isolation des pannes', () => {
     expect(prisma.conversation.update).toHaveBeenCalled();
     expect(translationService.handleNewMessage).toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('stats', expect.any(Error));
+  });
+
+  it('bumpe et traduit quand même si le flip firstMessageSentAt échoue', async () => {
+    const prisma = {
+      conversation: {
+        update: jest.fn<any>().mockResolvedValue(undefined),
+        updateMany: jest.fn<any>().mockRejectedValue(new Error('flip down')),
+      },
+    } as any;
+    const translationService = makeTranslationService();
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('firstMessageSentAt', expect.any(Error));
   });
 
   it('signale la panne du comptage sans toucher aux trois autres effets', async () => {

@@ -64,7 +64,7 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'translation' | 'stats' | 'messageStats';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats';
 
 /**
  * La poussée d'un message au translator, sous la forme que le service attend.
@@ -107,6 +107,11 @@ export function queueMessageTranslation(params: {
  *     n'est jamais rempli après coup : aucune retraduction n'est déclenchée hors
  *     édition ou demande explicite, donc un message non poussé ici reste en
  *     langue originale À VIE pour tous ses lecteurs.
+ *  1bis. `Conversation.firstMessageSentAt` — flip gardé (`updateMany` avec
+ *     `where: { firstMessageSentAt: null }`), séparé du bump ci-dessus qui
+ *     reste, lui, inconditionnel. Ne concerne que les DM créés vides (Prisme
+ *     design doc 2026-08-04) : `count` à 0 signifie "pas le premier message"
+ *     ou "conversation non concernée" — no-op silencieux dans les deux cas.
  *  3. Les statistiques de langue de la conversation.
  *  4. Les COMPTEURS de la conversation (`ConversationMessageStats`) — total de
  *     messages, mots, caractères, pièces jointes par type, et le crédit par
@@ -171,6 +176,20 @@ export function runMessagePostSaveEffects(params: {
       })
     )
     .catch(report('lastMessageAt'));
+
+  // Flip gardé, séparé du bump ci-dessus — celui-ci doit rester
+  // inconditionnel, il pilote l'ordre de liste/le curseur/le delta sync
+  // pour TOUS les messages, pas seulement le premier. Ne concerne que les
+  // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
+  // "pas le premier message" ou "conversation non concernée" — no-op.
+  void Promise.resolve()
+    .then(() =>
+      prisma.conversation.updateMany({
+        where: { id: message.conversationId, firstMessageSentAt: null },
+        data: { firstMessageSentAt: new Date() },
+      })
+    )
+    .catch(report('firstMessageSentAt'));
 
   if (translationService) {
     void Promise.resolve()

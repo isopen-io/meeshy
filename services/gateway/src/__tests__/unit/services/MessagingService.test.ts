@@ -1962,7 +1962,8 @@ describe('MessagingService - Edge Cases', () => {
       conversation: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
+        updateMany: jest.fn()
       },
       participant: {
         findUnique: jest.fn(),
@@ -2508,6 +2509,32 @@ describe('MessagingService - Edge Cases', () => {
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
 
       expect(response.success).toBe(true);
+    });
+
+    it('flips firstMessageSentAt when it is currently null, without touching the unconditional lastMessageAt bump', async () => {
+      mockPrisma.conversation.update.mockResolvedValue({});
+      mockPrisma.conversation.updateMany.mockResolvedValue({ count: 1 });
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello' },
+        testParticipantId
+      );
+
+      // Flush background promises — mêmes 3 `await Promise.resolve()` que le
+      // test voisin « logs error and still returns success when
+      // updateConversation fails », runPostSaveSideEffects étant fire-and-forget.
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { lastMessageAt: expect.any(Date) } })
+      );
+      expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: testConversationId, firstMessageSentAt: null }),
+          data: expect.objectContaining({ firstMessageSentAt: expect.any(Date) }),
+        })
+      );
     });
   });
 
