@@ -176,7 +176,8 @@ const createMockPrisma = () => ({
     findFirst: jest.fn() as MockFn,
     findUnique: jest.fn() as MockFn,
     create: jest.fn() as MockFn,
-    update: jest.fn() as MockFn
+    update: jest.fn() as MockFn,
+    updateMany: jest.fn() as MockFn
   },
   message: {
     findFirst: jest.fn() as MockFn,

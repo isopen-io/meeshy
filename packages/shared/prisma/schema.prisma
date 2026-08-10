@@ -336,8 +336,13 @@ model Conversation {
   /// Source de vérité unique pour la visibilité des DM vides (voir Prisme
   /// design doc 2026-08-04) — jamais backfillé sur les conversations
   /// existantes : le champ est ABSENT (pas `null`) sur tout document créé
-  /// avant cette migration. Toute lecture doit tester en négatif
-  /// (`NOT: { firstMessageSentAt: null }` ⇒ visible), jamais en positif.
+  /// avant cette migration. Un `NOT: { firstMessageSentAt: null }` seul ne
+  /// matche PAS les documents où le champ est ABSENT sur le connecteur
+  /// MongoDB de Prisma (il ne matche que present-et-non-null) — une lecture
+  /// décidant la visibilité DOIT donc combiner les deux : `OR: [{ NOT: {
+  /// firstMessageSentAt: null } }, { firstMessageSentAt: { isSet: false } }]`
+  /// (posé ⇒ visible OU absent-legacy ⇒ visible). Même idiome que
+  /// `deletedForMe` dans `routes/conversations/core.ts`.
   firstMessageSentAt DateTime?
 
   // ============================================
