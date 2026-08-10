@@ -466,6 +466,46 @@ describe('registerCoreRoutes', () => {
       );
     });
 
+    it('excludes an empty direct DM from a non-creator participant list', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              { type: { not: 'direct' } },
+              { NOT: { firstMessageSentAt: null } },
+              { participants: { some: { userId: USER_ID, role: 'creator' } } },
+              { participants: { none: { role: 'creator' } } },
+            ]),
+          }),
+        })
+      );
+    });
+
+    it('applies the same empty-DM visibility gate when withUserId is provided', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { withUserId: OTHER_USER_ID } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.any(Array), // bloc withUserId existant, inchangé
+            OR: expect.arrayContaining([
+              { participants: { some: { userId: USER_ID, role: 'creator' } } },
+            ]),
+          }),
+        })
+      );
+    });
+
     it('handles beforeCursor with valid lastMessageAt', async () => {
       const cursorDate = new Date('2024-01-01');
       prisma.conversation.findFirst.mockResolvedValue({ lastMessageAt: cursorDate });

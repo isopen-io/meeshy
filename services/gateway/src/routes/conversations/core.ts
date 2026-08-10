@@ -350,6 +350,18 @@ export function registerCoreRoutes(
         delete whereClause.participants;
       }
 
+      // Visibilité DM vide — Prisme design doc 2026-08-04. Ajouté APRÈS le
+      // bloc withUserId ci-dessus (qui reconstruit whereClause.participants
+      // /.AND) pour ne jamais être écrasé par lui : un OR à la racine du
+      // whereClause se combine par ET implicite avec .AND/.participants,
+      // quel que soit leur contenu.
+      whereClause.OR = [
+        { type: { not: 'direct' } },
+        { NOT: { firstMessageSentAt: null } }, // absent (legacy) OU déjà posé ⇒ visible
+        { participants: { some: { userId, role: 'creator' } } },
+        { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
+      ];
+
       // Cursor-based pagination: filter by lastMessageAt of the cursor conversation
       let cursorLastMessageAt: Date | null = null;
       if (beforeCursor) {
