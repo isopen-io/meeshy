@@ -1108,7 +1108,7 @@ private struct ReelActionRail: View {
                 Button {
                     onSaveMedia()
                 } label: {
-                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "bookmark")
+                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
                 }
             }
             if isOwnReel {
