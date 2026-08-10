@@ -893,7 +893,31 @@ export class MentionService {
   }
 
   /**
-   * Récupère les mentions récentes pour un utilisateur
+   * Récupère les mentions récentes pour un utilisateur.
+   *
+   * L'admission est celle de `GET /mentions/messages/:messageId`, la route
+   * soeur du même fichier : le message ne doit pas avoir été retiré, et
+   * l'appelant doit être un participant TOUJOURS actif de sa conversation.
+   *
+   * La garde vit ici plutôt que dans la route parce que la ligne `Mention`
+   * n'est atteignable QUE par cette fonction — c'est le seul endroit qu'un
+   * futur lecteur ne peut pas oublier. Sans elle, l'inbox était le seul chemin
+   * du gateway qui rendait `Message.content` sans vérifier `deletedAt` :
+   *
+   *  - un message RAPPELÉ par son auteur disparaissait de la conversation pour
+   *    tout le monde (`MESSAGE_DELETED` diffusé, `translations` vidées) mais
+   *    restait lisible en clair, avec son auteur et le titre de la
+   *    conversation, dans l'inbox de chaque personne qu'il nommait —
+   *    définitivement : aucun écrivain ne supprime jamais la ligne `Mention`
+   *    (l'unique `mention.deleteMany` du dépôt est la réconciliation
+   *    d'édition), et le `onDelete: Cascade` du schéma ne se déclenche que sur
+   *    une suppression PHYSIQUE, que le retrait doux ne fait jamais ;
+   *  - une personne retirée d'un groupe continuait d'y lire une entrée dont le
+   *    titre de conversation est relu LIVE à chaque appel.
+   *
+   * Filtrage à la LECTURE, et non purge des lignes au retrait du message : il
+   * couvre du même coup les lignes déjà en base (aucun script de réparation) et
+   * le cas appartenance, qu'aucun nettoyage à l'écriture ne pourrait voir.
    *
    * @param userId - ID de l'utilisateur
    * @param limit - Nombre maximum de mentions à retourner
@@ -902,7 +926,18 @@ export class MentionService {
   async getRecentMentionsForUser(userId: string, limit: number = 50) {
     const mentions = await this.prisma.mention.findMany({
       where: {
-        mentionedUserId: userId
+        mentionedUserId: userId,
+        message: {
+          deletedAt: null,
+          conversation: {
+            participants: {
+              some: {
+                userId,
+                isActive: true
+              }
+            }
+          }
+        }
       },
       include: {
         message: {
