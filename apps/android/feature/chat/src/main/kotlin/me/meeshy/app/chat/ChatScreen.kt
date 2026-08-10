@@ -261,8 +261,15 @@ fun ChatScreen(
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
         if (listItems.isEmpty()) return@LaunchedEffect
         val isOwnMessage = state.messages.lastOrNull()?.isOutgoing == true
-        if (isOwnMessage || listState.isNearBottom(listItems.lastIndex)) {
-            listState.animateScrollToItem(listItems.lastIndex)
+        val nearBottom = ChatScrollGeometry.isNearBottom(
+            edgeIndex = listState.lastVisibleItemIndex(),
+            lastIndex = listItems.lastIndex,
+            orientation = ChatListOrientation.TopDown,
+        )
+        if (isOwnMessage || nearBottom) {
+            listState.animateScrollToItem(
+                ChatScrollGeometry.bottomIndex(listItems.lastIndex, ChatListOrientation.TopDown),
+            )
         }
     }
 
@@ -285,7 +292,13 @@ fun ChatScreen(
         state.messages.map { it.toAffordanceMessage() }
     }
     val isNearBottom by remember(listItems) {
-        derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
+        derivedStateOf {
+            ChatScrollGeometry.isNearBottom(
+                edgeIndex = listState.lastVisibleItemIndex(),
+                lastIndex = listItems.lastIndex,
+                orientation = ChatListOrientation.TopDown,
+            )
+        }
     }
     val pinnedDayMillis by remember(listItems) {
         derivedStateOf { PinnedDayHeader.governingDayMillis(listItems, listState.firstVisibleItemIndex) }
@@ -305,7 +318,12 @@ fun ChatScreen(
         snapshotFlow { listState.firstVisibleItemIndex }
             .distinctUntilChanged()
             .collect { index ->
-                if (index <= LOAD_OLDER_THRESHOLD) viewModel.loadOlder()
+                val nearOldEnd = ChatScrollGeometry.isNearOldEnd(
+                    edgeIndex = index,
+                    lastIndex = listItems.lastIndex,
+                    orientation = ChatListOrientation.TopDown,
+                )
+                if (nearOldEnd) viewModel.loadOlder()
             }
     }
 
@@ -621,7 +639,9 @@ fun ChatScreen(
                             )
                             scope.launch {
                                 if (listItems.isNotEmpty()) {
-                                    listState.animateScrollToItem(listItems.lastIndex)
+                                    listState.animateScrollToItem(
+                                        ChatScrollGeometry.bottomIndex(listItems.lastIndex, ChatListOrientation.TopDown),
+                                    )
                                 }
                             }
                         },
@@ -955,9 +975,6 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
     }
 }
 
-private const val LOAD_OLDER_THRESHOLD = 2
-private const val BOTTOM_TOLERANCE_ITEMS = 2
-
 /**
  * Seconds of the release velocity to project past the current translation when
  * resolving the overlay drag — the Compose analogue of UIKit's
@@ -965,11 +982,15 @@ private const val BOTTOM_TOLERANCE_ITEMS = 2
  */
 private const val OVERLAY_DRAG_VELOCITY_PROJECTION_SECONDS = 0.1f
 
-private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
-    if (lastIndex <= 0) return true
-    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-    return lastVisible >= lastIndex - BOTTOM_TOLERANCE_ITEMS
-}
+/**
+ * The last-visible row index, or `0` when nothing has laid out yet — the
+ * bottom-edge input [ChatScrollGeometry.isNearBottom] reads in
+ * [ChatListOrientation.TopDown]. Thin Compose glue over [LazyListState]'s
+ * layout info; the actual near-bottom arithmetic is the pure, tested
+ * [ChatScrollGeometry].
+ */
+private fun LazyListState.lastVisibleItemIndex(): Int =
+    layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
 
 /**
  * Wraps a message bubble with the swipe-to-reply gesture. The bubble tracks the
