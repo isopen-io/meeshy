@@ -126,7 +126,11 @@ struct CommentAttachmentsTray: View {
 /// mêmes building blocks que les médias de post/message :
 /// - image  → `ProgressiveCachedImage` + plein écran `ConversationMediaGalleryView`
 /// - vidéo  → `MeeshyVideoPlayer(.inline)` + expand plein écran
-/// - audio  → `AudioPlayerView(.feedPost)` avec transcription + variantes TTS (Prisme)
+/// - audio  → `CoordinatedAudioPlayer` → `AudioPlayerView(.feedPost)` avec
+///            transcription + variantes TTS (Prisme) ; le routeur bascule sur
+///            le moteur du `ConversationAudioCoordinator` partagé (carte Now
+///            Playing, lecture background) dès que cet audio devient la tête
+///            de file — miroir standalone d'`AudioBubbleRouter`
 ///
 /// Le commentaire ne porte QU'UN SEUL média (cf. backend `commentId` FK sur PostMedia).
 /// Orchestration cache → policy → downloader déléguée aux resolvers app-side
