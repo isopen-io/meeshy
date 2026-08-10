@@ -1,3 +1,139 @@
+# Cycle 47 — L'inbox de notifications gardait une COPIE du message rappelé
+
+Le cycle 46 a sorti le message rappelé de l'inbox de mentions et a laissé, écrite noir sur blanc,
+la piste suivante : « la notification de mention survit au rappel — la ligne `Notification` et le
+push déjà remis portent le contenu du message ». Elle était juste, et elle sous-estimait la portée :
+ce ne sont pas les mentions, ce sont les **cinq** types de notification ancrés sur un message.
+
+## Pourquoi le correctif du cycle 46 ne pouvait pas couvrir celui-ci
+
+Les deux défauts se ressemblent — un message rappelé reste lisible ailleurs — et ils demandent des
+correctifs de nature OPPOSÉE. C'est le point à retenir de ce cycle.
+
+Une ligne `Mention` ne porte qu'une clé étrangère. Le contenu qu'elle affiche, la route va le
+chercher dans `Message.content` à chaque appel : ajouter `deletedAt: null` à l'admission suffit, et
+c'est réversible — restaurer le message rendrait sa mention.
+
+Une ligne `Notification` porte une **copie**. `createNotification` écrit `content` et
+`metadata.messagePreview` au moment de la création, à partir de l'extrait qu'on lui passe, et ne
+relit jamais le message ensuite. Il n'existe aucun filtre à la lecture qui puisse rattraper ça :
+la donnée est là, dénormalisée, servie telle quelle par `GET /notifications` et par
+`NotificationFormatter`. Le seul geste qui la retire est de retirer la ligne.
+
+## Ce que le rappel laissait derrière lui
+
+Rien ne supprime la ligne. Le `onDelete: Cascade` déclaré sur `Notification.message` demande une
+suppression **physique** ; le retrait doux ne bascule que `deletedAt`, donc la ligne `Message` reste
+et la `Notification` avec elle. **Troisième occurrence du même mécanisme** après les `TrackingLink`
+(cycle 43) et les `Mention` (cycle 46) — à ce stade, la question « qu'est-ce qu'une cascade ne fera
+PAS ? » mérite d'être posée systématiquement devant tout modèle qui référence `Message`.
+
+Concrètement : Bob écrit « désolé @alice, [quelque chose qu'il regrette] », puis supprime. La
+conversation le perd chez tout le monde, en direct. Alice le garde dans sa liste de notifications —
+extrait intégral, identité de l'auteur, titre de la conversation — à chaque ouverture, sans date de
+fin. Et pas seulement Alice : la réponse (`message_reply`), la réaction (`message_reaction`), le
+message régulier (`new_message`) et la traduction prête (`translation_ready`) écrivent tous
+`context.messageId`, donc tous laissaient une ligne derrière eux.
+
+Un détail qui n'en est pas un : `createMessageNotification` porte DÉJÀ, depuis longtemps, une garde
+de course explicite — elle relit le message juste avant l'éventail et abandonne sur `deletedAt`,
+avec ce commentaire : « we MUST NOT leak the original content via the banner ». La règle était donc
+déjà énoncée dans ce fichier, pour la fenêtre de quelques centaines de millisecondes de l'éventail.
+Personne ne l'avait étendue à la fenêtre qui compte vraiment — celle qui s'ouvre APRÈS et ne se
+referme jamais.
+
+## Le correctif
+
+Un quatrième effet dans `applyMessageRemovalEffects`, l'unité que les trois écrivains interactifs de
+`deletedAt` traversent. C'est la raison d'être du fichier : un effet ajouté là s'applique aux trois,
+et il n'y a plus de « second écrivain » à tenir à jour de mémoire.
+
+Trois choix, aucun cosmétique.
+
+**Le filtre porte sur `messageId`, pas sur la conversation.** `createNotification` renseigne la
+colonne depuis `context.messageId` pour les cinq types ancrés : une seule clé les couvre tous. Le
+témoin dédié — les notifications d'un AUTRE message de la même conversation restent — est celui qui
+tomberait si quelqu'un élargissait.
+
+**Retrait, pas neutralisation du contenu.** Une notification dont le message n'existe plus n'a rien
+à afficher ET rien où mener : son `action: view_message` ouvrirait une conversation sur un message
+absent. C'est aussi le seul geste que les clients savent déjà recevoir — `notification:deleted` est
+écouté par le web depuis le cycle qui l'a introduit.
+
+**L'écriture durable ici, l'annonce déléguée.** Supprimer des lignes non lues change le badge : sans
+annonce, la cloche resterait sur un compteur incluant des lignes que le serveur vient de supprimer,
+jusqu'au prochain démarrage à froid — une incohérence que le correctif aurait CRÉÉE. Mais l'écriture
+ne doit pas dépendre du câblage socket. D'où le port étroit `RetractedNotificationAnnouncer`, sur le
+modèle du `PostSoundReleaser` du jumeau côté post, dont le défaut est le `NotificationService`
+PARTAGÉ (le seul câblé avec `io`) : `notification:deleted` par ligne vers la room de SON
+destinataire, puis **un seul** `notification:counts` par destinataire quel qu'ait été son nombre de
+lignes. Sans annonceur — worker, script, test — les lignes partent quand même.
+
+## Plan
+
+- [x] T1 — RED : les notifications du message rappelé sortent de la base
+- [x] T2 — témoin : celles d'un AUTRE message restent (vert avant ET après)
+- [x] T3 — RED : chaque ligne retirée est annoncée à son destinataire
+- [x] T4 — RED : le retrait a lieu même sans annonceur câblé
+- [x] T5 — RED : une annonce qui jette n'emporte pas le retrait déjà committé
+- [x] T6 — les quatre effets restent indépendants (l'échec de l'un n'emporte pas les autres)
+- [x] T7 — GREEN : `retractMessageNotifications` + `announceNotificationsRetracted`
+- [x] T8 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T9 — changeset + CHANGELOG + ce relevé
+
+## Revue
+
+Le double mérite d'être noté, pour la raison inverse de celui du cycle 46. Là-bas, il fallait qu'un
+`where` absent laisse la ligne rappelée REVENIR. Ici, il faut qu'un `where` absent fasse disparaître
+TROP : c'est la sémantique de Prisma (`deleteMany({})` supprime tout), et c'est la seule façon dont
+le témoin T2 puisse échouer sur une garde manquante. Le double traite donc `undefined` comme
+« aucune contrainte » aux deux bouts, `findMany` comme `deleteMany`. Les deux directions de l'erreur
+sont couvertes par la même mécanique.
+
+Quatre rouges observés sur le retrait (sonde : l'appel désactivé, 4 tests tombent, 3 restent verts
+— exactement les trois qui doivent l'être des deux côtés). Un cinquième sur la déduplication des
+compteurs (sonde : `Set` remplacé par la liste brute, le test « une seule fois par destinataire »
+tombe).
+
+Placement dans la liste des effets : le retrait passe en deuxième, juste après le décompte des
+compteurs et avant les deux effets qui interrogent la conversation. C'est le seul des quatre dont le
+retard se lit comme une fuite — le contenu rappelé reste affiché tant qu'il n'a pas eu lieu — et il
+ne dépend d'aucun des trois autres.
+
+## Reste ouvert après ce cycle
+
+- **La fenêtre de course de l'éventail n'est pas fermée pour la réponse et les mentions.** Une
+  notification créée APRÈS le passage du retrait survit — et n'est même pas annoncée, puisque le
+  `deleteMany` la balaie sans que personne l'ait relue. `createMessageNotification` porte sa propre
+  garde (relecture + abandon sur `deletedAt`) ; `createMentionNotification` et
+  `createReplyNotification` n'en ont pas. Le bon endroit est `notifyMessageRecipients` — un seul
+  point d'entrée, une seule relecture pour les trois créateurs et tous les destinataires, au lieu
+  d'une par destinataire. Coût mesuré à l'avance : +1 lecture par ENVOI de message sur le chemin
+  chaud, ce qui est la raison pour laquelle ce cycle ne l'a pas prise — à instruire contre les
+  objectifs de débit avant de l'ajouter.
+- **iOS n'écoute pas `notification:deleted`.** Le web le traite (`use-notifications-manager-rq`,
+  `notification-socketio`) ; aucune occurrence dans `apps/ios` ni `packages/MeeshySDK`. La liste iOS
+  ne retirera donc la ligne qu'au prochain `GET /notifications`. Correct au fond, en retard à
+  l'écran — et c'est un diff `apps/ios` + SDK, donc une autre lane.
+- **Le push DÉJÀ remis reste sur l'appareil.** Aucun `apns-collapse-id` ni retrait à distance n'est
+  envoyé au rappel. Le contenu affiché en bannière avant la suppression y demeure jusqu'à ce que la
+  personne l'écarte. Fermable côté APNs (push `mutable-content` de retrait), chantier propre.
+- **Le balayage des messages vides (`MaintenanceService`, 4e écrivain) ne retire rien.** Il
+  n'appelle délibérément pas `applyMessageRemovalEffects` — un message au contenu blanc ne porte
+  aucun lien à désactiver. Il laisse en revanche ses `Notification` pendantes. Fuite nulle (le
+  contenu était vide) mais lignes orphelines pointant vers un message retiré : à traiter avec le
+  décompte des compteurs, que ce balayage ne peut pas faire non plus.
+- **Les mentions ne sont pas propagées en temps réel** (reconduit du cycle 46) : `message:deleted`
+  part vers les salons de conversation, aucun signal ne dit à un client affichant l'inbox de
+  mentions de retirer la ligne.
+- **`UserMessageDeletion` est écrite et lue par personne** (reconduit du cycle 46) — arbitrage
+  `delete-for-me` en attente de validation humaine depuis le cycle 12.
+- Reconduits des cycles 44/45 : les compteurs déjà dérivés restent en base ; le plancher reste
+  absent des décréments ; `emitConversationPreviewUpdate` et les autres émetteurs par room
+  personnelle n'ont pas été audités contre la clé `userId ?? id`.
+
+---
+
 # Cycle 46 — Le rappel d'un message s'arrêtait à la porte de l'inbox de mentions
 
 Supprimer un message, dans ce produit, est un **rappel** : les quatre écrivains de `deletedAt`

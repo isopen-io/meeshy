@@ -5,6 +5,7 @@ import {
   resolveAttachmentType,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+import { getSharedNotificationService } from '../notifications/notification-service-registry';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -19,7 +20,10 @@ const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
  * et par la vue web ; la désactivation des liens de partage manquait aux
  * quatre ; le décompte des compteurs de conversation ne vivait, lui, que dans
  * cette même route iOS/web — et son PENDANT, le comptage à l'envoi, que dans le
- * handler socket, si bien qu'aucune des deux moitiés ne couvrait l'autre.
+ * handler socket, si bien qu'aucune des deux moitiés ne couvrait l'autre. Le
+ * retrait des notifications que le message avait produites, lui, ne vivait
+ * NULLE PART : elles gardent une copie de son extrait, et le rappel les
+ * laissait affichées.
  * C'est le jumeau d'`applyPostRemovalEffects`, pour la même raison et
  * après le même constat : un effet ajouté ici s'applique à tous les chemins.
  *
@@ -239,15 +243,83 @@ export async function recomputeConversationLastMessageAt(
   });
 }
 
+/** Une ligne `Notification` retirée, réduite à ce que l'annonce doit adresser. */
+export interface RetractedNotification {
+  readonly id: string;
+  readonly userId: string;
+}
+
+/**
+ * La seule chose dont ce chemin ait besoin du `NotificationService` : dire aux
+ * appareils connectés que ces lignes n'existent plus.
+ *
+ * Un port étroit plutôt que le service entier, pour la même raison que
+ * `PostSoundReleaser` côté post : l'unité déclare ce qu'elle appelle, et un
+ * test l'observe sans monter un service qui parle à Redis, à APNs et à
+ * Socket.IO. Le défaut est le service PARTAGÉ du processus — le seul câblé
+ * avec `io`, donc le seul capable d'émettre.
+ */
+export interface RetractedNotificationAnnouncer {
+  announceNotificationsRetracted(retracted: readonly RetractedNotification[]): Promise<void>;
+}
+
+/**
+ * Les notifications que le message rappelé a produites — et le contenu qu'elles
+ * en gardent.
+ *
+ * `Notification.content` et `metadata.messagePreview` sont un EXTRAIT du
+ * message, dénormalisé à la création (`createNotification`). Aucun filtre à la
+ * lecture ne peut donc les rattraper : la ligne ne relit jamais le message,
+ * elle en détient une copie. C'est ce qui distingue ce cas de l'inbox de
+ * mentions du cycle précédent, où la ligne `Mention` ne portait qu'une clé
+ * étrangère et où une garde d'admission suffisait.
+ *
+ * La cascade `Notification.message` ne se déclenche pas : elle demande une
+ * suppression PHYSIQUE, et le retrait doux ne bascule que `deletedAt`. La ligne
+ * `Message` reste, donc les `Notification` aussi — même mécanisme que les
+ * `TrackingLink` et les `Mention` survivants des deux cycles précédents.
+ *
+ * Retrait plutôt que neutralisation du contenu : une notification dont le
+ * message n'existe plus n'a rien à afficher ET rien où mener — son `action:
+ * view_message` ouvrirait une conversation sur un message absent. C'est aussi
+ * le seul geste que les clients savent déjà recevoir (`notification:deleted`).
+ *
+ * Le filtre porte sur `messageId`, PAS sur la conversation : les autres
+ * messages gardent les leurs.
+ */
+async function retractMessageNotifications(
+  prisma: PrismaClient,
+  messageId: string,
+  announcer: RetractedNotificationAnnouncer | undefined
+): Promise<void> {
+  const retracted = await prisma.notification.findMany({
+    where: { messageId },
+    select: { id: true, userId: true },
+  });
+  if (retracted.length === 0) return;
+
+  // Filtré sur `messageId` et non sur les ids relus : une notification créée
+  // entre la lecture et l'écriture (l'éventail court après le retrait) part
+  // avec les autres. Elle n'est alors pas annoncée — un écran en retard, à
+  // corriger par une garde d'admission côté éventail — là où la garder aurait
+  // laissé la copie du contenu en base.
+  await prisma.notification.deleteMany({ where: { messageId } });
+
+  // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
+  // qu'elle recalcule doivent voir la base d'après le retrait.
+  await announcer?.announceNotificationsRetracted(retracted);
+}
+
 export async function applyMessageRemovalEffects(
   prisma: PrismaClient,
-  message: RemovedMessageRecord
+  message: RemovedMessageRecord,
+  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService()
 ): Promise<void> {
   // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
   // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue
   // web — pendant que le comptage, lui, ne vivait que dans le handler socket.
   // Aucune des deux moitiés ne couvrait l'autre. Il passe EN PREMIER parce
-  // qu'il est le seul des trois effets à lire des champs que le message porte
+  // qu'il est le seul des quatre effets à lire des champs que le message porte
   // déjà en mémoire : il ne peut être invalidé par rien de ce qui suit.
   try {
     await conversationMessageStatsService.onMessageDeleted(
@@ -260,6 +332,16 @@ export async function applyMessageRemovalEffects(
     );
   } catch (err) {
     log.warn('message removal: stats decrement failed', { messageId: message.id, err });
+  }
+
+  // Le retrait des notifications passe AVANT les deux effets qui interrogent la
+  // conversation : c'est le seul des quatre dont le retard se lit comme une
+  // fuite — le contenu rappelé reste affiché tant qu'il n'a pas eu lieu. Il ne
+  // dépend d'aucun des trois autres.
+  try {
+    await retractMessageNotifications(prisma, message.id, announcer);
+  } catch (err) {
+    log.warn('message removal: notification retraction failed', { messageId: message.id, err });
   }
 
   try {

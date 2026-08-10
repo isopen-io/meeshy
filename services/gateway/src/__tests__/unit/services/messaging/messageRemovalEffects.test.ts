@@ -51,12 +51,57 @@ const messageFindFirst = jest.fn<any>();
 const conversationFindUnique = jest.fn<any>();
 const conversationUpdateMany = jest.fn<any>();
 const trackingLinkUpdateMany = jest.fn<any>();
+const notificationFindMany = jest.fn<any>();
+const notificationDeleteMany = jest.fn<any>();
 
 const prisma = {
   message: { findRaw: messageFindRaw, findFirst: messageFindFirst },
   conversation: { findUnique: conversationFindUnique, updateMany: conversationUpdateMany },
   trackingLink: { updateMany: trackingLinkUpdateMany },
+  notification: { findMany: notificationFindMany, deleteMany: notificationDeleteMany },
 } as any;
+
+/**
+ * Le double des notifications APPLIQUE le `where` qu'il reçoit, aux deux bouts.
+ *
+ * Un double qui rendrait ses lignes quel que soit le filtre laisserait passer
+ * les deux erreurs qui comptent ici, et dans les deux sens : ne rien filtrer
+ * (le rappel emporte l'inbox entière) autant que filtrer sur rien (la ligne
+ * rappelée survit). `undefined` vaut « aucune contrainte » — la sémantique de
+ * Prisma, où `deleteMany({})` supprime tout — pour que l'absence de garde en
+ * production se voie comme une suppression trop LARGE et non comme un no-op.
+ */
+const OTHER_MESSAGE_ID = '507f1f77bcf86cd799439055';
+const MENTIONED_USER_ID = '64a000000000000000000001';
+const REPLIED_USER_ID = '64a000000000000000000002';
+
+interface NotificationRow {
+  id: string;
+  userId: string;
+  messageId: string | null;
+}
+
+let notificationRows: NotificationRow[] = [];
+
+const matchesWhere = (row: NotificationRow, where: { messageId?: string } | undefined): boolean =>
+  where?.messageId === undefined || row.messageId === where.messageId;
+
+function seedNotifications(rows: NotificationRow[]): void {
+  notificationRows = [...rows];
+}
+
+const ANCHORED_ON_REMOVED: NotificationRow[] = [
+  { id: 'notif-mention', userId: MENTIONED_USER_ID, messageId: MESSAGE_ID },
+  { id: 'notif-reply', userId: REPLIED_USER_ID, messageId: MESSAGE_ID },
+];
+const ANCHORED_ELSEWHERE: NotificationRow = {
+  id: 'notif-autre-message',
+  userId: MENTIONED_USER_ID,
+  messageId: OTHER_MESSAGE_ID,
+};
+
+const announceNotificationsRetracted = jest.fn<any>();
+const announcer = { announceNotificationsRetracted } as any;
 
 const SENDER_PARTICIPANT_ID = '507f1f77bcf86cd799439033';
 const SENDER_USER_ID = '507f1f77bcf86cd799439044';
@@ -86,6 +131,19 @@ beforeEach(() => {
   });
   conversationUpdateMany.mockResolvedValue({ count: 1 });
   trackingLinkUpdateMany.mockResolvedValue({ count: 1 });
+  seedNotifications([]);
+  announceNotificationsRetracted.mockResolvedValue(undefined);
+  notificationFindMany.mockImplementation(async ({ where }: any) =>
+    notificationRows
+      .filter((row) => matchesWhere(row, where))
+      .map(({ id, userId }) => ({ id, userId }))
+  );
+  notificationDeleteMany.mockImplementation(async ({ where }: any) => {
+    const kept = notificationRows.filter((row) => !matchesWhere(row, where));
+    const count = notificationRows.length - kept.length;
+    notificationRows = kept;
+    return { count };
+  });
 });
 
 describe('trackingTokensOfMessage', () => {
@@ -338,5 +396,96 @@ describe('applyMessageRemovalEffects — décompte des statistiques', () => {
     await expect(applyMessageRemovalEffects(prisma, removedMessage())).resolves.toBeUndefined();
     expect(trackingLinkUpdateMany).toHaveBeenCalled();
     expect(conversationUpdateMany).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Le quatrième effet du retrait : les notifications que le message a produites.
+ *
+ * Supprimer un message, dans ce produit, est un RAPPEL. Le cycle précédent a
+ * retiré le message rappelé de l'inbox de mentions ; il a laissé derrière lui
+ * l'inbox de notifications, qui porte le MÊME contenu par une autre voie —
+ * `Notification.content` et `metadata.messagePreview` sont l'extrait du
+ * message, dénormalisé à la création. Aucun filtre à la lecture ne pouvait le
+ * rattraper : la ligne ne relit jamais le message, elle en garde une COPIE.
+ *
+ * D'où le retrait durable, et ici plutôt qu'ailleurs : quatre écrivains
+ * basculent `deletedAt`, trois passent par cette unité, et un effet ajouté ici
+ * s'applique aux trois. La cascade `Notification.message` ne se déclenche pas —
+ * une cascade demande une suppression PHYSIQUE, le retrait doux ne bascule
+ * qu'une colonne. Même mécanisme que les `TrackingLink` et que les `Mention`
+ * des deux cycles précédents.
+ */
+describe('applyMessageRemovalEffects — notifications ancrées sur le message', () => {
+  it("retire les notifications que le message rappelé a produites", async () => {
+    seedNotifications([...ANCHORED_ON_REMOVED, ANCHORED_ELSEWHERE]);
+
+    await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
+
+    expect(notificationRows.map((row) => row.id)).toEqual(['notif-autre-message']);
+  });
+
+  it("laisse intactes les notifications d'un AUTRE message de la conversation", async () => {
+    // Le témoin : il interdit d'élargir. Un retrait sans garde — ou gardé sur
+    // la conversation plutôt que sur le message — viderait l'inbox de lignes
+    // qui pointent vers des messages toujours affichés.
+    seedNotifications([ANCHORED_ELSEWHERE]);
+
+    await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
+
+    expect(notificationRows).toEqual([ANCHORED_ELSEWHERE]);
+    expect(announceNotificationsRetracted).not.toHaveBeenCalled();
+  });
+
+  it("annonce chaque ligne retirée à son destinataire", async () => {
+    // Sans l'annonce, la cloche resterait sur un compteur qui inclut des
+    // lignes que le serveur vient de supprimer : le badge afficherait 3 pour
+    // une liste de 2, jusqu'au prochain démarrage à froid.
+    seedNotifications(ANCHORED_ON_REMOVED);
+
+    await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
+
+    expect(announceNotificationsRetracted).toHaveBeenCalledWith([
+      { id: 'notif-mention', userId: MENTIONED_USER_ID },
+      { id: 'notif-reply', userId: REPLIED_USER_ID },
+    ]);
+  });
+
+  it("n'annonce rien quand le message n'avait produit aucune notification", async () => {
+    await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
+
+    expect(notificationDeleteMany).not.toHaveBeenCalled();
+    expect(announceNotificationsRetracted).not.toHaveBeenCalled();
+  });
+
+  it("retire les lignes même sans annonceur câblé", async () => {
+    // L'écriture durable ne dépend PAS du câblage socket. Un script de
+    // maintenance, un worker sans `io`, un test : le rappel doit emporter la
+    // copie du contenu dans tous les cas — seule l'annonce est optionnelle.
+    seedNotifications(ANCHORED_ON_REMOVED);
+
+    await applyMessageRemovalEffects(prisma, removedMessage());
+
+    expect(notificationRows).toEqual([]);
+  });
+
+  it("ne fait pas échouer le retrait, déjà committé, quand l'annonce jette", async () => {
+    seedNotifications(ANCHORED_ON_REMOVED);
+    announceNotificationsRetracted.mockRejectedValue(new Error('socket down'));
+
+    await expect(
+      applyMessageRemovalEffects(prisma, removedMessage(), announcer)
+    ).resolves.toBeUndefined();
+    expect(notificationRows).toEqual([]);
+  });
+
+  it("recalcule quand même lastMessageAt si le retrait des notifications échoue", async () => {
+    // Quatre effets indépendants : l'un ne doit pas emporter les autres.
+    notificationFindMany.mockRejectedValue(new Error('mongo down'));
+
+    await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
+
+    expect(conversationUpdateMany).toHaveBeenCalledTimes(1);
+    expect(trackingLinkUpdateMany).toHaveBeenCalledTimes(1);
   });
 });
