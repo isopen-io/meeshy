@@ -108,6 +108,46 @@ struct FeedPostReelDisplayMediaTests {
     func empty() {
         #expect(post(type: "REEL", media: []).primaryReelDisplayMedia == nil)
     }
+
+    // MARK: - reelBackgroundMedia — le VISUEL de fond, distinct du média JOUÉ
+    //
+    // `primaryReelDisplayMedia` préfère l'audio à l'image parce qu'il désigne
+    // ce qu'on LIT. Le fond, lui, doit montrer une image quand il y en a une.
+    // Confondre les deux ferait basculer `ReelFeedCard.kind` sur `.imageOnly`
+    // pour un réel audio à couverture, et l'autoplay ne le prendrait plus.
+
+    @Test("le fond préfère la vidéo")
+    func backgroundPrefersVideo() {
+        let p = post(type: "REEL", media: [.image(), .audio(duration: 10), .video(duration: 20)])
+        #expect(p.reelBackgroundMedia?.type == .video)
+    }
+
+    @Test("un réel audio avec couverture montre l'image, pas le dégradé")
+    func backgroundPrefersImageOverAudio() {
+        let p = post(type: "REEL", media: [.image(), .audio(duration: 10)])
+        #expect(p.reelBackgroundMedia?.type == .image)
+        // La LECTURE reste sur l'audio : le fond ne doit pas la détourner.
+        #expect(p.primaryReelDisplayMedia?.type == .audio)
+    }
+
+    @Test("un réel audio sans image n'a pas de fond visuel")
+    func backgroundNilForAudioOnly() {
+        let p = post(type: "REEL", media: [.audio(duration: 10)])
+        #expect(p.reelBackgroundMedia == nil)
+    }
+
+    @Test("le fond suit le repost quand le post extérieur est vide")
+    func backgroundFollowsRepost() {
+        var p = post(type: "REEL", media: [])
+        p.repost = RepostContent(author: "Marie", content: "", type: "REEL",
+                                 media: [.image(), .audio(duration: 4)])
+        #expect(p.reelBackgroundMedia?.type == .image)
+    }
+
+    @Test("aucun média nulle part : pas de fond")
+    func backgroundNilWhenEmpty() {
+        #expect(post(type: "REEL", media: []).reelBackgroundMedia == nil)
+    }
 }
 
 @Suite("RepostContent reel classification")
