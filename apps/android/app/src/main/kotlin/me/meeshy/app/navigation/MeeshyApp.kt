@@ -47,6 +47,8 @@ import me.meeshy.app.calls.CallScreen
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
+import me.meeshy.sdk.model.chrome.menuGrowsRightward
+import me.meeshy.sdk.model.chrome.menuUnfoldsUpward
 import me.meeshy.ui.component.chrome.MeeshyMenuFab
 import me.meeshy.ui.component.chrome.RadialMenuItem
 import me.meeshy.ui.theme.MeeshyPalette
@@ -803,17 +805,17 @@ fun MeeshyApp(
                 },
                 rightContent = {
                     // Etat HISSE: le menu s'ouvre du premier tap, comme sur iOS.
-                    // Sans cela, MeeshyMenuFab garde son propre etat et il faut deux
-                    // taps — un pour l'afficher replie, un pour le deplier.
-                    if (menuExpanded) {
-                        MeeshyMenuFab(
-                            items = radialItems,
-                            expandedOverride = true,
-                            onExpandedChange = { menuExpanded = it },
-                        )
-                    } else {
-                        MeeshyInitialsButton(username = authState.username)
-                    }
+                    // Direction et cote de deploiement suivent la POSITION de la
+                    // pastille (geometrie pure core:model) : vers le haut si elle
+                    // est en bas, libelles tournes vers l'interieur de l'ecran.
+                    MeeshyMenuFab(
+                        items = radialItems,
+                        expanded = menuExpanded,
+                        onExpandedChange = { menuExpanded = it },
+                        unfoldUpward = menuUnfoldsUpward(rightButtonPosition),
+                        growRightward = menuGrowsRightward(rightButtonPosition),
+                        collapsedContent = { MeeshyInitialsButton(username = authState.username) },
+                    )
                 },
             )
         }
