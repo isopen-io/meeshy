@@ -76,6 +76,21 @@ describe('ConsentValidationService.getConsentStatus', () => {
     expect(status.canGenerateTranslatedAudio).toBe(false);
   });
 
+  it('respects an explicit ttsEnabled=false independently of the audioTranslationEnabled default flip', async () => {
+    // audioTranslationEnabled is omitted → now defaults to true, so
+    // canTranslateAudio unlocks. ttsEnabled is explicitly false, which must
+    // be what blocks canGenerateTranslatedAudio — not a cascade from
+    // audioTranslationEnabled being false, since it isn't here.
+    const service = new ConsentValidationService(
+      makePrisma({ user: fullVoiceConsent, audio: { ttsEnabled: false } })
+    );
+
+    const status = await service.getConsentStatus('u1');
+
+    expect(status.canTranslateAudio).toBe(true);
+    expect(status.canGenerateTranslatedAudio).toBe(false);
+  });
+
   it('respects an explicit transcriptionEnabled=false boolean', async () => {
     const service = new ConsentValidationService(
       makePrisma({ user: fullVoiceConsent, audio: { transcriptionEnabled: false } })
