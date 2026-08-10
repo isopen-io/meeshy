@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/shared",
-  "version": "1.8.9",
+  "version": "1.8.10",
   "description": "Shared library for Meeshy - Types, Prisma Schema, Utilities",
   "private": true,
   "type": "module",
