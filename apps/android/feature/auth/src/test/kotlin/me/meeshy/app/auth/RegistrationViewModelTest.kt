@@ -84,6 +84,8 @@ class RegistrationViewModelTest {
             me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
         override suspend fun revokeOtherSessions() =
             me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.AuthSession>(success = false)
         override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?): ApiResponse<AvailabilityResult> {
             availabilityCalls += Triple(username, email, phoneNumber)
             return availabilityResponse

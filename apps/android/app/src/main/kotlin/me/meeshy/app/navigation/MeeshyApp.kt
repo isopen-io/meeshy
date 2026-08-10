@@ -41,6 +41,8 @@ import me.meeshy.app.auth.GuestJoinViewModel
 import me.meeshy.app.auth.ForgotPasswordScreen
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.auth.MagicLinkScreen
+import me.meeshy.app.auth.MagicLinkValidateScreen
+import me.meeshy.app.auth.MagicLinkValidateViewModel
 import me.meeshy.app.auth.RegistrationScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
@@ -121,6 +123,7 @@ object Routes {
     const val REGISTRATION = "register"
     const val FORGOT_PASSWORD = "forgot-password"
     const val MAGIC_LINK = "magic-link"
+    const val MAGIC_LINK_VALIDATE = "auth/magic-link?token={token}"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
     fun guestJoin(identifier: String): String = "join/$identifier"
@@ -341,7 +344,11 @@ fun MeeshyApp(
     // recomposition never re-navigates. An unauthenticated launch defers until
     // sign-in resolves (the route survives in Activity state across the login gate).
     LaunchedEffect(launchRoute, authState.isAuthenticated) {
-        if (launchRoute != null && authState.isAuthenticated) {
+        // La validation d'un magic link est la SEULE destination de lancement
+        // legitime hors session : c'est precisement elle qui en ouvre une. Tout le
+        // reste (chat, appel) attend l'authentification.
+        val isMagicLink = launchRoute?.startsWith("auth/magic-link") == true
+        if (launchRoute != null && (authState.isAuthenticated || isMagicLink)) {
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
         }
@@ -402,6 +409,30 @@ fun MeeshyApp(
             }
             composable(Routes.MAGIC_LINK) {
                 MagicLinkScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.MAGIC_LINK_VALIDATE,
+                arguments = listOf(
+                    navArgument(MagicLinkValidateViewModel.TOKEN_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                MagicLinkValidateScreen(
+                    onAuthenticated = {
+                        authViewModel.onExternalSessionOpened()
+                        navController.navigate(Routes.CONVERSATIONS) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onBackToLogin = {
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
             }
             composable(Routes.REGISTRATION) {
                 RegistrationScreen(
