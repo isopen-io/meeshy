@@ -781,6 +781,16 @@ internal struct _FullscreenRenderer: View {
             complete: complete
         )
         AttachmentStatusReporter.report(attachmentId: attId, body: body)
+
+        // Resume-where-you-stopped on dismiss — the manager's own
+        // `reportWatchProgress` never fires here (this path only reports the
+        // partial-watch on disappear, see the BUG B fix note above).
+        guard !currentSec.isNaN, !totalSec.isNaN, !totalSec.isInfinite else { return }
+        if complete || !SharedAVPlayerManager.isResumable(currentSec, totalDuration: totalSec) {
+            VideoPlaybackPositionStore.shared.clear(for: attId)
+        } else {
+            VideoPlaybackPositionStore.shared.save(currentSec, for: attId)
+        }
     }
 
     private func saveToPhotos() {

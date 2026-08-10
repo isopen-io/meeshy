@@ -82,6 +82,11 @@ public final class SharedAVPlayerManager: ObservableObject {
     private var pipDelegate: PipDelegate?
     private var watchStartTime: Date?
 
+    /// Guards `applyResumePositionIfAvailable()` against firing on every
+    /// `duration` publisher tick (AVFoundation reports it more than once as
+    /// the item loads) — the resume seek must happen exactly once per `load()`.
+    private var hasAppliedResumeThisLoad = false
+
     /// Capture fidèle de l'interaction : une entrée par visionnage réellement
     /// continu, avec son motif de fin. Distinct des `WatchSample` d'engagement,
     /// qui échantillonnent une horloge : ceux-là ne diraient jamais qu'un
@@ -323,8 +328,12 @@ public final class SharedAVPlayerManager: ObservableObject {
         // so the bubble thumbnail can show a discreet progress bar at a glance.
         if complete {
             MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
+            // Natural/forced end → forget the saved RESUME position so a later
+            // re-watch starts from 0 (mirrors AudioPlaybackManager.handlePlaybackFinished).
+            VideoPlaybackPositionStore.shared.clear(for: attId)
         } else if duration > 0 {
             MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
+            saveOrClearResumePosition(currentTime, forAttachment: attId, totalDuration: duration)
         }
 
         let language = consumedLanguageProvider?()
@@ -338,6 +347,54 @@ public final class SharedAVPlayerManager: ObservableObject {
             language: language
         )
         AttachmentStatusReporter.report(attachmentId: attId, body: body)
+    }
+
+    // MARK: - Playback position persistence
+    //
+    // Resume-where-you-stopped: a saved position is honored only when it sits
+    // comfortably inside the video. Strict mirror of `AudioPlaybackManager`'s
+    // rule (same thresholds) so a video's resume behavior reads consistently
+    // with a voice note's — we never resume within `resumeEdgeGuard` of either
+    // edge, and tracks shorter than `minResumableDuration` are always replayed
+    // whole.
+
+    nonisolated private static let minResumableDuration: TimeInterval = 2.0
+    nonisolated private static let resumeEdgeGuard: TimeInterval = 1.0
+
+    /// Whether `saved` is a position playback will actually honor on the next
+    /// play. Single source of truth for the dead-zone rule: the seek path
+    /// (`applyResumePositionIfAvailable`) and the persist path
+    /// (`saveOrClearResumePosition`) both ask this.
+    nonisolated public static func isResumable(
+        _ saved: TimeInterval, totalDuration: TimeInterval
+    ) -> Bool {
+        totalDuration >= minResumableDuration
+            && saved > resumeEdgeGuard
+            && saved < totalDuration - resumeEdgeGuard
+    }
+
+    /// Seeks to the saved resume position (if any) BEFORE playback starts.
+    /// Called once per `load()` from the `duration` publisher sink, guarded by
+    /// `hasAppliedResumeThisLoad` — AVFoundation republishes `duration` more
+    /// than once while the item loads.
+    private func applyResumePositionIfAvailable() {
+        guard !hasAppliedResumeThisLoad, duration > 0, let attId = attachmentId else { return }
+        hasAppliedResumeThisLoad = true
+        guard let saved = VideoPlaybackPositionStore.shared.position(for: attId),
+              Self.isResumable(saved, totalDuration: duration) else { return }
+        seek(to: saved)
+    }
+
+    /// Saves `elapsed` as the resume point for `id`, or clears any stored
+    /// position when `elapsed` sits at either edge of the track (nothing
+    /// meaningful to resume). Short tracks are never stored.
+    private func saveOrClearResumePosition(_ elapsed: TimeInterval, forAttachment id: String, totalDuration: TimeInterval) {
+        guard totalDuration >= Self.minResumableDuration else { return }
+        if Self.isResumable(elapsed, totalDuration: totalDuration) {
+            VideoPlaybackPositionStore.shared.save(elapsed, for: id)
+        } else {
+            VideoPlaybackPositionStore.shared.clear(for: id)
+        }
     }
 
     // MARK: - Observers
@@ -393,6 +450,7 @@ public final class SharedAVPlayerManager: ObservableObject {
                 guard let self else { return }
                 let seconds = cmDuration.seconds
                 self.duration = seconds.isNaN || seconds.isInfinite ? 0 : seconds
+                self.applyResumePositionIfAvailable()
             }
             .store(in: &cancellables)
 
@@ -448,6 +506,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         watchStartTime = nil
         watchClockStart = nil
         lastHeartbeat = 0
+        hasAppliedResumeThisLoad = false
         attachmentId = nil
         pipController = nil
         pipDelegate = nil
