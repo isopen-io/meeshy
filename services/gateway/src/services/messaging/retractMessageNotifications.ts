@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
 
 /**
  * Retirer les notifications qu'un message a produites — le geste, isolé de ses
@@ -13,25 +14,16 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * avaient divergé avant `applyMessageRemovalEffects`.
  */
 
-/** Une ligne `Notification` retirée, réduite à ce que l'annonce doit adresser. */
-export interface RetractedNotification {
-  readonly id: string;
-  readonly userId: string;
-}
-
 /**
- * La seule chose dont ces chemins aient besoin du `NotificationService` : dire
- * aux appareils connectés que ces lignes n'existent plus.
- *
- * Un port étroit plutôt que le service entier, pour la même raison que
- * `PostSoundReleaser` côté post : l'unité déclare ce qu'elle appelle, et un
- * test l'observe sans monter un service qui parle à Redis, à APNs et à
- * Socket.IO. Le défaut est le service PARTAGÉ du processus — le seul câblé
- * avec `io`, donc le seul capable d'émettre.
+ * Le port d'annonce et sa ligne vivent sous `notifications/`, à côté de leur
+ * unique implémenteur : le retrait d'un POST en a le même besoin, et deux
+ * déclarations rivales pour une seule règle valent moins que l'une ou l'autre.
+ * Ré-exportés ici pour les importateurs historiques.
  */
-export interface RetractedNotificationAnnouncer {
-  announceNotificationsRetracted(retracted: readonly RetractedNotification[]): Promise<void>;
-}
+export type {
+  RetractedNotification,
+  RetractedNotificationAnnouncer,
+} from '../notifications/retractedNotifications';
 
 /**
  * La seule surface Prisma que le retrait touche, énumérée pour qu'un appelant
