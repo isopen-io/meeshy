@@ -5,6 +5,7 @@ import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
+import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
@@ -58,9 +59,13 @@ export function registerBanRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
+      // `isActive` et `leftAt` sont lus, pas seulement filtrés : la cible peut
+      // être un ancien membre — bannir quelqu'un qui est déjà parti est ce qui
+      // l'empêche de revenir par un lien de partage — et l'écriture ne doit
+      // alors pas réécrire la date de son départ.
       const targetParticipant = await prisma.participant.findFirst({
         where: { conversationId: id, userId: targetUserId },
-        select: { id: true, role: true, bannedAt: true, displayName: true },
+        select: { id: true, role: true, bannedAt: true, displayName: true, isActive: true, leftAt: true },
       })
 
       if (!targetParticipant) {
@@ -79,9 +84,10 @@ export function registerBanRoutes(
       }
 
       const now = new Date()
+      const ban = resolveBanWrite(targetParticipant, now)
       await prisma.participant.update({
         where: { id: targetParticipant.id },
-        data: { bannedAt: now, isActive: false, leftAt: now },
+        data: ban.data,
       })
       invalidateParticipantLookup(targetParticipant.id, id)
 
@@ -95,6 +101,10 @@ export function registerBanRoutes(
           userId: targetUserId,
           bannedBy: { id: currentUserId },
           bannedAt: now.toISOString(),
+          // Faux quand la cible avait déjà quitté : sans cette distinction, tout
+          // client qui décrémente son compteur de membres sur cet événement le
+          // décrémente pour quelqu'un qui n'y était plus.
+          membershipEnded: ban.membershipEnded,
         })
 
         const userSockets = await io.in(ROOMS.user(targetUserId)).fetchSockets()
@@ -146,19 +156,25 @@ export function registerBanRoutes(
         return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
       }
 
+      // `leftAt` et `bannedAt` disent si le bannissement avait mis fin à une
+      // appartenance ou frappé quelqu'un qui était déjà parti — cf.
+      // `conversationBanState.ts`. Sans eux, débannir REND une appartenance que
+      // le bannissement n'avait jamais prise.
       const targetParticipant = await prisma.participant.findFirst({
         where: { conversationId: id, userId: targetUserId, bannedAt: { not: null } },
-        select: { id: true },
+        select: { id: true, isActive: true, leftAt: true, bannedAt: true },
       })
 
       if (!targetParticipant) {
         return sendNotFound(reply, 'Participant banni introuvable')
       }
 
+      const unban = resolveUnbanWrite(targetParticipant)
       await prisma.participant.update({
         where: { id: targetParticipant.id },
-        data: { bannedAt: null, isActive: true, leftAt: null },
+        data: unban.data,
       })
+      invalidateParticipantLookup(targetParticipant.id, id)
 
       const manager = socketIOHandler?.getManager()
       const io = manager?.getIO()
@@ -180,7 +196,12 @@ export function registerBanRoutes(
       // ban's emit-then-evict ordering, which likewise ensures the target
       // receives their own transition. A join failure is logged, never fatal —
       // the broadcast still goes out for the remaining members.
-      if (manager) {
+      //
+      // Conditionné à `membershipRestored` : quand le bannissement avait frappé
+      // quelqu'un déjà parti, il n'y a aucune éviction à défaire, et rebrancher
+      // ses sockets le ferait entrer dans une conversation qu'il avait quittée
+      // de lui-même.
+      if (manager && unban.membershipRestored) {
         try {
           await manager.joinUserToConversationRoom(targetUserId, id)
         } catch (err) {
@@ -196,6 +217,10 @@ export function registerBanRoutes(
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
           conversationId: id,
           userId: targetUserId,
+          // Le bannissement est levé dans tous les cas ; l'appartenance, non.
+          // Les compteurs de membres des clients suivent ce champ, pas
+          // l'événement.
+          membershipRestored: unban.membershipRestored,
         })
       }
 

@@ -1,3 +1,174 @@
+# Cycle 49 — Débannir n'est pas une porte d'entrée, mais ça en était devenu une
+
+Tête prise là où le cycle 40 avait laissé sa propre règle. Ce cycle-là avait unifié « que faire de
+la ligne `Participant` déjà là quand quelqu'un (re)entre » dans `resolveConversationEntry`, et il
+avait énuméré les portes : le lien de partage, l'ajout de participant, l'invitation. Trois. Il en
+existait une quatrième, que personne n'avait comptée parce qu'elle ne s'appelle pas « entrer » :
+`PATCH …/participants/:userId/unban`.
+
+## Ce que les deux moitiés du geste écrivaient
+
+```ts
+ban:   data: { bannedAt: now,  isActive: false, leftAt: now  }
+unban: data: { bannedAt: null, isActive: true,  leftAt: null }
+```
+
+Sans condition, l'une comme l'autre. Sur le cas qu'on imagine en les lisant — bannir un membre
+actif, puis le débannir — elles sont exactes et inverses l'une de l'autre.
+
+Mais `ban` cherche sa cible **sans filtrer `isActive`**, et c'est délibéré : bannir un ancien membre
+est précisément ce qui l'empêche de revenir par un lien de partage, `resolveConversationEntry`
+refusant toute entrée sur `bannedAt`. Cette capacité est réelle, elle est même la raison d'être du
+`bannedAt` dans la décision du cycle 40, et ce cycle ne la retire pas.
+
+Le cas existe donc, et sur lui les deux écritures font autre chose que ce que leurs noms annoncent.
+
+### Lot A — bannir effaçait le départ
+
+`leftAt` était réécrit à l'instant du bannissement alors qu'il datait un départ volontaire vieux de
+plusieurs mois. L'information n'était pas remplacée par une meilleure : elle était perdue. Et c'est
+elle, précisément, qui aurait permis à l'autre moitié de savoir quoi rendre — le défaut du Lot B
+n'était pas réparable après coup parce que le Lot A avait détruit sa preuve.
+
+### Lot B — débannir faisait entrer
+
+`{ isActive: true, leftAt: null }` sur une personne que le bannissement n'avait pas sortie — parce
+qu'elle était déjà dehors — n'annule rien : **ça crée une appartenance.** Suivent, dans la même
+requête, les trois choses qu'une porte d'entrée fait et qu'un débannissement ne devrait pas faire :
+
+1. **Le rang périmé revient.** Aucune des trois portes reconnues ne rend son rang à un revenant —
+   « un rang se donne, il ne se retrouve pas dans une ligne périmée » (leçon 89, inscrite dans
+   l'en-tête de `conversationEntryAdmission.ts`). Celle-ci le rendait, `role` n'étant jamais réécrit.
+2. **Les sockets sont rebranchées de force.** `joinUserToConversationRoom` sur quelqu'un qui était
+   parti de lui-même : il reçoit à nouveau les messages d'une conversation qu'il avait quittée.
+3. **La conversation réapparaît chez lui**, sans qu'il ait rien demandé et sans qu'aucun chemin
+   d'invitation ait été emprunté.
+
+Le correctif ne change pas ce que le geste veut dire, il le rend exact : **un débannissement rend ce
+que le bannissement a pris, ni plus ni moins.** Le bannissement, lui, est levé dans TOUS les cas —
+sinon « débannir » ne lèverait rien et toutes les portes continueraient de refuser. Une personne
+partie d'elle-même puis bannie puis débannie redevient donc libre de revenir par une porte, ce qui
+est exactement l'état que `resolveConversationEntry` sait lire (`rejoin`).
+
+### La trace, sans champ nouveau
+
+Savoir laquelle des deux histoires s'est produite ne demande aucune colonne de plus. Une fois que
+bannir cesse d'écraser `leftAt`, le bannissement laisse lui-même sa réponse dans la ligne :
+
+| ce qui s'est passé              | `leftAt`            | `bannedAt` |
+|---------------------------------|---------------------|------------|
+| banni alors qu'il était membre  | instant du ban      | le même    |
+| banni alors qu'il était parti   | son départ, intact  | plus tard  |
+
+L'égalité est **exacte par construction** — les deux champs reçoivent le même objet `Date`, jamais
+deux lectures d'horloge — et non une comparaison à la milliseconde près qu'une coïncidence pourrait
+tromper. Les lignes écrites avant ce cycle portent toutes cette égalité, puisque l'ancien
+bannissement écrivait les deux ensemble : elles conservent donc à l'identique le comportement
+qu'elles ont toujours eu. **Aucune réparation de base n'est nécessaire** — c'est la première fois
+depuis le cycle 27 qu'un correctif de cette famille ne laisse pas un script derrière lui, et c'est
+le choix de la trace qui l'achète.
+
+La décision vit dans une unité pure, `services/conversations/conversationBanState.ts`, à côté de
+celle du cycle 40 dont elle est le complément : `conversationEntryAdmission` dit qui peut entrer,
+`conversationBanState` dit ce qu'un bannissement prend et ce qu'un débannissement rend.
+
+## Lot C — le débannissement n'oubliait pas la ligne mise en cache
+
+`participant-lookup-cache` mémorise `isActive` pendant 30 s pour éviter une lecture par message
+envoyé. Son en-tête énumère les sites qui l'invalident : « leave/ban/kick/delete-for-me ». Le
+débannissement n'y est pas, et ne l'appelait pas.
+
+Conséquence, sur le cas nominal cette fois — bannir un membre actif puis le débannir : pendant une
+demi-minute, la personne réintégrée restait `isActive: false` pour le chemin d'envoi, et chacun de
+ses messages était refusé sans qu'aucune ligne en base ne le justifie. Le même motif que les Lots A
+et B, à un étage différent : une moitié du geste tient une obligation que l'autre moitié ignore.
+
+## Lot D — les compteurs de membres suivaient l'ÉVÉNEMENT, pas le fait
+
+`conversation:participant-banned` et `conversation:participant-unbanned` ne disaient rien de leur
+effet sur l'effectif ; les clients le déduisaient de la réception.
+
+- **Web** (`use-socket-cache-sync`) : `memberCount - 1` / `+ 1` sans condition.
+- **iOS** (`ConversationListViewModel`) : idem, **puis `schedulePersist()`** — la valeur fausse est
+  écrite dans le cache local, donc la dérive survit au redémarrage.
+- **Android** : expose bien les deux événements mais n'en dérive aucun effectif. Rien à corriger —
+  vérifié, pas déduit (leçon 88).
+
+Les deux événements portent maintenant `membershipEnded` / `membershipRestored`. Optionnels, et leur
+absence se lit comme `true` : un serveur antérieur à ce contrat ne bannissait qu'en retirant, et lire
+son silence comme « aucun effet » aurait fait ignorer tous ses bannissements. Côté iOS la lecture est
+nommée (`didEndMembership`, `didRestoreMembership`) plutôt que laissée à un `== true` que le prochain
+appelant écrirait de travers.
+
+## Preuve
+
+**24 tests neufs, RED observé avant chaque correctif.**
+
+- `services/conversations/conversationBanState.test.ts` — 11 cas sur l'unité pure, dont les deux
+  compositions ban∘unban qui énoncent l'involution recherchée.
+- `routes/conversations/ban-departed-member.test.ts` — 8 régressions au niveau route. Le double
+  Prisma **discrimine sur le `where` ET projette sur le `select`** : un champ reste indisponible à
+  la route tant qu'elle ne l'a pas demandé, exactement comme Prisma. Sans cette projection,
+  « la route lit `leftAt` » serait vrai dans le test et faux en production — c'est la précaution que
+  le cycle 39 avait dû inventer pour le Lot B, réutilisée ici pour la même raison.
+- `use-socket-cache-sync.test.tsx` — 2 cas sur la dérive du compteur web.
+- `MessageSocketMiscEventTests.swift` — 4 cas de décodage SDK, dont les deux qui fixent la lecture
+  de l'absence (`nil ⇒ true`).
+
+Suites vertes : gateway complet, `tsc --noEmit` propre ; web `use-socket-cache-sync` (57/57), et
+aucune erreur `tsc` nouvelle sur `apps/web` (1184 avant, 1184 après — condition préexistante).
+
+## L'audit qui a mené ici, et ce qu'il a ÉCARTÉ
+
+La question du cycle 37 — « quelles appartenances sont jointes sans `isActive` ? » — a été balayée
+mécaniquement cette fois plutôt que site par site : **784** lectures `prisma.participant.find*` dans
+le gateway, dont **12** de forme appartenance (`where` portant à la fois `userId` et
+`conversationId`, sans `isActive`). Les douze ont été classées, et **onze sont légitimes** :
+
+- **Faux positifs de la recherche** (2) — `MeeshySocketIOManager` cherche par `id` (clé primaire),
+  `conversationId` n'apparaît que dans le `select`.
+- **Résolutions, pas des admissions** (2) — `CallService` résout le `Participant.id` de l'initiateur
+  d'un appel ; filtrer sur `isActive` ferait échouer la résolution au lieu de refuser un accès.
+- **Historique, où le filtre serait le défaut** (1) — `CallService.listHistory` charge le pair d'une
+  conversation directe pour nommer un appel passé. Un pair qui a quitté depuis doit rester nommé :
+  ajouter `isActive` effacerait le nom sur les entrées d'historique les plus anciennes.
+- **Réamorçage de la conversation globale** (4, `InitService`/`AuthService`) — la recherche sert à ne
+  PAS re-ajouter quelqu'un ; trouver la ligne inactive d'un partant volontaire et s'abstenir est
+  exactement le comportement voulu.
+- **Classements d'administration** (1) — `admin/system-rankings` énumère les admins de conversation ;
+  écart de qualité de donnée, sans conséquence d'accès, laissé tel quel.
+- **`ban` lui-même** (1) — délibérément sans filtre, cf. plus haut ; c'est le fil qui a mené à ce
+  cycle.
+
+Ce que le balayage a rendu n'est donc pas un douzième défaut de la même forme : c'est le constat que
+**la famille est propre**, et que le défaut restant était de l'autre côté du geste — non pas « qui
+peut entrer » mais « ce que le geste inverse rend ». La question du cycle 37 peut être considérée
+comme épuisée sur le gateway.
+
+## Reste ouvert après ce cycle
+
+- **Qui a le droit de débannir ? Pas le même que celui qui a le droit de bannir.** `ban` exige
+  seulement un rang STRICTEMENT supérieur à celui de la cible — un `moderator` peut donc bannir un
+  `member` — mais `unban` exige le rang `admin`. Un modérateur peut bannir sans pouvoir défaire son
+  propre geste. C'est cohérent à l'intérieur de chaque moitié, donc ce n'est pas un défaut au sens
+  de ce cycle, mais c'est une asymétrie de la même famille que celles des cycles 34 et 38b
+  (édition/suppression, appartenance active de l'auteur) — **les trois attendent le même arbitrage
+  produit et devraient être tranchées ensemble**, pas une par une.
+- **Rien ne borne la durée d'un bannissement.** `bannedAt` est un instant, jamais une échéance : un
+  bannissement est définitif jusqu'à ce qu'un admin passe. WhatsApp et Telegram offrent tous deux un
+  bannissement temporaire. Capacité absente, pas défaut — à instruire comme produit.
+- **`resolveBanWrite` ne dit pas ce qu'un ancien membre banni voit de la conversation.** Il ne
+  change rien à l'état visible : la ligne était déjà inactive, `GET …/messages` la refusait déjà.
+  Vérifié, mais non couvert par un test de bout en bout faute d'accès base.
+- **Les points hérités du cycle 48 restent ouverts tels quels** : la péremption (`expiresAt`) sans
+  équivalent au rappel ; le push déjà remis qui reste sur l'appareil ; les mentions du chemin de lien
+  sans extraction ; aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de
+  lien hors pipeline audio ; l'arbitrage `delete-for-me` du cycle 12.
+- **`eslint` ne peut toujours pas tourner sur le gateway** : aucun `eslint.config.js` depuis la
+  migration ESLint v9. Condition préexistante, non couverte par la CI.
+
+---
+
 # Cycle 48 — La course que le cycle 47 a nommée sans la fermer
 
 Le cycle 47 a fait retirer, au rappel d'un message, les notifications qu'il avait produites, et il a

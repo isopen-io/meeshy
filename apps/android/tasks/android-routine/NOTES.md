@@ -710,3 +710,35 @@ Append-only log of gotchas and decisions that save time next run.
   fresh SDK setup needed this time) and screenshotted both the Overview task-switcher (circle
   mask) and the home-screen app drawer (squircle mask) — two independently-masked real renders,
   not just one, since a single mask shape passing doesn't prove the safe-zone math generalizes.
+
+## Slice `feed-conversation-toggle` (2026-08-10)
+- **A live-session user bug report ("X doesn't seem to work") deserves the same RE-PROUVER
+  discipline as a stale `PROGRESS.md` note — read the actual code before touching anything.**
+  The report ("le toggle feed et conversation ne semble pas encore fonctionner") named a
+  behaviour, not a file; reading `MeeshyApp.kt`'s `onLeftTap` found the exact one-directional
+  `navigate(Routes.FEED)` call and cross-checking iOS's `showFeed.toggle()` confirmed it as a
+  genuine two-way-vs-one-way divergence rather than a vague impression — worth the two extra
+  minutes before writing a single line of fix.
+- **A pure decision extracted from a `@Composable` for testability doesn't need a new file if
+  the host file already has the pattern.** `MeeshyApp.kt` already contained
+  `menuItemLabelKeys()` — a top-level `internal fun` pulled out of `rememberRadialMenuItems`
+  specifically so a JVM test could assert on it. `leftButtonTapTarget(currentRoute: String?):
+  String` slots into the exact same shape right next to it; no new architectural pattern
+  introduced, just reused the one already in the file for the same reason (a `@Composable`'s
+  decision logic being otherwise untestable on the JVM).
+- **Android has no direct equivalent of iOS's `AnimatedLogoView` breathing-logo state
+  treatment** — iOS swaps the left button's content entirely (static "stack" glyph vs. an
+  animated brand logo) when `showFeed` is true; Android settled for `Icons.Filled.Home` vs.
+  `Icons.Outlined.Home` (Material's own filled/outline active-state convention) rather than
+  inventing a new animated component to match iOS pixel-for-pixel. Noted explicitly as a gap
+  in `feature-parity.md` rather than silently substituting and calling it done — the "closest
+  available equivalent, not the literal port" pattern this codebase uses elsewhere (e.g. the
+  saved-account picker's visible remove button vs. iOS's long-press `.contextMenu`).
+  Deferring the animated-logo port keeps this slice bounded to the actual bug (navigation
+  logic), which is what was reported broken — the icon is cosmetic parity, not the fix.
+- **On-device before/after screenshots of the SAME button caught the fix working in BOTH
+  directions, not just the previously-broken one.** Tapping once (Conversations→Feed) already
+  worked before this fix — only the SECOND tap (Feed→Conversations) was the actual bug. A
+  verification that only checked the first tap would have "passed" on the unfixed build too;
+  screenshotting the full round-trip (tap, tap again, compare both against the pre-fix
+  single-direction behaviour) is what makes the visual proof mean something here.

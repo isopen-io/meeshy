@@ -3040,7 +3040,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
 - [x] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
       new-posts banner + realtime-head merge done (slice `feed-new-posts-banner`, 2026-07-16)
-- [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
+- [~] Feed overlay shell with draggable floating buttons + radial menu ladder — the two
+      draggable floating buttons + radial menu ladder (`MeeshyFloatingButtons`/`MeeshyMenuFab`)
+      are wired (`MeeshyApp.kt`); the left button's tap **now genuinely toggles Flux <-> Conversations**
+      (slice `feed-conversation-toggle`, 2026-08-10) — before this fix it navigated to
+      `Routes.FEED` unconditionally, so a second tap while already on the Flux did nothing
+      (no way back except the system Back gesture), diverging from iOS
+      `RootView.draggableFloatingButtons.onLeftTap`'s `showFeed.toggle()`. Icon now reflects
+      the active state too (filled `Home` on the Flux, outline elsewhere) — the closest Android
+      equivalent to iOS's icon swap (static glyph <-> `AnimatedLogoView` breathing logo when
+      `showFeed == true`); Android has no ported equivalent of that animated-logo treatment yet.
+      **Deliberate architectural deviation, not a gap**: iOS shows the Flux as a `ZStack`
+      overlay animated on top of the conversation list (`showFeed` toggles visibility with a
+      spring animation, the list stays mounted underneath); Android navigates via `NavHost`
+      (a real screen swap with save/restore state) — functionally equivalent (same
+      toggle semantics, same destination reached) but not a pixel-identical port of the
+      overlay/animation mechanism.
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
