@@ -22,6 +22,7 @@ import me.meeshy.sdk.net.api.ReportApi
 import me.meeshy.sdk.net.api.ShareLinkApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -47,6 +48,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val activeCall: ActiveCallApi = retrofit.create()
     val translation: TranslationApi = retrofit.create()
     val media: MediaApi = retrofit.create()
+    val tus: TusApi = retrofit.create()
     val preferences: PreferencesApi = retrofit.create()
     val reports: ReportApi = retrofit.create()
     val dataExport: DataExportApi = retrofit.create()
