@@ -153,6 +153,16 @@ public final class ConversationAudioCoordinator: ObservableObject {
         startCurrentHead()
     }
 
+    /// Change la piste jouée pour l'attachment ACTIF (variante traduite Prisme
+    /// ou retour à l'original) en CONSERVANT le contexte et la file — le
+    /// sélecteur de langue du plein écran route ici pour que la carte système
+    /// et l'enchaînement survivent au changement de langue.
+    public func playVariant(urlString: String) {
+        guard !CallManager.shared.isCallActiveForAudioGuard else { return }
+        guard activeContext != nil, !urlString.isEmpty else { return }
+        engine.play(urlString: urlString)
+    }
+
     public func togglePlayPause() {
         guard !CallManager.shared.isCallActiveForAudioGuard else {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")

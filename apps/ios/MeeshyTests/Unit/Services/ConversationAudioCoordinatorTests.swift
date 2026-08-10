@@ -69,6 +69,35 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(engine.playCallCount, 0)
     }
 
+    func test_playVariant_swapsUrl_keepsContextAndQueue() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let contextBefore = sut.activeContext
+
+        sut.playVariant(urlString: "https://x/a-es.m4a")
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://x/a-es.m4a")
+        XCTAssertEqual(sut.activeContext, contextBefore)
+        XCTAssertEqual(sut.queueCount, 2)
+    }
+
+    func test_playVariant_withoutActiveContext_isNoOp() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+
+        sut.playVariant(urlString: "https://x/a-es.m4a")
+
+        XCTAssertEqual(engine.playCallCount, 0)
+    }
+
     func test_engineFinished_advancesQueue_playsNext() async {
         let (sut, engine) = makeSUT()
         let current = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
