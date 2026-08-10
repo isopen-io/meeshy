@@ -662,7 +662,7 @@ extension StoryRenderer {
 extension StoryRenderer {
 
     /// Shared duration (seconds) of the slide opening AND closing transitions.
-    public nonisolated static let slideTransitionDuration: Double = 0.5
+    public nonisolated static let slideTransitionDuration: Double = 1.2
 
     /// Peak scale of the `.zoom` transition (opening settles 1.08 → 1.0,
     /// closing ramps 1.0 → 1.08).
