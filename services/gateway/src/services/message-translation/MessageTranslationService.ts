@@ -29,6 +29,7 @@ import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -331,7 +332,7 @@ export class MessageTranslationService extends EventEmitter {
           originalLanguage: messageData.originalLanguage,
           messageType: messageData.messageType || 'text',
           replyToId: messageData.replyToId || null,
-          deletedAt: null
+          ...LIVE_MESSAGE_MARK
         }
       });
 
