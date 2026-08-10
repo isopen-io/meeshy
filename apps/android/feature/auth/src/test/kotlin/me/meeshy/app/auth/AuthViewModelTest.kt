@@ -44,6 +44,10 @@ class AuthViewModelTest {
         override suspend fun register(body: RegisterRequest) = response
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
+        override suspend fun forgotPassword(body: me.meeshy.sdk.net.api.ForgotPasswordRequest) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
         override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
             ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
     }
