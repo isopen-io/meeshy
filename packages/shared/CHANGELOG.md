@@ -1,5 +1,120 @@
 # @meeshy/shared
 
+## 1.8.9
+
+### Patch Changes
+
+- 2218e08: La famille est complète : toute notification qui DÉSIGNE un message hérite de son échéance.
+
+  Le lot précédent a branché les trois producteurs que l'éventail d'un message appelle — message
+  régulier, réponse, mention — et a laissé en backlog les deux autres ancrés sur un
+  `context.messageId`. Les voici, et l'un des deux n'existait pas vraiment.
+
+  **La réaction.** `createReactionNotification` lisait déjà le message pour en tirer l'extrait
+  (`select: { content: true }`) : `expiresAt` voyage dans la même lecture, aucune requête ajoutée. Une
+  réaction à un message éphémère ouvrait sinon, après expiration, un message absent.
+
+  **La mention ajoutée par ÉDITION.** `reconcileEditedMentions` est le second appelant de
+  `createMentionNotificationsBatch` — le paramètre existait depuis le lot précédent, personne ne le
+  lui passait. Les deux transports REST chargent déjà le message par `include` (donc `expiresAt` est
+  là) ; le transport socket ajoute un champ à un `select` qu'il émettait déjà. Aucune requête ajoutée
+  là non plus.
+
+  **La traduction prête n'était pas un producteur.** `createTranslationReadyNotification` n'avait
+  AUCUN appelant de production — un test était sa seule invocation dans tout le dépôt. Il n'a jamais
+  écrit une ligne, et aucun client n'a jamais reçu ce type. Retiré. `NotificationTypeEnum.TRANSLATION_READY`
+  reste déclaré (le SDK iOS le décode) mais porte désormais la mention explicite qu'aucun producteur
+  ne l'émet — la leçon du lot précédent : une valeur déclarée n'est pas une fonctionnalité, et sans
+  cette note l'énumération redonnerait à tout audit un cinquième cas à instruire.
+
+  L'énumération est vérifiable et fait partie de la revue : quatre méthodes `create*` posent un
+  `context.messageId`, les quatre estampillent l'échéance.
+
+- 7c2fb34: Une notification ne survit plus au message éphémère qu'elle annonce.
+
+  `createMessageNotification` refuse déjà de créer une notification pour un message DÉJÀ expiré. Rien
+  ne disait ce qu'il advient de celle qui est créée AVANT l'expiration : le message éphémère disparaît
+  quelques minutes plus tard, la ligne reste. Elle ne montre rien (l'extrait d'un message protégé est
+  déjà un libellé générique), elle ne mène nulle part (`action: view_message` ouvre un message absent),
+  et son badge non lu ne peut plus être décrémenté par une lecture — on ne lit pas ce qui n'est plus là.
+
+  `Notification.expiresAt` existait pour exactement ça, depuis l'origine du modèle, et le type partagé
+  le publie jusqu'aux clients (`state.expiresAt`, `isNotificationExpired`). Aucun producteur ne
+  l'écrivait, aucune lecture ne l'honorait : les deux moitiés d'une même règle, mortes chacune de son
+  côté. Ce lot les rebranche.
+
+  **Producteur.** La notification hérite de l'échéance du message qu'elle désigne — message régulier,
+  réponse et mention. Le chemin `new_message` la prend de sa propre relecture VIVANTE (celle de la
+  garde d'admission : aucune lecture ajoutée) ; la réponse et les mentions la reçoivent de l'éventail,
+  qui la tient déjà, plutôt que de la relire une fois par destinataire. Les deux sources ne peuvent pas
+  diverger : `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite.
+
+  **Lectures.** Un filtre à la lecture, et non un balayage : contrairement au rappel, la péremption
+  n'est pas un événement — personne ne passe à l'instant T, et un balayage périodique laisserait
+  toujours une fenêtre. Le filtre est exact à la milliseconde et ne coûte aucune écriture. Les sept
+  lectures qui répondent à la même question — liste REST et son total, compte non-lus REST, les deux
+  compteurs poussés par socket, le badge embarqué dans le push, le digest e-mail — la posent désormais
+  par une seule unité, `visibleNotificationsWhere`. `emitCountsUpdate` portait déjà en commentaire la
+  trace d'une divergence passée entre le prédicat du badge et celui de la liste ; sept copies l'auraient
+  rejouée.
+
+  **Index.** `Notification[userId, isRead]` devient `[userId, isRead, expiresAt]` — un remplacement, pas
+  un index de plus : l'ancienne clé est un préfixe de la nouvelle. Sans `expiresAt` dans l'index, le
+  filtre force un fetch de document par candidat sur un compteur qui tourne à CHAQUE notification créée,
+  donc une fois par destinataire de chaque message ; avec, les deux branches du OU restent des plages
+  d'index et le compte reste couvert. Migration `010_notification_expiry_index.js` pour les bases
+  existantes (idempotente, crée avant de supprimer).
+
+  Ce que ce lot ne fait pas : la ligne expirée reste en base (elle ne porte aucune copie du contenu), et
+  un badge déjà affiché ne se corrige qu'au prochain recalcul — cohérence à terme, pas immédiate.
+
+- e4ada9e: Débannir quelqu'un qui était parti de lui-même le faisait rentrer.
+
+  `PATCH …/participants/:userId/ban` cherche sa cible **sans filtrer `isActive`**, et c'est
+  délibéré : bannir un ancien membre est précisément ce qui l'empêche de revenir par un lien de
+  partage, `resolveConversationEntry` refusant toute entrée sur `bannedAt`. Cette capacité n'est pas
+  retirée. Mais les deux moitiés du geste écrivaient sans condition —
+  `ban: { bannedAt: now, isActive: false, leftAt: now }`,
+  `unban: { bannedAt: null, isActive: true, leftAt: null }` — et composées sur un ancien membre,
+  elles font autre chose que ce que leurs noms annoncent.
+
+  **Bannir effaçait le départ.** `leftAt` était réécrit à l'instant du bannissement alors qu'il datait
+  un départ volontaire vieux de plusieurs mois. L'information n'était pas remplacée par une
+  meilleure : elle était perdue, et c'est elle qui aurait permis au débannissement de savoir quoi
+  rendre.
+
+  **Débannir faisait entrer.** `{ isActive: true, leftAt: null }` sur une personne que le bannissement
+  n'avait pas sortie — parce qu'elle était déjà dehors — n'annule rien : ça CRÉE une appartenance. Le
+  débannissement devenait une **quatrième porte d'entrée** dans la conversation, la seule qui
+  n'obéisse pas à `resolveConversationEntry`, qui ne redonne ni rang ni permissions de nouvel arrivant
+  (l'ancien `admin` retrouvait son rang dans une ligne périmée — l'inverse exact de ce que la
+  leçon 89 exige), et qui rebranchait de force les sockets de quelqu'un qui était parti seul.
+
+  La décision vit désormais dans une unité pure, `services/conversations/conversationBanState.ts` :
+  un bannissement ne retire une appartenance que s'il en trouve une ; un débannissement ne rend que ce
+  que le bannissement a pris. Il lève l'interdiction dans tous les cas — sinon « débannir » ne lèverait
+  rien, et toutes les portes continueraient de refuser. Savoir laquelle des deux histoires s'est
+  produite ne demande aucun champ nouveau : le bannissement laisse la trace dans la ligne
+  (`leftAt === bannedAt` ⟺ c'est lui qui a mis fin à l'appartenance), et l'égalité est **exacte par
+  construction**, les deux champs recevant le même objet `Date`. Les lignes écrites avant ce cycle
+  portent toutes cette égalité, donc conservent à l'identique le comportement qu'elles ont toujours eu :
+  aucune réparation de base n'est nécessaire.
+
+  **Le débannissement n'oubliait pas la ligne mise en cache.** `participant-lookup-cache` mémorise
+  `isActive` 30 s pour éviter une lecture par message envoyé ; le bannissement l'invalide, le
+  débannissement ne le faisait pas. Pendant une demi-minute, la personne réintégrée restait
+  `isActive: false` pour le chemin d'envoi et chacun de ses messages était refusé sans qu'aucune ligne
+  en base ne le justifie.
+
+  **Les compteurs de membres des clients suivaient l'événement, pas le fait.**
+  `conversation:participant-banned` et `conversation:participant-unbanned` portent maintenant
+  `membershipEnded` / `membershipRestored`. Web (`use-socket-cache-sync`) et iOS
+  (`ConversationListViewModel`) décrémentaient et incrémentaient sans condition : bannir un ancien
+  membre faisait dériver le compteur vers le bas, durablement côté iOS où la valeur fausse est
+  persistée dans le cache local. Les deux champs sont optionnels et leur absence se lit comme `true` —
+  un serveur antérieur à ce contrat ne bannissait qu'en retirant. Android expose bien les deux
+  événements mais n'en dérive aucun effectif : rien à corriger de ce côté.
+
 ## 1.8.8
 
 ### Patch Changes
