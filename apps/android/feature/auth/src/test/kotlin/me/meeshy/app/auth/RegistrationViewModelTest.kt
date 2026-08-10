@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.locale.DeviceLocaleProvider
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.LanguageStepSelection
@@ -79,6 +80,20 @@ class RegistrationViewModelTest {
         }
     }
 
+    /**
+     * Fake [DeviceLocaleProvider] for deterministic tests — defaults to an unresolvable locale
+     * (both `null`), which drives `SignupRegionInference`'s own fallback branch (system `"fr"`,
+     * regional `"en"`, country left at [RegistrationFields]'s static default). Every scenario
+     * that doesn't care about locale inference stays deterministic without passing this at all.
+     */
+    private class FakeDeviceLocaleProvider(
+        private val language: String? = null,
+        private val region: String? = null,
+    ) : DeviceLocaleProvider {
+        override fun languageTag(): String? = language
+        override fun regionTag(): String? = region
+    }
+
     private fun scenario(
         registerResponse: ApiResponse<AuthSession> = ApiResponse(success = false),
         availabilityResponse: ApiResponse<AvailabilityResult> = ApiResponse(
@@ -89,6 +104,7 @@ class RegistrationViewModelTest {
         mediaRepository: MediaRepository = mockk(relaxed = true),
         userRepository: UserRepository = mockk(relaxed = true),
         workManager: WorkManager = mockk(relaxed = true),
+        deviceLocaleProvider: DeviceLocaleProvider = FakeDeviceLocaleProvider(),
     ): Triple<RegistrationViewModel, FakeAuthApi, RealtimeSessionCoordinator> {
         val api = FakeAuthApi(registerResponse, availabilityResponse)
         val store = InMemoryTokenStore()
@@ -99,6 +115,7 @@ class RegistrationViewModelTest {
             mediaRepository,
             userRepository,
             workManager,
+            deviceLocaleProvider,
         )
         return Triple(vm, api, coordinator)
     }
@@ -154,6 +171,53 @@ class RegistrationViewModelTest {
     fun initialState_defaultsToThePriorityCountry() {
         val (vm, _, _) = scenario()
         assertThat(vm.state.value.fields.countryIso).isEqualTo(CountryCatalog.priority.first())
+    }
+
+    // ---- device-locale inference (SignupRegionInference wiring) --------------
+
+    @Test
+    fun initialState_unresolvableDeviceLocale_fallsBackToFrenchAndKeepsPriorityCountry() {
+        val (vm, _, _) = scenario(deviceLocaleProvider = FakeDeviceLocaleProvider(language = null, region = null))
+        val fields = vm.state.value.fields
+        assertThat(fields.systemLanguage).isEqualTo("fr")
+        assertThat(fields.regionalLanguage).isEqualTo("en")
+        assertThat(fields.countryIso).isEqualTo(CountryCatalog.priority.first())
+    }
+
+    @Test
+    fun initialState_supportedDeviceLanguage_becomesSystemLanguage() {
+        val (vm, _, _) = scenario(deviceLocaleProvider = FakeDeviceLocaleProvider(language = "es", region = null))
+        assertThat(vm.state.value.fields.systemLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun initialState_deviceLanguageIsUppercase_stillMatchesCaseInsensitively() {
+        val (vm, _, _) = scenario(deviceLocaleProvider = FakeDeviceLocaleProvider(language = "ES", region = null))
+        assertThat(vm.state.value.fields.systemLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun initialState_knownDeviceRegion_becomesCountryIso() {
+        val (vm, _, _) = scenario(deviceLocaleProvider = FakeDeviceLocaleProvider(language = null, region = "MX"))
+        assertThat(vm.state.value.fields.countryIso).isEqualTo("MX")
+    }
+
+    @Test
+    fun initialState_unknownDeviceRegion_keepsThePriorityCountryDefault() {
+        val (vm, _, _) = scenario(deviceLocaleProvider = FakeDeviceLocaleProvider(language = null, region = "ZZ"))
+        assertThat(vm.state.value.fields.countryIso).isEqualTo(CountryCatalog.priority.first())
+    }
+
+    @Test
+    fun initialState_deviceRegionMapsToARegionalLanguageDistinctFromSystem_setsBoth() {
+        // "CM" -> "fr" in SignupRegionInference.regionLanguageMap; system stays "en" (supported,
+        // distinct from the region's mapped "fr") so the regional slot adopts the map's language
+        // instead of falling back to the generic secondary.
+        val (vm, _, _) = scenario(deviceLocaleProvider = FakeDeviceLocaleProvider(language = "en", region = "CM"))
+        val fields = vm.state.value.fields
+        assertThat(fields.systemLanguage).isEqualTo("en")
+        assertThat(fields.regionalLanguage).isEqualTo("fr")
+        assertThat(fields.countryIso).isEqualTo("CM")
     }
 
     // ---- field edits + availability -----------------------------------------
@@ -686,7 +750,11 @@ class RegistrationViewModelTest {
     @Test
     fun register_blankRegionalLanguage_sendsNullNotBlank() = runTest(dispatcher) {
         val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
-        vm.fillAllValid() // never chooses a regional language
+        vm.fillAllValid()
+        // Since applyDeviceLocaleDefaults() now pre-fills regionalLanguage at init (like every
+        // other device-inferred default), an explicit clear is the only way to reach the blank
+        // case this test exercises — the field is no longer blank on fresh state.
+        vm.onRegionalLanguageChange("")
         repeat(RegistrationStep.total) { vm.skip() }
         vm.register()
         advanceUntilIdle()

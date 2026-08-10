@@ -465,3 +465,45 @@ Append-only log of gotchas and decisions that save time next run.
   but grep the existing `@OptIn(ExperimentalLayoutApi::class)` sites first rather than assuming
   `FlowRow` is unconditionally stable because it appears unadorned nearby in the same file (it's
   adorned two screens up, just off-screen).
+
+## Slice `auth-signup-region-inference-wiring` (2026-08-10)
+- **A `@HiltViewModel @Inject constructor` parameter with a Kotlin default value is NOT a usable
+  test seam under Hilt** — Hilt still tries to satisfy every constructor parameter from the DI
+  graph regardless of a default value, so `Locale.getDefault()` can't just be read inline inside
+  `init` if the ViewModel needs to stay constructible with a controllable value in JVM tests (the
+  host JVM's default locale is unpredictable across machines/CI, and even if it weren't, a bare
+  `Locale.getDefault()` call has no seam for a test to override). The already-shipped
+  `CacheClock`/`SystemCacheClock` pair (`sdk-core/cache/CacheClock.kt`, Hilt-bound in
+  `SdkModule.providesCacheClock()`) is the established, working pattern for exactly this shape —
+  a trivial `interface` + a `System*`-prefixed object default implementation, Hilt-bound, faked in
+  tests — and it generalises cleanly to any other system/platform read a ViewModel needs
+  (`DeviceLocaleProvider`/`SystemDeviceLocaleProvider` this run). No dedicated unit test was written
+  for the `System*` implementation itself, matching the `SystemCacheClock` precedent (nothing to
+  assert beyond "it calls the system API" — that would be tautological); the real behaviour lives
+  in whatever consumes the interface, tested there via a fake.
+- **Wiring a device-locale default into a step's proceed gate can silently flip a "user must act"
+  step into "already pre-satisfied," and any test that relied on the old always-blank fresh-state
+  default breaks as a legitimate consequence, not a regression to work around.** Android's LANGUAGE
+  step gate is `fields.systemLanguage.isNotEmpty()`; before this slice `RegistrationFields()`
+  defaulted `systemLanguage`/`regionalLanguage` to `""`, so the step always started blocked. Once
+  `RegistrationViewModel.init` pre-fills both from the device locale (mirroring iOS, whose own
+  `systemLanguage`/`regionalLanguage` are never blank either — they default to `"fr"`/`"fr"` even
+  before `detectLanguages()` overwrites them), the step starts pre-satisfied — correct, matches iOS,
+  and exactly the point of the slice. One pre-existing test
+  (`register_blankRegionalLanguage_sendsNullNotBlank`) had implicitly relied on fresh state being
+  blank to reach the "blank → sends null" wire-mapping branch; the fix is an explicit
+  `vm.onRegionalLanguageChange("")` to reach that branch on purpose, not loosening the assertion —
+  the pure `toRegisterRequest()` trim-to-null behaviour it protects is unchanged and still holds.
+  Grep every test that asserts on a field's fresh-state value before wiring a new init-time default
+  into it; only one such assertion existed here, but a wider field would need the same sweep.
+- **A field fed by two independent optional inputs from the same source needs a wiring test that
+  proves BOTH downstream consumers read the SAME source read, not two separately-injected values
+  that happen to agree in every other test.** `applyDeviceLocaleDefaults()` calls
+  `deviceLocaleProvider.regionTag()` twice — once inside the `inferLanguages` argument list, once
+  inside `inferCountryIso`'s — both from the same provider call chain, not two independently mocked
+  inputs. The
+  `initialState_deviceRegionMapsToARegionalLanguageDistinctFromSystem_setsBoth` test picks a region
+  (`"CM"`) that simultaneously resolves a regional-language map hit AND a known country, asserting
+  all three fields in one scenario — this is what would catch a future refactor that accidentally
+  wired `inferCountryIso` to a stale or hardcoded region instead of the same live read
+  `inferLanguages` uses, which a test only ever setting one of the two inputs at a time could miss.

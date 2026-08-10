@@ -1100,7 +1100,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the app-side `EmailVerificationView` composable (code field driving `OtpCodeField.sanitize` →
       `AuthService.verifyEmailWithCode`, resend → `resendVerificationEmail` with the 3 s confirmation
       window off a `Flow`, success overlay) + `oneTimeCode` autofill.
-- [~] Country auto-detection + region→language inference at signup — **inference core shipped**
+- [x] Country auto-detection + region→language inference at signup — **inference core shipped**
       (slice `auth-region-language-inference`, 2026-07-21). Pure `:core:model`
       `SignupRegionInference` + `SignupLanguages` (faithful port of iOS
       `RegistrationViewModel.detectLanguages()` + `detectCountry()`,
@@ -1120,8 +1120,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `dropsRegionalLanguageEqualToSystem` + `regionMappingEqualToEnglishSystemFallsBackToFrench` +
       `regionMappingEqualToNonEnglishSystemFallsBackToEnglish` (22 run, 3 failed, no collateral).
       `:core:model:testDebugUnitTest` green + full `:app:assembleDebug` → BUILD SUCCESSFUL. Diff =
-      `apps/android` only. **Follow-up:** wire it into the app-side registration-wizard scaffold
-      (source `Locale.getDefault()` at wizard start to pre-select the language step + country picker).
+      `apps/android` only. **Follow-up shipped** (slice `auth-signup-region-inference-wiring`,
+      2026-08-10): wired into the app-side registration-wizard scaffold — see §Auth's own wiring
+      note under the routine's `PROGRESS.md` for the full writeup. `RegistrationViewModel.init` now
+      calls a new `applyDeviceLocaleDefaults()` (new `:sdk-core` seam
+      `me.meeshy.sdk.locale.DeviceLocaleProvider`/`SystemDeviceLocaleProvider`, same shape as
+      `CacheClock`/`SystemCacheClock`, wrapping `Locale.getDefault()` behind a fake-able interface
+      for tests) that feeds `SignupRegionInference.inferLanguages`/`.inferCountryIso` and applies the
+      result to `RegistrationFields.systemLanguage`/`.regionalLanguage`/`.countryIso` before the user
+      touches anything — pre-selecting the LANGUAGE step and the PHONE step's country picker exactly
+      like iOS `RegistrationViewModel.init()` → `detectCountry()` + `detectLanguages()`.
 - [~] Password recovery via email link — **pure flow core shipped** (slice `auth-email-recovery-core`,
       2026-07-21). Faithful port of iOS `MeeshyForgotPasswordView.emailFlow`
       (`packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift`): the `@State email` /
