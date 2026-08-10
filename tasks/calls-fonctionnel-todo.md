@@ -5805,3 +5805,63 @@ audit dédié (agent Explore, lecture seule, ligne à ligne, sans se fier au log
   moindre, à réévaluer ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors d'atteinte dans
   ce sandbox ; bun local 1.3.11 vs. 1.3.14 attendu par CLAUDE.md (`bun upgrade` non tenté ce cycle, hors
   périmètre calling).
+
+## Vague 90 — `handleIncomingCall`'s "second caller bumps unanswered call" branch rejetait la call en cours d'acceptation (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`HEAD == origin/main` au démarrage après merge de PR #2749 (Vague 89, `startCall()` ack timeout) — trouvée
+déjà ouverte et 15/15 checks CI verts, mergée directement (squash) avant de lancer un nouvel audit, aucune
+duplication. `rejoinActiveCallAfterReconnect` (piste laissée par la Vague 89) réévaluée en premier : fire-
+and-forget, aucun ref/ressource à fuir, le `call:ended` serveur récupère déjà le client en cas d'échec —
+confirmée non-régression (leçon 18 appliquée : hypothèse réfutée, pas suivie). Nouvel audit dédié (agent
+Explore, lecture seule, périmètre web+gateway — seules stacks avec toolchain dans ce sandbox) mandaté pour
+trouver un candidat frais.
+
+- **Root cause confirmée par lecture directe** (`apps/web/components/video-call/CallManager.tsx`,
+  `handleIncomingCall`, branche « second incoming call bumping unanswered call », introduite Vague 60) :
+  `handleAcceptCall` (~L715) ne fait `setIncomingCall(null)` qu'APRÈS que `acceptOrJoinCall` (~L640) se
+  résolve — un aller-retour `getUserMedia` + ack `call:join` pouvant durer jusqu'à `CALL_JOIN_ACK_TIMEOUT_MS`
+  (10s, Vague 88). `isInCall`/`currentCall` ne reflètent pas non plus l'acceptation en cours :
+  `setInCall(true)` est la TOUTE DERNIÈRE instruction d'`acceptOrJoinCall`. Pendant toute cette fenêtre,
+  `incomingCall` reste donc la call en cours d'acceptation et `isInCall` reste `false` — la branche
+  `busyInCall` (L320) ne se déclenche jamais. Un `call:initiated` non lié arrivant dans cette fenêtre tombe
+  alors dans la branche « second caller » (L347, sans connaissance d'`acceptingCallIdRef`) qui exécute
+  `rejectWaitingCall(incomingCall.callId)` — un `call:end reason=rejected` envoyé pour la call que
+  l'utilisateur vient précisément de taper Accept dessus, en course avec son propre `call:join` en attente
+  pour le MÊME callId. Scénario atteignable sans timing adverse : deux personnes tentant de joindre le même
+  utilisateur B à quelques secondes d'écart pendant que B accepte le premier appel (fenêtre ~1-10s, ordinaire
+  sur un groupe/DM actif). Si le join finit par réussir malgré tout, l'appelant A voit un reject fantôme
+  alors que B est réellement en train de le rejoindre ; côté gateway, le `call:end` et le `call:join` pour le
+  même `callId` arrivent sur le même socket coup sur coup, deux handlers async pouvant s'entrelacer.
+- **Fix** : dans la branche « second caller », un garde `acceptingCallIdRef.current === incomingCall.callId`
+  détourne vers le même traitement que le cas déjà-occupé (`setWaitingCall(event)` +
+  `startWaitingTimeout`) au lieu de rejeter la call en cours d'acceptation — avec la MÊME garde « ne pas
+  bumper silencieusement une waiting call existante » que la Vague 59 avait ajoutée à la branche sœur
+  (`busyInCall`), pour ne pas réintroduire la même classe de bug sur ce nouveau chemin `setWaitingCall`.
+  Aucun changement de dépendances `useCallback` : `waitingCall`, `clearWaitingTimeout`, `rejectWaitingCall`,
+  `startWaitingTimeout` étaient déjà dans le tableau de deps (réutilisés par la branche `busyInCall`
+  existante). Un seul fichier de production modifié, +18/-3 lignes.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau fichier `CallManager.acceptInFlightBump.test.tsx`
+  (2 tests, patron du fake-socket avec ack capturé/différé réutilisé de `CallManager.acceptCall.test.tsx`
+  combiné au patron double-incoming de `CallManager.doubleIncomingCall.test.tsx`) — (1) un deuxième
+  `call:initiated` pendant l'ack `call:join` en attente ne déclenche AUCUN `call:end` pour le premier callId,
+  affiche le second comme waiting call, et le join du premier réussit normalement une fois son ack résolu
+  (RED confirmé : `call:end reason=rejected` reçu pour FIRST_CALL_ID avant le fix) ; (2) un troisième caller
+  pendant la même fenêtre bump correctement la waiting call mise en file par le second (même garde Vague 59,
+  vérifie la symétrie du nouveau chemin). Les deux RED confirmés par exécution (`bun run jest`) avant le fix,
+  GREEN après.
+- **Vérification** : sweep complet `call|webrtc|video-call|orchestrator|adaptive-degradation` — **54 suites
+  / 747 tests verts**, aucune régression (notamment `CallManager.doubleIncomingCall.test.tsx` et
+  `CallManager.callWaitingBump.test.tsx`, les deux branches sœurs de celle modifiée, et
+  `CallManager.acceptCall.test.tsx`, qui exerce `acceptingCallIdRef`). Prérequis CLAUDE.md rejoués (sandbox
+  sans `node_modules` au démarrage) : `bun install --ignore-scripts`, puis `packages/shared && npx prisma
+  generate --generator client && bun run build` sans erreur. `npx tsc --noEmit` sur `apps/web` : **1657
+  erreurs avant et après le diff** (`git stash`/`stash pop`, comparaison directe), zéro nouvelle, zéro sur
+  les lignes touchées (347-388, vérifié par grep ciblé). `next lint` : même échec sandbox-only de config
+  ESLint v9 circulaire documenté aux vagues précédentes (65-89), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
+  needs on-device confirmation) ; `rejoinActiveCallAfterReconnect` (web, réévaluée ce cycle, confirmée
+  non-régression — retirée du backlog) ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors
+  d'atteinte dans ce sandbox ; bun local 1.3.11 vs. 1.3.14 attendu par CLAUDE.md (hors périmètre calling).
