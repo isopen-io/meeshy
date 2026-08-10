@@ -7,6 +7,11 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { getSharedNotificationService } from './notifications/notification-service-registry';
+import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
+import { retractCommentNotifications } from './posts/retractCommentNotifications';
+
+const log = enhancedLogger.child({ module: 'PostCommentService' });
 
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
@@ -321,7 +326,17 @@ export class PostCommentService {
     return { items: enriched, nextCursor, hasMore };
   }
 
-  async deleteComment(commentId: string, userId: string) {
+  async deleteComment(
+    commentId: string,
+    userId: string,
+    // Défaut = le service partagé du processus, le seul câblé avec `io`. Même
+    // résolution que `applyPostRemovalEffects` et `applyMessageRemovalEffects` :
+    // la route n'a rien à câbler, et un appelant hors serveur (worker, script,
+    // test) retire quand même les lignes, sans annonce. Le défaut est évalué à
+    // CHAQUE appel — le service n'est enregistré qu'au démarrage du socket,
+    // après la construction des routes.
+    announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  ) {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
     });
@@ -370,6 +385,21 @@ export class PostCommentService {
         where: { id: comment.parentId },
         data: { replyCount: { decrement: 1 } },
       });
+    }
+
+    // Les notifications que le fil retiré a produites. Le soft-delete ne
+    // déclenche aucune cascade et le lien vit dans un blob JSON : sans ceci,
+    // l'extrait du commentaire supprimé reste affiché — et non lu — dans
+    // l'inbox de toute son audience, avec un `view_post` qui n'ouvre plus rien.
+    // Sur la MÊME liste d'ids que le soft-delete, pas sur la seule cible.
+    //
+    // Best-effort DÉLIBÉRÉ, comme les quatre effets du retrait de post : quand
+    // ceci s'exécute, `deletedAt` est déjà committé. Une inbox récalcitrante ne
+    // doit pas transformer une suppression réussie en 500.
+    try {
+      await retractCommentNotifications(this.prisma, [commentId, ...descendantIds], announcer);
+    } catch (err) {
+      log.warn('comment removal: notification retraction failed', { commentId, err });
     }
 
     return { success: true };

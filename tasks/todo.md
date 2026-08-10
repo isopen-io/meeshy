@@ -1,3 +1,125 @@
+# Cycle 52 — Le commentaire partait ; ce qu'il avait écrit dans l'inbox des autres restait
+
+Le cycle 51 nommait cette tête en la donnant explicitement pour une **hypothèse à réfuter d'abord**
+(leçon 18), avec trois questions à instruire dans l'ordre. Les trois ont été instruites. Le défaut
+est confirmé ; **la piste, elle, était fausse sur le point qui décide toute l'implémentation.**
+
+## D1 (les trois questions du cycle 51, dans l'ordre)
+
+**Q1 — qui écrit `PostComment.deletedAt`, et est-ce la configuration « quatre écrivains sans
+unité » du cycle 14 ?** Non. Un seul écrivain interactif : `PostCommentService.deleteComment`,
+atteint par la seule route `DELETE /posts/:postId/comments/:commentId`. Le second site,
+`ExpiredStoriesCleanupService`, ne soft-delete pas : il **hard-delete** les commentaires d'une story
+expirée depuis 7 jours, dans un cycle de vie où c'est le post entier qui part. Pas de liste d'effets
+nommée à créer, donc — l'écrire pour un unique appelant aurait fabriqué l'indirection que les
+cycles 45b/51 justifient par la PLURALITÉ des écrivains. L'appel va directement dans `deleteComment`.
+
+**Q2 — `context.commentId` désigne-t-il toujours LE commentaire supprimé ?** Oui quand il est
+présent — et c'est ce « quand » qui est le vrai résultat. En relisant les écrivains plutôt que le
+nom de la colonne (leçon 18 du cycle 18), les huit types producteurs se répartissent en **trois**
+familles, pas une :
+
+| Chemin qui porte le lien | Types |
+|---|---|
+| `context.commentId` SEUL | `comment_reaction` |
+| `metadata.commentId` SEUL | **`post_comment`**, `comment_like` |
+| les deux | `comment_reply`, `user_mentioned` (mention en commentaire), `story_new_comment`, `story_thread_reply`, `friend_story_comment` |
+
+La piste du cycle 51 énumérait les sept premiers comme écrivains de `context.commentId`. Deux d'entre
+eux ne l'écrivent pas — dont `post_comment`, la notification la **plus fréquente** de toute la
+famille : une par commentaire, vers l'auteur du contenu. Un retrait transposé littéralement du
+jumeau post, qui ne connaît que `context.<clé>`, aurait donc laissé en base la majorité du volume,
+en passant tous ses tests. La trace de cette asymétrie était déjà dans le code — le payload APNs
+lit `params.context.commentId || params.metadata.commentId` — et personne ne l'avait lue comme
+l'aveu qu'elle est.
+
+**Q3 — retrait ou MARQUAGE, comme la réponse à une demande d'amitié ?** Retrait. Ce qui tranche est
+ce qui reste au bout du lien : le commentaire est filtré partout à la lecture (`getComments` et
+`getReplies` excluent `deletedAt`), donc la ligne n'a plus rien à afficher **et** rien où mener. Le
+marquage était l'arbitrage de la demande d'amitié RÉPONDUE parce que la ligne `FriendRequest`, elle,
+survit — la notification y est *consommée*, pas orpheline. Ici rien ne survit. Et `deleteComment`
+rejette `FORBIDDEN` pour tout autre que l'auteur : il n'existe donc pas de retrait de modération
+dont la notification serait la seule trace, le troisième faux positif cherché au cycle 51.
+
+## D2 (la seconde différence) — la cible est une liste, pas un id
+
+`deleteComment` soft-delete le **sous-arbre entier**, à profondeur arbitraire, parce que
+`commentCount` compte le fil complet. Le retrait reçoit exactement la liste d'ids que le soft-delete
+a écrite. Traiter la seule cible aurait laissé les notifications des réponses emportées avec elle —
+un défaut invisible depuis la cible, puisque la cible, elle, aurait été correctement nettoyée.
+
+`parentCommentId` reste VOLONTAIREMENT hors du filtre. C'est la seule autre clé de `context` qui
+désigne un commentaire, et elle ne désigne jamais le sujet de la ligne : sur un `comment_reply`,
+`commentId` est la réponse et `parentCommentId` le commentaire auquel on répond. Le cas « le parent
+disparaît » est déjà couvert par le sous-arbre.
+
+## D3 (câblage) — la route n'a rien à câbler
+
+Même résolution que `applyPostRemovalEffects` et `applyMessageRemovalEffects` : l'annonceur est un
+**défaut de paramètre** sur `getSharedNotificationService()`. Sur une méthode, le défaut est évalué
+à chaque appel — ce qui est ici nécessaire et pas seulement commode : le service partagé n'est
+enregistré qu'au démarrage du socket, après la construction des routes. Une injection par
+constructeur aurait capturé `undefined`.
+
+## Plan
+- [x] T1 — enquête : les trois questions du cycle 51, écrivains relus un par un
+- [x] T2 — RED (unité) : les deux chemins JSON lus ; chaque famille de types couverte
+- [x] T3 — RED (unité) : sous-arbre, annonce par destinataire, voisins épargnés, ordre, drainage,
+      liste vide, sans annonceur, échec Mongo remonté
+- [x] T4 — RED (câblage) : même liste d'ids que le soft-delete, annonce après l'écriture durable,
+      suppression réussie malgré un retrait en échec, rien de retiré si la suppression est refusée
+- [x] T5 — GREEN : `retractCommentNotifications` + appel best-effort dans `deleteComment`
+- [x] T6 — sondes de fidélité (leçon 45b) : quatre défauts réintroduits un par un
+- [x] T7 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T8 — changeset + CHANGELOG + ce relevé
+
+## Vérification
+
+Rouge observé avant le correctif : `Cannot find module '../retractCommentNotifications'`.
+
+**Sondes de fidélité** — chaque témoin central re-vérifié en réintroduisant volontairement le défaut
+qu'il prétend attraper, restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| filtre sur le seul `context.commentId` | 3 (dont « retire aussi les lignes dont le lien ne vit que dans metadata ») |
+| retrait borné à `[commentId]` au lieu du sous-arbre | 1 (« TOUT le sous-arbre soft-deleté ») |
+| appel au retrait supprimé de `deleteComment` | 2 |
+| annonce placée AVANT l'écriture durable | 1 (« annonce APRÈS l'écriture durable ») |
+
+Suite gateway complète sous bun (parité CI) : **639 suites, 16 220 tests, tout vert** (333 s).
+Couverture globale lignes **95,76 %** — inchangée. `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Aucune ligne déjà orpheline n'est rattrapée**, comme au cycle 51 : le correctif ne vaut que pour
+  les suppressions à venir. Réparable par le patron de `repair-mention-user-ids.ts` — action
+  humaine, cette routine n'a aucun accès MongoDB.
+- **`post_comment` et `comment_like` n'exposent pas `context.commentId`**, alors que leurs six
+  cousins le font. Ce n'est pas qu'une gêne pour le retrait : le commentaire de `createNotification`
+  dit que « `postId`/`commentId` vivent dans `context` (cible de navigation) » et que le schéma de
+  réponse REST les expose — donc la navigation **in-app** vers le commentaire exact ne peut pas
+  fonctionner pour ces deux types, seul le payload APNs s'en sortant par son repli sur `metadata`.
+  À instruire comme un défaut de navigation à part entière (lire d'abord ce que le web et le SDK iOS
+  consomment réellement), et non à corriger en passant : c'est un contrat client.
+- **Les stories expirées ne retirent pas leurs notifications.** `ExpiredStoriesCleanupService`
+  hard-delete les posts après 7 jours sans passer par `applyPostRemovalEffects` : toutes les
+  notifications d'une story expirée survivent, exactement comme celles d'un post supprimé avant le
+  cycle 51. Volume potentiellement supérieur au cas post (toutes les stories expirent). À vérifier
+  avant d'écrire : le hard-delete déclenche-t-il une cascade que le soft-delete ne déclenchait pas ?
+  `Notification` n'a pas de relation vers `Post`, donc a priori non — mais c'est précisément le genre
+  de déduction que ce cycle a appris à ne pas faire sans lire.
+- **`broadcastCommentDeleted` n'annonce que la cible, pas le sous-arbre.** La route émet un seul
+  `commentId` alors que `deleteComment` en a soft-deleté N. Les réponses restent affichées chez les
+  clients connectés jusqu'au prochain chargement du fil. Défaut voisin, non instruit ce cycle.
+- **Le retrait des `Mention` d'un post n'est pas dans la liste d'effets** (hérité du cycle 51,
+  inchangé) ; le push APNs/FCM déjà délivré n'est pas rappelé ; `.gitignore:177` porte un `post-*`
+  non ancré et non scopé ; `login_new_device` sans contexte de consommation ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le
+  gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 51 — Le jumeau côté post avait reçu la liste, jamais les notifications
 
 Le cycle 50 nommait cette tête en toutes lettres, et la leçon 18 dit quoi en faire : une piste
