@@ -112,7 +112,10 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     // MARK: - Init
 
-    public init(engine: AudioPlaybackEngineDriving = AudioPlaybackManager()) {
+    public init(
+        engine: AudioPlaybackEngineDriving = AudioPlaybackManager(),
+        sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never>? = nil
+    ) {
         self.engine = engine
         // Bubble taps and lock-screen commands call the engine directly, bypassing
         // the coordinator's guards. Setting playbackPermissionGuard closes that gap
@@ -124,6 +127,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
         wireEngineForwarding()
         wireAuthLogoutHook()
         wireSocketLifecycleHooks()
+        wireSessionInterruptionHooks(
+            sessionEvents ?? MediaSessionCoordinator.shared.events.eraseToAnyPublisher()
+        )
     }
 
     // MARK: - Public API
@@ -217,6 +223,51 @@ public final class ConversationAudioCoordinator: ObservableObject {
             return
         }
         startCurrentHead()
+    }
+
+    // MARK: - Interruptions système (Siri, appel cellulaire, route perdue)
+
+    /// Armé par `.interruptionBegan` UNIQUEMENT si la lecture était en cours ;
+    /// consommé par la fin d'interruption. Une pause déclenchée par un retrait
+    /// d'AirPods (`routeChangedOldDeviceUnavailable`) ne l'arme PAS —
+    /// convention iOS : débrancher = pause, sans reprise automatique.
+    private var wasPlayingBeforeInterruption = false
+
+    private func wireSessionInterruptionHooks(
+        _ events: AnyPublisher<MediaSessionCoordinator.Event, Never>
+    ) {
+        events
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.handleSessionEvent(event) }
+            .store(in: &cancellables)
+    }
+
+    /// `internal` : appelé en synchrone par les tests, par le sink en prod.
+    /// Les appels Meeshy (CallKit) ont leur propre chemin
+    /// `suspendForSystemCall`/`resumeAfterSystemCall` piloté par CallManager ;
+    /// pendant cette suspension, RTCAudioSession peut générer des
+    /// interruptions parasites — tout est ignoré ici.
+    func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
+        guard !_isSuspendedBySystemCall else { return }
+        guard activeContext != nil else { return }
+        switch event {
+        case .interruptionBegan:
+            guard isPlaying else { return }
+            wasPlayingBeforeInterruption = true
+            engine.pause()
+        case .interruptionEndedShouldResume:
+            guard wasPlayingBeforeInterruption else { return }
+            wasPlayingBeforeInterruption = false
+            guard !CallManager.shared.isCallActiveForAudioGuard else { return }
+            engine.resumeFromInterruption()
+        case .interruptionEndedShouldNotResume:
+            wasPlayingBeforeInterruption = false
+        case .routeChangedOldDeviceUnavailable:
+            guard isPlaying else { return }
+            engine.pause()
+        case .routeChangedOther, .callEndedShouldResume:
+            break
+        }
     }
 
     /// `true` when a prior track is available to jump back to. Drives the
