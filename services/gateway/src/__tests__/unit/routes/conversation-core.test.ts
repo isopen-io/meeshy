@@ -1227,7 +1227,49 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(req, reply);
 
+      // direct sans message : silencieux à la création, voir Prisme design doc 2026-08-04
+      expect(createInviteNotif).not.toHaveBeenCalled();
+    });
+
+    it('still sends invitation notifications for group conversations', async () => {
+      mockValidateSchema.mockReturnValue({ type: 'group', title: 'Team', participantIds: [OTHER_USER_ID] });
+      const createInviteNotif = jest.fn().mockResolvedValue(undefined);
+      fastify.notificationService = { createConversationInviteNotification: createInviteNotif };
+      prisma.user.findMany.mockResolvedValue([
+        { id: USER_ID, displayName: 'Alice', username: 'alice', avatar: null },
+        { id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null },
+      ]);
+      prisma.conversation.create.mockResolvedValue({
+        id: CONV_ID, type: 'group', title: 'Team', createdAt: new Date(), participants: [],
+      });
+
+      await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
+
       expect(createInviteNotif).toHaveBeenCalled();
+    });
+
+    it('emits CONVERSATION_NEW only to the creator for a fresh direct conversation', async () => {
+      mockValidateSchema.mockReturnValue({ type: 'direct', participantIds: [OTHER_USER_ID] });
+      prisma.user.findMany.mockResolvedValue([
+        { id: USER_ID, displayName: 'Alice', username: 'alice', avatar: null },
+        { id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null },
+      ]);
+      prisma.conversation.create.mockResolvedValue({
+        id: CONV_ID, type: 'direct', title: null, createdAt: new Date(), participants: [],
+      });
+
+      await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
+
+      // `createMockFastify()` (ligne 208) route tout `io.to(room).emit(...)` à
+      // travers UN SEUL `mockTo`/`mockEmit` partagé (`fastify._mockTo`/
+      // `fastify._mockEmit`) — le mock ROOMS de ce fichier (ligne 135) donne
+      // `ROOMS.user(id) === 'user:${id}'`. Un seul emit total pour ce test
+      // (notificationService est `null` par défaut dans createMockFastify, donc
+      // le chemin notification n'émet rien ici) confirme que seul le créateur a
+      // reçu conversation:new.
+      expect(fastify._mockEmit).toHaveBeenCalledTimes(1);
+      expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
+      expect(fastify._mockTo).not.toHaveBeenCalledWith(`user:${OTHER_USER_ID}`);
     });
 
     it('skips notifications when notificationService is null', async () => {
@@ -2057,9 +2099,8 @@ describe('registerCoreRoutes', () => {
       const handler = getHandler(fastify, 'POST', '/conversations');
       const reply = makeReply();
       await handler(makeRequest({ body: {} }), reply);
-      expect(createInviteNotif).toHaveBeenCalledWith(
-        expect.objectContaining({ inviterUsername: 'alice-username' })
-      );
+      // direct sans message : silencieux à la création, voir Prisme design doc 2026-08-04
+      expect(createInviteNotif).not.toHaveBeenCalled();
     });
 
     it('socket io null - CONVERSATION_NEW not broadcast but creation succeeds', async () => {

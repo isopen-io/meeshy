@@ -1005,6 +1005,11 @@ export function registerCoreRoutes(
           description,
           communityId: communityId || null,
           ...(isBroadcast ? { isAnnouncementChannel: true, defaultWriteRole: 'admin' } : {}),
+          // Explicite (pas juste omis) : Prisma/MongoDB omettrait le champ si
+          // on ne le posait pas, ce qui le laisserait ABSENT plutôt que
+          // `null` — voir Prisme design doc 2026-08-04 (DM vide et silencieux
+          // jusqu'au premier message).
+          ...(type === 'direct' ? { firstMessageSentAt: null } : {}),
           participants: {
             create: [
               {
@@ -1125,7 +1130,11 @@ export function registerCoreRoutes(
               ? conversation.createdAt.toISOString()
               : String(conversation.createdAt)
           };
-          for (const participantId of allParticipantIds) {
+          // Un direct fraîchement créé (0 message) reste silencieux pour les
+          // autres participants — seul le créateur voit sa conversation
+          // vide apparaître immédiatement (Prisme design doc 2026-08-04).
+          const emitParticipantIds = type === 'direct' ? [userId] : allParticipantIds;
+          for (const participantId of emitParticipantIds) {
             io.to(ROOMS.user(participantId)).emit(
               SERVER_EVENTS.CONVERSATION_NEW,
               conversationNewPayload
@@ -1138,9 +1147,11 @@ export function registerCoreRoutes(
         // au prochain delta sync ou via la notification legacy ci-dessous.
       }
 
-      // Envoyer des notifications aux participants invités
+      // Envoyer des notifications aux participants invités — sauf pour un
+      // direct fraîchement créé (0 message) : silencieux à la création, voir
+      // Prisme design doc 2026-08-04.
       const notificationService = fastify.notificationService;
-      if (notificationService && uniqueParticipantIds.length > 0) {
+      if (notificationService && uniqueParticipantIds.length > 0 && type !== 'direct') {
         try {
           // Le créateur est déjà chargé dans userMap (userId ∈ allUserIds) :
           // pas de second aller-retour DB.
