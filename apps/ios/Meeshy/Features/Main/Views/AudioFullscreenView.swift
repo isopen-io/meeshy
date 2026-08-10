@@ -535,7 +535,12 @@ private struct AudioFullscreenPage: View {
 
     /// Route toute lecture démarrée depuis le plein écran vers le coordinator
     /// partagé : si l'attachment est déjà la piste active, seule l'URL change
-    /// (variante de langue) — contexte et file survivent. Sinon, démarre une
+    /// (variante de langue) — contexte et file survivent. Si une AUTRE page
+    /// de la MÊME conversation est déjà en session (swipe entre pages du
+    /// pager), `playKeepingQueue` bascule la tête sans rouvrir de session —
+    /// sinon `coordinator.play(tail: [])` écraserait la file de conversation
+    /// et le titre de la carte système basculerait sur le nom de l'auteur.
+    /// Sinon (pas de session active, ou conversation différente), démarre une
     /// nouvelle session coordinator avec la file « à suivre » de la source
     /// (vide pour les surfaces standalone).
     private func playThroughCoordinator(urlString: String) {
@@ -546,8 +551,14 @@ private struct AudioFullscreenPage: View {
             }
             return
         }
+        let queued = item.queuedAudio(urlString: urlString)
+        if let activeConv = coordinator.activeContext?.conversationId,
+           !queued.conversationId.isEmpty, activeConv == queued.conversationId {
+            coordinator.playKeepingQueue(queued)
+            return
+        }
         coordinator.play(
-            current: item.queuedAudio(urlString: urlString),
+            current: queued,
             tail: item.queueTailProvider?() ?? [],
             conversationName: item.nowPlayingContextName,
             conversationArtworkURL: item.authorAvatarURL

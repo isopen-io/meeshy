@@ -159,8 +159,58 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// et l'enchaînement survivent au changement de langue.
     public func playVariant(urlString: String) {
         guard !CallManager.shared.isCallActiveForAudioGuard else { return }
-        guard activeContext != nil, !urlString.isEmpty else { return }
+        guard activeContext != nil, !urlString.isEmpty, let head = queue.first else { return }
+        // Rejoue la tête avec la nouvelle URL — SANS ça, tout chemin qui
+        // rejoue `queue.first.fileUrl` (ex: `resumeAfterSystemCall()` via
+        // `startCurrentHead()`) ramènerait silencieusement l'audio à sa
+        // langue d'origine. `QueuedAudio` est immuable : rebuild champ à
+        // champ, seul `fileUrl` change. `ActiveAudioContext` ne porte pas
+        // d'URL — `activeContext` reste donc identique, comme attendu.
+        queue[0] = QueuedAudio(
+            attachmentId: head.attachmentId,
+            messageId: head.messageId,
+            conversationId: head.conversationId,
+            fileUrl: urlString,
+            durationMs: head.durationMs,
+            senderName: head.senderName,
+            senderAvatarURL: head.senderAvatarURL,
+            receivedAt: head.receivedAt
+        )
         engine.play(urlString: urlString)
+    }
+
+    /// Change l'attachment ACTIF sans réinitialiser la session (nom de
+    /// conversation, historique) — le plein écran route ici quand on swipe
+    /// vers une AUTRE page pendant que le coordinator joue déjà la même
+    /// conversation, pour que la carte système et la file de secours
+    /// (« suivant ») survivent au changement de page.
+    ///
+    /// - Si `queued.attachmentId` est DÉJÀ dans la file : les entrées
+    ///   strictement avant lui basculent en historique (permet un
+    ///   `playPrevious()` cohérent), la file recommence à ce titre.
+    /// - Sinon : insère `queued` en tête, l'ancienne tête devient la suivante.
+    ///
+    /// `currentName`/`currentArtwork` ne sont JAMAIS touchés ici — c'est ce
+    /// qui garde le titre de conversation stable pendant la navigation.
+    public func playKeepingQueue(_ queued: QueuedAudio) {
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("playKeepingQueue() ignored: a CallKit call is active")
+            return
+        }
+        guard activeContext != nil else { return }
+
+        if let idx = queue.firstIndex(where: { $0.attachmentId == queued.attachmentId }) {
+            let skipped = queue[..<idx]
+            history.append(contentsOf: skipped)
+            while history.count > Self.maxHistory { history.removeFirst() }
+            consumedAttachmentIds.formUnion(skipped.map(\.attachmentId))
+            queue.removeFirst(idx)
+        } else {
+            queue.insert(queued, at: 0)
+            consumedAttachmentIds.remove(queued.attachmentId)
+        }
+        queueCount = queue.count
+        startCurrentHead()
     }
 
     public func togglePlayPause() {

@@ -98,6 +98,87 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(engine.playCallCount, 0)
     }
 
+    /// Régression : `resumeAfterSystemCall()` rejoue `queue.first.fileUrl` via
+    /// `startCurrentHead()`. Sans reconstruire la tête de file avec l'URL de la
+    /// variante, `playVariant` était annulé par tout chemin qui rejoue la tête —
+    /// la reprise d'appel ramenait l'audio à sa langue d'origine.
+    func test_playVariant_survivesSystemCallResume() async {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        sut.playVariant(urlString: "https://x/a-es.m4a")
+        engine.isPlaying = true
+        await Task.yield()
+
+        sut.suspendForSystemCall()
+        sut.resumeAfterSystemCall()
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://x/a-es.m4a")
+    }
+
+    // MARK: - playKeepingQueue
+
+    func test_playKeepingQueue_targetInQueue_preservesNameAndTail() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        let b = make("b")
+        sut.play(current: make("a"), tail: [b, make("c")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        sut.playKeepingQueue(b)
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "b")
+        XCTAssertEqual(sut.queueCount, 2)
+        XCTAssertEqual(sut.activeContext?.conversationName, "Conv")
+        XCTAssertTrue(sut.hasPrevious)
+    }
+
+    func test_playKeepingQueue_targetNotInQueue_insertsAtHead() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let x = make("x")
+
+        sut.playKeepingQueue(x)
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "x")
+        XCTAssertEqual(sut.queueCount, 3)
+        XCTAssertEqual(sut.activeContext?.conversationName, "Conv")
+    }
+
+    func test_playKeepingQueue_withoutActiveContext_isNoOp() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let x = QueuedAudio(attachmentId: "x", messageId: "m-x", conversationId: "c",
+                             fileUrl: "https://x/x.m4a", durationMs: 1000,
+                             senderName: "S", senderAvatarURL: nil, receivedAt: Date())
+
+        sut.playKeepingQueue(x)
+
+        XCTAssertEqual(engine.playCallCount, 0)
+    }
+
     func test_engineFinished_advancesQueue_playsNext() async {
         let (sut, engine) = makeSUT()
         let current = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
