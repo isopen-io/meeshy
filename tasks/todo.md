@@ -111,8 +111,34 @@ touchés sont le bruit de résolution `@meeshy/shared/prisma/client` en ligne 1,
 l'identique sur des fichiers jamais touchés. Le module neuf n'en produit aucune — il ne dépend pas
 du client Prisma généré, seulement de la surface qu'il déclare.
 
+**Ce que la CI a trouvé et que la baseline locale ne pouvait pas voir.** Un TROISIÈME témoin pinnait
+la forme scalaire du filtre : `posts-share-tracking.test.ts:222`. Il fait partie des 20 suites qui ne
+COMPILENT pas dans cet environnement — une suite qui ne démarre pas ne peut faire tomber aucune
+assertion. La comparaison « mêmes 20 suites avant/après » prouvait l'absence de régression parmi les
+suites qui TOURNENT, et rien du tout sur les 20 autres, soit ~3 % du dépôt. Corrigé au même titre
+que les deux premiers ; leçon 100. **Le geste juste, pour tout changement de FORME d'un appel, est
+un `grep` sur la forme — pas la liste des tests qui rougissent, qui en est un sous-ensemble dont le
+complément est exactement invisible.**
+
+**Une observation fabriquée, écrite puis retirée.** Une étape de CI vue « en cours » à trois
+sondages d'intervalle a été déclarée bloquée depuis 50 min ; un correctif de CI (borner le job
+`quality`, sans `timeout-minutes` alors que tout le pipeline l'attend) a été écrit sur cette base,
+puis retiré avant merge. L'étape avait duré **93 secondes** : les sondages se suivaient sans qu'une
+seule seconde réelle s'écoule entre eux. Le manque de borne sur `quality` est réel et reste au
+backlog ci-dessous — mais il se justifiera par le défaut lui-même, pas par un incident inventé.
+
 ## Reste ouvert après ce cycle
 
+- **Les 20 suites rouges de cet environnement sont un angle mort mesurable, pas un décor.** Elles ne
+  compilent pas (`PostReactionService.ts:354`, `groupBy` non typé par le client Prisma généré ici) et
+  ne peuvent donc contredire aucun cycle — c'est ce qui a laissé passer le troisième témoin de ce
+  cycle. **Réparer cette compilation locale vaudrait plus qu'un cycle de correctif** ; en attendant,
+  tout cycle touchant `PostService`/`PostReactionService` liste ses sites par `grep`.
+- **Le job CI `quality` n'a aucun `timeout-minutes`** alors que `test`, `prisma` et `build`
+  l'attendent tous par `needs: quality` : il hérite du défaut GitHub de 6 h, et une étape bloquée y
+  gèlerait tout le pipeline. Ses deux étapes étant `continue-on-error`, une borne ne peut pas faire
+  échouer une PR pour du bruit. Onze des douze jobs du fichier sont dans ce cas ; seul `test` est
+  borné. Changement d'un mot par job, à faire dans sa propre PR.
 - **La fenêtre soft-delete → hard-delete laisse les liens actifs sur un post déjà masqué.** Une
   passe en régime permanent, davantage pendant un rattrapage de passif. Se ferme en bornant la passe
   de soft-delete (`findMany` + `updateMany`), ce qui est aussi ce que réclamerait tout autre effet
