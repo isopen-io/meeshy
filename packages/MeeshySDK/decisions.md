@@ -1,5 +1,13 @@
 # Decisions - packages/MeeshySDK (Swift SDK)
 
+## 2026-08-10: Prisme de l'aperçu — deux chemins, une seule convention de clés
+**Statut**: Accepté
+**Contexte**: `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` et ses douze témoins existent depuis longtemps ; le champ qu'ils lisent (`lastMessageTranslations`) valait `nil` par le chemin REST, faute de champ dans `APIConversation` et de production côté gateway. La doc du champ annonçait le câblage au futur et renvoyait à un contournement applicatif (`ConversationListViewModel.attachLastMessageTranslations`) qui n'existe nulle part. Le gateway expédie désormais `lastMessageTranslations` et `lastMessageOriginalLanguage`.
+**Decision**: `APIConversation` décode les deux clés au niveau CONVERSATION (pas dans `lastMessage`) et `toConversation(currentUserId:)` les pose sur le domaine, **clés minuscules** — même normalisation que `ConversationSyncEngine.previewTranslations(from:)` sur le chemin socket. Une carte vide reste `nil` : le résolveur distingue « aucune traduction utile » de « carte présente », et `{}` sérialiserait inutilement dans le cache disque. `lastMessageOriginalLanguage` est ce qui permet de séparer « pas de traduction vers ma langue » de « le message EST déjà dans ma langue » (règle #3 du Prisme).
+**Alternatives rejetées**: porter la carte dans `APIConversationLastMessage` (elle n'a pas la forme de `Message.translations`, un `[APITextTranslation]` — deux formes sous un même nom auraient dérivé, et `MeeshyConversation` décode déjà la clé plate pour son cache) ; élargir l'init memberwise de `MeeshyConversation` (il aurait fallu toucher chacun de ses appelants pour deux champs optionnels) ; laisser le seul chemin socket alimenter le champ (les traductions arrivent APRÈS le `message:new`, et le démarrage à froid n'en voit aucune).
+**Cons**: la ligne de liste applique le Prisme dès le premier chargement REST ; une gateway antérieure qui n'envoie pas les clés reste décodable et retombe sur `lastMessagePreview` brut ; le fanout `conversation:updated` ne porte pas encore la carte, donc une ligne rafraîchie par édition/suppression revient temporairement à l'original.
+
+
 ## 2025-02: Architecture - Dual-Target (MeeshySDK + MeeshyUI)
 **Statut**: Accept
 **Contexte**: Sparation logique mtier et UI pour rutilisabilit

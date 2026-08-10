@@ -1,5 +1,37 @@
 # Decisions - services/gateway (Fastify API Gateway)
 
+## 2026-08-10 : Le Prisme s'applique à l'APERÇU de la liste, et c'est au serveur de le rendre possible
+
+**Statut** : Accepté
+
+**Contexte** : le principe produit dit « le prisme s'applique à TOUT le contenu — messages texte, transcriptions audio, métadonnées, **previews** ». La ligne de liste de conversations était la seule surface où il ne s'appliquait pas, et pas faute de client : le SDK iOS porte `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` avec sa batterie de douze témoins (ordre de préférence, refus explicite de retomber sur une traduction quelconque), et la facette `LastMessageFacet.translations` qui rend l'écriture des onze champs `lastMessage*` atomique.
+
+Ces deux surfaces ne recevaient **jamais** de données par le chemin REST. Le `select` du dernier message dans `GET /conversations` ne chargeait ni `Message.translations` ni `Message.originalLanguage` ; `APIConversation` n'avait aucun champ où les décoder. La documentation du champ SDK l'écrivait noir sur blanc — « when the gateway starts shipping these in `/conversations` it will be wired through the API → domain converter; until then the field stays `nil` » — et renvoyait à un contournement applicatif (`ConversationListViewModel.attachLastMessageTranslations`) qui **n'existe nulle part dans le dépôt**.
+
+Le chemin socket, lui, est câblé (`ConversationSyncEngine.previewTranslations(from:)` dérive la carte du `message:new` reçu) mais ne comble rien : les traductions arrivent **après** le message, par `message:translation`, si bien que l'`APIMessage` du `message:new` les porte rarement. Au démarrage à froid comme au rafraîchissement de liste, chaque ligne restait donc dans la langue de l'expéditeur.
+
+**Décision** :
+- **Les deux champs vivent au niveau CONVERSATION**, pas dans `lastMessage` : `lastMessageOriginalLanguage` et `lastMessageTranslations`. C'est la clé que `MeeshyConversation` décode depuis toujours pour son cache disque, et la carte compacte `{ langue: aperçu }` n'a pas la forme de `Message.translations` (un tableau de `MessageTranslation`) — deux formes sous un même nom auraient dérivé.
+- **La carte est restreinte aux langues du LECTEUR**, résolues une fois par page via `resolveUserLanguagesOrdered` (seule autorité du dépôt sur l'ordre du Prisme), depuis l'utilisateur déjà chargé et mis en cache par le middleware d'auth — **aucune requête supplémentaire** sur ce hot path. Servir les N langues de la conversation multiplierait le poids de la liste pour un champ dont le client n'affiche qu'UNE valeur.
+- **Quatre exclusions, chacune fermant un cas distinct** (`routes/conversations/utils/last-message-preview.ts`) : hors prisme du lecteur ; langue d'origine (elle EST déjà `lastMessage.content`) ; traduction **chiffrée** (`isEncrypted` — son `text` est un cryptogramme, l'afficher mettrait du base64 dans la liste) ; `text` non exploitable (la colonne est un JSON libre côté Mongo).
+- **`null`, jamais `{}`, quand il ne reste rien** : le résolveur client doit pouvoir retomber sur l'original, ce qui EST la règle #3 du Prisme.
+- **Le plafond d'aperçu s'applique aux traductions comme au contenu.** `truncateMessagePreview` et son cap déménagent dans le même module que le nouveau constructeur : la troncature de l'aperçu a désormais un propriétaire unique, et une traduction de 5 000 caractères ne peut plus contourner un plafond posé pour le seul `content`.
+- **Le schéma de réponse déclare les deux champs.** `fast-json-stringify` retire en silence tout ce qu'il ne connaît pas — le même piège a déjà coûté `customName`, `reaction` et `_count`. `lastMessageTranslations` a des clés dynamiques, donc `additionalProperties: { type: 'string' }` : sans lui, un schéma objet sans `properties` sérialise `{}`, panne plus discrète encore que le strip.
+
+**Alternatives rejetées** :
+- **Renvoyer `translations` brut dans `lastMessage` via le spread** : le blob JSON complet (une entrée par langue de la conversation, chacune avec modèle, score, champs de chiffrement) à chaque ligne de liste, pour un champ dont le client lit une chaîne. Le spread est au contraire **déstructuré** pour que ces deux colonnes ne fuient pas.
+- **Une résolution serveur qui renverrait DÉJÀ l'aperçu dans la langue du lecteur** (un seul champ `lastMessagePreview` traduit) : elle détruirait l'information « ceci est une traduction », que le client signale par un indicateur discret, et elle ferait diverger `lastMessagePreview` de `lastMessage.content` sans que rien ne le dise.
+- **Corriger côté client seul** (rejouer les traductions depuis le cache de messages) : c'est le contournement que la doc SDK annonçait et que personne n'a écrit. Il ne peut rien au démarrage à froid, où le cache est vide — c'est-à-dire dans le cas qui est cassé.
+- **Étendre le même traitement à `emitConversationPreviewUpdate` dans ce lot** : ce fanout adresse N participants dont les prismes diffèrent ; le faire correctement demande un payload par destinataire, question de conception distincte. Nommé en suite, pas bâclé ici.
+
+**Conséquences** :
+- **La liste de conversations parle enfin la langue du lecteur dès le premier chargement**, sur iOS comme sur toute surface qui consommera les deux champs.
+- **Le poids de la liste augmente de la seule carte utile** : au plus une entrée par langue du prisme du lecteur (4 au maximum), chacune plafonnée à 300 points de code.
+- **Ce que la décision n'assure PAS** : le fanout temps réel `conversation:updated` (édition/suppression) n'emporte toujours pas le prisme, donc une ligne rafraîchie par ce chemin retombe sur l'original jusqu'à la synchro suivante ; `routes/conversations/search.ts` construit son propre `lastMessage` à la main et reste hors prisme ; le web rend encore `lastMessage.content` brut (`formatLastMessage`) et devra consommer les deux nouveaux champs.
+
+**Tests** : 18 neufs — 12 sur la source (`__tests__/unit/routes/conversations/last-message-prisme.test.ts` : appariement de langue, casse, exclusion de l'original, exclusion du chiffré, plafond, paire de surrogates, `null` vs `{}`, JSON de forme inattendue), 6 sur la route (`conversation-core.test.ts`, dont la forme du `select`), 2 sur le schéma partagé (`api-schemas.test.ts`), 6 côté SDK (`ConversationListPrismeWiringTests.swift`). Le double de `@meeshy/shared/utils/conversation-helpers` garde l'implémentation RÉELLE de `resolveUserLanguagesOrdered` : la doubler aurait rendu les témoins de prisme tautologiques. Sondes de fidélité en sept temps — `select` amputé : 1 rouge (le seul témoin qui puisse le voir, les autres injectent la donnée) ; exclusion de l'original retirée : 1 ; garde `isEncrypted` retirée : 1 ; `{}` au lieu de `null` : 3 ; troncature retirée : 2 ; prisme du lecteur ignoré : **5** ; les deux champs retirés de la ligne (le défaut d'origine) : **5**.
+
+
 ## 2026-08-10 : Une suppression de commentaire annonce les ids qu'elle emporte, pas sa seule cible
 
 **Statut** : Accepté
