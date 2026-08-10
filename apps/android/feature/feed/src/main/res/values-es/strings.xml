@@ -98,6 +98,7 @@
     <string name="feed_composer_attach_media">Añadir foto o video</string>
     <string name="feed_composer_take_photo">Tomar una foto</string>
     <string name="feed_composer_take_video">Grabar un video</string>
+    <string name="feed_composer_attach_file">Adjuntar un archivo</string>
     <string name="feed_composer_remove_media">Quitar contenido multimedia</string>
     <string name="feed_composer_media_limit">Puedes adjuntar hasta %1$d elementos</string>
     <string name="feed_composer_media_unusable">No se pudo adjuntar ese contenido multimedia</string>

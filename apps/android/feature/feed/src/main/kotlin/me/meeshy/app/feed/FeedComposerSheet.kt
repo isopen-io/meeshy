@@ -25,6 +25,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
@@ -97,9 +99,24 @@ import java.io.File
  * tiles, no in-composer photo/video toggle ([CameraView]'s combined `.photo`/`.video` case) — iOS
  * opens a single custom AVFoundation capture screen with an in-app mode switch; Android delegates
  * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents, so no
- * camera runtime permission is needed here (the system camera app owns that). File, location or
- * audio attachments and the emoji picker or per-post language override remain unshipped too —
- * iOS's `composerOverlay` toolbar of 6 glyphes, each a real, separately-scoped follow-up.
+ * camera runtime permission is needed here (the system camera app owns that).
+ *
+ * Generic file attachment (`onAttachFile`, [Icons.Filled.AttachFile] tile) mirrors iOS's
+ * `doc.fill` button: [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the
+ * author pick ANY document from the system picker, dispatched through the **exact same** [dispatchPicked]
+ * pipeline every other tile already uses — the TUS upload/error-handling logic is fully
+ * MIME-agnostic (confirmed by reading `getAttachmentType`/`UploadProcessor.validateFile` gateway-side:
+ * arbitrary MIME types are accepted and classified, never rejected outright), so no new upload path
+ * was needed. The one genuinely new rendering decision — a picked document has no
+ * image/video thumbnail to show — lives in the pure [UploadedMedia.hasThumbnailPreview] extension
+ * (next to [FeedComposerDraft]), not inlined here: [MediaAttachmentsRow] renders a generic
+ * [Icons.AutoMirrored.Filled.InsertDriveFile] tile instead of [AsyncImage] whenever an attached
+ * item answers `false`. **Deliberate, documented scope cut**: no filename/size label on the file tile yet —
+ * [UploadedMedia] (`:core:model`) doesn't carry the original filename the gateway's TUS response
+ * discards on this path, unlike iOS's `MessageAttachment.fileName`; adding it is a separately-scoped
+ * follow-up touching the wire model, not a rendering-only change. Location or audio attachments and
+ * the emoji picker or per-post language override remain unshipped too — iOS's `composerOverlay`
+ * toolbar of 6 glyphes, each a real, separately-scoped follow-up.
  *
  * Every text/visibility/media-id decision lives in the pure
  * [FeedComposerDraft]; this Composable holds one in `remember` (plus the
@@ -225,6 +242,21 @@ fun FeedComposerSheet(
         captureVideo.launch(uri)
     }
 
+    // File attachment: unlike PickMultipleVisualMedia, OpenMultipleDocuments has no
+    // maxItems<=1 crash constraint, so there is no picker-mode routing to do — dispatchPicked
+    // already caps to draft.remainingMediaSlots and surfaces mediaLimitMessage on overflow.
+    val pickFiles = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris: List<Uri> -> dispatchPicked(uris) }
+
+    fun launchFilePicker() {
+        if (draft.isMediaFull) {
+            onMediaError(mediaLimitMessage)
+            return
+        }
+        pickFiles.launch(arrayOf("*/*"))
+    }
+
     fun removeMedia(id: String) {
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }
@@ -274,6 +306,7 @@ fun FeedComposerSheet(
                 onAdd = ::launchMediaPicker,
                 onCamera = ::launchCamera,
                 onVideoCapture = ::launchVideoCapture,
+                onAttachFile = ::launchFilePicker,
                 onRemove = ::removeMedia,
             )
         }
@@ -318,13 +351,16 @@ private fun Context.grantCaptureWritePermission(action: String, uri: Uri) {
 }
 
 /**
- * The attach-media/take-photo/take-video affordances plus the picked-media
- * thumbnail strip — always shows the gallery, camera and video-capture tiles
- * first (all disabled once [canAddMore] is false or while [isUploading]),
- * then each attached [media] item with a remove overlay, then an in-flight
- * spinner tile while a pick is uploading. Pure Compose glue: every id/list
- * decision it renders came from the already pure/tested [FeedComposerDraft]/
- * upload result upstream.
+ * The attach-media/take-photo/take-video/attach-file affordances plus the
+ * picked-attachment strip — always shows the gallery, camera, video-capture and
+ * file tiles first (all disabled once [canAddMore] is false or while
+ * [isUploading]), then each attached [media] item with a remove overlay, then an
+ * in-flight spinner tile while a pick is uploading. Each attached item renders
+ * either its real thumbnail ([UploadedMedia.hasThumbnailPreview]) or a generic
+ * file-icon tile — the only rendering decision made here, and it delegates to
+ * that already-tested pure extension rather than re-sniffing the MIME type.
+ * Otherwise pure Compose glue: every id/list decision it renders came from the
+ * already pure/tested [FeedComposerDraft]/upload result upstream.
  */
 @Composable
 private fun MediaAttachmentsRow(
@@ -334,6 +370,7 @@ private fun MediaAttachmentsRow(
     onAdd: () -> Unit,
     onCamera: () -> Unit,
     onVideoCapture: () -> Unit,
+    onAttachFile: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Row(
@@ -392,16 +429,50 @@ private fun MediaAttachmentsRow(
             )
         }
 
+        IconButton(
+            onClick = onAttachFile,
+            enabled = attachEnabled,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(MeeshyTheme.tokens.inputBackground)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.md)),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.AttachFile,
+                contentDescription = stringResource(R.string.feed_composer_attach_file),
+                tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
+            )
+        }
+
         media.forEach { item ->
             Box(modifier = Modifier.size(56.dp)) {
-                AsyncImage(
-                    model = item.thumbnailUrl ?: item.url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(MeeshyRadius.md)),
-                )
+                if (item.hasThumbnailPreview) {
+                    AsyncImage(
+                        model = item.thumbnailUrl ?: item.url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(MeeshyRadius.md)),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(MeeshyRadius.md))
+                            .background(MeeshyTheme.tokens.inputBackground)
+                            .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.md)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                            contentDescription = null,
+                            tint = MeeshyPalette.Indigo500,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
                 IconButton(
                     onClick = { onRemove(item.id) },
                     modifier = Modifier

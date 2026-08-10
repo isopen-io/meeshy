@@ -1,5 +1,7 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.MediaKindClassifier
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.UploadedMedia
@@ -11,8 +13,10 @@ import me.meeshy.sdk.model.UploadedMedia
  * already-uploaded photo/video attachments (the "photo/caméra d'abord" fast-follow
  * to the text-only first sub-slice) and [type] the resolved wire post type
  * (`"POST"`/`"REEL"` — see [FeedComposerDraft.postType]/[ReelComposition]). Camera
- * capture, file, location and audio attachments plus the per-post language override
- * remain a documented, deferred follow-up.
+ * capture and generic-file attachments now upload through the same [mediaIds]
+ * projection (see [UploadedMedia.hasThumbnailPreview]); location and audio
+ * attachments plus the per-post language override remain a documented, deferred
+ * follow-up.
  */
 data class FeedPostPublishRequest(
     val content: String,
@@ -141,3 +145,19 @@ data class FeedComposerDraft(
         const val MAX_MEDIA: Int = 10
     }
 }
+
+/**
+ * Whether this attachment's [UploadedMedia.mimeType] renders as an image/video
+ * thumbnail (every gallery-pick, camera-photo and camera-video path always
+ * produces one) versus a generic file icon (the file-attachment tile, whose
+ * documents/other MIME types the gateway still happily attaches — see
+ * [ReelComposition]'s own doc comment: "Documents and every other kind never
+ * qualify" as a reel, already anticipating this). Reuses [MediaKindClassifier]
+ * (the SSOT for MIME→kind, originally built for the auto-download gate) rather
+ * than re-sniffing MIME prefixes here — a `null`/[MediaKind.AUDIO]/
+ * [MediaKind.AUDIO_TRANSLATION] classification falls back to the generic icon
+ * exactly like an unrecognised MIME type does, since the composer has no audio
+ * preview surface yet either.
+ */
+val UploadedMedia.hasThumbnailPreview: Boolean
+    get() = MediaKindClassifier.fromMimeType(mimeType) in setOf(MediaKind.IMAGE, MediaKind.VIDEO)
