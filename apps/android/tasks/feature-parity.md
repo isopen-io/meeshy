@@ -2869,8 +2869,54 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       multi-item picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to single when one slot
       is left so the multi-picker's `maxItems > 1` requirement never throws and launching nothing
       when full; the screen reads every picked uri off-main and the VM's existing free-slot
-      truncation still caps the batch. Pending: on-canvas crop/edit, durable
-      upload-then-publish outbox chain (SOTA follow-up).
+      truncation still caps the batch. **Wire-format bug fixed** (slice `story-media-tus-upload`,
+      2026-08-10): the upload foundation above sent every picked media through `MediaApi`/
+      `MediaRepository` (`POST /attachments/upload`), which server-side ALWAYS creates a
+      `MessageAttachment` row (`services/gateway/src/services/attachments/UploadProcessor.ts`) —
+      never a `PostMedia` row. But `CreateStoryRequest.mediaIds` is claimed **exclusively** against
+      `PostMedia` (`prisma.postMedia.updateMany`, `services/gateway/src/services/PostService.ts` +
+      `mediaOwnership.ts`'s `claimableMediaWhere`), a structurally different collection/id-space —
+      only the gateway's TUS handler (`POST /api/v1/uploads`, `uploadcontext` metadata one of
+      `post`/`story`/`status`/`comment`) ever creates one. So every published story with a
+      picked photo/video silently published **without its media**: the upload itself succeeded,
+      the story published successfully, but the server-side claim matched zero rows (logged as a
+      shortfall, never thrown) — a real, user-visible production defect, not a missing feature.
+      New `TusApi`/`TusUploadRepository` (`:core:network`/`:sdk-core`) implement a **single-shot**
+      (no chunking/resume/checkpoint — sufficient for compressed images; large-video chunked upload
+      remains the tracked TUS follow-up two lines below and at §Q) port of iOS `TusUploadManager`'s
+      two-call exchange (`POST` create session reading the `Location` header via the new
+      `:core:network` `headerCall` helper, then one `PATCH` of the whole body at `Upload-Offset: 0`).
+      `StoryMediaUploader` (`:feature:stories`, binds the generic repository to
+      `TusUploadContext.STORY` — the SDK-purity "which context" product decision) replaces
+      `StoryComposerViewModel`'s eager `mediaRepository.upload` call; the **durable offline-retry
+      path** ( `MediaUploadQueue.enqueue`'s new optional `context` param, persisted via
+      `MediaUploadPayload` on the `UPLOAD_MEDIA` outbox row and read back by
+      `OutboxFlushWorker`'s sender) is fixed too, so a queued-while-offline story upload retried
+      later also produces a real `PostMedia` row — not just the common online path. Chat
+      attachments are untouched (still `MediaRepository`/`MessageAttachment`, correctly — messages
+      legitimately want that collection); a legacy/blank outbox payload (any row enqueued before
+      this fix) still decodes as "no context" and keeps using the old path, so nothing already
+      queued on a user's device breaks on upgrade. +30 tests across the chain (6
+      `TusUploadMetadataTest`, 2 `TusUploadContextTest`, 4 new `headerCall` tests in
+      `ApiCallTest`, 13 `TusUploadRepositoryTest`, 2 `StoryMediaUploaderTest`, 2 new
+      `MediaUploadQueueTest`, +1 precise `StoryComposerViewModelTest` proving the durable path is
+      tagged `TusUploadContext.STORY` and not just `any()`); the other ~130 pre-existing
+      `StoryComposerViewModelTest` cases needed only a mechanical mock-type rename
+      (`MediaRepository` → `StoryMediaUploader`, same `upload(items)` shape) since
+      `StoryMediaUploader.upload` preserves the exact `NetworkResult<List<UploadedMedia>>`
+      contract the ViewModel's existing (unchanged) decision logic already expected. Mutation-proven:
+      reverting `queueDurably`'s explicit `context = TusUploadContext.STORY` argument fails
+      **exactly** the one new precise test, the other 130 stay green; making `TusUploadRepository.
+      uploadAll` swallow a mid-batch failure instead of stopping fails **exactly** the one test
+      built to catch it, the other 12 stay green. **Gate:** `./apps/android/meeshy.sh check` →
+      `BUILD SUCCESSFUL` (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`).
+      **Still open** (unchanged from before this fix, now correctly scoped as follow-ups rather
+      than assumed-simple): chunked/resumable large-video TUS upload (see §Q and the two `[ ]`
+      TUS lines above/below this one), on-canvas crop/edit, and — the original "attachments
+      fast-follow" this fix was discovered while scoping — wiring a photo/camera picker into the
+      still-text-only Feed post composer (`feed-post-composer-text`, 2026-08-10) now correctly
+      depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
+      than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
@@ -4677,7 +4723,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Real-time socket→Room relay (messages, reactions, read status, translations, lifecycle)
 - [ ] Two Socket.IO connections (message + social), long-polling transport, robust reconnect + room re-join
 - [ ] Crash-safe boot recovery for in-flight queue items + orphaned audio files
-- [ ] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance
+- [~] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance —
+      **non-resumable TUS client done** (slice `story-media-tus-upload`, 2026-08-10, §E): `TusApi`/
+      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`
+      (single-shot only — one `PATCH` of the whole file at offset 0, no chunking, no checkpoint
+      store, does NOT survive app kill mid-upload). Message-retention cleanup / DB maintenance
+      still not started.
 - [ ] Background conversation sync + message prefetch (backoff + jitter)
 - [ ] Encrypted local storage (AES-GCM Room / EncryptedSharedPreferences) + per-user namespacing + logout wipe
 - [ ] E2EE message encryption/decryption (libsignal, batched, fail-closed)

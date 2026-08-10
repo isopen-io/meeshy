@@ -852,3 +852,64 @@ Append-only log of gotchas and decisions that save time next run.
   instinct (pixel-crop before concluding a logic bug; `uptime`/`ps aux` before chasing a phantom)
   that flagged the gap in the first place is what resolved it, just deferred until the environment
   cooperated instead of forced through a broken one.
+
+## Slice `story-media-tus-upload` (2026-08-10)
+- **A "reuse the pipeline already shipped for X" note in `PROGRESS.md` can be wrong on the
+  ARCHITECTURE, not just on "is it already done" — read the actual wire contract, not just the
+  call sites.** The routine prompt's own framing for the Feed-attachments fast-follow said to
+  "réutiliser le pipeline de compression déjà livré pour PROFILE" — reading `ImageCompressionPlanner`
+  showed it was dead code (zero call sites), and reading the gateway's upload routes showed
+  something far more consequential: Android's *only* upload path (`MediaRepository`/
+  `POST /attachments/upload`) creates a `MessageAttachment`, a collection `CreatePostRequest`/
+  `CreateStoryRequest.mediaIds` can never claim against (that id space is exclusively `PostMedia`,
+  minted only by the gateway's TUS handler). The lesson isn't "the note was stale" (the usual
+  RE-PROUVER finding) — it's that a plausible-sounding reuse suggestion can point at the wrong
+  ABSTRACTION LEVEL entirely, and only reading the actual server-side claim logic
+  (`prisma.postMedia.updateMany`/`claimableMediaWhere`), not just the client call site, surfaces
+  that. Worth the extra read before trusting a "just reuse X" note whenever a wire contract (not
+  just a client-side function) is involved.
+- **Tracing a "we'd reproduce the same bug on a new surface" risk backward found the bug was
+  ALREADY LIVE, not merely a future risk.** Feed's composer has no attachment UI yet, so building
+  one on the wrong pipeline would have been a *new* silent-data-loss bug. But Story's composer
+  ALREADY ships a picker that calls the same wrong pipeline and sends the resulting ids as
+  `CreateStoryRequest.mediaIds` — meaning every published story with a picked photo/video has
+  been silently publishing without its media since that slice shipped. Always check whether a
+  wrong pattern about to be copied is *already in production somewhere else* before assuming the
+  fix is purely preventative.
+- **TUS's session-creation result lives in a response HEADER (`Location`), not the JSON body** —
+  the codebase's existing `apiCall`/`rawApiCall` pair (`ApiCall.kt`) only handles a typed
+  `ApiResponse<T>` body envelope, so neither fits a call whose entire useful result is a header on
+  an otherwise-bodyless `201 Created`. Needed a genuinely new primitive (`headerCall`), not a
+  workaround bent to fit the existing two.
+- **A module boundary that hides `retrofit2` behind `implementation` (not `api`) in `:core:network`
+  is a real wall, not just a style preference** — `:sdk-core` cannot reference `retrofit2.Response`
+  even transitively through Kotlin's generic type inference (a lambda whose inferred return type is
+  `Response<Unit>` fails to compile in `:sdk-core` even with zero explicit `Response` import,
+  because the compiler still needs the class descriptor resolvable). The fix that keeps the
+  boundary intact: an extension function (`TusApi.createSession`) living IN `:core:network`
+  alongside `TusApi`/`headerCall`, so `:sdk-core` only ever touches `NetworkResult`/`ApiError`.
+  MockK still exercises the real `createUpload` interface method through it in tests (extension
+  functions aren't part of the mocked interface, so calling them runs the real body, which then
+  calls through to the mocked member) — no `mockkStatic` needed. The one remaining wrinkle: a test
+  that wants to construct raw `Response`/`Headers` FIXTURES (not mock a method) still needs
+  `retrofit2` on that module's *test* classpath even though production code never touches it —
+  added as `testImplementation(libs.retrofit)` in `:sdk-core/build.gradle.kts`, a narrow,
+  test-only carve-out of an otherwise-real module boundary, not a leak of it.
+- **The durable offline-retry path is a SEPARATE code path from the eager one, and both need the
+  same fix or the "fix" is half-true.** `StoryComposerViewModel.onMediaPicked`'s happy path and
+  its offline fallback (`queueDurably` → `MediaUploadQueue.enqueue` → `OutboxFlushWorker`'s
+  `UPLOAD_MEDIA` sender) are two independent call sites to the network layer, sharing nothing but
+  the outbox row schema. Fixing only the eager path would have left a `TusUploadContext`-shaped
+  hole in the SAME bug for exactly the offline case — the least observable, hardest-to-notice one
+  (a story published from a spotty connection, retried minutes later, coming out media-less would
+  read as "flaky network," not "known wire-format bug"). Threading the context through
+  `MediaUploadPayload` on the outbox row (a `String?`, not the enum itself, so a row enqueued by a
+  newer build with a context an older build doesn't recognise still decodes safely to "legacy
+  path" rather than crashing) closed both call sites in the same run rather than leaving one half
+  fixed and undocumented.
+- **Mutating the exact line the fix touches, not a nearby one, is what makes a mutation-proof
+  actually mean something.** For the `queueDurably` fix specifically, reverting the explicit
+  `context = TusUploadContext.STORY` argument (not some other unrelated line) and re-running the
+  FULL 131-test suite is what proved the new precise test — not just the ~24 already-existing
+  `enqueue(any(), any())` wildcard-matcher tests, which are correctly blind to WHICH context gets
+  passed — was the only one sensitive to this specific regression.

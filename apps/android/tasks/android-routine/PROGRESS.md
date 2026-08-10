@@ -2,6 +2,97 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **a real story-media wire-format bug got found and fixed** (slice
+> `story-media-tus-upload`, feature-parity §E — routine iteration 23, re-scoping the previously
+> planned "§F Feed attachments fast-follow"). **RE-PROUVEN before choosing anything**: the last
+> run's own "Next slice candidates" note said the Feed composer's attachments sub-slice could
+> "reuse the compression pipeline already shipped for PROFILE" — reading the actual code first
+> (not just the note) found that claim wrong on two independent counts: (1) `ImageCompressionPlanner`
+> (`:core:model`) is genuinely dead code, zero call sites anywhere in the app, no runtime bitmap
+> resize happens for ANY picker today; (2) far more importantly, Android's only media-upload path
+> (`MediaRepository`/`MediaApi`, `POST /attachments/upload`) creates a gateway `MessageAttachment`
+> row — reading `services/gateway/src/routes/uploads/tus-handler.ts` +
+> `services/gateway/src/services/posts/mediaOwnership.ts` end to end showed `CreatePostRequest`/
+> `CreateStoryRequest.mediaIds` are claimed **exclusively** against a structurally different
+> collection, `PostMedia`, which only the gateway's TUS handler (`POST /api/v1/uploads`,
+> `uploadcontext` metadata `post`/`story`/`status`/`comment`) ever creates. Tracing where Android
+> already sends `mediaIds` today (the shipped `story-composer-media` slice) confirmed this isn't
+> hypothetical: **the story composer's picked photo/video already silently loses its media on
+> every publish** — the upload call succeeds, the story publishes successfully, but the server-side
+> claim (`prisma.postMedia.updateMany`) matches zero rows (logged as a shortfall, never thrown) —
+> a real, live, user-visible production defect that predates this run, not a missing feature.
+> Building the Feed-attachments UI on the SAME wrong pipeline would have reproduced the identical
+> silent-loss bug on a second surface, so the correctly-scoped increment this run is the missing
+> foundation + the one place it's already reachable in the UI (Stories), not new picker UI on Feed.
+> **Shipped (production, all `apps/android`)**: a **single-shot** (no chunking/resume/checkpoint —
+> deliberately NOT a full port of iOS's resumable `TusUploadManager`, which chunks 10 MB pieces
+> with a checkpoint store surviving app kill; sufficient for compressed images, chunked large-video
+> upload stays a tracked follow-up) TUS client mirroring iOS's two-call exchange: `TusApi`
+> (`:core:network`, `POST uploads` reading the session `Location` response header, then one `PATCH`
+> of the whole body at `Upload-Offset: 0`) + a new `headerCall` helper in `ApiCall.kt` (the existing
+> `apiCall`/`rawApiCall` pair only handles the standard JSON-body `ApiResponse<T>` envelope — TUS's
+> session-creation result rides in a header with no body, a genuinely new shape) + `TusUploadRepository`
+> (`:sdk-core`, `upload()`/`uploadAll()` — sequential, **fail-fast on the first failure**, mirroring
+> iOS's task-group cancel-on-first-throw rather than silently dropping or half-uploading a batch) +
+> pure `TusUploadContext`/`TusUploadMetadata` (`:core:model`, the `Upload-Metadata` header
+> byte-for-byte matching iOS `TusUploadManager.postCreateUpload`'s inline base64 construction).
+> `StoryMediaUploader` (`:feature:stories`) binds the generic repository to `TusUploadContext.STORY`
+> — the SDK-purity "which context" product decision stays app-side, same split
+> `packages/MeeshySDK/CLAUDE.md` documents for iOS — and replaces `StoryComposerViewModel`'s eager
+> `mediaRepository.upload` call. **The durable offline-retry path is fixed too, not just the common
+> online path**: `MediaUploadQueue.enqueue` gained an optional `context: TusUploadContext?` (default
+> `null`, so chat's own durable media queueing — which correctly wants `MessageAttachment` — is
+> byte-for-byte unchanged), persisted via a new `MediaUploadPayload` on the `UPLOAD_MEDIA` outbox row
+> and read back by `OutboxFlushWorker`'s sender, which now branches TUS-vs-legacy per row; a blank/
+> pre-existing row payload (every row already queued on a user's device before this fix ships)
+> decodes as "no context" and safely keeps using the old path — nothing already in-flight breaks on
+> upgrade. **+30 tests** across the chain: `TusUploadMetadataTest` (6 — base64 pairs, key order,
+> all 4 context wire strings, special-character round-trip, protocol version constant),
+> `TusUploadContextTest` (2 — `fromWire` round-trips every context, unknown-safe on garbage/blank/
+> wrong-case), 4 new `headerCall` cases in `ApiCallTest` (success extracts the header, missing header
+> is a failure, non-2xx carries the status, `IOException` is a network failure), `TusUploadRepositoryTest`
+> (13 — successful create+patch maps to `UploadedMedia`, exact `Upload-Length`/`Upload-Metadata` sent,
+> PATCHes the returned `Location` at offset 0 with `application/offset+octet-stream`, create-then-patch
+> ordering, create failure never patches, missing-Location-header failure never patches, network error,
+> patch failure envelope, null/blank-id attachment collapses to an empty-but-successful list,
+> `uploadAll` empty/in-order/stops-at-first-failure), `StoryMediaUploaderTest` (2 — delegates tagged
+> `STORY`, propagates a failure unchanged), 2 new `MediaUploadQueueTest` cases (blank payload without a
+> context, persisted context round-trips through real JSON), +1 new precise `StoryComposerViewModelTest`
+> case asserting the durable path is tagged `TusUploadContext.STORY` specifically (not just `any()`).
+> The ~130 pre-existing `StoryComposerViewModelTest` cases needed only a mechanical mock-type rename
+> (`MediaRepository` → `StoryMediaUploader`, both same `upload(items): NetworkResult<List<UploadedMedia>>`
+> shape) since the ViewModel's own decision logic (gate, accumulate, rollback) is byte-for-byte
+> unchanged — the fix is entirely which network call gets made, not what the ViewModel decides.
+> **Mutation-proven, both axes**: (a) reverting `queueDurably`'s explicit
+> `context = TusUploadContext.STORY` argument back to the bare `enqueue(item)` default failed
+> **exactly** the one new precise test, the other 130 stayed green — correctly insensitive to a
+> regression they were never built to catch; (b) making `TusUploadRepository.uploadAll` swallow a
+> mid-batch failure instead of stopping (`is Failure -> Unit` instead of `-> return result`) failed
+> **exactly** the one test built to catch it, the other 12 stayed green; both reverted and re-run
+> clean. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full
+> `assembleDebug` + all-module `testDebugUnitTest`, zero failures anywhere in the monorepo).
+> Reviewer **PASS** (diff `apps/android` only — 4 new files [`TusApi.kt`, `TusUpload.kt`,
+> `TusUploadRepository.kt`, `StoryMediaUploader.kt`] + 4 new test files, `ApiCall.kt`/`MeeshyApi.kt`/
+> `NetworkModule.kt`/`OutboxModel.kt`/`MediaUploadQueue.kt`/`OutboxFlushWorker.kt`/
+> `StoryComposerViewModel.kt` edited [+1 test-scoped `testImplementation(libs.retrofit)` in
+> `sdk-core/build.gradle.kts`, justified inline — retrofit stays `:core:network`-only in
+> production code, `TusUploadRepositoryTest` needs it only to construct `Response` test fixtures],
+> `StoryComposerViewModelTest.kt` mechanically updated; SDK purity — the generic, context-agnostic
+> `TusUploadRepository` stays in `:sdk-core`, the "story media = STORY context" decision stays in
+> `:feature:stories`'s `StoryMediaUploader`, matching this codebase's own established split; SSOT —
+> `MediaAttachmentWire`/`toUploadedMedia()` reused verbatim for the TUS finish-response shape rather
+> than a second DTO, `apiCall` reused for the PATCH call, only the genuinely-new header-extraction
+> need got its own `headerCall` helper; no coverage floor lowered; no tautological tests). Not yet
+> verified on-device this run (no product-visible UI changed — the composer's picker/preview/publish
+> screens are pixel-identical; the fix is entirely which network call fires underneath, verifiable
+> only via a real multi-minute-round-trip against the live gateway with server-side DB inspection,
+> out of scope for this run's local `check` gate — a natural next-run candidate if the box is calm).
+> **Next slice candidates (not attempted this run)**: the original §F Feed post composer photo/camera
+> attachment, now correctly scoped to consume this run's `TusUploadRepository`/`TusUploadContext.POST`
+> rather than `MediaRepository`; chunked/resumable large-video TUS upload (checkpoint store, HEAD
+> recovery, survives app kill — the part of iOS `TusUploadManager` deliberately NOT ported this run);
+> the §C inverted-list rewrite decomposition (still deferred without an attempt); the §M
+> `NotificationChannel` taxonomy gap (2 channels vs. ~80 backend types).
 > On 2026-08-10 **the Feed post composer's text-only sub-slice landed** (slice
 > `feed-post-composer-text`, feature-parity §F, the routine's own suggested next candidate — the
 > §F "Create post" checkbox had been unchecked since the audit, and Android's Flux had zero way to
