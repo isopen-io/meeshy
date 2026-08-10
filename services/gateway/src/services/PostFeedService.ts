@@ -353,9 +353,14 @@ export class PostFeedService {
     // fetch (24 h) ou un pull-to-refresh.
     //
     // Couvre aussi l'expiration : `ExpiredStoriesCleanupService` soft-delete
-    // les stories périmées toutes les heures, ce qui pose `deletedAt` et
-    // remonte `updatedAt`. Le client garde néanmoins son propre filtre d'expiry
-    // pour ne pas dépendre du passage du balayeur.
+    // les stories périmées, ce qui pose `deletedAt` et remonte `updatedAt` —
+    // mais seulement une fois passée la fenêtre d'archive auteur
+    // (`EPHEMERAL_AUTHOR_ARCHIVE_MS`), pas à l'échéance. Le client garde donc
+    // bien son propre filtre d'expiry, et pas seulement « pour ne pas dépendre
+    // du passage du balayeur » : entre l'échéance et le masquage, il est le
+    // SEUL à filtrer. (Avant le cycle 54 le balayage n'appariait aucun post et
+    // ne posait jamais `deletedAt` — ce tombstone ne voyait que les
+    // suppressions décidées.)
     //
     // Même `visibilityFilter` que le tray : le delta ne doit pas divulguer
     // l'existence de stories que l'utilisateur n'a jamais eu le droit de voir.
