@@ -86,7 +86,7 @@ dnspython==2.8.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9
-nltk==3.10.0
+nltk==3.10.2
 textstat==0.7.13
 
 # Utilitaires système
