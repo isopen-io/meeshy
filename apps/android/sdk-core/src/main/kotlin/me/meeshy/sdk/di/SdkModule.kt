@@ -25,6 +25,8 @@ import me.meeshy.sdk.chat.SharedPrefsStarredMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
+import me.meeshy.sdk.locale.DeviceLocaleProvider
+import me.meeshy.sdk.locale.SystemDeviceLocaleProvider
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.media.AndroidNetworkConditionMonitor
 import me.meeshy.sdk.media.DataStoreMediaDownloadPreferencesStore
@@ -60,6 +62,10 @@ object SdkModule {
     @Provides
     @Singleton
     fun providesCacheClock(): CacheClock = SystemCacheClock
+
+    @Provides
+    @Singleton
+    fun providesDeviceLocaleProvider(): DeviceLocaleProvider = SystemDeviceLocaleProvider
 
     @Provides
     @Singleton
