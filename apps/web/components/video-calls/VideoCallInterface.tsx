@@ -160,14 +160,26 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // silently for the rest of the call.
   const videoToggleInFlightRef = useRef(false);
 
+  // Vague 92: same class of race, one hop over. `handleSwitchCamera` (below)
+  // mutates the SAME localStream video track and the SAME peer-connection
+  // senders as this guard's operations, via its own, entirely disconnected
+  // `cameraSwitchInFlightRef` — Vague 82 unified manual-toggle-vs-auto-
+  // suspend/resume but left camera-switch-vs-either unguarded. A camera flip
+  // racing a manual toggle or an auto suspend/resume (e.g. the link degrades
+  // mid-flip) lets one path replaceTrack/stop a track the other is still
+  // mid-acquisition on, orphaning a camera capture or reviving video the
+  // user/controller just turned off. `runGuardedVideoToggle` and
+  // `handleSwitchCamera` now check EACH OTHER's ref in addition to their own.
+  const cameraSwitchInFlightRef = useRef(false);
+
   // Wraps a video on/off operation with the guard above; rejects instead of
-  // running when another video toggle (manual or automatic) is already in
-  // flight. The adaptive-degradation controller's existing suspend()/resume()
-  // `.catch()` handlers already revert its state machine on rejection, so a
-  // rejected guard collision degrades correctly — the automatic decision
-  // simply retries on the next quality sample.
+  // running when another video toggle (manual or automatic) — or a camera
+  // switch — is already in flight. The adaptive-degradation controller's
+  // existing suspend()/resume() `.catch()` handlers already revert its state
+  // machine on rejection, so a rejected guard collision degrades correctly —
+  // the automatic decision simply retries on the next quality sample.
   const runGuardedVideoToggle = useCallback(async (op: () => Promise<void>): Promise<void> => {
-    if (videoToggleInFlightRef.current) {
+    if (videoToggleInFlightRef.current || cameraSwitchInFlightRef.current) {
       throw new Error('VIDEO_TOGGLE_IN_PROGRESS');
     }
     videoToggleInFlightRef.current = true;
@@ -381,15 +393,8 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   };
 
-  // Re-entrancy guard for handleSwitchCamera — same class of bug as
-  // handleToggleVideo (guarded above via videoToggleInFlightRef, shared with
-  // the adaptive-degradation controller): a double-click/tap before the first
-  // getUserMedia + replaceTrack round-trip settles lets a second invocation
-  // acquire its own camera track that nothing stops.
-  const cameraSwitchInFlightRef = useRef(false);
-
   const handleToggleVideo = async () => {
-    if (videoToggleInFlightRef.current) return;
+    if (videoToggleInFlightRef.current || cameraSwitchInFlightRef.current) return;
     videoToggleInFlightRef.current = true;
     try {
       const newEnabled = !controls.videoEnabled;
@@ -419,7 +424,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   };
 
   const handleSwitchCamera = async () => {
-    if (cameraSwitchInFlightRef.current) return;
+    if (cameraSwitchInFlightRef.current || videoToggleInFlightRef.current) return;
     cameraSwitchInFlightRef.current = true;
     let newStream: MediaStream | null = null;
     try {

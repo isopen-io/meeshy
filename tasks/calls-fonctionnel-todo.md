@@ -5954,3 +5954,46 @@ ligne à ligne directe de tous les fichiers cités.
   dispose jamais l'ancien `MediaStreamAudioDestinationNode` si `inputStream` change de référence en cours de
   montage — actuellement un piège latent plutôt qu'un bug actif, aucun chemin d'appel actuel ne remplace la
   référence du stream en cours d'appel (le switch caméra mute le stream existant plutôt que de le remplacer).
+
+## Vague 92 — `handleSwitchCamera` kept its own re-entrancy ref, disconnected from the manual-toggle/adaptive-degradation guard (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine (la Vague 91, #2762, était déjà mergée
+sur `main`). `HEAD == origin/main` au démarrage. Candidat repris directement du "reste ouvert" laissé par la
+Vague 91 (confiance moyenne-haute, déjà scopé par lecture directe) plutôt qu'un nouvel audit dédié — la piste
+était suffisamment précise pour aller droit à la vérification ligne à ligne.
+
+- **Root cause confirmée par lecture directe** (`apps/web/components/video-calls/VideoCallInterface.tsx`) :
+  Vague 82 avait unifié le toggle manuel (`handleToggleVideo`) et le contrôleur adaptive-degradation
+  (`suspend()`/`resume()` via `runGuardedVideoToggle`) sur un seul ref `videoToggleInFlightRef`, mutuel dans
+  les deux sens. `handleSwitchCamera` — qui mute EXACTEMENT la même ressource (la piste vidéo de
+  `localStream` + les `senders` vidéo des peer connections, via `replaceTrack`) — gardait son propre ref
+  `cameraSwitchInFlightRef`, jamais croisé avec l'autre. Un flip caméra en vol pendant un toggle manuel ou une
+  suspension/reprise automatique (typiquement : le lien se dégrade PENDANT que l'utilisateur retourne sa
+  caméra) laisse un chemin appeler `replaceTrack`/`stop()` sur une piste que l'autre est encore en train
+  d'acquérir — capture caméra orpheline, ou vidéo ranimée alors que l'utilisateur/le contrôleur venait de
+  l'éteindre. Même classe de bug que Vagues 76/82, sur le chemin qu'elles ne couvraient pas.
+- **Fix** : `runGuardedVideoToggle` et les deux handlers (`handleToggleVideo`, `handleSwitchCamera`) vérifient
+  désormais le ref de l'AUTRE en plus du leur. Le ref `cameraSwitchInFlightRef` est simplement remonté à côté
+  de `videoToggleInFlightRef` (même bloc de refs, commentaire mis à jour) — aucun renommage, aucune fusion en
+  un ref unique, pour garder le diff minimal et chaque chemin capable de continuer à se garder lui-même.
+  Un seul fichier de production modifié, +20/-9 lignes (dont commentaires).
+- **Tests** (TDD, RED confirmé avant fix, `git stash` du seul fichier de production) : 4 nouveaux tests dans
+  `VideoCallInterface.test.tsx` (describe « mutual exclusion — camera switch vs. manual toggle /
+  adaptive-degradation controller ») — camera-switch-bloque-toggle-manuel, toggle-manuel-bloque-camera-switch,
+  camera-switch-bloque-auto-suspend, auto-suspend-bloque-camera-switch. Les 4 RED confirmés par exécution
+  (`bun run jest -t "Vague 92"`) avant le fix, GREEN après (`git stash pop`).
+- **Vérification** : sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-
+  degradation` — **45 suites / 521 tests verts** (+4 net vs. la Vague 91), aucune régression. Prérequis
+  CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`, puis
+  `packages/shared && npx prisma generate --generator client && bun run build` sans erreur. `npx tsc
+  --noEmit` sur `apps/web` : **1657 erreurs avant et après le diff** (`git stash`/`stash pop`, comparaison
+  directe), zéro nouvelle. `next lint` : même échec sandbox-only de config ESLint v9 circulaire documenté aux
+  vagues précédentes (65-91), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles
+  Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite
+  confirmation on-device) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; (confiance
+  basse, non repris) `use-audio-effects.ts` ne dispose jamais l'ancien `MediaStreamAudioDestinationNode` si
+  `inputStream` change de référence en cours de montage — piège latent, aucun chemin d'appel actuel ne
+  déclenche ce remplacement.
