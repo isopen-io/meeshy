@@ -3285,7 +3285,57 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       than a second on-device capture. Flagged honestly rather than claimed — a natural
       candidate for a quick on-device confirmation pass once this shared box is quieter, not
       required to consider this slice done given the strength of the remaining evidence.
-      **Still open**: files, location, audio+transcription, per-post language
+      **Camera-video capture now done too** (slice `feed-composer-video-capture`, 2026-08-10 —
+      the standing "video capture fast-follow" candidate from the photo-capture slice's own
+      deliberate scope cut): a third attach tile ([Icons.Filled.Videocam]) launches the system
+      `ACTION_VIDEO_CAPTURE` activity ([ActivityResultContracts.CaptureVideo]) writing into a
+      fresh [CameraCaptureFile.nextVideo]-named destination in the **same** `captures/`
+      cache directory the photo tile already uses (no new `file_paths.xml` entry needed —
+      `cache-path` covers the whole directory, not per-extension), then dispatched through the
+      **exact same** `dispatchPicked` pipeline both the gallery pickers and the photo tile already
+      use — zero new upload/error-handling logic, zero new manifest surface. **Re-proved the same
+      URI-permission bug class applies here before writing any code**: decompiled
+      `ActivityResultContracts.CaptureVideo()`'s bytecode (`javap` on the same AndroidX
+      `activity-1.9.3` jar) and confirmed its `createIntent()` is the byte-for-byte identical
+      shape as `TakePicture()`'s — `Intent(ACTION_VIDEO_CAPTURE).putExtra("output", uri)`, no
+      `FLAG_GRANT_WRITE_URI_PERMISSION` — so the fix already shipped for photo capture was known
+      to be needed here too, not a novel risk. **Refactor, not duplication**: the
+      `queryIntentActivities`+`grantUriPermission` dance and the `capturesDir`/`File`/
+      `FileProvider.getUriForFile` construction (previously inlined once in `launchCamera`) are
+      now two small private `Context` extensions (`grantCaptureWritePermission(action, uri)`,
+      `createCaptureUri(fileName)`) shared by both `launchCamera` and the new
+      `launchVideoCapture` — keeps the one bug-prone piece (the permission grant) in exactly one
+      place rather than risking the fix drifting between two copies. `CameraCaptureFile` gains
+      `nextVideo(nowMillis)` (`video_<millis>.mp4`, distinct prefix/extension from the photo
+      `capture_<millis>.jpg` so the two never collide in the shared directory) alongside the
+      existing `next` — same pure-builder shape, +6 tests (naming, determinism, distinctness
+      across instants, extension, and a same-instant no-collision-with-photo test), mutation-
+      proven (hardcoding `nextVideo` to ignore its `nowMillis` parameter fails **exactly** the 2
+      discriminating tests — "names the file from the given instant" and "two different instants
+      produce two different video file names" — the other 7 in the file, including all 4 existing
+      photo tests, stay green). **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+      (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). **Full
+      on-device verification against the live gateway** (`meeshy_pixel8`, already booted and
+      idle, host load moderate — no repeat of the prior slice's severe contention): tapped the new
+      video tile, confirmed the system `com.android.camera2` app opened in genuine VIDEO mode
+      (red `REC 00:0x` indicator, not the photo shutter UI), recorded a ~3s clip, confirmed via
+      the same in-flight spinner tile the upload started immediately on return to the composer.
+      `adb logcat` confirmed the real TUS `POST`+`PATCH` round-trip (`filename=video_
+      1786394334180.mp4`, `filetype=video/mp4`, `uploadcontext=post`, full 1,260,047-byte
+      single-`PATCH` upload) — the `video_`/`.mp4` naming from `CameraCaptureFile.nextVideo`
+      confirmed verbatim in the real request. Published the resulting post for real (`POST
+      /api/v1/posts` → 201): the gateway independently probed the video (`duration: 13982`,
+      `width: 1280`, `height: 720`) and **auto-classified it `type: "REEL"`** — the existing
+      `ReelComposition` duration-floor rule firing correctly against a genuinely-captured (not
+      gallery-picked) video for the first time, with the composer's `Reel⇄Post` override chip
+      appearing exactly as it does for a qualifying gallery video. `GET /api/v1/posts/:id`
+      confirmed the persisted media (`fileUrl`/`thumbnailUrl` both resolving) before the test
+      post was deleted via `DELETE /api/v1/posts/:id` (`{"deleted":true}`, confirmed gone via a
+      follow-up 404). **Deliberate, documented scope cut vs. iOS unchanged**: Android now has two
+      system-delegated tiles (photo, video) where iOS has one custom AVFoundation screen with an
+      in-app photo/video toggle — functionally equivalent capture capability, different
+      interaction shape; no `CAMERA` runtime permission needed on Android either way (the system
+      camera app owns it). **Still open**: files, location, audio+transcription, per-post language
       override, durable-outbox queueing for offline resilience (media upload itself has no offline-retry
       path yet either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
       consistent, not a new gap) — each a separately-scoped follow-up.
