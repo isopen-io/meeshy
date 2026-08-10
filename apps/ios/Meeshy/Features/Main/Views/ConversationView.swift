@@ -259,7 +259,7 @@ struct ConversationView: View {
     /// `composerText.text` — hors body, donc sans créer de dépendance.
     @State var composerText = ConversationComposerTextModel()
     @StateObject var audioRecorder = AudioRecorderManager()
-    @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
+    @State var scrollButtonAudioIsPlaying = false
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
     /// Composant unifié « Enregistrer » au niveau écran — sert l'action
     /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
@@ -1024,11 +1024,10 @@ struct ConversationView: View {
                 // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
                 // possible pendant qu'elle est couverte.
                 composerText.onPersistNeeded = nil
-                // Arrêt déterministe des deux players locaux (scroll-button +
-                // preview d'audio en attente) : sans lui, l'audio continuait
-                // jusqu'au dealloc du @StateObject et la session restait
-                // acquise (refcount) le temps de la libération. Idempotent.
-                scrollButtonAudioPlayer.stop()
+                // Arrêt déterministe du player local (preview d'audio en attente) :
+                // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
+                // la session restait acquise (refcount) le temps de la libération.
+                // Idempotent.
                 pendingAudioPlayer.stop()
                 if audioRecorder.isRecording {
                     audioRecorder.cancelRecording()

@@ -38,7 +38,7 @@ extension ConversationView {
             unreadAttachmentIsAudio: unreadAttachment?.type == .audio,
             unreadAttachmentDetail: unreadAttachmentDetail,
             unreadAttachmentSymbol: unreadAttachmentSymbol,
-            isAudioPlaying: scrollButtonAudioPlayer.isPlaying,
+            isAudioPlaying: scrollButtonAudioIsPlaying,
             isOffline: isOffline,
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
             accentColor: accentColor,
@@ -51,14 +51,24 @@ extension ConversationView {
             },
             onPlayAudio: {
                 HapticFeedback.light()
-                if scrollButtonAudioPlayer.isPlaying {
-                    scrollButtonAudioPlayer.stop()
-                } else if let fileUrl = unreadAttachment?.fileUrl {
-                    scrollButtonAudioPlayer.play(urlString: fileUrl)
+                guard let att = unreadAttachment, att.type == .audio else { return }
+                let coordinator = ConversationAudioCoordinator.sharedForTesting
+                if coordinator.isActive(attachmentId: att.id) {
+                    coordinator.togglePlayPause()
+                } else {
+                    viewModel.playAudio(attachmentId: att.id)
                 }
             }
         )
         .accessibilityLabel(scrollToBottomAccessibilityLabel)
+        .onReceive(
+            ConversationAudioCoordinator.sharedForTesting.$activeContext
+                .combineLatest(ConversationAudioCoordinator.sharedForTesting.$isPlaying)
+                .map { [id = unreadAttachment?.id] context, playing in
+                    playing && id != nil && context?.attachmentId == id
+                }
+                .removeDuplicates()
+        ) { scrollButtonAudioIsPlaying = $0 }
     }
 
     private var scrollToBottomAccessibilityLabel: String {
