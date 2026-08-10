@@ -2,6 +2,103 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **device-locale inference was wired into the registration wizard's init** (slice
+> `auth-signup-region-inference-wiring`, feature-parity §A, the "Country auto-detection +
+> region→language inference at signup" bullet's own follow-up, tracked since
+> `auth-region-language-inference` on 2026-07-21 and re-surfaced as a candidate by the previous
+> two runs' "Next slice" notes). **RE-PROVEN before picking:** with the wizard's Compose
+> decomposition and the username-suggestion strip both closed, this run's candidate list was the
+> same four re-listed since `auth-username-suggestion-strip`: this device-locale wiring, the §C
+> inverted-list rewrite (still flagged "genuinely large" — deferred again, re-verification below),
+> `TagInputField` (still blocked on a backend `tags` wire field — grepped `ApiConversation` for a
+> `tags` field, still absent, gap confirmed real and still blocked), and the Kover coverage-gate
+> infra (deferred — infra work, not a parity gap, lowest priority of the four per the routine's own
+> ordering precedent). Picked the locale wiring: smallest, best-scoped, a real user-visible parity
+> gap (a French-locale device currently always starts the wizard on `"FR"`/blank language
+> regardless of device locale) rather than infra, and — per the routine's "RE-PROUVER" discipline —
+> re-read the bullet's own follow-up text (not just the "Next slice" pointer) and grepped
+> `SignupRegionInference`/`inferLanguages`/`inferCountryIso` across `apps/android` production code
+> first: all three hits were inside the pure core itself and one doc comment in
+> `RegistrationScreen.kt` explicitly flagging the wiring as "a distinct, not-yet-wired follow-up —
+> out of scope for this field-UI slice" (written by `auth-language-step-fields`) — confirming the
+> gap was real, not stale, and exactly where the prior slice had deliberately deferred it. Re-read
+> iOS's own `RegistrationViewModel.init()` line-by-line too: `detectCountry()` +
+> `detectLanguages()` fire unconditionally at construction, before any Combine debounce setup —
+> the wizard's LANGUAGE step and PHONE-step country picker are pre-selected from
+> `Locale.current` the instant the screen appears, not lazily on first render. **Added (production,
+> all `apps/android`):** `sdk-core/.../locale/DeviceLocaleProvider.kt` — a new `:sdk-core` seam
+> (`interface DeviceLocaleProvider { languageTag(); regionTag() }` +
+> `object SystemDeviceLocaleProvider : DeviceLocaleProvider` wrapping `Locale.getDefault()`),
+> deliberately the same shape as the already-shipped `CacheClock`/`SystemCacheClock` pair
+> (`sdk-core/cache/CacheClock.kt`) — a trivial JDK pass-through behind a fake-able interface, Hilt-
+> bound in `SdkModule.providesDeviceLocaleProvider()`, no dedicated unit test of its own (matches
+> the `SystemCacheClock` precedent: nothing to assert beyond "it calls the system API", the real
+> behaviour under test lives in what consumes it). `RegistrationViewModel` gains the new
+> constructor dep + `applyDeviceLocaleDefaults()`, called first in `init` (before the three
+> `launchProbe` debounce pipelines): reads `deviceLocaleProvider.languageTag()`/`.regionTag()`,
+> feeds them straight into the unmodified `SignupRegionInference.inferLanguages`/
+> `.inferCountryIso` (SSOT — the core's own 22 tests already cover every inference branch, this
+> slice only proves the wiring calls it correctly), and applies the result via the existing
+> `updateFields` helper — `systemLanguage`/`regionalLanguage` always overwrite (the core
+> guarantees a non-blank pair), `countryIso` only overwrites `RegistrationFields`'s static
+> `CountryCatalog.priority.first()` default when `inferCountryIso` resolves a known region
+> (mirrors iOS `detectCountry()`'s `guard let regionCode = … else { return }`, which leaves
+> `selectedCountry` at its `countries[0]` default on a `nil`/unmatched region rather than clearing
+> it — ported as `countryIso ?: it.countryIso`, an Elvis fallback to the current value, not a
+> hardcoded literal). Supported-language set reused verbatim from
+> `LanguageStepSelection.pickerLanguages` (the exact list the LANGUAGE step's own picker already
+> renders) rather than reaching into `LanguageData` a second, independent way — SSOT: "is this code
+> offered in the picker" is the exact question `inferLanguages` needs answered. **+6 new
+> ViewModel tests** (`RegistrationViewModelTest`, new `FakeDeviceLocaleProvider`, opt-in — its
+> default `null`/`null` keeps every pre-existing scenario byte-for-byte deterministic):
+> unresolvable device locale falls back to `fr`/`en`/priority-country; a supported device language
+> becomes `systemLanguage`; an uppercase device language code still matches case-insensitively; a
+> known device region becomes `countryIso`; an unknown device region leaves `countryIso` at the
+> static default (the Elvis fallback's other arm); a device region that maps to a regional language
+> distinct from the system language sets both fields from the same round-trip (proves `regionTag()`
+> feeds both `inferLanguages` and `inferCountryIso` from one shared source, not two independently
+> wired reads). **One pre-existing test's premise changed and was fixed, not weakened:**
+> `register_blankRegionalLanguage_sendsNullNotBlank` relied on `fields.regionalLanguage` being
+> blank on fresh state — no longer true now that `applyDeviceLocaleDefaults()` always pre-fills it
+> — so the test now calls `vm.onRegionalLanguageChange("")` to explicitly reach the blank case it
+> actually exercises (the pure `toRegisterRequest()` trim-to-null behaviour, unchanged and still
+> asserted identically); the other two regional-language edge tests
+> (`register_whitespaceRegionalLanguage_isTrimmedToNull`, `register_trimsRegionalLanguageValue`)
+> already called `onRegionalLanguageChange` explicitly and needed no change. **Mutation (RED
+> proof):** commenting out the `applyDeviceLocaleDefaults()` call in `init` fails **exactly** the
+> 5 of 6 new tests that depend on the call actually running (77 run, 5 failed, no collateral on any
+> pre-existing test) — the 6th (`initialState_unknownDeviceRegion_keepsThePriorityCountryDefault`)
+> legitimately still passes under the mutation, since disabling the call and never calling it both
+> leave `countryIso` at its unchanged static default; that test's value is corroborating the
+> "unknown region" branch alongside the known-region test that does catch the mutation, not
+> standing alone as its own RED proof. **Gate:** `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL in 20s`** (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks).
+> Reviewer **PASS** (diff `apps/android` only — new `sdk-core/locale/DeviceLocaleProvider.kt`,
+> `sdk-core/di/SdkModule.kt` [+1 `@Provides`], `feature/auth` [`RegistrationViewModel` +1
+> constructor dep + `applyDeviceLocaleDefaults()`, its test file]; SDK purity — the new seam is a
+> stateless system-API pass-through with no product rule, same grain as `CacheClock`, correctly
+> `:sdk-core`; the product decision ("pre-select the wizard's language/country from the device
+> locale at init") stays in the `:feature:auth` ViewModel; SSOT — reuses `SignupRegionInference`/
+> `LanguageStepSelection.pickerLanguages`/`CountryCatalog.dialCodes` untouched, no re-implementation;
+> instant-app — N/A, no network/spinner involved; UDF — unchanged `RegistrationViewModel` +
+> immutable `StateFlow`, applied via the existing `updateFields` helper; no dead end; no
+> tautological tests; no coverage floor lowered, one existing test's fixture adjusted to its new
+> real premise rather than weakened). **feature-parity.md's "Country auto-detection +
+> region→language inference at signup" bullet flips `[~]` → `[x]`** — its only follow-up is now
+> shipped. **Next slice (no single obvious pick — re-verify each before committing a run):** the §C
+> **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header`, flagged "genuinely large" over several runs without a fresh
+> re-decomposition — re-verify `ChatScreen.kt` before committing a run to it, per the routine's own
+> "a repeated verdict is a hypothesis, not a fact" discipline), OR the `TagInputField` composable +
+> `allTags` corpus hydration (still blocked on a new `tags` wire field on `ApiConversation` —
+> re-confirmed still absent this run), OR the tracked **Kover 90% coverage-gate infra**. With the
+> registration wizard now fully closed (8/8 Compose steps + username-suggestion strip + device-
+> locale inference), the next run should also weigh Auth §A's remaining non-wizard items (saved-
+> account picker, server environment selector, magic-link, OTP, phone recovery, onboarding
+> carousel, splash screen — several still `[~]`/`[ ]`, listed at feature-parity.md lines ~278-1285)
+> against moving on to Conversations/Chat per the `Auth → Conversations → Chat → Feed → Stories →
+> Calls → the rest` build order.
+>
 > On 2026-08-10 the **registration wizard's username-suggestion strip** landed (slice
 > `auth-username-suggestion-strip`, feature-parity §A). **RE-PROVEN before picking, not a rerun of a
 > stale note:** with the `OnboardingFlowView` Compose decomposition now 8/8 (all 8 steps shipped

@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=auth-username-suggestion-strip
+lane=ANDROID android_streak=2 last_run=auth-signup-region-inference-wiring

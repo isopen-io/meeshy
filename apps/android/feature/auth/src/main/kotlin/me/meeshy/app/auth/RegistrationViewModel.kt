@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.locale.DeviceLocaleProvider
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ImageUploadTarget
@@ -26,6 +27,7 @@ import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.auth.AvailabilityIntent
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.LanguageSelectionState
+import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.RegistrationFields
 import me.meeshy.sdk.model.auth.RegistrationNav
 import me.meeshy.sdk.model.auth.RegistrationNavModel
@@ -38,6 +40,7 @@ import me.meeshy.sdk.model.auth.RegistrationSummaryInput
 import me.meeshy.sdk.model.auth.RegistrationSummaryRow
 import me.meeshy.sdk.model.auth.SignupAvailabilityPolicy
 import me.meeshy.sdk.model.auth.SignupFieldValidation
+import me.meeshy.sdk.model.auth.SignupRegionInference
 import me.meeshy.sdk.model.auth.StepFill
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -160,6 +163,7 @@ class RegistrationViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val userRepository: UserRepository,
     private val workManager: WorkManager,
+    private val deviceLocaleProvider: DeviceLocaleProvider,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(RegistrationUiState())
@@ -170,6 +174,7 @@ class RegistrationViewModel @Inject constructor(
     private val phoneInput = MutableStateFlow("")
 
     init {
+        applyDeviceLocaleDefaults()
         launchProbe(usernameInput, SignupAvailabilityPolicy::usernameIntent, ::onUsernameAvailability) {
             // Sets both the verdict and its accompanying suggestions from the one round-trip
             // (mirrors iOS `checkUsernameAvailability`, which assigns `usernameAvailable` and
@@ -186,6 +191,37 @@ class RegistrationViewModel @Inject constructor(
         launchProbe(phoneInput, SignupAvailabilityPolicy::phoneIntent, ::onPhoneAvailability) { digits ->
             val dialCode = CountryCatalog.dialCode(_state.value.fields.countryIso).orEmpty()
             authRepository.checkAvailability(phoneNumber = dialCode + digits).getOrNull()?.phoneNumberAvailable
+        }
+    }
+
+    /**
+     * iOS `init()` → `detectCountry()` + `detectLanguages()`: pre-selects the LANGUAGE step's
+     * system/regional pair and the PHONE step's country from the device locale, via the pure
+     * [SignupRegionInference] core. [deviceLocaleProvider] supplies the two raw, `Locale`-free
+     * inputs the core needs; this method owns nothing but applying its result to [_state].
+     *
+     * The country only overrides [RegistrationFields]'s static default
+     * (`CountryCatalog.priority.first()`) when the device region resolves to a known one — mirrors
+     * iOS `detectCountry()`, which leaves `selectedCountry` at its `countries[0]` default on a
+     * `nil`/unmatched region rather than clearing it.
+     */
+    private fun applyDeviceLocaleDefaults() {
+        val supportedLanguages = LanguageStepSelection.pickerLanguages.map { it.code }.toSet()
+        val languages = SignupRegionInference.inferLanguages(
+            deviceLanguage = deviceLocaleProvider.languageTag(),
+            deviceRegion = deviceLocaleProvider.regionTag(),
+            supportedLanguageCodes = supportedLanguages,
+        )
+        val countryIso = SignupRegionInference.inferCountryIso(
+            deviceRegion = deviceLocaleProvider.regionTag(),
+            knownCountryCodes = CountryCatalog.dialCodes.keys,
+        )
+        updateFields {
+            it.copy(
+                systemLanguage = languages.systemLanguage,
+                regionalLanguage = languages.regionalLanguage,
+                countryIso = countryIso ?: it.countryIso,
+            )
         }
     }
 
