@@ -168,3 +168,31 @@ Conséquence : sur tout backdrop image de story (et tout `ProgressiveCachedImage
 - `Tests/MeeshySDKTests/Utils/ThumbHashTests.swift` : remplacement de `test_fromThumbHash_validBase64_createsImage` par un test de roundtrip + ajout `test_fromThumbHash_truncatedFiveByteHeader_returnsNil` ; remplacement de `test_thumbHashToRGBA_validHash_returnsNonEmptyPixels` par un roundtrip + ajout `test_thumbHashToRGBA_truncatedAfterHeader_returnsEmpty`.
 - `Tests/MeeshySDKTests/Utils/ThumbHashPipelineTests.swift` (nouveau) : roundtrip simple, roundtrip avec alpha, landscape preserve aspect, négatifs (invalid/empty/truncated), simulation gateway 100×100, préservation couleur dominante.
 - `Tests/MeeshyUITests/Story/Canvas/ThumbHashDecoderIntegrationTests.swift` (nouveau) : seam `ThumbHashDecoder` (empty/invalid/valid) ; `StoryBackgroundLayer.configure(kind: .image(...))` assigne ou non `CALayer.contents` selon la validité du hash.
+
+## 2026-08-09 : AudioPlayerView — l'audio suit la langue Prisme automatiquement (renversement du « B9 fix »)
+
+**Statut** : Accepté
+
+**Contexte** : `AudioPlayerView` séparait deux notions qui auraient dû être unifiées : la langue affichée dans le bandeau de transcription et la langue réellement JOUÉE. `selectedAudioLanguage` était bien seedé dès l'`init` avec la langue Prisme déjà résolue en amont par l'app (`resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)`), mais `hasUserSelectedAudioLanguage` démarrait inconditionnellement à `false` et ne passait à `true` que dans `switchToLanguage` — le seul point atteint par un tap explicite sur un pill de langue ou un changement du binding `externalLanguage`. `resolvePlaybackUrl` (fonction pure statique testable) ne basculait sur une traduction que si `isUserSelected == true` ; sinon, retour systématique à `originalUrl`. Conséquence : la langue Prisme résolue servait uniquement à préremplir le texte du bandeau de transcription, jamais à choisir la piste audio jouée — documenté explicitement dans le code comme une décision délibérée (« B9 fix »), pas un oubli, et verrouillé par une régression (`AudioPlayerViewPlaybackLanguageTests.swift`).
+
+**Décision** : renversement assumé de cette politique — l'audio doit suivre la langue préférée automatiquement, comme le texte, sur demande explicite du propriétaire produit. `hasUserSelectedAudioLanguage` est renommé `hasExplicitAudioLanguage` (le nom `hasUserSelected...` devenait trompeur : le flag représente désormais « la lecture doit suivre `selectedAudioLanguage` », que ce soit par seed Prisme automatique ou par tap explicite, pas seulement par action utilisateur). Il est seedé dans l'`init`, juste après `_selectedAudioLanguage` :
+```swift
+self._hasExplicitAudioLanguage = State(
+    initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage) != "orig"
+)
+```
+`switchToLanguage` continue de poser le flag à `true` sur tap explicite (déjà `true` si Prisme avait résolu une langue — no-op idempotent). `resolvePlaybackUrl` garde exactement la même signature/logique, seul son paramètre `isUserSelected` est renommé `hasExplicitLanguage` : le vrai changement est uniquement la valeur initiale du flag côté appelant. Ceci respecte automatiquement la règle Prisme #1 (pas de traduction disponible dans la langue préférée ⇒ afficher l'original, jamais `translations.first`) car `resolveInitialTranscriptionLanguage` la respecte déjà en amont : si aucune traduction ne matche, la valeur résolue est `"orig"`, donc le flag reste `false` et la lecture reste sur l'original — comportement inchangé dans ce cas précis.
+
+**Alternatives rejetées** :
+- **Supprimer entièrement `hasExplicitAudioLanguage` et faire dépendre `resolvePlaybackUrl` uniquement de `selectedLanguage != "orig"`** : fonctionnellement équivalent dans tous les cas actuels (le flag devient redondant s'il ne fait que suivre la même valeur), mais supprime un point d'extension déjà nommé et documenté qui pourrait servir plus tard (télémétrie « choix explicite vs Prisme », persistance différenciée). Écarté pour rester au diff minimal et ne pas changer la signature de `resolvePlaybackUrl` sans raison.
+- **Ne rien changer côté iOS, ne corriger que le bug web équivalent** : rejeté explicitement par le propriétaire produit — iOS est le frontend de référence sur lequel les autres (web) se calquent, il devait être corrigé en premier/ensemble.
+
+**Conséquences** :
+- Un audio dont Prisme a résolu une traduction (`initialTranscriptionLanguage` non-nil et ≠ `"orig"`) joue désormais automatiquement cette traduction dès l'ouverture du lecteur, sans tap utilisateur — parité avec le comportement texte.
+- Le test `test_init_neverMarksLanguageAsUserSelected` (qui verrouillait l'ancien comportement) est inversé en `test_init_marksLanguageAsExplicitWhenPrismeResolvesATranslation` ; un cas de non-régression est ajouté pour `initialTranscriptionLanguage = nil`/`"orig"` (le flag reste `false`, lecture sur l'original).
+- Les 4 tests purs existants sur `resolvePlaybackUrl` gardent leurs assertions telles quelles — seul le nom du paramètre à l'appel change.
+
+**Fichiers concernés** :
+- `Sources/MeeshyUI/Media/AudioPlayerView.swift` (commits `b9a9e0c90`, `b9a1a4f7e`) : renommage `hasUserSelectedAudioLanguage` → `hasExplicitAudioLanguage`, seed dans `init`, renommage du paramètre `isUserSelected` → `hasExplicitLanguage` sur `resolvePlaybackUrl`, mise à jour de la doc de `initialTranscriptionLanguage`.
+
+Détail complet et rationale : `docs/superpowers/specs/2026-08-09-audio-translation-prisme-reliability-design.md` (Problème 1).
