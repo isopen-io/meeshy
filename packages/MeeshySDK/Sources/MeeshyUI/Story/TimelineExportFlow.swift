@@ -160,6 +160,16 @@ final class TimelineExportController: ObservableObject {
 
     private var exportTask: Task<Void, Never>?
     private let exporter: TimelineStoryExporting
+    /// La timeline jouait-elle quand `start()` l'a mise en pause pour lancer
+    /// le bake — capturé AVANT la pause, jamais relu depuis le ViewModel une
+    /// fois l'export en cours. Sans ce flag, aucune sortie (fin, échec,
+    /// annulation) ne pouvait distinguer « il faut relancer » de « la
+    /// timeline était déjà à l'arrêt ».
+    private var wasPlayingBeforeExport = false
+    /// Référence FAIBLE vers la timeline mise en pause — sert uniquement à
+    /// la reprise en sortie d'export, jamais retenue au-delà (le composer en
+    /// reste seul propriétaire).
+    private weak var pausedTimelineViewModel: TimelineViewModel?
     /// Pseudo gravé dans le filigrane. Injectable — revue round 2 (Finding 2) :
     /// lire `AuthManager.shared` directement au site d'appel rendait cette
     /// valeur INcontrôlable en test, contrairement à `introProvider`. Par
@@ -199,9 +209,12 @@ final class TimelineExportController: ObservableObject {
 
     func start(composer: StoryComposerViewModel) {
         guard !isExporting else { return }
-        if composer.timelineViewModel.isPlaying {
-            composer.timelineViewModel.togglePlayback()
+        let timelineViewModel = composer.timelineViewModel
+        wasPlayingBeforeExport = timelineViewModel.isPlaying
+        if wasPlayingBeforeExport {
+            timelineViewModel.togglePlayback()
         }
+        pausedTimelineViewModel = timelineViewModel
         let slide = composer.exportableCurrentSlide()
         let mediaURLs = composer.collectMediaURLs(for: slide)
         // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur) —
@@ -250,9 +263,11 @@ final class TimelineExportController: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 self?.phase = .finished(ExportedFile(url: finalURL))
+                self?.resumePlaybackIfNeeded()
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.phase = .failed(error.localizedDescription)
+                self?.resumePlaybackIfNeeded()
             }
         }
     }
@@ -263,6 +278,21 @@ final class TimelineExportController: ObservableObject {
         exportTask?.cancel()
         exportTask = nil
         phase = .idle
+        resumePlaybackIfNeeded()
+    }
+
+    /// Relance la lecture coupée par `start()`, si (et seulement si) elle
+    /// jouait avant la pause — via la MÊME bascule (`togglePlayback()`) que
+    /// celle qui l'a arrêtée, jamais un `play()` direct qui court-circuiterait
+    /// l'état publié (`isPlaying`) du ViewModel. Appelée sur les TROIS sorties
+    /// possibles de l'export (fin, échec, annulation) : avant ce fix, aucune
+    /// ne relançait la lecture, laissant la timeline muette derrière l'aperçu
+    /// plein écran ou après un « Annuler ».
+    private func resumePlaybackIfNeeded() {
+        guard wasPlayingBeforeExport, let timelineViewModel = pausedTimelineViewModel else { return }
+        wasPlayingBeforeExport = false
+        pausedTimelineViewModel = nil
+        timelineViewModel.togglePlayback()
     }
 
     /// Ferme l'aperçu : le MP4 temporaire est supprimé (il a été partagé ou

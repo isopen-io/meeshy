@@ -49,6 +49,14 @@ struct MyStoriesView: View {
     /// this panel is the ONLY action surface for failed publishes.
     @StateObject private var publishService = StoryPublishService.shared
 
+    /// Source de vérité des exports story → photothèque en vol
+    /// (`StoryPhotoSaveService.shared`), même source que le rail du lecteur
+    /// (`StoryViewerView+Sidebar`) : un export lancé depuis l'une des deux
+    /// surfaces progresse sur les deux. `@ObservedObject`, pas une simple
+    /// lecture de `progress(for:)` — sinon la grille ne se redessinerait
+    /// jamais quand la progression change.
+    @ObservedObject private var saveService = StoryPhotoSaveService.shared
+
     @State private var viewersStory: StoryItem?
     @State private var exportStory: StoryItem?
     @State private var forwardStory: StoryItem?
@@ -373,7 +381,9 @@ struct MyStoriesView: View {
                 .reactions: story.reactionCount,
                 .comments: story.commentCount,
             ],
-            title: nil)
+            title: nil,
+            saveProgress: saveService.progress(for: story.id),
+            saveIsCancellable: saveService.isCancellable(storyId: story.id))
     }
 
     private func handlePublishedGlyph(_ glyph: MyStoryGlyph, for story: StoryItem) {
@@ -499,7 +509,9 @@ struct MyStoriesView: View {
             date: draft.updatedAt,
             expiresAt: nil,
             counts: [:],
-            title: draft.title)
+            title: draft.title,
+            saveProgress: saveService.progress(for: draft.id),
+            saveIsCancellable: saveService.isCancellable(storyId: draft.id))
     }
 
     private func handleDraftGlyph(_ glyph: MyStoryGlyph, for draft: StoryDraftSummary) {

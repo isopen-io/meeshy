@@ -226,8 +226,9 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     ///   2. **Foreground items** — `StoryRenderer.render` produces the layer
     ///      tree (text, media, stickers, persisted drawing).
     ///   3. **Opening transition** — `StoryRenderer.applyOpening` overlays
-    ///      the slide's opening effect during the first 0.5s of playback so
-    ///      the baked MP4 mirrors the live viewer/preview.
+    ///      the slide's opening effect during the first
+    ///      `StoryRenderer.slideTransitionDuration` of playback so the baked
+    ///      MP4 mirrors the live viewer/preview.
     @MainActor
     internal static func renderFrame(slide: StorySlide,
                                      languages: [String] = [],
@@ -278,12 +279,14 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                             mediaFrameProvider: mediaFrameProvider,
                                             contentsScale: 1.0)
 
-            // Opening transition — only visible during the first 0.5s. The
-            // live canvas uses `CABasicAnimation`, but `layer.render(in:)`
-            // doesn't run the animation engine — it renders the model layer
-            // as-is. So we apply the static state of the opening at the
-            // current playhead directly on the model layer.
-            if let opening = slide.effects.opening, time.seconds < 0.5 {
+            // Opening transition — only visible during the first
+            // `StoryRenderer.slideTransitionDuration`. The live canvas uses
+            // `CABasicAnimation`, but `layer.render(in:)` doesn't run the
+            // animation engine — it renders the model layer as-is. So we
+            // apply the static state of the opening at the current playhead
+            // directly on the model layer.
+            if let opening = slide.effects.opening,
+               time.seconds < StoryRenderer.slideTransitionDuration {
                 applyStaticOpening(opening, rootLayer: tree, elapsed: time.seconds)
             }
             layer = tree
@@ -485,12 +488,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// playback position `elapsed`. Mirrors `StoryRenderer.applyOpening` but
     /// without CABasicAnimation — `layer.render(in:)` doesn't run the
     /// animation engine, so we compute the model-layer state by hand each
-    /// frame. Progress is `elapsed / 0.5` clamped to `[0, 1]`.
+    /// frame. Progress is `elapsed / StoryRenderer.slideTransitionDuration`
+    /// clamped to `[0, 1]`.
     @MainActor
     private static func applyStaticOpening(_ effect: StoryTransitionEffect,
                                            rootLayer: CALayer,
                                            elapsed: Double) {
-        let progress = max(0.0, min(1.0, elapsed / 0.5))
+        let progress = max(0.0, min(1.0, elapsed / StoryRenderer.slideTransitionDuration))
         switch effect {
         case .fade:
             rootLayer.opacity = Float(progress)
