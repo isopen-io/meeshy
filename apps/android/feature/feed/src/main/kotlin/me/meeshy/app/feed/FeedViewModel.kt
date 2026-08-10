@@ -15,6 +15,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -296,18 +297,26 @@ class FeedViewModel @Inject constructor(
      * a stricter gateway validation on the text field is never exercised for a post
      * that carries only media. A successful create is prepended to the realtime head
      * via [FeedRealtimeReducer.created] — visible at the top instantly, without raising
-     * the "new posts" banner. **Deliberate, documented scope cuts**: no durable-outbox
-     * queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a post typed while
-     * offline is lost rather than durably queued; a tracked follow-up once Android's
-     * `OutboxKind` gains a `CREATE_POST` lane. Camera capture, file, location and audio
-     * attachments remain separately-scoped follow-ups to this photo/video sub-slice.
+     * the "new posts" banner. [type] carries the reel-classification decision the pure
+     * [FeedComposerDraft.postType] already resolved (`ReelComposition.defaultType`) —
+     * defaulted to [PostType.POST] so any other call site is unaffected. **Deliberate,
+     * documented scope cuts**: no durable-outbox queueing yet (unlike iOS's
+     * `enqueueDurableTextPost`, U1 ST3) — a post typed while offline is lost rather than
+     * durably queued; a tracked follow-up once Android's `OutboxKind` gains a
+     * `CREATE_POST` lane. Camera capture, file, location and audio attachments remain
+     * separately-scoped follow-ups to this photo/video sub-slice.
      */
-    fun publishPost(content: String, visibility: String, mediaIds: List<String> = emptyList()) {
+    fun publishPost(
+        content: String,
+        visibility: String,
+        mediaIds: List<String> = emptyList(),
+        type: String = PostType.POST.name,
+    ) {
         viewModelScope.launch {
             try {
                 val result = postRepository.create(
                     content = content.ifBlank { null },
-                    type = "POST",
+                    type = type,
                     visibility = visibility,
                     mediaIds = mediaIds.ifEmpty { null },
                 )

@@ -2,6 +2,84 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **the Feed post composer's reel-classification sub-slice landed** (slice
+> `feed-composer-reel-classification`, feature-parity §F — the orchestrator's documented next
+> sub-step after the photo/video attachments slice). **RE-PROUVEN before starting**: grepped
+> `services/gateway/src/services/PostService.ts` (`createPost`) and confirmed the gateway only ever
+> *degrades* a client-claimed `REEL` back to `POST` when the composition doesn't qualify — it never
+> auto-*upgrades* a `POST` claim, even when the attached media would qualify. Cross-checked
+> `FeedViewModel.publishPost`/`FeedComposerDraft`: every Android-authored post hardcoded
+> `type = "POST"`, confirming a REAL, currently-live parity gap — any Android post with a qualifying
+> video/audio (≥3s) or ≥2 images was permanently stuck as a plain post and could never surface on the
+> Reels surface, unlike iOS (`FeedView.composerOverlay` + `ReelComposition.defaultType`, "un post
+> n'est un RÉEL que si sa composition porte une vidéo, un audio, ou au moins deux images", directive
+> user 2026-08-02). **Shipped (production, all `apps/android`)**: a new pure `ReelComposition`
+> (`:core:model`) — third mirror of the SAME rule already living in the iOS SDK (`FeedModels.swift`)
+> and the gateway (`services/gateway/src/services/posts/reelComposition.ts`) — computing
+> `qualifiesAsReel`/`defaultType` from a media list's `mimeType`/`durationMs`. **No on-device
+> duration-extraction plumbing needed**: read `services/gateway/src/routes/uploads/tus-handler.ts`
+> end to end and confirmed the gateway's `ffprobe`-backed `metadataManager.extractMetadata` runs
+> SYNCHRONOUSLY before the TUS finish response, so `UploadedMedia.durationMs` (already surfaced by
+> the `story-media-tus-upload`/`feed-composer-media-attachments` slices' own `TusUploadRepository`)
+> already carries the server-authoritative duration the instant an upload completes — the same wire
+> shape (`MediaAttachmentWire`) every upload path shares. Added `PostType.REEL` (`:core:model`,
+> previously only `POST`/`STORY`/`STATUS` — confirmed zero exhaustive-`when`/ordinal-persistence call
+> sites anywhere in the app before adding it, so the insertion is additive-safe). `FeedComposerDraft`
+> now tracks `media: List<UploadedMedia>` instead of bare ids (`mediaIds` is a computed projection,
+> so no behavioural change to anything reading it) and gained `qualifiesAsReel`/`postType`/
+> `forcePlainPost`/`withForcePlainPost` — `postType` resolves `REEL` when qualifying and not
+> author-overridden, else `POST`, and `publishRequest()` now carries the resolved wire `type`.
+> `FeedComposerSheet` shows a small Réel⇄Post override chip (`PlayCircle`/`Description` icons already
+> established elsewhere in `:feature:feed` for the same semantics) **only when the composition
+> qualifies** — byte-for-byte the same conditional gate iOS uses around its own toggle, so removing
+> an image back down to one both de-qualifies AND hides the chip on both platforms identically.
+> `FeedViewModel.publishPost` gained a `type` param (defaulted to `PostType.POST.name`, so every other
+> call site is unaffected) threaded straight to `PostRepository.create`. **+28 tests**:
+> `ReelCompositionTest` (13 — video/audio/image qualification, the 3s duration floor at/under/missing,
+> images never subject to the floor, case-insensitive MIME matching, `defaultType` incl.
+> `forcePlainPost` override), `FeedComposerDraftTest` (+14 net new — fresh draft is POST, single image
+> never qualifies, ≥2 images/qualifying video default to REEL, short/missing-duration video does not
+> qualify, force-override on a qualifying vs. non-qualifying composition, de-qualification on
+> `withoutMedia` removal, publish request carries the resolved type both ways), `FeedViewModelTest`
+> (+1 — `publishPost` sends a caller-resolved `REEL` type through to the repository unchanged).
+> `FeedMediaPickerTest`/existing `FeedComposerDraftTest` cases mechanically updated for the
+> `mediaIds: List<String>` → `media: List<UploadedMedia>` constructor shape (same behaviour, new
+> fixture shape — a small local `media(id, mimeType, durationMs)` test factory added to both files).
+> **Mutation-proven, three independent axes**: (a) forcing `ReelComposition`'s private
+> `meetsMinDuration` to always return `true` failed **exactly** the 3 duration-floor-sensitive tests
+> (`under 3s does NOT qualify`, `missing duration does NOT qualify`, `a video under 3 seconds defaults
+> to POST`), the other 10 `ReelCompositionTest` cases stayed green; (b) loosening the image-count
+> threshold from `>= 2` to `>= 1` failed **exactly** the 2 single-image-must-not-qualify tests across
+> both files, everything else (2484 total tests in the `:core:model` run) stayed green; (c) hardcoding
+> `FeedComposerDraft.postType` to ignore `forcePlainPost` (passing a literal `false` instead) failed
+> **exactly** the 2 tests asserting the override, the other 33 `FeedComposerDraftTest` cases stayed
+> green. All three reverted and re-run clean before commit. **Gate**: `./apps/android/meeshy.sh check`
+> → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero
+> failures anywhere in the monorepo, confirmed both immediately after the mutation-proof reverts and
+> again on a clean rerun). Reviewer **PASS** (diff `apps/android` only — 2 new `:core:model` files
+> [`ReelComposition.kt` + its test] + 1 line added to the existing `PostType` enum, 4 `:feature:feed`
+> production files edited [`FeedComposerDraft.kt`/`FeedComposerSheet.kt`/`FeedScreen.kt`/
+> `FeedViewModel.kt`] + 3 existing test files mechanically updated + 1 extended, 4 locale
+> `strings.xml` [en/fr/es/pt, `FeedStringLocalizationParityTest` green — 3 new keys per locale]; SDK
+> purity — the stateless `ReelComposition` rule engine lives in `:core:model` exactly like its iOS SDK
+> counterpart, the "which media reached this draft, is the author overriding" product decision stays
+> in `:feature:feed`'s `FeedComposerDraft`, same split as every prior TUS-adjacent slice; SSOT — reused
+> `UploadedMedia.mimeType`/`durationMs` verbatim rather than inventing a second on-device
+> duration-extraction path, reused the `PlayCircle`/`Description` icons already established for the
+> same reel/post semantics elsewhere in this module; no coverage floor lowered; no tautological
+> tests). Not yet verified on-device this run (the toggle is a small conditional chip with no new
+> network shape — the underlying wire-format proof point, "does the gateway actually honor a
+> REEL-classified post typed on Android," piggybacks on the same TUS round-trip
+> `feed-composer-media-attachments` already verified live against the gateway; a dedicated on-device
+> pass confirming the chip's appear/disappear + a real `type: "REEL"` request body is a natural
+> next-run candidate if useful, not required by the local gate this run).
+> **Next slice candidates (not attempted this run)**: chunked/resumable large-video TUS upload
+> (checkpoint store, HEAD recovery, survives app kill); the §C inverted-list rewrite decomposition
+> (still deferred without an attempt, many runs running); the §M `NotificationChannel` taxonomy gap (2
+> channels vs. ~80 backend types); camera capture for the Feed composer (needs a genuinely new
+> `TakePicture`/`FileProvider` pattern, not yet established anywhere in the Android app); the
+> noticed-not-chased Friends/Discover tab content question from the prior `feed-composer-media-
+> attachments` run.
 > On 2026-08-10 **the Feed post composer's photo/video attachment sub-slice landed** (slice
 > `feed-composer-media-attachments`, feature-parity §F — the routine's own suggested next candidate,
 > "correctly scoped to consume [the previous run's] `TusUploadRepository`/`TusUploadContext.POST`
