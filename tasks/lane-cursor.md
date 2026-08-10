@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=app-launcher-icon
+lane=ANDROID android_streak=2 last_run=feed-conversation-toggle
