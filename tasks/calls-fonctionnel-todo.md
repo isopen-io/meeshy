@@ -5548,3 +5548,65 @@ démarré sur une base propre. Candidat repris directement du « reste ouvert »
   piste caméra n'a été acquise ni attachée à aucun pair. Investigation entamée mais pas menée à bout ce
   cycle (portée du fix — faire lever une erreur explicite depuis `enableVideo()` vs. gérer le cas dans
   l'appelant — pas encore tranchée) ; à vérifier ligne à ligne avant d'implémenter (leçon 18).
+
+## Vague 86 — `enableVideo()` (use-webrtc-p2p.ts) résolvait silencieusement sans pair, désynchronisant `controls.videoEnabled` de l'état média réel (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session. Deux
+PR ouvertes trouvées au démarrage (`list_pull_requests`) : #2706 (`claude/upbeat-dirac-mildu6`) et #2701
+(`claude/upbeat-dirac-9xg0k7`), toutes deux le MÊME correctif Vague 85 livré en parallèle (comparaison de
+diff : guard identique dans `addRemoteStream`, tests équivalents) — 15/15 checks CI verts sur les deux.
+Règle de la routine (reconduite depuis la Vague 82) : ne jamais empiler un nouveau cycle sur un backlog non
+fermé. #2706 mergée (squash, base la plus récente des deux) ; #2701 fermée avec commentaire de renvoi vers
+#2706. Branche resynchronisée sur `main` à jour (fast-forward). Candidat repris directement du « nouveau
+candidat prioritaire » laissé par la Vague 85 : `use-webrtc-p2p.ts enableVideo()` no-op silencieux sans
+pair. Vérifié ligne à ligne avant implémentation (leçon 18 : hypothèse à réfuter, pas une consigne).
+
+- **Root cause confirmée par lecture directe** : `enableVideo()` (`use-webrtc-p2p.ts`, ~L669) faisait
+  `if (services.length === 0) return;` — un retour anticipé silencieux, sans exception, quand
+  `webrtcServicesRef.current` est vide (aucun `RTCPeerConnection` créé pour aucun participant). Ce Map est
+  peuplé par `getWebRTCService()`, appelé depuis `createOffer` (côté appelant) ou depuis le handler de
+  signal `offer` reçu (côté destinataire) — donc `services.length === 0` signifie littéralement « aucune
+  signalisation n'a encore commencé avec personne », une fenêtre réelle bien que courte (le montage de
+  `VideoCallInterface` est inconditionnel dès `currentCall` existe, `CallManager.tsx:1134`, y compris
+  pendant la sonnerie). `handleToggleVideo` (`VideoCallInterface.tsx`) appelle `await enableVideo()` dans un
+  `try` dont le `catch` gère déjà l'échec (toast + `return` avant `setControls`) — mais un retour résolu
+  sans erreur ne déclenche jamais ce `catch` : le code tombe directement sur
+  `setControls({ videoEnabled: true })` PUIS émet `CALL_TOGGLE_VIDEO` au pair via socket — sans qu'aucune
+  piste caméra n'ait été acquise ni attachée à qui que ce soit. Le bouton affiche « vidéo activée », le pair
+  distant est informé que la vidéo locale est active, et rien ne corrige automatiquement cet état une fois
+  qu'un pair se connecte (pas de file d'attente, pas de retry).
+- **Fix** : `enableVideo()` lève désormais `new Error('NO_PEER_CONNECTION')` au lieu de résoudre
+  silencieusement quand `services.length === 0`. `handleToggleVideo` n'a besoin d'AUCUNE modification — son
+  `catch` existant (déjà exercé et testé pour un échec de renégociation mi-appel) absorbe le rejet
+  correctement : toast `videoSwitchFailed`, `return` avant `setControls`/l'émission socket. Un seul fichier
+  de production modifié (`use-webrtc-p2p.ts`, +7/-1 lignes) ; `VideoCallInterface.tsx` intouché — la
+  correctivité de son chemin d'erreur était déjà là, seule la source (l'exception jamais levée) manquait.
+  Docstring de `enableVideo()` mise à jour : l'ancienne mention « Works while ringing or connected » était
+  fausse dans ce cas précis (sonnerie SANS signalisation encore engagée) — remplacée par une explication du
+  contrat d'erreur.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau test dans `use-webrtc-p2p.test.tsx`
+  (describe « Mid-call A/V switch (FaceTime-style) ») — « enableVideo rejects without touching the camera
+  when no peer connection exists yet » : appelle `enableVideo()` SANS `createOffer` préalable (aucun
+  service), attend un rejet ET vérifie que `getUserMedia` n'a jamais été invoqué (pas d'acquisition caméra
+  pour rien). RED confirmé : la promesse résolvait `undefined` avant le fix. Nouveau test bout-en-bout dans
+  `VideoCallInterface.test.tsx` (describe dédié Vague 86) — simule le rejet via le mock du hook
+  (`webrtc.enableVideo.mockRejectedValueOnce`), clique le bouton toggle, et verrouille que `setControls`
+  n'est PAS appelé et que le socket n'émet PAS `call:toggle-video` — ce test était déjà vert avant le fix
+  (le `catch` de `handleToggleVideo` existait déjà et n'a pas changé) : il ne prouve pas la régression du
+  bug lui-même (c'est le rôle du test du hook), mais verrouille que le chemin de bout en bout — la vraie
+  raison d'être du fix — fonctionne réellement une fois `enableVideo()` corrigé, pas seulement en théorie.
+- **Vérification** : `use-webrtc-p2p.test.tsx` (43 tests, +1 net) et `VideoCallInterface.test.tsx`
+  (25 tests, +1 net) verts. Sweep complet `video-call|use-webrtc|use-call|orchestrator|adaptive-degradation|
+  call-store` (43 suites / 506 tests, +2 net vs. Vague 85) vert — aucune régression, notamment sur les
+  guards de re-entrance (Vague 76), l'exclusion mutuelle toggle manuel/auto (Vague 82) et le
+  pré-association m-line (Vague 83). Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au
+  démarrage) : `bun install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator
+  client && bun run build` sans erreur. `npx tsc --noEmit` sur `apps/web` : 1622 erreurs avant et après le
+  diff (`git stash`/`stash pop`, diff normalisé ligne-à-ligne), zéro nouvelle. `eslint` : même échec
+  sandbox-only de config circulaire documenté aux vagues précédentes (65-85), non bloquant, indépendant de
+  ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
+  needs on-device confirmation) ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) reconfirmées hors
+  d'atteinte dans ce sandbox ce cycle.

@@ -664,11 +664,21 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
    * Turn the local camera ON mid-call (audio→video upgrade, FaceTime-style).
    * Acquires a single camera track and attaches it to every peer (cloning for
    * additional peers), flipping each reserved video transceiver to sendrecv
-   * and renegotiating. Works while ringing or connected.
+   * and renegotiating.
+   *
+   * Throws if no peer connection exists yet (e.g. still ringing, before the
+   * caller's own createOffer or the callee's first offer signal has run) —
+   * the caller MUST NOT treat a resolved promise as "video is on" when there
+   * is nothing to attach a camera track to. Silently no-op'ing here used to
+   * let handleToggleVideo (VideoCallInterface) flip controls.videoEnabled to
+   * true and tell the peer video is enabled, while no camera track was ever
+   * acquired — a UI/media desync with nothing to recover it automatically.
    */
   const enableVideo = useCallback(async (): Promise<void> => {
     const services = Array.from(webrtcServicesRef.current.values());
-    if (services.length === 0) return;
+    if (services.length === 0) {
+      throw new Error('NO_PEER_CONNECTION');
+    }
     const cam = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',

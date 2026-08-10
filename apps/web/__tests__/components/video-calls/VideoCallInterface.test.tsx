@@ -767,6 +767,39 @@ describe('VideoCallInterface (container)', () => {
     });
   });
 
+  // Vague 86: enableVideo() (use-webrtc-p2p.ts) used to resolve silently
+  // (no-op, no throw) when no peer connection exists yet — e.g. the call is
+  // still ringing. handleToggleVideo has no way to distinguish that from a
+  // real success: it flipped controls.videoEnabled to true and told the peer
+  // video was on via CALL_TOGGLE_VIDEO, even though no camera track was ever
+  // acquired or attached to anything. enableVideo now throws in that case —
+  // this locks handleToggleVideo's reaction to the rejection through the
+  // SAME catch path already proven for a mid-call replaceTrack failure.
+  describe('handleToggleVideo — enableVideo rejecting must not report video as enabled (Vague 86)', () => {
+    afterEach(() => {
+      webrtc.enableVideo.mockResolvedValue(undefined);
+    });
+
+    it('keeps controls.videoEnabled false and does not notify the peer when enableVideo rejects', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: false };
+      webrtc.enableVideo.mockRejectedValueOnce(new Error('NO_PEER_CONNECTION'));
+      const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+      (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button);
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.videoSwitchFailed'));
+
+      expect(storeState.setControls).not.toHaveBeenCalled();
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith(
+        'call:toggle-video',
+        expect.anything(),
+      );
+    });
+  });
+
   // Vague 82: Vague 76 guarded the manual double-click (`videoToggleInFlightRef`)
   // but explicitly left open ("reste ouvert") that the manual toggle and the
   // adaptive-degradation controller's own suspend()/resume() (which call
