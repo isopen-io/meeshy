@@ -22,7 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -128,7 +130,7 @@ fun FeedComposerSheet(
                     if (result.data.isEmpty()) {
                         onMediaError(mediaUnusableMessage)
                     } else {
-                        draft = draft.withMedia(result.data.map { it.id })
+                        draft = draft.withMedia(result.data)
                         attachedMedia = attachedMedia + result.data
                     }
                 is NetworkResult.Failure -> onMediaError(result.error.message ?: mediaUnusableMessage)
@@ -181,6 +183,13 @@ fun FeedComposerSheet(
                 selected = draft.visibility,
                 onSelect = { visibility -> draft = draft.withVisibility(visibility) },
             )
+
+            if (draft.qualifiesAsReel) {
+                ReelTypeToggle(
+                    forcePlainPost = draft.forcePlainPost,
+                    onToggle = { draft = draft.withForcePlainPost(!draft.forcePlainPost) },
+                )
+            }
 
             OutlinedTextField(
                 value = draft.text,
@@ -380,3 +389,44 @@ private fun visibilityLabel(visibility: FeedPostVisibility): String = stringReso
         FeedPostVisibility.PRIVATE -> R.string.feed_composer_visibility_private
     },
 )
+
+/**
+ * The Réel⇄Post override chip — port of iOS `FeedView.composerOverlay`'s toggle
+ * (`composerForcePlainPost.toggle()`, shown only when
+ * `ReelComposition.qualifiesAsReel`). The caller only renders this Composable
+ * when [FeedComposerDraft.qualifiesAsReel] is already true, mirroring iOS's own
+ * `if ReelComposition.qualifiesAsReel(...)` gate around the identical button —
+ * so this Composable itself stays a pure display of [forcePlainPost], with no
+ * qualification logic of its own to duplicate/drift from [ReelComposition].
+ */
+@Composable
+private fun ReelTypeToggle(
+    forcePlainPost: Boolean,
+    onToggle: () -> Unit,
+) {
+    val hint = stringResource(R.string.feed_composer_type_hint)
+    val tint = if (forcePlainPost) MeeshyTheme.tokens.textMuted else MeeshyPalette.Indigo300
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .clickable(onClickLabel = hint, onClick = onToggle)
+            .padding(vertical = MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = if (forcePlainPost) Icons.Filled.Description else Icons.Filled.PlayCircle,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = stringResource(
+                if (forcePlainPost) R.string.feed_composer_type_post else R.string.feed_composer_type_reel,
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = tint,
+        )
+    }
+}

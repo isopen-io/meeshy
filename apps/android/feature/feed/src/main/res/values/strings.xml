@@ -98,4 +98,7 @@
     <string name="feed_composer_remove_media">Remove media</string>
     <string name="feed_composer_media_limit">You can attach up to %1$d items</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>
+    <string name="feed_composer_type_reel">Reel</string>
+    <string name="feed_composer_type_post">Post</string>
+    <string name="feed_composer_type_hint">Switch between reel and post</string>
 </resources>

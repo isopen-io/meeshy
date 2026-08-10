@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.UploadedMedia
 import org.junit.Test
 
 /**
@@ -14,6 +15,17 @@ import org.junit.Test
  * launcher.
  */
 class FeedMediaPickerTest {
+
+    private fun media(id: String) = UploadedMedia(
+        id = id,
+        url = "https://cdn.meeshy.me/$id",
+        mimeType = "image/jpeg",
+        fileSize = 10,
+        width = null,
+        height = null,
+        durationMs = null,
+        thumbnailUrl = null,
+    )
 
     @Test
     fun `no free slots launches nothing`() {
@@ -50,7 +62,7 @@ class FeedMediaPickerTest {
 
     @Test
     fun `a draft with a single slot left falls back to the single picker`() {
-        val draft = FeedComposerDraft(mediaIds = List(FeedComposerDraft.MAX_MEDIA - 1) { "m$it" })
+        val draft = FeedComposerDraft(media = List(FeedComposerDraft.MAX_MEDIA - 1) { media("m$it") })
         assertThat(draft.remainingMediaSlots).isEqualTo(1)
         assertThat(FeedMediaPicker.modeFor(draft.remainingMediaSlots))
             .isEqualTo(FeedMediaPickMode.Single)
@@ -58,7 +70,7 @@ class FeedMediaPickerTest {
 
     @Test
     fun `a full draft launches nothing`() {
-        val draft = FeedComposerDraft(mediaIds = List(FeedComposerDraft.MAX_MEDIA) { "m$it" })
+        val draft = FeedComposerDraft(media = List(FeedComposerDraft.MAX_MEDIA) { media("m$it") })
         assertThat(draft.isMediaFull).isTrue()
         assertThat(FeedMediaPicker.modeFor(draft.remainingMediaSlots))
             .isEqualTo(FeedMediaPickMode.None)
