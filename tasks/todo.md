@@ -1,3 +1,144 @@
+# Cycle 55 — Le lien de partage survivait à la story qu'il partageait
+
+Les deux ADR du gateway se terminent, l'une et l'autre, par la même réserve : « les `TrackingLink`
+visant une story détruite ne sont pas désactivés par cette passe ». Portée en backlog depuis le
+cycle 53, elle a cessé d'être théorique au cycle 54 : celui-ci a rendu le balayage effectif pour la
+première fois, donc toute story finit désormais par être détruite, donc tout lien de partage de
+story finissait par pointer sur une ligne qui n'existe plus.
+
+## Le défaut
+
+Le retrait interactif d'un post — l'app comme la console — coupe ses `/l/<token>` depuis trois
+cycles. C'est le troisième effet de `applyPostRemovalEffects`, et son commentaire dit exactement
+pourquoi : « le soft-delete ne bascule que `deletedAt`, le `onDelete: Cascade` ne se déclenche
+jamais, les `/l/<token>` qui visent ce post resteraient donc opérationnels ». Le balayage du contenu
+éphémère est l'AUTRE chemin qui rend un post inatteignable, et le SEUL qui le DÉTRUISE. Il ne
+coupait rien.
+
+Et rien ne pouvait le rattraper après coup : `TrackingLink.targetId` n'a ni relation ni cascade vers
+`Post` — le champ est polymorphe, il porte indifféremment un `postId`, un `conversationId` ou un
+`userId`, et le schéma l'écrit. La ligne `Post` détruite, plus aucun chemin du gateway ne sait
+relier le lien à sa cible disparue. Le lien survivait `isActive: true`, pour toujours :
+`/l/:token` comptait son clic, incrémentait `totalClicks`, écrivait un `TrackingLinkClick`, puis
+redirigeait vers une page morte. `resolveTarget` rendait `isActive: true` avec un `targetId` que
+plus rien ne résout, et la page web comme le `DeepLinkRouter` iOS ouvraient un post inexistant.
+
+Le même contenu retiré à la main répondait, lui, 410 `LINK_INACTIVE`. **Un objet, deux fins de vie
+selon le chemin de retrait — et la plus fréquente des deux, l'expiration que TOUTE story atteint,
+était la mauvaise.**
+
+## Réfutation du remède avant de l'écrire (leçon 94)
+
+Trois cas cherchés nommément, chacun capable de rendre le correctif faux :
+
+1. **Un lecteur légitime d'un lien actif vers un post détruit.** Aucun : `getPostById` est gardé par
+   `NOT_DELETED`, et le tableau de bord du partageur lit les statistiques, pas la cible.
+2. **Un `targetId` qui désignerait autre chose qu'un post.** Le champ est polymorphe, mais les
+   ObjectId ne se confondent pas d'une collection à l'autre — et le retrait interactif filtre déjà
+   sur `targetId` seul, sans `targetType`, depuis trois cycles. S'aligner sur lui, et non inventer
+   un filtre plus étroit que celui de la règle qu'on extrait.
+3. **Une désactivation qui emporterait des données.** Elle en emporterait si elle SUPPRIMAIT : les
+   `TrackingLinkClick` référencent le lien sans cascade déclarée. D'où le geste retenu — désactiver,
+   comme le fait déjà le retrait interactif.
+
+## L'instant retenu, et celui qui ne l'a pas été
+
+Le post devient inatteignable au SOFT-delete (`getPostById` est gardé par `NOT_DELETED`), pas au
+hard-delete. C'est donc l'instant théoriquement juste, et c'est celui du retrait interactif — qui
+n'a d'ailleurs pas le choix : un post non éphémère n'est JAMAIS hard-deleté, il reste soft-deleté
+pour toujours. Les deux chemins agissent en fait au même endroit logique : **le moment où leur
+contenu devient définitivement inatteignable par leur propre chemin.**
+
+Ancrer dans la passe de hard-delete a été retenu pour une raison de coût, notée honnêtement : la
+passe de soft-delete est un `updateMany` qui ne matérialise aucun id. Lui en faire produire
+demanderait de la convertir en `findMany` + `updateMany`, donc de la BORNER — un `$in` de tout le
+passif n'est pas une requête à émettre (leçon 89.5 : un plafond change de sens quand l'entrée change
+de nature) — donc de réécrire les témoins que le cycle 54 vient de construire autour de la forme
+actuelle. Le gain réel se mesure : les deux bornes valant sept jours depuis `expiresAt`, un post
+devient éligible aux deux au même instant et la fenêtre résiduelle est d'une passe en régime
+permanent. Elle s'allonge pendant un rattrapage de passif — c'est la réserve de ce cycle.
+
+## Plan
+- [x] T1 — enquête : réserve héritée confirmée par diff avec le jumeau (leçon 95), impact tracé
+      jusqu'aux deux clients (route `/l/:token` ET `resolveTarget`)
+- [x] T2 — réfutation du remède avant écriture : trois cas cherchés, aucun ne tient
+- [x] T3 — RED : 8 témoins, 3 rouges + 1 suite qui ne résout pas son module
+- [x] T4 — GREEN : module de règle unique, câblé aux deux chemins
+- [x] T5 — sondes de fidélité : cinq défauts réintroduits un par un, restauration par COPIE
+- [x] T6 — gates : suite gateway complète, comparée à une BASELINE mesurée sur arbre propre
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+Rouge observé avant correctif : 3 témoins sur 8 tombent, plus la suite du module neuf qui ne résout
+pas son import.
+
+**Sondes de fidélité** — chaque témoin re-vérifié en réintroduisant son défaut, restauration par
+**copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| appel retiré du balayage | 3 |
+| `ids` au lieu de `allPostIds` (reposts oubliés) | 1 |
+| erreur avalée par un `try/catch` | 1 |
+| désactivation placée APRÈS les suppressions | 2 |
+| garde de liste vide retirée du module | 1 |
+
+Le témoin « rien à détruire ⇒ aucune requête sur les liens » est **double-gardé** (garde externe
+`toDelete.length > 0` ET garde du module) et ne discrimine donc aucune des deux prise isolément —
+la sonde 5 fait tomber le témoin du module, pas celui-ci. Il pinne le contrat de bout en bout et son
+en-tête le dit, sur le patron de la note équivalente de la suite des sons. Ne pas le prendre pour
+un témoin fort.
+
+**Baseline mesurée, pas mémorisée** (leçon 90.6). Une première baseline a été lancée en tâche de
+fond pendant que le correctif s'écrivait : elle est ressortie à 21 suites rouges dont
+`postRemovalEffects` — c'est-à-dire qu'elle avait lu un arbre déjà modifié. **Jetée.** Le travail a
+été commité d'abord (rien à perdre), puis la baseline relancée sur `HEAD~1` en tête détachée, arbre
+réellement propre :
+
+- **Avant** : 20 suites en échec, 620 vertes, 640 au total, **15 799 tests, 0 échec de test**.
+- **Après** : **mêmes 20 suites**, 622 vertes, 642 au total, 15 807 tests — les deux suites neuves
+  et leurs 8 témoins.
+- **`diff` des LISTES de suites en échec : identiques.** Aucune régression, et la preuve ne repose
+  pas sur une parole.
+
+Les 20 suites rouges sont la condition pré-existante notée au cycle 54 (`PostReactionService.ts:354`,
+`groupBy` non typé par le client Prisma généré dans cet environnement) : 0 test en échec, 20 suites
+qui ne compilent pas.
+
+`tsc --noEmit` : 362 lignes, identiques avant et après ; les deux seules erreurs sur des fichiers
+touchés sont le bruit de résolution `@meeshy/shared/prisma/client` en ligne 1, présent à
+l'identique sur des fichiers jamais touchés. Le module neuf n'en produit aucune — il ne dépend pas
+du client Prisma généré, seulement de la surface qu'il déclare.
+
+## Reste ouvert après ce cycle
+
+- **La fenêtre soft-delete → hard-delete laisse les liens actifs sur un post déjà masqué.** Une
+  passe en régime permanent, davantage pendant un rattrapage de passif. Se ferme en bornant la passe
+  de soft-delete (`findMany` + `updateMany`), ce qui est aussi ce que réclamerait tout autre effet
+  ancré sur le masquage — **candidat sérieux pour un prochain cycle, à faire d'un bloc plutôt que
+  deux fois à moitié.**
+- **Les liens des posts détruits AVANT ce correctif restent `isActive: true` en base**, sans cible
+  et sans chemin pour les retrouver — leur `targetId` désigne des ObjectId qui n'existent plus. Un
+  script les détecterait par absence de cible, sur le patron de `repair-mention-user-ids.ts`. Action
+  humaine : cette routine n'a aucun accès MongoDB.
+- **`softDeleteRetentionMs` reste du code mort** (hérité du cycle 54) : assigné et journalisé, jamais
+  lu par `cleanup()`. Le corriger, c'est choisir entre supprimer le champ et ré-ancrer la seconde
+  passe — décision de conception à part entière, et elle se pose en même temps que la borne
+  ci-dessus.
+- **Le nom `ExpiredStoriesCleanupService` ment sur son périmètre** (hérité du cycle 54).
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel à défaut `PUBLIC`** —
+  footgun mécanique, sans risque à fermer, en file depuis le cycle 26.
+- **`post_comment` et `comment_like` n'exposent pas `context.commentId`** (hérité du cycle 52) —
+  leur lien ne vit que dans `metadata.commentId`, et le payload APNs porte l'aveu écrit de
+  l'asymétrie (`params.context.commentId || params.metadata.commentId`).
+- Inchangés : `broadcastCommentDeleted` n'annonce que la cible et pas le sous-arbre (traverse le
+  Swift que cet environnement ne compile pas) ; le push APNs/FCM déjà délivré n'est pas rappelé ;
+  l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut pas
+  tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 54 — Le balayage tournait toutes les heures et ne balayait rien
 
 Le backlog du cycle 53 portait une tête bien formée : « les posts `STATUS` expirent et ne sont
