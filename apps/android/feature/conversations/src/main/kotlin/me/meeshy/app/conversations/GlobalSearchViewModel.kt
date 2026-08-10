@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.search.GlobalSearchRepository
+import me.meeshy.sdk.search.RecentSearchesStore
 import me.meeshy.sdk.search.GlobalSearchResults
 import javax.inject.Inject
 
@@ -19,6 +20,7 @@ enum class GlobalSearchTab { MESSAGES, CONVERSATIONS, USERS }
 
 data class GlobalSearchUiState(
     val query: String = "",
+    val recentSearches: List<String> = emptyList(),
     val selectedTab: GlobalSearchTab = GlobalSearchTab.MESSAGES,
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
@@ -44,12 +46,21 @@ data class GlobalSearchUiState(
 @HiltViewModel
 class GlobalSearchViewModel @Inject constructor(
     private val repository: GlobalSearchRepository,
+    private val recentSearchesStore: RecentSearchesStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GlobalSearchUiState())
     val state: StateFlow<GlobalSearchUiState> = _state.asStateFlow()
 
     private var searchJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            recentSearchesStore.searches.collect { recents ->
+                _state.update { it.copy(recentSearches = recents) }
+            }
+        }
+    }
 
     fun setQuery(value: String) {
         _state.update { it.copy(query = value) }
@@ -65,6 +76,9 @@ class GlobalSearchViewModel @Inject constructor(
             delay(DEBOUNCE_MS)
             _state.update { it.copy(isSearching = true) }
             val results = repository.search(trimmed)
+            // Une recherche qui a REELLEMENT tourne entre dans l'historique — pas
+            // chaque frappe : le debounce fait deja office de "recherche commise".
+            recentSearchesStore.record(trimmed)
             _state.update { it.copy(isSearching = false, hasSearched = true, results = results) }
         }
     }
@@ -76,5 +90,13 @@ class GlobalSearchViewModel @Inject constructor(
     companion object {
         const val MIN_QUERY_LENGTH: Int = 2
         const val DEBOUNCE_MS: Long = 300L
+    }
+
+    fun removeRecentSearch(query: String) {
+        recentSearchesStore.remove(query)
+    }
+
+    fun clearRecentSearches() {
+        recentSearchesStore.clear()
     }
 }

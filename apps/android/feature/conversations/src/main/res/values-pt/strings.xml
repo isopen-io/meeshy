@@ -161,4 +161,7 @@
     <string name="dashboard_action_search">Busca global</string>
     <string name="dashboard_action_share_links">Links de compartilhamento</string>
     <string name="dashboard_action_contacts">Contatos</string>
+    <string name="global_search_recent_title">Pesquisas recentes</string>
+    <string name="global_search_recent_clear">Limpar</string>
+    <string name="global_search_recent_remove">Remover</string>
 </resources>
