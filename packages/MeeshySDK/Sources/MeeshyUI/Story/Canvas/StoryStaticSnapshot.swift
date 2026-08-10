@@ -89,15 +89,14 @@ public enum StoryStaticSnapshot {
     }
 
     private static func drawAspectFill(_ image: UIImage, in rect: CGRect, ctx: CGContext) {
-        guard let cgImage = image.cgImage else { return }
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let imageSize = image.size
         guard imageSize.width > 0, imageSize.height > 0 else { return }
         let scale = max(rect.width / imageSize.width, rect.height / imageSize.height)
         let scaledSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
         let origin = CGPoint(x: rect.midX - scaledSize.width / 2, y: rect.midY - scaledSize.height / 2)
         ctx.saveGState()
         ctx.clip(to: rect)
-        ctx.draw(cgImage, in: CGRect(origin: origin, size: scaledSize))
+        image.draw(in: CGRect(origin: origin, size: scaledSize))
         ctx.restoreGState()
     }
 }
