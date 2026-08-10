@@ -6047,3 +6047,56 @@ qu'un nouvel audit dédié.
   `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
   `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
   toolchains iOS/Android toujours hors d'atteinte dans ce sandbox.
+
+## Vague 94 — `useAudioEffects` never disconnected the upstream `MediaStreamAudioSourceNode` (+ mono upmix pair) on an `inputStream` swap (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests`/`search_pull_requests` n'ont remonté aucune PR ouverte de cette routine (la Vague 93,
+#2771, était déjà mergée sur `main`). `HEAD == origin/main` au démarrage, aucun backlog non fermé. Nouvel
+audit dédié (agent Explore, lecture seule, périmètre web+gateway — seules stacks avec toolchain dans ce
+sandbox) mandaté avec la liste complète des vagues 89-93 pour éviter toute redite.
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/use-audio-effects.ts`,
+  `initializeAudioPipeline`) : le graphe Web Audio construit est
+  `source (createMediaStreamSource) → [splitter → merger si mono] → Tone.Gain (inputNodeRef) →
+  MediaStreamAudioDestinationNode (mediaStreamDestinationRef)`. `source`/`splitter`/`merger` sont de simples
+  `const` locales à la fonction — jamais posées dans une ref. La Vague 93 a corrigé le nettoyage du NOEUD
+  DE SORTIE (`mediaStreamDestinationRef`), mais `AudioNode.disconnect()` ne coupe que les arêtes SORTANTES
+  d'un noeud : déconnecter le Gain (`inputNodeRef`, déjà fait avant la Vague 93) laisse intacte l'arête
+  AMONT `source → Gain.input` — l'ancien `MediaStreamAudioSourceNode` (et sa paire splitter/merger
+  d'upmixing mono) reste câblé indéfiniment dans le graphe partagé, à durée de vie de l'app, du
+  `Tone.context`, épinglant une référence à l'ancien `MediaStream`/ses tracks. Atteignabilité vérifiée par
+  le même chemin que la Vague 93 avait déjà confirmé pour le noeud de sortie :
+  `AudioRecorderWithEffects.tsx` appelle `setRawStream(newRawStream)` (nouvelle référence `MediaStream`) à
+  CHAQUE `startRecording()` — un cycle enregistrer/annuler/ré-enregistrer ordinaire, sans démontage du
+  composant, fuit un noeud source de plus (jusqu'à trois avec l'upmix mono) à chaque itération.
+- **Fix** : trois nouvelles refs (`sourceNodeRef`, `channelSplitterRef`, `channelMergerRef`) posées au
+  moment de la création dans `initializeAudioPipeline` (miroir exact du pattern déjà en place pour
+  `mediaStreamDestinationRef`). Dans le nettoyage du mount effect, avant le nettoyage des processeurs :
+  `channelSplitterRef`/`channelMergerRef` (si présentes) puis `sourceNodeRef` sont chacune `disconnect()`ées
+  puis remises à `null` — ordre aval→amont, cohérent avec le sens du graphe. Un seul fichier de production
+  modifié, +24/-0 lignes.
+- **Tests** (TDD, RED confirmé avant fix) : 2 nouveaux tests dans `use-audio-effects-input-stream.test.ts`
+  (patron du test destination-node de la Vague 93, mêmes noeuds factices trackés par tableau) — (1)
+  `sourceNodeRef` : swap `inputStream`, vérifie que le PREMIER noeud source voit `disconnect()` appelé
+  exactement une fois et que le SECOND (nouveau) n'est pas touché ; (2) même vérification pour
+  `channelSplitterRef`/`channelMergerRef` sur un `inputStream` mono (`createMediaStreamSource` mocké à
+  `channelCount: 1` pour forcer la branche d'upmix). Les mocks `disconnect: jest.fn()` ajoutés aux noeuds
+  factices de ces deux fichiers de test (`use-audio-effects-input-stream.test.ts` et `use-audio-effects.test.ts`,
+  ce dernier partageant le même `beforeEach` de mocks Tone.js) — absents avant ce cycle car rien n'appelait
+  encore `disconnect()` sur ces noeuds. RED confirmé (0 appel à `disconnect()` avant le fix sur les deux
+  tests neufs), GREEN après.
+- **Vérification** : sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-
+  degradation|audio-effect` — **49 suites / 554 tests verts** (+2 net vs. la Vague 93), aucune régression.
+  Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`,
+  puis `packages/shared && npx prisma generate --generator client && bun run build` sans erreur. `npx tsc
+  --noEmit` sur `apps/web` : **1657 erreurs avant et après le diff** (`git stash`/`stash pop`, diff direct
+  ligne à ligne), zéro nouvelle, zéro sur les fichiers touchés.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web à haute confiance identifié ce cycle — le backup
+  `use-webrtc-p2p.ts` `removeParticipant()` ne nettoyant pas `connectedPeersRef`/`stalledPeersRef`, contra
+  `cleanup()`, a été jugé plausible mais de faible impact pratique par l'agent d'audit lui-même, le handler
+  `call:reconnected` côté gateway étant déjà idempotent — candidat à réévaluer une prochaine vague) : dead
+  code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+  `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
+  toolchains iOS/Android toujours hors d'atteinte dans ce sandbox.
