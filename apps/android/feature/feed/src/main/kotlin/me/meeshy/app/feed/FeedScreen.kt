@@ -272,10 +272,16 @@ fun FeedScreen(
         FeedComposerSheet(
             initialDraft = seed,
             onPublish = { request ->
-                viewModel.publishPost(content = request.content, visibility = request.visibility)
+                viewModel.publishPost(
+                    content = request.content,
+                    visibility = request.visibility,
+                    mediaIds = request.mediaIds,
+                )
                 composerDraft = null
             },
             onDismiss = { composerDraft = null },
+            onUploadMedia = viewModel::uploadMedia,
+            onMediaError = { message -> scope.launch { snackbar.showSnackbar(message) } },
         )
     }
 }

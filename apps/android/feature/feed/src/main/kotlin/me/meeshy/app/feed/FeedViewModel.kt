@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
@@ -45,6 +47,7 @@ class FeedViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val feedMediaUploader: FeedMediaUploader,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -283,22 +286,32 @@ class FeedViewModel @Inject constructor(
     }
 
     /**
-     * Publish a text-only post: the pure [FeedComposerDraft]/[FeedPostPublishRequest]
-     * already validated [content]/[visibility] before calling this (the publish gate is
-     * that draft's SSOT, not re-checked here — mirror of [StatusesViewModel.setStatus]
-     * trusting its own [StatusPublishRequest]). Port of iOS `FeedViewModel.createPost`'s
-     * direct (non-durable) path: confirmed by the network before the post is shown, so
-     * there is nothing to roll back on failure. A successful create is prepended to the
-     * realtime head via [FeedRealtimeReducer.created] — visible at the top instantly,
-     * without raising the "new posts" banner. **Deliberate, documented scope cut**: no
-     * durable-outbox queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a
-     * post typed while offline is lost rather than durably queued; a tracked follow-up
-     * once Android's `OutboxKind` gains a `CREATE_POST` lane.
+     * Publish a post: the pure [FeedComposerDraft]/[FeedPostPublishRequest] already
+     * validated [content]/[visibility]/[mediaIds] before calling this (the publish gate
+     * is that draft's SSOT, not re-checked here — mirror of
+     * [StatusesViewModel.setStatus] trusting its own [StatusPublishRequest]). Port of
+     * iOS `FeedViewModel.createPost`'s direct (non-durable) path: confirmed by the
+     * network before the post is shown, so there is nothing to roll back on failure. A
+     * blank [content] (a media-only post) is sent as `null`, never an empty string, so
+     * a stricter gateway validation on the text field is never exercised for a post
+     * that carries only media. A successful create is prepended to the realtime head
+     * via [FeedRealtimeReducer.created] — visible at the top instantly, without raising
+     * the "new posts" banner. **Deliberate, documented scope cuts**: no durable-outbox
+     * queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a post typed while
+     * offline is lost rather than durably queued; a tracked follow-up once Android's
+     * `OutboxKind` gains a `CREATE_POST` lane. Camera capture, file, location and audio
+     * attachments remain separately-scoped follow-ups to this photo/video sub-slice.
      */
-    fun publishPost(content: String, visibility: String) {
+    fun publishPost(content: String, visibility: String, mediaIds: List<String> = emptyList()) {
         viewModelScope.launch {
             try {
-                when (val result = postRepository.create(content = content, type = "POST", visibility = visibility)) {
+                val result = postRepository.create(
+                    content = content.ifBlank { null },
+                    type = "POST",
+                    visibility = visibility,
+                    mediaIds = mediaIds.ifEmpty { null },
+                )
+                when (result) {
                     is NetworkResult.Success ->
                         realtimeHead.update { FeedRealtimeReducer.created(it, result.data) }
                     is NetworkResult.Failure ->
@@ -311,6 +324,18 @@ class FeedViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Uploads freshly-picked composer media as `post`-context TUS attachments — the
+     * network half of the photo/video fast-follow to the text-only Feed composer,
+     * consuming the TUS foundation the story-media fix built (never the legacy
+     * `MessageAttachment`-producing path). A plain suspend delegate (no `_state`
+     * mutation): the composer sheet owns its own upload-in-flight UI state via
+     * `remember`, mirroring the story composer's split between network call and
+     * caller-owned progress state, just without a ViewModel of its own for the sheet.
+     */
+    suspend fun uploadMedia(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> =
+        feedMediaUploader.upload(items)
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5

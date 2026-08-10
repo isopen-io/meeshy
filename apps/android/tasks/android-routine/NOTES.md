@@ -913,3 +913,46 @@ Append-only log of gotchas and decisions that save time next run.
   FULL 131-test suite is what proved the new precise test — not just the ~24 already-existing
   `enqueue(any(), any())` wildcard-matcher tests, which are correctly blind to WHICH context gets
   passed — was the only one sensitive to this specific regression.
+
+## Slice `feed-composer-media-attachments` (2026-08-10)
+- **`uiautomator dump`'s `bounds="[...]"` is ALWAYS in real device pixels — a screenshot viewed at a
+  scaled-down display size is not, and mixing the two silently mistaps.** Several taps in this run's
+  on-device pass landed on the wrong element because a coordinate was eyeballed off a screenshot shown
+  at 900×2000 (a 1080×2400 real device, ratio 1.2) without the ×1.2 scale-up applied consistently — one
+  omission opened a second composer sheet by accident (the tap fell back onto the composer placeholder
+  underneath instead of the intended banner), another needed three retries to land on a small
+  `IconButton`/system-picker button. The reliable fix each time was the same: `adb shell uiautomator
+  dump` + grep the target's `bounds="[x1,y1][x2,y2]"` and tap the exact center — never estimate off a
+  displayed screenshot's pixel grid, even when the scale factor is known and simple.
+- **A server feed's ranking is not always `createdAt DESC`, and a freshly-published post not
+  appearing at the head of an on-device scroll is not automatically evidence of a client bug.** After a
+  real, logcat-confirmed successful publish (TUS upload + `POST /api/v1/posts` both 2xx, media
+  attached), the new post did not appear at the top of the Friends-feed list on-device — even after a
+  full cold relaunch (ruling out a stale in-memory realtime-head). Before assuming a rendering
+  regression, a direct `curl` against the exact endpoint the client calls (`GET posts/feed`, found by
+  reading `PostApi.kt`, not guessed) confirmed the post genuinely WAS present in the server's response,
+  just ranked 4th despite having the most recent `createdAt` of the returned page — the gateway's own
+  feed algorithm, not a `createdAt`-sorted list. Since this diff never touches `feedStream`/`getFeed`/
+  any ranking code, tracing straight to the server response (bypassing the client entirely) closed the
+  investigation in two `curl` calls instead of chasing a phantom rendering bug through Compose
+  recomposition.
+- **Verifying a wire-format fix by reading BOTH the request body and the persisted server state is
+  strictly stronger than reading either alone.** `adb logcat` showed the `POST /api/v1/posts` request
+  body carrying `"mediaIds":["<real-tus-id>"]` and its 201 response echoing a populated `media` array —
+  already fairly convincing — but a follow-up direct `GET` of that same post id (via `curl` with the
+  session's own bearer token pulled straight from the logcat `Authorization` header, no separate login
+  needed) confirmed the exact same media array, plus the Prisme translations, were durably persisted,
+  not just present in a single response the app happened to log. Cheap extra step, meaningfully
+  stronger proof — and the token-from-logcat trick avoids a separate `POST /auth/login` round-trip
+  purely for verification tooling.
+- **Reusing an established Compose picker pattern byte-for-byte (both launchers always constructed
+  with a fixed `maxItems`, mode-routing decided only at the click site) is lower-risk than trying to
+  make the picker's `maxItems` track the live remaining-slot count.** `StoryComposerScreen`'s
+  `PickMultipleVisualMedia(StoryComposerDraft.MAX_MEDIA)` is constructed once with the constant cap,
+  never the dynamic `remainingMediaSlots` — the pure `StoryMediaPicker`/`FeedMediaPicker.modeFor`
+  decision only chooses WHICH already-built launcher to invoke. Mirroring this exactly for Feed meant
+  zero new risk surface (no dynamic-contract-construction edge case to reason about) even though the
+  crash the doc comment describes (`PickMultipleVisualMedia` throwing on `maxItems <= 1`) can't
+  actually occur with a fixed constant — the Single-vs-Multiple choice is genuinely a UX nicety
+  (matching the system picker's affordance to how many slots are actually left) riding on the same
+  crash-avoidance-shaped abstraction, not a contradiction worth "fixing" mid-slice.
