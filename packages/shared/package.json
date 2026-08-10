@@ -108,7 +108,7 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "@signalapp/libsignal-client": "^0.99.1"
+    "@signalapp/libsignal-client": "^0.100.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
