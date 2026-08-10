@@ -6100,3 +6100,87 @@ sandbox) mandaté avec la liste complète des vagues 89-93 pour éviter toute re
   busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
   `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
   toolchains iOS/Android toujours hors d'atteinte dans ce sandbox.
+
+## Vague 95 — `handleSwitchCamera` replaced every peer's video sender with a SINGLE shared track, orphaning per-peer clones in a group call (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` a remonté une PR ouverte de cette routine (#2776, Vague 94 — `useAudioEffects`
+upstream source-node leak), CI 15/15 verte, mergée directement (squash) avant tout nouvel audit — aucune
+duplication. Branche locale réinitialisée sur `origin/main` (`git reset --hard`, aucun commit local
+antérieur à préserver). Toolchains iOS (`xcodebuild`/`swift`) et Android (`gradle` présent, aucun SDK)
+toujours hors d'atteinte. Audit dédié (agent Explore, lecture seule, périmètre web+gateway, mandaté avec
+la liste des Vagues 89-94 déjà fixées pour éviter toute redite) a remonté un candidat unique retenu après
+relecture ligne à ligne directe de tous les fichiers cités.
+
+- **Root cause confirmée par lecture directe** : `enableVideo()` (`use-webrtc-p2p.ts`) établit, pour un
+  appel de groupe (mesh complet, un `WebRTCService` par pair distant), un modèle de propriété explicite —
+  « une vraie piste caméra pour le premier pair, un `.clone()` pour chacun des autres » — précisément
+  parce que `WebRTCService.exclusiveVideoTrack` (champ documenté comme « jamais partagé entre pairs »,
+  utilisé par `close({stopLocalTracks:false})` pour ne libérer QUE la piste de l'instance qui part) a
+  besoin d'un objet track distinct par pair pour rester exact. `handleSwitchCamera`
+  (`VideoCallInterface.tsx`) ignorait entièrement ce modèle : il lisait `localStream.getVideoTracks()[0]`
+  (indexé, en supposant UNE seule piste vidéo), remplaçait le sender de **CHAQUE** connexion pair avec un
+  **unique** nouvel objet track obtenu via un seul `getUserMedia`, puis ne stoppait/retirait que la piste
+  d'INDICE 0 de `localStream`. Dans un appel à 3 (A, B, C), après `enableVideo()`, `localStream` porte
+  légitimement 2 pistes vidéo (`baseTrack` pour B, `clone_C` pour C, le clone d'un pair non-index-0 n'étant
+  JAMAIS le même objet). Un premier flip caméra remplace les DEUX senders par un nouvel objet partagé,
+  stoppe/retire `baseTrack` (indice 0) — mais `clone_C`, débranché de tout sender depuis ce remplacement,
+  n'est ni stoppé ni retiré : une piste caméra orpheline, toujours vivante, invisible à tout chemin de
+  nettoyage (`WebRTCService` de C garde un `exclusiveVideoTrack` pointant sur `clone_C`, désormais faux).
+  Un second flip lit `localStream.getVideoTracks()[0]` — devenu l'orphelin `clone_C`, pas la piste
+  réellement attachée aux deux senders — et le cycle recommence en alternant systématiquement quelle piste
+  reste orpheline : fuite non bornée de captures caméra vivantes pour toute la durée d'un appel de groupe
+  dont l'utilisateur local flip la caméra plus d'une fois, un geste mobile ordinaire (aucun timing adverse
+  requis).
+- **Fix** : nouvelle méthode `WebRTCService.switchVideoSendTrack(track)` (`webrtc-service.ts`), miroir
+  bookkeeping-complet d'`enableVideoSend`/`disableVideoSend` — lit la piste sortante RÉELLEMENT attachée
+  au sender (`this.videoTransceiver.sender.track`, même technique de vérité-terrain que
+  `disableVideoSend`, plutôt que de faire confiance à `exclusiveVideoTrack`), `replaceTrack()` sur LE
+  sender de CETTE instance uniquement, MAJ `localStream` (ajoute la nouvelle, retire l'ancienne SI elle
+  existait), stoppe l'ancienne, et remet à jour `exclusiveVideoTrack`. Aucune renégociation nécessaire
+  (transceiver déjà `sendrecv`, `replaceTrack()` seul suffit). Nouvelle fonction `switchCamera(facingMode)`
+  (`use-webrtc-p2p.ts`), miroir structurel d'`enableVideo()` : un seul `getUserMedia`, la piste littérale
+  au premier pair, un `.clone()` à chacun des autres, chaque pair reçoit l'ordre via son propre
+  `switchVideoSendTrack`. `handleSwitchCamera` (`VideoCallInterface.tsx`) perd toute la logique
+  d'acquisition/remplacement bas niveau (plus d'accès direct à `useCallStore.getState().peerConnections`
+  ni à `navigator.mediaDevices.getUserMedia`) — son seul rôle restant est de dériver le `facingMode` cible
+  à partir de la piste courante et de déléguer à `switchCamera()`. Trois fichiers de production modifiés :
+  `webrtc-service.ts` (+31), `use-webrtc-p2p.ts` (+33), `VideoCallInterface.tsx` (+15/-32, net plus simple
+  que l'implémentation remplacée).
+- **Tests** (TDD, RED confirmé avant fix à chaque couche) :
+  - `webrtc-service.coverage.test.ts` — 6 nouveaux tests `switchVideoSendTrack` (throw sans transceiver ;
+    replace + MAJ localStream + stop de l'ancienne ; aucun effet quand le sender n'avait pas de piste
+    préalable ; pas de renégociation ; propriété exclusive préservée en appel de groupe — la piste de A
+    est seule stoppée, celle de B jamais touchée ; `close({stopLocalTracks:false})` après un switch libère
+    la NOUVELLE piste, pas l'ancienne déjà traitée par le switch lui-même).
+  - `use-webrtc-p2p.test.tsx` — 3 nouveaux tests `switchCamera` (pair unique → pas de clone ; appel de
+    groupe → premier pair reçoit la piste littérale, chaque autre reçoit un `.clone()` distinct ; rejette
+    sans toucher la caméra quand aucune connexion pair n'existe encore, même garde qu'`enableVideo`).
+  - `VideoCallInterface.test.tsx` — les tests bas niveau qui simulaient `peerConnections`/`getUserMedia`
+    directement (désormais la responsabilité de la couche service/hook, déjà couverte ci-dessus) sont
+    réécrits pour mocker `webrtc.switchCamera` : dérivation du `facingMode` cible (user→environment et
+    inverse), toast succès/échec, garde de non-réentrance (second clic avant résolution), et les 4 tests de
+    Vague 92 (exclusion mutuelle camera-switch ↔ toggle manuel/contrôleur adaptatif) portés sur les mêmes
+    assertions au niveau `webrtc.switchCamera` plutôt que `getUserMedia`.
+  RED confirmé à chaque couche par exécution (`TypeError: ... is not a function` avant l'implémentation),
+  GREEN après.
+- **Vérification** : sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-
+  degradation|audio-effect` — **49 suites / 559 tests verts** (+5 net vs. la Vague 94), plus
+  `webrtc-service.test.ts`/`webrtc-service.coverage.test.ts` (hors du sweep par nom de fichier) — **180/180
+  verts**. Aucune régression. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun
+  install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client && bun run
+  build` sans erreur. `npx tsc --noEmit` sur `apps/web` : **1190 erreurs avant et après le diff**
+  (`git stash`/`stash pop`, comparaison directe — le chiffre diffère de la baseline 1657 des vagues
+  précédentes, delta pré-existant sans rapport avec ce diff, non investigué ce cycle), zéro nouvelle
+  erreur, zéro sur les trois fichiers de production touchés (`webrtc-service.ts`, `use-webrtc-p2p.ts` :
+  aucune ; `VideoCallInterface.tsx` : les erreurs présentes y préexistaient déjà, même nombre avant/après).
+  `next lint` : même échec sandbox-only de config ESLint v9 circulaire documenté aux vagues précédentes
+  (65-94), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié ce cycle) :
+  dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+  `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
+  `removeParticipant()` ne nettoie pas `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-
+  régression) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; delta de comptage
+  `tsc --noEmit` (1190 vs. 1657 legacy) à investiguer si un futur cycle a besoin d'un chiffre de référence
+  fiable.
