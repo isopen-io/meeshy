@@ -400,6 +400,7 @@ export async function notifyMessageRecipients(params: {
             messagePreview: notificationPreview,
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
+            messageExpiresAt: message.expiresAt ?? null,
           });
           return created != null;
         })
@@ -415,6 +416,12 @@ export async function notifyMessageRecipients(params: {
               messageContent: notificationPreview,
               conversationId,
               messageId: message.id,
+              // L'éventail tient déjà l'échéance du message : la transmettre
+              // évite une relecture PAR MENTIONNÉ, et `Message.expiresAt` étant
+              // écrit à l'insertion et jamais modifié, cette copie ne dérive
+              // pas. Le chemin `new_message`, lui, la prend de sa propre
+              // relecture vivante — il en fait une de toute façon.
+              messageExpiresAt: message.expiresAt ?? null,
             },
             memberIds
           )
