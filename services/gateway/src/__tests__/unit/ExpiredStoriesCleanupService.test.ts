@@ -63,6 +63,16 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
         return { count: 0 };
       }),
     },
+    // La désactivation des liens de partage gouverne désormais la passe, au
+    // même titre que le retrait des notifications : sans ce double elle rejette
+    // et RIEN n'est détruit (comportement voulu — un lien laissé actif sur un
+    // post détruit n'est plus rattrapable par aucune passe).
+    trackingLink: {
+      updateMany: jest.fn(async () => {
+        calls.push('trackingLink.updateMany');
+        return { count: 0 };
+      }),
+    },
     // Le hard-delete purge aussi les usages de sons (le Sound, lui, survit).
     // Sans ces doubles, l'accès à `prisma.soundUsage` lève et le try/catch de
     // la passe avale l'erreur : postMedia.deleteMany n'est jamais atteint.
@@ -129,6 +139,9 @@ function makeSimplePrisma() {
     },
     postMedia: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    trackingLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     soundUsage: {
       findMany: jest.fn<any>().mockResolvedValue([]),

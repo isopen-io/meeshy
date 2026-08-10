@@ -1,5 +1,111 @@
 # Lessons
 
+## Leçon 97 — Une réserve écrite en bas d'une ADR est un défaut daté, pas une note de prudence (2026-08-10, routine messaging, cycle 55)
+
+Les deux dernières ADR du gateway se terminaient par la même phrase, à un cycle d'intervalle : « les
+`TrackingLink` visant une story détruite ne sont pas désactivés par cette passe ». Elle a été écrite
+deux fois, relue deux fois, et n'a rien déclenché — parce que la rubrique qui l'accueille s'appelle
+« ce que la décision n'assure PAS », et qu'une limite ASSUMÉE se lit comme une limite RÉSOLUE. Le
+format transforme un défaut connu en périmètre.
+
+Ce qui l'a rendue actionnable n'est pas une relecture plus attentive : c'est que le cycle précédent
+a changé le monde autour d'elle. Tant que le balayage n'appariait aucun post, aucune story n'était
+jamais détruite et la réserve ne décrivait qu'un cas de figure. Le balayage rendu effectif, la même
+phrase décrit le sort de TOUTE story.
+
+**Règle** : quand un cycle rend effectif un mécanisme qui ne l'était pas, relire les réserves que
+les cycles précédents ont écrites SUR ce mécanisme — elles ont été rédigées sous l'hypothèse
+implicite qu'il ne s'exécutait pas, et leur gravité vient de changer sans qu'un mot n'ait bougé.
+Corollaire pratique : une réserve qui réapparaît à l'identique dans deux ADR successives n'est plus
+une réserve, c'est un point de backlog qui a échoué à se faire nommer comme tel.
+
+## Leçon 98 — Deux chemins qui appliquent la même règle ne l'appliquent pas au même INSTANT, et c'est correct (2026-08-10, routine messaging, cycle 55)
+
+Le retrait interactif d'un post coupe ses liens de partage au SOFT-delete ; le balayage du contenu
+éphémère les coupe au HARD-delete. La première lecture y voit une incohérence — deux chemins, une
+règle, deux moments — et pousse à aligner le second sur le premier.
+
+C'est cohérent, et la formulation qui le montre est la seule qui vaille : **chaque chemin agit au
+moment où SON contenu devient définitivement inatteignable par SON propre chemin.** Un post non
+éphémère n'est jamais hard-deleté — il reste soft-deleté pour toujours, donc le retrait interactif
+n'a pas d'instant ultérieur où agir. Un post éphémère, lui, est réellement détruit, et c'est cette
+destruction qui condamne le lien.
+
+La leçon de méthode est sur la formulation, pas sur le cas : quand deux implémentations d'une même
+règle divergent sur le QUAND, chercher l'énoncé sous lequel les deux deviennent le même geste avant
+de conclure qu'une des deux a tort. S'il n'existe pas, l'une a effectivement tort ; s'il existe, il
+est la bonne documentation des deux — et il dit du même coup ce qui se passerait si l'un des deux
+chemins changeait de nature.
+
+Contrepartie honnête, notée dans l'ADR : l'instant théoriquement juste dans les deux cas serait le
+soft-delete, et ne pas l'avoir retenu pour le balayage tient à un coût mesurable (la passe de
+soft-delete est un `updateMany` sans ids matérialisés, dont la conversion imposerait une borne et
+la réécriture des témoins du cycle précédent), pas à une justification de principe. **Une
+justification de coût s'écrit comme telle, avec la fenêtre résiduelle chiffrée** — sinon le cycle
+suivant la relira comme une justification de principe et ne rouvrira jamais le sujet. C'est
+exactement le mécanisme de la leçon 97, une rubrique plus haut dans le même document.
+
+## Leçon 100 — Une suite rouge en baseline pour une raison sans rapport ne peut avertir de RIEN (2026-08-10, routine messaging, cycle 55)
+
+L'extraction d'une règle a changé la forme d'un filtre (`{ targetId: id }` →
+`{ targetId: { in: [id] } }`). Deux témoins la pinnaient, tous deux trouvés et mis à jour, suite
+locale verte, PR ouverte. La CI en a trouvé un **troisième** — `posts-share-tracking.test.ts`.
+
+Il n'était pas caché : un `grep` l'aurait rendu. Ce qui a manqué, c'est que la baseline locale, si
+soigneusement mesurée soit-elle, comptait cette suite parmi ses **20 rouges pré-existantes** — elle
+ne COMPILE pas dans cet environnement (`PostReactionService.ts:354`, `groupBy` non typé par le
+client Prisma généré ici). Une suite qui ne démarre pas ne peut pas faire tomber une assertion. La
+comparaison « mêmes 20 suites avant/après » était exacte et prouvait bien l'absence de régression
+**parmi les suites qui tournent** — elle ne disait rien des 20 autres, et j'ai lu son silence comme
+une couverture.
+
+**Règle** : dès qu'un changement modifie la FORME d'un appel (arguments d'une requête, signature,
+nom d'événement), la liste des sites à corriger se fait par `grep` sur la forme, jamais par la liste
+des tests qui rougissent. Les tests qui rougissent sont un sous-ensemble de ce qu'il faut corriger,
+et le complément est exactement invisible.
+
+**Corollaire, plus important** : la baseline rouge de cet environnement n'est pas un décor, c'est un
+angle mort **mesurable**. 20 suites sur 642 — soit environ 3 % du dépôt — ne peuvent contredire
+aucun cycle. Tant qu'elles ne compilent pas, tout cycle qui touche `PostService`, `PostReactionService`
+ou leurs voisins doit lister ses sites par `grep` et considérer la CI comme le premier vrai contrôle.
+Réparer cette compilation localement vaudrait plus qu'un cycle de correctif.
+
+## Leçon 99 — Une baseline lancée en tâche de fond pendant qu'on code n'est pas une baseline (2026-08-10, routine messaging, cycle 55)
+
+La leçon 90.6 impose de comparer à une baseline MESURÉE sur arbre propre. Elle a été appliquée — et
+ratée, par une erreur d'ordonnancement : la suite complète a été lancée en tâche de fond « pendant
+ce temps », puis les fichiers du correctif ont été écrits dans les minutes qui ont suivi. Jest
+n'énumère pas ses suites une fois pour toutes au démarrage : les fichiers créés en cours de route
+sont ramassés, et ceux qu'on édite sont lus au moment où leur suite démarre. Le résultat annonçait
+21 suites rouges dont une, `postRemovalEffects`, que le correctif venait de toucher — une baseline
+qui décrit un arbre qui n'a jamais existé.
+
+Le tell est bon marché et vaut d'être cherché : **si la liste des suites rouges d'une baseline
+contient un fichier que le cycle touche, la baseline est contaminée.** Une baseline saine ne connaît
+rien du travail en cours.
+
+La parade est un ordre, pas une précaution : **commiter d'abord, mesurer ensuite.** Le travail
+commité, `git checkout HEAD~1` en tête détachée rend un arbre réellement propre sans rien risquer —
+tout est récupérable par un `git checkout` de retour sur la branche. C'est aussi ce qui évite le
+`git stash -u` que la leçon 93 apprend à redouter. Le seul coût est une seconde exécution complète,
+qui est précisément ce que la mesure vaut.
+
+**Addendum, la cause racine étant pire que le symptôme.** La contamination n'était pas un défaut de
+patience : les attentes étaient lancées en tâche de fond puis la question suivante posée sans
+attendre leur notification, si bien que **zéro seconde réelle s'écoulait entre deux sondages**. Ça a
+produit une seconde erreur, plus coûteuse : une étape de CI vue « en cours » à trois sondages
+d'intervalle a été déclarée BLOQUÉE depuis 50 minutes alors qu'elle tournait depuis deux, et un
+correctif de CI a été écrit — puis retiré — sur cette observation fabriquée. Elle avait duré
+93 secondes.
+
+Deux règles qui en sortent, et la seconde vaut au-delà de l'outillage :
+1. **Une attente en tâche de fond n'est une attente que si l'on rend la main jusqu'à sa
+   notification.** Sonder juste après l'avoir lancée mesure l'instant du lancement.
+2. **Une durée n'est jamais « le nombre de fois que j'ai regardé ».** Avant de qualifier quoi que ce
+   soit de bloqué, lire les HORODATAGES de la chose observée et les soustraire. Ici les deux
+   timestamps étaient dans la réponse même qui servait à conclure au blocage.
+
+
 ## Leçon 96 — Une piste héritée peut être vraie sur le défaut et fausse sur son remède (2026-08-10, routine messaging, cycle 52)
 
 Le cycle 51 léguait une piste bien formée : « le même mécanisme a un sixième candidat, la

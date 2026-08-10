@@ -100,7 +100,7 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
 
     expect(auditCreate).toHaveBeenCalled();
     expect(trackingLinkUpdateMany).toHaveBeenCalledWith({
-      where: { targetId: POST_ID },
+      where: { targetId: { in: [POST_ID] } },
       data: { isActive: false },
     });
     expect(releasePost).toHaveBeenCalledWith(POST_ID);
