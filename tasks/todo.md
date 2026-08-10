@@ -110,8 +110,39 @@ strictement identique au relevé du cycle 62, donc inchangée. `routes/conversat
   consommateurs web de `searchConversations`. Surface d'outillage admin, faible valeur, et le
   fichier traîne une dette de typage voisine (`(conv as unknown).lastMessage`). Non pris pour ne
   pas mélanger deux sujets ; c'est le dernier rendu web d'aperçu non prismé connu.
-- **`ConversationSyncEngine.previewTranslations` (iOS, chemin socket) n'a toujours pas été audité
-  contre la règle de rang** (hérité du cycle 62, non pris).
+- **`ConversationSyncEngine.previewTranslations` (iOS, chemin socket) — audité ce cycle, et c'est
+  la TÊTE DU PROCHAIN CYCLE.** Le point hérité du cycle 62 demandait de le vérifier contre la règle
+  de rang. Sur ce plan il est sain : le résolveur ne consulte que les langues du prisme, donc des
+  clés supplémentaires ne changent pas le texte affiché. Mais l'audit en trouve un autre, plus
+  grave, et **gatable ici** (`sdk-tests.yml` se déclenche sur `pull_request` pour
+  `packages/MeeshySDK/**`) :
+
+  `buildLastMessagePreviewTranslations` (REST) écarte explicitement les traductions **chiffrées**
+  — son exclusion #3, « son `text` est un cryptogramme ; le poser dans un aperçu afficherait du
+  base64 dans la liste ». `previewTranslations` (socket) **n'a pas cette exclusion**, et ne peut
+  pas l'avoir : `APITextTranslation` (`MessageModels.swift:300`) **ne décode pas `isEncrypted`**.
+  Or `MessageHandler._parseTranslations` (`:1732`) **répand l'entrée stockée telle quelle**
+  (`...data`) dans le payload `message:new` — le drapeau est donc bien SUR LE FIL, seul le client
+  ne le lit pas. Une traduction chiffrée arrivée par socket peut ainsi atterrir dans
+  `lastMessageTranslations` et faire rendre un cryptogramme par `resolvedLastMessagePreview` dans
+  la ligne de liste, là où le même message servi par REST est correctement filtré.
+
+  **Question à trancher AVANT d'écrire le correctif** (non résolue par cet audit, ne pas la
+  supposer) : la forme exacte de l'entrée sur le fil. `buildLastMessagePreviewTranslations` lit
+  `data.text`, alors que `previewTranslations` lit `$0.translatedContent` — et
+  `APITextTranslation.translatedContent` est un `String` NON optionnel, donc un décodage de tout
+  l'`APIMessage` échouerait si la clé manquait. Les deux lectures ne peuvent pas être vraies du
+  même objet sans un mappage de clés quelque part. **Commencer par établir la forme réelle du
+  payload `message:new`** (relire `translation-transformer.ts` et les `CodingKeys` d'
+  `APITextTranslation`), puis décider si le correctif est côté client (décoder `isEncrypted` et
+  filtrer, jumeau de l'exclusion #3) ou côté gateway (ne jamais mettre de traduction chiffrée sur
+  le fil d'un aperçu).
+
+  Trois écarts mineurs constatés au passage, à traiter dans le même geste s'ils survivent à
+  l'enquête ci-dessus : la carte socket n'est **pas restreinte au prisme du lecteur** (le REST
+  l'est), **pas tronquée** (le REST plafonne à 300), et **n'exclut pas la langue d'origine**. Aucun
+  des trois ne change le texte affiché — le résolveur les absorbe — mais tous les trois alourdissent
+  le cache de la liste d'autant de langues que la conversation en compte.
 - **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60). Question de
   conception — payload PAR DESTINATAIRE — non tranchée.
 - **`normalizeConversation` reste un constructeur manuel de `Conversation` sans aucun appelant**
