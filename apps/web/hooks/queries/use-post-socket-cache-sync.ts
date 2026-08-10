@@ -208,8 +208,19 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         commentCount: data.commentCount,
       }));
 
-      // The delete payload doesn't say whether it was a reply, so drop the id
-      // from every post-scoped comment cache (top-level list AND replies subs).
+      // Deleting a comment soft-deletes its WHOLE reply subtree server-side, so
+      // the payload announces every removed id — not just the target. Dropping
+      // only the target left its expanded replies on screen with nothing to ever
+      // remove them: `getComments` filters `parentId: null`, so a refetch never
+      // returns them and `getReplies` is never called again for a deleted parent.
+      //
+      // Fall back to the target alone when the list is absent (an idempotent
+      // replay can no longer reconstruct the subtree) — exactly the previous
+      // behaviour, never an empty list.
+      const removedIds = new Set(data.deletedCommentIds ?? [data.commentId]);
+
+      // The payload doesn't say whether an id was a reply, so sweep every
+      // post-scoped comment cache (top-level list AND replies subs).
       queryClient.setQueriesData<InfiniteCommentsData>(
         { queryKey: queryKeys.posts.comments(data.postId) },
         (old) => {
@@ -218,7 +229,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
             ...old,
             pages: old.pages.map((page) => ({
               ...page,
-              data: page.data.filter((c) => c.id !== data.commentId),
+              data: page.data.filter((c) => !removedIds.has(c.id)),
             })),
           };
         },

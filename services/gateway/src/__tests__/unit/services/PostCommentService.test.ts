@@ -576,7 +576,9 @@ describe('PostCommentService.deleteComment — retrait des notifications', () =>
     runCommandRaw.mockRejectedValue(new Error('mongo down'));
     const service = new PostCommentService(prisma);
 
-    await expect(service.deleteComment('c1', 'u1', announcer)).resolves.toEqual({ success: true });
+    await expect(service.deleteComment('c1', 'u1', announcer)).resolves.toEqual(
+      expect.objectContaining({ success: true }),
+    );
   });
 
   it('ne retire rien quand la suppression est refusée', async () => {
@@ -587,6 +589,63 @@ describe('PostCommentService.deleteComment — retrait des notifications', () =>
 
     await expect(service.deleteComment('c1', 'intruder', announcer)).rejects.toThrow('FORBIDDEN');
     expect(runCommandRaw).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteComment — ce que le retrait REND à son appelant
+//
+// Le soft-delete, le décompte et le retrait des notifications portent déjà sur
+// le SOUS-ARBRE ENTIER (témoins ci-dessus). Mais la valeur de retour ne disait
+// que « c'est fait » : la liste des ids réellement retirés mourait dans la
+// méthode. Son seul appelant — la route DELETE — n'avait donc rien d'autre à
+// annoncer que la cible, et les réponses survivaient à l'écran de tout client
+// qui les avait dépliées (elles ne reviennent d'aucun refetch : `getComments`
+// filtre `parentId: null`, et leur parent supprimé n'est plus rendu, donc
+// `getReplies` n'est plus jamais appelé pour elles).
+//
+// Ces témoins verrouillent le CONTRAT : le retrait rend la même liste que celle
+// qu'il a soft-deletée, cible en tête.
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.deleteComment — les ids retirés remontent à l\'appelant', () => {
+  it('rend la cible seule quand elle n\'a aucune réponse', async () => {
+    const { prisma } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+
+    await expect(service.deleteComment('c1', 'u1')).resolves.toEqual(
+      expect.objectContaining({ deletedCommentIds: ['c1'] }),
+    );
+  });
+
+  it('rend TOUT le sous-arbre retiré, pas seulement la cible', async () => {
+    const { prisma } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }, { id: 'r2' }], r1: [{ id: 'r1a' }] },
+    );
+    const service = new PostCommentService(prisma);
+
+    const result = await service.deleteComment('c1', 'u1');
+
+    expect([...(result?.deletedCommentIds ?? [])].sort()).toEqual(['c1', 'r1', 'r1a', 'r2']);
+  });
+
+  /**
+   * La liste rendue est la MÊME que celle passée au soft-delete — pas une
+   * seconde dérivation qui pourrait s'en écarter en silence.
+   */
+  it('rend exactement la liste soft-deletée', async () => {
+    const { prisma, updateMany } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }], r1: [{ id: 'r1a' }] },
+    );
+    const service = new PostCommentService(prisma);
+
+    const result = await service.deleteComment('c1', 'u1');
+
+    expect(result?.deletedCommentIds).toEqual(updateMany.mock.calls[0][0].where.id.in);
   });
 });
 
