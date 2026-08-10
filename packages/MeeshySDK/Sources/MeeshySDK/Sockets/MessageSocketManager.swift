@@ -444,6 +444,9 @@ public struct AttachmentStatusUpdatedEvent: Decodable, Sendable {
     public let userId: String
     public let action: String
     public let updatedAt: Date?
+    public let playPositionMs: Int?
+    public let durationMs: Int?
+    public let percentage: Int?
 }
 
 // MARK: - Attachment Updated Event Data (`message:attachment-updated`)

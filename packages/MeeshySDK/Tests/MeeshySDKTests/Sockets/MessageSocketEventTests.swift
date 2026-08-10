@@ -487,6 +487,50 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.summary.readCount, 1)
     }
 
+    // MARK: - AttachmentStatusUpdatedEvent
+
+    func testAttachmentStatusUpdatedEventDecoding_withPositionFields() throws {
+        let json = """
+        {
+            "attachmentId": "att1",
+            "messageId": "msg1",
+            "conversationId": "c1",
+            "userId": "u1",
+            "action": "listened",
+            "updatedAt": "2026-03-06T14:30:00.000Z",
+            "playPositionMs": 2500,
+            "durationMs": 10000,
+            "percentage": 25
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentStatusUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.attachmentId, "att1")
+        XCTAssertEqual(event.action, "listened")
+        XCTAssertEqual(event.playPositionMs, 2500)
+        XCTAssertEqual(event.durationMs, 10000)
+        XCTAssertEqual(event.percentage, 25)
+    }
+
+    func testAttachmentStatusUpdatedEventDecoding_tolerantWithoutPositionFields() throws {
+        let json = """
+        {
+            "attachmentId": "att2",
+            "messageId": "msg2",
+            "conversationId": "c2",
+            "userId": "u2",
+            "action": "downloaded",
+            "updatedAt": "2026-03-06T14:30:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentStatusUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.attachmentId, "att2")
+        XCTAssertNil(event.playPositionMs)
+        XCTAssertNil(event.durationMs)
+        XCTAssertNil(event.percentage)
+    }
+
     // MARK: - MessageConsumedEvent
 
     func testMessageConsumedEventDecoding() throws {

@@ -845,6 +845,15 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                // At-rest consumption tint (waveform/progress bar) : independent
+                // of message persistence, so it must fire even when `persistence`
+                // is unset.
+                if let playPositionMs = event.playPositionMs,
+                   let durationMs = event.durationMs, durationMs > 0 {
+                    let fraction = Double(playPositionMs) / Double(durationMs)
+                    MediaConsumptionStore.shared.record(
+                        fraction: fraction, complete: fraction >= 1, for: event.attachmentId)
+                }
                 guard let self, let persistence = self.persistence else { return }
                 // Touch the record so the store observation fires and
                 // bubbles re-render with the updated attachment status.
