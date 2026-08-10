@@ -1,3 +1,81 @@
+# Cycle 50 — La famille était de cinq. Elle est de quatre, et les quatre héritent.
+
+Le cycle 49b a branché les trois producteurs que l'éventail d'un message appelle et a nommé les deux
+qui restaient, sans les traiter : la réaction et la traduction prête. Ce cycle les prend, et l'un des
+deux se révèle ne pas être un producteur.
+
+## L'énumération, parce qu'elle est vérifiable
+
+Quatre — pas trois, pas six — méthodes `create*` de `NotificationService` posent un
+`context.messageId`. Le compte se refait en une commande, et c'est ce qui fait la valeur de la
+revendication « la famille est complète » : `createMessageNotification`, `createMentionNotification`,
+`createReactionNotification`, `createReplyNotification`. Les quatre estampillent désormais
+l'échéance.
+
+## Ce que chacun coûte : rien
+
+**La réaction** lisait déjà le message pour en tirer l'extrait (`select: { content: true }`) —
+`expiresAt` voyage dans la même lecture. **La mention par édition** avait son paramètre depuis le
+cycle précédent, sans personne pour le lui passer : les deux transports REST chargent le message par
+`include` (l'échéance était déjà là, à portée de main), et le transport socket ajoute un champ à un
+`select` qu'il émettait déjà. Zéro requête ajoutée sur les deux chemins — la même contrainte que le
+cycle 49b s'était donnée, tenue pour les mêmes raisons.
+
+## Le cinquième n'écrivait rien
+
+`createTranslationReadyNotification` n'avait **aucun appelant de production** : un test était sa
+seule invocation dans tout le dépôt. Il n'a jamais écrit une ligne `Notification`, et aucun client
+n'a jamais reçu ce type. Ce n'était donc pas « le producteur qui n'hérite pas d'échéance » — c'était
+un producteur qui ne produit pas.
+
+Retiré. Mais retirer la méthode ne suffisait pas : `NotificationTypeEnum.TRANSLATION_READY` reste
+déclaré (le SDK iOS le décode, et un client déployé ne doit pas buter dessus), et c'est exactement la
+forme que la leçon 92 décrit — une valeur déclarée qu'un audit lit comme une fonctionnalité. Elle
+porte désormais la mention explicite qu'aucun producteur ne l'émet, et le renvoi vers l'homonyme ZMQ
+`translation_ready`, lui bien vivant, qui annonce une traduction au gateway sans notifier personne.
+
+Le test qui l'atteignait est retiré avec elle, et remplacé par la phrase qui explique pourquoi : un
+test qui est le SEUL appelant de son sujet ne mesure pas du code vivant, il en entretient
+l'apparence.
+
+## Plan
+
+- [x] T1 — RED : une réaction à un message éphémère hérite de son échéance
+- [x] T2 — témoin : une réaction à un message ordinaire n'invente aucune échéance
+- [x] T3 — RED : une mention ajoutée en ÉDITANT un message éphémère hérite de son échéance
+- [x] T4 — témoin : l'édition d'un message ordinaire transmet `null`, jamais une échéance inventée
+- [x] T5 — les trois transports d'édition alimentent le champ (socket + PUT + PATCH)
+- [x] T6 — retrait du producteur sans appelant + annotation de l'énumération partagée
+- [x] T7 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T8 — changeset + ce relevé
+
+## Revue
+
+Sonde : les deux estampilles neutralisées ensemble → **3 rouges**. Les deux attendus, plus un
+troisième qui mérite d'être nommé : le test « réconcilie et ne notifie QUE les entrants » compare la
+totalité de `commonData`. Il tombe parce que le champ a disparu de l'objet — c'est-à-dire qu'il tient
+aussi, gratuitement, le témoin `messageExpiresAt: null` du chemin ordinaire. C'est le cas où
+l'égalité stricte, que le cycle 49b a assouplie ailleurs, se révèle utile : ici l'objet EST le
+contrat de l'appel, et personne d'autre ne le compose.
+
+`tsc --noEmit` a d'abord rendu deux erreurs sur `routes/conversations/core.ts` (`firstMessageSentAt`
+absent du type Prisma) : client généré périmé après la fusion de `main`, aucun rapport avec ce lot.
+Régénéré, la compilation est propre.
+
+## Reste ouvert après ce cycle
+
+- **Les clients ne s'auto-périment toujours pas**, et le parseur socket du web lit à la RACINE ce
+  que le serveur envoie sous `state` — les deux points hérités du 49b, inchangés.
+- **`getUserNotifications` reste sans appelant de production.** Même forme que le producteur retiré
+  ici, mais la route `/notifications` refait sa requête à la main : supprimer la méthode demanderait
+  d'abord de faire appeler le service par la route, ce qui est un autre geste.
+- **Les points hérités restent ouverts tels quels** : le push déjà remis reste sur l'appareil au
+  rappel ; les mentions du chemin de lien attendent l'extraction qui écrit `Message.validatedMentions` ;
+  aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas
+  dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
+
+---
+
 # Cycle 49b — Le champ existait, le prédicat existait, personne ne les avait présentés
 
 > **Session parallèle.** Deux sessions ont livré un cycle 49 en même temps, sur des sujets sans

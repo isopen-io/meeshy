@@ -1650,7 +1650,10 @@ export class NotificationService {
       }),
       this.prisma.message.findUnique({
         where: { id: params.messageId },
-        select: { content: true },
+        // `expiresAt` voyage dans la lecture que l'extrait demandait déjà :
+        // la notification d'une réaction DÉSIGNE le message réagi, donc elle
+        // ne doit pas lui survivre.
+        select: { content: true, expiresAt: true },
       }),
     ]);
 
@@ -1669,6 +1672,7 @@ export class NotificationService {
       priority: 'low',
       content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
       lang,
+      expiresAt: message?.expiresAt ?? undefined,
 
       actor: {
         id: params.reactorUserId,
@@ -2975,37 +2979,18 @@ export class NotificationService {
   }
 
   // ==============================================
-  // TRANSLATION_READY
+  // TRANSLATION_READY — retiré, cf. `NotificationTypeEnum.TRANSLATION_READY`
+  //
+  // `createTranslationReadyNotification` vivait ici sans AUCUN appelant de
+  // production : seul un test l'atteignait. Il n'a donc jamais produit une
+  // ligne, et aucun client n'a jamais reçu ce type. C'était le seul des cinq
+  // producteurs ancrés sur un `context.messageId` à ne pas avoir d'échéance à
+  // hériter — pour la raison la plus simple : il ne créait rien.
+  //
+  // Le laisser en place aurait coûté plus qu'une méthode morte : il donnait à
+  // l'énumération des producteurs de notification une cinquième entrée, et à
+  // tout audit de la famille un cinquième cas à instruire.
   // ==============================================
-
-  async createTranslationReadyNotification(params: {
-    recipientUserId: string;
-    messageId: string;
-    conversationId: string;
-  }): Promise<Notification | null> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'translation_ready',
-      priority: 'low',
-      content: 'Traduction disponible',
-
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-        messageId: params.messageId,
-      },
-
-      metadata: {
-        action: 'view_message',
-      },
-    });
-  }
 
   // ==============================================
   // MESSAGE_REPLY

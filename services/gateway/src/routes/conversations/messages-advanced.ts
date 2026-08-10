@@ -319,7 +319,12 @@ export function registerMessagesAdvancedRoutes(
         prisma,
         mentionService: fastify.mentionService,
         notificationService: fastify.notificationService,
-        message: { id: messageId, conversationId, senderId: existingMessage.senderId },
+        message: {
+          id: messageId,
+          conversationId,
+          senderId: existingMessage.senderId,
+          expiresAt: existingMessage.expiresAt,
+        },
         content: processedContent,
         editorUserId: userId,
         onError: (err) => logger.error('Edit - Error processing mentions', err)
@@ -822,7 +827,12 @@ export function registerMessagesAdvancedRoutes(
         prisma,
         mentionService: fastify.mentionService,
         notificationService: fastify.notificationService,
-        message: { id: messageId, conversationId: message.conversationId, senderId: message.senderId },
+        message: {
+          id: messageId,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          expiresAt: message.expiresAt,
+        },
         content: processedContent,
         editorUserId: userId,
         onError: (err) => logger.error('Patch edit - Error processing mentions', err)
