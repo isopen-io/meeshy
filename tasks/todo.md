@@ -1,51 +1,200 @@
-# Cycle 45 — Le fil qui trie la liste de conversations ne parlait pas aux invités du lien
+# Cycle 45b — Addendum d'une session parallèle : les tests du cycle 45 ne voyaient pas le défaut du cycle 45
 
-Tête prise dans le « reste ouvert » du cycle 44, qui la désignait nommément : « `emitConversationPreviewUpdate` et les autres émetteurs par room personnelle n'ont pas été audités contre la même clé. La règle "adresser par `userId ?? id`" vaut pour tout émetteur personnel — à instruire par une recherche sur `ROOMS.user(` plutôt que par déduction. »
+Deux sessions ont livré le cycle 45 en parallèle, sur **le même défaut**. Celle-ci arrive seconde.
 
-Instruit par la recherche. **La règle était violée par les trois émetteurs de `conversation:updated` — c'est-à-dire par tous.**
+Arbitrage défaut par défaut (leçon du cycle 23), pas « qui est arrivé en premier » : **le correctif
+de production ci-dessous est strictement plus large** et il est conservé intégralement. Il couvre
+deux sites que cette session n'avait pas vus — la quatrième copie verbatim dans
+`POST /messages/:id/status`, et la garde contre un `select` amputé des deux identités, qui aurait
+déversé tout le trafic dans l'unique room `user:undefined`. Le module concurrent de cette session
+(`emitToParticipantRooms`) a été **supprimé** à la fusion : deux helpers rivaux pour la même règle
+valent moins que l'un ou l'autre.
 
-## R1 — Un invité de lien de partage a un salon personnel, et rien n'y parlait
+Ce qui est ajouté par-dessus ne touche donc à aucune ligne de production. **C'est la partie que la
+session arrivée première n'a pas faite, et elle n'est pas cosmétique : ses propres tests ne
+capturent pas le défaut qu'elle corrige.**
 
-`AuthHandler` joint un socket anonyme à `ROOMS.user(participant.id)`, et le commentaire qui l'y a mis dit pourquoi : c'est « le seul salon que tout émetteur d'événement personnel adresse ». Adresser par `userId` seul ne saute donc pas un salon inexistant — **il saute un salon qui existe**.
+## Le faux vert, mesuré et non supposé
 
-| chemin | émetteur | clé employée |
+Dans `MeeshySocketIOManager.test.ts`, toutes les chaînes se déversent dans un `io.to` unique.
+`expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('part-anon'))` prouve alors qu'**un** émetteur a
+adressé cette room — **jamais lequel**. Or sur le chemin `broadcastMessage`, `conversation:updated`
+n'est pas seul à viser cette room : `emitUnreadCountsToRecipients` l'adresse déjà correctement
+depuis le cycle 42.
+
+Vérifié par expérience, pas par raisonnement : le fanout `conversation:updated` a été **re-cassé**
+localement (retour au `filter((p) => p.userId)`), puis les deux tests lancés sur ce code fautif.
+
+| test | sur le code re-cassé |
+|---|---|
+| `emits CONVERSATION_UPDATED to every participant user room…` (session 1) | **PASSE** |
+| `addresses an accountless participant by its participant id in CONVERSATION_UPDATED` (celui-ci) | **ÉCHOUE** |
+
+Le premier test resterait donc vert si quelqu'un régressait demain exactement le défaut que le
+cycle 45 vient de corriger. C'est la seule raison d'être de cet addendum.
+
+*(Le test de drain de la session 1 n'a pas ce défaut : il fait `ioState.to.mockClear()` et
+`_emitDeliveryForDrainedMessages` n'a qu'un émetteur — l'assertion lâche y suffit.)*
+
+## Trois doubles de test corrigés
+
+- **`MeeshySocketIOManager.test.ts`** — `recordEmitChains(ioState)` remplace le temps d'un test le
+  `io.to` partagé par une chaîne qui garde room et événement ensemble, et restaure le double
+  d'origine en `finally` pour qu'aucun test suivant n'hérite de l'override.
+- **`MessageHandler.test.ts`** — même problème sur `makeIO()` (un `mockToResult` unique). Le test du
+  chemin d'envoi WS monte un double enregistreur local et n'affirme que sur les rooms de
+  `conversation:updated`.
+- **`MessageHandlerEditDelete.test.ts`** — `target.to.mockReturnValue(target)` rabattait toute
+  chaîne sur son **premier** salon : un émetteur chaîné y était indiscernable d'un émetteur qui
+  aurait oublié tous les salons sauf le premier. `emitToConversationParticipants` chaînant les
+  accusés, le trou restait ouvert quelle que soit la forme retenue pour `conversation:updated`.
+
+## Écarté volontairement
+
+Cette session chaînait aussi `conversation:updated` (une émission au lieu de N). La session 1 a
+**délibérément** gardé la boucle, en argumentant que les deux familles d'émetteurs ne partagent pas
+une forme d'émission et que seule la liste de rooms leur est commune. L'argument tient ; le gain
+était marginal. Non réimposé — la structure de la session 1 est conservée telle quelle.
+
+---
+
+# Cycle 45 — La piste du cycle 43 nommait un émetteur ; il y en avait cinq, et le plus lourd n'était pas un accusé
+
+Tête prise dans la dernière ligne du cycle 43, littérale : « `emitConversationPreviewUpdate` et les
+autres émetteurs par room personnelle n'ont pas été audités contre la même clé. La règle « adresser
+par `userId ?? id` » vaut pour tout émetteur personnel [...] À instruire par une recherche sur
+`ROOMS.user(` plutôt que par déduction. »
+
+La recherche a été faite telle que prescrite (`ROOMS.user(` sur tout `services/gateway/src`, 60
+sites, puis tri manuel). Elle valide la piste et la déborde : **cinq** émetteurs défectueux, pas un.
+
+## Le tri qui compte : quelle identité l'appelant tient-il ?
+
+Un `ROOMS.user(x)` n'est fautif que si `x` vient d'une ligne `Participant` — seule table où
+l'identité peut être nulle. Les 60 sites se répartissent ainsi :
+
+| famille | exemples | verdict |
+|---|---|---|
+| `x` est un `User.id` de bout en bout | demandes d'ami, notifications, préférences | **sain** — aucun anonyme concerné par construction |
+| `x` vient d'un `Participant` | les 5 ci-dessous | **fautif** |
+| `x` vient d'un `Participant`, déjà corrigé | `emitUnreadCountsToRecipients`, `emitToConversationParticipants` | sain (cycles 42–43) |
+
+## R1 — Le défaut le plus lourd n'est pas un accusé de lecture, c'est `conversation:updated`
+
+Le backlog attendait des accusés. Trois des cinq sites émettent `conversation:updated`, et ce signal
+pèse plus : c'est le SEUL qui fait remonter une conversation en tête de liste, et le seul par lequel
+une conversation créée après la connexion entre dans la liste d'un client déjà en ligne.
+`message:new` ne s'y substitue pas — il n'atteint que les sockets encore dans `conversation:<id>`,
+que le client posé sur sa liste a précisément quittée.
+
+Les trois chemins d'envoi le sautaient identiquement pour un participant sans compte :
+
+| chemin | émetteur | ligne fautive |
 |---|---|---|
 | envoi WS | `MessageHandler.broadcastNewMessage` | `if (!p.userId) continue` |
 | envoi REST/ZMQ | `MeeshySocketIOManager._broadcastNewMessage` | `if (!p.userId) continue` |
-| édition / suppression | `emitConversationPreviewUpdate` | `if (!p.userId) continue`, **et `select: { userId: true }`** |
-| reçu de livraison au drain | `_emitDeliveryForDrainedMessages` | `if (row.userId)` au montage de la liste |
+| édition / suppression | `emitConversationPreviewUpdate` | `if (!p.userId ...) continue`, et `select: { userId: true }` |
 
-Le troisième ne se contentait pas d'ignorer l'identité de repli : **il ne la lisait jamais**, la requête ne sélectionnant pas `Participant.id`. Même défaut, mot pour mot, que les deux copies sur trois relevées au cycle précédent sur les accusés de lecture.
+Conséquence, pour l'invité de lien partagé — le mode d'entrée principal du produit : liste de
+conversations **figée**. Aucun re-tri à la réception, aucun rafraîchissement de l'aperçu après
+édition ou suppression, et un fil neuf absent jusqu'au refetch manuel.
 
-## R2 — Le symptôme était visible et incohérent, pas silencieux
+`emitConversationPreviewUpdate` documentait le manque comme une intention : « Anonymous participants
+(no `userId`) are skipped, exactly as the send path does. » La phrase était **exacte sur ses deux
+moitiés et fausse sur les deux** — le chemin d'envoi les sautait bien, et c'était son défaut. Son
+test unitaire l'affirmait aussi (`it('skips anonymous participants...')`) : un défaut fixé par un
+test est un défaut qui ne se corrige plus tout seul. Le test est retourné, en disant pourquoi.
 
-`emitUnreadCountsToRecipients`, **un fichier plus loin**, adresse déjà `recipient.userId ?? recipient.id`. Un invité de lien voyait donc sa **pastille de non-lus bouger** pendant que **sa ligne de conversation restait figée** à son ancien rang, avec l'aperçu d'avant l'édition. Les deux signaux du même envoi, l'un arrivé et l'autre perdu, sur le même écran.
+## R2 — Deux copies de l'éventail d'accusés avaient survécu au regroupement du cycle 43
 
-Une conversation ouverte par lien de partage est peuplée d'anonymes : ce n'est pas un cas limite de l'audience, **c'est l'audience**.
+Le cycle 43 en a réuni trois. Il en restait deux, invisibles à sa recherche parce qu'elles ne
+ressemblaient pas aux autres :
 
-## Correctif — une unité, quatre appelants
+- `POST /messages/:id/status` (`routes/messages.ts:718`) — **quatrième copie verbatim**, jamais
+  recensée. Même `select: { userId: true }`, même filtre.
+- `_emitDeliveryForDrainedMessages` — variante : la clé y transite par un `Map<convId, string[]>`
+  construit sous `if (row.userId)`, donc le filtre est à la construction, pas à l'émission.
 
-Extrait `emitToParticipantRooms` : chaînage (une seule émission, au plus une copie par socket) + adressage `userId ?? id` + déduplication, avec `seedRooms` pour les salons non dérivés d'un participant. `emitToConversationParticipants` (cycle 44) en devient un appel avec le salon de conversation en graine — la règle d'adressage n'a plus qu'un seul domicile pour les cinq émetteurs.
+Effet : un expéditeur sans compte reste sur un unique tic « envoyé », y compris au moment où son
+destinataire revient en ligne et vide sa file — l'instant précis où l'accusé existe.
 
-Le reçu de livraison au drain passe par `emitToConversationParticipants` : sa forme était déjà exactement celle-là, recopiée à la main.
+## Correctif — extraire la liste de rooms, pas la boucle d'émission
 
-## TDD
+Les deux familles n'ont PAS la même forme d'émission, et vouloir partager la boucle aurait imposé
+l'une à l'autre :
 
-RED sur les quatre sites avant toute ligne de production, dont deux tests qui **affirmaient le défaut** et ont dû être retournés (`skips anonymous participants…`, `skips null-userId participants…`).
+- les accusés **chaînent** room de conversation + rooms personnelles (`io.to(a).to(b).emit()`), ce
+  qui garantit une livraison au plus une fois par socket présente dans les deux ;
+- `conversation:updated` n'adresse **que** les rooms personnelles — une copie vers la room de
+  conversation serait inutile pour qui regarde déjà le fil, sa ligne de liste n'étant pas à l'écran.
 
-Deux doubles de test mentaient et ont été corrigés — c'est la partie qui a demandé le plus d'attention :
-- `MessageHandler.test.ts` / `MeeshySocketIOManager.test.ts` : un `io.to` unique où toutes les chaînes se déversent. `expect(io.to).toHaveBeenCalledWith(salon)` prouve qu'un émetteur a adressé ce salon, **jamais lequel** — et `conversation:unread-updated` y arrivait déjà correctement. La première version du test passait au VERT sur du code défectueux. Remplacé par un enregistreur qui lie salon et événement.
-- `MessageHandlerEditDelete.test.ts` : `target.to.mockReturnValue(target)` rabattait la chaîne sur son premier salon, rendant un émetteur chaîné indiscernable d'un émetteur qui aurait oublié tous les salons sauf le premier.
+Ce qu'elles partagent est la liste de rooms, et c'est exactement la ligne que chaque copie ratait.
+D'où `participantUserRooms(participants, seed?)`, extraite seule ;
+`emitToConversationParticipants` s'appuie dessus, et les cinq sites l'appellent.
+
+Une garde s'y ajoute que les copies n'avaient pas : un participant sans `userId` **ni** `id` ne
+nomme aucune room. Deux des sites corrigés sélectionnaient `{ userId: true }` seul — la même erreur
+de `select` commise demain n'aurait plus rien sauté, elle aurait déversé le trafic de toutes les
+conversations dans l'unique room `user:undefined`, où toute socket y ayant jamais atterri reçoit
+tout. Le type dit que le cas est impossible ; les `select` partiels que cette fonction existe pour
+corriger disent le contraire.
 
 ## Vérification
 
-`bun run test:coverage` → **634/634 suites, 16123/16123 tests, exit 0**. `tsc --noEmit` propre.
+- 631 suites / 16095 tests verts (bun + jest), `tsc --noEmit` propre.
+- Le test qui affirmait le défaut de `emitConversationPreviewUpdate` est retourné et commenté.
+- Quatre régressions ajoutées, une par site non couvert : room `user:<participantId>` sur les deux
+  chemins d'envoi, sur le rejeu de remise, et sur `POST /messages/:id/status` (dont le double
+  Socket.IO du fichier de test ne voyait pas les `.to()` chaînés — il les enregistre maintenant).
 
-## Reste ouvert
+## Écarté, avec la raison
 
-- Les émetteurs personnels restants ont été relus contre la même clé et sont **corrects par construction, pas par chance** : mentions (`emitMentionCreated`, les deux chemins `MENTION_CREATED`), demandes d'ami et notifications (`NotificationService`), `emitWithSeq` (documenté registered-only), `CallEventsHandler`. Tous adressent des porteurs de `User` par nature — un anonyme n'y est pas une audience manquée.
-- Les points hérités du cycle 19 restent ouverts tels quels : les mentions du chemin de lien attendent toujours l'extraction qui écrit `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
-- **Aucun client n'a été touché.** iOS et web reçoivent `conversation:updated` sur le salon personnel qu'ils joignent déjà ; le correctif est entièrement côté adressage serveur.
+- `routes/conversations/core.ts:1129` et `participants.ts:403` adressent des `User.id` venus de la
+  charge utile de création / de la route : aucun anonyme n'y transite. Sains.
+- `utils/callEndedFanout.ts` filtre `userId: { not: null }` **dans le `where` Prisma**. Ressemblance
+  trompeuse : instruit et **écarté comme correct**, voir ci-dessous.
+
+## `callEndedFanout` ressemblait au sixième site — c'est le seul filtre légitime
+
+Le même `userId: { not: null }`, la même forme, et pourtant l'inverse. Ce que l'en-tête du fichier
+énonce déjà tranche : « l'audience de terminaison doit toujours refléter l'audience d'invitation ».
+Et `call:initiated` (`CallEventsHandler`, requête `conversationParticipants`) porte **exactement le
+même filtre**. Un participant sans compte n'est jamais sonné, donc n'a aucune sonnerie à faire taire :
+aligner ce fan-out sur la règle générale n'aurait pas corrigé un manque, il aurait diffusé
+`call:ended` à quelqu'un qui n'a jamais reçu `call:initiated`.
+
+Le cas qui semblait rester est déjà couvert. Un anonyme **peut** rejoindre l'appel — `CallService.joinCall`
+admet sur le seul `Participant.id`, et la bulle « appel en cours » lui parvient comme un message
+ordinaire — mais dès qu'il a rejoint, il est dans `ROOMS.call(callId)`, la première room de la liste.
+
+Ce qui manquait était donc la raison écrite, pas le correctif : elle est maintenant dans le fichier,
+pour que le prochain passage sur la règle `userId ?? id` ne re-litige pas ce site.
+
+**La question de produit qu'il soulève reste ouverte et n'est pas un bug** : faut-il sonner un invité
+de lien partagé ? Aujourd'hui non — et c'est cohérent, il n'a pas de jeton de push. À trancher côté
+produit, pas côté correctif.
+
+## Piste pour le cycle suivant
+
+Aucune piste ouverte sur les rooms personnelles : les 60 sites `ROOMS.user(` sont triés, les cinq
+fautifs corrigés, le sixième instruit et justifié. La prochaine tête est à prendre ailleurs — les
+points hérités des cycles 19/24 restent en tête de file (extraction des mentions du chemin de lien
+qui écrit `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ; les pièces
+jointes du chemin de lien n'entrent pas dans le pipeline audio).
+## Note d'intégration — deux sessions ont numéroté leur cycle « 44 »
+
+Les deux ont pris leur tête dans le cycle 43, mais dans **deux phrases différentes** de sa liste de
+restes, et les deux défauts sont disjoints :
+
+| session | tête prise dans | défaut |
+|---|---|---|
+| celle arrivée sur `main` la première (ci-dessous, reste « 44 ») | « `onMessageDeleted` n'est appelé que par un chemin sur trois » | dérive des compteurs de conversation |
+| celle-ci (renumérotée **45**) | « les autres émetteurs par room personnelle n'ont pas été audités contre la même clé » | `conversation:updated` et les accusés ne parvenaient à aucun anonyme |
+
+Rien à arbitrer défaut par défaut (leçon du cycle 23) : aucun des deux ne touche à la logique de
+l'autre. Les deux ont modifié `MessageHandler.ts` et `routes/messages.ts`, mais dans des blocs
+distincts — le leur sur les effets de compteurs, celui-ci sur le nommage des rooms. La fusion est
+textuellement propre ET vérifiée par la suite complète après merge, pas seulement par git.
 
 ---
 

@@ -35,8 +35,11 @@ import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
-import { emitToConversationParticipants } from './emitToConversationParticipants';
-import { emitToParticipantRooms, type ParticipantRoomTarget } from './emitToParticipantRooms';
+import {
+  emitToConversationParticipants,
+  participantUserRooms,
+  type ParticipantRoomTarget,
+} from './emitToConversationParticipants';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -519,10 +522,11 @@ export class MeeshySocketIOManager {
 
     // conversationId → the reconnecting user's participantId (drives markReceived)
     const ownParticipant = new Map<string, string>();
-    // conversationId → every participant (drives the user-room fanout). Kept
-    // whole rather than reduced to userIds: an accountless peer is addressed by
-    // its `Participant.id`, and it may well be the author waiting on the
-    // sent→delivered tick.
+    // conversationId → every participant, room-addressable (drives the fanout).
+    // Accountless rows are KEPT: `emitToConversationParticipants` names their
+    // room after `Participant.id`. Filtering on `userId` here left an anonymous
+    // sender stuck on a single "sent" tick forever, since the receipt for the
+    // message they sent never reached the only room they are in.
     const convParticipants = new Map<string, ParticipantRoomTarget[]>();
     for (const row of participantRows) {
       if (row.userId === userId) ownParticipant.set(row.conversationId, row.id);
@@ -548,10 +552,13 @@ export class MeeshySocketIOManager {
           summary,
         };
         // Chain the conversation room + each participant's user room, deduped so
-        // Socket.IO delivers the event at most once per socket. Mirrors the two
-        // sibling emitters of this same event — `autoDeliverToOnlineRecipients`
-        // and `broadcastReadStatusUpdate` — which fan out identically so authors
-        // never get stuck on a single "sent" tick after navigating away.
+        // Socket.IO delivers the event at most once per socket. Same unit as the
+        // four sibling emitters of this same event — `autoDeliverToOnlineRecipients`,
+        // `broadcastReadStatusUpdate` and the two REST mark-as-read routes — so
+        // authors never get stuck on a single "sent" tick after navigating away.
+        // The copy this replaces filtered on `userId` one step earlier than the
+        // others, at the `Map` it built rather than at the emit, which is why the
+        // sweep that unified the verbatim copies never saw it.
         const rooms = emitToConversationParticipants({
           io: this.io,
           conversationId,
@@ -2165,14 +2172,13 @@ export class MeeshySocketIOManager {
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
-          // Accountless participants are addressed by their `Participant.id`,
-          // like the WS send path — the shared unit owns that rule.
-          emitToParticipantRooms({
-            io: this.io,
-            participants: allParticipants,
-            events: [SERVER_EVENTS.CONVERSATION_UPDATED],
-            payload: updatePayload,
-          });
+          // `userId ?? id` (participantUserRooms) : parité avec le chemin socket
+          // de MessageHandler. Un participant sans compte a une room personnelle
+          // nommée d'après son `Participant.id` — la sauter privait un invité de
+          // lien partagé de tout re-tri de sa liste de conversations.
+          for (const room of participantUserRooms(allParticipants)) {
+            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          }
 
           // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
           // Délégué à l'unité partagée par les trois transports d'envoi : la copie

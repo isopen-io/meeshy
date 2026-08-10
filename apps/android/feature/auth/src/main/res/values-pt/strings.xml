@@ -15,6 +15,7 @@
     <string name="registration_username_label">Nome de usuário</string>
     <string name="registration_username_available">Nome de usuário disponível</string>
     <string name="registration_username_taken">Este nome de usuário já está em uso</string>
+    <string name="registration_username_suggestions_title">Sugestões disponíveis</string>
     <string name="registration_next">Próximo</string>
     <string name="registration_continue">Continuar</string>
     <string name="registration_create_account">Criar minha conta</string>

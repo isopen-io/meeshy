@@ -28,8 +28,7 @@ import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
-import { emitToConversationParticipants } from '../emitToConversationParticipants';
-import { emitToParticipantRooms } from '../emitToParticipantRooms';
+import { emitToConversationParticipants, participantUserRooms } from '../emitToConversationParticipants';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -1330,16 +1329,16 @@ export class MessageHandler {
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
-        // Accountless participants are addressed by their `Participant.id` —
-        // a share-link conversation is populated with them, and their list row
-        // otherwise never learns the conversation moved.
-        const updatedRooms = emitToParticipantRooms({
-          io: this.io,
-          participants: sharedParticipants,
-          events: [SERVER_EVENTS.CONVERSATION_UPDATED],
-          payload: updatePayload,
-        });
-        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: updatedRooms.length });
+        // `userId ?? id` — un participant sans compte a une room personnelle
+        // nommée d'après son `Participant.id`, et c'est la SEULE par laquelle il
+        // apprend qu'une conversation remonte en tête de liste. Sans elle, un
+        // invité de lien partagé ne voit jamais sa liste se retrier, et une
+        // conversation toute neuve n'y apparaît pas du tout.
+        const rooms = participantUserRooms(sharedParticipants);
+        for (const room of rooms) {
+          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+        }
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: rooms.length });
       }
 
       // Offline delivery queue — parity with the REST send path

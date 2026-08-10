@@ -4,17 +4,14 @@ import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate'
 
 type Emitted = { room: string; event: string; payload: any };
 
-// Chainable double: `io.to(a).to(b).emit(e, p)` records one entry per room so
-// every assertion below reads the rooms actually addressed, regardless of
-// whether the emitter loops or chains.
 function makeIo(sink: Emitted[]) {
-  const chain = (rooms: readonly string[]) => ({
-    to: (room: string) => chain([...rooms, room]),
-    emit: (event: string, payload: unknown) => {
-      for (const room of rooms) sink.push({ room, event, payload });
-    },
-  });
-  return { to: (room: string) => chain([room]) };
+  return {
+    to: (room: string) => ({
+      emit: (event: string, payload: unknown) => {
+        sink.push({ room, event, payload });
+      },
+    }),
+  };
 }
 
 function makePrisma(
@@ -38,7 +35,11 @@ describe('emitConversationPreviewUpdate', () => {
   it('fans conversation:updated to every active participant user room with the recomputed latest preview', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma(
-      [{ userId: 'user-A' }, { userId: 'user-B' }, { userId: 'user-C' }],
+      [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+        { id: 'p-C', userId: 'user-C' },
+      ],
       latest,
     );
 
@@ -62,27 +63,29 @@ describe('emitConversationPreviewUpdate', () => {
     });
   });
 
+  // Ce test affirmait l'inverse : « skips anonymous participants (no userId) ».
+  // C'était le défaut, pas l'intention. Un participant sans compte a bien une
+  // room personnelle — `AuthHandler` la nomme d'après son `Participant.id` — et
+  // c'est par elle seule qu'il reçoit quoi que ce soit une fois sorti de la vue
+  // conversation. Le sauter laissait un invité de lien partagé avec une ligne
+  // de liste figée sur le texte d'avant l'édition, indéfiniment.
   it('addresses an accountless participant by its participant id, and dedupes repeated userIds', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma(
       [
         { id: 'p-A', userId: 'user-A' },
-        { id: 'p-anonymous', userId: null },
-        { id: 'p-A-second-device-row', userId: 'user-A' },
+        { id: 'p-anon', userId: null },
+        { id: 'p-A2', userId: 'user-A' },
       ],
       latest,
     );
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
-    // A conversation opened through a share link is populated with anonymous
-    // participants, and `AuthHandler` joins them to `user:<Participant.id>`.
-    // Skipping them does not avoid a room that does not exist — their list row
-    // simply never learns the preview changed.
-    expect(emitted.map((e) => e.room)).toEqual(['user:user-A', 'user:p-anonymous']);
+    expect(emitted.map((e) => e.room)).toEqual(['user:user-A', 'user:p-anon']);
   });
 
-  it('selects the participant id so the accountless fallback identity can be read at all', async () => {
+  it('selects the participant id, without which the fallback identity cannot be read', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
 
@@ -95,7 +98,7 @@ describe('emitConversationPreviewUpdate', () => {
 
   it('emits a null preview when the last message of the conversation was deleted', async () => {
     const emitted: Emitted[] = [];
-    const prisma = makePrisma([{ userId: 'user-A' }], null);
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], null);
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
@@ -111,7 +114,7 @@ describe('emitConversationPreviewUpdate', () => {
     const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
     const emitted: Emitted[] = [];
     const geoLatest: any = { ...latest, content: '', metadata: { location: GEO } };
-    const prisma = makePrisma([{ userId: 'user-A' }], geoLatest);
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], geoLatest);
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
@@ -122,7 +125,7 @@ describe('emitConversationPreviewUpdate', () => {
   });
 
   it('is a no-op when the Socket.IO layer is unavailable', async () => {
-    const prisma = makePrisma([{ userId: 'user-A' }], latest);
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
     await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1', 'user-editor')).resolves.toBeUndefined();
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
   });
