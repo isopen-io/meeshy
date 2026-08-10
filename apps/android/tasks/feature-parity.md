@@ -1794,7 +1794,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `listState.firstVisibleItemIndex`. +8 tests, mutation-prouvé (dropper la garde
       « en-tête en haut → null » casse exactement 1 test). **SOTA over iOS** : la décision est un
       value type pur entièrement couvert (iOS n'a pas de pastille flottante).
-      Reste : inverted list pending
+      **Inverted-list sub-slice 1 done** (slice `chat-scroll-geometry`, 2026-08-10) : préparation pure,
+      zéro changement de comportement visible — `:feature:chat/ChatScrollGeometry` (+
+      `ChatListOrientation.TopDown|BottomUp`) factorise l'arithmétique d'index jusque-là ad hoc dans
+      `ChatScreen` (`bottomIndex`, `isNearBottom`, `isNearOldEnd`) derrière une SSOT paramétrée par
+      orientation ; `ChatScreen` est rebranché sur `TopDown` (sortie identique bit à bit, `LOAD_OLDER_
+      THRESHOLD`/`BOTTOM_TOLERANCE_ITEMS` déplacées dans l'objet, l'extension privée `isNearBottom`
+      remplacée par `lastVisibleItemIndex()`), et la branche `BottomUp` est prouvée correcte en
+      isolation (17 tests, mutation-prouvée — casser le seuil `LOAD_OLDER_THRESHOLD` de `<=` à `<`
+      casse exactement 1 test). `PinnedDayHeader.governingDayMillis` reste volontairement inchangé (déjà
+      sa propre SSOT pure et testée ; migrer son scan vers `ChatScrollGeometry` est laissé à la sous-
+      tranche 2, quand `BottomUp` a un appelant réel). Reste : sous-tranche 2 (le flip visible —
+      `reverseLayout = true` + liste inversée + rebrancher les 4 sites restants sur `BottomUp`) et
+      sous-tranche 3 (vérification IME on-device) — décomposition complète dans PROGRESS.md.
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
