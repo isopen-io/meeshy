@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -186,6 +187,20 @@ internal fun menuItemLabelKeys(): List<String> = listOf(
     "menu_contacts",
     "tab_profile",
 )
+
+/**
+ * Ou mene un tap sur le bouton gauche flottant, etant donne la route courante.
+ *
+ * Parite iOS : `RootView.draggableFloatingButtons.onLeftTap` fait
+ * `showFeed.toggle()` — un aller-retour Flux <-> Conversations sur le MEME
+ * bouton. Avant ce fix, le bouton Android naviguait TOUJOURS vers [Routes.FEED],
+ * quelle que soit la route courante : un tap depuis le Flux ne ramenait jamais
+ * aux Conversations (seul le bouton retour systeme le faisait). Extrait de
+ * `MeeshyApp` — qui est @Composable, donc hors de portee d'un test JVM — pour
+ * que la regle de bascule soit verifiable.
+ */
+internal fun leftButtonTapTarget(currentRoute: String?): String =
+    if (currentRoute == Routes.FEED) Routes.CONVERSATIONS else Routes.FEED
 
 /**
  * Parite iOS : la barre d'onglets est remplacee par DEUX boutons flottants
@@ -720,10 +735,11 @@ fun MeeshyApp(
                 rightPosition = rightButtonPosition,
                 onLeftPositionChange = { scope.launch { floatingButtonPositions.setLeftPosition(it) } },
                 onRightPositionChange = { scope.launch { floatingButtonPositions.setRightPosition(it) } },
-                // Tap : le Flux, par le NavHost et avec la meme semantique
+                // Tap : bascule Flux <-> Conversations (parite iOS
+                // `showFeed.toggle()`) via le NavHost, avec la meme semantique
                 // save/restore que les autres destinations de premier niveau.
                 onLeftTap = {
-                    navController.navigate(Routes.FEED) {
+                    navController.navigate(leftButtonTapTarget(currentRoute)) {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
@@ -745,8 +761,12 @@ fun MeeshyApp(
                 leftContentDescription = stringResource(R.string.tab_feed),
                 rightContentDescription = stringResource(R.string.a11y_floating_menu),
                 leftContent = {
+                    // Filled quand le Flux est la destination active (on peut taper
+                    // pour en repartir), outline sinon (un tap y mene) — le seul
+                    // signal visuel de bascule que ce bouton porte, faute d'un
+                    // equivalent Android au logo anime iOS de `showFeed == true`.
                     Icon(
-                        imageVector = Icons.Filled.Home,
+                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.Home else Icons.Outlined.Home,
                         contentDescription = null,
                         tint = MeeshyPalette.Success,
                     )
