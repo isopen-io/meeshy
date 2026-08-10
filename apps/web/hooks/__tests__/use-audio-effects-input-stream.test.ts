@@ -55,4 +55,45 @@ describe('useAudioEffects input stream swap', () => {
     expect(createMediaStreamSource).toHaveBeenCalledWith(streamB);
     expect(onOutputStreamReady).toHaveBeenCalledTimes(2);
   });
+
+  /**
+   * `initializeAudioPipeline()` overwrites `mediaStreamDestinationRef.current`
+   * with a brand-new `MediaStreamAudioDestinationNode` on every (re)init, but
+   * the mount effect's cleanup never touched the OLD one before this fix. The
+   * old node stayed wired into the (long-lived, Tone.js-shared) AudioContext
+   * graph, so it kept generating audio into a `MediaStream` nobody reads from
+   * anymore — a CPU/battery leak that compounds with every mic/camera switch
+   * during a call, since nothing ever stops.
+   */
+  it('stops the previous MediaStreamAudioDestinationNode output tracks when inputStream is swapped mid-call', async () => {
+    const streamA = makeFakeInputStream();
+    const streamB = makeFakeInputStream();
+    const rawContext = (Tone.context as any).rawContext;
+    const destinationNodes: Array<{
+      disconnect: jest.Mock;
+      stream: { getTracks: () => Array<{ stop: jest.Mock }> };
+      track: { stop: jest.Mock };
+    }> = [];
+    rawContext.createMediaStreamDestination = jest.fn(() => {
+      const track = { stop: jest.fn() };
+      const node = { disconnect: jest.fn(), stream: { getTracks: () => [track] }, track };
+      destinationNodes.push(node);
+      return node;
+    });
+
+    const { rerender } = renderHook(
+      ({ inputStream }) => useAudioEffects({ inputStream }),
+      { initialProps: { inputStream: streamA } }
+    );
+
+    await waitFor(() => expect(destinationNodes).toHaveLength(1));
+    const firstDestination = destinationNodes[0];
+
+    rerender({ inputStream: streamB });
+
+    await waitFor(() => expect(destinationNodes).toHaveLength(2));
+    expect(firstDestination.track.stop).toHaveBeenCalledTimes(1);
+    expect(firstDestination.disconnect).toHaveBeenCalledTimes(1);
+    expect(destinationNodes[1].track.stop).not.toHaveBeenCalled();
+  });
 });

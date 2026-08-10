@@ -5997,3 +5997,53 @@ Vague 91 (confiance moyenne-haute, déjà scopé par lecture directe) plutôt qu
   basse, non repris) `use-audio-effects.ts` ne dispose jamais l'ancien `MediaStreamAudioDestinationNode` si
   `inputStream` change de référence en cours de montage — piège latent, aucun chemin d'appel actuel ne
   déclenche ce remplacement.
+
+## Vague 93 — `useAudioEffects` never disposed the old `MediaStreamAudioDestinationNode` on an `inputStream` swap (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests`/`search_pull_requests` n'ont remonté aucune PR ouverte de cette routine (la Vague 92,
+#2765, était déjà mergée sur `main`). Branche fast-forwardée sur `origin/main` (1 commit de retard, chore
+lane-cursor) avant tout travail. Candidat repris directement du "reste ouvert" laissé par la Vague 92
+(confiance basse à l'origine — le doute portait sur l'atteignabilité, pas sur le défaut lui-même) plutôt
+qu'un nouvel audit dédié.
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/use-audio-effects.ts`) : le mount effect
+  `[inputStream]` reconstruit tout le pipeline Web Audio à chaque changement de référence de `inputStream`
+  (mic/caméra swap). Sa fonction de nettoyage disposait déjà le `Tone.Gain` d'entrée et détruisait les
+  processeurs d'effets, mais ne touchait JAMAIS `mediaStreamDestinationRef.current` — `initializeAudioPipeline`
+  se contente d'écraser la ref avec un nouveau `audioContext.createMediaStreamDestination()` au ré-init
+  suivant. Le noeud orphelin reste câblé dans le graphe du `AudioContext` partagé (singleton Tone.js à
+  durée de vie de l'app) et continue à générer de l'audio dans un `MediaStream` que plus personne ne lit —
+  une fuite CPU/batterie qui s'accumule à chaque nouvelle acquisition de flux.
+- **Vérification de l'atteignabilité** (le doute laissé par la Vague 92) : dans `VideoCallInterface.tsx`,
+  `inputStream: localStream` ne change JAMAIS de référence pendant un appel actif — `handleSwitchCamera`
+  mute les tracks du MÊME objet `MediaStream` (`removeTrack`/`addTrack`), et `enableVideo`/`disableVideo`
+  (togle vidéo manuel + dégradation adaptative) ne touchent jamais l'audio ni `setLocalStream`. En revanche
+  `AudioRecorderWithEffects.tsx` (même hook partagé, chemin « enregistrer un message vocal avec effets »)
+  appelle `setRawStream(newRawStream)` avec un **nouveau** `MediaStream` à CHAQUE `startRecording()` —
+  un flux produit ordinaire (enregistrer, annuler, ré-enregistrer) sans jamais démonter le composant. Le
+  défaut est donc réellement atteignable via ce second consommateur du hook partagé, pas seulement
+  théorique — la Vague 92 avait correctement identifié le défaut mais sous-estimé sa portée réelle en ne
+  vérifiant qu'un seul appelant.
+- **Fix** : dans la fonction de nettoyage du mount effect, avant de réinitialiser `isInitializedRef`/
+  `isInitialized` — si `mediaStreamDestinationRef.current` existe, arrêt de tous ses tracks de sortie
+  (`stream.getTracks().forEach(track => track.stop())`), `disconnect()` du noeud, puis remise à `null` de
+  la ref. Optional chaining (`?.()`) sur `getTracks`/`disconnect` par cohérence avec le reste du fichier
+  (`dispose?.()`, `setActive?.()`). Un seul fichier de production modifié, +9/-0 lignes.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau test dans `use-audio-effects-input-stream.test.ts`
+  (« stops the previous MediaStreamAudioDestinationNode output tracks when inputStream is swapped mid-call »)
+  — mock `createMediaStreamDestination` renvoyant un noeud distinct par appel avec son propre track
+  `stop()` traçable ; swap `inputStream`, vérifie que le PREMIER noeud voit son track stoppé et lui-même
+  déconnecté exactement une fois, et que le SECOND (nouveau) noeud n'est pas touché. RED confirmé (0 appel
+  à `stop()` avant le fix), GREEN après.
+- **Vérification** : sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-
+  degradation|audio-effect` — **49 suites / 552 tests verts** (+4 suites / +31 tests net vs. la Vague 92,
+  la pattern inclut désormais `audio-effect`), aucune régression. Prérequis CLAUDE.md rejoués (sandbox sans
+  `node_modules` au démarrage) : `bun install --ignore-scripts`, puis `packages/shared && npx prisma
+  generate --generator client && bun run build` sans erreur. `npx tsc --noEmit` sur `apps/web` : **1657
+  erreurs avant et après le diff** (`git stash`/`stash pop`, comparaison directe), zéro nouvelle.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web à haute confiance identifié ce cycle) : dead code /
+  god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+  `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+  `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
+  toolchains iOS/Android toujours hors d'atteinte dans ce sandbox.

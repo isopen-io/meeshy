@@ -287,6 +287,17 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       processorsRef.current.forEach((processor) => processor.destroy());
       processorsRef.current.clear();
       previouslyEnabledTypesRef.current = new Set();
+      if (mediaStreamDestinationRef.current) {
+        // The destination node stays wired into the shared, long-lived
+        // AudioContext graph until explicitly stopped — overwriting the ref
+        // on re-init (below, in initializeAudioPipeline) isn't enough, it
+        // just orphans the old node while it keeps generating audio into a
+        // MediaStream nobody reads from anymore. Left unstopped, this leaks
+        // CPU/battery on every mic/camera switch for the rest of the call.
+        mediaStreamDestinationRef.current.stream.getTracks?.().forEach((track) => track.stop());
+        mediaStreamDestinationRef.current.disconnect?.();
+        mediaStreamDestinationRef.current = null;
+      }
       if (inputStream) {
         isInitializedRef.current = false;
         setIsInitialized(false);
