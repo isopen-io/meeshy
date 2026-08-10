@@ -27,6 +27,18 @@ interface UseVideoCallOptions {
 
 export type CallMediaType = 'audio' | 'video';
 
+// Sibling of CALL_JOIN_ACK_TIMEOUT_MS (CallManager.tsx, Vague 88) and the
+// pre-existing SOCKET_ACK_TIMEOUT_MS pattern (use-post-mutations.ts /
+// use-comment-mutations.ts) — Socket.IO client 4.8 does NOT auto-reject a
+// pending ack callback when the transport drops between emit and response
+// unless the caller opts in via `socket.timeout(ms)`, which this call site
+// never did. A dropped `call:initiate` ack (transient disconnect right
+// after the emit, gateway restart mid-request, ordinary mobile flakiness)
+// left `startCallInFlightRef` stuck `true` forever — every subsequent Call
+// button click silently swallowed by the re-entrancy guard — and the
+// pre-authorized camera/mic stream never released.
+const CALL_INITIATE_ACK_TIMEOUT_MS = 10_000;
+
 interface UseVideoCallReturn {
   startCall: (type?: CallMediaType) => Promise<void>;
 }
@@ -109,56 +121,77 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         },
       };
 
-      socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (ack: CallInitiateAck) => {
-        // Whichever way the ack resolves, the attempt this ref was guarding
-        // against re-entrancy is over — clear it first so it can't be left
-        // stuck true by an early return below.
-        startCallInFlightRef.current = false;
-
-        // The gateway can reject call:initiate (callee busy/blocked/offline,
-        // rate-limited, validation error). Without handling this branch the
-        // pre-authorized camera/mic stream stays hot forever — the only
-        // consumer that releases it is VideoCallInterface, which never
-        // mounts because currentCall is never set — and the user is left
-        // staring at a "Starting call..." toast with no further feedback.
-        if (!ack?.success) {
-          stopPreauthorizedStream(stream);
-          toast.error(ack?.error?.message ?? 'Failed to start call. Please try again.');
-          return;
-        }
-
-        // Persist the server-provided ICE servers (STUN + time-limited TURN)
-        // so the initiator's RTCPeerConnection is built with TURN credentials
-        // before the SDP offer is created.
-        if (ack.data?.iceServers?.length) {
-          useCallStore.getState().setIceServers(ack.data.iceServers);
-        }
-
-        // P0 fix (2026-07-06) — the gateway deliberately never re-emits
-        // `call:initiated` back to the initiator's own socket(s) (it only
-        // notifies the OTHER conversation members); `CallManager`'s
-        // `isInitiator` branch that would set `currentCall`/`isInCall` is
-        // therefore unreachable for the caller on web. Without this, the
-        // callee gets rung correctly but the caller's own screen never shows
-        // the call UI. Set the call as current directly from the ack — the
-        // only data the caller actually needs to start rendering; the
-        // participants list is populated as callees join via the existing
-        // `call:participant-joined` handler (a no-op until `currentCall`
-        // exists, so this is the step that unblocks it).
-        if (ack.data?.callId && user) {
-          useCallStore.getState().setCurrentCall({
-            id: ack.data.callId,
-            conversationId: conversation.id,
-            mode: ack.data.mode,
-            status: 'initiated',
-            initiatorId: user.id,
-            startedAt: new Date(),
-            participants: [],
+      let ack: CallInitiateAck;
+      try {
+        ack = await new Promise<CallInitiateAck>((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('CALL_INITIATE_ACK_TIMEOUT')),
+            CALL_INITIATE_ACK_TIMEOUT_MS
+          );
+          socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (response: CallInitiateAck) => {
+            clearTimeout(timer);
+            resolve(response);
           });
-        }
+        });
+      } catch {
+        // Ack never arrived in time (dropped packet, gateway restart
+        // mid-request) — same fallback as an explicit ack failure below, so
+        // the guard is released and the pre-authorized stream is stopped
+        // either way.
+        startCallInFlightRef.current = false;
+        stopPreauthorizedStream(stream);
+        toast.error('Failed to start call. Please try again.');
+        return;
+      }
 
-        toast.success('Starting call...');
-      });
+      // Whichever way the ack resolves, the attempt this ref was guarding
+      // against re-entrancy is over — clear it first so it can't be left
+      // stuck true by an early return below.
+      startCallInFlightRef.current = false;
+
+      // The gateway can reject call:initiate (callee busy/blocked/offline,
+      // rate-limited, validation error). Without handling this branch the
+      // pre-authorized camera/mic stream stays hot forever — the only
+      // consumer that releases it is VideoCallInterface, which never
+      // mounts because currentCall is never set — and the user is left
+      // staring at a "Starting call..." toast with no further feedback.
+      if (!ack?.success) {
+        stopPreauthorizedStream(stream);
+        toast.error(ack?.error?.message ?? 'Failed to start call. Please try again.');
+        return;
+      }
+
+      // Persist the server-provided ICE servers (STUN + time-limited TURN)
+      // so the initiator's RTCPeerConnection is built with TURN credentials
+      // before the SDP offer is created.
+      if (ack.data?.iceServers?.length) {
+        useCallStore.getState().setIceServers(ack.data.iceServers);
+      }
+
+      // P0 fix (2026-07-06) — the gateway deliberately never re-emits
+      // `call:initiated` back to the initiator's own socket(s) (it only
+      // notifies the OTHER conversation members); `CallManager`'s
+      // `isInitiator` branch that would set `currentCall`/`isInCall` is
+      // therefore unreachable for the caller on web. Without this, the
+      // callee gets rung correctly but the caller's own screen never shows
+      // the call UI. Set the call as current directly from the ack — the
+      // only data the caller actually needs to start rendering; the
+      // participants list is populated as callees join via the existing
+      // `call:participant-joined` handler (a no-op until `currentCall`
+      // exists, so this is the step that unblocks it).
+      if (ack.data?.callId && user) {
+        useCallStore.getState().setCurrentCall({
+          id: ack.data.callId,
+          conversationId: conversation.id,
+          mode: ack.data.mode,
+          status: 'initiated',
+          initiatorId: user.id,
+          startedAt: new Date(),
+          participants: [],
+        });
+      }
+
+      toast.success('Starting call...');
     } catch (error: unknown) {
       startCallInFlightRef.current = false;
       stopPreauthorizedStream(stream);
