@@ -180,6 +180,28 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       // `call:participant-joined` handler (a no-op until `currentCall`
       // exists, so this is the step that unblocks it).
       if (ack.data?.callId && user) {
+        // Vague 91 — this ack can land up to CALL_INITIATE_ACK_TIMEOUT_MS
+        // after the request, long enough for the user to have accepted an
+        // unrelated incoming call in the meantime (CallManager's
+        // acceptOrJoinCall sets currentCall/isInCall on its own accord, with
+        // no coordination with this hook). Committing to this call now would
+        // silently clobber the single currentCall slot out from under a call
+        // the user is already actively in, re-pointing the mounted
+        // VideoCallInterface at a stale callId mid-conversation. Mirror
+        // CallManager.tsx's rejectWaitingCall precedent for the symmetric
+        // case (an unwanted second call while already in one): abandon the
+        // newcomer instead — end it on the wire so its callee isn't left
+        // ringing forever, and release the media acquired for it.
+        const activeCall = useCallStore.getState().currentCall;
+        if (activeCall && activeCall.id !== ack.data.callId) {
+          (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+            callId: ack.data.callId,
+            reason: 'rejected',
+          });
+          stopPreauthorizedStream(stream);
+          return;
+        }
+
         useCallStore.getState().setCurrentCall({
           id: ack.data.callId,
           conversationId: conversation.id,
