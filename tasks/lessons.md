@@ -1,5 +1,51 @@
 # Lessons
 
+## Leçon 95 — Une liste d'effets ne montre pas ce qui lui manque ; seul son JUMEAU le montre (2026-08-10, routine messaging, cycle 51)
+
+`applyPostRemovalEffects` a été créée exactement pour empêcher ce défaut : son en-tête raconte que
+la console avait rattrapé un par un, à trois cycles d'intervalle, ce que le service faisait et
+qu'elle ne faisait pas, et conclut « chaque omission a attendu son propre incident parce que rien ne
+NOMMAIT la liste ». La liste a été écrite. Elle a nommé trois effets. Le quatrième — retirer les
+notifications du post — n'y a jamais figuré, et l'unité créée contre l'oubli n'a rien signalé.
+
+Elle ne pouvait pas. **Une liste rend visible ce qu'elle contient, jamais ce qu'elle omet** : la
+relire donne trois effets cohérents, bien commentés, et aucun trou où pointer. Le nom même du
+fichier (« TOUT ce qu'un retrait de post doit écrire ») décourage la question, puisqu'il affirme la
+complétude.
+
+Ce qui la rend visible existait pourtant à une ligne de distance : le commentaire de tête nomme
+lui-même `applyMessageRemovalEffects` comme jumeau. **Deux listes jumelles se lisent en DIFF, pas
+l'une après l'autre.** Le diff donnait immédiatement le quatrième effet, présent d'un côté depuis
+deux cycles et absent de l'autre.
+
+Règle : dès qu'un module déclare un jumeau dans son propre commentaire, la revue de ce module est
+un diff avec ce jumeau. Corollaire d'audit : quand une famille de défauts se répète (ici la
+cinquième ligne dénormalisée survivant à son référent), ne pas chercher l'occurrence suivante par le
+mécanisme — la chercher par les PAIRES d'unités censées faire la même chose de part et d'autre d'une
+frontière de domaine.
+
+## Leçon 94 — Un défaut par récurrence se cherche par les paires, et se réfute par ses faux positifs (2026-08-10, routine messaging, cycle 51)
+
+La piste héritée du cycle 50 était juste, et la leçon 18 imposait quand même de la réfuter d'abord.
+La réfutation n'a pas consisté à revérifier que le défaut existe — ça, un `grep` le montre en dix
+secondes — mais à chercher **le cas qui rendrait le correctif faux**. Trois candidats, cherchés
+nommément avant la première ligne de code :
+
+1. une notification dont la clé de filtre désigne un AUTRE objet que celui qu'elle concerne
+   (`post_repost` porte `context.postId = originalPostId` et le repost dans `metadata.repostId` — il
+   allait dans le bon sens, mais rien ne le garantissait a priori) ;
+2. une notification ancrée sur l'objet supprimé dont la cible vivante est ailleurs ;
+3. une notification créée PAR le retrait, qui serait emportée par lui.
+
+Aucun n'existait, et c'est ce constat — pas le diagnostic — qui a autorisé un filtre sans
+distinction par `type`. **Le coût de la réfutation est le prix du filtre large** : sans elle, la
+seule écriture prudente aurait été une liste de types en dur, c'est-à-dire une quatrième chose à
+tenir à jour de mémoire.
+
+Contrepartie à retenir : au cycle 18, la même démarche avait au contraire INVALIDÉ le correctif
+suggéré. Les deux issues sont normales ; ce qui ne l'est pas, c'est de sauter l'étape parce que la
+piste vient d'un cycle qui, lui, avait raison sur le défaut.
+
 ## Leçon 93 — Restaurer une sonde avec `git checkout <fichier>`, c'est jeter tout ce qui n'est pas commité (2026-08-10, routine messaging, cycle 49b)
 
 Pour prouver qu'un test neuf est bien celui qui attrape le défaut, on neutralise le correctif et on

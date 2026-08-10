@@ -1,3 +1,157 @@
+# Cycle 51 — Le jumeau côté post avait reçu la liste, jamais les notifications
+
+Le cycle 50 nommait cette tête en toutes lettres, et la leçon 18 dit quoi en faire : une piste
+héritée est une **hypothèse à réfuter d'abord**. Réfutation tentée, défaut confirmé, correctif
+suggéré confirmé lui aussi — mais seulement après avoir cherché le cas qui l'aurait rendu faux.
+
+## D1 (racine) — la liste nomme trois effets, le quatrième n'y a jamais figuré
+
+`applyPostRemovalEffects` existe pour une raison écrite dans son propre en-tête : la console avait
+rattrapé un par un, à trois cycles d'intervalle, ce que le service faisait et qu'elle ne faisait
+pas — les usages de sons, puis la diffusion, puis l'audit et les liens de partage. « Chaque omission
+a attendu son propre incident parce que rien ne NOMMAIT la liste. »
+
+La liste a été écrite. Elle nomme l'audit, les `TrackingLink`, les usages de sons. Elle ne nomme pas
+les `Notification`. Le jumeau côté message les retire depuis le cycle 47, et ce jumeau est nommé
+dans le commentaire de tête du fichier — la comparaison était à une ligne de distance et personne ne
+l'a faite, parce que **ce qui manque à une liste ne se voit pas en lisant la liste**.
+
+Le mécanisme est celui des cycles 46/47/48/50, à sa cinquième occurrence et à sa plus grande
+échelle : retrait doux (`deletedAt`), donc pas de cascade ; lien porté par `context.postId`, un
+chemin dans un blob JSON, donc aucune relation déclarée à ne pas se déclencher ; copie
+**dénormalisée** du contenu prise à la création, donc aucun filtre à la lecture ne peut rattraper —
+`content`, `metadata.commentPreview`, et `metadata.firstAttachmentUrl`, qui est la vignette du média
+retiré. ≈ 8 100 lignes non lues en production au diagnostic du 2026-08-04.
+
+## D2 (réfutation de la piste) — trois faux positifs cherchés, aucun trouvé
+
+La piste disait « filtrer sur `context.postId` ». Le cycle 18 a montré qu'un filtre qui porte le nom
+d'une relation ne porte pas forcément la relation. Trois cas ont donc été cherchés avant d'écrire :
+
+1. **Une notification dont `context.postId` désigne un AUTRE post que celui qu'elle concerne.**
+   `post_repost` était le candidat : il porte `context.postId = originalPostId` et le repost lui-même
+   dans `metadata.repostId`. Supprimer le repost ne retire donc rien du post d'origine, et supprimer
+   l'original retire bien la notification « X a reposté votre post », qui n'a effectivement plus de
+   destination. Le seul écrivain asymétrique va dans le bon sens.
+2. **Une notification ancrée sur un post mais dont la cible vivante est ailleurs** (typiquement une
+   réponse de story qui atterrit dans une conversation). Les onze producteurs de `context.postId` ont
+   été relus : tous désignent le post lui-même, aucun ne double la clé avec un `messageId` vivant.
+3. **Une notification de modération « votre post a été retiré »** qui serait créée par le retrait et
+   emportée par lui. Aucune n'existe — ni le service ni la route console n'en créent.
+
+Rien n'oblige donc à distinguer par `type`, et c'est ce qui rend le filtre sûr.
+
+## D3 (les deux différences avec le jumeau message) — elles décident l'implémentation
+
+| | message rappelé | post retiré |
+|---|---|---|
+| Lien vers la ligne | colonne `Notification.messageId` | `context.postId`, chemin JSON |
+| Audience | quelques destinataires nommés | auteur + fil + amis prévenus |
+| Requête | `findMany` Prisma | `$runCommandRaw` (Prisma ne filtre pas les chemins JSON sur MongoDB) |
+| Scope `userId` | inutile | **projeté**, l'annonce se groupe par destinataire |
+| Volume | une passe suffit | **drainage** par lots |
+
+Le drainage est la seule addition que le jumeau n'a pas. Un lot plein ne prouve pas que la base est
+vide, et une lecture unique laisserait la queue en place **sans le moindre signal** — le premier
+lot, lui, a réussi. Lots de 200 en série : `announceNotificationsRetracted` déclenche un recalcul de
+compteurs par destinataire distinct, donc le lot borne la rafale de lectures concurrentes, et la
+sérialisation garde le pic à un lot quelle que soit la taille de l'audience. Plafond de 200 lots :
+il ne borne aucune audience réaliste, il empêche une boucle infinie si la suppression cessait un
+jour de faire progresser la lecture.
+
+## D4 (câblage) — les deux routes n'ont rien à câbler
+
+Le cycle 50 anticipait « l'annonceur doit descendre jusqu'à `applyPostRemovalEffects`, qui ne reçoit
+ni `NotificationService` ni port étroit ». Vrai, mais la descente n'a coûté aucun paramètre aux
+appelants : `applyMessageRemovalEffects` résout déjà son annonceur par **défaut de paramètre** sur
+`getSharedNotificationService()` — le service partagé du processus, le seul câblé avec `io`. Le même
+défaut ici couvre les deux routes (`DELETE /posts/:postId` via `PostService.deletePost`, et
+`DELETE /admin/posts/:postId` qui écrit `deletedAt` en direct) sans toucher ni au constructeur à
+sept paramètres de `PostService`, ni à la signature de `deletePost`, ni aux deux routes.
+
+Le port `RetractedNotificationAnnouncer` déménage de `messaging/` vers `notifications/`, à côté de
+son unique implémenteur. Le redéclarer sous `posts/` aurait fabriqué deux ports rivaux pour une
+seule règle — la configuration même que ces modules d'effets existent pour empêcher (cycle 45b).
+`messaging/` le ré-exporte : aucun importateur historique ne bouge.
+
+## D5 (place dans la liste) — après l'audit, avant les deux autres
+
+L'audit reste le premier effet écrit : c'est la trace de modération, et c'est la seule des quatre
+dont la perte est une perte de conformité. Le retrait vient juste après, avant les liens de partage
+et les usages de sons, parce que c'est le seul des quatre dont le **retard se voit** — tant qu'il
+n'a pas eu lieu, l'extrait du contenu retiré et la vignette de son média restent affichés dans
+l'inbox de toute l'audience. Best-effort comme les trois autres : `deletedAt` est déjà committé
+quand la liste s'exécute, et un retrait qui échoue ne doit pas transformer une suppression réussie
+en 500.
+
+## Plan
+- [x] T1 — RED (unité) : lecture par chemin JSON `context.postId`, projection `_id` + `userId`
+- [x] T2 — RED (unité) : toute l'audience retirée, chaque ligne annoncée à SON destinataire
+- [x] T3 — RED (unité) : un autre post et une notification hors post ne bougent pas
+- [x] T4 — RED (unité) : l'annonce vient APRÈS l'écriture durable
+- [x] T5 — RED (unité) : drainage au-delà d'un lot plein ; arrêt au premier lot incomplet
+- [x] T6 — RED (unité) : rien à retirer → aucune suppression, aucune annonce ; sans annonceur → les
+      lignes partent quand même ; échec Mongo → remonte (la liste d'effets décide de l'absorber)
+- [x] T7 — RED (liste) : `applyPostRemovalEffects` retire ; un échec n'emporte ni la suppression ni
+      les trois effets historiques
+- [x] T8 — GREEN : `retractPostNotifications` + 4e effet + port déménagé
+- [x] T9 — sondes de fidélité (leçon 45b) : trois défauts réintroduits un par un
+- [x] T10 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T11 — changeset + CHANGELOG + ce relevé
+
+## Vérification
+
+Rouges observés avant le correctif : `Cannot find module '../retractPostNotifications'` sur la suite
+d'unité, et TS2554 (« Expected 3-4 arguments, but got 5 ») sur la suite de liste d'effets.
+
+**Sondes de fidélité** — chaque témoin central re-vérifié en réintroduisant volontairement le
+défaut qu'il prétend attraper, restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoin qui tombe |
+|---|---|
+| `userId: objectId(rows[0]?.userId)` (tout le monde rabattu sur le premier destinataire) | « annonce chacune à SON destinataire » |
+| `return total` inconditionnel en fin de boucle (pas de drainage) | « draine au-delà d'un lot plein » |
+| appel au retrait supprimé de la liste d'effets | « retire les notifications que le post a produites » |
+
+Suite gateway complète sous bun (parité CI) : **638 suites, 16 204 tests, tout vert** (386 s).
+Couverture globale lignes **95,76 %** — inchangée. `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Aucune ligne déjà orpheline n'est rattrapée.** Le correctif ne vaut que pour les suppressions à
+  venir ; les ≈ 8 100 lignes des posts déjà supprimés restent en base. Réparable par le patron des
+  scripts existants (`repair-mention-user-ids.ts`) — action humaine, cette routine n'a aucun accès
+  MongoDB.
+- **Piste pour le cycle suivant, à traiter en HYPOTHÈSE (leçon 18).** Le même mécanisme a un sixième
+  candidat, un cran en dessous du post : la suppression d'un **commentaire**. `context.commentId`
+  est écrit par `comment_reaction`, `post_comment`, `comment_reply`, `comment_like`,
+  `story_new_comment`, `story_thread_reply` et `friend_story_comment` ; le retrait d'un commentaire
+  est doux lui aussi (`PostComment.deletedAt`, cf. `loadCommentPostAcl`). À vérifier AVANT d'écrire,
+  et dans cet ordre : (1) qui écrit `PostComment.deletedAt`, et ces écrivains partagent-ils une
+  liste d'effets nommée, ou sont-ils la configuration « quatre écrivains sans unité » du cycle 14 ?
+  (2) `context.commentId` désigne-t-il toujours LE commentaire supprimé, ou parfois son parent
+  (`context.parentCommentId` existe séparément — donc a priori oui, mais c'est exactement le genre
+  de colonne dont il faut lire les écrivains et non le nom) ? (3) le retrait d'un commentaire
+  doit-il vraiment emporter la notification, ou est-ce un cas de MARQUAGE comme la réponse à une
+  demande d'amitié ? Rien ne dit que l'arbitrage du post se transpose.
+- **Le retrait des `Mention` d'un post n'est pas dans la liste non plus.** `reconcilePostMentions`
+  retire les lignes des partants à l'ÉDITION ; aucun appel équivalent au retrait. Défaut probable de
+  la même famille, non instruit ce cycle — le vérifier avant de l'écrire.
+- **Le push APNs/FCM déjà délivré n'est pas rappelé.** Retirer la ligne éteint la liste in-app et la
+  cloche, pas la bannière déjà posée sur l'écran verrouillé. Chantier de contrat, pas correctif.
+- **`.gitignore:177` porte un `post-*` non ancré et non scopé** — il masque *tout* fichier dont le
+  nom commence par `post-`, à n'importe quelle profondeur. Rencontré en écrivant ce cycle : le
+  changeset nommé `post-removal-…` n'apparaissait pas dans `git status`, renommé pour contourner.
+  Aucune perte active aujourd'hui (`apps/web/__tests__/components/v2/post-card-enhanced.test.tsx`
+  est déjà suivi, donc le motif ne s'y applique plus), mais tout fichier `post-*` créé désormais
+  disparaît en silence. Non corrigé ici : le motif est voisin d'un bloc « Version files » sans
+  commentaire propre, et le restreindre demande de savoir ce qu'il visait — à instruire séparément.
+- Hérités et inchangés : `login_new_device` sans contexte de consommation ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le
+  gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 50b — La famille était de cinq. Elle est de quatre, et les quatre héritent.
 
 > **Session parallèle.** Deux sessions ont livré un cycle 50 en même temps, et pour une fois dans la
