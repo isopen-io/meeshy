@@ -71,6 +71,11 @@ struct ConversationScrollState {
     var isNearBottom: Bool = true
     var unreadBadgeCount: Int = 0
     var scrollToBottomTrigger: Int = 0
+    /// Incrémenté quand le lecteur déclare regarder le bas — ouverture, bouton
+    /// « dernier message », départ en arrière-plan. Le pont `MessageListView`
+    /// compare l'ancien et le nouveau pour vider l'accumulateur de lecture sans
+    /// attendre le seuil de présence.
+    var flushSeenTrigger: Int = 0
     var scrollToMessageId: String? = nil
     /// Counter incremented each time a scroll-to-message is requested via the
     /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
@@ -837,6 +842,11 @@ struct ConversationView: View {
                 viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
+                // Ouvrir une conversation, c'est en regarder le bas. Le signal
+                // near-bottom ne se déclenche pas ici (l'état naît déjà « au
+                // bas », donc sans transition) — d'où cette demande explicite,
+                // reprise au réveil suivant si les cellules n'ont pas encore paru.
+                scrollState.flushSeenTrigger += 1
                 MessageSocketManager.shared.connect()
 
                 await consumePendingHighlightMessage()
@@ -985,6 +995,10 @@ struct ConversationView: View {
                 // par iOS) — miroir du D1 story. Rebuild complet : la vérité
                 // est l'état courant du tray.
                 if phase == .background {
+                    // Ce qui était à l'écran a bien été lu : le signaler AVANT
+                    // que l'app ne s'endorme, sinon l'accusé attend le retour
+                    // en avant-plan — ou le démontage de la vue.
+                    scrollState.flushSeenTrigger += 1
                     persistDraftAttachmentsForBackground()
                 }
             }
@@ -1085,6 +1099,7 @@ struct ConversationView: View {
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
+                flushSeenTrigger: scrollState.flushSeenTrigger,
                 isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count

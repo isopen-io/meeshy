@@ -1570,6 +1570,13 @@ class ConversationListViewModel: ObservableObject {
         guard convIndex(for: conversationId) != nil else { return }
         // Local-first read sync (cache + cross-VM `.conversationMarkedRead`).
         await syncEngine.markConversationReadLocally(conversationId)
+        guard Self.shouldDispatchListMarkAsRead(
+            conversationId: conversationId,
+            activeConversationId: messageSocket.activeConversationId
+        ) else {
+            clearUnreadLocally(conversationId)
+            return
+        }
         // Server mark-read via the store: optimistic unreadCount=0 + outbox
         // offline replay. The gateway gates the read-RECEIPT broadcast to the
         // sender by the user's `showReadReceipts` preference (see
@@ -1578,6 +1585,34 @@ class ConversationListViewModel: ObservableObject {
         // Dropping it also fixes cross-device unread sync when receipts are off
         // (the server now records the read position regardless).
         try? await store.apply(.markAsRead, for: conversationId)
+    }
+
+    /// La conversation OUVERTE possède déjà son chemin de marquage, qui NOMME
+    /// au gateway les messages réellement affichés. Celui de la liste poste un
+    /// mark-read sans corps : le gateway y retombe sur son repli par fenêtre
+    /// temporelle, qui déclare lus des messages jamais montrés — un mensonge
+    /// aux expéditeurs. En split-view iPad les deux surfaces sont visibles en
+    /// même temps ; laisser la grossière doubler la précise annulerait
+    /// exactement ce que la seconde garantit.
+    nonisolated static func shouldDispatchListMarkAsRead(
+        conversationId: String,
+        activeConversationId: String?
+    ) -> Bool {
+        conversationId != activeConversationId
+    }
+
+    /// Efface la pastille de la ligne dans l'état publié courant. Le cache est
+    /// déjà à jour, mais son signal est débouncé : sans cette pose immédiate,
+    /// le geste resterait sans effet visible pendant deux dixièmes de seconde.
+    private func clearUnreadLocally(_ conversationId: String) {
+        guard let idx = convIndex(for: conversationId) else { return }
+        conversations[idx].userState.unreadCount = 0
+        for i in 0..<groupedConversations.count {
+            if let rowIdx = groupedConversations[i].conversations.firstIndex(where: { $0.id == conversationId }) {
+                groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
+                break
+            }
+        }
     }
 
     // MARK: - Mark as Unread
@@ -1867,15 +1902,7 @@ class ConversationListViewModel: ObservableObject {
         ) { [weak self] notification in
             guard let cid = notification.object as? String else { return }
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard let idx = self.convIndex(for: cid) else { return }
-                self.conversations[idx].userState.unreadCount = 0
-                for i in 0..<self.groupedConversations.count {
-                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
-                        self.groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
-                        break
-                    }
-                }
+                self?.clearUnreadLocally(cid)
             }
         }
     }

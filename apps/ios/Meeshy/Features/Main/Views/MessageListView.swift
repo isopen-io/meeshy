@@ -365,6 +365,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// (counter) so the bridge detects each distinct request.
     var scrollToMessageId: String? = nil
     var scrollToMessageTrigger: Int = 0
+    /// Incrémenté par le parent aux instants où le lecteur DÉCLARE regarder le
+    /// bas : ouverture de l'écran, bouton « dernier message », départ en
+    /// arrière-plan. Le pont déclenche alors `flushSeenNow()`, qui signale ce
+    /// qui est affiché sans attendre le seuil de présence.
+    var flushSeenTrigger: Int = 0
     /// True while the ViewModel is searching for a quoted message on the server.
     /// Drives the slow continuous scroll on the underlying UICollectionView.
     var isSearchingQuotedMessage: Bool = false
@@ -445,6 +450,7 @@ struct MessageListView: UIViewControllerRepresentable {
     class Coordinator {
         var lastScrollToBottomTrigger: Int = 0
         var lastScrollToMessageTrigger: Int = 0
+        var lastFlushSeenTrigger: Int = 0
         var wasSearchingQuotedMessage: Bool = false
     }
 
@@ -501,6 +507,10 @@ struct MessageListView: UIViewControllerRepresentable {
         if scrollToBottomTrigger != context.coordinator.lastScrollToBottomTrigger {
             context.coordinator.lastScrollToBottomTrigger = scrollToBottomTrigger
             vc.scrollToBottom(animated: true)
+        }
+        if flushSeenTrigger != context.coordinator.lastFlushSeenTrigger {
+            context.coordinator.lastFlushSeenTrigger = flushSeenTrigger
+            vc.flushSeenNow()
         }
         // If the trigger changed, FAST scroll to the requested message
         // (this fires after jumpToQuotedMessage loaded the target from server).

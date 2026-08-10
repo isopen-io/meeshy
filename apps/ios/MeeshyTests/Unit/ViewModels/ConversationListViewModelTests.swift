@@ -72,10 +72,14 @@ final class ConversationListViewModelTests: XCTestCase {
     /// the global `.shared` singleton — prevents cross-test pollution.
     /// `prefError` makes the preference writer throw (e.g. a 4xx for a
     /// permanent-failure rollback test).
-    static func makeTestStore(prefError: Error? = nil, lifecycleError: Error? = nil) -> ConversationStore {
+    static func makeTestStore(
+        prefError: Error? = nil,
+        lifecycleError: Error? = nil,
+        lifecycleWriter: ConvListTestLifecycleWriter? = nil
+    ) -> ConversationStore {
         let writer = ConvListTestPreferenceWriter()
         writer.errorToThrow = prefError
-        let lifecycle = ConvListTestLifecycleWriter()
+        let lifecycle = lifecycleWriter ?? ConvListTestLifecycleWriter()
         lifecycle.errorToThrow = lifecycleError
         let outboxPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("convlist-vm-outbox-\(UUID().uuidString).db").path
@@ -397,6 +401,58 @@ final class ConversationListViewModelTests: XCTestCase {
         await drainMainQueue()
 
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0)
+    }
+
+    // MARK: - markAsRead: conversation ouverte (split-view iPad)
+
+    /// La conversation à l'écran possède son propre chemin de marquage, qui
+    /// NOMME les messages réellement affichés. Le chemin de la liste poste un
+    /// mark-read SANS corps : le gateway retombe alors sur son repli par
+    /// fenêtre temporelle et déclare lus des messages jamais montrés. En
+    /// split-view iPad les deux surfaces coexistent, donc le cas est réel.
+    func test_markAsRead_whenConversationIsOpen_skipsTheWindowFallbackDispatch() async throws {
+        let lifecycle = ConvListTestLifecycleWriter()
+        let socket = MockMessageSocket()
+        socket.activeConversationId = "conv1"
+        let store = Self.makeTestStore(lifecycleWriter: lifecycle)
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
+
+        await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
+
+        XCTAssertTrue(lifecycle.markReadCalls.isEmpty,
+                      "le repli par fenêtre ne doit pas doubler le marquage exact de la conversation ouverte")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+                       "la pastille tombe quand même : la mise à jour optimiste locale est conservée")
+    }
+
+    func test_markAsRead_whenAnotherConversationIsOpen_stillDispatches() async throws {
+        let lifecycle = ConvListTestLifecycleWriter()
+        let socket = MockMessageSocket()
+        socket.activeConversationId = "conv-other"
+        let store = Self.makeTestStore(lifecycleWriter: lifecycle)
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
+
+        await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
+
+        XCTAssertEqual(lifecycle.markReadCalls, ["conv1"])
+    }
+
+    func test_shouldDispatchListMarkAsRead_onlyWhenTheConversationIsNotTheOpenOne() {
+        XCTAssertFalse(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: "c1"
+        ))
+        XCTAssertTrue(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: "c2"
+        ))
+        XCTAssertTrue(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: nil
+        ))
     }
 
     // MARK: - markAsRead: Failure (rollback)
@@ -3228,7 +3284,11 @@ final class ConvListTestPreferenceWriter: ConversationPreferenceWriting, @unchec
 
 final class ConvListTestLifecycleWriter: ConversationLifecycleWriting, @unchecked Sendable {
     var errorToThrow: Error?
-    func markRead(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+    private(set) var markReadCalls: [String] = []
+    func markRead(conversationId: String) async throws {
+        markReadCalls.append(conversationId)
+        if let e = errorToThrow { throw e }
+    }
     func markUnread(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func deleteForMe(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func leave(conversationId: String) async throws { if let e = errorToThrow { throw e } }
