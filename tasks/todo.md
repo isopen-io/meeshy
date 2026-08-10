@@ -1,3 +1,137 @@
+# Cycle 64 — La recherche de conversations était la dernière ligne hors Prisme
+
+## Contrainte d'environnement (identique aux cycles 61/63, revérifiée)
+
+Même conteneur Linux distant. `tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane
+Android reste **matériellement impossible** ici (`dl.google.com` refusé au CONNECT → pas de
+`sdkmanager`, donc pas de `./apps/android/meeshy.sh check`, le seul gate de cette lane). Ni macOS
+ni Xcode pour compiler du Swift. **`tasks/lane-cursor.md` n'a donc PAS été touché.**
+
+Ce cycle a pris la tête de backlog nommée par le cycle 62, sur la lane gatable ici — gateway. Il
+emporte AUSSI un correctif iOS, délibérément : voir §« Pourquoi du Swift dans un cycle sans Xcode ».
+
+## Le défaut
+
+**`GET /conversations/search` était la dernière route qui servait une ligne de conversation sans
+Prisme.** Le cycle 62 l'avait nommée « tête du prochain cycle » et annonçait un correctif
+« mécanique ». Il l'était — et le diagnostic tenait, vérifié point par point avant d'écrire une
+ligne :
+
+| Fait annoncé par le cycle 62 | Vérifié |
+|---|---|
+| `conversationMinimalSchema` DÉCLARE déjà les deux champs | oui (`api-schemas.ts:1294-1305`) |
+| la route construit son `lastMessage` à la main et ne les remplit jamais | oui (`search.ts:201`) |
+| même `include` Prisma, même helper, même `viewerLanguages` que `core.ts` | oui |
+
+Le point qui donne sa gravité au défaut : **la donnée était déjà payée**. Le `messages` de cette
+route utilise `include` (et non `select`), donc Prisma rapporte TOUS les scalaires du message —
+`translations` (colonne `Json?`) et `originalLanguage` compris. Le mapping manuel les jetait sans
+que rien ne le signale. Même famille que `metadata.location` avant le Lot 3, et le fichier
+documentait déjà cette leçon à trois lignes de l'endroit exact où elle se répétait.
+
+Conséquence utilisateur : un lecteur francophone qui cherche une conversation lit « Hello » dans le
+résultat, puis « Bonjour » sur la même conversation dans sa liste. Le serveur avait la traduction
+dans les deux cas.
+
+## Un second défaut, trouvé en le corrigeant
+
+`core.ts` tronque son aperçu (`truncateMessagePreview`, plafond 300 points de code) ; `search.ts`
+servait `msg.content` **brut**. Tant que la ligne n'avait pas de prisme, c'était une simple
+divergence de poids entre deux routes. Le correctif la rendait incohérente **à l'intérieur d'une
+même réponse** : `buildLastMessagePreviewTranslations` plafonne chaque aperçu traduit, donc un
+lecteur servi en français aurait reçu 300 caractères et un lecteur servi dans la langue d'origine
+le blob entier. Le poids de la ligne aurait dépendu de la langue du lecteur. Corrigé dans le même
+geste — ce n'est pas un élargissement de périmètre, c'est la conséquence directe du premier
+correctif.
+
+## Pourquoi du Swift dans un cycle sans Xcode
+
+La leçon du cycle 62 est qu'un champ posé sur le fil ne sert à rien tant que le client ne le lit
+pas — « quatre couches à câbler, pas une ». Vérifié ici avant de conclure quoi que ce soit :
+
+- **Web** : rien à faire. `searchConversations` (`crud.service.ts:159`) passe déjà ses résultats
+  par `transformConversationData`, que le cycle 62 a appris à propager les deux champs. Et
+  `SearchPageContent.tsx` ne rend aucun aperçu de dernier message (seulement `lastMessageAt`).
+- **iOS** : la chaîne s'arrêtait à un pas de l'arrivée. `APIConversation.toConversation` propage
+  bien les deux champs (`ConversationModels.swift:382-398`), mais `GlobalSearchViewModel` posait
+  `lastMessagePreview: conv.lastMessagePreview` — l'aperçu BRUT — sur ses **deux** chemins (cache
+  local et réseau), là où `ThemedConversationRow` résout via
+  `resolvedLastMessagePreview(preferredLanguages:)`. La ligne de résultat de recherche EST une
+  ligne de conversation ; elle affichait un autre texte que la liste pour la même conversation.
+
+Le correctif Swift est un remplacement d'appel, pas une conception : `resolvedLastMessagePreview`
+ne rend `nil` que si `lastMessagePreview` l'est déjà (relu ligne par ligne, `CoreModels.swift:234`),
+donc c'est un substitut exact. `MeeshyUser.preferredContentLanguages` fournit le prisme ordonné —
+seule autorité iOS sur cet ordre, jamais réimplémentée localement.
+
+**Ce Swift n'est pas gaté par la CI de PR** : `ios-tests.yml` ne tourne automatiquement que sur les
+push vers `dev` (décision du 2026-07-27, file d'attente macOS saturée), et `sdk-tests.yml` ne se
+déclenche que sur `packages/MeeshySDK/**`. Le gate a donc été demandé explicitement par
+`workflow_dispatch` sur la branche — voir §Vérification. Livrer le gateway seul aurait laissé la
+moitié client du cycle 62 se reproduire à l'identique une route plus loin.
+
+## Vérification
+
+**Rouge observé avant correctif** : 7 des 8 témoins gateway neufs rouges. Le 8e
+(« ne fait jamais fuiter le blob `translations` brut dans `lastMessage` ») passait déjà — c'est un
+garde-fou assumé, pas un témoin de défaut : il interdit qu'une future réécriture remplace le
+mapping manuel par un spread et renvoie le cryptogramme complet à chaque ligne de résultat.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| les deux champs ne sont jamais posés (le défaut d'origine) | 6 |
+| carte non restreinte au prisme (toutes les langues servies) | 3 |
+| aperçu original non tronqué (le second défaut) | 1 |
+| `deviceLocale` ignorée (prisme amputé de son 4e rang) | 1 |
+
+**Un témoin voisin est tombé, et c'est un fait à retenir** :
+`conversations-search-routes.test.ts` doublait `@meeshy/shared/utils/conversation-helpers` avec un
+mock qui n'exposait QUE `generateDefaultConversationTitle`. Ajouter un import à la route rendait
+`resolveUserLanguagesOrdered` `undefined` → 500 sur 4 témoins. Réparé comme
+`conversation-core.test.ts` le fait déjà : `...jest.requireActual(...)` puis surcharge du seul
+double voulu. Un mock d'objet-module qui énumère ses exports est un couplage caché à la liste des
+imports de la cible.
+
+**Gate gateway** : **649 suites / 16 353 tests**, 0 échec, couverture lignes **95,78 %** —
+strictement identique au relevé du cycle 62, donc inchangée. `routes/conversations/search.ts` :
+100 % lignes / 100 % fonctions, 95,23 % branches (la seule branche non couverte, ligne 246, est le
+`?? ''` de `senderPresenceVis.get` — préexistante, hors correctif). `tsc --noEmit` gateway :
+0 erreur.
+
+**Swift** : non exécuté localement (aucune chaîne Swift sur ce conteneur). 3 témoins ajoutés à
+`GlobalSearchViewModelTests` — langue primaire servie, refus de retomber sur une langue tierce
+(règle #1), langue d'origine au rang 2 qui ne rétrograde pas la primaire (règle #3, cycle 62).
+
+## Reste ouvert après ce cycle
+
+- **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** — trouvé en auditant les
+  consommateurs web de `searchConversations`. Surface d'outillage admin, faible valeur, et le
+  fichier traîne une dette de typage voisine (`(conv as unknown).lastMessage`). Non pris pour ne
+  pas mélanger deux sujets ; c'est le dernier rendu web d'aperçu non prismé connu.
+- **`ConversationSyncEngine.previewTranslations` (iOS, chemin socket) n'a toujours pas été audité
+  contre la règle de rang** (hérité du cycle 62, non pris).
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60). Question de
+  conception — payload PAR DESTINATAIRE — non tranchée.
+- **`normalizeConversation` reste un constructeur manuel de `Conversation` sans aucun appelant**
+  (cycle 62) : trancher s'il vit ou meurt.
+- **Un participant ANONYME n'a pas de prisme sur ce chemin** — vrai ici aussi :
+  `authContext.registeredUser` est `undefined` pour lui, donc `viewerLanguages` est vide et
+  `lastMessageTranslations` vaut `null`. Comportement identique à `GET /conversations`, donc
+  cohérent, mais toujours non résolu sur le fond (cycle 60, inchangé).
+- **Aucune traduction rétroactive de l'aperçu** (cycle 60, inchangé).
+- Hérités et non traités : `DELETE /sessions/:sessionId` ne coupe aucune socket (pont client
+  `sessionToken` au handshake) ; l'auth REST ne vérifie pas `UserSession.isValid` ; la suppression
+  de compte ne révoque aucune session ; `auth:session-revoked` n'est écouté ni par iOS ni par
+  Android ; `MaintenanceService.cleanupOrphanedAttachments` reste inerte ; les ~12 copies inline de
+  `unsetOrNull` ; `TrackingLink.messageId` est une colonne morte ; l'arbitrage `delete-for-me` du
+  cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le gateway (aucun
+  `eslint.config.js` depuis ESLint v9) ; `tsc` ne passe pas sur le web (1 190 erreurs
+  préexistantes, non gatées par la CI).
+
+---
+
 # Cycle 63 — « Toutes les sessions ont été déconnectées » était faux
 
 > **Collision de numérotation, résolue à la main — même patron que celle du relevé ci-dessous.**
