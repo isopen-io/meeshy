@@ -31,6 +31,12 @@ final class DependencyContainer {
     let dbPool: DatabasePool
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
+    /// Pont de persistance GRDB du feed. Possédé par le container — donc par
+    /// l'app — et non plus par `FeedView` : armé au montage de l'écran et
+    /// désarmé à sa disparition, il ratait tout ce qui arrivait pendant que le
+    /// feed n'était pas affiché (post créé, commentaire, réaction, traduction).
+    /// La persistance disque ne doit dépendre d'aucune vue.
+    let feedSocketHandler: FeedSocketHandler
     let thumbnailPrefetcher: ThumbnailPrefetcher
 
     /// Q3 (P1 hotfix) — Combine subscriptions tenues par le container.
@@ -69,7 +75,9 @@ final class DependencyContainer {
         self.dbPool = pool
         let persistence = MessagePersistenceActor(dbWriter: pool)
         self.messagePersistence = persistence
-        self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
+        let feed = FeedPersistenceActor(dbWriter: pool)
+        self.feedPersistence = feed
+        self.feedSocketHandler = FeedSocketHandler(persistence: feed)
         self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
         self.initDiagnostics = diagnostics
 

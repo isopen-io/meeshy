@@ -997,12 +997,6 @@ class FeedViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
-        // Ré-arme le bridge de persistance GRDB désarmé par
-        // `unsubscribeFromSocketEvents` à l'onDisappear : il restait sinon
-        // désarmé en permanence après le premier aller-retour sur le feed
-        // (le `arm()` initial n'était fait que dans le bloc one-shot
-        // `feedStore == nil` du setup). `arm()` est idempotent.
-        feedSocketHandler?.arm()
         guard socketCancellables.isEmpty else { return }
         let isRearm = hasSubscribedOnce
         hasSubscribedOnce = true
@@ -1244,10 +1238,13 @@ class FeedViewModel: ObservableObject {
             .store(in: &socketCancellables)
     }
 
+    /// Coupe les sinks d'UI du feed. Le pont de persistance GRDB
+    /// (`FeedSocketHandler`) N'EST PAS désarmé ici : il est armé une fois pour
+    /// toutes au niveau app (`RootView`), parce que la persistance disque ne
+    /// doit dépendre d'aucun écran monté.
     func unsubscribeFromSocketEvents() {
         socketCancellables.removeAll()
         socialSocket.unsubscribeFeed()
-        feedSocketHandler?.disarm()
     }
 
     // MARK: - Media Prefetch
