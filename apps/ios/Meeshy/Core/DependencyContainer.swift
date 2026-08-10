@@ -244,7 +244,7 @@ final class DependencyContainer {
                     // rejouées dès l'init de chaque surface) et
                     // PendingStatusQueue. (pending_mark_read App Group est
                     // couvert par le wipe appgroup-01 — pas de doublon ici.)
-                    await ImpressionBatcher.purgeAllPendingImpressions()
+                    ImpressionBatcher.purgeAllPendingImpressions()
                     await PendingStatusQueue.shared.clearAll()
                 }
             }
