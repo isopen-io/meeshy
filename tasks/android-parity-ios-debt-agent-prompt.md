@@ -136,6 +136,23 @@ légitimement trop gros pour un slice (ex. `OnboardingFlowView`, 8 étapes d'UI 
 et la bonne action est de documenter une décomposition concrète en sous-slices plutôt que de le
 re-proposer tel quel.
 
+**Angle mort catégoriel (trouvé à l'itération 19, par l'utilisateur) : le choix de slice re-lit
+`feature-parity.md` mais ne se demande jamais quelles CATÉGORIES ENTIÈRES en sont absentes.**
+L'audit source (`tasks/audit/part-01..23.md`) n'a lu que les fichiers `.swift` — les asset
+catalogs iOS (`.xcassets`) ont échappé à l'audit, donc l'icône de l'app (aucun `mipmap-*`, aucun
+`android:icon` dans `AndroidManifest.xml`, l'app tourne avec l'icône générique Android) n'a jamais
+été une ligne de checklist nulle part. Résultat : 18 runs consécutifs sur des écrans applicatifs
+(auth/conversations), zéro sur les intégrations plateforme natives — pas parce qu'elles sont
+faites, mais parce qu'aucun mécanisme ne les fait remonter en RE-PROUVANT une note existante sur
+un item qui n'a jamais eu de note. **Périodiquement (tous les ~5 runs Android, ou dès que le
+pointeur « Next slice » se répète sans conviction), vérifie explicitement l'existence — pas juste
+l'état — de ces catégories** : icône de l'app / icône adaptative, splash screen, widgets
+écran d'accueil (`AppWidgetProvider`/`GlanceAppWidget` — grep, zéro résultat = zéro
+implémentation), Picture-in-Picture, taxonomie des canaux de notification (`NotificationChannel`,
+~80 types de notifications à couvrir par `ARCHITECTURE.md §18`). Si une catégorie entière manque
+de ligne dans `feature-parity.md`, AJOUTE-la explicitement (c'est corriger un trou d'audit, pas une
+nouvelle exigence produit) avant de décider de la traiter ou de la différer.
+
 **Condition de complétion (« 100 % parité perf/qualité »)** : toutes les cases de
 `feature-parity.md` cochées **et vérifiées**, **et** les gates de `ARCHITECTURE.md §17` actifs et
 verts — Roborazzi (charte graphique), `:macrobenchmark` (cold-start ≤ 1 s + scroll jank),
