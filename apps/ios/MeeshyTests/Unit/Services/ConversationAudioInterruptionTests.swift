@@ -82,4 +82,37 @@ final class ConversationAudioInterruptionTests: XCTestCase {
         XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
         XCTAssertEqual(engine.pauseCallCount, 0)
     }
+
+    /// Une interruption armée AVANT le retrait des AirPods ne doit pas survivre à
+    /// ce retrait : `.routeChangedOldDeviceUnavailable` doit désarmer
+    /// inconditionnellement, sinon `.interruptionEndedShouldResume` relance la
+    /// lecture alors que les AirPods sont débranchés.
+    func test_routeChangedDuringInterruption_disarmsResume() async {
+        let (sut, engine) = makeSUT()
+        engine.isPlaying = true
+        await drainMainQueue()
+        sut.handleSessionEvent(.interruptionBegan)
+        await drainMainQueue()
+
+        sut.handleSessionEvent(.routeChangedOldDeviceUnavailable)
+        sut.handleSessionEvent(.interruptionEndedShouldResume)
+
+        XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
+    }
+
+    /// Une interruption armée avant un appel Meeshy (CallKit) ne doit pas
+    /// survivre à la frontière de suspension : sinon un `.interruptionEndedShouldResume`
+    /// tardif renverserait la décision de `resumeAfterSystemCall()`.
+    func test_interruptionArmedFlag_clearedBySuspendForSystemCall() async {
+        let (sut, engine) = makeSUT()
+        engine.isPlaying = true
+        await drainMainQueue()
+        sut.handleSessionEvent(.interruptionBegan)
+
+        sut.suspendForSystemCall()
+        sut.resumeAfterSystemCall()
+        sut.handleSessionEvent(.interruptionEndedShouldResume)
+
+        XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
+    }
 }

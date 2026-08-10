@@ -189,6 +189,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
         guard !_isSuspendedBySystemCall else { return }
         _isSuspendedBySystemCall = true
         _wasPlayingBeforeSystemCall = isPlaying
+        // Une interruption système armée avant l'appel (Siri, autre appel) ne
+        // doit pas survivre à la frontière : sans ce reset, un
+        // `.interruptionEndedShouldResume` tardif renverserait la décision de
+        // `resumeAfterSystemCall()`.
+        wasPlayingBeforeInterruption = false
         clearNowPlayingForSystemCall()
         setRemoteCommandsEnabled(false)
     }
@@ -263,6 +268,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
         case .interruptionEndedShouldNotResume:
             wasPlayingBeforeInterruption = false
         case .routeChangedOldDeviceUnavailable:
+            // Désarme INCONDITIONNELLEMENT, avant le guard `isPlaying` : une
+            // interruption déjà armée (ex. Siri en cours) ne doit pas survivre
+            // à un retrait d'AirPods pendant cette même interruption — sinon
+            // `.interruptionEndedShouldResume` relance la lecture alors que le
+            // périphérique de sortie vient d'être débranché. Convention iOS :
+            // débrancher = pause, sans reprise automatique.
+            wasPlayingBeforeInterruption = false
             guard isPlaying else { return }
             engine.pause()
         case .routeChangedOther, .callEndedShouldResume:
