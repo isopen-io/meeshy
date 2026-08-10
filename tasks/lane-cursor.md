@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=5 last_run=feed-composer-camera-capture
+lane=IOS_DETTE android_streak=0 last_run=state-store-dead-loading-booleans
