@@ -1055,3 +1055,56 @@ Append-only log of gotchas and decisions that save time next run.
   Distinguishing and stating precisely which half of the on-device story is proven vs. which half
   rests on code-level evidence (decompiled bytecode + Android's own documented canonical fix
   pattern) is more useful to the next reader than either extreme.
+
+## Slice `chat-inverted-list-flip` (2026-08-10)
+- **A manual mutation-test cleanup with `git checkout -- <file>` discards the file's real
+  uncommitted diff along with the mutation, not just the mutation.** After the first mutation-test
+  pass (temporarily swapping `ChatScrollGeometry.bottomEdgeIndex`'s two `when` branches to confirm
+  the discriminating tests fail), reverting with `git checkout -- feature/chat/.../
+  ChatScrollGeometry.kt` restored the file to its pre-slice `origin/main` state — wiping out the
+  legitimate new production code (the `bottomEdgeIndex`/`topEdgeIndex` functions themselves, still
+  uncommitted) along with the mutation, since `git checkout --` always restores from the index/HEAD,
+  not from "whatever the file looked like a moment ago." Caught immediately (the tool's own diff
+  view showed the file collapse to its original ~80 lines) and fixed by re-applying the two `Edit`
+  calls from scratch. The correct pattern for in-place mutation testing on a file with real
+  uncommitted changes: `cp file file.orig` before mutating, `cp file.orig file` (not `git checkout`)
+  to restore, `rm file.orig` after — verified with `git diff --stat` immediately after each restore
+  to confirm the legitimate diff is still exactly what it should be before moving to the next
+  mutation.
+- **Compose's `reverseLayout = true` swaps which of `LazyListState.firstVisibleItemIndex` /
+  `layoutInfo.visibleItemsInfo.last().index` answers "the bottom edge" vs. "the top edge" — neither
+  reading's own meaning changes, only which chat-semantic question it answers.** Under the app's
+  pre-flip `TopDown` layout, the newest message renders last (highest index), so the *highest*
+  visible index is the bottom edge and the *lowest* is the old/top edge — exactly what the
+  pre-existing ad-hoc code read. Under `reverseLayout` (`BottomUp`), item index 0 renders at the
+  visual bottom, so the mapping inverts: the *lowest* visible index is now the bottom edge, the
+  *highest* is the old/top edge. Missing this swap silently breaks `isNearBottom`/`isNearOldEnd`'s
+  edge reading without any compile error — worth its own two pure, mutation-tested functions
+  (`ChatScrollGeometry.bottomEdgeIndex`/`topEdgeIndex`) rather than inlining the `if` at each of the
+  4 call sites that need it, both to keep the branch tested once and to make the "which raw index
+  means which edge" mapping a single, greppable place instead of four independent judgment calls.
+- **Reversing a list's item order also reverses the relative order WITHIN each grouped block, which
+  can flip a "scan backward to find the header" into "scan forward" — work it out on a concrete
+  example before writing the code, don't trust intuition.** `PinnedDayHeader`'s day-header blocks are
+  `[DayHeader, message, message, ...]` in the natural (oldest-first) list — a header always precedes
+  the rows it governs, so finding "the governing header for row N" scans backward
+  (`N downTo 0`). Reversing the whole list turns each block into `[..., message, message, DayHeader]`
+  — the header now trails the rows it governs — so the equivalent search over the REVERSED list must
+  scan forward (`N..lastIndex`) instead. Both scan directions coexist in the same function,
+  discriminated by `orientation`; writing out a concrete `[DayHeader(d1), m1, DayHeader(d2), m2, m3]`
+  → reversed `[m3, m2, DayHeader(d2), m1, DayHeader(d1)]` example on paper (now preserved in the
+  test file's own comments) before touching the implementation is what caught the direction flip
+  before it became a bug rather than after.
+- **`uiautomator dump`'s captured bounds go stale the instant the keyboard/IME animates the layout
+  — re-dump immediately before each tap rather than reusing an earlier dump's coordinates.** A
+  composer-send-button tap computed from a dump taken right after the keyboard opened missed (landed
+  on the message list instead, causing an incidental scroll with no visible error) because the
+  keyboard's slide-in animation had already shifted the composer's Y position by the time the tap
+  landed a few hundred ms later. Re-dumping `uiautomator` immediately before the tap (not reusing the
+  bounds from an earlier dump in the same interaction sequence) resolved it on the next attempt.
+- **A shared QA/test conversation already salted with prior runs' test strings (`REPRO-*`,
+  `TEST-P1*`) is a reasonable, low-risk place to leave a new on-device verification artifact
+  (`flip-test-verify`) rather than chasing a swipe-to-delete gesture that dismissed the action sheet
+  instead of scrolling it.** Matches the existing convention in that specific conversation rather
+  than introducing a new hygiene concern; not worth extra automation fragility to clean up when the
+  conversation's whole purpose is already routine-verification scratch space.
