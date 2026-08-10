@@ -502,6 +502,27 @@ describe('MeeshySocketIOManager', () => {
   let manager: MeeshySocketIOManager;
   let prisma: ReturnType<typeof makePrisma>;
   let translationService: ReturnType<typeof makeTranslationService>;
+  /**
+   * The module-level `io` double funnels every chain into ONE `emit` mock, so
+   * `expect(ioState.to).toHaveBeenCalledWith(room)` proves only that some
+   * emitter addressed that room — never which event landed there. This swaps in
+   * a chain that keeps rooms and event together, and restores the shared double
+   * afterwards so no later test inherits the override.
+   */
+  function recordEmitChains(state: ReturnType<typeof getIoState>) {
+    const sent: Array<{ rooms: string[]; event: string }> = [];
+    const chain = (rooms: string[]): any => ({
+      to: (room: string) => chain([...rooms, room]),
+      except: () => chain(rooms),
+      emit: (event: string) => { sent.push({ rooms, event }); },
+    });
+    state.to.mockImplementation(((room: string) => chain([room])) as never);
+    return {
+      roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+      restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
+    };
+  }
+
   let ioState: ReturnType<typeof getIoState>;
 
   beforeEach(async () => {
@@ -1888,6 +1909,32 @@ describe('MeeshySocketIOManager', () => {
           lastMessagePreview: 'hello list',
         })
       );
+    });
+
+    it('addresses an accountless participant by its participant id in CONVERSATION_UPDATED', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'hello link guest',
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      // A conversation opened through a share link: the guest has no `User` row,
+      // and `AuthHandler` joins its socket to `user:<Participant.id>`.
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-anonymous', userId: null, joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      // Bound to the EVENT, not merely to `io.to`: `conversation:unread-updated`
+      // already reaches this room with the right key, and would mask the defect.
+      expect(sent.roomsFor(SERVER_EVENTS.CONVERSATION_UPDATED)).toContain(ROOMS.user('part-anonymous'));
     });
 
     it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {
@@ -4507,6 +4554,31 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
 
       expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
+    });
+
+    it('chains an accountless peer by its participant id so a link guest sees the checkmark advance', async () => {
+      const userId = 'user-drain-anon-peer';
+      const convId = '507f1f77bcf86cd799439213';
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = makeReadStatusSvc();
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-self', conversationId: convId, userId },
+        { id: 'part-anonymous', conversationId: convId, userId: null },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await (manager as any)._emitDeliveryForDrainedMessages(userId, [
+          { messageId: 'msg-a', conversationId: convId, payload: {}, enqueuedAt: 1 },
+        ]);
+      } finally {
+        sent.restore();
+      }
+
+      // The accountless peer may well be the message AUTHOR waiting on the
+      // sent→delivered tick; its personal room is `user:<Participant.id>`.
+      expect(sent.roomsFor(SERVER_EVENTS.READ_STATUS_UPDATED)).toContain(ROOMS.user('part-anonymous'));
     });
 
     it('marks received and emits READ_STATUS_UPDATED per conversation when showReadReceipts is true', async () => {

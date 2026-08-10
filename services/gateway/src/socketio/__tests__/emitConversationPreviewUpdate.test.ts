@@ -4,18 +4,21 @@ import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate'
 
 type Emitted = { room: string; event: string; payload: any };
 
+// Chainable double: `io.to(a).to(b).emit(e, p)` records one entry per room so
+// every assertion below reads the rooms actually addressed, regardless of
+// whether the emitter loops or chains.
 function makeIo(sink: Emitted[]) {
-  return {
-    to: (room: string) => ({
-      emit: (event: string, payload: unknown) => {
-        sink.push({ room, event, payload });
-      },
-    }),
-  };
+  const chain = (rooms: readonly string[]) => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: unknown) => {
+      for (const room of rooms) sink.push({ room, event, payload });
+    },
+  });
+  return { to: (room: string) => chain([room]) };
 }
 
 function makePrisma(
-  participants: Array<{ userId: string | null }>,
+  participants: Array<{ id?: string; userId: string | null }>,
   latest: { id: string; content: string | null; senderId: string; createdAt: Date } | null,
 ) {
   return {
@@ -59,17 +62,35 @@ describe('emitConversationPreviewUpdate', () => {
     });
   });
 
-  it('skips anonymous participants (no userId) and dedupes repeated userIds', async () => {
+  it('addresses an accountless participant by its participant id, and dedupes repeated userIds', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma(
-      [{ userId: 'user-A' }, { userId: null }, { userId: 'user-A' }],
+      [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-anonymous', userId: null },
+        { id: 'p-A-second-device-row', userId: 'user-A' },
+      ],
       latest,
     );
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
-    expect(emitted).toHaveLength(1);
-    expect(emitted[0].room).toBe('user:user-A');
+    // A conversation opened through a share link is populated with anonymous
+    // participants, and `AuthHandler` joins them to `user:<Participant.id>`.
+    // Skipping them does not avoid a room that does not exist — their list row
+    // simply never learns the preview changed.
+    expect(emitted.map((e) => e.room)).toEqual(['user:user-A', 'user:p-anonymous']);
+  });
+
+  it('selects the participant id so the accountless fallback identity can be read at all', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect((prisma.participant.findMany as jest.Mock).mock.calls[0][0]).toMatchObject({
+      select: { id: true, userId: true },
+    });
   });
 
   it('emits a null preview when the last message of the conversation was deleted', async () => {

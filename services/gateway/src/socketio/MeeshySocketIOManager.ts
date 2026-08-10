@@ -35,6 +35,8 @@ import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
+import { emitToConversationParticipants } from './emitToConversationParticipants';
+import { emitToParticipantRooms, type ParticipantRoomTarget } from './emitToParticipantRooms';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -517,15 +519,16 @@ export class MeeshySocketIOManager {
 
     // conversationId → the reconnecting user's participantId (drives markReceived)
     const ownParticipant = new Map<string, string>();
-    // conversationId → every participant's userId (drives the user-room fanout)
-    const convUserIds = new Map<string, string[]>();
+    // conversationId → every participant (drives the user-room fanout). Kept
+    // whole rather than reduced to userIds: an accountless peer is addressed by
+    // its `Participant.id`, and it may well be the author waiting on the
+    // sent→delivered tick.
+    const convParticipants = new Map<string, ParticipantRoomTarget[]>();
     for (const row of participantRows) {
       if (row.userId === userId) ownParticipant.set(row.conversationId, row.id);
-      if (row.userId) {
-        const list = convUserIds.get(row.conversationId) ?? [];
-        list.push(row.userId);
-        convUserIds.set(row.conversationId, list);
-      }
+      const list = convParticipants.get(row.conversationId) ?? [];
+      list.push({ id: row.id, userId: row.userId });
+      convParticipants.set(row.conversationId, list);
     }
 
     await Promise.allSettled(
@@ -549,18 +552,14 @@ export class MeeshySocketIOManager {
         // sibling emitters of this same event — `autoDeliverToOnlineRecipients`
         // and `broadcastReadStatusUpdate` — which fan out identically so authors
         // never get stuck on a single "sent" tick after navigating away.
-        const convRoom = ROOMS.conversation(conversationId);
-        let emitter = this.io.to(convRoom);
-        const seenRooms = new Set<string>([convRoom]);
-        for (const pUserId of convUserIds.get(conversationId) ?? []) {
-          const userRoom = ROOMS.user(pUserId);
-          if (seenRooms.has(userRoom)) continue;
-          seenRooms.add(userRoom);
-          emitter = emitter.to(userRoom);
-        }
-        emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
-        emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
-        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms: [...seenRooms] });
+        const rooms = emitToConversationParticipants({
+          io: this.io,
+          conversationId,
+          participants: convParticipants.get(conversationId) ?? [],
+          events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+          payload: drainPayload,
+        });
+        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms });
       })
     );
   }
@@ -2166,10 +2165,14 @@ export class MeeshySocketIOManager {
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
-          for (const p of allParticipants) {
-            if (!p.userId) continue;
-            this.io.to(ROOMS.user(p.userId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
-          }
+          // Accountless participants are addressed by their `Participant.id`,
+          // like the WS send path — the shared unit owns that rule.
+          emitToParticipantRooms({
+            io: this.io,
+            participants: allParticipants,
+            events: [SERVER_EVENTS.CONVERSATION_UPDATED],
+            payload: updatePayload,
+          });
 
           // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
           // Délégué à l'unité partagée par les trois transports d'envoi : la copie
