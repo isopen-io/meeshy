@@ -5,6 +5,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { MessagingService } from '../../services/messaging/MessagingService';
+import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
 import {
   buildPostReplyTo,
   postReplyToFromMetadata,
@@ -2545,32 +2546,48 @@ export function registerMessagesRoutes(
 
       const now = new Date();
 
-      const updated = await prisma.message.update({
-        where: { id: messageId },
-        data: { viewOnceCount: { increment: 1 } }
-      });
+      // Le spectateur, et non l'appelant. Un anonyme porte un jeton de session
+      // dans `authContext.userId` : le chercher par `userId` ne trouvait
+      // jamais sa ligne, si bien qu'il dépensait le budget sans laisser la
+      // moindre trace de l'avoir fait. Même ordre de résolution que
+      // `canAccessConversation`, dont le succès garantit qu'une de ces deux
+      // lectures aboutit.
+      const viewParticipant = authRequest.authContext.participantId
+        ? await prisma.participant.findFirst({
+            where: { id: authRequest.authContext.participantId, conversationId: message.conversationId, isActive: true },
+            select: { id: true }
+          })
+        : await prisma.participant.findFirst({
+            where: { conversationId: message.conversationId, userId, isActive: true },
+            select: { id: true }
+          });
 
-      const maxViewOnceCount = (message as any).maxViewOnceCount ?? 1;
-      const newViewOnceCount = updated.viewOnceCount ?? 1;
-      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
-
-      // Update status entry for this user
-      const viewParticipant = await prisma.participant.findFirst({
-        where: { conversationId: message.conversationId, userId, isActive: true },
-        select: { id: true }
-      });
-      if (viewParticipant) {
-        await prisma.messageStatusEntry.updateMany({
-          where: { messageId, participantId: viewParticipant.id },
-          data: { viewedOnceAt: now, revealedAt: now }
-        });
+      if (!viewParticipant) {
+        return sendForbidden(reply, 'Not a participant');
       }
+
+      // Une unité par SPECTATEUR, pas par ouverture. Le compteur était
+      // incrémenté à chaque appel : un rejeu de la requête, ou un destinataire
+      // qui rouvre la photo, épuisait le budget des autres membres du groupe.
+      const { viewOnceCount: newViewOnceCount, firstConsumption } = await recordViewOnceConsumption(prisma, {
+        messageId,
+        conversationId: message.conversationId,
+        participantId: viewParticipant.id,
+        currentViewOnceCount: message.viewOnceCount ?? 0,
+        at: now
+      });
+
+      const maxViewOnceCount = message.maxViewOnceCount ?? 1;
+      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
 
       logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
 
-      // Broadcast consume event via Socket.IO
-      if (socketIOHandler) {
-        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:consumed', {
+      // Annoncé seulement quand l'état a CHANGÉ. Rediffuser un compte identique
+      // à toute la room n'apprend rien à personne et, sur un rejeu, ferait
+      // clignoter chez les pairs un événement qui ne correspond à aucune
+      // ouverture nouvelle.
+      if (socketIOHandler && firstConsumption) {
+        fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_CONSUMED, {
           messageId,
           conversationId,
           userId,
