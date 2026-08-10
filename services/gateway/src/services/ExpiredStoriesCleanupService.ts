@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { getSharedNotificationService } from './notifications/notification-service-registry';
+import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
+import { retractPostNotifications } from './posts/retractPostNotifications';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 
 const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
@@ -65,7 +68,16 @@ export class ExpiredStoriesCleanupService {
   /// 1. Soft-delete `STORY` posts where `expiresAt < now()` and not already deleted.
   /// 2. Hard-delete soft-deleted stories whose `expiresAt` is older than
   ///    `hardDeleteAgeMs` (well past any client cache TTL).
-  async cleanup(): Promise<{ softDeleted: number; hardDeleted: number }> {
+  ///
+  /// `announcer` — même résolution que `applyPostRemovalEffects` et
+  /// `applyMessageRemovalEffects` : défaut de paramètre sur le service partagé
+  /// du processus, le seul câblé avec `io`. Évalué à CHAQUE appel, ce qui est
+  /// ici nécessaire et pas seulement commode — ce service est construit au
+  /// démarrage, avant l'enregistrement du service partagé, donc une injection
+  /// par constructeur capturerait `undefined` pour toujours.
+  async cleanup(
+    announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  ): Promise<{ softDeleted: number; hardDeleted: number }> {
     const now = new Date();
     const hardDeleteCutoff = new Date(now.getTime() - this.hardDeleteAgeMs);
 
@@ -112,6 +124,23 @@ export class ExpiredStoriesCleanupService {
         });
         const repostIds = repostRows.map((p) => p.id);
         const allPostIds = [...ids, ...repostIds];
+
+        // Les notifications que ces posts ont produites. Ancrées sur la
+        // DESTRUCTION, pas sur l'expiration : tant que la story n'est que
+        // périmée, sa notification reste une trace légitime — les deux clients
+        // l'affichent marquée « expirée » depuis `context.postExpiresAt`, et
+        // `getPostById` ne filtre pas l'expiration, donc la cible répond
+        // encore. Ici les deux appuis tombent ensemble : la ligne garde une
+        // copie dénormalisée d'un contenu qui n'existe plus, son `view_post`
+        // n'ouvre qu'un 404, et son badge non lu ne peut plus être décrémenté.
+        //
+        // Placé AVANT toute suppression, et il REJETTE volontairement — même
+        // raison que `releasePosts` juste en dessous : `context.postId` n'a ni
+        // relation ni cascade, donc détruire les posts après un retrait en
+        // échec laisserait des lignes que plus aucun chemin n'atteindrait, la
+        // passe suivante ne voyant plus les posts. Le `catch` de cette passe
+        // rattrape, la passe horaire suivante rejoue tout.
+        await retractPostNotifications(this.prisma, allPostIds, announcer);
 
         // G7 — collect comment ids BEFORE deleting them: their media rows
         // (PostMedia.commentId, `onDelete: SetNull`) must be purged too.

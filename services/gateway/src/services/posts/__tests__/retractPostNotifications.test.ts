@@ -69,8 +69,10 @@ const prisma = {
 function seed(seeded: NotificationRow[]): void {
   rows = [...seeded];
   runCommandRaw.mockImplementation(async (command: any) => {
-    const wanted = command?.filter?.['context.postId'];
-    const matched = rows.filter((row) => wanted === undefined || row.postId === wanted);
+    const wanted: string[] | undefined = command?.filter?.['context.postId']?.$in;
+    const matched = rows.filter(
+      (row) => wanted === undefined || (row.postId !== null && wanted.includes(row.postId))
+    );
     const batch = matched.slice(0, command?.batchSize ?? matched.length);
     return {
       cursor: {
@@ -103,12 +105,12 @@ describe('retractPostNotifications', () => {
   it('lit par le chemin JSON context.postId — la seule trace du post sur la ligne', async () => {
     seed([notification('n1', AUTHOR_ID, POST_ID)]);
 
-    await retractPostNotifications(prisma, POST_ID, announcer);
+    await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(runCommandRaw).toHaveBeenCalledWith(
       expect.objectContaining({
         find: 'Notification',
-        filter: { 'context.postId': POST_ID },
+        filter: { 'context.postId': { $in: [POST_ID] } },
         projection: { _id: 1, userId: 1 },
       })
     );
@@ -121,7 +123,7 @@ describe('retractPostNotifications', () => {
       notification('n-ami', FRIEND_ID, POST_ID),
     ]);
 
-    const count = await retractPostNotifications(prisma, POST_ID, announcer);
+    const count = await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(count).toBe(3);
     expect(deleteMany).toHaveBeenCalledWith({
@@ -141,7 +143,7 @@ describe('retractPostNotifications', () => {
       notification('n-hors-post', AUTHOR_ID, null),
     ]);
 
-    await retractPostNotifications(prisma, POST_ID, announcer);
+    await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n-cible'] } } });
     expect(rows.map((row) => row.id)).toEqual(['n-voisin', 'n-hors-post']);
@@ -158,7 +160,7 @@ describe('retractPostNotifications', () => {
       order.push('announce');
     });
 
-    await retractPostNotifications(prisma, POST_ID, announcer);
+    await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(order).toEqual(['delete', 'announce']);
   });
@@ -175,7 +177,7 @@ describe('retractPostNotifications', () => {
     );
     seed(audience);
 
-    const count = await retractPostNotifications(prisma, POST_ID, announcer);
+    const count = await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(count).toBe(audience.length);
     expect(rows).toHaveLength(0);
@@ -186,7 +188,7 @@ describe('retractPostNotifications', () => {
   it('s\'arrête au premier lot INCOMPLET — pas de lecture de trop', async () => {
     seed([notification('n1', AUTHOR_ID, POST_ID)]);
 
-    await retractPostNotifications(prisma, POST_ID, announcer);
+    await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(runCommandRaw).toHaveBeenCalledTimes(1);
   });
@@ -194,7 +196,7 @@ describe('retractPostNotifications', () => {
   it('ne supprime rien et n\'annonce rien quand le post n\'a produit aucune ligne', async () => {
     seed([notification('n-voisin', AUTHOR_ID, OTHER_POST_ID)]);
 
-    const count = await retractPostNotifications(prisma, POST_ID, announcer);
+    const count = await retractPostNotifications(prisma, [POST_ID], announcer);
 
     expect(count).toBe(0);
     expect(deleteMany).not.toHaveBeenCalled();
@@ -209,7 +211,7 @@ describe('retractPostNotifications', () => {
   it('retire les lignes même sans annonceur branché', async () => {
     seed([notification('n1', AUTHOR_ID, POST_ID)]);
 
-    const count = await retractPostNotifications(prisma, POST_ID, undefined);
+    const count = await retractPostNotifications(prisma, [POST_ID], undefined);
 
     expect(count).toBe(1);
     expect(rows).toHaveLength(0);
@@ -218,6 +220,74 @@ describe('retractPostNotifications', () => {
   it('laisse remonter un échec Mongo — c\'est la liste d\'effets qui décide de l\'absorber', async () => {
     runCommandRaw.mockRejectedValue(new Error('mongo down'));
 
-    await expect(retractPostNotifications(prisma, POST_ID, announcer)).rejects.toThrow('mongo down');
+    await expect(retractPostNotifications(prisma, [POST_ID], announcer)).rejects.toThrow('mongo down');
+  });
+
+  /**
+   * Le balayage des stories expirées retire une FOURNÉE de posts d'un coup —
+   * stories du jour ∪ leurs reposts. Un retrait post par post ferait autant de
+   * lectures que de posts là où un seul `$in` les couvre ; surtout, il
+   * n'énoncerait plus la règle au bon niveau : ce qui part ensemble se retire
+   * ensemble.
+   */
+  it('couvre plusieurs posts en une seule lecture', async () => {
+    seed([
+      notification('n-story', AUTHOR_ID, POST_ID),
+      notification('n-repost', FRIEND_ID, OTHER_POST_ID),
+    ]);
+
+    const count = await retractPostNotifications(prisma, [POST_ID, OTHER_POST_ID], announcer);
+
+    expect(count).toBe(2);
+    expect(runCommandRaw).toHaveBeenCalledTimes(1);
+    expect(runCommandRaw).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: { 'context.postId': { $in: [POST_ID, OTHER_POST_ID] } } })
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  /**
+   * Une liste vide n'est pas un `$in: []` à envoyer à Mongo : c'est une
+   * question qui n'a pas lieu d'être posée. Le balayage horaire tombe sur ce
+   * cas à chaque passe où rien n'a expiré, c'est-à-dire la plupart du temps.
+   */
+  it('ne pose aucune question quand la liste est vide', async () => {
+    seed([notification('n1', AUTHOR_ID, POST_ID)]);
+
+    const count = await retractPostNotifications(prisma, [], announcer);
+
+    expect(count).toBe(0);
+    expect(runCommandRaw).not.toHaveBeenCalled();
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Le plafond de drainage REJETTE, il n'avertit plus.
+   *
+   * Tant que l'entrée était UN post, le plafond ne bornait aucune audience
+   * réaliste et un avertissement suffisait. L'entrée du balayage, elle, n'est
+   * pas bornée : c'est une heure d'expirations de toute la plateforme. Un
+   * plafond atteint en silence laisserait l'appelant supprimer les posts —
+   * et les lignes restantes n'auraient alors plus AUCUN chemin de retrait,
+   * puisque la passe suivante ne verra plus les posts.
+   *
+   * En rejetant, le retrait rend la reprise possible : l'appelant renonce à
+   * supprimer cette heure-ci, et la passe suivante reprend un drainage qui a
+   * déjà progressé (les lots lus ont bien été supprimés).
+   */
+  it('REJETTE quand le drainage n\'aboutit pas — l\'appelant doit pouvoir renoncer', async () => {
+    runCommandRaw.mockImplementation(async () => ({
+      cursor: {
+        firstBatch: Array.from(
+          { length: POST_NOTIFICATION_RETRACTION_BATCH_SIZE },
+          (_, index) => ({ _id: { $oid: `n${index}` }, userId: { $oid: AUTHOR_ID } })
+        ),
+      },
+    }));
+    deleteMany.mockResolvedValue({ count: POST_NOTIFICATION_RETRACTION_BATCH_SIZE });
+
+    await expect(retractPostNotifications(prisma, [POST_ID], announcer)).rejects.toThrow(
+      /drainage/i
+    );
   });
 });

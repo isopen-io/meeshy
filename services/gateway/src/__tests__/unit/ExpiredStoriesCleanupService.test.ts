@@ -73,6 +73,16 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
     sound: {
       update: jest.fn(async () => ({})),
     },
+    // Le retrait des notifications gouverne désormais la passe : sans ces deux
+    // doubles, il rejette et RIEN n'est supprimé (c'est le comportement voulu,
+    // cf. « ExpiredStoriesCleanupService — notifications des posts détruits »).
+    $runCommandRaw: jest.fn(async (_command: any) => {
+      calls.push('notification.find');
+      return { cursor: { firstBatch: [] as unknown[] } };
+    }),
+    notification: {
+      deleteMany: jest.fn(async (_args: any) => ({ count: 0 })),
+    },
     postComment: {
       findMany: jest.fn(async (args: any) => {
         return state.comments
@@ -123,6 +133,10 @@ function makeSimplePrisma() {
     },
     sound: {
       update: jest.fn<any>().mockResolvedValue({}),
+    },
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ cursor: { firstBatch: [] } }),
+    notification: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
   };
 }
@@ -293,5 +307,111 @@ describe('ExpiredStoriesCleanupService — G7 media-orphan purge', () => {
     const orClauses = args.where.OR as any[];
     const commentClause = orClauses.find((c) => c.commentId);
     expect(commentClause.commentId.in).toEqual(['c1']);
+  });
+});
+
+/**
+ * Les notifications que les stories détruites ont produites.
+ *
+ * Ce balayage est le SEUL chemin de hard-delete de post du gateway. Tant que
+ * la story n'est que périmée, sa notification reste une trace légitime : les
+ * deux clients l'affichent marquée « expirée » depuis `context.postExpiresAt`,
+ * et `getPostById` ne filtre pas l'expiration — la cible répond encore. À la
+ * destruction, ces deux appuis tombent ensemble : la ligne garde une copie
+ * dénormalisée d'un contenu qui n'existe plus, son `view_post` n'ouvre qu'un
+ * 404, et son badge non lu ne peut plus être décrémenté par personne.
+ *
+ * Le retrait est donc ancré sur la DESTRUCTION, pas sur l'expiration — et il
+ * précède les suppressions, exactement comme la libération des usages de sons
+ * juste à côté et pour la même raison : `context.postId` n'a ni relation ni
+ * cascade, donc supprimer les posts après un retrait en échec laisserait des
+ * lignes que plus aucun chemin n'atteindrait.
+ */
+describe('ExpiredStoriesCleanupService — notifications des posts détruits', () => {
+  const ANNOUNCER = { announceNotificationsRetracted: jest.fn<any>() };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    ANNOUNCER.announceNotificationsRetracted.mockResolvedValue(undefined);
+  });
+
+  it('retire les notifications des stories ET de leurs reposts, en une seule question', async () => {
+    const fake = makeFakePrisma({ storyIds: ['story1'], repostIds: ['repost1'], comments: [] });
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    await service.cleanup(ANNOUNCER as any);
+
+    expect(fake.prisma.$runCommandRaw).toHaveBeenCalledWith(
+      expect.objectContaining({
+        find: 'Notification',
+        filter: { 'context.postId': { $in: ['story1', 'repost1'] } },
+      })
+    );
+  });
+
+  it('retire AVANT de supprimer — un retrait en échec ne doit rien laisser d\'inatteignable', async () => {
+    const fake = makeFakePrisma({ storyIds: ['story1'], repostIds: [], comments: [] });
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    await service.cleanup(ANNOUNCER as any);
+
+    const retractIdx = fake.calls.indexOf('notification.find');
+    const deleteIdx = fake.calls.indexOf('post.deleteMany');
+    expect(retractIdx).toBeGreaterThanOrEqual(0);
+    expect(retractIdx).toBeLessThan(deleteIdx);
+  });
+
+  it('renonce à la passe quand le retrait échoue — rien n\'est détruit cette heure-ci', async () => {
+    const fake = makeFakePrisma({ storyIds: ['story1'], repostIds: [], comments: [] });
+    (fake.prisma.$runCommandRaw as jest.Mock<any>).mockRejectedValue(new Error('mongo down'));
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    const result = await service.cleanup(ANNOUNCER as any);
+
+    expect(result.hardDeleted).toBe(0);
+    expect(fake.prisma.post.deleteMany).not.toHaveBeenCalled();
+    expect(fake.prisma.postComment.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('annonce le retrait à CHAQUE destinataire', async () => {
+    const fake = makeFakePrisma({ storyIds: ['story1'], repostIds: [], comments: [] });
+    (fake.prisma.$runCommandRaw as jest.Mock<any>).mockResolvedValueOnce({
+      cursor: {
+        firstBatch: [
+          { _id: { $oid: 'n1' }, userId: { $oid: '64a000000000000000000001' } },
+          { _id: { $oid: 'n2' }, userId: { $oid: '64a000000000000000000002' } },
+        ],
+      },
+    });
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    await service.cleanup(ANNOUNCER as any);
+
+    expect(fake.prisma.notification.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['n1', 'n2'] } },
+    });
+    expect(ANNOUNCER.announceNotificationsRetracted).toHaveBeenCalledWith([
+      { id: 'n1', userId: '64a000000000000000000001' },
+      { id: 'n2', userId: '64a000000000000000000002' },
+    ]);
+  });
+
+  it('ne pose aucune question quand rien n\'a expiré', async () => {
+    const prisma = makeSimplePrisma();
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+
+    await service.cleanup(ANNOUNCER as any);
+
+    expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
+  });
+
+  it('détruit quand même sans annonceur branché — un worker sans `io` reste correct', async () => {
+    const fake = makeFakePrisma({ storyIds: ['story1'], repostIds: [], comments: [] });
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    const result = await service.cleanup(undefined);
+
+    expect(result.hardDeleted).toBe(1);
+    expect(fake.prisma.$runCommandRaw).toHaveBeenCalled();
   });
 });
