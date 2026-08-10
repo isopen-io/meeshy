@@ -742,3 +742,61 @@ Append-only log of gotchas and decisions that save time next run.
   verification that only checked the first tap would have "passed" on the unfixed build too;
   screenshotting the full round-trip (tap, tap again, compare both against the pre-fix
   single-direction behaviour) is what makes the visual proof mean something here.
+
+## Slice `splash-screen` (2026-08-10)
+- **A single cold-start screenshot at a fixed `sleep N` delay is not reliable proof on a
+  shared, resource-contended dev box.** Cold-start latency (Hilt DI graph, ViewModel
+  construction, cold JIT across many feature modules) varied by SEVERAL SECONDS run-to-run
+  while heavy `./gradlew` test/build activity ran concurrently on the same machine — one
+  capture at `sleep 2.3` still showed the OS-level system splash, another at `sleep 5` already
+  showed the fully-hydrated conversations list, and one at `sleep 6` happened to land at
+  literally `progress≈0` of a 600ms Compose entrance animation (correctly rendering nothing
+  yet — not a bug). A `screenrecord` attempt was *worse*, not better: recording itself adds
+  enough overhead on an emulator to visibly stall the very cold start it's trying to observe
+  (all 29 extracted frames across 5.9s were pixel-identical). **What actually worked:**
+  temporarily widening the thing-being-verified's own duration constant by 10× (a 1200ms splash
+  floor bumped to 9000ms, purely for this manual pass, reverted before commit) turns a
+  needle-in-a-haystack timing problem into a wide, trivially-capturable window — the same "make
+  it observable, verify, put it back" trick as e.g. slowing down an animation to eyeball its
+  curve. Don't fight jitter with more samples; widen the window instead.
+- **When a screenshot shows an expected element completely missing, add a solid debug-color
+  `.background()` to the exact modifier chain before assuming a logic bug.** The suspect
+  Canvas-drawn logo appeared to render NOTHING in one capture (zero bright pixels in its whole
+  region, confirmed via pixel-scan, not just eyeballing). Filling the same `Modifier` with
+  `Color.Red` before investigating anything else immediately answered the only question that
+  mattered: was the LayoutNode sized correctly (yes — the red box appeared at the right size)
+  and did the `drawRoundRect` calls fire (yes — white bars appeared on top of the red once given
+  a wider capture window)? Both were fine; the "missing logo" was 100% the cold-start-jitter
+  timing issue above, caught in under two rebuild/install cycles instead of chasing the
+  Canvas/DrawScope/Animatable wiring for a phantom bug.
+- **A component-level asset-drift guard doesn't need runtime coupling across modules that
+  can't depend on each other.** `SplashLogoGeometry` (`:sdk-ui`) reuses the exact same bar
+  bounding-box numbers as `ic_launcher_foreground.xml` (`:app`'s resources) so the launcher icon
+  glyph and the splash logo glyph can never visually drift apart — but `:sdk-ui` cannot depend
+  on `:app`'s resources (dependency direction is the other way). The fix is citation, not
+  coupling: a code comment pointing at the source-of-truth file plus copying the literal
+  numbers, the same non-runtime "kept in lockstep by convention" relationship the launcher
+  icon's own vector XML already has with its legacy PNG generator script.
+- **A slice's OWN "deliberately deferred, documented not silent" scope note is a hypothesis
+  about acceptable risk, not a closed decision — a human with context can still overrule it,
+  and should be taken seriously when they do.** The first on-device verification pass showed
+  logo + wordmark + tagline exactly as scoped, with the footer signature explicitly written off
+  in this very file's own "Deliberately scoped simpler than iOS" note. The user caught it anyway
+  ("Il manque la signature avec les details de version!") — the port (iOS `BrandSignature.swift`)
+  turned out fully specified and genuinely cheap (three text lines + a small reused draw call),
+  so the right response was to build it before merging, not to defend the original scope
+  decision or push it to a follow-up slice. The general pattern: writing down *why* something
+  was skipped is good practice and not the same as it being *right* to skip — it just makes the
+  disagreement, when one arrives, fast to resolve instead of requiring re-derivation from
+  scratch. Also reinforced: the shared `StackedDashesMark` extraction (draw logic factored out of
+  `SplashLogo` before the footer was added) paid off immediately — the small static footer mark
+  needed zero new drawing code, just a second call site at `progress = 1f`.
+- **Pixel-sampling a background gradient's corners is not sufficient to prove "this is the
+  splash" once the same background component is shared app-wide.** A capture believed to show
+  the Compose splash (distinct top-left/bottom-right gradient stops, ruling out the flat
+  system-splash color) turned out to be the fully-loaded conversations screen — `MeeshyBackground`
+  is "the root background of every top-level screen," so ANY of them produces the same corner
+  signature. The pixel check correctly rules out "still the system splash" but cannot by itself
+  distinguish "the new splash composable" from "any other screen using the same shared
+  background." Confirm with content that's unique to the screen under test (the "Meeshy" wordmark
+  text, or the footer signature text), not just background color sampling.

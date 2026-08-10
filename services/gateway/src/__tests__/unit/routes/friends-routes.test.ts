@@ -156,6 +156,7 @@ function makeNotifService() {
     createFriendAcceptedNotification: jest.fn().mockResolvedValue(undefined),
     createSystemNotification: jest.fn().mockResolvedValue(undefined),
     markFriendRequestNotificationsAsRead: jest.fn().mockResolvedValue(0),
+    retractFriendRequestNotifications: jest.fn().mockResolvedValue(0),
     emitFriendRequestCancelled: jest.fn(),
     emitFriendRequestNew: jest.fn(),
     emitFriendRequestAccepted: jest.fn(),
@@ -638,6 +639,63 @@ describe('DELETE /friend-requests/:id', () => {
     });
     expect(res.statusCode).toBe(200);
     await appNoNotif.close();
+  });
+
+  // La ligne `FriendRequest` part inconditionnellement — sa notification
+  // « X vous a envoyé une demande d'amitié » n'a donc plus rien où mener, quel
+  // que soit celui des deux qui a appelé. Elle appartient TOUJOURS au receveur :
+  // c'est lui, et lui seul, que `createFriendRequestNotification` a notifié.
+  it('retracts the receiver notification when the sender cancels', async () => {
+    const notifService = makeNotifService();
+    const appAsSender = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+      authUserId: USER_ID, // DB_FRIEND_REQUEST.senderId
+    });
+    const res = await appAsSender.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.retractFriendRequestNotifications).toHaveBeenCalledWith(RECEIVER_ID, FR_ID);
+    await appAsSender.close();
+  });
+
+  it('retracts its own notification when the receiver removes the request', async () => {
+    const notifService = makeNotifService();
+    const appAsReceiver = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+      authUserId: RECEIVER_ID, // DB_FRIEND_REQUEST.receiverId
+    });
+    const res = await appAsReceiver.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.retractFriendRequestNotifications).toHaveBeenCalledWith(RECEIVER_ID, FR_ID);
+    await appAsReceiver.close();
+  });
+
+  it('a failing retractFriendRequestNotifications does not fail the route', async () => {
+    const notifService = makeNotifService();
+    notifService.retractFriendRequestNotifications.mockRejectedValueOnce(new Error('notification db crash'));
+    const appErr = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+    });
+    const res = await appErr.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    // Le signal temps réel à l'autre partie ne doit pas être emporté par
+    // l'échec du retrait : les deux gestes sont indépendants.
+    expect(notifService.emitFriendRequestCancelled).toHaveBeenCalled();
+    await appErr.close();
   });
 });
 

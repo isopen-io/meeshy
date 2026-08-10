@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -52,6 +53,11 @@ class MainActivity : ComponentActivity() {
     private val languageViewModel: LanguageViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Must run BEFORE super.onCreate — installs the system pre-Compose splash
+        // (Theme.Meeshy.Starting) so a cold start never flashes a blank window
+        // before the branded, animated MeeshySplashScreen (:sdk-ui) takes over
+        // inside the Compose tree (see themes.xml + MeeshyApp.kt).
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         launchRoute = LaunchRouter.route(intent.launchExtras())

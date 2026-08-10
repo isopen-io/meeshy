@@ -124,6 +124,14 @@ avancer d'exactement une phase. Ne redéfinis rien ici — `ROUTINE.md` est la s
 ne pas la dupliquer ni la contredire. Après le merge, pousse le commit séparé de mise à jour de
 `tasks/lane-cursor.md` (cf. §Choix de la lane) — jamais dans le diff `apps/android`-only.
 
+**Dernière action avant de conclure le run : reviens sur la branche du worktree de routine,
+jamais sur ta branche de slice.** `git checkout ops/android-ios-parity-routine &&
+git fetch origin main --quiet && git merge --ff-only origin/main`. Sans ça, le worktree reste
+checkouté sur `claude/apps/android/<slice-id>` — déjà squash-mergée, donc ses commits sont
+orphelins/périmés — et le prochain run échoue sur `git merge --ff-only` avec une erreur de
+branches divergentes (vécu à l'itération 21 : aucune perte de données, juste un checkout à
+corriger, mais ça bloque le run suivant pour rien).
+
 **RE-PROUVER avant de choisir un slice — une note « Next slice » est une hypothèse, pas un
 fait.** L'itération 2 a découvert qu'une recommandation « à faire » répétée pendant plusieurs runs
 (catégorie expand/collapse) était en réalité déjà livrée — personne n'avait rouvert le composant

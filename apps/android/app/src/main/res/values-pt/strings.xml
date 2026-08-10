@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Meeshy</string>
+    <string name="splash_tagline">Quebre a barreira do idioma</string>
+    <string name="splash_version_label">Meeshy %1$s · %2$s</string>
+    <string name="brand_signature_credit">Services CEO</string>
 
     <!-- Navigation tabs -->
     <string name="tab_messages">Mensagens</string>
