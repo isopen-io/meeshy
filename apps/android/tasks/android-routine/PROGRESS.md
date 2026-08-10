@@ -9,6 +9,80 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **TUS chunked upload landed — sub-slice 1 of the standing "chunked/resumable
+> large-video TUS upload" candidate, decomposed this run instead of attempted whole** (slice
+> `tus-chunked-upload-core`, feature-parity §Q — flagged for several runs as "the largest/riskiest
+> open candidate, likely needs its own sub-slice decomposition before starting"). **RE-PROUVEN
+> before starting**: `git branch -r`/`gh pr list --state open` found only two branches touched in
+> the prior 24h (`claude/apps/android/feed-composer-media-attachments`,
+> `claude/apps/ios/inline-video-top-controls`), both already merged (PRs #2759, #2767) — no
+> interrupted run to resume. Read `TusUploadRepository`/`TusApi` end to end (still exactly the
+> single-shot, whole-file-in-one-PATCH shape the doc comments described) and the gateway's
+> `services/gateway/src/routes/uploads/tus-handler.ts` to confirm the server side is a genuine
+> `@tus/server` mount — meaning it ALREADY speaks multi-PATCH chunked uploads per the tus.io
+> protocol, nothing server-side needed to change; the client just never split the body. **Concrete
+> decomposition worked out before coding, to keep this run's slice small and low-risk**: sub-slice 1
+> (this run) chunks the body into bounded PATCH calls **within one upload session**, deferring
+> persistent-checkpoint/resume-after-app-kill (needs a Room table + reading the source file lazily
+> instead of the already-fully-resident `MediaUploadItem.bytes`) and 409 HEAD-recovery to later
+> sub-slices — both explicitly out of scope this run, not silently dropped. **Shipped (production,
+> all `apps/android`)**: new pure `TusChunkPlan.chunks(totalBytes, chunkSize): List<TusChunkRange>`
+> (`:core:model`, alongside `TusUploadContext`/`TusUploadMetadata`) computes chunk boundaries —
+> zero-byte body → one zero-length final chunk (still needs a PATCH to reach `onUploadFinish`);
+> body ≤ chunk size → one final chunk unchanged from before; exact multiples and remainders split
+> correctly, exactly one range ever marked `isFinal`. `TusApi` gains `uploadChunk` (`Response<Unit>`)
+> for every non-final chunk — the gateway's `@tus/server` returns a bare `204 No Content` for any
+> PATCH that doesn't reach the declared upload length, so it can never decode as `uploadData`'s
+> `ApiResponse<TusUploadFinishData>` envelope, which only the FINAL chunk's PATCH actually returns
+> (confirmed by reading `onUploadFinish`'s own `status_code: 200` JSON-body branch in
+> `tus-handler.ts` — every earlier PATCH falls through to the TUS server's own default response).
+> A new `TusApi.patchChunk` extension (`:core:network`, alongside the pre-existing `createSession`)
+> keeps `retrofit2.Response` confined to `:core:network` — mirrors the existing precedent exactly,
+> `:sdk-core` never references `Response` directly. New `chunkCall` helper in `ApiCall.kt` (mirrors
+> `headerCall` minus the header extraction — success/failure is the only signal a `204` carries).
+> `TusUploadRepository.upload` now loops `TusChunkPlan.chunks(item.bytes.size, chunkSizeBytes)`:
+> every non-final range PATCHes via `patchChunk`, stopping and returning the failure immediately if
+> any chunk fails; the final range still goes through the pre-existing `uploadData` path unchanged.
+> `chunkSizeBytes` defaults to a new `DEFAULT_CHUNK_SIZE_BYTES` (10 MB, matches iOS
+> `TusUploadManager.chunkSize`) and is a function parameter (not a constructor field) specifically
+> so Dagger/Hilt injection stays untouched — a raw `Long` constructor parameter would need its own
+> qualified binding and break `@Inject constructor`. A body no larger than one chunk (every existing
+> caller today — compressed images) produces exactly the same single `uploadData` PATCH as before;
+> all 13 pre-existing `TusUploadRepositoryTest` cases stayed green unchanged, proving zero behaviour
+> drift for the common case. +9 tests (`TusChunkPlanTest`: zero-byte/under/exact/multiple/remainder
+> boundaries, contiguity, length-sum invariant, exactly-one-final invariant, negative-input
+> rejection; `ApiCallTest`: 3 `chunkCall` cases mirroring `headerCall`'s; `TusUploadRepositoryTest`:
+> 4 new — single-chunk-still-uses-uploadData, multi-chunk-splits-correctly, ordered-offsets-with-
+> correct-final-remainder-length, intermediate-chunk-failure-stops-before-the-final-PATCH).
+> **Mutation-proven**: hardcoding `TusChunkRange.isFinal` to always `false` in `TusChunkPlan` fails
+> **exactly** the 5 tests asserting `isFinal`/finish-shape (the other 5 — contiguity, length-sum,
+> both `require` rejections — stay green); inverting `TusUploadRepository`'s `if (!range.isFinal)`
+> branch fails 11 of the file's 17 tests (every path whose final/non-final routing the condition
+> gates — the 6 that stay green are the create-session-failure paths that never reach the chunk
+> loop at all), a strong, broad-impact kill confirming the branch is exercised end-to-end. Both
+> mutations applied via a scratch `cp`-backed edit (never `git checkout --`), restored via `cp`,
+> re-confirmed green before continuing. **Gate**: `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero
+> failures). Reviewer **PASS** (diff `apps/android` only — 4 production files edited
+> [`TusUpload.kt`, `TusApi.kt`, `ApiCall.kt`, `TusUploadRepository.kt`], 3 test files
+> touched/added; SDK purity — everything stays inside `:core:model`/`:core:network`/`:sdk-core`,
+> no product-decision code, exactly the "stateless building block" layer this belongs in; SSOT —
+> the chunk-boundary math lives in exactly one place, reused by the only caller; no coverage floor
+> lowered; no tautological tests). **No on-device verification this run**: this slice is purely
+> internal to the TUS client's own PATCH-count/boundary logic with no observable UI surface (the
+> composer/story flows that call `TusUploadRepository.upload` are unchanged from the caller's
+> perspective — same `NetworkResult<List<UploadedMedia>>` contract, same default chunk size larger
+> than any file a manual on-device pass could practically produce) — the mutation-proven unit
+> coverage is the appropriate verification depth for this internal a plumbing change, matching how
+> `story-media-tus-upload` itself was verified (unit-level) before any on-device pass was layered
+> on top by a later slice. **Next slice candidates (not attempted this run)**: persistent
+> checkpoint store (Room table, survive app kill, resume from stored `byteOffset` — needs
+> `MediaUploadItem` to read from a file lazily instead of holding the whole `ByteArray` resident,
+> a larger change than this run's); 409 HEAD-recovery (client/server offset desync); a dedicated
+> `WorkManager` foreground chain with upload progress (feature-parity.md line ~175); location/audio/
+> per-post-language attachments for the Feed composer; widgets/PiP (re-grepped this run too — still
+> zero `AppWidgetProvider`/`GlanceAppWidget`/`PictureInPicture` hits, due for a real pass).
+
 > On 2026-08-10 **the Feed post composer's generic file-attachment sub-slice landed** (slice
 > `feed-composer-file-attachment`, feature-parity §F — the routine's own standing "files,
 > location, audio, per-post language" candidate, decomposed this run rather than attempted

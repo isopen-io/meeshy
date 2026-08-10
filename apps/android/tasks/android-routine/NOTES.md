@@ -1177,3 +1177,58 @@ Append-only log of gotchas and decisions that save time next run.
   file attachment and required reopening the composer and re-picking from scratch. When scripting
   a multi-step on-device flow that ends in "tap Publish", avoid any exploratory `KEYCODE_BACK`
   between attaching and publishing — dump/screenshot without navigating away instead.
+
+## Slice `tus-chunked-upload-core` (2026-08-10)
+- **A real `@tus/server` mount already speaks chunked/multi-PATCH uploads server-side — a client
+  that only ever sends one PATCH isn't hitting a server limitation, it's just not using the
+  protocol it already has.** Before assuming chunking needed gateway-side work, reading
+  `services/gateway/src/routes/uploads/tus-handler.ts` end to end showed `onUploadCreate`/
+  `onUploadFinish` are the only two hooks the gateway customizes — the PATCH-per-chunk mechanics
+  themselves are the stock `@tus/server` library behaviour, standards-compliant and already
+  working for any client that sends bounded PATCHes. The entire gap was client-side: `TusApi.
+  uploadData` always sent the whole file in one PATCH at offset 0.
+- **A stdlib TUS server's response shape genuinely DIFFERS between a non-final and the final PATCH
+  of a multi-chunk upload — a single Retrofit method typed for one shape breaks on the other.** Per
+  the tus.io protocol, every PATCH that doesn't reach the upload's declared length gets a bare `204
+  No Content` (headers only, no body); only the PATCH that completes the upload triggers the
+  gateway's `onUploadFinish` hook, which is the ONLY place a JSON body (`{success, data:
+  {attachment}}`) is ever written (confirmed by reading the hook's own `status_code: 200` branch).
+  A single `TusApi.uploadData: ApiResponse<TusUploadFinishData>` method used for every chunk would
+  either throw on decoding an empty 204 body (RED, not silently wrong) or work by pure accident
+  today only because single-shot mode always sends the final byte in the one and only PATCH. Fix:
+  two Retrofit methods with different return shapes — `uploadChunk: Response<Unit>` for every
+  non-final chunk (empty-body-friendly, mirrors the pre-existing `createUpload`), `uploadData:
+  ApiResponse<TusUploadFinishData>` unchanged, called only for the genuinely-final chunk.
+- **`retrofit2.Response<T>` cannot cross a Gradle module boundary where `retrofit` is an
+  `implementation` (not `api`) dependency — this repo already has the fix pattern, follow it
+  rather than promoting the dependency.** `:sdk-core` calling `tusApi.uploadChunk(...)` directly (a
+  method returning `Response<Unit>`) failed to compile with "Cannot access class
+  'retrofit2.Response' — check your module classpath", because `:core:network` deliberately keeps
+  retrofit `implementation`-scoped (its own `createSession` doc comment already explains why:
+  callers should only ever see `NetworkResult`/`ApiError`). The existing `TusApi.createSession`
+  extension function is the established fix — wrap the raw `Response`-returning call in a
+  same-module extension (`TusApi.patchChunk`) that folds it into `NetworkResult<Unit>` before it
+  ever reaches `:sdk-core`. Mirroring an existing sibling wrapper caught this before it became a
+  real investigation — the first compile error already named the exact same shape of problem
+  `createSession`'s doc comment was written to prevent.
+- **A `Long` constructor parameter on an `@Inject constructor` class would need its own Dagger/Hilt
+  qualifier binding — a plain default-valued constructor field is NOT free DI-wise, unlike a
+  default-valued FUNCTION parameter.** Wanted `chunkSizeBytes` overridable by tests without
+  allocating megabytes of fixture bytes for every test. Putting it on the constructor (`chunkSizeBytes:
+  Long = DEFAULT_CHUNK_SIZE_BYTES`) would compile, but Dagger's generated factory calls the
+  constructor by resolving a binding for EVERY parameter type regardless of Kotlin default values —
+  an unqualified `Long` binding doesn't exist in the graph and injection would fail at runtime, not
+  compile time. Kept the constructor untouched (`TusApi` only) and added `chunkSizeBytes` as a
+  trailing default-valued parameter on the public `upload()` FUNCTION instead — ordinary callers are
+  unaffected (defaulted, same call sites work verbatim), tests pass a small value directly, Dagger
+  never sees the new parameter at all since function calls aren't its concern.
+- **A mutation that inverts a single `if` branch condition central to request routing can fail the
+  majority of a test file, not just the "targeted" tests — that's a signal of strong coverage, not
+  an over-broad mutation to discount.** Flipping `TusUploadRepository`'s `if (!range.isFinal)` to
+  `if (range.isFinal)` failed 11 of 17 `TusUploadRepositoryTest` cases (every path whose PATCH
+  routing depends on final-vs-intermediate, including every pre-existing single-chunk test — a
+  single-chunk upload's one range IS final, so the mutated code now routed it through `uploadChunk`
+  instead of `uploadData`). The 6 survivors were exclusively the `createUpload`-failure paths that
+  return before the chunk loop even starts. Worth explicitly checking WHICH tests survive a broad
+  mutation (do they make sense as untouched by this code path?) rather than treating "many
+  failures" alone as noise to dismiss.

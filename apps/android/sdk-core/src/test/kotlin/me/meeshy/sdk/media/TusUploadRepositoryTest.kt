@@ -206,4 +206,67 @@ class TusUploadRepositoryTest {
         coVerify(exactly = 2) { api.createUpload(any(), any(), any()) }
         coVerify(exactly = 1) { api.uploadData(any(), any(), any(), any()) }
     }
+
+    // --- chunking: a body larger than chunkSizeBytes is split across uploadChunk
+    // (every slice but the last) + uploadData (the last slice only) ---
+
+    private fun chunkResponse() = Response.success(Unit)
+
+    @Test
+    fun `a body no larger than the chunk size makes a single PATCH via uploadData, never uploadChunk`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(item(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        coVerify(exactly = 0) { api.uploadChunk(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { api.uploadData(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a body larger than the chunk size is split, only the last slice goes through uploadData`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns
+            finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
+
+        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val result = repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify(exactly = 2) { api.uploadChunk(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { api.uploadData(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `chunks are patched in order at increasing offsets, the last chunk carrying the remainder`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        val chunkOffsets = mutableListOf<Long>()
+        coEvery { api.uploadChunk(any(), capture(chunkOffsets), any(), any()) } returns chunkResponse()
+        val finalOffset = slot<Long>()
+        val finalBody = slot<okhttp3.RequestBody>()
+        coEvery { api.uploadData(any(), capture(finalOffset), any(), capture(finalBody)) } returns
+            finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
+
+        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(chunkOffsets).containsExactly(0L, 10L).inOrder()
+        assertThat(finalOffset.captured).isEqualTo(20L)
+        assertThat(finalBody.captured.contentLength()).isEqualTo(5L)
+    }
+
+    @Test
+    fun `an intermediate chunk failure stops the upload and never sends the final chunk`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns
+            Response.error(409, "offset mismatch".toResponseBody("text/plain".toMediaTypeOrNull()))
+
+        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val result = repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.httpStatus).isEqualTo(409)
+        coVerify(exactly = 0) { api.uploadData(any(), any(), any(), any()) }
+    }
 }

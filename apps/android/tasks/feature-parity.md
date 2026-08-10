@@ -4999,10 +4999,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Crash-safe boot recovery for in-flight queue items + orphaned audio files
 - [~] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance —
       **non-resumable TUS client done** (slice `story-media-tus-upload`, 2026-08-10, §E): `TusApi`/
-      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`
-      (single-shot only — one `PATCH` of the whole file at offset 0, no chunking, no checkpoint
-      store, does NOT survive app kill mid-upload). Message-retention cleanup / DB maintenance
-      still not started.
+      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`.
+      **Chunked upload within a single session done** (slice `tus-chunked-upload-core`, 2026-08-10):
+      `TusUploadRepository.upload` now splits the body into bounded PATCH calls (`TusChunkPlan`,
+      pure chunk-boundary math, `:core:model`) of at most `DEFAULT_CHUNK_SIZE_BYTES` (10 MB, matches
+      iOS `TusUploadManager.chunkSize`) instead of one monolithic PATCH — every chunk but the last
+      goes through the new `TusApi.uploadChunk`/`patchChunk` (typed `Response<Unit>`, since the
+      gateway's `@tus/server` returns a bare `204 No Content` for any non-final PATCH per the
+      tus.io protocol), only the last chunk still goes through `uploadData` (the only PATCH whose
+      response actually carries the `onUploadFinish` JSON body). A body no larger than one chunk
+      (the common case today — compressed images) still makes exactly one PATCH, byte-identical to
+      before. **Still NOT done:** persistent checkpoint (survive app kill mid-upload — needs a Room
+      table + reading the source file lazily instead of `MediaUploadItem.bytes` already fully
+      resident in memory), 409 HEAD-recovery, dedicated `WorkManager` foreground chain. Those are
+      the next sub-slices, not attempted this run. Message-retention cleanup / DB maintenance still
+      not started.
 - [ ] Background conversation sync + message prefetch (backoff + jitter)
 - [ ] Encrypted local storage (AES-GCM Room / EncryptedSharedPreferences) + per-user namespacing + logout wipe
 - [ ] E2EE message encryption/decryption (libsignal, batched, fail-closed)

@@ -1,12 +1,15 @@
 package me.meeshy.sdk.media
 
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.media.TusChunkPlan
+import me.meeshy.sdk.model.media.TusChunkRange
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.TusUploadMetadata
 import me.meeshy.sdk.model.toUploadedMedia
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.createSession
+import me.meeshy.sdk.net.api.patchChunk
 import me.meeshy.sdk.net.apiCall
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -21,17 +24,29 @@ import javax.inject.Singleton
  * upload tagged with a [TusUploadContext] is the **only** path that produces a
  * `PostMedia` row — the id space `CreatePostRequest`/`CreateStoryRequest.mediaIds`
  * actually claims against server-side (`services/gateway/src/services/posts/
- * mediaOwnership.ts`). Port of iOS `TusUploadManager`, single-shot only: the whole
- * file is PATCHed in one request at `Upload-Offset: 0` (no chunking/resume/
- * checkpoint-store) — sufficient for compressed images; chunked large-video upload
- * is a tracked follow-up (`feature-parity.md` §F).
+ * mediaOwnership.ts`). Port of iOS `TusUploadManager`: the body is split into
+ * bounded PATCH calls of at most [DEFAULT_CHUNK_SIZE_BYTES] each ([TusChunkPlan]),
+ * matching iOS's own fixed-size chunking loop. Does **not** yet persist a
+ * checkpoint or survive an app kill mid-upload — that remains a tracked follow-up
+ * (`feature-parity.md` §Q); a body no larger than one chunk (the common case —
+ * compressed images) still makes exactly one PATCH, unchanged from before.
  */
 @Singleton
 public class TusUploadRepository @Inject constructor(
     private val tusApi: TusApi,
 ) {
-    /** Uploads one [item] tagged with [context]. See [TusUploadRepository]. */
-    public suspend fun upload(item: MediaUploadItem, context: TusUploadContext): NetworkResult<List<UploadedMedia>> {
+    /**
+     * Uploads one [item] tagged with [context]. See [TusUploadRepository].
+     * [chunkSizeBytes] defaults to [DEFAULT_CHUNK_SIZE_BYTES] — exposed as a
+     * parameter (not a constructor field, to keep DI construction untouched) so
+     * tests can exercise multi-chunk plans without allocating megabytes of test
+     * fixture bytes.
+     */
+    public suspend fun upload(
+        item: MediaUploadItem,
+        context: TusUploadContext,
+        chunkSizeBytes: Long = DEFAULT_CHUNK_SIZE_BYTES,
+    ): NetworkResult<List<UploadedMedia>> {
         val fileName = MediaUpload.fileName(item.fileName)
         val mimeType = MediaUpload.mimeType(item.mimeType)
 
@@ -45,16 +60,35 @@ public class TusUploadRepository @Inject constructor(
             is NetworkResult.Success -> locationResult.data
         }
 
-        val body = item.bytes.toRequestBody(OCTET_STREAM_MEDIA_TYPE)
-        return apiCall {
-            tusApi.uploadData(
-                location = location,
-                uploadOffset = 0L,
-                tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                body = body,
-            )
-        }.map { data -> listOfNotNull(data.attachment?.toUploadedMedia()) }
+        val ranges = TusChunkPlan.chunks(totalBytes = item.bytes.size.toLong(), chunkSize = chunkSizeBytes)
+        for (range in ranges) {
+            if (!range.isFinal) {
+                val chunkResult = tusApi.patchChunk(
+                    location = location,
+                    uploadOffset = range.offset,
+                    tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
+                    body = rangeBody(item.bytes, range),
+                )
+                if (chunkResult is NetworkResult.Failure) return chunkResult
+                continue
+            }
+
+            return apiCall {
+                tusApi.uploadData(
+                    location = location,
+                    uploadOffset = range.offset,
+                    tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
+                    body = rangeBody(item.bytes, range),
+                )
+            }.map { data -> listOfNotNull(data.attachment?.toUploadedMedia()) }
+        }
+
+        // Unreachable: TusChunkPlan.chunks always returns at least one (final) range.
+        error("TusChunkPlan produced no ranges for ${item.bytes.size} bytes")
     }
+
+    private fun rangeBody(bytes: ByteArray, range: TusChunkRange) =
+        bytes.copyOfRange(range.offset.toInt(), (range.offset + range.length).toInt()).toRequestBody(OCTET_STREAM_MEDIA_TYPE)
 
     /**
      * Uploads every item in [items], sequentially and in order, all tagged with the
@@ -79,7 +113,15 @@ public class TusUploadRepository @Inject constructor(
         return NetworkResult.Success(uploaded)
     }
 
-    private companion object {
-        val OCTET_STREAM_MEDIA_TYPE = "application/offset+octet-stream".toMediaTypeOrNull()
+    public companion object {
+        /**
+         * Default PATCH chunk size — matches iOS `TusUploadManager.chunkSize` (10 MB)
+         * so both clients place the same load shape against the gateway's `@tus/server`
+         * mount. Public so it's usable as a real default for [upload]'s [chunkSizeBytes]
+         * parameter from any caller/module.
+         */
+        public const val DEFAULT_CHUNK_SIZE_BYTES: Long = 10L * 1024 * 1024
+
+        private val OCTET_STREAM_MEDIA_TYPE = "application/offset+octet-stream".toMediaTypeOrNull()
     }
 }
