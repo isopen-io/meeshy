@@ -106,4 +106,34 @@ class ChatScrollGeometryTest {
     fun `BottomUp -- just past the threshold is not near the old end`() {
         assertThat(ChatScrollGeometry.isNearOldEnd(17, 20, ChatListOrientation.BottomUp)).isFalse()
     }
+
+    // -- bottomEdgeIndex / topEdgeIndex -----------------------------------
+    //
+    // A real `LazyListState` exposes two Compose-native readings —
+    // `firstVisibleItemIndex` (lowest visible index) and the derived
+    // `lastVisibleItemIndex` (highest visible index) — that never change
+    // meaning themselves, but which one answers "the bottom edge" / "the old
+    // (top) edge" flips with `reverseLayout`. These two functions are the
+    // single place that translates Compose's own first/last into the chat's
+    // semantic bottom/old-end edges, so [ChatScreen] never repeats the branch.
+
+    @Test
+    fun `TopDown -- the bottom edge is the highest visible index`() {
+        assertThat(ChatScrollGeometry.bottomEdgeIndex(2, 9, ChatListOrientation.TopDown)).isEqualTo(9)
+    }
+
+    @Test
+    fun `BottomUp -- the bottom edge is the lowest visible index`() {
+        assertThat(ChatScrollGeometry.bottomEdgeIndex(2, 9, ChatListOrientation.BottomUp)).isEqualTo(2)
+    }
+
+    @Test
+    fun `TopDown -- the old (top) edge is the lowest visible index`() {
+        assertThat(ChatScrollGeometry.topEdgeIndex(2, 9, ChatListOrientation.TopDown)).isEqualTo(2)
+    }
+
+    @Test
+    fun `BottomUp -- the old (top) edge is the highest visible index`() {
+        assertThat(ChatScrollGeometry.topEdgeIndex(2, 9, ChatListOrientation.BottomUp)).isEqualTo(9)
+    }
 }

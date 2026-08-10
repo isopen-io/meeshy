@@ -14,7 +14,10 @@ object PinnedDayHeader {
 
     /**
      * The `dayMillis` of the [ChatListItem.DayHeader] governing the topmost visible
-     * row, or `null` when nothing should float.
+     * row, or `null` when nothing should float. Equivalent to
+     * `governingDayMillis(items, firstVisibleIndex, ChatListOrientation.TopDown)`
+     * — kept for [ChatListOrientation.TopDown] callers/tests that predate the
+     * orientation parameter.
      *
      * Returns `null` for an empty list, a negative [firstVisibleIndex], a top row
      * that sits above the first day header (e.g. the encryption notice at index 0),
@@ -22,11 +25,32 @@ object PinnedDayHeader {
      * the inline header is already on screen, so a floating duplicate would be
      * redundant. A [firstVisibleIndex] past the end clamps to the last row.
      */
-    fun governingDayMillis(items: List<ChatListItem>, firstVisibleIndex: Int): Long? {
-        if (items.isEmpty() || firstVisibleIndex < 0) return null
-        val top = firstVisibleIndex.coerceAtMost(items.lastIndex)
+    fun governingDayMillis(items: List<ChatListItem>, firstVisibleIndex: Int): Long? =
+        governingDayMillis(items, firstVisibleIndex, ChatListOrientation.TopDown)
+
+    /**
+     * Orientation-aware form of the two-argument overload above. [items] must
+     * already be the list actually rendered by the `LazyColumn` — oldest-first
+     * in [ChatListOrientation.TopDown], `items.asReversed()` (newest-first) in
+     * [ChatListOrientation.BottomUp] — and [topIndex] the index, within THAT
+     * list, of the row currently at the visual top of the viewport (see
+     * [ChatScrollGeometry.topEdgeIndex]).
+     *
+     * The scan direction flips with orientation: reversing item order also
+     * reverses each day's `[DayHeader, message...]` block into
+     * `[message..., DayHeader]`, so a header now sits AFTER (not before) the
+     * rows it governs — [ChatListOrientation.BottomUp] scans forward
+     * (`topIndex..items.lastIndex`) instead of backward to find it.
+     */
+    fun governingDayMillis(items: List<ChatListItem>, topIndex: Int, orientation: ChatListOrientation): Long? {
+        if (items.isEmpty() || topIndex < 0) return null
+        val top = topIndex.coerceAtMost(items.lastIndex)
         if (items[top] is ChatListItem.DayHeader) return null
-        for (index in top downTo 0) {
+        val scanRange = when (orientation) {
+            ChatListOrientation.TopDown -> top downTo 0
+            ChatListOrientation.BottomUp -> top..items.lastIndex
+        }
+        for (index in scanRange) {
             val header = items[index] as? ChatListItem.DayHeader ?: continue
             return header.dayMillis
         }
