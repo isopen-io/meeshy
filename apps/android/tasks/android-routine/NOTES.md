@@ -507,3 +507,60 @@ Append-only log of gotchas and decisions that save time next run.
   all three fields in one scenario — this is what would catch a future refactor that accidentally
   wired `inferCountryIso` to a stale or hardcoded region instead of the same live read
   `inferLanguages` uses, which a test only ever setting one of the two inputs at a time could miss.
+
+## Slice `auth-saved-account-picker-ui` (2026-08-10)
+- **A "core shipped, UI follow-up pending" bullet is worth checking for a missing backend endpoint
+  before picking it as "the smallest well-scoped item."** Auth §A had five such bullets (saved-account
+  picker, server environment selector, magic-link, OTP verification, email/phone recovery), all
+  superficially identical in shape. Grepping `AuthApi.kt` (`login`/`register`/`refresh`/`me`/
+  `checkAvailability` — four endpoints, nothing else) before picking found that OTP/magic-link/
+  recovery's follow-ups all silently assume a `POST /auth/...` call that doesn't exist yet
+  (`verifyEmailWithCode`, `requestMagicLink`, `requestPasswordReset`, `forgotPasswordPhone*` — zero
+  production hits anywhere in `apps/android`), while the saved-account picker and server-environment
+  selector are **fully local** (no network call in their follow-up text at all). Picking one of the
+  network-shaped ones would have silently doubled the slice's scope (new `AuthApi` method + DTOs +
+  repository wiring, on top of the Compose UI the note describes) — a "RE-PROUVER" pass that only
+  re-reads the note's prose and not what it implicitly depends on would have missed this.
+- **A store whose domain object is a stateless `object` of `List<T> -> List<T>` pure functions
+  (`SavedAccounts`) needs a different store shape than one whose domain object bundles data + methods
+  (`StarredMessages`).** `StarredMessagesStore.starred: StateFlow<StarredMessages>` exposes the whole
+  value type because `StarredMessages.toggle()`/`.unstar()` are *instance* methods the store just
+  forwards to. `SavedAccounts.upsert(accounts, account)`/`.remove(accounts, id)` take the list as a
+  first parameter instead — so `SavedAccountsStore.accounts: StateFlow<List<SavedAccount>>` exposes
+  the raw list, and the store itself is the thing that threads `SavedAccounts.sorted(...)` through
+  every mutation (upsert/remove/initial hydration) so callers never see or have to re-derive an
+  unsorted list. Copying `StarredMessagesStore`'s shape verbatim (a `StateFlow<DomainType>`) would
+  have been a type mismatch from the first line — matching the *precedent's pattern* (persist +
+  observe + idempotent-write skip) mattered more than matching its exact generic signature.
+- **A ViewModel's `viewModelScope.launch { store.flow.collect { ... } }` seed only fires once the
+  test dispatcher advances — a test asserting `vm.state.value` right after a mutating call, with no
+  `runTest`/`advanceUntilIdle`, will see the STALE pre-mutation state even though the mutation itself
+  (`store.remove(id)`) ran synchronously.** Caught this via `removeAccount_dropsItFromTheStoreAndThe
+  ExposedState` initially failing on `[a1, a2]` instead of `[a2]` — the store had already dropped
+  `a1` (verified separately), but the collector coroutine that mirrors the store's flow into
+  `AuthUiState.savedAccounts` hadn't been scheduled yet under `StandardTestDispatcher`. Fix: wrap in
+  `runTest(dispatcher)` + `advanceUntilIdle()` after the mutating call, same as every other
+  ViewModel-state-after-async-work test in this file. The *initial-seed* tests
+  (`initialState_seedsSavedAccountsFromTheStore...`) don't need this — that value is read
+  synchronously from `store.accounts.value` inside the `AuthUiState(...)` constructor call, not via
+  the collector — a useful reminder that "seeded at construction" and "kept in sync afterwards" are
+  two different code paths with two different test requirements even when they end up populating the
+  same field.
+- **`logout()` resetting to a bare `AuthUiState()` silently wipes a field that must survive
+  logout.** The pre-existing `logout()` did `_state.value = AuthUiState()`, which is correct for every
+  field it originally had (all should reset) but became a bug the moment `savedAccounts` was added —
+  logging out would show an empty picker until some unrelated store emission happened to refresh it,
+  even though the store itself still held the accounts. `SessionTeardown.wipe()` was re-read to
+  confirm it doesn't touch this store either (it only clears the Room database + category-snapshot +
+  conversation-draft stores — all per-account; saved accounts are deliberately cross-account, same as
+  iOS's `AuthManager.logout()` never touching `savedAccounts`). Fix: `AuthUiState(savedAccounts =
+  savedAccountsStore.accounts.value)`, covered by a dedicated `logout_preservesTheSavedAccountsList`
+  test — a "reset to defaults" pattern is only safe if every field's default is actually the
+  post-reset-desired value, worth re-checking on every new field added to a state class that gets
+  blanket-reset somewhere.
+- **iOS's `.contextMenu` (long-press → destructive action) has no first-class Compose equivalent** —
+  ported as a visible trailing `IconButton` on `SavedAccountRow` instead of chasing a long-press
+  gesture + custom menu popup. Same user capability (remove a remembered account), platform-idiomatic
+  discovery (Android users expect visible affordances more than iOS's long-press-to-reveal pattern),
+  called out explicitly as a deliberate simplification in `feature-parity.md` rather than left
+  implicit — same discipline as prior slices' "merging two iOS controls into one" notes.

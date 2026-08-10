@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.auth.SavedAccountsStore
+import me.meeshy.sdk.auth.SharedPrefsSavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.category.CategorySnapshotStore
@@ -84,6 +86,13 @@ object SdkModule {
         @ApplicationContext context: Context,
         json: Json,
     ): StarredMessagesStore = SharedPrefsStarredMessagesStore(context, json)
+
+    @Provides
+    @Singleton
+    fun providesSavedAccountsStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): SavedAccountsStore = SharedPrefsSavedAccountsStore(context, json)
 
     @Provides
     @Singleton

@@ -12,6 +12,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.auth.InMemorySavedAccountsStore
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.LoginRequest
@@ -19,6 +21,7 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.SavedAccount
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
@@ -42,14 +45,28 @@ class AuthViewModelTest {
             ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
     }
 
+    private class FixedCacheClock(private val millis: Long) : CacheClock {
+        override fun nowMillis(): Long = millis
+    }
+
+    private fun account(id: String, username: String = "user-$id") =
+        SavedAccount(id = id, username = username, displayName = null, avatarUrl = null, lastActiveAtMillis = 1L)
+
     private fun viewModel(
         response: ApiResponse<AuthSession>,
         store: InMemoryTokenStore = InMemoryTokenStore(),
         coordinator: RealtimeSessionCoordinator = mockk(relaxed = true),
         teardown: SessionTeardown = mockk(relaxed = true),
+        savedAccountsStore: InMemorySavedAccountsStore = InMemorySavedAccountsStore(),
+        clock: CacheClock = FixedCacheClock(999L),
     ): AuthViewModel {
         val api = FakeAuthApi(response)
-        return AuthViewModel(AuthRepository(api, store, SessionRepository(api, store), teardown), coordinator)
+        return AuthViewModel(
+            AuthRepository(api, store, SessionRepository(api, store), teardown),
+            coordinator,
+            savedAccountsStore,
+            clock,
+        )
     }
 
     @Before
@@ -163,5 +180,127 @@ class AuthViewModelTest {
 
         coVerify { teardown.wipe() }
         assertThat(vm.state.value.isAuthenticated).isFalse()
+    }
+
+    // --- Saved-account picker (auth-saved-account-picker-ui) ---
+
+    @Test
+    fun initialState_seedsSavedAccountsFromTheStore_andShowsThePicker() {
+        val store = InMemorySavedAccountsStore(initial = listOf(account("a1")))
+
+        val vm = viewModel(ApiResponse(success = false), savedAccountsStore = store)
+
+        assertThat(vm.state.value.savedAccounts.map { it.id }).containsExactly("a1")
+        assertThat(vm.state.value.showPicker).isTrue()
+    }
+
+    @Test
+    fun initialState_withNoSavedAccounts_doesNotShowThePicker() {
+        val vm = viewModel(ApiResponse(success = false))
+
+        assertThat(vm.state.value.showPicker).isFalse()
+    }
+
+    @Test
+    fun selectAccount_prefillsUsernameAndClearsThePasswordAndAnyError() {
+        val vm = viewModel(ApiResponse(success = false, error = "stale"))
+        vm.onPasswordChange("stale-password")
+
+        vm.selectAccount(account("a1", username = "atabeth"))
+
+        val state = vm.state.value
+        assertThat(state.selectedAccount?.id).isEqualTo("a1")
+        assertThat(state.username).isEqualTo("atabeth")
+        assertThat(state.password).isEmpty()
+    }
+
+    @Test
+    fun deselectAccount_returnsToThePickerAndClearsThePassword() {
+        val vm = viewModel(ApiResponse(success = false), savedAccountsStore = InMemorySavedAccountsStore(listOf(account("a1"))))
+        vm.selectAccount(account("a1"))
+        vm.onPasswordChange("typed")
+
+        vm.deselectAccount()
+
+        val state = vm.state.value
+        assertThat(state.selectedAccount).isNull()
+        assertThat(state.password).isEmpty()
+        assertThat(state.showPicker).isTrue()
+    }
+
+    @Test
+    fun useAnotherAccount_switchesToTheNormalLoginFormAndClearsAnySelection() {
+        val vm = viewModel(ApiResponse(success = false), savedAccountsStore = InMemorySavedAccountsStore(listOf(account("a1"))))
+        vm.selectAccount(account("a1"))
+
+        vm.useAnotherAccount()
+
+        val state = vm.state.value
+        assertThat(state.showNormalLogin).isTrue()
+        assertThat(state.selectedAccount).isNull()
+        assertThat(state.showPicker).isFalse()
+    }
+
+    @Test
+    fun backToSavedAccounts_returnsFromTheNormalFormToThePicker() {
+        val vm = viewModel(ApiResponse(success = false), savedAccountsStore = InMemorySavedAccountsStore(listOf(account("a1"))))
+        vm.useAnotherAccount()
+
+        vm.backToSavedAccounts()
+
+        assertThat(vm.state.value.showPicker).isTrue()
+    }
+
+    @Test
+    fun removeAccount_dropsItFromTheStoreAndTheExposedState() = runTest(dispatcher) {
+        val store = InMemorySavedAccountsStore(initial = listOf(account("a1"), account("a2")))
+        val vm = viewModel(ApiResponse(success = false), savedAccountsStore = store)
+
+        vm.removeAccount("a1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.savedAccounts.map { it.id }).containsExactly("a2")
+    }
+
+    @Test
+    fun login_success_upsertsTheAccountIntoTheSavedAccountsStore() = runTest(dispatcher) {
+        val store = InMemorySavedAccountsStore()
+        val session = AuthSession(MeeshyUser(id = "u1", username = "atabeth", displayName = "Ata"), token = "jwt")
+        val vm = viewModel(ApiResponse(success = true, data = session), savedAccountsStore = store, clock = FixedCacheClock(42L))
+
+        vm.onUsernameChange("atabeth")
+        vm.onPasswordChange("secret")
+        vm.login()
+        advanceUntilIdle()
+
+        val saved = store.accounts.value.single()
+        assertThat(saved.id).isEqualTo("u1")
+        assertThat(saved.username).isEqualTo("atabeth")
+        assertThat(saved.displayName).isEqualTo("Ata")
+        assertThat(saved.lastActiveAtMillis).isEqualTo(42L)
+    }
+
+    @Test
+    fun login_failure_doesNotUpsertAnyAccount() = runTest(dispatcher) {
+        val store = InMemorySavedAccountsStore()
+        val vm = viewModel(ApiResponse(success = false, error = "nope"), savedAccountsStore = store)
+
+        vm.onUsernameChange("atabeth")
+        vm.onPasswordChange("wrong")
+        vm.login()
+        advanceUntilIdle()
+
+        assertThat(store.accounts.value).isEmpty()
+    }
+
+    @Test
+    fun logout_preservesTheSavedAccountsList() = runTest(dispatcher) {
+        val store = InMemorySavedAccountsStore(initial = listOf(account("a1")))
+        val vm = viewModel(ApiResponse(success = false), store = InMemoryTokenStore(jwt = "jwt"), savedAccountsStore = store)
+
+        vm.logout()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.savedAccounts.map { it.id }).containsExactly("a1")
     }
 }
