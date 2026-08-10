@@ -6,6 +6,7 @@ import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
@@ -714,10 +715,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
 
         // Diffuser le statut de lecture via Socket.IO
-        // Emit to the conversation room AND each registered participant's user
-        // room so message authors still receive updates when they've navigated
-        // away from the conversation view. Socket.IO deduplicates per-socket
-        // delivery when multiple rooms are chained on a single emit call.
+        // Emit to the conversation room AND each participant's personal room so
+        // message authors still receive updates when they've navigated away from
+        // the conversation view. Socket.IO deduplicates per-socket delivery when
+        // multiple rooms are chained on a single emit call.
         try {
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
@@ -725,7 +726,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               readStatusService.getLatestMessageSummary(message.conversationId),
               prisma.participant.findMany({
                 where: { conversationId: message.conversationId, isActive: true },
-                select: { userId: true }
+                // `id` NAMES the personal room of a participant with no `User`
+                // row — sans lui, l'identité de repli n'était pas ignorée, elle
+                // n'était jamais lue.
+                select: { id: true, userId: true }
               })
             ]);
             const payload = {
@@ -736,19 +740,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               updatedAt: new Date(),
               summary
             };
-            const io = socketIOManager.getIO();
-            const convRoom = ROOMS.conversation(message.conversationId);
-            let emitter: any = io.to(convRoom);
-            const seenRooms = new Set<string>([convRoom]);
-            for (const p of activeParticipants) {
-              if (!p.userId) continue;
-              const userRoom = ROOMS.user(p.userId);
-              if (seenRooms.has(userRoom)) continue;
-              seenRooms.add(userRoom);
-              emitter = emitter.to(userRoom);
-            }
-            emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-            emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+            // Quatrième copie verbatim de ce fan-out, et la dernière : les trois
+            // autres (MessageHandler auto-deliver, /message-read-status, la route
+            // conversations/messages) sont passées par cette unité partagée en
+            // adressant `userId ?? id`. Celle-ci était restée sur `userId` seul,
+            // donc un participant sans compte ne recevait aucun accusé de lecture.
+            emitToConversationParticipants({
+              io: socketIOManager.getIO(),
+              conversationId: message.conversationId,
+              participants: activeParticipants,
+              events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+              payload
+            });
           }
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);

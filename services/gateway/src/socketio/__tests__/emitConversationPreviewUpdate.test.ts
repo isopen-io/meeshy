@@ -15,7 +15,7 @@ function makeIo(sink: Emitted[]) {
 }
 
 function makePrisma(
-  participants: Array<{ userId: string | null }>,
+  participants: Array<{ id?: string; userId: string | null }>,
   latest: { id: string; content: string | null; senderId: string; createdAt: Date } | null,
 ) {
   return {
@@ -35,7 +35,11 @@ describe('emitConversationPreviewUpdate', () => {
   it('fans conversation:updated to every active participant user room with the recomputed latest preview', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma(
-      [{ userId: 'user-A' }, { userId: 'user-B' }, { userId: 'user-C' }],
+      [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+        { id: 'p-C', userId: 'user-C' },
+      ],
       latest,
     );
 
@@ -59,22 +63,42 @@ describe('emitConversationPreviewUpdate', () => {
     });
   });
 
-  it('skips anonymous participants (no userId) and dedupes repeated userIds', async () => {
+  // Ce test affirmait l'inverse : « skips anonymous participants (no userId) ».
+  // C'était le défaut, pas l'intention. Un participant sans compte a bien une
+  // room personnelle — `AuthHandler` la nomme d'après son `Participant.id` — et
+  // c'est par elle seule qu'il reçoit quoi que ce soit une fois sorti de la vue
+  // conversation. Le sauter laissait un invité de lien partagé avec une ligne
+  // de liste figée sur le texte d'avant l'édition, indéfiniment.
+  it('addresses an accountless participant by its participant id, and dedupes repeated userIds', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma(
-      [{ userId: 'user-A' }, { userId: null }, { userId: 'user-A' }],
+      [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-anon', userId: null },
+        { id: 'p-A2', userId: 'user-A' },
+      ],
       latest,
     );
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
-    expect(emitted).toHaveLength(1);
-    expect(emitted[0].room).toBe('user:user-A');
+    expect(emitted.map((e) => e.room)).toEqual(['user:user-A', 'user:p-anon']);
+  });
+
+  it('selects the participant id, without which the fallback identity cannot be read', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect((prisma.participant.findMany as jest.Mock).mock.calls[0][0]).toMatchObject({
+      select: { id: true, userId: true },
+    });
   });
 
   it('emits a null preview when the last message of the conversation was deleted', async () => {
     const emitted: Emitted[] = [];
-    const prisma = makePrisma([{ userId: 'user-A' }], null);
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], null);
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
@@ -90,7 +114,7 @@ describe('emitConversationPreviewUpdate', () => {
     const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
     const emitted: Emitted[] = [];
     const geoLatest: any = { ...latest, content: '', metadata: { location: GEO } };
-    const prisma = makePrisma([{ userId: 'user-A' }], geoLatest);
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], geoLatest);
 
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
@@ -101,7 +125,7 @@ describe('emitConversationPreviewUpdate', () => {
   });
 
   it('is a no-op when the Socket.IO layer is unavailable', async () => {
-    const prisma = makePrisma([{ userId: 'user-A' }], latest);
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
     await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1', 'user-editor')).resolves.toBeUndefined();
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
   });

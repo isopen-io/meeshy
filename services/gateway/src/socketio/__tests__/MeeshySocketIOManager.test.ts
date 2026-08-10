@@ -1874,12 +1874,16 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findMany.mockResolvedValue([
         { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
         { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+        { id: 'part-anon', userId: null, joinedAt: new Date() },
       ]);
 
       await manager.broadcastMessage(msg, 'conv-123456789012');
 
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-recipient'));
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-sender'));
+      // Parité avec le chemin socket : un participant sans compte est adressé
+      // par son `Participant.id`, la seule room qu'il ait jamais rejointe.
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('part-anon'));
       expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_UPDATED,
         expect.objectContaining({
@@ -4587,6 +4591,34 @@ describe('MeeshySocketIOManager', () => {
         SERVER_EVENTS.READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId, userId, type: 'received' })
       );
+    });
+
+    it('reaches an accountless sender by its participant id, the only room it is in', async () => {
+      const userId = 'user-drain-anon-peer';
+      const convId = '507f1f77bcf86cd799439231';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      // L'expéditeur du message rejoué est un invité de lien partagé : pas de
+      // ligne `User`, donc `AuthHandler` nomme sa room d'après son
+      // `Participant.id`. Le filtre `if (row.userId)` que ceci couvre le
+      // laissait bloqué sur un unique tic « envoyé », pour toujours.
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', conversationId: convId, userId },
+        { id: 'part-anon-sender', conversationId: convId, userId: null },
+      ]);
+
+      ioState.to.mockClear();
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, [
+        { messageId: 'msg-anon', conversationId: convId, payload: {}, enqueuedAt: 1 },
+      ]);
+
+      expect(ioState.to).toHaveBeenCalledWith('user:part-anon-sender');
+      expect(ioState.to).toHaveBeenCalledWith(`user:${userId}`);
+      expect(ioState.to).toHaveBeenCalledWith(`conversation:${convId}`);
     });
 
     it('keeps only the latest messageId when same conversationId appears multiple times', async () => {

@@ -378,6 +378,38 @@ new SocketIOServer(httpServer, {
 
 > **Convention:** Toujours utiliser les helpers `ROOMS.*()` de `@meeshy/shared/types/socketio-events` — jamais de string hardcodee.
 
+#### Quel `id` passer a `ROOMS.user()` ?
+
+**`participant.userId ?? participant.id`, jamais `participant.userId` seul.** Un
+participant sans ligne `User` (invite de lien partage) a bien une room
+personnelle : `AuthHandler` la lui fait rejoindre sous son **`Participant.id`**.
+L'adresser par `userId` seul ne saute donc pas une room absente, il en saute une
+qui existe — et c'est la seule par laquelle ce participant recoit quoi que ce
+soit une fois sorti de `conversation:<id>`.
+
+Ne pas ecrire la regle a la main : `participantUserRooms(participants, seed?)`
+(`socketio/emitToConversationParticipants.ts`) rend la liste de rooms dedupee,
+et `emitToConversationParticipants(...)` fait en plus le chainage
+`conversation` + rooms personnelles pour les evenements qui concernent toute la
+conversation. Ces deux unites existent parce que la regle a ete re-ecrite a la
+main **neuf fois**, et ratee **huit** : trois copies de l'eventail d'accuses
+(cycle 43), puis les trois emetteurs de `conversation:updated`, la quatrieme
+copie des accuses et le rejeu de remise a la reconnexion (cycle 44).
+
+Deux pieges qui ne se voient pas a la relecture :
+
+1. **Le `select` Prisma doit charger `id` ET `userId`.** Quatre des huit sites
+   selectionnaient `{ userId: true }` : l'identite de repli n'y etait pas
+   ignoree, elle n'etait jamais lue.
+2. **Le filtre peut etre en amont de l'emission.** Un `if (row.userId)` a la
+   construction d'une `Map`, ou un `where: { userId: { not: null } }`, produit
+   exactement le meme trou sans qu'aucun `ROOMS.user(` ne paraisse fautif.
+
+Exception unique et deliberee : `utils/callEndedFanout.ts` filtre bien les
+anonymes, parce que l'audience de terminaison d'un appel doit refleter son
+audience d'invitation et que `call:initiated` porte le meme filtre — un
+participant sans compte n'est jamais sonne. La raison est ecrite dans le fichier.
+
 ---
 
 ## Maps de Connexion
