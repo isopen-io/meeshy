@@ -1,3 +1,126 @@
+# Cycle 48 — La course que le cycle 47 a nommée sans la fermer
+
+Le cycle 47 a fait retirer, au rappel d'un message, les notifications qu'il avait produites, et il a
+laissé la course ouverte — écrite dans le code même, en commentaire du `deleteMany` :
+
+> une notification créée entre la lecture et l'écriture (l'éventail court après le retrait) part
+> avec les autres. Elle n'est alors pas annoncée — un écran en retard, **à corriger par une garde
+> d'admission côté éventail**.
+
+La première moitié est juste. La seconde nomme le mauvais remède, et c'est le point de ce cycle.
+
+## Pourquoi une garde d'ADMISSION ne pouvait pas fermer cette fenêtre
+
+Le `deleteMany` du rappel filtre sur `messageId` : il emporte donc tout ce qui existe À SON INSTANT,
+et rien de ce qui naît après lui. La ligne qui fuit n'est pas celle créée « entre la lecture et
+l'écriture » — celle-là part bien avec les autres — c'est celle créée APRÈS le balayage.
+
+Une relecture en TÊTE d'éventail rétrécit la fenêtre sans jamais la fermer : `deletedAt` peut être
+committé entre la relecture et la création. C'est exactement le trou que porte DÉJÀ la garde de
+`createMessageNotification`, présente depuis longtemps et documentée comme telle. L'étendre aux deux
+autres créateurs aurait donc payé une lecture par ENVOI de message — le coût que le cycle 47 avait
+lui-même chiffré pour reculer — sans clore quoi que ce soit.
+
+## Le geste qui ferme
+
+Une relecture de `deletedAt` à l'AUTRE bout, après l'éventail.
+
+Soit D l'instant du commit de `deletedAt`, X celui du `deleteMany` du rappel (X > D par
+construction : les effets de retrait tournent après le commit), [c1..cn] les créations de l'éventail
+et R sa relecture finale (R > cn) :
+
+- **X > cn** — le `deleteMany` du rappel voit toutes nos lignes. Rien ne survit.
+- **X < cn** — alors D < X < cn < R, donc R lit `deletedAt` non nul et l'éventail retire lui-même.
+
+Aucun troisième cas. La fenêtre est fermée, pas rétrécie.
+
+Le placement est aussi ce qui la rend gratuite. Après `onFanOut`, les notifications sont déjà
+parties : la lecture n'entre pas dans le chemin de latence du push, là où la garde d'admission
+l'aurait allongé pour TOUS les envois. C'est l'inverse exact du compromis que le cycle 47 avait
+refusé.
+
+## Trois choix, aucun cosmétique
+
+**La garde porte sur l'audience VISÉE, pas sur le compte rendu.** `onFanOut` dit ce qui est
+réellement parti ; un créateur qui écrit sa ligne puis jette la laisserait derrière lui avec un
+compteur à zéro, donc sans relecture. `owesReplyNotification || mentions.length || candidats.length`
+ne peut pas rater ce cas, et laisse toujours l'éventail sans destinataire ne rien payer.
+
+**`deletedAt` non nul est la SEULE preuve d'un rappel.** Un message introuvable à la relecture ne
+fait rien retirer : aucun chemin du gateway ne supprime un message physiquement (vérifié — pas un
+seul `message.delete`/`deleteMany`), et retirer sur une non-preuve viderait des inboxes. Le sens sûr
+de l'erreur est ici de GARDER, à l'inverse du rappel lui-même.
+
+**Le retrait devient une unité partagée.** `retractMessageNotifications` sort de `private` :
+fermer une course demande le même geste aux deux bouts — au rappel pour les lignes déjà écrites, en
+fin d'éventail pour celles que le rappel n'a pas pu voir. Deux copies auraient divergé comme les
+listes d'effets de suppression avaient divergé avant `applyMessageRemovalEffects`.
+
+## Plan
+
+- [x] T1 — unité partagée `retractMessageNotifications`, appelée par les deux bouts
+- [x] T2 — RED : un rappel qui court après l'éventail voit ses lignes retirées
+- [x] T3 — témoin : un message vivant garde ses notifications
+- [x] T4 — RED : les lignes emportées sont annoncées à leurs destinataires
+- [x] T5 — témoin : un éventail sans destinataire ne relit pas le message
+- [x] T6 — témoin : un message introuvable ne fait rien retirer
+- [x] T7 — RED : une relecture qui jette n'emporte ni l'éventail ni son compte rendu
+- [x] T8 — gates : 633/633 suites, 16143 tests, `tsc --noEmit` propre
+- [x] T9 — changeset + CHANGELOG + ce relevé
+
+## Revue
+
+Sonde : `if (attemptedFanOut)` neutralisé en `if (false && attemptedFanOut)` — **3 rouges** sur 6
+tests neufs, et ce sont les bons trois (T2, T4, T7). Les trois autres sont des témoins verts avant
+comme après, par construction : ils disent ce que le correctif ne doit PAS faire.
+
+Le mock `message.findUnique` du fichier de test a dû apprendre à aiguiller sur `where.id`. Deux
+questions distinctes passent désormais par ce délégué et elles ne portent pas sur le même message —
+l'auteur du message CITÉ avant l'éventail, l'état vivant du message ENVOYÉ après. Un double qui
+rendrait la même ligne aux deux ne pourrait pas distinguer un défaut de l'un du défaut de l'autre.
+
+Première version de la garde : `reply || mentions > 0 || regular > 0`. Elle a fait tomber T2 et T4,
+et c'est le test qui a corrigé le code, pas l'inverse — les doubles rendent `null`/`0`, donc « rien
+créé », donc pas de relecture. En cherchant pourquoi, le vrai défaut apparaît : ce compteur ne dit
+pas ce qui a été ÉCRIT, il dit ce qui a été écrit ET rendu. Un créateur qui commit puis jette
+échappe aux deux. D'où le passage à l'audience visée.
+
+Couverture des trois fichiers touchés : 100 % des lignes, `retractMessageNotifications.ts` à 100 %
+sur les quatre métriques.
+
+## Reste ouvert après ce cycle
+
+- **La péremption (`expiresAt`) n'a pas d'équivalent.** `createMessageNotification` refuse un
+  message déjà expiré, mais un message qui expire APRÈS la création de sa notification laisse la
+  ligne — et son extrait — en base. Contrairement au rappel, la péremption n'est pas un événement :
+  personne ne passe à l'instant T. Il faudrait un balayage, ou une lecture qui filtre sur
+  `Message.expiresAt` à l'affichage de l'inbox. Chantier distinct, à instruire séparément.
+- **Le push DÉJÀ remis reste sur l'appareil** (hérité du cycle 47). Aucun `apns-collapse-id` ni
+  retrait à distance n'est envoyé au rappel. Ce cycle rend d'autant plus probable qu'un push parte
+  puis soit retiré en base : la relecture d'après-éventail retire la LIGNE, pas la bannière déjà
+  affichée. Fermable côté APNs par un push `mutable-content` de retrait.
+- **Les points hérités restent ouverts tels quels** : les mentions du chemin de lien attendent
+  l'extraction qui écrit `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ;
+  les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine.
+- **Fermé ce cycle — l'audit des émetteurs par room personnelle contre la clé `userId ?? id`.**
+  Le backlog le portait depuis le cycle 25b, en soupçon (« rien ne garantit que les autres la
+  respectent »). Instruit par recherche et non par déduction, comme il le demandait : 53 sites
+  `ROOMS.user(` sur 19 fichiers. Le résultat est propre. `emitConversationPreviewUpdate`, celui que
+  le backlog nommait, charge `id` ET `userId` et émet par `participantUserRooms()` — le helper
+  canonique — avec la règle inscrite en commentaire au-dessus du `select`. Les sites qui passent un
+  identifiant nu le tiennent d'un `User.id` (destinataire de notification, créateur de conversation,
+  liste de participants inscrits), jamais d'un `Participant`. Une seule exception délibérée, et déjà
+  documentée en tant que telle : `callEndedFanout` filtre `userId: { not: null }` parce que
+  l'audience de terminaison doit refléter l'audience d'INVITATION — `call:initiated` porte le même
+  filtre, un participant sans compte n'est jamais sonné, et s'il rejoint l'appel il est de toute
+  façon dans `ROOMS.call(callId)`. Le point sort du backlog.
+- **Fermé depuis le cycle 47, vérifié ce cycle** : « iOS n'écoute pas `notification:deleted` » n'est
+  plus vrai. `MessageSocketManager` l'écoute et le publie sur `notificationDeleted`, que
+  `NotificationToastManager` consomme. Le point sort du backlog.
+
+---
+
 # Cycle 47 — L'inbox de notifications gardait une COPIE du message rappelé
 
 Le cycle 46 a sorti le message rappelé de l'inbox de mentions et a laissé, écrite noir sur blanc,

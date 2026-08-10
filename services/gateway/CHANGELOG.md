@@ -1,5 +1,12 @@
 # @meeshy/gateway
 
+## 1.22.12
+
+### Patch Changes
+
+- Updated dependencies [36911f8]
+  - @meeshy/shared@1.8.8
+
 ## 1.22.11
 
 ### Patch Changes
