@@ -1232,3 +1232,69 @@ Append-only log of gotchas and decisions that save time next run.
   return before the chunk loop even starts. Worth explicitly checking WHICH tests survive a broad
   mutation (do they make sense as untouched by this code path?) rather than treating "many
   failures" alone as noise to dismiss.
+
+## Slice `chat-voice-recording-capture` (2026-08-10)
+- **Two remote branches touched in the prior 24h that look like interrupted routine runs can
+  instead be a concurrent session's LOST RACE — diff against the actual merge commit before
+  assuming either interruption or duplication needs graft/adoption.** `git branch -r` found
+  `claude/apps/android/feed-composer-media-attachments` (last commit 20 min BEFORE
+  `dd151eac4`/#2759 merged the identical slice) and `claude/apps/ios/inline-video-top-controls`
+  (last commit ~2h BEFORE `7f49bf904`/#2767 merged the identical change). `git diff <merged-sha>
+  <stale-branch>` on both came back **completely empty** — byte-for-byte identical content, not a
+  partial/half-duplicate needing the "graft the delta" treatment. The correct action for a
+  confirmed-identical stale branch is simple deletion (`git push origin --delete`), not the
+  stale-routine-PR playbook (which assumes a genuine delta to port).
+- **`MediaRecorder.getMaxAmplitude()` has no Android equivalent of iOS's direct
+  `AVAudioRecorder.averagePower(forChannel:)` dB reading — the linear-PCM-to-dB conversion is
+  genuinely new client-side math, not a port, even though the pure normalizer it feeds
+  (`AudioLevelNormalizer`) already existed and was already a faithful iOS port.** Worth writing a
+  doc comment that says so explicitly (`MicAmplitudeDecibels`'s), since the instinct on this
+  routine is usually "find the iOS source and port it" — here there was nothing on the iOS side
+  to port for this specific conversion, only for the normalizer downstream of it.
+- **A Compose sub-composable's own doc comment can be the single most reliable signal that a
+  "done" checklist item is actually half-wired.** `VoiceRecordingPill`'s `RecordingWaveform` doc
+  comment literally said "Until live microphone metering is wired... the bars breathe on
+  staggered infinite transitions" — i.e. the component's author had already left a note
+  explaining its own synthetic-fallback nature. `feature-parity.md` still marked the parent item
+  `[~]` (partial) with the same "pending follow-up" wording, so the two sources agreed, but the
+  waveform's specific mechanism (still fully synthetic, `session.levels` never read at all) only
+  became clear from reading the composable's own comment, not the checklist line.
+- **A generic "deliver these bytes as a file attachment" callback (`onPickFile`/
+  `sendFileAttachment`) already wired for one picker is very often the exact right pipeline for a
+  DIFFERENT capture mechanism producing the same shape of payload — reuse before assuming a new
+  VM method is needed.** The voice pill's Stop/Send needed zero new `ChatViewModel` surface: the
+  file-attachment picker's `(bytes, fileName, mimeType) -> Unit` callback, `AttachmentMessageType
+  .forMime` (already resolves `audio/mp4` → `"audio"`), and `ComposerSendGate` (already gates
+  `AUDIO` on `canSendAudios`, the same flag that already hid/showed the Mic button) all existed
+  and composed correctly with zero modification — the only genuinely new code was the capture
+  itself (permission, `MediaRecorder`, dB conversion, waveform rendering).
+- **The gateway's own independent server-side media probe (returned in the upload response) is a
+  stronger verification signal than anything client-observable for "is this a REAL recording, not
+  silence-shaped garbage."** The `POST /attachments/upload` response for the recorded `.m4a`
+  carried `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — the
+  gateway independently decoded and probed the uploaded bytes server-side, which is definitive
+  proof of a genuine, well-formed AAC container (a corrupt/truncated/all-zero recording would
+  either fail to probe or report `duration:0`), stronger than checking the local file's byte size
+  alone (a non-empty file could still be malformed).
+- **A message stuck permanently "pending" (clock icon, never reaches the server) after its
+  attachment upload succeeds is not automatically a bug in the code that produced the
+  attachment — check whether OTHER, unrelated, OLDER messages in the same conversation show the
+  identical symptom before concluding the new diff broke delivery.** After Send, the voice
+  message's `POST /attachments/upload` returned 200 (gateway-probed valid audio) but the message
+  itself never appeared server-side even after a cold app restart and a follow-up flush trigger.
+  Tracing `OutboxFlushWorker.doWork()` found the real cause: `messageLanes` (per-conversation
+  `SEND_MESSAGE` rows whose `dependsOn` is already satisfied) is computed ONCE at the START of
+  the function, before the `media` lane (later in the same pass) delivers and grafts the
+  attachment's real id — so a message that depends on an upload landing in the SAME flush pass
+  needs a SEPARATE, later trigger to actually drain, not a re-check within the same `doWork()`
+  call. Confirmed this is pre-existing and unrelated to this diff (not a red herring) by finding
+  that OTHER, plain-text test messages from unrelated PRIOR verification sessions
+  (`flip-test-verify`, `ime-verify-flip-c3` — no attachment dependency at all) were ALREADY stuck
+  pending in the same conversation's local outbox before this run even started, and a fresh
+  plain-text message sent during this run's own verification got stuck the identical way. Same
+  family as `reference_persistent_queue_must_not_wake_only_on_a_network_edge` (iOS) — a
+  persistent queue whose only redrain trigger is a single in-process event silently stalls once
+  that event's timing loses a race with the dependency it's waiting on. Flagged as a new backlog
+  candidate (`feature-parity.md` §Q) rather than fixed in this slice — it's a cross-cutting
+  `OutboxFlushWorker` reliability gap affecting every dependent chat attachment send, well beyond
+  "wire the voice recorder."

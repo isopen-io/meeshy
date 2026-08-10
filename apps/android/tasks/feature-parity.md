@@ -2292,19 +2292,74 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       interactive preview — `BubbleContent` does not yet carry a playable video attachment, so there is nothing to drive
       there yet (audio/voice-note is the dominant overlay case and is now interactive).
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
-- [~] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
+- [x] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
       **logic + pill UI done** (slice `chat-voice-recording-pill`, 2026-07-15, +29 tests). Pure
       `:feature:chat` `VoiceRecordingSession` SSOT: `Idle`/`Recording` phases, `start`/`tick`/`meter`/
       `cancel`/`stop` transitions, `canSend` min-duration gate (`>= 0.5s`, iOS `minimumSendableDuration`
       parity), `formattedElapsed` (`m:ss`, iOS `formatDuration`), `recordingDotOpacity(reduceMotion)`
       blink (iOS `dotOpacity`), and a `VoiceRecordingStop(session, outcome)` result
       (`Completed(duration, levels)` / `TooShort` / `Inactive`). Composes the existing `:core:model`
-      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer. Wired real
-      (`ChatComposer`, exempt glue): blank-composer `Mic` button starts, a 100 ms `LaunchedEffect` ticks
-      the timer, the `VoiceRecordingPill` (X cancel / animated waveform / blinking dot + timer / stop /
-      send, stop+send gated by `canSend`) replaces the input row while recording. **Pending follow-up:**
-      real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
-      (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
+      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer.
+      **Real `MediaRecorder` capture + send pipeline done** (slice `chat-voice-recording-capture`,
+      2026-08-10): the `Mic` tap now requests `RECORD_AUDIO` (mirrors `feature:calls`'
+      `CallPermissions`/`withMediaPermissions` pattern) and starts a real `MediaRecorder`
+      (`MPEG_4`/`AAC`, `voice_<millis>.m4a` via the new pure `VoiceRecordingFile` builder,
+      mirrors `:feature:feed`'s `CameraCaptureFile`) writing into `cacheDir/voice`. The 100 ms
+      `LaunchedEffect` tick loop now also polls `MediaRecorder.maxAmplitude` and feeds it through
+      a new pure `:core:model` `MicAmplitudeDecibels.toDecibels` (linear PCM → dB, Android has no
+      direct dB-metering API unlike iOS `AVAudioRecorder.averagePower`) into
+      `VoiceRecordingSession.meter()` — the waveform strip (`VoiceRecordingPill`'s
+      `RecordingWaveform`) now renders `session.levels` directly (`animateFloatAsState` per bar)
+      instead of the old synthetic `rememberInfiniteTransition` placeholder. Stop and Send both
+      finalise the take (no staging tray exists anywhere in this composer — every other
+      attachment kind sends immediately on pick too) and, when `canSend` (`Completed` outcome),
+      hand the real file bytes to the **existing, unmodified** `onPickFile`/
+      `ChatViewModel.sendFileAttachment` chain — zero VM/pipeline changes, since
+      `AttachmentMessageType.forMime("audio/mp4")` already resolves to `"audio"` and
+      `ComposerSendGate` already gates it on `canSendAudios`, exactly the Mic button's own
+      visibility gate. +10 tests (`MicAmplitudeDecibelsTest`: silence floor, defensive negative
+      amplitude, full/half-scale dB, monotonicity, above-reference-amplitude safety;
+      `VoiceRecordingFileTest`: naming determinism/uniqueness, mirrors `CameraCaptureFileTest`).
+      **Mutation-proven**: hardcoding `toDecibels` to always return `FLOOR_DB` fails **exactly**
+      the 4 discriminating tests (monotonicity, full-scale, half-scale, above-reference) — the 2
+      silence-floor tests (already expecting `FLOOR_DB`) correctly stay green; reverted via a
+      scratch `cp`-backed edit (never `git checkout --`), re-confirmed green. **Gate**:
+      `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks). Reviewer **PASS**
+      (diff `apps/android` only — 2 new files [`MicAmplitudeDecibels.kt`, `VoiceRecordingFile.kt`]
+      + 2 new test files, `VoiceRecordingPill.kt`/`ChatScreen.kt` edited; SDK purity — the dB
+      conversion is a stateless `:core:model` transform reusable by any future recorder, the
+      "when to request permission / how to wire the mic" product decision stays app-side in
+      `:feature:chat`; SSOT — `AttachmentMessageType`/`ComposerSendGate`/`MimeTypeResolver` all
+      reused verbatim, zero new classification logic; no coverage floor lowered; no tautological
+      tests). **Verified end-to-end on-device against the live gateway** (`meeshy_pixel8`,
+      already-authenticated session): tapped the real Mic button (`uiautomator dump` exact
+      bounds, not estimated screenshot coordinates), confirmed Android's system mic-in-use
+      indicator appeared (genuine hardware capture, not simulated), recorded ~24s, confirmed via
+      `run-as` a real, growing `voice_<millis>.m4a` file in `cacheDir/voice` (67 KB mid-recording).
+      Tapped Send: `adb logcat` confirmed a real `POST /api/v1/attachments/upload` (multipart,
+      `Content-Type: audio/mp4`, 89706-byte body) returning 200 with the gateway's own
+      **independent server-side audio probe** of the uploaded file —
+      `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — definitive
+      proof the recorded bytes are genuine playable AAC audio, not silence-shaped garbage.
+      **Investigation dead-end, NOT a bug in this diff**: the resulting message stayed
+      locally-pending (clock icon, never reached the server) after the attachment upload
+      succeeded — traced to the **pre-existing** two-stage `OutboxFlushWorker` dependency chain
+      (`SEND_MESSAGE`'s `dependsOn` the upload's cmid; `messageLanes` — computed once at the
+      START of `doWork()` — files require a SEPARATE later flush pass once the media graft lands,
+      not a re-check within the same pass) — confirmed pre-existing and unrelated to this diff
+      because **other, older test messages already sitting in this exact conversation's local
+      outbox from unrelated prior verification sessions** (`flip-test-verify`,
+      `ime-verify-flip-c3`, plain text, no attachment dependency at all) show the **identical**
+      stuck-pending symptom; a fresh text message sent in the same conversation during this
+      verification also stuck pending. This diff never touches `OutboxFlushWorker`/
+      `MessageRepository`/the outbox drain code — the capture-to-pipeline handoff this slice owns
+      is proven correct by the server's own independent audio probe; the outbox's
+      wake-only-once-per-mutation reliability gap (same family as the iOS
+      `reference_persistent_queue_must_not_wake_only_on_a_network_edge` finding) is a separate,
+      pre-existing, cross-cutting issue affecting every chat attachment send, not scoped to this
+      slice — flagged below as a new backlog candidate rather than fixed here. Test artifacts
+      (the recorded file, the two verification-only messages) left as-is since they never reached
+      the server (nothing to delete server-side).
 - [◐] Attachment ladder (emoji, file, location, camera, photo library, voice) — **file + photo-library picker done**
       (slice `chat-attachment-file-picker`, 2026-07-16): the composer now carries an attach button
       (`Icons.Filled.AttachFile`) launching the system document/photo picker (`GetContent("*/*")`); the pick is
