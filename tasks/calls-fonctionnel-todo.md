@@ -5733,3 +5733,75 @@ tous deux dans la même famille de bug (ack Socket.IO sans timeout).
   indéfiniment sur une ack perdue, rendant tout bouton d'appel sortant silencieusement inerte) — bon candidat
   pour la Vague 89 ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors d'atteinte dans ce
   sandbox.
+
+## Vague 89 — `startCall()` (`use-video-call.ts`) : le sibling `call:initiate` du fix Vague 88 avait le même défaut d'ack sans timeout (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`HEAD == origin/main` au démarrage après merge de la Vague 88 (PR #2725, `call:join` ack timeout) — trouvée
+déjà ouverte et verte (15/15 checks CI) au début de ce cycle, mergée directement (squash) avant de lancer un
+nouvel audit ; aucune autre PR ouverte sur le périmètre calling (`list_pull_requests` complet, 21 PR open au
+total, le reste 100% Dependabot + #2748 hors périmètre). Candidat repris directement du « Reste ouvert »
+laissé par la Vague 88 elle-même (déjà identifié en fin de cycle précédent) et confirmé indépendamment par un
+audit dédié (agent Explore, lecture seule, ligne à ligne, sans se fier au log — leçon 18).
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/conversations/use-video-call.ts`, hook
+  `useVideoCall`, fonction `startCall`, ~L112) : `socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (ack) =>
+  {...})` — exactement le même patron bugué que `acceptOrJoinCall` avant la Vague 88 (aucun `socket.timeout(ms)`,
+  aucun `setTimeout`/`clearTimeout`), mais côté appel SORTANT cette fois (le seul autre call-site socket.emit
+  ack-style sur le chemin calling avec `startCallInFlightRef` comme guard de ré-entrance, cf. commentaire du
+  hook citant explicitement `acceptingCallIdRef` de `CallManager.tsx` comme la même famille de bug). Un ack
+  `call:initiate` perdu (coupure transitoire juste après l'emit, redémarrage gateway en cours de requête,
+  flakiness mobile ordinaire) laisse le callback ne jamais s'exécuter :
+  1. `startCallInFlightRef.current` reste bloqué à `true` pour toujours — la garde de ré-entrance en tête de
+     `startCall` (`if (startCallInFlightRef.current) return;`) avale silencieusement tout clic ultérieur sur
+     le bouton Appeler, sans jamais relancer `getUserMedia`/`call:initiate`.
+  2. Le flux micro/caméra pré-autorisé (`getUserMedia` déjà résolu, `__preauthorizedMediaStream` déjà posé)
+     n'est jamais arrêté — LED caméra/micro allumée indéfiniment.
+  3. Aucune erreur n'est jamais montrée à l'utilisateur — le bouton Appeler devient silencieusement inerte,
+     seul un rechargement de page répare l'état.
+- **Fix** : ajout de `CALL_INITIATE_ACK_TIMEOUT_MS = 10_000` (même valeur/convention que
+  `CALL_JOIN_ACK_TIMEOUT_MS`) et remplacement du callback brut par `ack = await new Promise<CallInitiateAck>(
+  (resolve, reject) => { const timer = setTimeout(() => reject(...), CALL_INITIATE_ACK_TIMEOUT_MS);
+  socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (response) => { clearTimeout(timer); resolve(response); });
+  })`, enveloppé dans un `try/catch` dédié qui, sur timeout, relâche `startCallInFlightRef`, arrête le flux
+  pré-autorisé et affiche le même toast de repli que la branche `!ack?.success` existante — sans passer par
+  `handleMediaError` (qui aurait affiché un message trompeur de type « Failed to access camera/microphone:
+  CALL_INITIATE_ACK_TIMEOUT », ce n'est pas une erreur média). Le reste du corps (branches succès/échec,
+  `setIceServers`, `setCurrentCall`, toast succès) est inchangé, seulement déplacé hors du callback puisque
+  l'ack est maintenant attendu de façon linéaire. Un seul fichier de production modifié
+  (`use-video-call.ts`, +32/-24 lignes).
+- **Effet de bord découvert en cours de route** : `startCall()` attendait auparavant le résultat de l'ack de
+  façon purement fire-and-forget (le callback socket.emit s'exécutait bien après que la fonction async ait déjà
+  rendu la main) ; il attend désormais réellement l'ack (ou le timeout) avant de se résoudre. Sans impact
+  production — le seul appelant (`CallSystemMessage.tsx`) fait déjà `void startCall(...)`, jamais `await`é — mais
+  a cassé 32 tests existants qui appelaient `mockEmit` sans jamais invoquer son callback (le test attendait alors
+  réellement les 10s du VRAI timer, dépassant le timeout Jest de 5s, avec effet de cascade sur les tests
+  suivants). Corrigé en ajoutant un callback d'ack par défaut (`{ success: true, ... }`) dans le `beforeEach`
+  partagé du fichier de test — les tests qui vérifient un ack spécifique continuent de surcharger ce mock comme
+  avant.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau describe `call:initiate ack timeout (Vague 89)` dans
+  `use-video-call.test.tsx` (4 tests, timers falsifiés, même structure que
+  `CallManager.joinAckTimeout.test.tsx`) — (1) ack jamais résolue → toast d'échec affiché après
+  `advanceTimersByTime` ; (2) les pistes du flux pré-autorisé sont arrêtées au timeout ; (3) le guard de
+  ré-entrance est bien relâché — un retry après timeout relance réellement `getUserMedia`/`emit` (2 appels
+  chacun) ; (4) régression négative : un ack réussi AVANT le délai n'est pas invalidé rétroactivement par
+  `advanceTimersByTime` après coup. Les 3 premiers RED confirmés par exécution (`bun run test`) avant le fix
+  (échec sur les assertions, la 4e passait déjà trivialement faute de timer armé), GREEN après (34/34 tests du
+  fichier).
+- **Vérification** : suite `use-video-call.test.tsx` (34 tests, +4 net) verte. Sweep complet
+  `video-call|use-webrtc|use-call|orchestrator|adaptive-degradation|call-store` (44 suites / 514 tests) vert,
+  aucune régression. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage, bun 1.3.11 local
+  vs. 1.3.14 CI — écart déjà documenté, non résolu ce cycle) : `bun install --ignore-scripts`, puis
+  `packages/shared && npx prisma generate --generator client && bun run build` sans erreur. `npx tsc --noEmit`
+  sur `apps/web` : 1188 erreurs avant et après le diff (`git stash`/`stash pop`, diff normalisé ligne-à-ligne —
+  seul bruit résiduel : ordre non-déterministe des membres d'union dans les messages TS, déjà documenté), zéro
+  nouvelle erreur, zéro sur les fichiers touchés. `next lint` : même échec sandbox-only de config ESLint v9
+  circulaire documenté aux vagues précédentes (65-88), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5865 lignes, en légère
+  hausse vs. Vague 87) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall`
+  UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs.
+  `supportsHolding = false` (Vague 84, needs on-device confirmation) ; `rejoinActiveCallAfterReconnect` (web,
+  ~L830 `CallManager.tsx`) partage le même défaut d'ack sans timeout mais en fire-and-forget, gravité
+  moindre, à réévaluer ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors d'atteinte dans
+  ce sandbox ; bun local 1.3.11 vs. 1.3.14 attendu par CLAUDE.md (`bun upgrade` non tenté ce cycle, hors
+  périmètre calling).

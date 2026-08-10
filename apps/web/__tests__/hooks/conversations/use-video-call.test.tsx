@@ -98,6 +98,17 @@ describe('useVideoCall', () => {
       emit: mockEmit,
     });
 
+    // Default: resolve the call:initiate ack synchronously with success.
+    // Vague 89 made startCall() genuinely await this ack (with a timeout
+    // fallback) instead of firing emit and returning without waiting for
+    // the callback — tests that only care about getUserMedia/emit args
+    // (not the ack outcome) need SOME callback invocation or they'd hang
+    // for the full CALL_INITIATE_ACK_TIMEOUT_MS. Tests that care about a
+    // specific ack shape override this per-test as before.
+    mockEmit.mockImplementation((_event: string, _data: unknown, cb?: Function) => {
+      cb?.({ success: true, data: { callId: 'call-default-ack', mode: 'p2p', iceServers: [] } });
+    });
+
     // Clean up window storage
     delete (window as any).__preauthorizedMediaStream;
   });
@@ -616,6 +627,139 @@ describe('useVideoCall', () => {
       });
 
       expect(storeModule.getState().iceServers).toBeNull();
+    });
+  });
+
+  describe('call:initiate ack timeout (Vague 89)', () => {
+    // Sibling of Vague 88's CallManager.tsx `acceptOrJoinCall` fix — same
+    // Socket.IO-4.8-does-not-auto-reject-a-dropped-ack root cause, this time
+    // on the CALL_INITIATE outbound-call path. Without a timeout, a dropped
+    // ack leaves `startCallInFlightRef` stuck `true` forever (every future
+    // Call button click silently swallowed by the guard at the top of
+    // `startCall`) and the pre-authorized camera/mic stream never released.
+    const CALL_INITIATE_ACK_TIMEOUT_MS = 10_000;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('does not hang forever when the call:initiate ack is dropped — surfaces the failure toast', async () => {
+      // emit intentionally never invokes its ack callback — simulates a
+      // dropped ack packet (transport blip right after emit).
+      mockEmit.mockImplementation(() => {});
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 1);
+      });
+
+      await startPromise;
+
+      expect(mockToastError).toHaveBeenCalledWith('Failed to start call. Please try again.');
+    });
+
+    it('stops the pre-authorized stream tracks when the call:initiate ack times out (no orphaned hot mic/camera)', async () => {
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+      mockEmit.mockImplementation(() => {});
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 1);
+      });
+
+      await startPromise;
+
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+    });
+
+    it('releases the in-flight guard after the timeout so a retry actually re-attempts', async () => {
+      mockEmit.mockImplementation(() => {}); // first attempt: drop the ack
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 1);
+      });
+
+      await startPromise;
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+
+      // Retry now succeeds — proves startCallInFlightRef was released, not
+      // left stuck true by the timed-out attempt.
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-retry', mode: 'p2p', iceServers: [] } });
+      });
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retroactively fail an already-successful call:initiate once the timeout window later elapses', async () => {
+      let capturedAck: ((response: unknown) => void) | undefined;
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        capturedAck = cb as (response: unknown) => void;
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        capturedAck?.({ success: true, data: { callId: 'call-ok', mode: 'p2p', iceServers: [] } });
+      });
+
+      await startPromise;
+
+      expect(mockToastSuccess).toHaveBeenCalledWith('Starting call...');
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 5000);
+      });
+
+      expect(mockToastError).not.toHaveBeenCalled();
     });
   });
 
