@@ -631,7 +631,10 @@ class ConversationListViewModel: ObservableObject {
     /// the grouping pipeline.
     private func mergeUserStateFromStore(_ snapshot: [MeeshyConversation]) {
         let ids = Set(snapshot.map(\.id))
-        let disappeared = lastStoreSnapshotIds.subtracting(ids)
+        // Un instantané VIDE est un teardown de session (`ConversationStore.reset`
+        // au logout republie `[]`), jamais N suppressions simultanées : le
+        // traiter comme telles viderait la liste ET persisterait ce vide.
+        let disappeared = ids.isEmpty ? [] : lastStoreSnapshotIds.subtracting(ids)
         lastStoreSnapshotIds = ids
         guard !conversations.isEmpty else { return }
         guard let merged = Self.reconciling(
