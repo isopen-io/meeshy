@@ -104,7 +104,12 @@ describe('NotificationService — événements de sync de lecture multi-appareil
 
       expect(mockIO.emit).toHaveBeenCalledWith('notification:counts', expect.any(Object));
       const countWheres = prisma.notification.count.mock.calls.map((c: any[]) => c[0].where);
-      expect(countWheres).toContainEqual({ userId: USER_ID, isRead: false });
+      // `objectContaining` et non l'égalité : ce que ce test défend est le
+      // PRÉDICAT de non-lu (isRead, jamais readAt), pas la clause entière — le
+      // filtre de visibilité (`expiresAt`) s'y compose depuis, et il est tenu
+      // sur son propre terrain par `notificationExpiry.test.ts`, en évaluant
+      // la clause contre des lignes plutôt qu'en la recopiant.
+      expect(countWheres).toContainEqual(expect.objectContaining({ userId: USER_ID, isRead: false }));
       expect(countWheres.some((w: Record<string, unknown>) => 'readAt' in w)).toBe(false);
     });
 

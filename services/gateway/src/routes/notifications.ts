@@ -6,6 +6,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { NotificationFormatter } from '../services/notifications/NotificationFormatter';
+import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
 import {
   notificationSchema,
   errorResponseSchema,
@@ -82,11 +83,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         const userId = request.user!.userId;
         const { offset = 0, limit = 20, unreadOnly = false } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean };
 
-        // Récupérer les notifications BRUTES de Prisma (pas encore formatées)
-        const where: any = { userId };
-        if (unreadOnly) {
-          where.isRead = false;
-        }
+        // Récupérer les notifications BRUTES de Prisma (pas encore formatées).
+        // Même prédicat que le compte non-lus rendu à côté (`getUnreadCount`) :
+        // une liste et un badge qui ne s'accordent pas sur ce qui est visible
+        // se contredisent à l'écran.
+        const where = visibleNotificationsWhere({ userId, unreadOnly });
 
         const [rawNotifications, total, unreadCount] = await Promise.all([
           fastify.prisma.notification.findMany({

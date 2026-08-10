@@ -40,6 +40,17 @@ import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
 // web caller. Aligned to 45s (2026-07-11, Vague 38) to match that convention.
 const CALL_TIMEOUT_MS = 45000; // 45 seconds
 
+// call:join ack timeout (Vague 88, 2026-08-10). Socket.IO client 4.8 does NOT
+// auto-reject a pending ack callback when the transport drops between the
+// emit and the response — mirrors the existing SOCKET_ACK_TIMEOUT_MS pattern
+// in use-post-mutations.ts / use-comment-mutations.ts. Without this, a
+// dropped ack (transient disconnect right after the emit, gateway restart
+// mid-request, mobile flakiness) left acceptOrJoinCall's promise pending
+// forever: acceptingCallIdRef never released (Accept became permanently
+// inert), the pre-authorized mic/camera stream never stopped, and no error
+// ever surfaced to the user.
+const CALL_JOIN_ACK_TIMEOUT_MS = 10_000;
+
 export function CallManager() {
   const { t } = useI18n('calls');
   const { user, isChecking } = useAuth();
@@ -647,7 +658,11 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
+      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('CALL_JOIN_ACK_TIMEOUT')),
+          CALL_JOIN_ACK_TIMEOUT_MS
+        );
         (socket as unknown).emit(
           CLIENT_EVENTS.CALL_JOIN,
           {
@@ -657,7 +672,10 @@ export function CallManager() {
               videoEnabled: params.isVideo,
             },
           },
-          resolve
+          (response: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+            clearTimeout(timer);
+            resolve(response);
+          }
         );
       });
 

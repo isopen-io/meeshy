@@ -5666,3 +5666,70 @@ lancer un nouvel audit, aucune duplication avec cette vague.
   trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
   needs on-device confirmation) ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors
   d'atteinte dans ce sandbox.
+
+## Vague 88 — `acceptOrJoinCall`'s `call:join` ack (web) n'avait aucun timeout : une ack perdue bloquait le join pour toujours (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`HEAD == origin/main` au démarrage (Vague 87, PR #2719, mergée avant le lancement de cette vague — aucune
+PR ouverte trouvée pour ce périmètre au démarrage, `list_pull_requests`/`search_pull_requests`). Audit dédié
+(agent Explore, lecture seule) mandaté sur tout le périmètre calling non déjà blanchi par les vagues 1-87 ni
+bloqué par l'absence de toolchain (iOS god-object, Android Vague 70) — deux candidats web/gateway trouvés,
+tous deux dans la même famille de bug (ack Socket.IO sans timeout).
+
+- **Root cause confirmée par lecture directe** (`apps/web/components/video-call/CallManager.tsx`, fonction
+  `acceptOrJoinCall`, ~L629 — chemin partagé par `handleAcceptCall` (Accept d'un appel entrant),
+  `handleEndAndAnswerWaiting` (bascule call-waiting) et l'effet `joinRequest` (join depuis la bulle live,
+  ré-hydratation à froid)) : `const ack = await new Promise((resolve) => { socket.emit(CLIENT_EVENTS.CALL_JOIN,
+  ..., resolve); })` — la promesse n'a NI timeout NI branche `reject`. Socket.IO client 4.8 (utilisé ici) ne
+  rejette PAS automatiquement un callback d'ack en attente quand le transport tombe entre l'émission et la
+  réponse, sauf opt-in explicite via `socket.timeout(ms)` — jamais utilisé nulle part dans ce fichier. Un
+  paquet d'ack perdu (coupure transitoire juste après l'emit, redémarrage gateway en cours de requête,
+  flakiness mobile ordinaire) laisse le `await` ne jamais se résoudre :
+  1. Le `finally { acceptingCallIdRef.current = null; }` de `handleAcceptCall` ne s'exécute jamais — le
+     re-clic sur Accept est avalé indéfiniment par le guard de ré-entrance
+     (`if (acceptingCallIdRef.current === incomingCall.callId) return;`).
+  2. La bannière d'appel entrant (`CallNotification`) reste affichée pour toujours, bouton Accept inerte.
+  3. Le flux micro/caméra pré-autorisé (`getUserMedia` déjà résolu, `__preauthorizedMediaStream` déjà posé)
+     n'est jamais arrêté — LED caméra allumée indéfiniment, aucune piste jamais relâchée.
+  4. Aucune erreur n'est jamais montrée à l'utilisateur — seul un rechargement de page répare l'état.
+  Un pattern identique existe déjà ailleurs dans le même repo (`SOCKET_ACK_TIMEOUT_MS = 10_000` +
+  `setTimeout(() => reject(...), SOCKET_ACK_TIMEOUT_MS)` / `clearTimeout(timer)` dans
+  `use-post-mutations.ts`/`use-comment-mutations.ts`) — jamais repris pour le chemin d'appel.
+- **Fix** : ajout de `CALL_JOIN_ACK_TIMEOUT_MS = 10_000` (même valeur que le pattern existant) et d'un
+  `setTimeout`/`clearTimeout` autour de l'emit `CALL_JOIN`, qui `reject`ie la promesse avec
+  `Error('CALL_JOIN_ACK_TIMEOUT')` si l'ack n'arrive pas à temps. Le `catch` existant de `acceptOrJoinCall`
+  (`stopPreauthorizedStream(stream); throw error;`) absorbe ce rejet sans aucune modification — il arrête déjà
+  le flux et repropage vers les 3 appelants, dont les `catch` existants (déjà exercés/testés pour un échec de
+  join classique) affichent déjà le toast `joinFailed` et remettent l'état à zéro. Un seul fichier de
+  production modifié (`CallManager.tsx`, +12/-3 lignes) ; les 3 sites d'appel (`handleAcceptCall`,
+  `handleEndAndAnswerWaiting`, l'effet `joinRequest`) sont corrigés d'un coup car ils partagent tous
+  `acceptOrJoinCall`. Le site séparé de re-join après reconnexion (`rejoinActiveCallAfterReconnect`, ~L830)
+  a le même défaut mais n'est pas `await`é (fire-and-forget avec callback), donc aucun état ne reste bloqué
+  si son ack se perd — laissé de côté, pas la même gravité, candidat pour une vague future si confirmé réel.
+- **Tests** (TDD, RED confirmé avant fix) : nouveau fichier `CallManager.joinAckTimeout.test.tsx` (4 tests,
+  timers falsifiés) — (1) ack jamais résolue → `jest.advanceTimersByTime(CALL_JOIN_ACK_TIMEOUT_MS + 1)` doit
+  déclencher le toast `joinFailed` et laisser `isInCall`/`currentCall` à leur état initial (RED confirmé :
+  timeout de test à l'infini avant le fix, faux avant que `advanceTimersByTime` ne débloque rien) ; (2) les
+  pistes du flux pré-autorisé sont bien arrêtées (`track.stop()`) au timeout ; (3) le guard de ré-entrance
+  `acceptingCallIdRef` est bien relâché après le timeout — un second Accept après coup relance vraiment
+  `getUserMedia`/`call:join` (2 appels chacun) ; (4) régression négative : une ack réussie AVANT le délai
+  n'est pas invalidée rétroactivement par `advanceTimersByTime` après coup (`clearTimeout` bien appelé dans
+  le callback d'ack). Les 3 premiers RED confirmés par exécution (`bun run jest`) avant le fix, GREEN après.
+- **Vérification** : sweep complet `video-call|use-webrtc|use-call|orchestrator|adaptive-degradation|
+  call-store` (44 suites / 510 tests, +1 suite/+4 tests net vs. Vague 86) vert — aucune régression, incluant
+  les 5 tests `CallManager.acceptCall.test.tsx` existants (ack succès/échec, ré-entrance, privacy) qui
+  exercent le même code modifié. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) :
+  `bun install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client && bun run
+  build` sans erreur. `npx tsc --noEmit` sur `apps/web` : 1188 erreurs avant et après le diff (`git
+  stash`/`stash pop`, comparaison directe), zéro nouvelle. `eslint` : même échec sandbox-only de config
+  circulaire documenté aux vagues précédentes (65-87), non bloquant, indépendant de ce diff.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
+  needs on-device confirmation) ; `rejoinActiveCallAfterReconnect` (web) partage le même défaut d'ack sans
+  timeout que le fix de cette vague mais en fire-and-forget, gravité moindre, à réévaluer ; sibling candidat
+  identifié par l'audit de cette vague dans `apps/web/hooks/conversations/use-video-call.ts` `startCall()`
+  (`CLIENT_EVENTS.CALL_INITIATE` ack sans timeout non plus — `startCallInFlightRef` resterait bloqué à `true`
+  indéfiniment sur une ack perdue, rendant tout bouton d'appel sortant silencieusement inerte) — bon candidat
+  pour la Vague 89 ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors d'atteinte dans ce
+  sandbox.

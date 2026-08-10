@@ -1374,7 +1374,14 @@ model Notification {
   user User @relation(fields: [userId], references: [id])
 
   // ===== INDEXES =====
-  @@index([userId, isRead])
+  /// `expiresAt` en 3e clé, pas un index de plus : toute requête que
+  /// [userId, isRead] servait est servie par son préfixe. Les lectures d'inbox
+  /// filtrent désormais `expiresAt = null OU > maintenant` (cf.
+  /// `visibleNotificationsWhere`) — sans la clé dans l'index, ce filtre force
+  /// un fetch de chaque document candidat sur un compteur qui tourne à CHAQUE
+  /// notification créée ; avec elle, les deux branches du OU restent deux
+  /// plages d'index et le compte reste couvert.
+  @@index([userId, isRead, expiresAt])
   @@index([userId, type])
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])

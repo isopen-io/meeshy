@@ -34,6 +34,7 @@ import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type 
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
+import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
@@ -536,6 +537,25 @@ type MemberJoinedSnapshot = {
   readonly memberCount: number;
 };
 
+/**
+ * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
+ * d'amitié produit UNE notification, à sa création — et `singleBatch` en fait
+ * une lecture close plutôt qu'un curseur laissé ouvert côté serveur.
+ */
+const RETRACTION_BATCH_SIZE = 1000;
+
+/**
+ * Le retour d'une commande Mongo `find` brute réduite à sa projection d'ids.
+ *
+ * `_id` arrive en Extended JSON (`{ $oid }`) et non en `string` : c'est la
+ * différence entre la commande brute et un `findMany` Prisma, et la raison pour
+ * laquelle le retrait relit puis supprime par ids typés plutôt que d'enchaîner
+ * deux commandes brutes.
+ */
+type RawNotificationIdBatch = {
+  cursor?: { firstBatch?: ReadonlyArray<{ _id: string | { $oid: string } }> };
+};
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -969,7 +989,7 @@ export class NotificationService {
           let unreadBadge: number | undefined;
           try {
             const count = await this.prisma.notification.count({
-              where: { userId: params.userId, isRead: false },
+              where: visibleNotificationsWhere({ userId: params.userId, unreadOnly: true }),
             });
             if (typeof count === 'number') unreadBadge = count;
           } catch {
@@ -1426,6 +1446,10 @@ export class NotificationService {
       content,
       collapseId: `conv-${params.conversationId}`,
       lang: recipientLang,
+      // La notification ne survit pas au message qu'elle annonce. La valeur
+      // vient de la relecture VIVANTE ci-dessus, pas de l'appelant : celui-ci
+      // ne pourrait que rapporter ce qu'il croyait savoir à l'envoi.
+      expiresAt: liveMessage.expiresAt ?? undefined,
 
       actor: {
         id: params.senderId,
@@ -1491,6 +1515,15 @@ export class NotificationService {
     messagePreview: string;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
+    /**
+     * Échéance du message qui mentionne, reportée sur la notification : elle ne
+     * doit pas survivre au message. Fournie par l'appelant plutôt que relue
+     * ici — l'éventail la tient déjà (`FanOutMessage.expiresAt`), et
+     * `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite,
+     * donc sa copie ne peut pas dériver. Absente : aucune échéance, le
+     * comportement de toujours.
+     */
+    messageExpiresAt?: Date | null;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1522,6 +1555,7 @@ export class NotificationService {
       priority: 'high',
       content: params.messagePreview,
       collapseId: `conv-${params.conversationId}`,
+      expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
         id: params.mentionerUserId,
@@ -1564,6 +1598,8 @@ export class NotificationService {
       messageContent: string;
       conversationId: string;
       messageId: string;
+      /** Échéance du message mentionnant — cf. `createMentionNotification`. */
+      messageExpiresAt?: Date | null;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -1589,6 +1625,7 @@ export class NotificationService {
           conversationId: commonData.conversationId,
           messagePreview: commonData.messageContent,
           senderProfile: commonData.senderProfile,
+          messageExpiresAt: commonData.messageExpiresAt,
         })
       )
     );
@@ -3002,6 +3039,12 @@ export class NotificationService {
     originalMessageId?: string;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
+    /**
+     * Échéance de la RÉPONSE — le message que cette notification désigne et
+     * ouvre —, jamais celle du message cité. Même contrat que
+     * `createMentionNotification.messageExpiresAt`.
+     */
+    messageExpiresAt?: Date | null;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3030,6 +3073,7 @@ export class NotificationService {
       priority: 'normal',
       content: params.messagePreview,
       collapseId: `conv-${params.conversationId}`,
+      expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
         id: params.replierUserId,
@@ -3922,12 +3966,12 @@ export class NotificationService {
   private async emitCountsUpdate(userId: string): Promise<void> {
     if (!this.io) return;
     try {
-      // `isRead: false` — même prédicat (indexé [userId, isRead]) que la liste
-      // et le badge REST. `readAt: null` divergeait sur les données legacy et
-      // tournait en collscan (aucun index sur readAt).
+      // `isRead: false` — même prédicat (indexé [userId, isRead, expiresAt])
+      // que la liste et le badge REST. `readAt: null` divergeait sur les
+      // données legacy et tournait en collscan (aucun index sur readAt).
       const [unread, total] = await Promise.all([
-        this.prisma.notification.count({ where: { userId, isRead: false } }),
-        this.prisma.notification.count({ where: { userId } }),
+        this.prisma.notification.count({ where: visibleNotificationsWhere({ userId, unreadOnly: true }) }),
+        this.prisma.notification.count({ where: visibleNotificationsWhere({ userId }) }),
       ]);
       this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_COUNTS, { unread, total });
     } catch (error) {
@@ -4134,10 +4178,10 @@ export class NotificationService {
     offset?: number;
     unreadOnly?: boolean;
   }): Promise<{ notifications: Notification[]; total: number }> {
-    const where: any = { userId: params.userId };
-    if (params.unreadOnly) {
-      where.isRead = false;
-    }
+    const where = visibleNotificationsWhere({
+      userId: params.userId,
+      unreadOnly: params.unreadOnly,
+    });
 
     const [notifications, total] = await Promise.all([
       this.prisma.notification.findMany({
@@ -4351,6 +4395,86 @@ export class NotificationService {
   }
 
   /**
+   * RETIRE les notifications liées à une demande d'amitié dont la ligne vient
+   * d'être supprimée (`DELETE /friend-requests/:id` — annulation par
+   * l'expéditeur, ou retrait par le destinataire sans répondre).
+   *
+   * Pendant de `markFriendRequestNotificationsAsRead`, et l'arbitrage entre les
+   * deux tient à ce qui reste au bout du lien. Répondre (accept/reject) laisse
+   * la ligne `FriendRequest` en place : la notification est CONSOMMÉE, donc lue.
+   * Supprimer emporte la ligne : la notification n'a plus rien à afficher ET
+   * rien où mener — son `metadata.action: accept_or_reject_contact` ouvrirait
+   * un écran de demande qui répond 404. Même conclusion que le rappel d'un
+   * message (`retractMessageNotifications`), pour la même raison, et le même
+   * geste — le seul que les clients savent déjà recevoir (`notification:deleted`,
+   * écouté par le web et par le SDK iOS).
+   *
+   * Trois conséquences du fait que la ligne part INCONDITIONNELLEMENT :
+   *
+   *  1. **Aucun filtre `isRead`.** Une notification déjà lue est tout aussi
+   *     morte qu'une non lue ; la laisser garderait une ligne sans destination
+   *     dans la liste. C'est la seule différence de filtre avec le marquage.
+   *  2. **Le destinataire est toujours `receiverId`**, quel que soit celui des
+   *     deux qui a appelé la route : `createFriendRequestNotification` ne
+   *     notifie que lui. Le scope `userId` reste la garde anti-IDOR, comme pour
+   *     le marquage.
+   *  3. **`context.friendRequestId` n'appartient qu'à `friend_request`.** Le
+   *     `friend_accepted` de l'expéditeur porte `context.conversationId`, jamais
+   *     cette clé — le retrait ne peut pas l'emporter au passage.
+   *
+   * La lecture passe par `$runCommandRaw` pour la même raison que le marquage
+   * (Prisma ne filtre pas les chemins JSON sur MongoDB), puis la suppression
+   * porte sur les ids RELUS et non sur le prédicat : l'ensemble supprimé et
+   * l'ensemble annoncé sont alors identiques par construction, et aucune ligne
+   * ne peut disparaître sans son `notification:deleted`. `singleBatch` ferme le
+   * curseur côté serveur ; le lot est très au-dessus du réel (une demande
+   * produit UNE notification, à sa création).
+   */
+  async retractFriendRequestNotifications(userId: string, friendRequestId: string): Promise<number> {
+    if (!/^[0-9a-f]{24}$/i.test(userId)) {
+      return 0;
+    }
+
+    try {
+      const raw = await (this.prisma as unknown as {
+        $runCommandRaw: (cmd: Record<string, unknown>) => Promise<RawNotificationIdBatch>;
+      }).$runCommandRaw({
+        find: 'Notification',
+        filter: {
+          userId: { $oid: userId },
+          'context.friendRequestId': friendRequestId,
+        },
+        projection: { _id: 1 },
+        singleBatch: true,
+        batchSize: RETRACTION_BATCH_SIZE,
+      });
+
+      const ids = (raw?.cursor?.firstBatch ?? []).map((row) =>
+        typeof row._id === 'string' ? row._id : row._id.$oid
+      );
+
+      if (ids.length === 0) {
+        return 0;
+      }
+
+      await this.prisma.notification.deleteMany({ where: { id: { in: ids } } });
+
+      // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
+      // qu'elle recalcule doivent voir la base d'après le retrait.
+      await this.announceNotificationsRetracted(ids.map((id) => ({ id, userId })));
+
+      return ids.length;
+    } catch (error) {
+      notificationLogger.error('Failed to retract friend request notifications', {
+        error,
+        userId,
+        friendRequestId,
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Marque comme lues toutes les notifications de l'utilisateur dont le `type`
    * est dans la liste fournie. Utilisé quand l'utilisateur ouvre un écran qui
    * consomme une catégorie entière de notifications (ex : l'écran des demandes
@@ -4390,10 +4514,7 @@ export class NotificationService {
    */
   async getUnreadCount(userId: string): Promise<number> {
     return this.prisma.notification.count({
-      where: {
-        userId,
-        isRead: false,
-      },
+      where: visibleNotificationsWhere({ userId, unreadOnly: true }),
     });
   }
 

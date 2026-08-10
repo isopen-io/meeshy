@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme.Meeshy.Starting's system splash background — Indigo950, the brand's
+         darkest surface tone (CLAUDE.md "Brand Color Scale (Indigo)"). Chosen so the
+         white ic_launcher_foreground glyph always reads clearly, regardless of the
+         device's light/dark setting, for this brief OS-level flash. -->
+    <color name="splash_background">#FF1E1B4B</color>
+</resources>
