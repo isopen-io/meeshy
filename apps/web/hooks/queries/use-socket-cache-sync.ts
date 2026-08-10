@@ -780,8 +780,18 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // Handler for participant-banned — member was banned from the conversation
-    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => {
+    // Handler for participant-banned — member was banned from the conversation.
+    // `membershipEnded: false` means the target had ALREADY left: banning an
+    // ex-member is what keeps them from walking back in through a share link,
+    // but it removes no membership, so the count must not move. Absent on
+    // servers older than that contract, where a ban always removed one.
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean }) => {
+      if (data.membershipEnded === false) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.participants(data.conversationId),
+        });
+        return;
+      }
       const bannedUpdater = (convs: Conversation[]) =>
         convs.map((conv) =>
           conv.id === data.conversationId
@@ -803,7 +813,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // decrement above: without it every ban/unban round-trip drifts the cached
     // count one lower than reality, and the drift persists until an unrelated
     // full refetch (staleTime: Infinity never re-reads on its own).
-    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string }) => {
+    //
+    // `membershipRestored: false` means the unban lifted the ban WITHOUT
+    // re-admitting anyone — the person had left on their own before being
+    // banned, so there is no ban-time decrement to undo here either.
+    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string; membershipRestored?: boolean }) => {
+      if (data.membershipRestored === false) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.participants(data.conversationId),
+        });
+        return;
+      }
       const unbannedUpdater = (convs: Conversation[]) =>
         convs.map((conv) =>
           conv.id === data.conversationId

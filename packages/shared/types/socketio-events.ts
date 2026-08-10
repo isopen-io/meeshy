@@ -1277,11 +1277,31 @@ export interface ConversationParticipantBannedEventData {
   readonly userId: string;
   readonly bannedBy: { readonly id: string };
   readonly bannedAt: string;
+  /**
+   * Faux quand la cible avait DÉJÀ quitté la conversation — bannir un ancien
+   * membre reste possible, c'est ce qui l'empêche de revenir par un lien de
+   * partage, mais ce bannissement-là ne retire aucune appartenance.
+   *
+   * Un compteur de membres doit suivre ce champ, jamais la seule réception de
+   * l'événement. Absent des serveurs antérieurs à ce contrat : le lire comme
+   * `true` y reproduit leur comportement, puisqu'ils ne bannissaient qu'en
+   * retirant.
+   */
+  readonly membershipEnded?: boolean;
 }
 
 export interface ConversationParticipantUnbannedEventData {
   readonly conversationId: string;
   readonly userId: string;
+  /**
+   * Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
+   * que si le bannissement l'avait prise. Faux quand la personne était partie
+   * d'elle-même AVANT d'être bannie : elle redevient libre de revenir par une
+   * porte d'entrée, mais n'est pas réintégrée.
+   *
+   * Même lecture que `membershipEnded` côté bannissement — absent ⇒ `true`.
+   */
+  readonly membershipRestored?: boolean;
 }
 
 export interface ConversationParticipantLeftEventData {

@@ -30,8 +30,8 @@ let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
 let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void) | null = null;
-let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void) | null = null;
-let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
+let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean }) => void) | null = null;
+let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
@@ -984,6 +984,29 @@ describe('useSocketCacheSync', () => {
       expect((cached.pages[0].conversations[0] as any).memberCount).toBe(2);
     });
 
+    it('leaves memberCount alone when the banned person had already left', () => {
+      // Bannir un ancien membre reste possible — c'est ce qui l'empêche de
+      // revenir par un lien de partage — mais ce bannissement-là ne retire
+      // aucune appartenance. Décrémenter quand même fait dériver le compteur
+      // vers le bas, et la dérive persiste : `staleTime: Infinity` ne relit
+      // jamais de lui-même.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString(), membershipEnded: false });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
+
     it('invalidates participants query on participant-banned', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
       const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
@@ -1014,6 +1037,27 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
       );
+    });
+
+    it('leaves memberCount alone when the unban restored nothing', () => {
+      // Lever le bannissement de quelqu'un qui était parti de lui-même le rend
+      // libre de revenir ; ça ne le fait pas rentrer. Incrémenter ici
+      // afficherait un membre de plus que la conversation n'en a.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantUnbannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', membershipRestored: false });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
     });
 
     it('restores memberCount when a participant is unbanned', () => {

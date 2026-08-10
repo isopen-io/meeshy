@@ -51,6 +51,15 @@
  * - **Un banni n'entre par aucune porte.** C'est la seule capacité retirée par
  *   ce cycle, et elle l'est dans le sens que la route de bannissement énonce
  *   explicitement. `POST …/unban` reste le chemin, et il écrit une trace.
+ *
+ *   **Et `unban` était lui-même une QUATRIÈME porte, non comptée ici** parce
+ *   qu'elle ne s'appelle pas « entrer » : il écrivait `{ isActive: true,
+ *   leftAt: null }` sans condition, donc il RÉ-ADMETTAIT quiconque avait été
+ *   banni après être parti de lui-même — en lui rendant son rang périmé, ce que
+ *   les trois portes ci-dessus refusent explicitement de faire. Ce qu'un
+ *   bannissement prend et ce qu'un débannissement rend est désormais énoncé une
+ *   seule fois dans `conversationBanState.ts`, complément de cette unité-ci :
+ *   celle-là dit QUI peut entrer, celle-ci dit CE QUE le geste inverse rend.
  * - **Un ancien membre est RÉINTÉGRÉ sur sa ligne**, jamais dupliqué.
  * - **`joinedAt` est conservé** à la réintégration. Il ne date pas la ligne, il
  *   borne l'historique visible quand le lien de partage porte
