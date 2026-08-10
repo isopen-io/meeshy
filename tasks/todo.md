@@ -1,4 +1,10 @@
-# Cycle 57 — Les messages d'appel n'étaient pas des messages
+# Cycle 58 — Les messages d'appel n'étaient pas des messages
+
+Une session sœur a livré le cycle 57 en parallèle (« le budget d'une vue unique se dépense par
+spectateur »). Aucun recouvrement : son lot touche `recordViewOnceConsumption` et la route des
+messages, le mien les sept `message.create` et `CallService`. Les deux ne se croisent que dans les
+trois fichiers de suivi, fusionnés à la main en gardant les deux relevés. Ce cycle est donc
+renuméroté 58 — son numéro d'origine était 57.
 
 Le backlog du cycle 56 portait quatre têtes. Trois ont été instruites et écartées avant d'écrire une
 ligne, ce qui est le vrai résultat de la première moitié de ce cycle :
@@ -105,6 +111,123 @@ a été écrit en réponse à ce constat, pas prévu au plan.
   APNs/FCM déjà délivré n'est pas rappelé ; iOS et Android ne lisent pas encore `deletedCommentIds`
   (cycle 56) ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne
   peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+# Cycle 57 — Le budget d'une vue unique se dépensait par ouverture, pas par spectateur
+
+Le backlog du cycle 56 laissait six items ouverts. Aucun n'a été pris : trois relèvent d'une
+plateforme que cet environnement ne compile pas, un attend une validation humaine, un est un
+outillage cassé (`eslint` sur le gateway), et le dernier — « `post_comment` et `comment_like`
+n'exposent pas `context.commentId` » — s'est **réfuté à la lecture**. Le retrait des notifications
+de commentaire couvre déjà les deux chemins JSON par un `$or`, son en-tête explique pourquoi, et
+aucun client ne lit `context.commentId` : uniformiser les huit producteurs changerait un contrat
+sans corriger aucun défaut observable. C'est la leçon 89 appliquée AVANT d'écrire, pour une fois.
+
+Le cycle est donc parti d'un audit du contrat temps-réel plutôt que d'une piste héritée : les 175
+constantes de `socketio-events.ts` confrontées à leurs émetteurs (gateway) et à leurs auditeurs
+(web, iOS). L'audit a rendu surtout de l'hygiène — trois `*_SYNC` déclarés que personne n'émet,
+un `socket.on(REACTION_SYNC)` mort côté web, `MESSAGE_READ_STATUS_UPDATED` émis en doublon de
+`READ_STATUS_UPDATED`. Mais il a mené à la route `consume`, et c'est là que le défaut était.
+
+## Le défaut
+
+`POST /conversations/:id/messages/:messageId/consume` incrémentait `Message.viewOnceCount` par un
+`update` **inconditionnel**. Le compteur mesurait donc des OUVERTURES. Tous ses lecteurs le lisent
+comme un nombre de SPECTATEURS : `isFullyConsumed`, l'annonce `message:consumed` diffusée à la
+room, la disparition du média chez les clients.
+
+Dans un groupe où l'émetteur a posé `maxViewOnceCount: 2`, le premier destinataire qui rouvre la
+photo une seconde fois porte `isFullyConsumed` à vrai. La route l'ANNONCE à toute la conversation.
+Le second destinataire perd un média qu'il n'a jamais ouvert. Et la route étant une mutation nue,
+sans clé d'idempotence, un rejeu — file hors-ligne, double tap, retry réseau — suffit à produire
+le même effet à lui seul.
+
+**La donnée qui rend le compte exact était écrite par ce même gestionnaire, deux instructions plus
+bas** : `MessageStatusEntry.viewedOnceAt`, par participant. Écrite, jamais relue.
+
+Un corollaire, trouvé en suivant la même ligne : cette écriture cherchait le participant par
+`userId`. Un anonyme porte un jeton de session dans `authContext.userId` — la ligne n'était jamais
+trouvée. Il dépensait donc le budget **sans qu'aucune trace n'enregistre qu'il l'avait fait**, et
+pouvait le dépenser indéfiniment.
+
+## Plan
+- [x] T1 — audit : contrat d'événements gateway/web/iOS, piste héritée réfutée, défaut localisé
+- [x] T2 — RED : 8 témoins de module + 5 de route, rouges pour la bonne raison
+- [x] T3 — GREEN : la revendication gardée, l'incrément n'en est que la conséquence
+- [x] T4 — câblage : résolution du spectateur, annonce conditionnée, `ROOMS`/`SERVER_EVENTS`
+- [x] T5 — sondes de fidélité : cinq défauts réintroduits un par un, restauration par copie
+- [x] T6 — gates : baseline mesurée sur arbre propre, suite complète, `tsc`
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Baseline mesurée, pas mémorisée** (leçon 90 #6) : arbre propre via `git stash`, suite gateway
+complète → **642 suites / 16 269 tests, 0 échec**. Après le lot : **644 / 16 282, 0 échec** —
++2 suites, +13 témoins, aucune régression. `tsc --noEmit` : **0 erreur**.
+
+**Rouge observé avant correctif** : les 5 témoins de route tombent sur le corps d'origine, et le
+témoin central reproduit le défaut utilisateur littéralement —
+
+```
+- "isFullyConsumed": false,   - "viewOnceCount": 1,
++ "isFullyConsumed": true,    + "viewOnceCount": 2,
+```
+
+deux ouvertures du même destinataire, sur un budget de deux, et le pair est dépossédé.
+
+**Sondes de fidélité** — chaque défaut réintroduit volontairement, restauration par **copie**
+(leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| incrément inconditionnel (le défaut d'origine) | 2 (seconde ouverture + création concurrente perdante) |
+| prédicat réduit à `{ viewedOnceAt: null }` | 1 (la colonne absente) |
+| toute panne d'écriture lue comme « déjà vu » | 1 (la panne remonte) |
+| création retirée quand l'entrée manque | 2 (spectateur sans entrée + la panne) |
+| corps de route d'origine restauré | 4 sur 5 |
+
+Aucune sonde n'a fait tomber un témoin qu'elle ne visait pas, et aucune n'a laissé tout vert. Le
+survivant de la dernière sonde est le **verrou du chemin nominal** — vert avant ET après, c'est
+exactement son rôle : interdire au correctif de rétrécir le cas courant.
+
+**Le double Prisma HONORE le filtre** (leçon 90 #5) : une entrée déjà estampillée n'est plus
+appariée par l'`updateMany`, et une création en double lève P2002. Un double qui aurait rendu la
+même ligne quelle que soit la question aurait laissé le témoin central vert sur un correctif
+absent — c'est précisément la configuration qui avait fait passer le balayage éphémère pour vivant
+pendant trois cycles.
+
+**Deux témoins pré-existants mis à jour, pas affaiblis.** `messages-routes.test.ts` portait deux
+cas de couverture de branche nommés d'après des numéros de ligne, qui épinglaient
+`viewParticipant = null` comme un chemin de **succès** — c'est-à-dire le corollaire anonyme
+lui-même, figé en contrat. Leur intention est conservée (« l'arithmétique de repli des colonnes
+nullables », « aucune entrée de statut n'est écrite ») et le second est ÉTENDU : le budget ne se
+dépense pas davantage. Un témoin nommé d'après une ligne de code mesure l'implémentation ; celui-ci
+mesure maintenant un comportement.
+
+## Reste ouvert après ce cycle
+
+- **Le serveur ne redacte pas le contenu d'un message à vue unique épuisé.** L'application de la
+  règle est entièrement côté client et le compteur reste consultatif : un client modifié lit le
+  contenu après `isFullyConsumed`. C'est une décision de conception (chiffrement, cache, pièces
+  jointes déjà téléchargées), pas un oubli — relevé pour mémoire.
+- **Rien ne rattrape les `viewOnceCount` déjà gonflés en base** par l'ancien chemin. Un script de
+  réparation les recalculerait depuis `MessageStatusEntry.viewedOnceAt`, qui porte la vérité par
+  participant. Action humaine : cette routine n'a aucun accès MongoDB.
+- **Hygiène du contrat d'événements, trouvée par l'audit et non traitée** : `REACTION_SYNC`,
+  `COMMENT_REACTION_SYNC` et `POST_REACTION_SYNC` sont déclarés dans `socketio-events.ts` et émis
+  par personne — les trois synchronisations répondent par ACK, ce que le SDK iOS documente
+  explicitement à ses deux sites. Le web porte en face un `socket.on(SERVER_EVENTS.REACTION_SYNC)`
+  qui ne se déclenchera jamais, et qui pousserait de surcroît un payload de synchronisation dans
+  ses auditeurs de `reaction:added`. Trois constantes et un auditeur à retirer.
+- **`MESSAGE_READ_STATUS_UPDATED` est émis en doublon de `READ_STATUS_UPDATED`** sur les cinq sites
+  de diffusion des accusés de lecture, et aucun client n'écoute le premier. Un alias qui double le
+  trafic de la famille d'événements la plus fréquente après `message:new`.
+- **`onMessageConsumed` n'a aucun consommateur applicatif côté web** : la couche socket l'expose,
+  aucun cache React Query ne s'y abonne. Un média épuisé par un pair ne change donc rien à l'écran
+  d'un utilisateur web avant rechargement.
+- Hérités et non traités : `softDeleteRetentionMs` reste du code mort et le nom
+  `ExpiredStoriesCleanupService` ment sur son périmètre ; le push APNs/FCM déjà délivré n'est pas
+  rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne
+  peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9) ; iOS et Android ne
+  lisent pas encore `deletedCommentIds`.
 
 ---
 

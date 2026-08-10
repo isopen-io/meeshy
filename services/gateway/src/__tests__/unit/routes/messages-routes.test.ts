@@ -3171,9 +3171,14 @@ describe('POST /conversations/:id/messages/:messageId/consume — null value bra
   const makeReqWithMsg = () => makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
 
   it('maxViewOnceCount null → 1, viewOnceCount null → 1 (lines 2256-2257)', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: null, conversationId: CONV_ID });
+    // Intention inchangée : l'arithmétique de repli sur les deux colonnes
+    // nullables. Le spectateur est désormais RÉSOLU — la consommation
+    // s'attribue à un participant depuis qu'elle ne se dépense qu'une fois
+    // par spectateur — sans quoi ce cas ne va plus jusqu'au calcul.
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: null, viewOnceCount: null, conversationId: CONV_ID });
     prisma.message.update.mockResolvedValue({ id: MSG_ID, viewOnceCount: null });
-    prisma.participant.findFirst.mockResolvedValue(null);
+    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+    prisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 1 });
     const reply = makeReply();
     await getHandler()(makeReqWithMsg(), reply);
     const result = mockSendSuccess.mock.calls[0][1] as any;
@@ -3181,14 +3186,18 @@ describe('POST /conversations/:id/messages/:messageId/consume — null value bra
     expect(result.viewOnceCount).toBe(1);
   });
 
-  it('viewParticipant=null: statusEntry skipped (line 2265 false branch)', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: 2, conversationId: CONV_ID });
-    prisma.message.update.mockResolvedValue({ id: MSG_ID, viewOnceCount: 1 });
+  it('viewParticipant=null: rien n’est écrit, et rien n’est dépensé', async () => {
+    // Intention inchangée — « aucune entrée de statut n'est écrite quand le
+    // spectateur ne se résout pas » — et ÉTENDUE : le budget de vue unique ne
+    // se dépense pas davantage. Il se dépensait, sans laisser la moindre trace
+    // de qui l'avait dépensé.
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: 2, viewOnceCount: 0, conversationId: CONV_ID });
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler()(makeReqWithMsg(), reply);
     expect(prisma.messageStatusEntry.updateMany).not.toHaveBeenCalled();
-    expect(mockSendSuccess).toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(mockSendForbidden).toHaveBeenCalled();
   });
 
   it('socketIOHandler=null: consume without broadcast (line 2274 false)', async () => {
