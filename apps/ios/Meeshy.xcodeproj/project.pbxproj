@@ -173,6 +173,7 @@
 		347903A76733FFBDA997EDA8 /* EngagementDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBCBEC8E94447F050564849 /* EngagementDispatcher.swift */; };
 		3510B2241A2F99BEDC4C87EB /* ConversationViewModelCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E08FFF5F280686C26514B19 /* ConversationViewModelCacheTests.swift */; };
 		3568FC941D1FD9CB8C8FAEE6 /* CommunityDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C774BC7D059BD4848EE22CD /* CommunityDetailViewModelTests.swift */; };
+		3572E7FE0988BA8B8D11A390 /* FeedPostCardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504C59EB711EC0CB5FEE3080 /* FeedPostCardLayout.swift */; };
 		3597836A7AA7E4E9685564C7 /* PiPSourceAnchor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F17DEB0A27F244F9E14273 /* PiPSourceAnchor.swift */; };
 		35FE10FA07B11D5DC069B5AA /* CharacterCountLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFFAFA02143A5984FBBFEB1 /* CharacterCountLabel.swift */; };
 		3613ED850A06BC1CEEB4D71C /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00DE18C46D8CE35926B47D4 /* StatusComposerView.swift */; };
@@ -474,6 +475,7 @@
 		83CBBFD971DC9BC76B388E39 /* StoryViewerBackgroundParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D90BA86C1B1E6503BB932E6 /* StoryViewerBackgroundParsingTests.swift */; };
 		83CD1AC163BE53DD80418116 /* ConversationListHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386FD50AF115663916D468DB /* ConversationListHelpers.swift */; };
 		83CFA13BFF5B3C4B1CE0CF70 /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37AE533A7253CF94E729A57C /* PostModels.swift */; };
+		8588BE76D275B1D7781E9FBF /* BubbleMoodQuoteLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC6DA62D4C5FA0744EA218F9 /* BubbleMoodQuoteLayoutTests.swift */; };
 		859896210887D4517A01D2B8 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A505F792B7F980536BD635BA /* PrivacySettingsView.swift */; };
 		86096A82E2FF9B3BE165A4DA /* SkeletonStoryThumb.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2A57B5220A3B23BFD04A391 /* SkeletonStoryThumb.swift */; };
 		866B9DB1CEDAD02625229DA6 /* MessageFrameTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C788FD415255C33F09AC108 /* MessageFrameTrackerTests.swift */; };
@@ -864,6 +866,7 @@
 		EADA96E1286AB2DDE9358A73 /* MiniAudioPlayerBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1211BB9F888351AD885DA9AC /* MiniAudioPlayerBarTests.swift */; };
 		EAE8987A4E117FCE06C711B9 /* PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BC8C60105FA31CAB8EF9A5 /* PostDetailView.swift */; };
 		EB20519416E36E76A0B18892 /* TypingDotTimerHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 589DFA08B1DAF287E831F8BD /* TypingDotTimerHarness.swift */; };
+		EB29EB60CCBD589CEEC8D252 /* FeedPostCardLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41991B22C6C4E3C6E18D55C /* FeedPostCardLayoutTests.swift */; };
 		EB2DC20881BAE0BA2C4A54D4 /* NotificationPresentationResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04CC86C57EB111AAB0DFD87 /* NotificationPresentationResolverTests.swift */; };
 		EB946D87FB8D2B363C3B7D03 /* AttachmentQuickLookPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FBF8B8EB22AD824BF1C5D3 /* AttachmentQuickLookPreview.swift */; };
 		EC73584D2CD8B094F833B7C7 /* MockReactionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4338C075987BEB849F675116 /* MockReactionService.swift */; };
@@ -1294,6 +1297,7 @@
 		4FC1F042BC062F811D3A552A /* AudioQueueBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioQueueBuilder.swift; sourceTree = "<group>"; };
 		4FE581474B3BBD56EDAD6E0E /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
 		50266C28923130C5BC3A4D00 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
+		504C59EB711EC0CB5FEE3080 /* FeedPostCardLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPostCardLayout.swift; sourceTree = "<group>"; };
 		509CE49DBC4B9E0A7C13BB07 /* StoryViewerInitialAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerInitialAction.swift; sourceTree = "<group>"; };
 		50EF45030EFFB0C1C0586C2F /* DeclarationBodyScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarationBodyScannerTests.swift; sourceTree = "<group>"; };
 		52A639C59C8E391084459E73 /* VoiceProfileWizardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModelTests.swift; sourceTree = "<group>"; };
@@ -1593,6 +1597,7 @@
 		A2F6164D4D41F89DC92F3C9B /* BubbleQuotedReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleQuotedReply.swift; sourceTree = "<group>"; };
 		A3B15D54F4340ADC471EF388 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
 		A3DEF4E0E43424D8057DCEEB /* FeedViewStoryTrayPlatformGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewStoryTrayPlatformGuardTests.swift; sourceTree = "<group>"; };
+		A41991B22C6C4E3C6E18D55C /* FeedPostCardLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPostCardLayoutTests.swift; sourceTree = "<group>"; };
 		A4C0B97987223FE88C01451E /* ReelFeedCardMenuTriggerGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedCardMenuTriggerGuardTests.swift; sourceTree = "<group>"; };
 		A505F792B7F980536BD635BA /* PrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsView.swift; sourceTree = "<group>"; };
 		A566D9FC245AE7D64F177C64 /* ProfileUserPostsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUserPostsList.swift; sourceTree = "<group>"; };
@@ -1815,6 +1820,7 @@
 		EBDEFAE5B1206FE8BE50AAD3 /* MessageDayStickyOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDayStickyOverlay.swift; sourceTree = "<group>"; };
 		EC0740A2A612B83ACBC3070D /* ReelsPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsPresenterTests.swift; sourceTree = "<group>"; };
 		EC2EBD8AB465E1FD32A71531 /* OptimisticAttachmentAdopter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticAttachmentAdopter.swift; sourceTree = "<group>"; };
+		EC6DA62D4C5FA0744EA218F9 /* BubbleMoodQuoteLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleMoodQuoteLayoutTests.swift; sourceTree = "<group>"; };
 		ECF82BB3461D0F3AA3CBDEEA /* StoryInteractionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryInteractionServiceTests.swift; sourceTree = "<group>"; };
 		ED07B9B4A1F7D3EF7A1BE6DF /* CrashStackDumper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashStackDumper.swift; sourceTree = "<group>"; };
 		ED36078D4B88FFDCA81754F6 /* StoryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewModelTests.swift; sourceTree = "<group>"; };
@@ -2040,6 +2046,7 @@
 				057E67AC5556A99A57809F43 /* BookmarkFeedbackLocalizationTests.swift */,
 				73AD28A61044AAEAA53E35D4 /* BrandSignatureLocalizationTests.swift */,
 				3BB9313059F38C73F1C40F24 /* BubbleFooterAccessibilityTests.swift */,
+				EC6DA62D4C5FA0744EA218F9 /* BubbleMoodQuoteLayoutTests.swift */,
 				DC3139613CF49F368694927F /* BubbleSwipeResistanceTests.swift */,
 				EEC6EDF394B8D272DB56C364 /* BubbleWindowMetricsTests.swift */,
 				0A578814F851D248E82A76E3 /* CallBubbleGestureResolverTests.swift */,
@@ -2078,6 +2085,7 @@
 				1A9155B40380452CBB53B7A6 /* DiscoverTabSMSComposerCoordinatorSourceGuardTests.swift */,
 				3E3ABE797CD254FAC4B328D7 /* ExplicitPluralLabelTests.swift */,
 				0C37D8CF0C43294478A00011 /* FeedButtonAnchorTests.swift */,
+				A41991B22C6C4E3C6E18D55C /* FeedPostCardLayoutTests.swift */,
 				3F3821507A67E0D94D3246A1 /* FeedPostCardMentionColorGuardTests.swift */,
 				FFE35EB51741DD3569F763C1 /* FeedViewStoryPullToRefreshGuardTests.swift */,
 				A3DEF4E0E43424D8057DCEEB /* FeedViewStoryTrayPlatformGuardTests.swift */,
@@ -2721,6 +2729,7 @@
 				3CC41B0CE5382DC347D811F8 /* FeedListViewController.swift */,
 				36B1A5A4D0A6D08BFDB31138 /* FeedPostCard.swift */,
 				3A898767927CF988354C48D4 /* FeedPostCard+Media.swift */,
+				504C59EB711EC0CB5FEE3080 /* FeedPostCardLayout.swift */,
 				5C4CF12113EA47BD3FB759A3 /* FeedPostLocationView.swift */,
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
 				BF929B2EA6F013227742CB62 /* FeedView+Attachments.swift */,
@@ -3731,6 +3740,7 @@
 				D245A7743029539A370FD95C /* FeedModels.swift in Sources */,
 				F1F3BC73E60547F0CECB2507 /* FeedPostCard+Media.swift in Sources */,
 				8008E9B82AE93B660364D7A1 /* FeedPostCard.swift in Sources */,
+				3572E7FE0988BA8B8D11A390 /* FeedPostCardLayout.swift in Sources */,
 				D1DD1A84D068B478B32102BC /* FeedPostLocationView.swift in Sources */,
 				54294A8094B3B8D30C0BAC40 /* FeedSocketHandler.swift in Sources */,
 				8858FB76EF5D9ACD1FC8C464 /* FeedStore.swift in Sources */,
@@ -4048,6 +4058,7 @@
 				D2FA916D9A459F2934C3C271 /* BubbleFooterModelTests.swift in Sources */,
 				0808776F36CAB8386ADDE879 /* BubbleLanguageFlagControllerTests.swift in Sources */,
 				7337FCFF0281DC99F757F5D3 /* BubbleLocationRenderingTests.swift in Sources */,
+				8588BE76D275B1D7781E9FBF /* BubbleMoodQuoteLayoutTests.swift in Sources */,
 				FDE8D8068409785FF05AF704 /* BubbleQuotedReplyAttachmentKindTests.swift in Sources */,
 				3AD2F64896700DA11A603CC6 /* BubbleSimpleMessagePerfTests.swift in Sources */,
 				06981CC6912219DCAA78D169 /* BubbleSwipeResistanceTests.swift in Sources */,
@@ -4162,6 +4173,7 @@
 				9CB22CFD1C7F0B03989CC5CC /* FakeOfflineMessageQueue.swift in Sources */,
 				BDE0C161B26D8DAC65AC0F1D /* FeedButtonAnchorTests.swift in Sources */,
 				C2C2BFFF8401EDDBE52C08A4 /* FeedPipelineIntegrationTests.swift in Sources */,
+				EB29EB60CCBD589CEEC8D252 /* FeedPostCardLayoutTests.swift in Sources */,
 				4189861E30F648C714D995CD /* FeedPostCardMentionColorGuardTests.swift in Sources */,
 				06E2B5AB0C61A3CA2B959B08 /* FeedViewModelTests.swift in Sources */,
 				E935CB0356B5A83A9EFE6D49 /* FeedViewStoryPullToRefreshGuardTests.swift in Sources */,
@@ -4522,7 +4534,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1747;
+				CURRENT_PROJECT_VERSION = 1748;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -4686,7 +4698,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1747;
+				CURRENT_PROJECT_VERSION = 1748;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_NS_ASSERTIONS = NO;
