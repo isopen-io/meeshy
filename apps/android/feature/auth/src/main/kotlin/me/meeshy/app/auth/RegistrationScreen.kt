@@ -12,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -52,6 +55,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -352,6 +356,63 @@ private fun PseudoStepBody(state: RegistrationUiState, viewModel: RegistrationVi
                 color = color,
                 modifier = Modifier.padding(top = MeeshySpacing.xs),
             )
+        }
+        if (state.fields.usernameSuggestions.isNotEmpty()) {
+            UsernameSuggestionStrip(
+                suggestions = state.fields.usernameSuggestions,
+                onSuggestionClick = viewModel::selectUsernameSuggestion,
+            )
+        }
+    }
+}
+
+/**
+ * Parity target: iOS `StepPseudoView.suggestionsCard` — free alternate handles the
+ * server offers when the typed username is taken
+ * ([me.meeshy.sdk.model.auth.RegistrationFields.usernameSuggestions]). A tap adopts
+ * the handle via [RegistrationViewModel.selectUsernameSuggestion]. `FlowRow` (stable
+ * since Compose Foundation 1.7, already used elsewhere in this codebase e.g. the
+ * chat effects picker) replaces iOS's hand-rolled `FlowLayout`.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun UsernameSuggestionStrip(suggestions: List<String>, onSuggestionClick: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = MeeshySpacing.sm)
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.warning.copy(alpha = 0.08f))
+            .padding(MeeshySpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Lightbulb,
+                contentDescription = null,
+                tint = MeeshyTheme.tokens.warning,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = stringResource(R.string.registration_username_suggestions_title),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            suggestions.forEach { suggestion ->
+                SuggestionChip(
+                    onClick = { onSuggestionClick(suggestion) },
+                    label = { Text("@$suggestion") },
+                )
+            }
         }
     }
 }

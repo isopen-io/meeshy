@@ -432,3 +432,36 @@ Append-only log of gotchas and decisions that save time next run.
   from another concurrent worktree session, the exact shared-ref hazard `CLAUDE.md` already warns
   about) before concluding the empty diff meant something was wrong; it didn't — it meant "not
   committed yet," the expected state at that point in the run.
+
+## Slice `auth-username-suggestion-strip` (2026-08-10)
+- **When a headline item ("the OnboardingFlowView Compose scaffold is 8/8") makes the obvious
+  thread disappear, re-read the CLOSED item's own follow-up text before falling back to the
+  generic "Next slice" candidate list.** With the registration wizard fully wired, the prior run's
+  "Next slice" note offered four options, none obviously best (device-locale inference, a
+  large-and-recurring §C rewrite, a backend-blocked TagInputField, coverage-gate infra). A cheap
+  first move that isn't in that checklist: grep the follow-up sentences hanging off *already-`[x]`*
+  or `[~]` bullets in the same area — `signup-availability-probe`'s own entry had said "Follow-up:
+  the username-suggestion strip … and the Compose onboarding screen" back on 2026-07-25; the
+  Compose screen half got done across eight later slices but the suggestion-strip half never got
+  its own line item in any "Next slice" list, so it silently accumulated seven weeks of not being
+  picked without ever being flagged as blocked or hard. Confirmed real (not stale) with one grep
+  for the symbols it would need (`usernameSuggestions`, `selectUsernameSuggestion`) before
+  committing to it.
+- **A shared generic helper's signature is not sacred — but changing it for one caller out of
+  three isn't always the cheapest fix either.** `RegistrationViewModel.launchProbe`'s `probe`
+  parameter is `suspend (String) -> Boolean?`, shared by the username/email/phone debounce
+  pipelines. Only username's probe needed to report a second piece of data
+  (`AvailabilityResult.suggestions`). Generalising `launchProbe` to `<T>` would have touched all
+  three call sites for one caller's need; instead the username probe closure calls
+  `onUsernameSuggestions(...)` as a side effect before returning the `Boolean?` `apply` still
+  expects — exactly what iOS's own `checkUsernameAvailability` does (sets two `@Published`
+  properties from one response inside one `do` block), so the "two things from one round-trip"
+  shape isn't a workaround, it's the faithful port of how the source already models this.
+- **`FlowRow` needs `@OptIn(ExperimentalLayoutApi::class)` on THIS `composeBom` (`2024.10.01`)
+  even though it's used unguarded-looking elsewhere in the codebase** — `ChatScreen.kt` and
+  `PostDetailScreen.kt` both opt in per-function (`@OptIn(ExperimentalLayoutApi::class)` right
+  above the composable), it's just easy to miss scrolling past 2800+ lines of an unrelated file.
+  Compiler error is a same-line, precise `The API of this layout is experimental` — cheap to find,
+  but grep the existing `@OptIn(ExperimentalLayoutApi::class)` sites first rather than assuming
+  `FlowRow` is unconditionally stable because it appears unadorned nearby in the same file (it's
+  adorned two screens up, just off-screen).

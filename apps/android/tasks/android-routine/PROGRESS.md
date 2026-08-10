@@ -2,6 +2,79 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 the **registration wizard's username-suggestion strip** landed (slice
+> `auth-username-suggestion-strip`, feature-parity §A). **RE-PROVEN before picking, not a rerun of a
+> stale note:** with the `OnboardingFlowView` Compose decomposition now 8/8 (all 8 steps shipped
+> `auth-profile-step-fields`, previous run), there was no single obvious "next slice" — the prior run's
+> candidate list was SignupRegionInference device-locale wiring, the §C inverted-list message layout
+> (flagged "genuinely large" over several runs), `TagInputField` (blocked on a backend `tags` wire
+> field), and the Kover coverage-gate infra. Re-reading `feature-parity.md`'s own follow-up text for
+> the registration-wizard bullet (not just the "Next slice" pointer) surfaced a concrete, already-scoped,
+> not-yet-picked item hiding in plain sight: "the username-suggestion strip (surface
+> `AvailabilityResult.suggestions`)" — flagged as a follow-up since `signup-availability-probe`
+> (2026-07-25) and never picked up. Grepped `usernameSuggestions`/`selectUsernameSuggestion` across
+> `apps/android` first — zero production hits, confirming the gap was real, not stale. Chose it over the
+> other candidates: smaller and better-scoped than the §C inverted-list rewrite, not blocked on a
+> gateway wire field like `TagInputField`, and closes a real, small, well-understood parity gap rather
+> than infra work. **Re-verified iOS itself too**, not just the Android note:
+> `RegistrationViewModel.usernameSuggestions`/`selectSuggestion`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`) — populated from
+> `AvailabilityResult.suggestions` inside `checkUsernameAvailability`, rendered by `StepPseudoView.
+> suggestionsCard` (a warning-tinted card, lightbulb icon, `FlowLayout` of tappable `@handle` capsules),
+> tapping one sets `username`, optimistically marks `usernameAvailable = true` (the server already
+> confirmed it when it offered the handle), and clears the list. **Added (production, all
+> `apps/android`):** `RegistrationFields.usernameSuggestions: List<String>` (`:core:model`, sibling to
+> `usernameAvailable`); `RegistrationViewModel.onUsernameSuggestions` (background-verdict setter, same
+> `updateFields`/errorMessage-preserving rationale as `onUsernameAvailability`) + `selectUsernameSuggestion`
+> (the tap handler, faithful port of iOS `selectSuggestion`); the username probe's `init{}` pipeline now
+> applies both the verdict and its suggestions from one `checkAvailability` round-trip — a side effect
+> inside the `launchProbe` closure, since the shared generic plumbing only carries one value back to
+> `apply` and changing its signature for one of three callers wasn't worth the diff (mirrors iOS
+> `checkUsernameAvailability` setting both `@Published` properties from the same response, not a new
+> pattern); `onUsernameChange` now also clears `usernameSuggestions` on every edit — extends the
+> existing "invalidate stale verdict on edit" SOTA convention (Android already diverges from iOS here by
+> clearing `usernameAvailable` immediately rather than waiting for the debounced sink) to suggestions
+> too, consistently. `RegistrationScreen.kt`'s new `UsernameSuggestionStrip` — `FlowRow` (stable since
+> Compose Foundation 1.7, already used elsewhere in this codebase, e.g. the chat effects picker) of
+> Material3 `SuggestionChip`s in a `MeeshyTheme.tokens.warning`-tinted card with a lightbulb icon —
+> renders under `PseudoStepBody`'s availability indicator whenever the list is non-empty. **+7
+> behavioural tests** (`RegistrationViewModelTest`: direct setter; edit invalidates stale suggestions;
+> selecting a suggestion sets username + marks available + clears the list + unlocks `canProceed`;
+> editing again after a select re-invalidates the optimistic verdict; a taken-username probe applies
+> suggestions; an available-username probe leaves them empty; a failed probe leaves them empty).
+> **Mutation (RED proof):** reverting `selectUsernameSuggestion`'s optimistic `usernameAvailable = true`
+> to `null` fails **exactly** `selectUsernameSuggestion_setsUsernameAndMarksAvailable` (71 run, 1 failed,
+> no collateral); RED was also proven first by the suite failing to **compile** against the absent
+> production members (`onUsernameSuggestions`/`selectUsernameSuggestion`/`usernameSuggestions` all
+> unresolved). **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full `assembleDebug` +
+> all-module `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only — `core/model`
+> [`RegistrationFields` +1 field, no new files], `feature/auth` [`RegistrationViewModel` +2 setters +
+> probe-closure wiring, `RegistrationScreen.kt` +1 composable, ×4 locale strings ×4 locales]; SDK purity
+> — `usernameSuggestions` is inert data on an existing `:core:model` type, `selectUsernameSuggestion` is
+> ordinary ViewModel plumbing at the same grain as the sibling `on…Change` setters, the Compose strip is
+> UI glue over ViewModel state — no shared-singleton-plus-product-rule combo; SSOT — reuses
+> `AvailabilityResult.suggestions` untouched, no re-implementation; instant-app — no spinner introduced;
+> UDF — unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — the strip is purely
+> additive under the existing field, doesn't gate anything; no tautological tests; no coverage floor
+> lowered, no existing test weakened). **Registration-wizard top-level bullet now `[x]`** — both of its
+> tracked follow-ups (the 8 step composables, and the suggestion strip) are done. **Bookkeeping
+> correction alongside this slice (not new production work):** re-verifying this area of
+> `feature-parity.md` found three sibling bullets (progress bar, bottom-bar nav, ViewModel wiring) still
+> marked `[~]` despite their own text already documenting `auth-onboarding-shell` (2026-08-09) shipping
+> the composables/wiring they describe — corrected to `[x]` since directly re-verified in this run's
+> research, rather than left for a future run to re-discover the same staleness. **Next slice (no single
+> obvious pick — re-verify each before committing a run):** wiring `SignupRegionInference` into the
+> wizard's init for a device-locale default (deliberately deferred since `auth-language-step-fields`), OR
+> the §C **inverted-list** message layout (bottom-anchored `reverseLayout`, recurring since
+> `chat-pinned-day-header` — re-verify `ChatScreen.kt` before committing a run to it, the "genuinely
+> large" verdict is itself a hypothesis several runs have repeated without re-decomposing it), OR the
+> `TagInputField` composable + `allTags` corpus hydration (still blocked on a new `tags` wire field on
+> `ApiConversation`), OR the tracked **Kover 90% coverage-gate infra**. With Auth's registration wizard
+> now fully closed end-to-end, the next run should also weigh whether Auth §A has any remaining
+> non-wizard gaps (saved-account picker, server environment selector, magic-link, OTP, phone recovery,
+> onboarding carousel, splash screen — several still `[~]`/`[ ]`) against moving on to Conversations/Chat
+> per the `Auth → Conversations → Chat → Feed → Stories → Calls → the rest` build order.
+>
 > On 2026-08-09 the **registration wizard's PROFILE step field UI + post-registration asset upload**
 > landed (slice `auth-profile-step-fields`, feature-parity §A — slice **8/8, the last one** of the
 > `OnboardingFlowView` Compose decomposition, flipping the combined "Profile photo / banner / bio

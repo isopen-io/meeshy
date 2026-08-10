@@ -15,6 +15,15 @@ data class RegistrationFields(
     val username: String = "",
     val usernameAvailable: Boolean? = null,
     /**
+     * Free alternate handles the server offers when [username] is taken (iOS
+     * `RegistrationViewModel.usernameSuggestions`, populated from
+     * [me.meeshy.sdk.model.AvailabilityResult.suggestions]). Empty when the
+     * username is available, unprobed, or the probe failed — never a fallback
+     * to a stale list from a since-edited value (see [RegistrationFields]'s own
+     * `usernameAvailable` invalidation-on-edit convention).
+     */
+    val usernameSuggestions: List<String> = emptyList(),
+    /**
      * The PHONE step's selected dial-code country (iOS `selectedCountry`), defaulting to
      * [CountryCatalog.priority]'s head (`"FR"`, mirrors `CountryPicker.countries[0]`). Display-only
      * for the gate (the digit-count check in [SignupFieldValidation.isPhoneValidLocally] never reads
