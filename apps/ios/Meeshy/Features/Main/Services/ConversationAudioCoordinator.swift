@@ -286,6 +286,20 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// lock-screen `previousTrackCommand` enablement.
     public var hasPrevious: Bool { !history.isEmpty }
 
+    /// Position 0-based dans la file complète (déjà joués + courant + à venir),
+    /// publiée à la carte système (`MPNowPlayingInfoPropertyPlaybackQueueIndex`).
+    var queuePosition: (index: Int, count: Int) {
+        (history.count, history.count + queueCount)
+    }
+
+    /// Titre de carte « {conversation} — {date} » (parité WhatsApp : la date
+    /// du vocal est le repère principal quand on rattrape une file).
+    nonisolated static func nowPlayingTitle(
+        conversationName: String, receivedAt: Date
+    ) -> String {
+        "\(conversationName) — \(receivedAt.formatted(date: .numeric, time: .shortened))"
+    }
+
     /// Lock-screen / AirPods "previous". Mirrors the standard media convention:
     /// past `previousRestartThreshold` it restarts the current track; otherwise
     /// it pops the played-history stack and re-heads the prior track. With no

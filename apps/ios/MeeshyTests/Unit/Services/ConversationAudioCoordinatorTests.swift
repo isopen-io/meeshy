@@ -515,4 +515,34 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         let coordinator = ConversationAudioCoordinator()
         XCTAssertEqual(coordinator.engineForBubble?.sessionProfile, .content)
     }
+
+    // MARK: - Task 4 — Now Playing enriched card
+
+    func test_nowPlayingTitle_containsConversationAndDate() {
+        let date = Date(timeIntervalSince1970: 1_754_000_000)
+        let title = ConversationAudioCoordinator.nowPlayingTitle(
+            conversationName: "Ashley", receivedAt: date
+        )
+        XCTAssertTrue(title.hasPrefix("Ashley — "))
+        XCTAssertGreaterThan(title.count, "Ashley — ".count)
+    }
+
+    func test_queuePosition_advancesWithHistory() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b"), make("c")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        XCTAssertEqual(sut.queuePosition.index, 0)
+        XCTAssertEqual(sut.queuePosition.count, 3)
+
+        sut.playNext()
+        XCTAssertEqual(sut.queuePosition.index, 1)
+        XCTAssertEqual(sut.queuePosition.count, 3)
+    }
 }
