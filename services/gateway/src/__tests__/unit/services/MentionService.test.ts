@@ -1187,9 +1187,98 @@ describe('MentionService', () => {
 
       expect(prisma.mention.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { mentionedUserId: 'user-1' },
+          where: expect.objectContaining({ mentionedUserId: 'user-1' }),
         })
       );
+    });
+
+    // ------------------------------------------------------------------
+    // Admission de l'inbox : la MÊME règle que `GET /mentions/messages/:id`
+    //
+    // La route soeur, dans le même fichier, refuse un message supprimé ET un
+    // appelant qui n'est plus participant actif. L'inbox rendait la ligne sur
+    // le seul `mentionedUserId` — donc un message RAPPELÉ par son auteur y
+    // restait lisible en clair, indéfiniment, et aucun écrivain ne supprime
+    // jamais la ligne `Mention` (le seul `mention.deleteMany` du dépôt est la
+    // réconciliation d'édition).
+    //
+    // Le double honore le `where` REÇU plutôt que celui attendu : sans garde
+    // déclarée par la production, la ligne rappelée revient et le test tombe.
+    // ------------------------------------------------------------------
+    const inboxRow = (
+      id: string,
+      overrides: { deletedAt?: Date | null; participants?: { userId: string; isActive: boolean }[] } = {}
+    ) => ({
+      id,
+      mentionedUserId: 'user-1',
+      mentionedAt: new Date('2026-08-01T10:00:00Z'),
+      message: {
+        id: `msg-${id}`,
+        content: `Salut @user1 (${id})`,
+        conversationId: 'conv-1',
+        senderId: 'sender-1',
+        createdAt: new Date('2026-08-01T10:00:00Z'),
+        deletedAt: overrides.deletedAt ?? null,
+        sender: { id: 'sender-1', userId: 'u-sender', displayName: 'Sender', avatar: null, user: { username: 'sender' } },
+        conversation: {
+          id: 'conv-1',
+          title: 'Test Conversation',
+          type: 'group',
+          participants: overrides.participants ?? [{ userId: 'user-1', isActive: true }],
+        },
+      },
+    });
+
+    const honourWhere = (rows: ReturnType<typeof inboxRow>[]) => (args: any) => {
+      const where = args?.where ?? {};
+      const messageGate = where.message ?? {};
+      const participantGate = messageGate.conversation?.participants?.some;
+
+      return Promise.resolve(
+        rows.filter((row) => {
+          if (where.mentionedUserId != null && row.mentionedUserId !== where.mentionedUserId) return false;
+          if (messageGate.deletedAt === null && row.message.deletedAt !== null) return false;
+          if (participantGate) {
+            const admitted = row.message.conversation.participants.some(
+              (p) => p.userId === participantGate.userId && p.isActive === participantGate.isActive
+            );
+            if (!admitted) return false;
+          }
+          return true;
+        })
+      );
+    };
+
+    it('omits a message its author has recalled', async () => {
+      prisma.mention.findMany.mockImplementation(
+        honourWhere([inboxRow('live'), inboxRow('recalled', { deletedAt: new Date('2026-08-02T09:00:00Z') })])
+      );
+
+      const result = await service.getRecentMentionsForUser('user-1');
+
+      expect(result.map((m: { id: string }) => m.id)).toEqual(['live']);
+    });
+
+    it('omits a mention from a conversation the user no longer belongs to', async () => {
+      prisma.mention.findMany.mockImplementation(
+        honourWhere([
+          inboxRow('joined'),
+          inboxRow('left', { participants: [{ userId: 'user-1', isActive: false }] }),
+        ])
+      );
+
+      const result = await service.getRecentMentionsForUser('user-1');
+
+      expect(result.map((m: { id: string }) => m.id)).toEqual(['joined']);
+    });
+
+    it('keeps a live mention in a conversation the user is still in', async () => {
+      prisma.mention.findMany.mockImplementation(honourWhere([inboxRow('live')]));
+
+      const result = await service.getRecentMentionsForUser('user-1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].message.content).toBe('Salut @user1 (live)');
     });
 
     it('should use default limit of 50', async () => {

@@ -1,3 +1,136 @@
+# Cycle 46 — Le rappel d'un message s'arrêtait à la porte de l'inbox de mentions
+
+Supprimer un message, dans ce produit, est un **rappel** : les quatre écrivains de `deletedAt`
+vident `translations`, diffusent `message:deleted`, désactivent les `/l/<token>` que le message
+emportait, recalculent `lastMessageAt`. Le message disparaît de partout.
+
+Sauf d'un endroit. `GET /mentions/me` rendait `Message.content` sans jamais regarder `deletedAt` —
+le seul chemin du gateway dans ce cas.
+
+## Le défaut, et pourquoi il ne se referme jamais tout seul
+
+`MentionService.getRecentMentionsForUser` interrogeait `mention.findMany` sur le seul
+`mentionedUserId`. Sa route soeur, **dans le même fichier**, écrit pourtant la règle complète :
+
+```ts
+// routes/mentions.ts — GET /mentions/messages/:messageId
+prisma.message.findFirst({
+  where: { id: messageId, deletedAt: null,
+           conversation: { participants: { some: { userId, isActive: true } } } },
+})
+```
+
+Deux lecteurs, une seule règle, et un seul des deux la porte.
+
+Ce que cela donne : Bob écrit « désolé @alice, [quelque chose qu'il regrette] », puis supprime.
+La conversation le perd chez tout le monde, en direct. Alice le garde — contenu intégral, identité
+de l'auteur, titre de la conversation — dans son inbox de mentions, à chaque ouverture, sans date
+de fin.
+
+**Rien ne l'en retire jamais**, et c'est le point qui rend le défaut permanent plutôt que
+transitoire :
+
+- l'unique `mention.deleteMany` du dépôt est la réconciliation d'édition
+  (`replaceMessageMentions`), qui ne supprime que les mentionnés **partants** d'un texte réécrit —
+  elle ne connaît pas la suppression ;
+- `Mention.message` déclare bien `onDelete: Cascade`, mais une cascade ne se déclenche que sur une
+  suppression **physique**. Le retrait doux ne bascule que `deletedAt` : la ligne `Message` reste,
+  donc la ligne `Mention` aussi. Même mécanisme que les `TrackingLink` survivants du cycle 43.
+
+Second trou de la même garde absente : une ligne `Mention` survit à `Participant.isActive = false`.
+Une personne retirée d'un groupe y lit encore son entrée — et le **titre de conversation est relu
+live** à chaque appel, donc il peut avoir changé après son départ.
+
+## Le correctif
+
+L'admission de la route soeur, portée dans `getRecentMentionsForUser` :
+
+```ts
+where: {
+  mentionedUserId: userId,
+  message: {
+    deletedAt: null,
+    conversation: { participants: { some: { userId, isActive: true } } },
+  },
+}
+```
+
+Deux choix, et aucun n'est cosmétique.
+
+**Dans le service, pas dans la route.** La ligne `Mention` n'est atteignable que par cette
+fonction : c'est le seul endroit qu'un futur lecteur ne peut pas oublier. La placer dans la route
+aurait reproduit la configuration qui a produit le défaut — une règle correcte répétée en N
+endroits, dont l'un finit par manquer. Même argument qu'au cycle qui a mis les contrôles de
+périmètre dans `writeConversationPreferences`.
+
+**Filtrage à la lecture, pas purge des lignes au retrait du message.** Purger dans
+`applyMessageRemovalEffects` aurait laissé derrière lui toutes les lignes DÉJÀ en base (un script de
+réparation de plus, après ceux des cycles 25 et 27), et n'aurait rien pu faire du cas appartenance —
+qu'aucun nettoyage à l'écriture ne peut voir, puisque le départ arrive après. Le filtre couvre les
+deux, et il est réversible : restaurer un message rendrait sa mention, ce qu'une purge interdirait.
+
+## Plan
+
+- [x] T1 — RED : une mention dont le message est rappelé sort de l'inbox
+- [x] T2 — RED : une mention d'une conversation quittée sort de l'inbox
+- [x] T3 — témoin : une mention vivante dans une conversation rejointe reste (vert avant ET après)
+- [x] T4 — GREEN : la garde d'admission dans `getRecentMentionsForUser`
+- [x] T5 — le verrou « on filtre sur l'utilisateur, pas sur un participant » relâché en
+      `objectContaining` sans perdre son intention
+- [x] T6 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T7 — changeset + CHANGELOG + ce relevé
+
+## Revue
+
+Le double de test mérite d'être noté, parce que c'est lui qui fait la différence entre un test qui
+prouve quelque chose et un test qui accompagne. Les assertions voisines de ce `describe` portent sur
+la **forme** de l'appel (`toHaveBeenCalledWith(objectContaining({ take: 50 }))`). Une assertion de
+plus sur la forme du `where` aurait été verte dès l'instant où le champ existe, sans jamais dire que
+la ligne rappelée disparaît.
+
+`honourWhere(rows)` rend un `mention.findMany` qui **applique le `where` qu'il reçoit** aux lignes
+qu'on lui donne. Il ne connaît pas le `where` attendu : si la production n'en déclare aucun, la
+ligne rappelée revient et le test tombe. C'est exactement ce qui a été observé — deux rouges, la
+ligne `recalled` puis la ligne `left` présentes dans le résultat — avant que la garde n'existe. Un
+double qui rend ses lignes quel que soit le filtre laisserait passer ce défaut ; c'est la leçon du
+cycle 45b, appliquée ici avant plutôt qu'après.
+
+Le témoin T3 est vert des deux côtés du correctif. Son rôle est d'interdire de trop resserrer : une
+garde qui viderait l'inbox passerait T1 et T2 sans broncher.
+
+Vérifié aussi, et sans changement nécessaire : `getMentionsForMessage` (l'autre lecteur de
+`Mention`) est appelé exclusivement derrière la garde de la route soeur, qui la porte déjà.
+
+## Reste ouvert après ce cycle
+
+- **Le rappel n'est pas propagé à l'inbox en temps réel.** `message:deleted` part vers les salons
+  de conversation ; un client qui affiche l'inbox de mentions n'a aucun signal lui disant de retirer
+  la ligne, et la relira au prochain `GET`. Correct à la lecture, en retard à l'écran — le même
+  écart qu'entre un compteur juste et un compteur poussé.
+- **La notification de mention survit au rappel.** La ligne `Notification` et le push déjà remis
+  portent le contenu du message. Le filtre de ce cycle ne les atteint pas : c'est un autre lecteur,
+  avec sa propre question (faut-il retirer une notification déjà affichée, ou seulement la vider de
+  son contenu ?).
+- **`UserMessageDeletion` est écrite et lue par personne.** Quatre écritures dans
+  `routes/user-deletions.ts`, zéro lecture dans tout le dépôt : « supprimer pour moi » un message
+  n'a aucun effet observable. Volontairement hors de ce cycle — c'est l'arbitrage `delete-for-me`
+  que le cycle 12 a laissé en attente de validation humaine, et l'inbox ne doit pas trancher seule
+  une question qui appartient à la liste de messages.
+- Reconduits du cycle 44 : les compteurs déjà dérivés restent en base (script de réparation en lot,
+  candidat autonome) ; le plancher reste absent des décréments ; `ConversationMessageStats` reste un
+  dénormalisé sans propriétaire (JSON en lecture-modification-écriture non atomique) ; les messages
+  SYSTÈME ne sont comptés par personne alors que `recompute()` les compte — trancher AVANT de câbler.
+- Reconduits du cycle 43 : `TrackingLink.messageId` reste une colonne trompeuse ; le décompte de
+  références relit le texte pour retrouver une relation.
+- Reconduits des cycles 40-42 : E2EE web de bout en bout ; `signedPreKeySignature` invérifiable ; le
+  reste de `PreferencesService` (479 lignes) mort ; colonnes `User.signal*` mortes ; pré-clé à usage
+  unique non unique ; `POST /signal/session/establish` n'établit aucune session ; `registrationId`
+  iOS déborde le `maximum` documenté ; doublons `Participant` ; « qui a le droit d'épingler ? » ;
+  asymétrie édition/suppression ; `eslint` inopérant sur le gateway (pas d'`eslint.config.js` depuis
+  ESLint v9).
+
+---
+
 # Cycle 45b — Addendum d'une session parallèle : les tests du cycle 45 ne voyaient pas le défaut du cycle 45
 
 Deux sessions ont livré le cycle 45 en parallèle, sur **le même défaut**. Celle-ci arrive seconde.
