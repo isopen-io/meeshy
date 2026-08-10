@@ -388,6 +388,10 @@ private struct MyStoryButton: View {
         // aussitôt (`skipUnplayableStoriesIfNeeded`). Cohérent avec le filtre du tray.
         let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
+        // Parité 2026-08-10 : au moins une story, active ou entièrement
+        // expirée — route le tap et le menu contextuel vers la gestion
+        // plutôt que de forcer la création quand tout est expiré.
+        let hasAnyStory = viewModel.hasStories(forUserId: userId)
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
@@ -407,7 +411,7 @@ private struct MyStoryButton: View {
                         // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
                         // Supersession 2026-08-02 : le tap ouvre la LISTE —
                         // les onglets Publiées / Brouillons vivent là.
-                        switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory) {
+                        switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory, hasAnyStory: hasAnyStory) {
                         case .manageStories: onManageStories?()
                         case .createStory:   viewModel.showStoryComposer = true
                         }
@@ -428,11 +432,14 @@ private struct MyStoryButton: View {
                                 HapticFeedback.medium()
                             })
                         }
-                        // Découplé de `hasMyStory` : un envoi en cours ou une
-                        // publication échouée n'a produit AUCUNE story publiée,
-                        // et c'est précisément ce travail-là qu'on vient gérer.
+                        // Découplé de `hasMyStory` : un envoi en cours, une
+                        // publication échouée, ou un historique entièrement
+                        // expiré (`hasAnyStory`) n'a produit AUCUNE story
+                        // ACTIVE, et c'est précisément ce travail-là qu'on
+                        // vient gérer.
                         if !hasMyStory,
-                           !viewModel.activeUploads.isEmpty
+                           hasAnyStory
+                            || !viewModel.activeUploads.isEmpty
                             || !StoryPublishService.shared.failedItems.isEmpty {
                             items.append(AvatarContextMenuItem(label: StoryTrayCopy.manageStories, icon: "rectangle.stack.fill") {
                                 onManageStories?()
@@ -460,7 +467,7 @@ private struct MyStoryButton: View {
                 // badge « + » aurait cessé d'être un bouton nommé, alors que
                 // c'est justement l'affordance « composer TOUJOURS ».
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: hasMyStory))
+                .accessibilityLabel(StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: hasMyStory, hasAnyStory: hasAnyStory))
                 // Fusionné, l'élément héritait du type de ses enfants (une
                 // image) : VoiceOver annonçait une destination sans dire que
                 // c'était actionnable.
@@ -713,13 +720,21 @@ struct PinnedStoryTrailBand: View {
         AuthManager.shared.currentUser?.id ?? ""
     }
 
-    /// Le groupe de l'utilisateur courant (sa propre story), non expiré.
-    /// Surfacé en tête du band replié pour un accès rapide « voir / revoir ma
-    /// story » depuis le header une fois la grande trail scrollée hors écran.
+    /// Le groupe de l'utilisateur courant (sa propre story). Surfacé en tête
+    /// du band replié pour un accès rapide « voir / gérer mes stories »
+    /// depuis le header une fois la grande trail scrollée hors écran.
+    ///
+    /// Parité 2026-08-10 : NE filtre plus sur `!isFullyExpired()` — un
+    /// historique entièrement expiré est quand même « une story » pour
+    /// l'anneau self : sans lui, il disparaissait purement et simplement du
+    /// band replié, avec son appui long (« Gérer mes stories »), dès que la
+    /// dernière story active expirait. Contrairement à `MyStoryButton` (la
+    /// grande trail), il n'existe ici aucun autre slot de repli pour cette
+    /// cellule — la retirer retire le SEUL accès self de ce band.
     private var ownGroup: StoryGroup? {
         let uid = currentUserId
         guard !uid.isEmpty else { return nil }
-        return viewModel.storyGroups.first { $0.id == uid && !$0.isFullyExpired() }
+        return viewModel.storyGroups.first { $0.id == uid }
     }
 
     private var visibleGroups: [StoryGroup] {
