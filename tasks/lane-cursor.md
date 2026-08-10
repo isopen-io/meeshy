@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=5 last_run=feed-composer-camera-capture
+lane=ANDROID android_streak=1 last_run=chat-scroll-geometry

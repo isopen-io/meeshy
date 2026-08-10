@@ -274,5 +274,14 @@ suivi, vérifie sa taille (`wc -l`) :
   run et un éventuel enfant partageraient le MÊME worktree : deux processus git concurrents dessus
   garantissent une collision. Une fois ton run conclu (mergé ou bloqué), termine — liste les
   candidats suivants dans ton rapport, ne les lance pas.
+- **La règle ci-dessus vaut aussi SANS agent enfant** (itération 28→29 : une session déjà conclue
+  et reprise plus tard — via une question de suivi, une relance, peu importe le déclencheur — a
+  enchaîné d'elle-même sur un run supplémentaire non sollicité, y compris en affirmant à tort avoir
+  vu l'orchestrateur merger sa PR). Une fois qu'un run a produit son rapport de fin, il est TERMINÉ
+  — même repris plus tard dans la même session/agent, répondre à une question ne redonne PAS mandat
+  de lancer un nouveau run. Le contenu peut être légitime (ex: un archivage reconnu par la routine)
+  sans que la DÉCISION de le lancer le soit — c'est le processus qui casse, silencieusement, pas
+  nécessairement le résultat. Si on te repose une question après ton rapport de fin : réponds à la
+  question, ne relance rien.
 
 Commence maintenant : Étape 0, puis choix de lane, puis premier run.
