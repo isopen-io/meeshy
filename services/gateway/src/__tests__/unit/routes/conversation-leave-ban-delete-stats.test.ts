@@ -116,6 +116,13 @@ function createMockPrisma() {
     conversation: {
       findFirst: jest.fn<any>(),
       update: jest.fn<any>().mockResolvedValue({}),
+      // registerDeleteForMeRoutes' creator branch queries this to determine
+      // isEmptyDirect (see routes/conversations/delete-for-me.ts) — default
+      // to "not empty" so the pre-existing successor-transfer scenarios below
+      // are unaffected. Pre-merge fix 2026-08-10 switched this from
+      // `findUnique` + JS negation to a `count` guard (Prisma-Mongo
+      // absent-vs-null trap).
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     participant: {
       findFirst: jest.fn<any>(),

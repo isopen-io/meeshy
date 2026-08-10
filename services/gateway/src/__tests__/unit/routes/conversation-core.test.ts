@@ -478,13 +478,50 @@ describe('registerCoreRoutes', () => {
           where: expect.objectContaining({
             OR: expect.arrayContaining([
               { type: { not: 'direct' } },
-              { NOT: { firstMessageSentAt: null } },
+              {
+                OR: [
+                  { NOT: { firstMessageSentAt: null } },
+                  { firstMessageSentAt: { isSet: false } },
+                ],
+              },
               { participants: { some: { userId: USER_ID, role: 'creator' } } },
               { participants: { none: { role: 'creator' } } },
             ]),
           }),
         })
       );
+    });
+
+    // Regression — Prisma-Mongo absent-vs-null (corrigé en revue pré-merge,
+    // 2026-08-10). Un `NOT: { firstMessageSentAt: null }` nu exclut aussi les
+    // documents où le champ est ABSENT (legacy, jamais backfillé) sur le
+    // connecteur MongoDB de Prisma — il faut l'OR explicite avec
+    // `isSet: false`. Un client Prisma mocké ne peut pas rejouer la sémantique
+    // Mongo (present-et-null vs absent), donc on vérifie la FORME du where
+    // (même technique que le `deletedForMe` isSet:false plus haut dans ce
+    // fichier / `PostFeedService.test.ts` deletedAt isSet:false) : elle seule
+    // prouve que les trois états (absent / null explicite / Date posée) sont
+    // couverts par la requête envoyée à Mongo.
+    it('builds the firstMessageSentAt visibility branch as an OR of set-or-absent, never a bare NOT', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const where = prisma.conversation.findMany.mock.calls[0][0].where;
+      const firstMessageBranch = where.OR.find(
+        (branch: any) => branch.OR && branch.OR.some((inner: any) => 'firstMessageSentAt' in inner || inner.NOT?.firstMessageSentAt !== undefined)
+      );
+      expect(firstMessageBranch).toEqual({
+        OR: [
+          { NOT: { firstMessageSentAt: null } }, // present-et-non-null (message envoyé) ⇒ visible
+          { firstMessageSentAt: { isSet: false } }, // absent (legacy, avant migration) ⇒ visible
+        ],
+      });
+      // Jamais une forme qui exclurait les documents absents.
+      expect(where.OR).not.toContainEqual({ NOT: { firstMessageSentAt: null } });
+      expect(where.OR).not.toContainEqual({ firstMessageSentAt: null });
     });
 
     it('applies the same empty-DM visibility gate when withUserId is provided', async () => {

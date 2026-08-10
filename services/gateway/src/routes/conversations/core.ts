@@ -357,7 +357,18 @@ export function registerCoreRoutes(
       // quel que soit leur contenu.
       whereClause.OR = [
         { type: { not: 'direct' } },
-        { NOT: { firstMessageSentAt: null } }, // absent (legacy) OU déjà posé ⇒ visible
+        {
+          // `NOT: { firstMessageSentAt: null }` seul ne matche PAS les
+          // documents où le champ est ABSENT sur le connecteur MongoDB de
+          // Prisma (il ne matche que present-et-non-null) — il exclurait donc
+          // à tort tout DM legacy (créé avant cette migration, jamais
+          // backfillé). Les deux branches sont nécessaires : déjà posé (message
+          // envoyé) OU absent (legacy, avant migration) ⇒ visible.
+          OR: [
+            { NOT: { firstMessageSentAt: null } },
+            { firstMessageSentAt: { isSet: false } }
+          ]
+        },
         { participants: { some: { userId, role: 'creator' } } },
         { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
       ];

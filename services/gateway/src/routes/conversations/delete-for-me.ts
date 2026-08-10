@@ -46,11 +46,16 @@ export function registerDeleteForMeRoutes(
 
       // If caller is CREATOR, transfer ownership
       if (participant.role === 'creator') {
-        const conversationInfo = await prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { type: true, firstMessageSentAt: true },
-        })
-        const isEmptyDirect = conversationInfo?.type === 'direct' && !conversationInfo.firstMessageSentAt
+        // Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien
+        // quand le champ est present-et-null que quand il est ABSENT (legacy,
+        // jamais backfillé) — impossible de distinguer les deux cas côté JS
+        // via un simple `select` + négation. On requête donc directement le
+        // state present-et-null (seul état correspondant à un DM "genuinely
+        // empty") via `count`, qui ne matche jamais un document où le champ
+        // est absent — `type: 'direct'` est filtré dans la même requête.
+        const isEmptyDirect = (await prisma.conversation.count({
+          where: { id: conversationId, type: 'direct', firstMessageSentAt: null },
+        })) > 0
 
         if (isEmptyDirect) {
           // DM vide jamais utilisé : rien à préserver pour un successeur qui
