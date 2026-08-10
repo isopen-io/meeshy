@@ -234,9 +234,17 @@ export class PasswordResetService {
   /**
    * Complete password reset - Step 2
    */
+  /**
+   * `userId` is present on success ONLY, and exists for one reason: the
+   * transaction below invalidates EVERY session of that user, and the caller is
+   * the only layer that can also cut their live Socket.IO channels
+   * (`disconnectRevokedSessions`). Without it the route has no idea whose
+   * sockets to close, and a reset password left an intruder's socket streaming.
+   * It is never echoed to the client — the route returns `message` alone.
+   */
   async completePasswordReset(
     request: PasswordResetCompletion
-  ): Promise<{ success: boolean; message?: string; error?: string }> {
+  ): Promise<{ success: boolean; message?: string; error?: string; userId?: string }> {
     const {
       token,
       newPassword,
@@ -443,7 +451,8 @@ export class PasswordResetService {
 
       return {
         success: true,
-        message: 'Password reset successfully. All sessions have been invalidated.'
+        message: 'Password reset successfully. All sessions have been invalidated.',
+        userId: user.id
       };
 
     } catch (error) {

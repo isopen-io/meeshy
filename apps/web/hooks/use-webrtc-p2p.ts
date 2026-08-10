@@ -698,6 +698,42 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   }, [callId]);
 
   /**
+   * Switch the local camera between front/back mid-call (FaceTime-style flip
+   * — Vague 95). Mirrors enableVideo()'s "one real track + N clones"
+   * ownership model — giving the first peer the literal camera track and
+   * every other peer a `.clone()` — so each peer's WebRTCService instance
+   * (via switchVideoSendTrack) can safely stop/release only the exact track
+   * it owns.
+   *
+   * Before this existed, VideoCallInterface's handleSwitchCamera replaced
+   * every sender with a SINGLE shared track object while assuming
+   * `localStream` held only one video track — an assumption that breaks the
+   * moment a group call has clones in flight, silently orphaning a live
+   * camera capture on every switch beyond the first.
+   */
+  const switchCamera = useCallback(
+    async (facingMode: 'user' | 'environment'): Promise<void> => {
+      const services = Array.from(webrtcServicesRef.current.values());
+      if (services.length === 0) {
+        throw new Error('NO_PEER_CONNECTION');
+      }
+      const cam = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
+        audio: false,
+      });
+      const baseTrack = cam.getVideoTracks()[0];
+      if (!baseTrack) return;
+      await Promise.all(
+        services.map((service, index) =>
+          service.switchVideoSendTrack(index === 0 ? baseTrack : baseTrack.clone())
+        )
+      );
+      logger.info('[useWebRTCP2P]', 'Camera switched', { callId, facingMode });
+    },
+    [callId]
+  );
+
+  /**
    * Turn the local camera OFF mid-call (video→audio downgrade). Stops outbound
    * video on every peer and flips the transceiver to recvonly so we keep
    * receiving theirs.
@@ -917,6 +953,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     createOffer,
     enableVideo,
     disableVideo,
+    switchCamera,
     applyQualityTier,
     removeParticipant,
     cleanup,

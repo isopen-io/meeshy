@@ -971,6 +971,42 @@ export class WebRTCService {
   }
 
   /**
+   * Swap the currently-sent camera track for a new one without a full
+   * enable/disable cycle (front↔back camera flip, FaceTime-style — Vague 95).
+   * The transceiver is already sendrecv and stays that way: replaceTrack()
+   * alone is sufficient, no renegotiation needed, unlike enableVideoSend().
+   *
+   * Reads the outgoing track straight off the sender (ground truth) before
+   * replacing — the same technique disableVideoSend() already uses — rather
+   * than trusting `exclusiveVideoTrack`, so this instance's own previous
+   * track is the only one ever stopped/removed. use-webrtc-p2p.ts's
+   * enableVideo() gives each peer beyond the first its own `.clone()`; a
+   * camera switch must respect that same per-peer ownership or it silently
+   * orphans a live camera capture on every other peer's track in a group
+   * call (the bug this method replaces: handleSwitchCamera used to replace
+   * every sender with one shared track object while assuming `localStream`
+   * held exactly one video track).
+   */
+  async switchVideoSendTrack(track: MediaStreamTrack): Promise<void> {
+    if (!this.videoTransceiver) {
+      throw new Error('Video transceiver not initialized');
+    }
+    try { track.contentHint = 'motion'; } catch { /* not supported */ }
+    const previousTrack = this.videoTransceiver.sender.track;
+    await this.videoTransceiver.sender.replaceTrack(track);
+    if (this.localStream) {
+      this.localStream.addTrack(track);
+      if (previousTrack) {
+        this.localStream.removeTrack(previousTrack);
+      }
+    }
+    if (previousTrack) {
+      previousTrack.stop();
+    }
+    this.exclusiveVideoTrack = track;
+  }
+
+  /**
    * Downgrade video→audio (turn my camera off): stop sending video, release the
    * track, and flip the transceiver to recvonly so we still receive the peer's
    * video. Renegotiates so the peer drops our tile.
