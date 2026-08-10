@@ -62,11 +62,17 @@ class ConversationListViewModel: ObservableObject {
     /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
     /// changed re-evaluates its body. The full list does NOT re-render.
     @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName (derived view of `typers`)
-    /// Per-user source of truth: conversationId → (userId → displayName). The
+    /// conversationId → PSEUDO du frappeur retenu pour cette conversation.
+    /// Dérivé du même choix que `typingUsernames`, donc désignant toujours la
+    /// même personne : la ligne de liste affiche son nom, la pastille de
+    /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
+    /// comme deux personnes en train d'écrire.
+    @Published private(set) var typingUsers: [String: String] = [:]
+    /// Per-user source of truth: conversationId → (userId → frappeur). The
     /// public `typingUsernames` is derived from this so a `typing:stop` from ONE
     /// member of a group no longer wipes the whole row's indicator while OTHER
     /// members are still typing (displayed "personne n'écrit" ≠ real "B écrit").
-    private var typers: [String: [String: String]] = [:]
+    private var typers: [String: [String: TypingUser]] = [:]
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
@@ -675,8 +681,11 @@ class ConversationListViewModel: ObservableObject {
                 // "<You> écrit…" on your own conversation row. Mirror the per-conversation
                 // guard in ConversationSocketHandler.
                 guard event.userId != currentUserId else { return }
-                typers[event.conversationId, default: [:]][event.userId] = event.preferredDisplayName
-                typingUsernames[event.conversationId] = Self.typingDisplayName(for: typers[event.conversationId])
+                typers[event.conversationId, default: [:]][event.userId] = TypingUser(
+                    username: event.username,
+                    displayName: event.preferredDisplayName
+                )
+                refreshTypingDerivations(for: event.conversationId)
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -1010,22 +1019,39 @@ class ConversationListViewModel: ObservableObject {
             return
         }
         typers[conversationId] = convTypers
-        typingUsernames[conversationId] = Self.typingDisplayName(for: convTypers)
+        refreshTypingDerivations(for: conversationId)
     }
 
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
         typingUsernames.removeValue(forKey: conversationId)
+        typingUsers.removeValue(forKey: conversationId)
         typers.removeValue(forKey: conversationId)
     }
 
-    /// Picks the single name surfaced on the row from the set of current typers.
-    /// The row API is single-name; sorting keeps the choice deterministic (and
-    /// stable across re-renders) when several members type at once.
-    nonisolated static func typingDisplayName(for typers: [String: String]?) -> String? {
+    /// Réaligne les deux vues publiques sur le frappeur retenu. Une seule
+    /// sélection les alimente : la ligne et la pastille désignent donc toujours
+    /// la même personne.
+    private func refreshTypingDerivations(for conversationId: String) {
+        let selection = Self.typingSelection(for: typers[conversationId])
+        typingUsernames[conversationId] = selection?.displayName
+        typingUsers[conversationId] = selection?.username
+    }
+
+    /// Un frappeur : son handle (`@pseudo`) et son nom d'affichage. Le gateway
+    /// transmet les deux ; les deux surfaces n'en montrent pas le même.
+    struct TypingUser: Equatable, Sendable {
+        let username: String
+        let displayName: String
+    }
+
+    /// Picks the single typer surfaced for a conversation. The row API is
+    /// single-name; sorting keeps the choice deterministic (and stable across
+    /// re-renders) when several members type at once.
+    static func typingSelection(for typers: [String: TypingUser]?) -> TypingUser? {
         guard let typers, !typers.isEmpty else { return nil }
-        return typers.values.sorted().first
+        return typers.values.sorted { ($0.displayName, $0.username) < ($1.displayName, $1.username) }.first
     }
 
     // MARK: - Badge Sync
@@ -1570,6 +1596,13 @@ class ConversationListViewModel: ObservableObject {
         guard convIndex(for: conversationId) != nil else { return }
         // Local-first read sync (cache + cross-VM `.conversationMarkedRead`).
         await syncEngine.markConversationReadLocally(conversationId)
+        guard Self.shouldDispatchListMarkAsRead(
+            conversationId: conversationId,
+            activeConversationId: messageSocket.activeConversationId
+        ) else {
+            clearUnreadLocally(conversationId)
+            return
+        }
         // Server mark-read via the store: optimistic unreadCount=0 + outbox
         // offline replay. The gateway gates the read-RECEIPT broadcast to the
         // sender by the user's `showReadReceipts` preference (see
@@ -1578,6 +1611,34 @@ class ConversationListViewModel: ObservableObject {
         // Dropping it also fixes cross-device unread sync when receipts are off
         // (the server now records the read position regardless).
         try? await store.apply(.markAsRead, for: conversationId)
+    }
+
+    /// La conversation OUVERTE possède déjà son chemin de marquage, qui NOMME
+    /// au gateway les messages réellement affichés. Celui de la liste poste un
+    /// mark-read sans corps : le gateway y retombe sur son repli par fenêtre
+    /// temporelle, qui déclare lus des messages jamais montrés — un mensonge
+    /// aux expéditeurs. En split-view iPad les deux surfaces sont visibles en
+    /// même temps ; laisser la grossière doubler la précise annulerait
+    /// exactement ce que la seconde garantit.
+    nonisolated static func shouldDispatchListMarkAsRead(
+        conversationId: String,
+        activeConversationId: String?
+    ) -> Bool {
+        conversationId != activeConversationId
+    }
+
+    /// Efface la pastille de la ligne dans l'état publié courant. Le cache est
+    /// déjà à jour, mais son signal est débouncé : sans cette pose immédiate,
+    /// le geste resterait sans effet visible pendant deux dixièmes de seconde.
+    private func clearUnreadLocally(_ conversationId: String) {
+        guard let idx = convIndex(for: conversationId) else { return }
+        conversations[idx].userState.unreadCount = 0
+        for i in 0..<groupedConversations.count {
+            if let rowIdx = groupedConversations[i].conversations.firstIndex(where: { $0.id == conversationId }) {
+                groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
+                break
+            }
+        }
     }
 
     // MARK: - Mark as Unread
@@ -1867,15 +1928,7 @@ class ConversationListViewModel: ObservableObject {
         ) { [weak self] notification in
             guard let cid = notification.object as? String else { return }
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard let idx = self.convIndex(for: cid) else { return }
-                self.conversations[idx].userState.unreadCount = 0
-                for i in 0..<self.groupedConversations.count {
-                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
-                        self.groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
-                        break
-                    }
-                }
+                self?.clearUnreadLocally(cid)
             }
         }
     }

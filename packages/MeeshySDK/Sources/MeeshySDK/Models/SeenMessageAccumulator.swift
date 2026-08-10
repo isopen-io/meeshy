@@ -53,7 +53,7 @@ public struct SeenMessageAccumulator: Sendable {
 
     /// `true` si assez d'identifiants sont acquis pour qu'un envoi vaille le coup.
     public mutating func isBatchReady(at now: Int) -> Bool {
-        promoteVisible(at: now)
+        promoteVisible(at: now, minimumDwell: dwellMs)
         return acquired.count >= batchSize
     }
 
@@ -62,20 +62,38 @@ public struct SeenMessageAccumulator: Sendable {
     /// d'appeler cette méthode à la fermeture ou au passage en arrière-plan sans
     /// perdre une lecture en cours.
     public mutating func drain(at now: Int) -> [String] {
-        promoteVisible(at: now)
+        promoteVisible(at: now, minimumDwell: dwellMs)
+        return takeAcquired()
+    }
 
+    /// Rend TOUT ce qui est en attente — seuil franchi ou non — et vide l'état.
+    ///
+    /// Le seuil distingue une lecture d'un défilement, distinction qui n'a plus
+    /// d'objet aux instants où l'utilisateur DÉCLARE regarder le bas : il vient
+    /// d'y arriver, il l'a demandé, ou il quitte l'écran. Ce qui est affiché est
+    /// alors ce qu'il a sous les yeux ; attendre 300 ms de plus ne rendrait
+    /// l'accusé ni plus ni moins véridique, seulement plus tardif.
+    ///
+    /// Réservé à ces déclencheurs : appelée pendant un défilement, elle
+    /// réintroduirait exactement le défaut que `dwellMs` corrige.
+    public mutating func promoteAndDrain(at now: Int) -> [String] {
+        promoteVisible(at: now, minimumDwell: 0)
+        return takeAcquired()
+    }
+
+    private mutating func takeAcquired() -> [String] {
         let batch = acquired
         acquired.removeAll(keepingCapacity: true)
         for messageId in batch { markReported(messageId) }
         return batch
     }
 
-    private mutating func promoteVisible(at now: Int) {
+    private mutating func promoteVisible(at now: Int, minimumDwell: Int) {
         // Trié pour que deux messages franchissant le seuil au même appel
         // sortent dans un ordre déterministe — un dictionnaire Swift n'en offre
         // aucun, et un lot non reproductible complique le diagnostic.
         let due = visibleSince
-            .filter { now - $0.value >= dwellMs }
+            .filter { now - $0.value >= minimumDwell }
             .sorted { ($0.value, $0.key) < ($1.value, $1.key) }
             .map(\.key)
 
