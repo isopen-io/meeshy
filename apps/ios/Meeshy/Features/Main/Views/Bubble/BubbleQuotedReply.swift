@@ -94,6 +94,20 @@ struct BubbleQuotedReply: View, Equatable {
         return reply.authorName
     }
 
+    /// Date de publication du mood cité, rendue sur la ligne de titre.
+    /// Vide pour toute citation qui n'est pas un mood : les citations de
+    /// message et de story gardent leur composition d'origine.
+    @ViewBuilder
+    private func moodDateLabel(previewColor: Color) -> some View {
+        if reply.moodEmoji != nil, let date = reply.storyPublishedAt {
+            Text(date, style: .relative)
+                .font(.caption2)
+                .foregroundColor(previewColor.opacity(0.8))
+                .lineLimit(1)
+                .layoutPriority(-1)
+        }
+    }
+
     var body: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
@@ -114,10 +128,19 @@ struct BubbleQuotedReply: View, Equatable {
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(quotedTitle)
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(nameColor)
-                        .lineLimit(1)
+                    // Titre + date du mood sur la MÊME ligne : dans l'aperçu, la
+                    // date vivait avec le contenu et lui mangeait sa largeur, ce
+                    // qui le coupait à mi-phrase.
+                    HStack(spacing: 6) {
+                        Text(quotedTitle)
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(nameColor)
+                            .lineLimit(1)
+
+                        moodDateLabel(previewColor: previewColor)
+
+                        Spacer(minLength: 0)
+                    }
 
                     if reply.moodEmoji != nil {
                         BubbleMoodReplyPreview(reply: reply, previewColor: previewColor)
@@ -230,28 +253,21 @@ struct BubbleMoodReplyPreview: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
+        // La date est rendue par la ligne de titre de `BubbleQuotedReply` : ici
+        // elle consommait la largeur du contenu, qui se coupait à mi-phrase.
+        HStack(alignment: .top, spacing: 5) {
             if let emoji = reply.moodEmoji {
                 Text(emoji)
                     .font(.footnote)
             }
 
-            if let date = reply.storyPublishedAt {
-                Text(date, style: .relative)
-                    .font(.caption2)
-                    .foregroundColor(previewColor.opacity(0.8))
-            }
-
             if !reply.previewText.isEmpty {
-                if reply.storyPublishedAt != nil {
-                    Text("\u{2022}")
-                        .font(.caption2)
-                        .foregroundColor(previewColor.opacity(0.6))
-                }
                 Text(reply.previewText)
                     .font(.caption)
                     .foregroundColor(previewColor)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
