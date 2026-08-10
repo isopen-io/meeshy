@@ -448,4 +448,59 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.conversationId, "conv1")
         XCTAssertEqual(event.userId, "u1")
     }
+
+    // MARK: - Appartenance : ce que le bannissement retire, ce que le débannissement rend
+
+    func test_participantBannedEvent_membershipEnded_absent_readsAsTrue() throws {
+        // Un serveur antérieur à ce champ ne bannissait qu'en retirant. Lire
+        // l'absence comme `false` ferait ignorer tous ses bannissements.
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "bannedBy": {"id": "u2"},
+            "bannedAt": "2026-04-09T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantBannedEvent.self, from: json)
+        XCTAssertNil(event.membershipEnded)
+        XCTAssertTrue(event.didEndMembership)
+    }
+
+    func test_participantBannedEvent_membershipEnded_false_whenTargetHadAlreadyLeft() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "bannedBy": {"id": "u2"},
+            "bannedAt": "2026-04-09T10:00:00.000Z",
+            "membershipEnded": false
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantBannedEvent.self, from: json)
+        XCTAssertEqual(event.membershipEnded, false)
+        XCTAssertFalse(event.didEndMembership)
+    }
+
+    func test_participantUnbannedEvent_membershipRestored_absent_readsAsTrue() throws {
+        let json = """
+        {"conversationId": "conv1", "userId": "u1"}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantUnbannedEvent.self, from: json)
+        XCTAssertNil(event.membershipRestored)
+        XCTAssertTrue(event.didRestoreMembership)
+    }
+
+    func test_participantUnbannedEvent_membershipRestored_false_whenNobodyWasReadmitted() throws {
+        let json = """
+        {"conversationId": "conv1", "userId": "u1", "membershipRestored": false}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantUnbannedEvent.self, from: json)
+        XCTAssertEqual(event.membershipRestored, false)
+        XCTAssertFalse(event.didRestoreMembership)
+    }
 }

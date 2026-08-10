@@ -875,18 +875,27 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Un bannissement ne retire pas toujours une appartenance : bannir
+        // quelqu'un DÉJÀ parti est ce qui l'empêche de revenir par un lien de
+        // partage, et ne change rien à l'effectif. Décompter quand même ferait
+        // dériver le compteur vers le bas — durablement, puisque `schedulePersist`
+        // écrit la valeur fausse dans le cache local.
         messageSocket.participantBanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                guard event.didEndMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount -= 1
                 self.schedulePersist()
             }
             .store(in: &cancellables)
 
+        // Symétrique : lever le bannissement de quelqu'un qui était parti de
+        // lui-même le rend libre de revenir, mais ne le fait pas rentrer.
         messageSocket.participantUnbanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                guard event.didRestoreMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount += 1
                 self.schedulePersist()
