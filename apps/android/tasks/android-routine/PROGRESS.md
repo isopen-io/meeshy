@@ -9,6 +9,43 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 3 (IME on-device verification) landed —
+> confirmed free, exactly as the decomposition predicted, zero production code changed** (item
+> `chat-inverted-list-ime-verify`, feature-parity §C — the routine's own standing "sub-slice 3,
+> likely free, verification-only" candidate from the prior 2 runs). **RE-PROUVEN before starting**:
+> re-read the sub-slice 2 entry above plus the `## §C inverted-list rewrite — concrete decomposition`
+> section to confirm sub-slice 3 was still genuinely open (not silently done by a concurrent
+> session) — `feature-parity.md`'s §C bullet still listed it as the sole remaining item, and
+> `git branch -r`/`gh pr list --state open` turned up no in-flight work on it (the two branches
+> touched in the last 24h, `claude/apps/android/feed-composer-media-attachments` and
+> `claude/apps/ios/inline-video-top-controls`, were both already merged — PRs #2759 and #2767). No
+> code changes were anticipated by the decomposition and none were needed. **Verified on-device**
+> (emulator `meeshy_pixel8`, already running/idle, host load ~6-8 — light, no contention this run):
+> built + installed the current `main` APK (already carrying the sub-slice 2 flip via commit
+> `2e1d03178`) over the existing session, opened the same real conversation used for sub-slice 2's
+> own verification (~40+ historical messages, `flip-test-verify` marker still present from that
+> run). (1) Tapping the `Message` composer field opens the soft keyboard; the list resizes with
+> **zero dedicated IME-handling code** — the reversed list's bottom edge (index 0, the newest
+> content) stays naturally anchored just above the composer/keyboard, exactly the benefit the
+> decomposition predicted for an inverted list, no `imePadding`/`Scaffold` adjustment needed. (2)
+> Sent a new text message (`ime-verify-flip-c3`) **with the keyboard still open**: auto-scroll-to-
+> newest fires correctly, the new bubble appears immediately above the composer with no visual
+> glitch — confirms behaviour #2 (auto-scroll-on-new-message) composes cleanly with the IME, not
+> just in isolation. (3) Dismissing the keyboard (`KEYCODE_BACK`) restores the list to full height
+> cleanly, the newest message stays anchored at the bottom. Zero crashes across the whole sequence
+> (`adb logcat` checked for `FATAL EXCEPTION`/`AndroidRuntime` — none from the app). Emulator
+> returned to the home screen afterward (idle, not mid-app), device-side screenshots/dumps cleaned
+> up. **feature-parity.md's §C inverted-list bullet now records all 3 sub-slices done — the §C
+> inverted-list rewrite is complete.** No `apps/android` production code changed this run (pure
+> verification pass), so this run's diff is `apps/android/tasks/` docs only (`feature-parity.md` +
+> this file) — still `apps/android`-only per the merge gate, no PR-worthy production risk. **Next
+> slice candidates (not attempted this run)**: chunked/resumable large-video TUS upload
+> (checkpoint store, HEAD recovery, survives app kill — still the largest/riskiest open candidate);
+> video capture fast-follow to the Feed composer's camera-capture slice (`ACTION_VIDEO_CAPTURE`,
+> same `FileProvider`/grant pattern, smaller now that the permission-grant lesson is written down);
+> files/location/audio/per-post-language attachments for the Feed composer; widgets/PiP (still
+> zero `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check).
+
 > On 2026-08-10 **the §C inverted-list rewrite's sub-slice 2 (the actual visible flip) landed**
 > (slice `chat-inverted-list-flip`, feature-parity §C — this run's own decomposition from the
 > previous iteration, sub-slice 2 of 2 code sub-slices; sub-slice 3 is verification-only).
