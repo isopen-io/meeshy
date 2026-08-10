@@ -762,60 +762,80 @@ struct MessageViewsDetailView: View {
                     let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
                     let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
                     let count = isAudio ? user.listenCount : user.watchCount
+                    let fraction = Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration)
 
-                    HStack(spacing: 10) {
-                        MeeshyAvatar(
-                            name: user.username,
-                            context: .userListItem,
-                            accentColor: contactColor,
-                            avatarURL: user.avatar
-                        )
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) {
+                            MeeshyAvatar(
+                                name: user.username,
+                                context: .userListItem,
+                                accentColor: contactColor,
+                                avatarURL: user.avatar
+                            )
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(user.username)
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(user.username)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(theme.textPrimary)
 
-                            if let date = listenDate {
-                                Text(relativeDate(date))
-                                    .font(.caption2)
+                                if let date = listenDate {
+                                    Text(relativeDate(date))
+                                        .font(.caption2)
+                                        .foregroundColor(theme.textMuted)
+                                }
+                            }
+
+                            Spacer()
+
+                            // Play count badge
+                            if let c = count, c > 1 {
+                                Text("\(c)x")
+                                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                                    .foregroundColor(accent.opacity(0.8))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(accent.opacity(0.08))
+                                    )
+                            }
+
+                            // Completion status
+                            if isComplete {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                    Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
+                                        .font(.caption2.weight(.semibold))
+                                }
+                                .foregroundColor(MeeshyColors.success)
+                            } else if let pos = positionMs, pos > 0 {
+                                Text(formatDuration(pos / 1000))
+                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
                                     .foregroundColor(theme.textMuted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                    )
                             }
                         }
 
-                        Spacer()
-
-                        // Play count badge
-                        if let c = count, c > 1 {
-                            Text("\(c)x")
-                                .font(.system(.caption2, design: .monospaced).weight(.bold))
-                                .foregroundColor(accent.opacity(0.8))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule().fill(accent.opacity(0.08))
-                                )
-                        }
-
-                        // Completion status
-                        if isComplete {
-                            HStack(spacing: 3) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.caption2)
-                                Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                    .font(.caption2.weight(.semibold))
+                        // Live playback progress — real-time position pushed via
+                        // `attachment-status:updated` (percentage/playPositionMs)
+                        // lands here through `attachmentStatuses` reload, same as
+                        // the mm:ss chip above.
+                        if !isComplete, fraction > 0 {
+                            HStack(spacing: 6) {
+                                ProgressView(value: fraction)
+                                    .progressViewStyle(.linear)
+                                    .tint(accent)
+                                Text("\(Int((fraction * 100).rounded()))%")
+                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                                    .foregroundColor(theme.textMuted)
+                                    .frame(minWidth: 30, alignment: .trailing)
                             }
-                            .foregroundColor(MeeshyColors.success)
-                        } else if let pos = positionMs, pos > 0 {
-                            Text(formatDuration(pos / 1000))
-                                .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                .foregroundColor(theme.textMuted)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                )
+                            .padding(.leading, 54)
                         }
                     }
                     .padding(.vertical, 4)
@@ -989,6 +1009,17 @@ struct MessageViewsDetailView: View {
 
     private func relativeDate(_ date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
+    }
+
+    /// Fraction (`0...1`) of an attachment consumed by a participant — ported
+    /// from the (now-deleted) `MessageInfoSheet.mediaFraction`. `complete`
+    /// always wins: a media marked complete reads as fully consumed
+    /// regardless of the last reported position (matches the server's own
+    /// `listenedComplete`/`watchedComplete` semantics).
+    static func positionFraction(positionMs: Int?, complete: Bool, durationMs: Int?) -> Double {
+        if complete { return 1 }
+        guard let durationMs, durationMs > 0, let positionMs else { return 0 }
+        return min(1, max(0, Double(positionMs) / Double(durationMs)))
     }
 }
 
