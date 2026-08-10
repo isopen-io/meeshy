@@ -1,3 +1,174 @@
+# Cycle 62 — La langue d'origine rétrogradait la langue primaire du lecteur
+
+> **Collision de numérotation, résolue à la main.** Deux sessions ont tourné en parallèle depuis le
+> cycle 60 et ont toutes deux nommé leur travail « cycle 61 ». Ce ne sont PAS deux versions d'une
+> même question — l'autre traite l'absence d'auditeur mobile sur `link:message:new`, celle-ci le
+> Prisme de la ligne de liste. Aucune des deux n'est un addendum de l'autre (le suffixe `b` des
+> cycles 25b/32b/36b/38b désigne deux sessions sur la MÊME question). L'autre étant arrivée sur
+> `main` la première, elle garde le 61 ; ce relevé prend le 62. Rien n'a été fusionné ni écrasé.
+
+Le cycle 60 laissait un candidat nommé en tête : « le web rend toujours `lastMessage.content`
+brut ; il manque le résolveur côté web, jumeau de `resolvedLastMessagePreview`. **Candidat direct
+pour le prochain cycle.** »
+
+Ce cycle l'a pris — et le backlog **sous-estimait** le défaut sur deux axes.
+
+## Ce que le backlog annonçait, et ce qui était vrai
+
+Il n'y avait pas « un résolveur manquant ». La donnée n'arrivait même pas jusqu'à un endroit où un
+résolveur aurait pu la lire. Balayage de `lastMessageTranslations|lastMessageOriginalLanguage` sur
+tout le dépôt, avant correctif :
+
+| Site | État |
+|---|---|
+| `gateway/routes/conversations/core.ts` | **écrit** les deux champs (cycle 60) |
+| `shared/types/api-schemas.ts` | **déclare** les deux champs (cycle 60) |
+| `MeeshySDK/.../CoreModels.swift` | **lit** via `resolvedLastMessagePreview` |
+| `shared/types/conversation.ts` (`Conversation`) | **aucun champ** |
+| `web/services/conversations/transformers.service.ts` | objet à la main → **jette** |
+| `web/.../conversation-item/message-formatting.tsx` | `return lastMessage.content` **brut** |
+
+**Zéro occurrence des deux noms sous `apps/web/`.** Quatre couches à câbler, pas une.
+
+## Le vrai défaut, trouvé en écrivant le jumeau
+
+Le jumeau TypeScript a d'abord été écrit en miroir strict d'iOS. Ses témoins passaient. C'est le
+témoin de CÂBLAGE de la ligne de liste qui a refusé de verdir : prisme `['fr', 'en']` (jsdom pose
+`navigator.language = 'en-US'`, donc `'en'` entre en 4e priorité), message anglais, traduction
+française disponible → rendu « Hello everyone ».
+
+Ce n'était pas un défaut de câblage. C'était **la règle**, et elle était fausse des deux côtés.
+
+iOS court-circuitait dès que la langue d'origine appartenait **quelque part** au prisme :
+
+```swift
+if let original = lastMessageOriginalLanguage?.lowercased(),
+   preferred.contains(original) {
+    return lastMessagePreview   // ← rétrograde la langue PRIMAIRE
+}
+```
+
+Cette formulation par **appartenance** est correcte tant que le prisme n'a qu'une entrée, ou que la
+langue d'origine en est la tête. Dès qu'elle occupe un rang inférieur, elle bat la langue primaire
+du lecteur — et c'est exactement ce que produit mécaniquement la locale appareil, entrée en 4e
+priorité depuis 2026-05-26. La population touchée est précisément celle pour qui cette feature
+existe : les comptes dont la locale de l'appareil diffère de la langue de l'app.
+
+`CLAUDE.md` tranche noir sur blanc, et depuis le début :
+
+> « Un utilisateur francophone avec un iPhone en anglais voit **toujours** ses messages en français
+> (priorité 1) ; la locale anglaise n'intervient que si aucune traduction française n'est
+> disponible ET qu'une traduction anglaise existe. »
+
+Et le chemin du **corps** des messages appliquait déjà la bonne règle : `use-message-translations`
+compare `originalLanguage` à `preferredLanguage` — la **seule langue de tête**, pas la liste. La
+ligne de liste était la dernière surface à en diverger, et elle divergeait sur les deux clients.
+
+## Le correctif
+
+Le prisme est parcouru **par rang** ; la langue d'origine y concourt à sa place :
+
+```
+pour chaque langue L du prisme, dans l'ordre :
+  L est la langue d'origine   ⇒ l'aperçu brut (le message EST en L)
+  une traduction existe en L  ⇒ cette traduction
+aucune ⇒ l'aperçu brut
+```
+
+Se réduit au comportement du corps des messages quand on ne regarde que le rang 1, et lui ajoute la
+descente que celui-ci n'a pas. Règle #3 inchangée : jamais de repli sur `translations.first`.
+
+Appliqué aux **deux** plateformes — `resolveLastMessagePreview` (`@meeshy/shared`, neuf) et
+`MeeshyConversation.resolvedLastMessagePreview` (iOS, corrigé). Aucun témoin iOS existant
+n'encodait le défaut (les deux témoins « langue d'origine » utilisent un prisme à une entrée, donc
+survivent tels quels) ; 4 témoins de rang ont été ajoutés côté Swift, jumeaux des témoins TS.
+
+## Livré
+
+- [x] T1/T2 — `resolveLastMessagePreview` dans `packages/shared/utils/conversation-helpers.ts`,
+      20 témoins (17 de miroir iOS + 3 de rang/locale appareil)
+- [x] T3 — `Conversation.lastMessageTranslations` / `.lastMessageOriginalLanguage`
+- [x] T4/T5 — `transformConversationData` propage les deux champs (`extractPreviewTranslations`
+      rejette non-objet, tableau, valeurs non-chaînes, et ne matérialise jamais `{}`)
+- [x] T6/T7 — `formatLastMessage(lastMessage, prism?)` applique le prisme au TEXTE seul
+- [x] T8 — `ConversationItem` câble `getUserLanguagePreferences(currentUser)` (le seul point
+      d'entrée web autorisé — il injecte la `deviceLocale` en 4e priorité, ce qu'un appel direct au
+      shared perdrait, cf. `apps/web/CLAUDE.md`)
+- [x] T9 — correctif de RÈGLE sur shared + iOS, `CLAUDE.md` § « Règles critiques du Prisme » gagne
+      la règle 3
+- [x] T10 — changeset, ce relevé, leçon 93
+
+## Vérification
+
+**Rouge observé avant correctif** : 17/17 témoins shared rouges (fonction absente) ; 2 témoins
+transformer rouges ; 1 témoin `formatLastMessage` rouge ; 2 témoins de câblage `ConversationItem`
+rouges.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| court-circuit par APPARTENANCE (le défaut de règle de ce cycle) | **2 shared + 2 web** |
+| repli sur `translations.first` (violation règle #3) | 2 shared |
+| le transformer rejette les deux champs (le défaut d'origine) | **2** |
+| `formatLastMessage` rend le contenu brut | 3 |
+| la ligne ne passe aucune langue de lecteur | 2 |
+| la ligne ne passe QUE `systemLanguage` (ordre du prisme ignoré) | **1** |
+
+Deux lignes apprennent quelque chose. La **première** : le défaut de règle n'est visible côté web
+QUE parce que jsdom injecte `navigator.language` — c'est-à-dire que le témoin de câblage reproduit
+la condition réelle (locale appareil ≠ langue in-app) au lieu de la neutraliser. Un test qui aurait
+figé `navigator.language` pour « isoler » n'aurait rien vu.
+
+La **troisième** : seuls 2 témoins voient le transformer amputé, et aucun n'est un témoin de
+composant — les témoins de `ConversationItem` construisent leur `Conversation` directement et ne
+peuvent donc pas savoir si la couche de transformation a laissé passer la donnée. Même famille de
+trou que la leçon 105 : ces 2 témoins sont le SEUL garde-fou de cette couche.
+
+**Gate** : `@meeshy/shared` **50 fichiers / 1 484 tests**, 0 échec. Web **515 suites / 11 745
+tests** (21 skipped), 0 échec. Gateway **648 suites / 16 332 tests**, 0 échec, couverture lignes
+**95,78 %** (mesuré sur l'état MERGÉ, qui inclut le cycle 61 de l'autre session). `tsc --noEmit` gateway : 0 erreur. `tsc --noEmit` web : **1 190 erreurs avant comme
+après** — condition préexistante non gatée par la CI, zéro erreur introduite (mesuré par
+`git stash`, avant/après identiques au unité près). Swift : **non exécuté localement** — aucune
+chaîne Swift sur ce conteneur Linux ; les 4 témoins `ConversationPrismeRankOrderTests` sont validés
+par `sdk-tests.yml` en CI.
+
+Le gateway n'était pas censé bouger (ce cycle n'y touche pas) mais il consomme
+`conversation-helpers.ts` : la suite complète a été passée pour prouver que l'ajout de
+`resolveLastMessagePreview` et des deux champs optionnels sur `Conversation` ne déplace rien chez
+son plus gros consommateur.
+
+## Reste ouvert après ce cycle
+
+- **`ConversationSyncEngine.previewTranslations` (iOS, chemin socket) n'a pas été audité contre la
+  règle de rang.** Il dérive la même carte d'un `message:new` ; c'est `resolvedLastMessagePreview`
+  qui la consomme, donc le correctif de règle le couvre. Mais la carte elle-même pourrait porter
+  des langues hors prisme, là où le chemin REST les filtre côté gateway — à vérifier.
+- **`routes/conversations/search.ts` reste hors prisme** (hérité du cycle 60, non pris). Le
+  `conversationMinimalSchema` DÉCLARE pourtant déjà les deux champs : la route construit son
+  `lastMessage` à la main et ne les remplit jamais. Le correctif est mécanique — même `include`
+  Prisma, même `buildLastMessagePreviewTranslations`, même `viewerLanguages`. **Tête du prochain
+  cycle** : c'est la dernière route qui sert une ligne de conversation sans prisme.
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60). Question de
+  conception — payload PAR DESTINATAIRE — non tranchée.
+- **`normalizeConversation` (`packages/shared/types/migration-utils.ts`) est un deuxième
+  constructeur manuel de `Conversation` qui jette les deux champs — et il n'a AUCUN appelant.**
+  Balayage `\bnormalizeConversation\b` sur tout le dépôt (hors `node_modules`/`dist`) : une seule
+  occurrence, sa propre déclaration. Il n'a donc pas été câblé — corriger un constructeur mort
+  aurait été du geste pour du geste (leçon 92). Le vrai reste est de trancher s'il vit ou meurt ;
+  tant qu'il vit, il divergera un peu plus à chaque champ ajouté.
+- **Un participant ANONYME n'a pas de prisme sur ce chemin** (cycle 60, inchangé).
+- **Aucune traduction rétroactive de l'aperçu** (cycle 60, inchangé).
+- Hérités et non traités : `MaintenanceService.cleanupOrphanedAttachments` reste inerte,
+  délibérément ; les ~12 copies inline de l'idiome `unsetOrNull` ; `TrackingLink.messageId` est
+  une colonne morte (3 écrivains, 0 lecteur) ; l'arbitrage `delete-for-me` du cycle 12 attend une
+  validation humaine ; `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js`
+  depuis ESLint v9) ; `tsc` ne passe pas sur le web (1 190 erreurs préexistantes, non gatées).
+
+---
+
+---
+
 # Cycle 61 — Un message de lien de partage n'arrivait sur aucun mobile
 
 ## Contrainte d'environnement (à lire avant de juger le choix de lane)

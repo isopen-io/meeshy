@@ -1108,3 +1108,20 @@ Append-only log of gotchas and decisions that save time next run.
   instead of scrolling it.** Matches the existing convention in that specific conversation rather
   than introducing a new hygiene concern; not worth extra automation fragility to clean up when the
   conversation's whole purpose is already routine-verification scratch space.
+- **`adb exec-out screencap` captures at the device's real resolution, but the screenshot the tool
+  renders back for viewing is scaled down (e.g. 1080x2400 device → 900x2000 shown) — eyeballing a
+  tap coordinate off the SHOWN image and feeding it straight to `adb shell input tap` lands off by
+  the scale factor, not just a few px.** Cost one wasted round-trip this run (a tap meant for the
+  bottom attach-tile row landed on the text field above it instead, opening the keyboard). Fix used
+  ever since: `adb shell uiautomator dump` + `adb pull`, then grep the target's `content-desc`/
+  `resource-id` for its real `bounds="[x1,y1][x2,y2]"` and tap the bounds' center — this is exact
+  device-pixel truth, immune to any preview scaling. Reserve visual screenshot coordinates for
+  elements with no accessible node (rare) or for a first orientation pass only, never as the actual
+  tap input for a precise target.
+- **A Compose `Icon(contentDescription = …)` inside a clickable `IconButton` shows up in
+  `uiautomator dump` as its OWN node with `clickable="false"` — the click handler lives on the
+  parent `IconButton`, not the icon glyph itself — but tapping the center of the icon's own bounds
+  still lands inside the parent's larger touch target and fires the click.** Don't be thrown by
+  `clickable="false"` on the node you found by content-desc; check that its bounds sit inside a
+  clickable ancestor's bounds (usually true for any icon-button pattern in this codebase) rather
+  than hunting for a `clickable="true"` node with the same content-desc.
