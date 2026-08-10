@@ -991,3 +991,22 @@ Append-only log of gotchas and decisions that save time next run.
   constructed the draft directly with the old shape — caught immediately by the compiler, not
   silently, but only because the whole module was recompiled; a narrower `--tests` filter run first
   would have reported green while a sibling file was actually broken.
+- **A Robolectric module with no `@Config`/`testOptions.unitTests` block does not default to
+  `targetSdkVersion` (36 here) — it silently ran at API 21** (`android.os.Build.VERSION.SDK_INT`
+  printed 21 from inside `@Before`), well below the O+ floor `android.app.NotificationManager.
+  getNotificationChannels()`/`NotificationChannel` need. The failure mode is a bare
+  `java.lang.NoSuchMethodError` at the call site, not a helpful "unsupported SDK" message — easy to
+  mistake for a real production bug. Fix: pin `@Config(sdk = [N])` explicitly (`N` = the module's own
+  `minSdk`, the floor every real device is guaranteed to meet) rather than trusting the ambient
+  default whenever a test exercises an API introduced after Android's early levels. Diagnosed by
+  temporarily `System.err.println`-ing `SDK_INT` inside `@Before` and reading it back from the JUnit
+  XML's `<system-err>` (`app/build/test-results/.../TEST-*.xml`) — `--info` gradle output doesn't
+  surface Robolectric's own SDK-selection log line in this setup, and stdout from Robolectric tests
+  isn't forwarded to the gradle console either, only captured in the XML report.
+- **`androidx.test.ext:junit` (and the `ApplicationProvider` it pulls in transitively) isn't
+  automatically present in every module just because `robolectric` is** — `:sdk-core` had both;
+  `:app` had only `robolectric`, so the first `ApplicationProvider.getApplicationContext()` call in
+  a new `:app` test failed to resolve at compile time (`Unresolved reference 'core'`) until
+  `testImplementation(libs.androidx.test.ext.junit)` was added to `:app`'s own `build.gradle.kts` —
+  check the target module's existing test dependencies before assuming a working pattern from a
+  sibling module (`:sdk-core`) ports over for free.

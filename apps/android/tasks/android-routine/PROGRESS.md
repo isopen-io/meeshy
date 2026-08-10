@@ -2,6 +2,69 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **a real FCM channel-id-drift bug got found and fixed** (slice
+> `notification-channel-id-drift`, feature-parity §M — this run's periodic angle-mort category
+> check, on the standing §M `NotificationChannel` taxonomy line the prior run added but didn't
+> implement). **RE-PROUVEN before choosing**: rather than jumping straight to the "curated 80-type
+> taxonomy" framing of that line, read `services/gateway/src/services/PushNotificationService.ts`
+> `sendViaFCM` end to end first — found the gateway already sends `message.android.notification.
+> channelId = 'meeshy_notifications'` for every Android non-call push, but `MeeshyFcmService` had
+> only ever created a channel named `meeshy_messages`, and only lazily inside `onMessageReceived`.
+> Cross-checked Android/FCM semantics: a push carrying both a `notification` and a `data` block
+> (every non-call push today) is auto-rendered by the OS/Play services when the app is
+> backgrounded or killed — `onMessageReceived` never runs in that case, so the system posts
+> directly against the gateway's `channelId`. Grepped the manifest for a `com.google.firebase.
+> messaging.default_notification_channel_id` fallback too — absent — so with no
+> `meeshy_notifications` channel ever created client-side, that push is either dropped outright or
+> folded into a generic, unbranded system "Miscellaneous" channel with none of the intended
+> importance/sound, exactly backwards from the scenario push exists for (the foregrounded case,
+> where `onMessageReceived` DOES run, was never actually affected — channel creation there already
+> worked). A real, live, currently-shipping defect, not a missing feature. **Fixed (production,
+> all `apps/android`)**: new `NotificationChannelIds` (`:app`, SSOT replacing the two ad-hoc
+> constant sets previously duplicated in `MeeshyFcmService`'s companion) renames the client's
+> message channel id to `meeshy_notifications` — byte-for-byte matching the gateway's own literal
+> — and a new `NotificationChannelInstaller` creates it **eagerly at process start**
+> (`MeeshyApplication.onCreate`, Hilt-injected) instead of only lazily inside the one handler
+> that's exactly the one that doesn't run in the failure scenario; it also deletes the orphaned
+> pre-drift `meeshy_messages` channel (channels are immutable once created — same "delete +
+> recreate under a new id" migration `CHANNEL_CALLS` already took `meeshy_calls` v1→v2).
+> `MeeshyFcmService`'s own lazy `createNotificationChannel` call in the foreground-received path
+> stays as a harmless, idempotent belt-and-suspenders, now pointing at the same SSOT id.
+> **+4 `NotificationChannelInstallerTest`** (Robolectric): creates the channel under the
+> gateway-matching id at `IMPORTANCE_HIGH`, deletes the stale legacy channel, idempotent across
+> repeated `install()` calls (no duplicate), never touches the calls channel. **Robolectric gotcha
+> hit and fixed**: the `:app` module's ambient default SDK resolution silently fell back to API 21
+> (well below the O+ `NotificationChannel` API), producing a `NoSuchMethodError` rather than a
+> clear "unsupported SDK" error — pinned `@Config(sdk = [26])` to the app's own `minSdk` floor
+> instead of trusting the default; `testImplementation(libs.androidx.test.ext.junit)` also needed
+> adding to `:app` (present in `:sdk-core` but not `:app`) for `ApplicationProvider` to resolve.
+> Mutation-proven: commenting out the legacy-delete call fails **exactly** the 1 discriminating
+> test, the other 3 stay green. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+> (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). Reviewer
+> **PASS** (diff `apps/android` only — 2 new `:app` files [`NotificationChannelIds.kt`,
+> `NotificationChannelInstaller.kt`] + 1 new test, `MeeshyApplication.kt`/`MeeshyFcmService.kt`
+> edited, 1 dependency line added; SDK purity — this is app-specific `MeeshyFcmService`/
+> `MeeshyApplication` glue, correctly in `:app` not `:sdk-core`, same precedent as
+> `DeclinedCallStore`/`CrashDiagnosticsRecorder`; SSOT — one channel-id source of truth replacing
+> two duplicated constant sets; no coverage floor lowered; no tautological tests). **Verified
+> on-device** (`meeshy_pixel8` emulator, fresh app launch, no push sent): `adb shell dumpsys
+> notification` confirms `NotificationChannel{mId='meeshy_notifications', mImportance=4,
+> mDeleted=false}` exists for `me.meeshy.app.debug` the instant the process starts, before any
+> message push ever arrives. **feature-parity.md's §M taxonomy bullet flips `[ ]` → `[~]`** — the
+> concrete id-mismatch defect is closed and the SSOT + eager-install foundation is laid, but the
+> full curated *multi*-channel taxonomy (a distinct channel per category, each individually
+> mutable in system settings) still needs the gateway to send a **per-type** `channelId` instead
+> of the one hardcoded literal it sends today — a `services/gateway` change, outside this lane's
+> `apps/android`-only scope, left as an explicitly separate, larger follow-up. **Next slice
+> candidates (not attempted this run)**: chunked/resumable large-video TUS upload (checkpoint
+> store, HEAD recovery, survives app kill); the §C inverted-list rewrite (still deferred without a
+> concrete sub-slice decomposition, many runs running — re-verify genuinely large before deferring
+> again rather than re-typing the same note); camera capture for the Feed composer (needs a
+> genuinely new `TakePicture`/`FileProvider` pattern, not yet established anywhere in the Android
+> app); the gateway-side per-type `channelId` fast-follow to this slice (out of lane scope, needs
+> a `services/gateway` change — flag for the user or a dedicated cross-lane task, not this
+> routine's Android-only diff); the noticed-not-chased Friends/Discover tab content question
+> (still outside this routine's mandate per the user's 2026-08 note).
 > On 2026-08-10 **the Feed post composer's reel-classification sub-slice landed** (slice
 > `feed-composer-reel-classification`, feature-parity §F — the orchestrator's documented next
 > sub-step after the photo/video attachments slice). **RE-PROUVEN before starting**: grepped
