@@ -9,6 +9,80 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **the Feed post composer's camera-video capture fast-follow landed** (slice
+> `feed-composer-video-capture`, feature-parity §F — the routine's own standing candidate from
+> the prior camera-photo-capture slice's deliberate scope cut, re-proven still genuinely unshipped
+> by grepping `apps/android` for `ACTION_VIDEO_CAPTURE`/`CaptureVideo` before starting: zero hits
+> besides the doc comment noting it as a follow-up). **Re-proved the scope before coding**: read
+> `FeedComposerSheet.kt`'s existing `launchCamera`/`CameraCaptureFile` photo-capture pair end to
+> end, confirmed both merged branches (`feed-composer-media-attachments` #2759,
+> `claude/apps/ios/inline-video-top-controls` #2767) were the only branches touched in the prior
+> 24h and both already merged — no interrupted run to resume, no concurrent claim on this slice.
+> **Shipped (production, all `apps/android`)**: a third attach tile
+> ([Icons.Filled.Videocam]) mirrors the photo tile exactly — `ActivityResultContracts.
+> CaptureVideo()` launches the system `ACTION_VIDEO_CAPTURE` activity, writing into a fresh
+> [CameraCaptureFile.nextVideo]-named destination in the **same** `captures/` cache directory the
+> photo tile already uses (no new `file_paths.xml` entry needed), dispatched through the
+> **exact same** `dispatchPicked` pipeline gallery picks and the photo tile already use.
+> **Re-proved the same URI-permission bug class applies here before writing any code, rather than
+> assuming it**: decompiled `ActivityResultContracts.CaptureVideo()`'s bytecode (`javap` on the
+> same `activity-1.9.3` AndroidX jar used for the photo-capture bug) and confirmed
+> `createIntent()` is the byte-for-byte identical shape as `TakePicture()`'s — plain
+> `EXTRA_OUTPUT`, no `FLAG_GRANT_WRITE_URI_PERMISSION` — so the fix already shipped for photo
+> capture was known to be needed here too before ever touching a device, not a guess later
+> confirmed. **Refactor while extending, not duplicating**: the `queryIntentActivities`+
+> `grantUriPermission` dance and the `capturesDir`/`File`/`FileProvider.getUriForFile`
+> construction (previously inlined once in `launchCamera`) became two small private `Context`
+> extensions (`grantCaptureWritePermission(action, uri)`, `createCaptureUri(fileName)`) shared by
+> both `launchCamera` and the new `launchVideoCapture` — keeps the one bug-prone piece (the
+> permission grant) in exactly one place instead of risking the fix drifting between two copies
+> the next time either needs adjustment. `CameraCaptureFile` gains `nextVideo(nowMillis)`
+> (`video_<millis>.mp4`, distinct prefix/extension from the photo `capture_<millis>.jpg` so the
+> two never collide in the shared cache directory) alongside the existing `next` — same
+> pure-builder shape, +6 tests (naming, determinism, cross-instant distinctness, extension, and a
+> same-instant no-collision-with-photo test). **Mutation-proven**: hardcoding `nextVideo` to
+> ignore its `nowMillis` parameter and always resolve `0L` fails **exactly** the 2 discriminating
+> tests ("names the file from the given instant", "two different instants produce two different
+> video file names") — the other 7 tests in the file, including all 4 pre-existing photo tests,
+> stayed green; mutation applied via a scratch `cp`-backed edit (never `git checkout --`),
+> restored via `cp`, re-confirmed green before continuing. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
+> all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff `apps/android` only — 2
+> production files edited [`CameraCaptureFile.kt`, `FeedComposerSheet.kt`], 4 locale `strings.xml`
+> [en/fr/es/pt, each carrying zero format specifiers so `FeedStringLocalizationParityTest`'s
+> positional-specifier check is a non-issue], 1 test file extended; SDK purity — everything stays
+> inside `:feature:feed` alongside its photo-capture precedent; SSOT — the permission-grant/
+> destination-Uri logic is now genuinely shared, not copy-pasted; no coverage floor lowered; no
+> tautological tests). **Full on-device verification against the live gateway this run** (no
+> repeat of the photo-capture slice's severe shared-host contention — `meeshy_pixel8` already
+> booted/idle, moderate load): installed the freshly built debug APK over the existing session
+> (`adb install -r -d`), opened the Feed composer, tapped the new video tile — confirmed via
+> `uiautomator dump` bounds (not estimated screenshot coordinates, which mis-tapped once first)
+> that the system `com.android.camera2` app opened in genuine VIDEO mode (red `REC 00:0x`
+> indicator, distinct from the photo shutter UI), recorded a ~3s clip, confirmed the composer's
+> existing in-flight spinner tile appeared immediately on return. `adb logcat` confirmed the real
+> TUS `POST`+`PATCH` round-trip: `filename=video_1786394334180.mp4`, `filetype=video/mp4`,
+> `uploadcontext=post`, a full 1,260,047-byte single-`PATCH` upload — the `video_`/`.mp4` naming
+> from `CameraCaptureFile.nextVideo` confirmed verbatim in the real request, not just unit-tested
+> in isolation. Published the resulting post for real (`POST /api/v1/posts` → 201): the gateway
+> independently probed the video (`duration: 13982`, `width: 1280`, `height: 720`) and
+> **auto-classified it `type: "REEL"`** — the existing `ReelComposition` duration-floor rule
+> (`feed-composer-reel-classification`, landed earlier the same day) firing correctly against a
+> genuinely-captured video for the first time, with the composer's `Reel⇄Post` override chip
+> appearing exactly as it does for a qualifying gallery-picked video — confirms the new capture
+> path composes cleanly with the existing classification pipeline rather than needing its own
+> special-casing. `GET /api/v1/posts/:id` confirmed the persisted media (`fileUrl`/`thumbnailUrl`
+> both resolving to real files) before the test post was deleted via `DELETE /api/v1/posts/:id`
+> (`{"deleted":true}`), confirmed gone via a follow-up `GET` → 404. Emulator left idle on the Feed
+> screen afterward (a normal app screen, not mid-camera/mid-composer). **feature-parity.md's §F
+> Create-post bullet now records camera-video capture done** alongside the earlier camera-photo
+> capture. **Next slice candidates (not attempted this run)**: chunked/resumable large-video TUS
+> upload (checkpoint store, HEAD recovery, survives app kill — still the largest/riskiest open
+> candidate, likely needs its own sub-slice decomposition before starting rather than one run);
+> files/location/audio/per-post-language attachments for the Feed composer; widgets/PiP (still
+> zero `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check, last
+> re-verified several runs ago — due for another explicit re-check soon per the ~5-run cadence).
+
 > On 2026-08-10 **the §C inverted-list rewrite's sub-slice 3 (IME on-device verification) landed —
 > confirmed free, exactly as the decomposition predicted, zero production code changed** (item
 > `chat-inverted-list-ime-verify`, feature-parity §C — the routine's own standing "sub-slice 3,

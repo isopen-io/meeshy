@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import android.content.ContentResolver
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -88,14 +90,16 @@ import java.io.File
  * ([ActivityResultContracts.TakePicture]) writing into a fresh [CameraCaptureFile]-named
  * destination the composer creates via the app's [FileProvider] authority, then dispatched
  * through the exact same [dispatchPicked] pipeline as a gallery pick — zero new upload/error
- * logic. **Deliberate, documented scope cut vs. iOS**: photo only, no in-composer video capture
- * ([CameraView]'s `.video` case) — iOS opens a custom AVFoundation capture screen with a
- * photo/video toggle; Android delegates to the system camera app's own `ACTION_IMAGE_CAPTURE`
- * intent, so no camera runtime permission is needed here (the system camera app owns that), and
- * video capture is a separately-scoped follow-up (`ACTION_VIDEO_CAPTURE`, its own destination
- * MIME/extension). File, location or audio attachments and the emoji picker or per-post language
- * override remain unshipped too — iOS's `composerOverlay` toolbar of 6 glyphes, each a real,
- * separately-scoped follow-up.
+ * logic. Camera-video capture (`onVideoCapture`, [Icons.Filled.Videocam] tile) is the same
+ * pattern one level over: `ACTION_VIDEO_CAPTURE` ([ActivityResultContracts.CaptureVideo]) writing
+ * into a [CameraCaptureFile.nextVideo]-named destination, dispatched through the identical
+ * [dispatchPicked] pipeline. **Deliberate, documented scope cut vs. iOS**: two system-delegated
+ * tiles, no in-composer photo/video toggle ([CameraView]'s combined `.photo`/`.video` case) — iOS
+ * opens a single custom AVFoundation capture screen with an in-app mode switch; Android delegates
+ * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents, so no
+ * camera runtime permission is needed here (the system camera app owns that). File, location or
+ * audio attachments and the emoji picker or per-post language override remain unshipped too —
+ * iOS's `composerOverlay` toolbar of 6 glyphes, each a real, separately-scoped follow-up.
  *
  * Every text/visibility/media-id decision lives in the pure
  * [FeedComposerDraft]; this Composable holds one in `remember` (plus the
@@ -167,10 +171,10 @@ fun FeedComposerSheet(
         }
     }
 
-    // Camera-photo capture: TakePicture() writes into a Uri WE provide (unlike the gallery
-    // pickers above, which hand one back), so the destination file/Uri is created up front and
-    // held only long enough to resolve the callback — cleared either way so a second tap always
-    // starts from a fresh destination.
+    // Camera-photo/video capture: both TakePicture() and CaptureVideo() write into a Uri WE
+    // provide (unlike the gallery pickers above, which hand one back), so the destination
+    // file/Uri is created up front and held only long enough to resolve the callback — cleared
+    // either way so a second tap always starts from a fresh destination.
     var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
     val takePicture = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
@@ -186,33 +190,39 @@ fun FeedComposerSheet(
         }
     }
 
+    var videoCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    val captureVideo = rememberLauncherForActivityResult(
+        ActivityResultContracts.CaptureVideo(),
+    ) { success: Boolean ->
+        val uri = videoCaptureUri
+        videoCaptureUri = null
+        if (success && uri != null) {
+            dispatchPicked(listOf(uri))
+        } else {
+            uri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+        }
+    }
+
     fun launchCamera() {
         if (FeedMediaPicker.modeFor(draft.remainingMediaSlots) == FeedMediaPickMode.None) {
             onMediaError(mediaLimitMessage)
             return
         }
-        val capturesDir = File(context.cacheDir, "captures").apply { mkdirs() }
-        val file = File(capturesDir, CameraCaptureFile.next(System.currentTimeMillis()))
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        // ActivityResultContracts.TakePicture()'s own Intent(ACTION_IMAGE_CAPTURE) carries the
-        // destination Uri as a plain EXTRA_OUTPUT — it does NOT set FLAG_GRANT_WRITE_URI_PERMISSION,
-        // so an implicitly-resolved camera app has no permission to write into our FileProvider Uri
-        // unless we grant it ourselves first (confirmed on-device: without this, the stock AOSP
-        // camera silently fails to save and the launcher resolves `success = false`). Canonical
-        // Android pattern: grant every activity that CAN resolve the capture intent, since the
-        // system picks one of them at launch time and we can't know which in advance.
-        val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        context.packageManager
-            .queryIntentActivities(captureIntent, PackageManager.MATCH_DEFAULT_ONLY)
-            .forEach { resolveInfo ->
-                context.grantUriPermission(
-                    resolveInfo.activityInfo.packageName,
-                    uri,
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            }
+        val uri = context.createCaptureUri(CameraCaptureFile.next(System.currentTimeMillis()))
+        context.grantCaptureWritePermission(MediaStore.ACTION_IMAGE_CAPTURE, uri)
         cameraCaptureUri = uri
         takePicture.launch(uri)
+    }
+
+    fun launchVideoCapture() {
+        if (FeedMediaPicker.modeFor(draft.remainingMediaSlots) == FeedMediaPickMode.None) {
+            onMediaError(mediaLimitMessage)
+            return
+        }
+        val uri = context.createCaptureUri(CameraCaptureFile.nextVideo(System.currentTimeMillis()))
+        context.grantCaptureWritePermission(MediaStore.ACTION_VIDEO_CAPTURE, uri)
+        videoCaptureUri = uri
+        captureVideo.launch(uri)
     }
 
     fun removeMedia(id: String) {
@@ -263,6 +273,7 @@ fun FeedComposerSheet(
                 canAddMore = !draft.isMediaFull,
                 onAdd = ::launchMediaPicker,
                 onCamera = ::launchCamera,
+                onVideoCapture = ::launchVideoCapture,
                 onRemove = ::removeMedia,
             )
         }
@@ -270,13 +281,50 @@ fun FeedComposerSheet(
 }
 
 /**
- * The attach-media/take-photo affordances plus the picked-photo/video
- * thumbnail strip — always shows the gallery and camera tiles first (both
- * disabled once [canAddMore] is false or while [isUploading]), then each
- * attached [media] item with a remove overlay, then an in-flight spinner
- * tile while a pick is uploading. Pure Compose glue: every id/list decision
- * it renders came from the already pure/tested [FeedComposerDraft]/upload
- * result upstream.
+ * Builds the `content://` destination [Uri] a system capture activity ([ActivityResultContracts.
+ * TakePicture]/[ActivityResultContracts.CaptureVideo]) will write its result into, under
+ * `context.cacheDir/captures` via the app's [FileProvider] authority. Shared by both the photo
+ * and video capture launchers — [fileName] (from [CameraCaptureFile.next]/[CameraCaptureFile.
+ * nextVideo]) is the only thing that differs between them.
+ */
+private fun Context.createCaptureUri(fileName: String): Uri {
+    val capturesDir = File(cacheDir, "captures").apply { mkdirs() }
+    val file = File(capturesDir, fileName)
+    return FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+}
+
+/**
+ * Grants every activity that can resolve [action] (`ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE`)
+ * write+read permission on [uri]. Both [ActivityResultContracts.TakePicture] and
+ * [ActivityResultContracts.CaptureVideo] build their capture `Intent` with a plain `EXTRA_OUTPUT`
+ * and never set `FLAG_GRANT_WRITE_URI_PERMISSION` themselves (confirmed by reading both
+ * contracts' decompiled bytecode — identical shape, same gap) — so an implicitly-resolved camera
+ * app has no permission to write into our [FileProvider] Uri unless granted here first (confirmed
+ * on-device for the photo case: without this, the stock AOSP camera silently fails to save and
+ * the launcher resolves `success = false`). Canonical Android pattern: grant every activity that
+ * CAN resolve the capture intent, since the system picks one of them at launch time and the
+ * caller can't know which in advance.
+ */
+private fun Context.grantCaptureWritePermission(action: String, uri: Uri) {
+    packageManager
+        .queryIntentActivities(Intent(action), PackageManager.MATCH_DEFAULT_ONLY)
+        .forEach { resolveInfo ->
+            grantUriPermission(
+                resolveInfo.activityInfo.packageName,
+                uri,
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+}
+
+/**
+ * The attach-media/take-photo/take-video affordances plus the picked-media
+ * thumbnail strip — always shows the gallery, camera and video-capture tiles
+ * first (all disabled once [canAddMore] is false or while [isUploading]),
+ * then each attached [media] item with a remove overlay, then an in-flight
+ * spinner tile while a pick is uploading. Pure Compose glue: every id/list
+ * decision it renders came from the already pure/tested [FeedComposerDraft]/
+ * upload result upstream.
  */
 @Composable
 private fun MediaAttachmentsRow(
@@ -285,6 +333,7 @@ private fun MediaAttachmentsRow(
     canAddMore: Boolean,
     onAdd: () -> Unit,
     onCamera: () -> Unit,
+    onVideoCapture: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Row(
@@ -323,6 +372,22 @@ private fun MediaAttachmentsRow(
             Icon(
                 imageVector = Icons.Filled.PhotoCamera,
                 contentDescription = stringResource(R.string.feed_composer_take_photo),
+                tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
+            )
+        }
+
+        IconButton(
+            onClick = onVideoCapture,
+            enabled = attachEnabled,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(MeeshyTheme.tokens.inputBackground)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.md)),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Videocam,
+                contentDescription = stringResource(R.string.feed_composer_take_video),
                 tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
             )
         }
