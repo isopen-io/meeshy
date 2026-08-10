@@ -9,6 +9,64 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 1 (safe prep) landed** (slice
+> `chat-scroll-geometry`, feature-parity §C — this run's own prior-run decomposition, picked up
+> rather than re-deferred). **RE-PROUVEN before starting**: re-grepped `apps/android` for
+> `reverseLayout`/`ChatScrollGeometry` — zero hits, confirming both that the flip genuinely
+> hasn't landed yet and that no concurrent session had already claimed this exact sub-slice; then
+> re-read `ChatScreen.kt`'s actual scroll effects (not just the decomposition note) to confirm the
+> 3 ad-hoc index computations it describes as genuinely inline: the private `LazyListState.
+> isNearBottom` extension, the bare `listItems.lastIndex` used as the auto-scroll-to-bottom target
+> (2 call sites), and the `index <= LOAD_OLDER_THRESHOLD` load-older trigger. **Shipped (production,
+> all `apps/android`)**: new pure `ChatScrollGeometry` (`:feature:chat`, same module/grain as its
+> `InitialScrollTarget`/`PinnedDayHeader` siblings) + `ChatListOrientation.TopDown|BottomUp` enum,
+> exposing `bottomIndex`/`isNearBottom`/`isNearOldEnd` as orientation-parameterised pure functions —
+> zero Compose/`LazyListState` dependency, fully unit-testable in isolation. `ChatScreen` rewired
+> through it under `TopDown` at all 3 sites (the private `isNearBottom` extension replaced by a thin
+> `lastVisibleItemIndex()` glue function; `LOAD_OLDER_THRESHOLD`/`BOTTOM_TOLERANCE_ITEMS` moved into
+> the new object, duplicate top-level consts deleted) — **output is byte-for-byte identical to
+> before**: `isNearBottom`'s `TopDown` arm reproduces the exact same guard + tolerance comparison,
+> `bottomIndex(lastIndex, TopDown) == lastIndex` so both `animateScrollToItem` call sites are
+> unchanged, and `isNearOldEnd`'s `TopDown` arm reproduces `edgeIndex <= LOAD_OLDER_THRESHOLD`
+> verbatim (ignoring `lastIndex`, exactly as the original ad-hoc check did — the original never
+> looked at list size for this trigger either). **Deliberate scope trim, documented rather than
+> silently omitted**: `PinnedDayHeader.governingDayMillis` (behaviour #6 of the decomposition's 7,
+> the pinned-header scan direction) is left untouched this run — it is already its own pure, tested
+> SSOT (not ad-hoc arithmetic duplicated in `ChatScreen.kt` the way the other 3 were), so migrating
+> its internal scan to delegate to `ChatScrollGeometry` before sub-slice 2 actually needs a
+> `BottomUp` caller there would be premature surface-area/risk on an already-solid, already-tested
+> object for zero behavioural gain this run — left as part of sub-slice 2's own scope instead.
+> **+17 `ChatScrollGeometryTest`** covering both orientations: `bottomIndex` (TopDown/BottomUp,
+> single-row, empty list `-1`), `isNearBottom` (exact edge, within/past tolerance, reader-in-history,
+> empty/single-row-always-true for both orientations), `isNearOldEnd` (exact edge, within/past
+> threshold, both orientations). **Mutation-proven**: flipping `isNearOldEnd`'s `TopDown` comparison
+> from `<=` to `<` failed **exactly** the 1 discriminating boundary test (`within threshold of index
+> zero is near the old end`), the other 17 stayed green; reverted and re-confirmed clean before
+> commit. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full
+> `assembleDebug` + all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff
+> `apps/android` only — 2 new `:feature:chat` files [`ChatScrollGeometry.kt` + its test], 1
+> production file edited [`ChatScreen.kt`: 3 call sites rewired, 1 private extension replaced, 2
+> duplicate consts deleted]; SDK purity — pure screen-scoped geometry lives in `:feature:chat`
+> alongside its `InitialScrollTarget`/`PinnedDayHeader` precedents, not misplaced into `:sdk-core`;
+> SSOT — one orientation-aware object replacing 3 duplicated ad-hoc index checks; no coverage floor
+> lowered; no tautological tests; zero visible behaviour change, confirmed by construction not just
+> by the green full-suite run). `ChatScreen.kt` itself stays untested directly (Compose glue,
+> `TDD-COVERAGE.md`-exempt, same as its `InitialScrollTarget`/`PinnedDayHeader` precedents) — the
+> regression guard is the pure `TopDown` arm reproducing the original math exactly, provable by
+> inspection (documented above) rather than a screen-level test. **feature-parity.md's pinned-day-
+> header §C bullet's "Reste : inverted list pending" tail flips to record sub-slice 1 done**, still
+> listing sub-slice 2 (the visible `reverseLayout` flip + rewiring the remaining `BottomUp` call
+> sites, incl. `PinnedDayHeader`) and sub-slice 3 (IME on-device verification) as open. **Next slice
+> candidates (not attempted this run)**: chunked/resumable large-video TUS upload (checkpoint store,
+> HEAD recovery, survives app kill); the §C inverted-list rewrite's sub-slice 2 (the actual visible
+> flip — now unblocked by this run's sub-slice 1, still the largest remaining candidate: `reverseLayout
+> = true`, `listItems.asReversed()`, rewire `PinnedDayHeader` + the 2 `indexOfFirst` jump sites onto
+> `BottomUp`, verify on-device); video capture fast-follow to the Feed composer's camera-capture slice
+> (`ACTION_VIDEO_CAPTURE`, same `FileProvider`/grant pattern, smaller now that the permission-grant
+> lesson is written down); files/location/audio/per-post-language attachments for the Feed composer;
+> the gateway-side per-type `channelId` fast-follow to the notification-channel-id-drift slice (out of
+> lane scope, needs a `services/gateway` change).
+>
 > On 2026-08-10 **the Feed post composer's camera-photo capture sub-slice landed, and a real
 > Android platform bug was found and fixed along the way** (slice
 > `feed-composer-camera-capture`, feature-parity §F — the routine's own standing candidate,
