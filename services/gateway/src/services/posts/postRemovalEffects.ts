@@ -94,7 +94,7 @@ export async function applyPostRemovalEffects(
   // Les liens de partage et les usages de sons, eux, ne se lisent nulle part en
   // temps réel.
   try {
-    await retractPostNotifications(prisma, post.id, announcer);
+    await retractPostNotifications(prisma, [post.id], announcer);
   } catch (err) {
     log.warn('post removal: notification retraction failed', { postId: post.id, err });
   }

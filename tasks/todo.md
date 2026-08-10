@@ -1,3 +1,150 @@
+# Cycle 53 — Une story périmée n'est pas une story détruite
+
+Le cycle 52 laissait cette tête en backlog sous le nom « les stories expirées ne retirent pas leurs
+notifications ». La leçon 18 dit quoi en faire : une piste héritée est une **hypothèse à réfuter
+d'abord**. Elle a été réfutée sur le mot qui décide tout — *expirées* — puis confirmée sur l'autre
+moitié, celle que son propre énoncé nommait déjà sans qu'on l'entende : *hard-delete*.
+
+## D1 (la piste, et pourquoi elle était fausse)
+
+L'audit est parti d'une piste plus élégante que celle du backlog. `Notification.expiresAt` existe,
+les sept lectures d'inbox l'honorent depuis `visibleNotificationsWhere`, et le cycle précédent
+(PR #2751) venait de brancher les **quatre** producteurs ancrés sur un message pour qu'ils en
+héritent. Une story est le contenu éphémère canonique : `Post.expiresAt`, écrit à l'insertion et
+jamais modifié — vérifié, les deux seuls autres sites d'écriture sont des `create` de repost.
+Mieux encore, **six** producteurs reçoivent déjà `postExpiresAt` de leurs appelants et le déposent
+dans `context.postExpiresAt`, une ligne au-dessus de la colonne qui les masquerait. Toute la forme
+du défaut jumeau était là : *l'échéance arrive au producteur et s'arrête juste avant la colonne.*
+
+**C'est faux, et le vérifier a demandé de lire les clients.** `context.postExpiresAt` n'est pas une
+échéance oubliée en route : c'est une fonctionnalité livrée des deux côtés. Le web en tire
+« · expirée » (`notification-helpers.ts:553`), iOS en tire `expiryLabel` et
+`isLinkedContentExpired` (`NotificationModels.swift:823/829`). Le produit **montre** délibérément
+la notification d'une story périmée, marquée comme telle. Estampiller la colonne l'aurait masquée
+côté serveur et rendu mort le code des deux clients — la régression exacte que le cycle 51 avait
+appris à chercher sous le nom de « faux positif ».
+
+La différence avec le message éphémère est réelle et se lit dans la donnée, pas dans l'intention :
+
+| | message éphémère | story périmée |
+|---|---|---|
+| Ce que la ligne montre | un libellé générique (`protectedPreview`) | un vrai extrait, un acteur, une vignette |
+| Ce que la cible répond | rien, le message est détruit à l'échéance | **encore le post** — `getPostById` ne filtre pas l'expiration |
+| Geste juste | masquer | montrer, marqué « expirée » |
+
+## D2 (le défaut, là où il est vraiment)
+
+`ExpiredStoriesCleanupService` est le **seul chemin de hard-delete de post du gateway** (vérifié :
+les deux seuls `post.deleteMany` du dépôt sont les siens). Sept jours après l'expiration, il détruit
+les lignes `Post` des stories, de leurs reposts et de tous leurs commentaires. À cet instant les
+deux appuis de la notification tombent **ensemble** : sa copie dénormalisée décrit un contenu qui
+n'existe plus, et son `view_post` n'ouvre plus qu'un 404. Le badge non lu, lui, ne peut plus être
+décrémenté par personne — on ne lit pas ce qui n'est plus là.
+
+Toutes les stories expirent. Toutes finissaient donc par laisser leurs lignes.
+
+C'est bien ce que le backlog du cycle 52 décrivait — « hard-delete les posts après 7 jours sans
+passer par `applyPostRemovalEffects` ». La piste « plus élégante » l'avait déplacé de sept jours et
+d'un cran de sévérité. **La note d'origine avait raison ; c'est la relecture qui s'était trompée.**
+
+Sa question ouverte — « le hard-delete déclenche-t-il une cascade que le soft-delete ne déclenchait
+pas ? » — se répond en lisant le modèle : `Notification` n'a de relation que vers `User` et
+`Message`. Aucune vers `Post`. Rien ne se déclenche, dans un sens comme dans l'autre.
+
+## D3 (placement) — la passe nommait déjà la règle, pour un autre effet
+
+Le retrait ne passe PAS par `applyPostRemovalEffects` : cette liste écrirait une ligne
+`AdminAuditLog` pour un balayage sans acteur, et re-libérerait des usages de sons que la passe
+libère déjà. Elle nomme les effets d'un retrait **décidé par quelqu'un** ; ceci est une fin de vie.
+
+En revanche la passe porte déjà, au-dessus de `releasePosts`, la règle qui gouverne exactement ce
+cas : « placé AVANT les suppressions de posts, et il REJETTE volontairement : `SoundUsage.postId`
+n'a ni relation ni cascade, donc supprimer les posts après un échec de libération laisserait des
+usages que plus aucun chemin n'atteindrait. » `context.postId` a la même forme — ni relation, ni
+cascade. Le retrait prend donc la même place et le même contrat, et la règle n'a pas eu à être
+inventée : **elle était écrite trois lignes plus bas, pour son voisin.**
+
+## D4 (la cible est une fournée) — et le plafond change de sens avec elle
+
+`retractPostNotifications` prend désormais une **liste**, comme son jumeau
+`retractCommentNotifications` : un `$in` sur stories ∪ reposts, au lieu d'une lecture par post. Les
+notifications des commentaires détruits partent avec — toute la famille du fil porte aussi
+`context.postId`.
+
+Son plafond de drainage **rejette** au lieu d'avertir, et c'est l'entrée qui l'exige, pas un goût
+pour la sévérité : tant qu'elle était UN post, le plafond ne bornait aucune audience réaliste. Elle
+est maintenant une heure d'expirations de toute la plateforme — un ensemble que rien ne borne. Un
+plafond atteint en silence laisserait l'appelant détruire les posts, et les lignes restantes
+n'auraient alors plus **aucun** chemin de retrait, la passe suivante ne voyant plus les posts. Le
+rejet rend la reprise possible, et elle converge : les lots déjà lus ont bien été supprimés.
+
+## Plan
+- [x] T1 — enquête : la piste héritée réfutée sur les clients, puis confirmée sur le hard-delete
+- [x] T2 — RED (unité) : liste, `$in`, liste vide, plafond qui rejette
+- [x] T3 — RED (câblage) : stories ∪ reposts, retrait avant destruction, renoncement sur échec,
+      annonce par destinataire, aucune question quand rien n'a expiré, sans annonceur
+- [x] T4 — GREEN : `retractPostNotifications` élargi + appel gardé dans la passe de hard-delete
+- [x] T5 — sondes de fidélité (leçon 45b/93) : cinq défauts réintroduits un par un
+- [x] T6 — gates : suite gateway complète sous bun, `tsc --noEmit` propre
+- [x] T7 — changeset + ADR + ce relevé
+
+## Vérification
+
+Rouge observé avant le correctif : les six témoins de câblage tombent, l'appel n'existant pas.
+
+**Sondes de fidélité** — chaque témoin re-vérifié en réintroduisant volontairement le défaut qu'il
+prétend attraper, restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| appel du retrait supprimé de la passe | 5 |
+| retrait borné aux stories (reposts oubliés) | 1 |
+| retrait placé APRÈS les suppressions | 2 |
+| plafond qui avertit au lieu de rejeter | 1 |
+| liste vide qui interroge quand même Mongo | 1 |
+
+**Deux suites voisines ont dû être réparées, et les deux réparations disent quelque chose.**
+`postRemovalEffects.test.ts` verrouillait la forme scalaire du filtre — assertion mise à jour, le
+comportement mesuré est inchangé. `ExpiredStoriesCleanupService.sounds.test.ts`, lui, est tombé
+parce que son double Prisma ne connaît pas `$runCommandRaw` : le retrait rejetait, et la libération
+des usages — ce que cette suite mesure — n'était plus atteinte. C'est **exactement** le contrat
+voulu (le retrait gouverne la passe), observé depuis une suite qui ne le teste pas. Ajouter les deux
+doubles n'affaiblit donc rien : c'est la même leçon que le commentaire déjà présent dans ce fichier
+à propos de `soundUsage` — un double manquant transforme une garde en avale-tout silencieux.
+
+Suite gateway complète sous bun (parité CI) : **639 suites, 16 241 tests, tout vert**.
+Couverture globale lignes **95,76 %** — inchangée. `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Aucune ligne déjà orpheline n'est rattrapée**, comme aux cycles 51 et 52 : le correctif ne vaut
+  que pour les destructions à venir. Réparable par le patron de `repair-mention-user-ids.ts` —
+  action humaine, cette routine n'a aucun accès MongoDB.
+- **Les posts `STATUS` expirent et ne sont balayés par rien.** Le balayage filtre `type: 'STORY'` ;
+  une story dure 21 h et meurt à 7 jours, un statut dure 1 h et sa ligne vit pour toujours. Leurs
+  notifications mènent donc toujours quelque part — ce n'est pas un défaut de notification, c'est
+  un balayage qui manque, et le trou de disque associé (médias, usages de sons) est le même que
+  celui que le cycle G7 a fermé pour les stories. À instruire pour lui-même.
+- **Les `TrackingLink` d'une story détruite ne sont pas désactivés par la passe.** Sur le chemin de
+  retrait DÉCIDÉ, `applyPostRemovalEffects` les désactive ; une story qui meurt de vieillesse n'y
+  passe jamais. Un `/l/<token>` visant une story détruite reste donc actif et pointe une ligne
+  absente. Défaut voisin, non instruit ce cycle — vérifier d'abord ce que résout un lien dont la
+  cible n'existe plus.
+- **Une passe peut désormais bloquer sur elle-même.** Plafond de drainage atteint ⇒ rien n'est
+  détruit cette heure-là. Voulu (la reprise converge), mais retarde d'autant la récupération de
+  disque, et rien ne mesure aujourd'hui la fréquence de ce cas.
+- **`broadcastCommentDeleted` n'annonce que la cible, pas le sous-arbre** (hérité du cycle 52,
+  inchangé) : la route émet un seul `commentId` là où `deleteComment` en a soft-deleté N, et les
+  réponses restent affichées chez les clients connectés jusqu'au prochain chargement du fil. Le
+  correctif traverse gateway + shared + web + SDK iOS — dont le Swift, que cet environnement ne
+  sait pas compiler (leçon 88c : ne pas livrer ce qu'on ne peut pas prouver).
+- **`post_comment` et `comment_like` n'exposent pas `context.commentId`** (hérité du cycle 52) ;
+  le retrait des `Mention` d'un post n'est pas dans la liste d'effets ; le push APNs/FCM déjà
+  délivré n'est pas rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation
+  humaine ; `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 52 — Le commentaire partait ; ce qu'il avait écrit dans l'inbox des autres restait
 
 Le cycle 51 nommait cette tête en la donnant explicitement pour une **hypothèse à réfuter d'abord**
