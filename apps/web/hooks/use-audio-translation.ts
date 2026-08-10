@@ -117,14 +117,14 @@ export function useAudioTranslation({
   const resolveAutoLanguage = useCallback(
     (audios: readonly SocketIOTranslatedAudio[]): string => {
       if (!userLanguages?.length || audios.length === 0) return 'original';
-      const originalLang = initialTranscription?.language;
+      const originalLang = transcription?.language ?? initialTranscription?.language;
       if (originalLang && userLanguages.includes(originalLang)) return 'original';
       for (const lang of userLanguages) {
         if (audios.find(t => t.targetLanguage === lang && t.url)) return lang;
       }
       return 'original';
     },
-    [userLanguages, initialTranscription?.language]
+    [userLanguages, transcription?.language, initialTranscription?.language]
   );
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>(() =>

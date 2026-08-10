@@ -4411,6 +4411,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Push message prefetch + pre-persist into Room for instant cold-launch
 - [ ] `NotificationCoordinator` authority model (socket authoritative; cache only seeds)
 - [ ] Comprehensive notification system (~80 types)
+- [ ] Android `NotificationChannel` taxonomy (ARCHITECTURE.md §18: "~80 notification types
+      map onto a curated notification-channel taxonomy"). Today only 2 channels exist
+      (`CHANNEL_CALLS` full-screen ringer + a single generic "Messages" channel, both in
+      `MeeshyFcmService`) — the ~80 backend notification types above are not mapped onto a
+      curated per-category channel set (message/reaction/mention/social/call/etc, each with
+      its own importance/sound/badge policy, mirroring iOS's per-category push handling).
+      Line added by the app-icon-audit angle-mort pass (2026-08-10, `tasks/android-parity-
+      ios-debt-agent-prompt.md` §"Angle mort catégoriel") — not implemented this run.
 - [x] Per-type semantic row accent (`notifications-type-accent-color`, 2026-07-13): pure
       `:core:model` `notificationTypeAccentHex(type)` SSOT — faithful port of iOS
       `MeeshyNotificationType.accentHex`, mapping all ~80 backend `type` strings (lowercase +
@@ -4552,6 +4560,41 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       raster→`Bitmap` wrap + Coil placeholder wiring + slide-level generation (encode → upload) still pending.
 
 ## Q. Cross-cutting infrastructure
+- [x] App icon — launcher icon (`app-launcher-icon`, 2026-08-10). Was **entirely absent**:
+      `apps/android/app/src/main/res/` had zero `mipmap-*` folders and no drawable icon asset,
+      and `<application>` in `AndroidManifest.xml` carried neither `android:icon` nor
+      `android:roundIcon` — every install rendered the generic Android launcher icon. Not a
+      single line anywhere flagged this, because the integral iOS audit
+      (`tasks/audit/part-01..23.md`) only read `.swift` production files and never opened
+      iOS's `.xcassets` asset catalogs — a categorical blind spot in the audit itself (found
+      by the user, 2026-08-10, `tasks/android-parity-ios-debt-agent-prompt.md` §"Angle mort
+      catégoriel"), not a regression. **Shipped:** adaptive icon
+      (`mipmap-anydpi-v26/ic_launcher{,_round}.xml` + `drawable/ic_launcher_{background,
+      foreground,monochrome}.xml` — background/foreground/Android-13+-themed-icon layers) plus
+      legacy PNG fallback (`mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher{,_round}.png`,
+      inert at `minSdk 26` — the OS always resolves the adaptive XML — but shipped for
+      tooling/launchers that still read the classic path directly) + `android:icon`/
+      `android:roundIcon` wired on `<application>`. Ported **pixel-measured**, not eyeballed,
+      off the iOS brand asset
+      (`apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png`): a
+      connected-component scan of the white glyph pixels gave the 3 bar bounding boxes exactly,
+      and corner-pixel sampling confirmed the gradient is exactly Indigo500 `#6366F1`
+      (top-left) → Indigo700 `#4338CA` (bottom-right) — matching `apps/ios/CLAUDE.md`'s
+      documented brand identity precisely, not a re-hue. Glyph scaled 0.85× beyond the literal
+      108/1024 port so every bar corner clears the 66dp adaptive safe-zone circle (max corner
+      distance ~30dp of the 33dp radius). Vector layers (API 26+, i.e. every device this app
+      can run on) and the legacy PNGs share the exact same derivation
+      (`apps/android/scripts/generate_legacy_launcher_icons.py`, committed + documented, mirrors
+      the iOS `check_appicon_variants.py` convention) so they can never visually drift. **TDD**:
+      `LauncherIconManifestGuardTest` (app module) — asserts `<application>` declares both
+      manifest attributes, the adaptive XML references drawables that exist on disk, and every
+      legacy density ships both PNGs; proven RED (manifest attributes reverted → the
+      icon-declaration test failed, the resource-existence tests stayed green as expected) then
+      restored to GREEN by hand before commit. **Verified visually, not just compiled**:
+      installed the debug APK on the `meeshy_pixel8` emulator (API 35) and screenshotted both
+      the Overview task-switcher (circle mask) and the home-screen app drawer (squircle mask) —
+      both render the Indigo-gradient background + white stacked-dashes glyph correctly, no
+      generic Android robot icon anywhere.
 - [ ] Cache-first / SWR data layer (`CacheResult`, `cacheFirstFlow`, Room as single SoT)
 - [ ] Offline outbox (one Room table, FIFO flush, backoff ×5, coalescing, `cmid` idempotency, rollback)
 - [ ] Optimistic updates with snapshot rollback + in-flight guards + self/others socket-echo split
