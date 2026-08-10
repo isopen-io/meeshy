@@ -53,7 +53,9 @@
             </intent-filter>
             <!-- App Link : le lien du mail magic link (https://meeshy.me/auth/magic-link?token=)
                  ouvre l'app directement. La verification s'appuie sur
-                 apps/web/public/.well-known/assetlinks.json. -->
+                 apps/web/public/.well-known/assetlinks.json, qui doit contenir le
+                 SHA-256 de la cle de signature RELEASE. Procedure (obtenir + poser
+                 l'empreinte, verifier) : apps/android/docs/magic-link-app-links.md -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
