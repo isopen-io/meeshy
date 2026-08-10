@@ -352,7 +352,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       expectation and the resolver's `AWAY_WINDOW_MS` diverged. Reconcile against the CLAUDE.md presence
       spec (online/recent → green, away → orange, offline > 30 min → no dot) in its own slice
       (`profile-presence-window-reconcile`). Out of scope for the pure saved-account core.
-- [~] Server environment selector (dev/staging/prod/custom host) — **enum + URL-derivation
+- [x] Server environment selector (dev/staging/prod/custom host) — **enum + URL-derivation
       core shipped** (slice `auth-server-environment-selector`, 2026-07-21). Pure `:core:model`
       `ServerEnvironment` (enum: `PRODUCTION`/`STAGING`/`LOCALHOST`/`CUSTOM` with `id`/`label`/`origin`
       + `fromId` production-fallback) + `ServerEnvironmentResolver` (faithful port of iOS `MeeshyConfig`,
@@ -379,10 +379,51 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (35 run, 3 failed, no collateral). `:core:model:testDebugUnitTest` green (35/35); `assembleDebug`
       compiled every module (full-repo `testDebugUnitTest` only tripped the pre-existing unrelated
       `:sdk-core` `InterfaceLanguageStoreTest` DataStore parallel-load flake, green in isolation). Diff =
-      `apps/android` only. **Follow-up:** the
-      app-side `LoginView` environment-selector composable + a persistence store (DataStore) owning the
-      selected env + custom host, driving `ServerEnvironmentResolver.apiBaseUrl` into the SDK config at
-      app launch (iOS `restoreEnvironment`).
+      `apps/android` only. **App-side wiring shipped** (slice `auth-server-environment-wiring`,
+      2026-08-10): `:core:network` `ServerEnvironmentStore` (interface + `InMemoryServerEnvironmentStore`
+      + `SharedPrefsServerEnvironmentStore`, plain SharedPreferences — non-sensitive dev/QA config,
+      unlike `TokenStore`'s encrypted storage) persists the selected environment + custom host next to
+      `MeeshyConfig`/`NetworkModule` (same module, since `NetworkModule.providesMeeshyConfig()` is the
+      one caller that needs it at Hilt-graph-construction time — the Android equivalent of iOS
+      `restoreEnvironment()` "at app launch": `providesMeeshyConfig(store)` now derives `apiBaseUrl`/
+      `socketUrl` from `ServerEnvironmentResolver.apiBaseUrl`/`.serverOrigin` fed by the store instead of
+      a hardcoded literal. `AuthViewModel` gains a 5th/6th constructor dep (`MeeshyConfig` — reused, not
+      new; `ServerEnvironmentStore`), seeds `AuthUiState.selectedEnvironment`/`customHostInput`
+      synchronously from the store at construction (cache-first, matches the SharedPrefs read being
+      synchronous), and 3 new transitions: `selectEnvironment` (non-custom pill → persists immediately,
+      mirrors iOS `if env != .custom { applyEnvironment(env) }`; `.CUSTOM` only reveals the host field
+      locally, matching iOS leaving `selectedEnvironment` untouched until the checkmark), `onCustomHostChange`
+      (pure text binding), `applyCustomHost` (persists host + selects CUSTOM in one step — iOS
+      `applyEnvironment(.custom, customHost:)` — inert on a blank/whitespace host, mirroring the disabled
+      apply button). `logout()` now explicitly re-seeds the environment fields from the store (same
+      cross-account-survives-logout treatment as `savedAccounts` — `SessionTeardown.wipe()` doesn't touch
+      either). `LoginScreen.kt` gains an `EnvironmentSelector` composable (Material3 `FilterChip` row +
+      conditional custom-host field + "Connected to: %@" label) gated on `state.showEnvironmentSelector`.
+      **Deliberate simplifications over iOS, called out:** (1) gates on `config.enableLogging`
+      (`BuildConfig.DEBUG`, reused not duplicated) instead of iOS's `Self.isSimulator` — Android has no
+      reliable simulator-vs-device signal, and "developer/QA build" is the intent either way; (2) a
+      selection persists to `ServerEnvironmentStore` but only takes effect on the **next app launch**, not
+      mid-session — iOS's `APIClient` re-reads `MeeshyConfig.shared.apiBaseURL` per request from a mutable
+      singleton, while Android's `MeeshyApi` bakes `apiBaseUrl` into a `Retrofit.Builder` at Hilt-graph
+      construction; hot-swapping that live would be new architecture, not this slice's scope. +3 new
+      `NetworkModuleTest`, +9 new `ServerEnvironmentStoreTest` (InMemory + SharedPrefs, including
+      persistence-survives-reconstruction and unknown-persisted-id-falls-back-to-production), +10 new
+      `AuthViewModelTest` (seed from store, selector visibility both ways, select non-custom persists,
+      select custom does not, host text binding, apply valid/blank host, origin-label derivation, logout
+      preserves the selection). Mutation (RED proof): making `select()` also overwrite `customHost` fails
+      **exactly** `inMemory_select_neverTouchesTheCustomHost` (9 run, 1 failed, no collateral); dropping the
+      environment-preserving fields from `logout()`'s reset fails **exactly**
+      `logout_preservesTheServerEnvironmentSelection` (29 run, 1 failed, no collateral). **Gate:**
+      `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL in 21s`** (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only — `core/network`
+      [new `ServerEnvironmentStore.kt`, `NetworkModule.kt` rewired, +1 test dep], `feature/auth`
+      [`AuthViewModel` +2 constructor deps +3 transitions, `LoginScreen.kt` +`EnvironmentSelector`, ×3
+      strings ×4 locales]; SDK purity — the store is a stateless persistence seam at `TokenStore`'s grain,
+      no product rule; the product decisions (when to persist, selector visibility, "connected to" label)
+      stay in `:feature:auth`; SSOT — reuses `ServerEnvironment`/`ServerEnvironmentResolver`/
+      `config.enableLogging` untouched, no re-implementation; instant-app — N/A, synchronous SharedPrefs
+      read, no network/spinner; UDF — unchanged `AuthViewModel` shape, immutable `StateFlow<AuthUiState>`;
+      no dead end; no tautological tests; no coverage floor lowered).
 - [~] Passwordless magic-link login (email + countdown + resend) via deep link —
       **countdown state-machine + strict email gate core shipped** (slice
       `auth-magic-link-countdown`, 2026-07-21). Pure `:core:model` `MagicLinkCountdown`

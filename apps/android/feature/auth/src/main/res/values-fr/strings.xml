@@ -10,6 +10,9 @@
     <string name="login_other_account">Autre compte</string>
     <string name="login_remove_account">Supprimer ce compte</string>
     <string name="login_saved_accounts">Comptes sauvegardés</string>
+    <string name="login_custom_host_label">Hôte personnalisé</string>
+    <string name="login_apply_custom_host">Appliquer l\'hôte personnalisé</string>
+    <string name="login_server_origin">Connecté à : %1$s</string>
 
     <string name="registration_close">Fermer</string>
     <string name="registration_back">Retour</string>

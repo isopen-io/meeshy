@@ -2,6 +2,72 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 the **server environment selector's app-side wiring landed** (slice
+> `auth-server-environment-wiring`, feature-parity §A, the pure core's own follow-up, tracked since
+> `auth-server-environment-selector` on 2026-07-21 and re-surfaced as "the next best candidate" by the
+> previous run's note). **RE-PROVEN before picking:** re-read the bullet's own follow-up text (not just
+> the "Next slice" pointer) and grepped `ServerEnvironment`/`ServerEnvironmentStore`/`apiBaseUrl` across
+> `apps/android` outside `core/model` first — zero app-side hits, confirming the app-side wiring gap was
+> real, not stale. Picked over the other three standing candidates (§C inverted-list, still flagged
+> genuinely large; `TagInputField`, still blocked on an absent `ApiConversation.tags` field — re-grepped,
+> still absent; the Kover coverage-gate infra) because it was the only one of the four that was fully
+> local (no backend dependency) AND already scoped down to a concrete follow-up sentence in
+> `feature-parity.md` itself. Re-read iOS `MeeshyConfig.swift` and `LoginView.swift`'s `environmentSelector`
+> line-by-line (not just the pure core's own doc comment) to confirm the exact wiring shape: `applyEnvironment`
+> persists `selectedEnvironment` unconditionally but only touches `customHost` on the `.custom` branch, the
+> non-custom pill tap calls `applyEnvironment(env)` immediately while the `.custom` pill tap only flips
+> local `@State` (no persistence) until the checkmark button's `applyCustomHost()` — a two-step
+> select-vs-apply distinction easy to collapse into one if only skimming the follow-up sentence. **Added
+> (production, all `apps/android`):** `:core:network` `ServerEnvironmentStore.kt` — interface +
+> `InMemoryServerEnvironmentStore` + `SharedPrefsServerEnvironmentStore` (plain SharedPreferences, not
+> encrypted — non-sensitive dev/QA config, unlike `TokenStore`), living in `core:network` next to
+> `MeeshyConfig`/`NetworkModule` rather than `sdk-core` (deviates from the `SavedAccountsStore`/
+> `SdkModule` precedent used by every other store so far — deliberate: `NetworkModule.providesMeeshyConfig()`
+> is the one caller that needs the store at Hilt-graph-construction time, and `sdk-core` cannot be a
+> dependency of `core:network` without inverting the existing module graph). `NetworkModule.providesMeeshyConfig(store)`
+> now derives `apiBaseUrl`/`socketUrl` from `ServerEnvironmentResolver.apiBaseUrl`/`.serverOrigin` fed by
+> the store — the Android equivalent of iOS `restoreEnvironment()` "at app launch" (both re-derive from a
+> persisted selection once, before the first network call). `AuthViewModel` gains a 5th/6th constructor
+> dep (`MeeshyConfig` — reused, not new; `ServerEnvironmentStore`), seeds `AuthUiState.selectedEnvironment`/
+> `customHostInput` synchronously from the store at construction, and 3 new transitions:
+> `selectEnvironment`/`onCustomHostChange`/`applyCustomHost` (see `feature-parity.md` §A for the full
+> select-vs-apply behavioural spec). `logout()` now explicitly re-seeds the environment fields from the
+> store — the same cross-account-survives-logout treatment as `savedAccounts`, caught by re-applying the
+> `auth-saved-account-picker-ui` lesson ("a bare `AuthUiState()` reset silently wipes any field that must
+> survive logout") proactively this time rather than after a failing test. `LoginScreen.kt` gains an
+> `EnvironmentSelector` composable (Material3 `FilterChip` row + conditional custom-host field + "Connected
+> to: %@" label) gated on `state.showEnvironmentSelector`, itself sourced from `config.enableLogging`
+> (`BuildConfig.DEBUG`, reused not duplicated) as the Android-idiomatic equivalent of iOS's
+> `Self.isSimulator` gate — called out as a deliberate simplification, not silent, since Android has no
+> reliable simulator-vs-device signal. **Also called out:** a selection persists immediately but only takes
+> effect on the next app launch, not mid-session — iOS's `APIClient` re-reads `MeeshyConfig.shared.apiBaseURL`
+> per request from a mutable singleton, while Android's `MeeshyApi` bakes `apiBaseUrl` into a
+> `Retrofit.Builder` at Hilt-graph construction; hot-swapping that live would be new architecture, out of
+> this slice's scope. **+3 new `NetworkModuleTest`, +9 new `ServerEnvironmentStoreTest`, +10 new
+> `AuthViewModelTest`.** **Mutation (RED proof):** making `select()` also overwrite `customHost` fails
+> **exactly** `inMemory_select_neverTouchesTheCustomHost` (9 run, 1 failed, no collateral); dropping the
+> environment-preserving fields from `logout()`'s reset fails **exactly**
+> `logout_preservesTheServerEnvironmentSelection` (29 run, 1 failed, no collateral). **Gate:**
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL in 21s`** (full `assembleDebug` + all-module
+> `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only — `core/network`
+> [new `ServerEnvironmentStore.kt`, `NetworkModule.kt` rewired, +1 test dep], `feature/auth`
+> [`AuthViewModel` +2 constructor deps +3 transitions, `LoginScreen.kt` +`EnvironmentSelector`, ×3 strings
+> ×4 locales]; SDK purity — the store is a stateless persistence seam at `TokenStore`'s grain, no product
+> rule; the product decisions (when to persist, selector visibility, "connected to" label) stay in
+> `:feature:auth`; SSOT — reuses `ServerEnvironment`/`ServerEnvironmentResolver`/`config.enableLogging`
+> untouched, no re-implementation; instant-app — N/A, synchronous SharedPrefs read, no network/spinner;
+> UDF — unchanged `AuthViewModel` shape, immutable `StateFlow<AuthUiState>`; no dead end; no tautological
+> tests; no coverage floor lowered). **feature-parity.md's "Server environment selector" bullet flips
+> `[~]` → `[x]`.** **Next slice (no single obvious pick — re-verify each before committing a run):** with
+> both fully-local Auth §A follow-ups now closed (saved-account picker, server environment selector), the
+> three standing candidates are the §C inverted-list rewrite (still genuinely large — attempt a concrete
+> sub-slice decomposition next time rather than deferring again), `TagInputField` (still blocked on the
+> absent `ApiConversation.tags` field), and the Kover coverage-gate infra. The remaining non-wizard Auth
+> §A items (magic-link, OTP verification, email/phone recovery) all confirmed still blocked on missing
+> `AuthApi` endpoints as of the previous run. Next run should also weigh moving on to Conversations/Chat
+> per the `Auth → Conversations → Chat → Feed → Stories → Calls → the rest` build order, now that Auth's
+> cheaply-shippable, fully-local items are exhausted.
+>
 > On 2026-08-10 the **saved-account picker's app-side UI landed** (slice
 > `auth-saved-account-picker-ui`, feature-parity §A, the pure core's own follow-up, tracked since
 > `auth-saved-account-picker-core` on 2026-07-21). **RE-PROVEN before picking, not the §C rewrite

@@ -564,3 +564,40 @@ Append-only log of gotchas and decisions that save time next run.
   discovery (Android users expect visible affordances more than iOS's long-press-to-reveal pattern),
   called out explicitly as a deliberate simplification in `feature-parity.md` rather than left
   implicit — same discipline as prior slices' "merging two iOS controls into one" notes.
+
+## Slice `auth-server-environment-wiring` (2026-08-10)
+- **Not every new persistence seam belongs in `sdk-core`/`SdkModule` just because every other store so
+  far has.** `ServerEnvironmentStore`'s only production reader is `NetworkModule.providesMeeshyConfig()`
+  inside `:core:network` itself — and `core:network` cannot depend on `sdk-core` (the dependency graph
+  runs the other way: `sdk-core` → `api(project(":core:network"))`). Putting the store in `sdk-core` per
+  the `SavedAccountsStore`/`DeviceLocaleProvider` precedent would have made it structurally unreachable
+  from the one place that needs it at Hilt-graph-construction time. Placed it in `core:network` instead,
+  next to `MeeshyConfig`/`TokenStore` — the right home is "the module of the thing that reads it at
+  construction time," not "the module every other store happens to live in." Worth checking a new
+  store's actual consumer BEFORE defaulting to the `SdkModule` copy-paste.
+- **A `@Provides` Hilt function containing real derivation logic (not just `SomeType(...)` direct
+  construction) is worth a dedicated JVM test even though "DI modules" are the TDD-COVERAGE.md exemption
+  for the boilerplate case.** `NetworkModule.providesMeeshyConfig(store)` composes two
+  `ServerEnvironmentResolver` calls (`apiBaseUrl` then `serverOrigin` fed the FIRST call's own result,
+  not two independent reads) plus a trailing-`/`-for-Retrofit convention neither pure function encodes
+  on its own — exactly the kind of composition bug (e.g. accidentally deriving `socketUrl` from a
+  different, stale `apiBaseUrl`) a "DI modules are exempt" blanket rule would let slip through untested.
+  Since the function is a plain internal Kotlin function under the hood, nothing stops calling it
+  directly from the module's own test source set with a fake `ServerEnvironmentStore` — same technique
+  as testing any other pure-ish function, Hilt's involvement is irrelevant to whether it's testable.
+- **A field seeded once at ViewModel construction from a store, with no `viewModelScope.launch { store.
+  flow.collect {...} }` mirror, needs its OWN explicit re-seed in `logout()`'s reset** — proactively
+  applying the `auth-saved-account-picker-ui` lesson this run (a bare `AuthUiState()` silently drops any
+  field whose default isn't the desired post-logout value) caught this before a red test forced it: both
+  `selectedEnvironment`/`customHostInput` (seeded once, no collector) and `savedAccounts` (seeded once
+  AND collector-mirrored) needed the same `logout()` treatment despite having different sync-vs-live
+  shapes, because `AuthUiState()`'s bare defaults (`PRODUCTION`, `""`) are wrong for BOTH regardless of
+  which one has a live collector to eventually correct it.
+- **A "core shipped, X follow-up pending" bullet can have MULTIPLE independent follow-ups fully closed
+  across separate runs without the bullet itself ever saying so until the last one lands** — this run
+  flipped `feature-parity.md`'s server-environment-selector bullet from `[~]` to `[x]` in one step (no
+  intermediate partial-follow-up state was recorded, since the whole "app-side wiring" follow-up was one
+  slice), unlike the saved-account-picker bullet which had already been sitting at `[~]` → its own single
+  follow-up across two note paragraphs. Worth re-reading the bullet's exact follow-up sentence (singular
+  vs plural "follow-ups") before assuming one slice closes it — this one did, but it wasn't obvious
+  without checking.

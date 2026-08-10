@@ -22,7 +22,10 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.SavedAccount
+import me.meeshy.sdk.model.auth.ServerEnvironment
+import me.meeshy.sdk.net.InMemoryServerEnvironmentStore
 import me.meeshy.sdk.net.InMemoryTokenStore
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
@@ -59,6 +62,8 @@ class AuthViewModelTest {
         teardown: SessionTeardown = mockk(relaxed = true),
         savedAccountsStore: InMemorySavedAccountsStore = InMemorySavedAccountsStore(),
         clock: CacheClock = FixedCacheClock(999L),
+        config: MeeshyConfig = MeeshyConfig(),
+        environmentStore: InMemoryServerEnvironmentStore = InMemoryServerEnvironmentStore(),
     ): AuthViewModel {
         val api = FakeAuthApi(response)
         return AuthViewModel(
@@ -66,6 +71,8 @@ class AuthViewModelTest {
             coordinator,
             savedAccountsStore,
             clock,
+            config,
+            environmentStore,
         )
     }
 
@@ -302,5 +309,117 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.savedAccounts.map { it.id }).containsExactly("a1")
+    }
+
+    // --- Server environment selector (auth-server-environment-wiring) ---
+
+    @Test
+    fun initialState_seedsTheSelectedEnvironmentAndCustomHostFromTheStore() {
+        val environmentStore = InMemoryServerEnvironmentStore(
+            initialEnvironment = ServerEnvironment.STAGING,
+            initialCustomHost = "gate.example.com",
+        )
+
+        val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)
+
+        assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.STAGING)
+        assertThat(vm.state.value.customHostInput).isEqualTo("gate.example.com")
+    }
+
+    @Test
+    fun initialState_whenConfigLoggingIsEnabled_showsTheEnvironmentSelector() {
+        val vm = viewModel(ApiResponse(success = false), config = MeeshyConfig(enableLogging = true))
+
+        assertThat(vm.state.value.showEnvironmentSelector).isTrue()
+    }
+
+    @Test
+    fun initialState_whenConfigLoggingIsDisabled_hidesTheEnvironmentSelector() {
+        val vm = viewModel(ApiResponse(success = false), config = MeeshyConfig(enableLogging = false))
+
+        assertThat(vm.state.value.showEnvironmentSelector).isFalse()
+    }
+
+    @Test
+    fun selectEnvironment_nonCustom_updatesStateAndPersistsImmediately() {
+        val environmentStore = InMemoryServerEnvironmentStore()
+        val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)
+
+        vm.selectEnvironment(ServerEnvironment.STAGING)
+
+        assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.STAGING)
+        assertThat(environmentStore.selectedEnvironment).isEqualTo(ServerEnvironment.STAGING)
+    }
+
+    @Test
+    fun selectEnvironment_custom_updatesStateButDoesNotPersistUntilApplied() {
+        val environmentStore = InMemoryServerEnvironmentStore()
+        val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)
+
+        vm.selectEnvironment(ServerEnvironment.CUSTOM)
+
+        assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.CUSTOM)
+        assertThat(vm.state.value.showCustomHostInput).isTrue()
+        assertThat(environmentStore.selectedEnvironment).isEqualTo(ServerEnvironment.PRODUCTION)
+    }
+
+    @Test
+    fun onCustomHostChange_updatesTheInputFieldOnly() {
+        val environmentStore = InMemoryServerEnvironmentStore()
+        val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)
+
+        vm.onCustomHostChange("gate.example.com")
+
+        assertThat(vm.state.value.customHostInput).isEqualTo("gate.example.com")
+        assertThat(environmentStore.customHost).isEmpty()
+    }
+
+    @Test
+    fun applyCustomHost_withAValidHost_persistsAndSelectsCustom() {
+        val environmentStore = InMemoryServerEnvironmentStore()
+        val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)
+
+        vm.onCustomHostChange("gate.example.com")
+        vm.applyCustomHost()
+
+        assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.CUSTOM)
+        assertThat(environmentStore.selectedEnvironment).isEqualTo(ServerEnvironment.CUSTOM)
+        assertThat(environmentStore.customHost).isEqualTo("gate.example.com")
+    }
+
+    @Test
+    fun applyCustomHost_withABlankHost_isInert() {
+        val environmentStore = InMemoryServerEnvironmentStore()
+        val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)
+
+        vm.onCustomHostChange("   ")
+        vm.applyCustomHost()
+
+        assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.PRODUCTION)
+        assertThat(environmentStore.customHost).isEmpty()
+    }
+
+    @Test
+    fun serverOriginLabel_reflectsTheSelectedEnvironment() {
+        val vm = viewModel(ApiResponse(success = false))
+
+        vm.selectEnvironment(ServerEnvironment.LOCALHOST)
+
+        assertThat(vm.state.value.serverOriginLabel).isEqualTo("http://localhost:3000")
+    }
+
+    @Test
+    fun logout_preservesTheServerEnvironmentSelection() = runTest(dispatcher) {
+        val environmentStore = InMemoryServerEnvironmentStore(initialEnvironment = ServerEnvironment.STAGING)
+        val vm = viewModel(
+            ApiResponse(success = false),
+            store = InMemoryTokenStore(jwt = "jwt"),
+            environmentStore = environmentStore,
+        )
+
+        vm.logout()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.STAGING)
     }
 }
