@@ -60,6 +60,12 @@ data class SessionsListData(
     val totalCount: Int = 0,
 )
 
+/** Corps de POST auth/magic-link/validate. */
+@Serializable
+data class MagicLinkValidateRequest(
+    val token: String,
+)
+
 interface AuthApi {
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): ApiResponse<AuthSession>
@@ -100,4 +106,7 @@ interface AuthApi {
 
     @DELETE("auth/sessions")
     suspend fun revokeOtherSessions(): ApiResponse<Unit>
+
+    @POST("auth/magic-link/validate")
+    suspend fun validateMagicLink(@Body body: MagicLinkValidateRequest): ApiResponse<AuthSession>
 }

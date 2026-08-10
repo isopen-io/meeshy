@@ -61,6 +61,17 @@ class AuthRepository @Inject constructor(
         apiCall { authApi.requestMagicLink(me.meeshy.sdk.net.api.MagicLinkRequestBody(email)) }
             .map { it.expiresInSeconds ?: DEFAULT_MAGIC_LINK_VALIDITY_SECONDS }
 
+    /**
+     * Echange le token du magic link contre une session complete — le pendant
+     * passwordless de [login] : memes effets (tokens persistes, session hydratee).
+     * L'appelant est responsable du logout PREALABLE si un compte est deja ouvert
+     * (parite iOS P0 : un lien pour le compte B tape depuis le compte A doit
+     * passer par un teardown complet, jamais par un simple remplacement).
+     */
+    suspend fun loginWithMagicLink(token: String): NetworkResult<AuthSession> =
+        apiCall { authApi.validateMagicLink(me.meeshy.sdk.net.api.MagicLinkValidateRequest(token)) }
+            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+
     /** Les sessions actives du compte (la courante marquee par le serveur). */
     suspend fun listSessions(): NetworkResult<me.meeshy.sdk.net.api.SessionsListData> =
         apiCall { authApi.listSessions() }
