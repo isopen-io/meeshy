@@ -46,52 +46,68 @@ export function registerDeleteForMeRoutes(
 
       // If caller is CREATOR, transfer ownership
       if (participant.role === 'creator') {
-        // Try moderator first, then oldest active member
-        let successor = await prisma.participant.findFirst({
-          where: {
-            conversationId,
-            isActive: true,
-            userId: { not: userId },
-            role: 'moderator',
-          },
-          orderBy: { joinedAt: 'asc' },
+        const conversationInfo = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { type: true, firstMessageSentAt: true },
         })
+        const isEmptyDirect = conversationInfo?.type === 'direct' && !conversationInfo.firstMessageSentAt
 
-        if (!successor) {
-          successor = await prisma.participant.findFirst({
-            where: {
-              conversationId,
-              isActive: true,
-              userId: { not: userId },
-            },
-            orderBy: { joinedAt: 'asc' },
-          })
-        }
-
-        if (successor) {
-          await prisma.participant.update({
-            where: { id: successor.id },
-            data: { role: 'creator' },
-          })
-
-          const io = socketIOHandler?.getManager()?.getIO()
-          if (io) {
-            io.to(ROOMS.conversation(conversationId)).emit(
-              SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
-              {
-                conversationId,
-                userId: successor.userId,
-                newRole: 'creator',
-                updatedBy: userId,
-              }
-            )
-          }
-        } else {
-          // No other active members — close conversation
+        if (isEmptyDirect) {
+          // DM vide jamais utilisé : rien à préserver pour un successeur qui
+          // ne l'a pas demandé (Prisme design doc 2026-08-04) — fermer
+          // plutôt que transférer, même s'il reste un autre participant actif.
           await prisma.conversation.update({
             where: { id: conversationId },
             data: { isActive: false },
           })
+        } else {
+          // Try moderator first, then oldest active member
+          let successor = await prisma.participant.findFirst({
+            where: {
+              conversationId,
+              isActive: true,
+              userId: { not: userId },
+              role: 'moderator',
+            },
+            orderBy: { joinedAt: 'asc' },
+          })
+
+          if (!successor) {
+            successor = await prisma.participant.findFirst({
+              where: {
+                conversationId,
+                isActive: true,
+                userId: { not: userId },
+              },
+              orderBy: { joinedAt: 'asc' },
+            })
+          }
+
+          if (successor) {
+            await prisma.participant.update({
+              where: { id: successor.id },
+              data: { role: 'creator' },
+            })
+
+            const io = socketIOHandler?.getManager()?.getIO()
+            if (io) {
+              io.to(ROOMS.conversation(conversationId)).emit(
+                SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
+                {
+                  conversationId,
+                  userId: successor.userId,
+                  newRole: 'creator',
+                  updatedBy: userId,
+                }
+              )
+            }
+          } else {
+            // No other active members — close conversation
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { isActive: false },
+            })
+          }
         }
       }
 

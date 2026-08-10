@@ -75,6 +75,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+      findUnique: jest.fn<any>().mockResolvedValue({ type: 'group', firstMessageSentAt: new Date('2026-01-01') }),
     },
     ...overrides,
   };
@@ -157,6 +158,32 @@ describe('DELETE /conversations/:id/delete-for-me — creator with successor (mo
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM', () => {
+  it('returns 200 and closes the conversation instead of transferring ownership', async () => {
+    const creatorParticipant = { ...mockParticipant, role: 'creator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+      conversation: {
+        update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+        findUnique: jest.fn<any>().mockResolvedValue({ type: 'direct', firstMessageSentAt: null }),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isActive: false } })
+    );
+    expect(prisma.participant.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { role: 'creator' } })
+    );
     await app.close();
   });
 });

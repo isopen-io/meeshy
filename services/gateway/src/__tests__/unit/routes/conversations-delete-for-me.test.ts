@@ -66,6 +66,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({}),
+      findUnique: jest.fn<any>().mockResolvedValue({ type: 'group', firstMessageSentAt: new Date('2026-01-01') }),
       ...(overrides.conversation ?? {}),
     },
   };
@@ -214,6 +215,43 @@ describe('DELETE /conversations/:id/delete-for-me — creator with moderator suc
     expect(socket.mockEmit).toHaveBeenCalledWith(
       'participant:role-updated',
       expect.objectContaining({ userId: SUCCESSOR_USER_ID, newRole: 'creator' })
+    );
+  });
+});
+
+describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM', () => {
+  let app: FastifyInstance;
+  let prisma: ReturnType<typeof makePrisma>;
+
+  beforeAll(async () => {
+    (resolveConversationId as jest.MockedFunction<any>).mockResolvedValue(CONV_ID);
+    ({ app, prisma } = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, userId: USER_ID, conversationId: CONV_ID,
+            role: 'creator', isActive: true,
+          }),
+          update: jest.fn<any>().mockResolvedValue({}),
+        },
+        conversation: {
+          update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+          findUnique: jest.fn<any>().mockResolvedValue({ type: 'direct', firstMessageSentAt: null }),
+        },
+      },
+    }));
+  });
+
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 and closes the conversation instead of transferring ownership', async () => {
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isActive: false } })
+    );
+    expect(prisma.participant.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { role: 'creator' } })
     );
   });
 });
