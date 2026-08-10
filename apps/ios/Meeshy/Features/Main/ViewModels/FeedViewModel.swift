@@ -1203,18 +1203,24 @@ class FeedViewModel: ObservableObject {
                     translationModel: data.translation.translationModel,
                     confidenceScore: data.translation.confidenceScore
                 )
+                let langs = self.preferredLanguages
+                let language = data.language
                 // Batch mutations into a single array assignment
                 var post = self.posts[index]
-                var translations = post.translations ?? [:]
-                translations[data.language] = translation
-                post.translations = translations
-                let langs = self.preferredLanguages
-                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    if post.translatedContent == nil {
-                        post.translatedContent = data.translation.text
+                Self.applyPostTranslation(translation, language: language,
+                                          preferredLanguages: langs, to: &post)
+                self.posts[index] = post
+                // Un post vit sous PLUSIEURS clés (main-feed, sa clé détail,
+                // bookmarks, pager reels) : `debouncedCacheSave` ne réécrit que
+                // « main-feed », donc la traduction n'existait que là et
+                // repartait de zéro dès qu'une autre surface servait le post.
+                let postId = data.postId
+                Task.detached(priority: .utility) {
+                    await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                        Self.applyPostTranslation(translation, language: language,
+                                                  preferredLanguages: langs, to: &$0)
                     }
                 }
-                self.posts[index] = post
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
@@ -1223,19 +1229,67 @@ class FeedViewModel: ObservableObject {
         socialSocket.commentTranslationUpdated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (data: SocketCommentTranslationUpdatedData) in
-                guard let self,
-                      let postIndex = self.posts.firstIndex(where: { $0.id == data.postId }),
-                      let commentIndex = self.posts[postIndex].comments.firstIndex(where: { $0.id == data.commentId })
+                guard let self, let postIndex = self.posts.firstIndex(where: { $0.id == data.postId })
                 else { return }
                 let langs = self.preferredLanguages
-                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    if self.posts[postIndex].comments[commentIndex].translatedContent == nil {
-                        self.posts[postIndex].comments[commentIndex].translatedContent = data.translation.text
-                        self.debouncedCacheSave()
+                let language = data.language
+                let commentId = data.commentId
+                let text = data.translation.text
+                var post = self.posts[postIndex]
+                let changed = Self.applyCommentTranslation(
+                    text, commentId: commentId, language: language,
+                    preferredLanguages: langs, to: &post
+                )
+                guard changed else { return }
+                self.posts[postIndex] = post
+                let postId = data.postId
+                Task.detached(priority: .utility) {
+                    await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                        _ = Self.applyCommentTranslation(
+                            text, commentId: commentId, language: language,
+                            preferredLanguages: langs, to: &$0
+                        )
                     }
                 }
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
+    }
+
+    /// Règle unique de pose d'une traduction de post — appliquée à l'exemplaire
+    /// en mémoire ET à chaque exemplaire en cache. `translatedContent` n'est
+    /// posé que si la langue est préférée et qu'aucune traduction n'est déjà
+    /// affichée (une traduction plus prioritaire ne doit pas être écrasée).
+    nonisolated static func applyPostTranslation(
+        _ translation: PostTranslation,
+        language: String,
+        preferredLanguages: [String],
+        to post: inout FeedPost
+    ) {
+        var translations = post.translations ?? [:]
+        translations[language] = translation
+        post.translations = translations
+        guard post.translatedContent == nil,
+              preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame })
+        else { return }
+        post.translatedContent = translation.text
+    }
+
+    /// Idem pour un commentaire. Retourne `false` quand rien ne change — le
+    /// sink s'en sert pour ne pas réécrire le cache pour rien.
+    nonisolated static func applyCommentTranslation(
+        _ text: String,
+        commentId: String,
+        language: String,
+        preferredLanguages: [String],
+        to post: inout FeedPost
+    ) -> Bool {
+        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }),
+              let index = post.comments.firstIndex(where: { $0.id == commentId }),
+              post.comments[index].translatedContent == nil
+        else { return false }
+        post.comments[index].translatedContent = text
+        return true
     }
 
     /// Coupe les sinks d'UI du feed. Le pont de persistance GRDB
