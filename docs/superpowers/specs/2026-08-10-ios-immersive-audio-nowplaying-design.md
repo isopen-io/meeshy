@@ -107,7 +107,10 @@ vide depuis.
 - `MediaSessionCoordinator.request(role:options:)` : le chemin refcompté
   accepte les options de catégorie au lieu de figer `[.duckOthers]`.
 - `AudioPlaybackManager.sessionProfile: AudioSessionProfile` (défaut
-  `.content`), transmis à `request(role:options:)` par `acquireSession()`.
+  `.transient` — fail-safe : un moteur oublié garde le comportement actuel,
+  sans carte fantôme), transmis à `request(role:options:)` par
+  `acquireSession()`. Seul le moteur possédé par le
+  `ConversationAudioCoordinator` opte pour `.content`.
 
 **App** (décisions produit) :
 
@@ -178,6 +181,19 @@ tous les events d'interruption sont ignorés — RTCAudioSession peut en génér
    l'id du post/commentaire ; les hooks socket du coordinator filtrent par id
    exact, donc aucun effet de bord.
 
+### D3bis — Vocal en pause au verrouillage : la carte reste
+
+`MediaLifecycleBridge.prepareForBackground()` ne préserve aujourd'hui la
+session que si une lecture est EN COURS (`isPlaying`). Un vocal mis en pause
+puis l'écran verrouillé → `stopAll()` + désactivation de session → l'app perd
+le statut Now Playing et la carte disparaît, alors que WhatsApp la conserve
+(et le play depuis la carte réveille l'app suspendue — comportement standard
+de l'app Now Playing). La garde s'étend à
+`ConversationAudioCoordinator.activeContext != nil` : file en pause = session
+conservée, carte affichée à rate 0, reprise possible depuis le lock screen.
+La fermeture explicite (`close()`, fin de file, logout) libère la session et
+efface la carte comme aujourd'hui.
+
 ### D4 — Fiabilité de l'avance de file en background
 
 Entre deux pistes, `AudioPlaybackManager.play(urlString:)` peut toucher le
@@ -227,6 +243,10 @@ surfaces s'appuient sur le bouton route natif de la carte système.
   interruption ; `routeChangedOldDeviceUnavailable` pause sans reprise ;
   events ignorés pendant `_isSuspendedBySystemCall` ;
   `playVariant` conserve `activeContext` et `queueCount`.
+- **App — background** : `prepareForBackground` préserve session et carte
+  quand `activeContext != nil` même en pause (sondes `testStopAllProbe` /
+  `MediaSessionCoordinatorTestProbe` existantes) ; la fermeture explicite
+  libère toujours.
 - **App — fusion** : le routeur généralisé produit une file d'un élément pour
   une source hors conversation ; garde de source vérifiant
   qu'`AudioFullscreenView` et `ConversationView+ScrollIndicators`
@@ -245,10 +265,10 @@ surfaces s'appuient sur le bouton route natif de la carte système.
 - **Réels audio** : passent explicitement `.transient` — aucun changement de
   comportement.
 - **Carte fantôme** : un moteur `.content` qui jouerait sans `activeContext`
-  rendrait l'app Now Playing sans métadonnées. Mitigation : après fusion, tout
-  moteur `.content` est celui du coordinator (les moteurs locaux restants sont
-  `.transient`) ; le défaut `.content` de `sessionProfile` est donc recouvert
-  explicitement sur chaque instance annexe conservée.
+  rendrait l'app Now Playing sans métadonnées. Mitigation structurelle : le
+  défaut de `sessionProfile` est `.transient` et seul le moteur du coordinator
+  opte pour `.content` — un moteur annexe oublié duck comme aujourd'hui, sans
+  jamais prendre la carte.
 
 ## 8. Références
 
