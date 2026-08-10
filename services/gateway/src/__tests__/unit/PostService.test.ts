@@ -2082,7 +2082,7 @@ describe('PostCommentService', () => {
           data: { commentCount: { decrement: 1 } },
         }),
       );
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual(expect.objectContaining({ success: true }));
     });
 
     it('cascades to surviving replies and decrements commentCount by 1 + reply count', async () => {

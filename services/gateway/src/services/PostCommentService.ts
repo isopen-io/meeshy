@@ -366,9 +366,15 @@ export class PostCommentService {
       frontier = childIds;
     }
 
+    // La liste est calculée UNE fois et sert partout : soft-delete, décompte,
+    // retrait des notifications, et — rendue à l'appelant — annonce Socket.IO.
+    // Une seconde dérivation dériverait : après le soft-delete, la reconstruire
+    // demanderait de relire des lignes que `NOT_DELETED` masque désormais.
+    const deletedCommentIds = [commentId, ...descendantIds];
+
     const deletedAt = new Date();
     await this.prisma.postComment.updateMany({
-      where: { id: { in: [commentId, ...descendantIds] } },
+      where: { id: { in: deletedCommentIds } },
       data: { deletedAt },
     });
 
@@ -397,12 +403,17 @@ export class PostCommentService {
     // ceci s'exécute, `deletedAt` est déjà committé. Une inbox récalcitrante ne
     // doit pas transformer une suppression réussie en 500.
     try {
-      await retractCommentNotifications(this.prisma, [commentId, ...descendantIds], announcer);
+      await retractCommentNotifications(this.prisma, deletedCommentIds, announcer);
     } catch (err) {
       log.warn('comment removal: notification retraction failed', { commentId, err });
     }
 
-    return { success: true };
+    // `deletedCommentIds` remonte pour que la route ANNONCE le fil entier. Sans
+    // elle, les descendants restaient affichés chez tout client qui les avait
+    // dépliés, et aucun refetch ne les enlevait : `getComments` filtre
+    // `parentId: null`, leur parent supprimé n'est plus rendu, donc `getReplies`
+    // n'est plus jamais appelé pour eux.
+    return { success: true as const, deletedCommentIds };
   }
 
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {

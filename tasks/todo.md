@@ -1,3 +1,104 @@
+# Cycle 56 — La suppression emportait le fil sans jamais le dire
+
+Le backlog du cycle 54 portait sa tête ailleurs : « les `TrackingLink` d'une story détruite ne sont
+toujours pas désactivés ». Elle est juste — et elle était **déjà prise** : la PR #2761, ouverte par
+une session sœur vingt minutes avant ce cycle, la traitait ; elle a fusionné pendant celui-ci et
+porte le numéro 55. Prendre l'item suivant de la même liste plutôt que le doubler. Celui-ci y
+figurait sous le nom hérité du cycle 52 : « `broadcastCommentDeleted` n'annonce que la cible et pas
+le sous-arbre ».
+
+## Ce que la piste héritée disait, et ce qu'elle ne disait pas
+
+Elle est confirmée telle quelle — chose rare. Mais son énoncé la fait passer pour un défaut de
+broadcast, et elle ne l'est pas : **le broadcast n'a jamais eu la liste**. Elle mourait un étage plus
+bas.
+
+`PostCommentService.deleteComment` soft-delete le sous-arbre ENTIER depuis le cycle qui a corrigé
+l'invariant de `commentCount` — cible + descendants, profondeur arbitraire, une seule liste d'ids
+qui sert aussi au décompte et au retrait des notifications. Sa valeur de retour : `{ success: true }`.
+La liste ne sortait pas de la méthode. Son seul appelant n'avait donc rien d'autre à annoncer que le
+`commentId` qu'il tenait déjà de son propre chemin d'URL.
+
+## Ce que ça faisait à l'écran
+
+Chez tout client qui avait déplié les réponses, elles restaient affichées. Le serveur venait de les
+retirer.
+
+**Et rien ne les enlevait jamais.** `getComments` filtre `parentId: null` : le parent supprimé n'est
+plus rendu, donc `getReplies` n'est plus jamais appelé pour ses réponses. Ni le refetch, ni
+l'invalidation, ni un aller-retour sur le post ne les faisaient disparaître — seulement un
+rechargement complet de la page.
+
+Le compteur, lui, était juste depuis le début : `commentCount` voyage en ABSOLU. L'écran affichait
+donc « 1 commentaire » au-dessus de trois lignes visibles, et c'est cette contradiction-là que
+l'utilisateur voyait, pas l'absence d'un id dans un payload.
+
+## Plan
+- [x] T1 — enquête : piste héritée confirmée, mais l'étage fautif n'est pas celui qu'elle nomme
+- [x] T2 — RED : 5 témoins (3 service, 2 route) + 2 web, tous rouges pour la bonne raison
+- [x] T3 — GREEN : la liste remonte, la route l'annonce, le web en purge ses caches
+- [x] T4 — source unique : liste calculée UNE fois, partagée par soft-delete/décompte/retrait/annonce
+- [x] T5 — sondes de fidélité : trois défauts réintroduits un par un
+- [x] T6 — gates : suites gateway + web, `tsc` sur les trois paquets touchés
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Rouge observé avant correctif** : 5 témoins gateway (les 3 du service sur `deletedCommentIds`
+absent, les 2 de la route sur le payload sans la liste) + 1 web (les réponses orphelines survivent
+en cache — le défaut utilisateur reproduit tel quel). Le 2e témoin web (repli sans liste) passait
+déjà : il verrouille le comportement d'AVANT, qui doit survivre au correctif.
+
+**Sondes de fidélité** — chaque défaut réintroduit volontairement, restauration par **copie**
+(leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| le service ne rend que `[commentId]` | 2 (sous-arbre profond + égalité avec la liste soft-deletée) |
+| repli de la route `?? [commentId]` → `?? []` | 1 (le rejeu) |
+| le web ignore `deletedCommentIds` | 1 (les réponses orphelines) |
+
+Aucune sonde n'a fait tomber un témoin qu'elle ne visait pas, et aucune n'a laissé tout vert.
+Le témoin « cible seule sur une feuille » reste vert sous la 1ère sonde — c'est correct : sur une
+feuille, `[commentId]` EST la bonne réponse. Un témoin qui serait tombé là aurait mesuré
+l'implémentation, pas le comportement.
+
+**Suites** : gateway `(omment|SocialEvents|posts)` → 92 suites / 1862 tests verts ; web
+`__tests__/hooks/{queries,social}` → 24 suites / 529 verts ; web `__tests__/components` → 201 suites
+/ 4155 verts. `tsc --noEmit` : **0 erreur** sur gateway, 0 sur shared, aucune sur le fichier web
+touché.
+
+**Deux témoins pré-existants mis à jour, pas affaiblis** : `PostCommentService.test.ts` et
+`PostService.test.ts` asseyaient `toEqual({ success: true })` — une égalité EXACTE que le champ
+ajouté casse mécaniquement. Passés à `expect.objectContaining({ success: true })` : leur intention
+(« la suppression reste réussie même si le retrait des notifications échoue », « le décompte est
+juste ») est intacte, et ils ne prétendent plus verrouiller la forme complète du retour, ce qu'ils
+ne cherchaient pas à faire.
+
+## Reste ouvert après ce cycle
+
+- **iOS et Android ne lisent pas encore `deletedCommentIds`, et n'en souffraient pas** — vérifié en
+  lisant leur code plutôt qu'en le supposant (la première rédaction de ce relevé affirmait
+  l'inverse). iOS `PostDetailViewModel` fait `repliesMap[id] = nil` + `expandedThreads.remove(id)`
+  sur chaque `comment:deleted` ; Android `PostCommentsViewModel.onCommentDeleted` appelle
+  `CommentRepliesState.removedThread(commentId)`. **Le web était le seul client sans cette
+  compensation** — le défaut n'était donc pas « le serveur se tait » tout court, mais « le serveur
+  se tait, et deux clients sur trois ont chacun payé une traversée locale pour compenser ». C'est
+  cette duplication-là que `deletedCommentIds` rend caduque : les deux traversées peuvent céder la
+  place à un retrait autoritatif, un cycle par plateforme (cet environnement ne compile ni Swift ni
+  Kotlin — leçon 88c), avec leur propre gate.
+- **Le rejeu idempotent annonce toujours la seule cible.** `onDuplicate` ne rend qu'un `{ id }` et
+  le sous-arbre n'est plus reconstructible par une lecture vivante. Le repli reproduit exactement
+  l'existant ; le faire mieux demanderait de stocker la liste dans la `MutationLog`, ce qui est une
+  décision de conception sur le journal, pas sur la suppression.
+- Hérités et non traités ce cycle : `softDeleteRetentionMs` reste du code mort (le champ est assigné
+  et journalisé, `cleanup()` ne le lit pas) ; le nom `ExpiredStoriesCleanupService` ment sur son
+  périmètre ; `post_comment` et `comment_like` n'exposent pas `context.commentId` ; le push APNs/FCM
+  déjà délivré n'est pas rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation
+  humaine ; `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 55 — Le lien de partage survivait à la story qu'il partageait
 
 Les deux ADR du gateway se terminent, l'une et l'autre, par la même réserve : « les `TrackingLink`
