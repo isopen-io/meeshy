@@ -956,3 +956,38 @@ Append-only log of gotchas and decisions that save time next run.
   actually occur with a fixed constant — the Single-vs-Multiple choice is genuinely a UX nicety
   (matching the system picker's affordance to how many slots are actually left) riding on the same
   crash-avoidance-shaped abstraction, not a contradiction worth "fixing" mid-slice.
+
+## Slice `feed-composer-reel-classification` (2026-08-10)
+- **A "the gateway is authoritative" architecture can be authoritative in only ONE direction — check
+  which before assuming the client's own classification is optional.** The gateway silently
+  *degrades* a client-claimed `REEL` to `POST` when the composition doesn't qualify
+  (`PostService.createPost`), which reads at first like "the client's own guess doesn't matter, the
+  server fixes it." Reading the actual branch (`if (data.type === PostType.REEL) { ...degrade... }`)
+  showed the safety net is one-directional: a client that always sends `POST` is NEVER upgraded to
+  `REEL`, no matter how qualifying the media. The server being a safety net for over-claiming does
+  not make client-side under-claiming safe — those are two independent failure directions, and only
+  one of them has a net under it.
+- **A field that reads like it needs new on-device plumbing may already be populated server-side —
+  check the actual response shape before building an extraction pipeline.** The reel-qualification
+  rule needs video/audio duration, which sounds like it requires `MediaMetadataRetriever` (new
+  Android-framework glue, JVM-untestable without Robolectric). Reading
+  `services/gateway/src/routes/uploads/tus-handler.ts` end to end showed the gateway's own
+  `ffprobe`-backed metadata extraction runs SYNCHRONOUSLY before the TUS finish response, and
+  `UploadedMedia.durationMs` (already wired by two prior slices) already carries that
+  server-computed value the instant an upload completes. The pure classification engine only ever
+  needed to read a field that was already there — zero new IO, zero new Android-framework
+  dependency, zero coverage-gate exemption needed for the new logic.
+- **A one-line enum addition can still need a real "is this safe" check, not just a compile-check.**
+  Adding `PostType.REEL` next to `POST`/`STORY`/`STATUS` compiles cleanly regardless of insertion
+  order (Kotlin enums aren't position-sensitive at the source level), but an enum used anywhere via
+  `.ordinal` (Room converters, sorted persistence) WOULD have silently reordered every existing
+  stored value. Grepping every `PostType` call site first (`.name`-only usage, zero `.ordinal`, zero
+  exhaustive `when`) confirmed the addition was purely additive before relying on "it compiled" as
+  the safety signal.
+- **Changing a constructor's stored field type ripples further than the file being edited — grep
+  every direct-construction call site, not just the ones already open.** Switching
+  `FeedComposerDraft(mediaIds: List<String>)` to `FeedComposerDraft(media: List<UploadedMedia>)`
+  broke `FeedMediaPickerTest.kt` (a sibling test file, not touched by the main diff so far) which
+  constructed the draft directly with the old shape — caught immediately by the compiler, not
+  silently, but only because the whole module was recompiled; a narrower `--tests` filter run first
+  would have reported green while a sibling file was actually broken.

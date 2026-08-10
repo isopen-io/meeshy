@@ -742,6 +742,20 @@ class FeedViewModelTest {
         assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
     }
 
+    @Test
+    fun `publishPost sends the reel-classification type the caller resolved`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "check this out", visibility = "PUBLIC", mediaIds = listOf("m1"), type = "REEL")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        }
+    }
+
     // --- Composer media upload (uploadMedia) ---
 
     @Test

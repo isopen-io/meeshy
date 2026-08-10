@@ -99,4 +99,7 @@
     <string name="feed_composer_remove_media">Quitar contenido multimedia</string>
     <string name="feed_composer_media_limit">Puedes adjuntar hasta %1$d elementos</string>
     <string name="feed_composer_media_unusable">No se pudo adjuntar ese contenido multimedia</string>
+    <string name="feed_composer_type_reel">Reel</string>
+    <string name="feed_composer_type_post">Publicar</string>
+    <string name="feed_composer_type_hint">Cambiar entre reel y publicación</string>
 </resources>

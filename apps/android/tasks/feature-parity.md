@@ -3172,12 +3172,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       live gateway (not just unit tests): logcat confirmed the real TUS `POST`+`PATCH` round-trip
       (`uploadcontext=post`), the `POST /api/v1/posts` body carrying the real returned `mediaIds`, and a
       direct `GET` of the created post confirming the media persisted with a working `fileUrl`/
-      `thumbnailUrl` and Prisme translations generated — the test post was deleted afterward. **Still
-      open**: camera capture (no existing pattern anywhere in the Android app yet — no `TakePicture`
-      contract/`FileProvider` wiring, a materially bigger increment deliberately deferred rather than
-      rushed), files, location, audio+transcription, per-post language override, the Réel⇄Post toggle,
-      durable-outbox queueing for offline resilience (media upload itself has no offline-retry path yet
-      either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
+      `thumbnailUrl` and Prisme translations generated — the test post was deleted afterward.
+      **Reel classification done** (slice `feed-composer-reel-classification`, 2026-08-10): every prior
+      publish hardcoded `type = "POST"` — confirmed via `services/gateway/src/services/PostService.ts`
+      that the gateway only ever *degrades* a claimed `REEL` back to `POST` when the composition doesn't
+      qualify, it never auto-*upgrades* a client-sent `POST`, so any Android post with qualifying media
+      (a video/audio ≥3s, or ≥2 images) was permanently stuck as a plain post, unlike iOS. New pure
+      `ReelComposition` (`:core:model`, mirror of iOS SDK `ReelComposition` and the gateway's own
+      `reelComposition.ts` — all three sites now share one rule) computes `qualifiesAsReel`/`defaultType`
+      from the already-uploaded media's `mimeType`/`durationMs` — no on-device metadata extraction
+      needed, since the gateway's TUS finish response already returns the server-probed duration in the
+      same `UploadedMedia` shape every upload path surfaces. `FeedComposerDraft` gained `postType`/
+      `qualifiesAsReel`/`forcePlainPost`/`withForcePlainPost` and now tracks `media: List<UploadedMedia>`
+      instead of bare ids (mechanical, `mediaIds` stays a computed projection); `FeedComposerSheet` shows
+      a Réel⇄Post override chip (iOS parity: `FeedView.composerOverlay`'s toggle) only when the current
+      composition qualifies, exactly mirroring iOS's own conditional `if ReelComposition.qualifiesAsReel`
+      gate; `FeedViewModel.publishPost` threads the resolved `type` through to `PostRepository.create`
+      instead of the old hardcoded literal. +15 tests (13 `ReelCompositionTest`, +14 net new
+      `FeedComposerDraftTest` cases covering qualification/boundary/force-toggle/de-qualification-on-
+      removal, +1 `FeedViewModelTest` asserting the `type` threads through). Mutation-proof, three axes:
+      (a) forcing `meetsMinDuration` to always `true` failed exactly the 3 duration-floor tests: (b)
+      loosening the image-count rule from `>= 2` to `>= 1` failed exactly the 2 single-image tests; (c)
+      hardcoding `FeedComposerDraft.postType` to ignore `forcePlainPost` failed exactly the 2 tests
+      asserting the override — every other test in all three files stayed green each time; all three
+      reverted and re-run clean. **Still open**: camera capture (no existing pattern anywhere in the
+      Android app yet — no `TakePicture` contract/`FileProvider` wiring, a materially bigger increment
+      deliberately deferred rather than rushed), files, location, audio+transcription, per-post language
+      override, durable-outbox queueing for offline resilience (media upload itself has no offline-retry
+      path yet either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
       consistent, not a new gap) — each a separately-scoped follow-up.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
