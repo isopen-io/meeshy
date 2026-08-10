@@ -638,8 +638,11 @@ public struct AudioPlayerView: View {
     /// every existing call site) means "show the original". The SDK stays
     /// agnostic of the resolution rule itself (systemLanguage > regional >
     /// custom > deviceLocale); it only renders whichever code it is handed.
-    /// This ONLY seeds the transcription display — it never changes which
-    /// audio track plays, that stays the original by default.
+    /// Prisme audio-follow (2026-08-09) — this now ALSO seeds playback: a
+    /// non-nil/non-"orig" value marks `hasExplicitAudioLanguage = true` in
+    /// `init`, so the matching translated audio track (if one exists) plays
+    /// automatically, exactly like the transcription strip. See
+    /// `hasExplicitAudioLanguage`'s doc for the full contract.
     public var initialTranscriptionLanguage: String? = nil
 
     public var onFullscreen: (() -> Void)? = nil
