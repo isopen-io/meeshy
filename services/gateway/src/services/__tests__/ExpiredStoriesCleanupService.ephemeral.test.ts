@@ -43,6 +43,13 @@ function buildPrisma(overrides: Record<string, unknown> = {}) {
       deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
     },
     postMedia: { deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }) },
+    // La désactivation des liens de partage gouverne désormais la passe, au
+    // même titre que le retrait des notifications : sans ce double elle rejette
+    // et RIEN n'est détruit (comportement voulu — un lien laissé actif sur un
+    // post détruit n'est plus rattrapable par aucune passe).
+    trackingLink: {
+      updateMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    },
     soundUsage: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
       deleteMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),

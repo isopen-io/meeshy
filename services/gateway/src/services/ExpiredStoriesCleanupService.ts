@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
+import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS, EPHEMERAL_POST_TYPES } from './posts/ephemeralPosts';
 import { retractPostNotifications } from './posts/retractPostNotifications';
 import { SoundCaptureService } from './posts/SoundCaptureService';
@@ -221,6 +222,32 @@ export class ExpiredStoriesCleanupService {
         // passe suivante ne voyant plus les posts. Le `catch` de cette passe
         // rattrape, la passe horaire suivante rejoue tout.
         await retractPostNotifications(this.prisma, allPostIds, announcer);
+
+        // Les `/l/<token>` qui visaient ces posts. Même famille que le retrait
+        // ci-dessus — une ligne dénormalisée qui survit à son référent — et
+        // même correctif que le retrait interactif, dont c'est le troisième
+        // effet depuis trois cycles : `TrackingLink.targetId` n'a ni relation
+        // ni cascade vers `Post`, donc rien ne coupait ces liens quand la
+        // ligne `Post` disparaissait. Le lien restait `isActive: true` POUR
+        // TOUJOURS, comptait son clic et redirigeait vers une page morte, là
+        // où le même contenu retiré à la main répond 410 `LINK_INACTIVE`.
+        //
+        // Ancré sur la DESTRUCTION et non sur l'expiration, pour la raison que
+        // le bloc ci-dessus vient d'écrire : une story seulement périmée
+        // répond encore par `getPostById`, et son lien mène donc quelque part.
+        //
+        // `allPostIds` et jamais `ids` : un repost est détruit par la cascade
+        // de son original sans avoir jamais été soft-deleté pour son propre
+        // compte (son `expiresAt` est postérieur de plusieurs heures), et c'est
+        // justement le repost qu'on partage.
+        //
+        // Placé AVANT toute suppression, et il REJETTE volontairement — même
+        // raison que ses deux voisins : sans relation ni cascade, détruire les
+        // posts après une désactivation en échec laisserait des liens que plus
+        // aucun chemin n'atteindrait, la passe suivante ne voyant plus les
+        // posts. Le `catch` de cette passe rattrape, la passe horaire suivante
+        // rejoue tout.
+        await deactivatePostTrackingLinks(this.prisma, allPostIds);
 
         // G7 — collect comment ids BEFORE deleting them: their media rows
         // (PostMedia.commentId, `onDelete: SetNull`) must be purged too.
