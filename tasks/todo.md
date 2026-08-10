@@ -1,3 +1,146 @@
+# Cycle 59 — Les anonymes n'entraient plus dans leur propre conversation
+
+Le backlog du cycle 58 laissait un candidat nommé : le prédicat défensif
+`OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }]` sur les 119 lectures de
+`Message.deletedAt`. Ce cycle ne l'a pas pris, et c'est le premier résultat.
+
+La tête du backlog dit « appliquez cet idiome aux 119 sites ». Or ces 119 sites ne sont PAS cassés :
+le cycle 58 vient de rendre la discipline d'écriture complète, les sept créateurs écrivent la
+colonne, les lectures apparient. Le prédicat y serait de la ceinture par-dessus des bretelles — 119
+fichiers touchés pour zéro défaut observable. La question utile n'était pas « où cet idiome
+manque-t-il ? » mais **« sur quelle colonne le filtre naïf n'apparie-t-il RIEN aujourd'hui ? »**, ce
+qui se réduit à : *une colonne `DateTime?`/`String?` dont AUCUN créateur n'écrit la valeur.*
+
+Un balayage des `where` du gateway sous cette question rend quatre sites. Le premier est une porte
+d'accès.
+
+## Le défaut
+
+`canAccessConversation` — la garde de toutes les routes de conversation — filtrait
+`bannedAt: null` sur `Participant`. **Aucun des neuf créateurs de `Participant` n'écrit `bannedAt`.**
+La colonne est donc ABSENTE du document de tout participant jamais banni, et sur le connecteur
+MongoDB de Prisma l'égalité à `null` ne l'apparie pas.
+
+Le seul producteur d'un `null` EXPLICITE sur cette colonne est `resolveUnbanWrite`. Autrement dit :
+**les seuls participants que cette porte laissait entrer étaient ceux qui avaient été bannis puis
+débannis.** Tous les autres étaient dehors.
+
+Et cette branche n'est empruntée que par un contexte d'auth portant un `participantId`, ce qui
+d'après `middleware/auth.ts` désigne exactement une population : **les anonymes venus par un lien de
+partage.**
+
+| Route | Ce qu'un anonyme obtenait |
+|---|---|
+| `GET /conversations/:id/messages` | 403 « Unauthorized access to this conversation » |
+| `POST /conversations/:id/messages` | 403 |
+| `GET /conversations/:id` | 403 |
+| fils, statistiques, liste des participants, épinglage | 403 |
+
+La fonctionnalité d'entrée par lien anonyme — celle que `routes/anonymous.ts` provisionne, dont
+`routes/conversations/messages.ts` gère explicitement le cas trois lignes plus bas (`joinedAt`,
+`allowViewHistory`, `shareLinkId`) — était fermée au niveau de sa garde.
+
+## Les trois autres sites, même piège
+
+- **`PasswordResetService.revokeExistingTokens` et le jumeau magic-link n'ont jamais révoqué un seul
+  jeton.** `create` ne renseigne pas `usedAt`, donc la colonne est absente de tout jeton encore
+  vierge — soit exactement la cible. Demander un nouveau lien laissait le précédent valide jusqu'à
+  son expiration ; `revokedReason: 'NEW_REQUEST'` n'a jamais été écrit. La validation, elle, lit la
+  ligne et teste `token.usedAt` en JS : elle est juste, et c'est pour ça que le défaut est resté
+  invisible — un jeton consommé était bien refusé, il n'y avait simplement aucune exclusivité.
+- **`MessageProcessor.updateTrackingLinksWithMessageId` n'écrivait aucune attribution.** La
+  réécriture crée le lien avec un `messageId` encore indisponible, donc omis — son propre
+  commentaire dit « sera null », il est ABSENT. Le rattachement post-envoi ne retrouvait pas le lien
+  qu'elle venait de créer.
+- **`activeTokens` du balayage des jetons périmés rendait toujours 0.**
+
+## Le correctif
+
+`unsetOrNull(champ)` (`utils/prisma-unset.ts`) — le prédicat de LECTURE, nommé, typé sur le nom du
+champ, pendant du `LIVE_MESSAGE_MARK` côté écriture du cycle 58. Un nom par colonne (à la
+`NOT_DELETED`) ne convenait pas : quatre colonnes différentes dans quatre modules, l'invariant est
+commun, pas la colonne.
+
+**Pourquoi la lecture et non l'écriture, cette fois** : ajouter `bannedAt: null` aux neuf créateurs —
+le geste exact du cycle 58 — n'aurait rien réparé pour les participants anonymes DÉJÀ en base, c'est-
+à-dire pour tous ceux dont l'accès est cassé. Une discipline d'écriture répare l'avenir ; un prédicat
+défensif répare le passé. Le cycle 58 pouvait choisir l'écriture parce que ses lignes fautives
+étaient rares et rejouables ; ici, elles sont la population.
+
+## Plan
+- [x] T1 — bootstrap (leçon 102b) : `bun install --ignore-scripts`, `prisma generate`, build shared
+- [x] T2 — reformuler la question du backlog, puis balayer les `where` sous la bonne question
+- [x] T3 — vérifier créateur par créateur que la colonne n'est écrite par personne (9 pour `Participant`, 2 pour chaque modèle de jeton)
+- [x] T4 — double Prisma qui HONORE « absent ≠ null » (`__tests__/helpers/mongo-where.ts`)
+- [x] T5 — RED : 4 témoins de comportement, un par site
+- [x] T6 — GREEN : `unsetOrNull`, étalé par les quatre sites
+- [x] T7 — 3 témoins pré-existants qui ÉPINGLAIENT la clause fautive, réécrits en comportement
+- [x] T8 — sondes de fidélité en sept temps
+- [x] T9 — gates : suite gateway complète, `tsc --noEmit`
+- [x] T10 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Rouge observé avant correctif** : 4 témoins, un par site, tous sur un document dont la colonne est
+absente. Chacun a échoué pour la bonne raison — la lecture ne rend rien / la clause n'apparie pas la
+ligne fraîche.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| `canAccessConversation` remis à `bannedAt: null` | 1 (le sien) |
+| `revokeExistingTokens` remis à `usedAt: null` | 1 (le sien) |
+| magic-link remis à `usedAt: null` | 2 — il y avait DEUX copies du témoin de forme |
+| balayage des jetons remis à `usedAt: null` | 1 (le sien) |
+| rattachement des liens remis à `messageId: null` | 1 (le sien) |
+| `unsetOrNull` vidé en `{}` | **8**, dont « refuse un banni resté actif » |
+| branche `null` retirée du prédicat | **3**, dont « admet un débanni » |
+
+Les deux dernières sondes sont celles qui apprennent quelque chose. Vider le prédicat ne produit pas
+seulement des échecs de forme : il fait tomber le refus d'un participant BANNI, donc un prédicat trop
+permissif est attrapé comme une régression de sécurité et pas comme une faute de frappe. Et retirer
+la branche `null` ne fait tomber que le débanni — le seul cas au monde que cette branche protège,
+puisque `resolveUnbanWrite` est le seul à écrire un `null` explicite.
+
+**Gate** : suite gateway complète **646 suites / 16 300 tests, 0 échec** (baseline du cycle 58 :
+643 / 16 273 sur un `main` antérieur ; +1 suite de ce cycle, +2 amont). `tsc --noEmit` : 0 erreur —
+et il a servi : la première forme du prédicat rendait un tuple `readonly` que
+`ParticipantWhereInput` refuse, ce qu'aucun test n'aurait vu.
+
+## Reste ouvert après ce cycle
+
+- **`MaintenanceService.cleanupOrphanedAttachments` porte le MÊME défaut et n'a PAS été corrigé.**
+  Son `messageId: null` sur `MessageAttachment` n'apparie rien (le chemin TUS crée la ligne sans la
+  colonne), donc la passe n'a jamais rien supprimé. La réparer est une ligne — et arme un effacement
+  irréversible de fichiers et de lignes sur des données que ce conteneur ne connaît pas. C'est
+  exactement la leçon 90.4 (« réparer une chose morte peut en éteindre une vivante ») : le préalable
+  est un essai à blanc contre la base de production, hors de portée de cette routine. Le liage
+  légitime (`associateAttachmentsToMessage`) filtre par `id`, lui, donc il fonctionne — les lignes
+  visées sont bien des orphelines. **Candidat pour un cycle avec accès base, jamais pour un cycle
+  aveugle.**
+- **Aucune attribution rétroactive.** Les `TrackingLink` et les jetons déjà écrits gardent leur
+  colonne absente ; les nouvelles lectures les apparient, mais rien ne remplit le passé.
+- **Les ~12 copies inline correctes de l'idiome** (`leftAt`, `expiresAt`, `parentId`, `mutedAt`,
+  `invalidatedAt`) n'ont pas été migrées vers `unsetOrNull`. Volontaire : elles fonctionnent, et
+  certaines vivent dans un `where` portant DÉJÀ un `OR`, où un spread écraserait l'existant. Le
+  spread silencieux est le seul piège de cet utilitaire, et son en-tête le dit.
+- **`updateTrackingLinksMessageId` (le binder du chemin de PARTAGE) écrase sans aucune garde** —
+  ni `conversationId`, ni `messageId` déjà pris. Le défaut est documenté dans
+  `messageRemovalEffects.ts` comme un fait admis ; ce cycle n'y touche pas, mais maintenant que le
+  binder du chemin d'ENVOI écrit vraiment, les deux se disputent la colonne pour de bon.
+- **La sémantique `absent` vs `null` n'a pas été vérifiée contre une vraie base** (aucun MongoDB
+  joignable, pas de démon Docker). Elle repose sur trois post-mortems de production internes
+  (`postIncludes.ts`, `CallService.initiateCall`, cycle 54) et sur les cycles 57-58. **Le correctif
+  est juste sous les DEUX sémantiques** : la forme `OR` apparie l'absent ET le nul. Ce qui reste
+  incertain est l'ampleur du défaut, pas la validité de sa réparation.
+- Hérités et non traités : le prédicat défensif sur les 119 lectures de `Message.deletedAt` (écarté
+  ci-dessus, avec sa raison) ; les messages d'appel écrits avant le cycle 58 restent invisibles ;
+  `post_comment`/`comment_like` gardent leur asymétrie de forme sans conséquence ;
+  `softDeleteRetentionMs` reste du code mort documenté ; iOS et Android ne lisent pas
+  `deletedCommentIds` ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
 # Cycle 58 — Les messages d'appel n'étaient pas des messages
 
 Une session sœur a livré le cycle 57 en parallèle (« le budget d'une vue unique se dépense par

@@ -104,6 +104,7 @@ jest.mock('../../../../services/messaging/postReplySnapshot', () => ({
 // ── Import after all mocks ─────────────────────────────────────────────────
 
 import { MessageProcessor } from '../../../../services/messaging/MessageProcessor';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
 
 // ── Prisma helpers ─────────────────────────────────────────────────────────
 
@@ -657,6 +658,28 @@ describe('MessageProcessor.saveMessage', () => {
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
     await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
     expect(tlUpdateMany).toHaveBeenCalled();
+  });
+
+  /**
+   * Le rattachement, jugé sur le DOCUMENT du lien qu'il doit atteindre.
+   *
+   * `createTrackingLink` reçoit `messageId: undefined` au moment de la réécriture
+   * (« pas encore disponible ») : Prisma n'écrit alors pas la colonne, elle est
+   * ABSENTE. Un filtre `messageId: null` n'appariait donc pas le lien que ce
+   * chemin vient tout juste de créer, et l'attribution du lien à son message
+   * n'était jamais écrite. « `tlUpdateMany` a été appelé » ne peut pas voir ça.
+   */
+  it('rattache un lien dont la colonne messageId est ABSENTE, sans voler celui d\'un autre message', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
+    await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
+
+    const { where } = tlUpdateMany.mock.calls[0][0] as any;
+    const fresh = { token: 'tok-abc', conversationId: baseData.conversationId };
+
+    expect(matchesMongoWhere(fresh, where)).toBe(true);
+    expect(matchesMongoWhere({ ...fresh, messageId: null }, where)).toBe(true);
+    expect(matchesMongoWhere({ ...fresh, messageId: 'other-message' }, where)).toBe(false);
+    expect(matchesMongoWhere({ ...fresh, conversationId: 'another-conversation' }, where)).toBe(false);
   });
 
   it('skips tracking link update when content unchanged (no special links)', async () => {
