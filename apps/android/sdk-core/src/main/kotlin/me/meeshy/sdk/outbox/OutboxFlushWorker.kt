@@ -24,10 +24,10 @@ import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.media.TusUploadRepository
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
-import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
 import me.meeshy.sdk.net.api.BlockApi
