@@ -2,6 +2,79 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **the branded splash screen landed** (slice `splash-screen`, feature-parity §A,
+> the routine's own suggested next candidate — foundational, scoped, reusable component).
+> **RE-PROVEN before starting** (the finding dated from a prior iteration): re-confirmed the gap
+> directly — `grep`-ing `apps/android/app/build.gradle.kts`/`gradle/libs.versions.toml` for
+> `splashscreen` came back empty, `themes.xml` held one bare `Theme.Meeshy` style and nothing
+> else, `AndroidManifest.xml`'s `<activity>` referenced only that theme — the gap was still real,
+> unchanged since the last angle-mort sweep. **Shipped (production, all `apps/android`):** (1)
+> `androidx.core:core-splashscreen` wired via a new `Theme.Meeshy.Starting` (`parent=
+> Theme.SplashScreen`, `windowSplashScreenBackground=@color/splash_background` [Indigo950],
+> `windowSplashScreenAnimatedIcon=@drawable/ic_launcher_foreground` [reused from the launcher
+> icon slice, zero new asset], `postSplashScreenTheme=@style/Theme.Meeshy`) on `<activity
+> android:name=".MainActivity">`, `installSplashScreen()` called before `super.onCreate` in
+> `MainActivity.kt` — bridges the truly-first frame down to minSdk 26 (previously a blank
+> white/black flash pre-API 31, since Android 12's OS-generated splash didn't exist below it).
+> (2) A new, ANIMATED Compose splash — `MeeshySplashScreen` (`:sdk-ui/component/chrome`) —
+> takes over once Compose paints: reuses `MeeshyBackground` (gradient + ambient orbs, the exact
+> root treatment already shared by every top-level screen — zero new gradient/orb code, pure
+> reuse) wrapping a new animated "stacked-dashes" logo (`SplashLogo` Canvas + pure
+> `SplashLogoGeometry`: bar bounding boxes are the SAME source numbers as
+> `ic_launcher_foreground.xml`'s 108×108 viewport, normalized, so the two brand surfaces never
+> drift) + a gradient "Meeshy" wordmark (`TextStyle(brush = ...)`, `MeeshyPalette.BrandGradient`)
+> + a tagline (`splash_tagline`, en/fr/es/pt — iOS's exact copy, "Break the language barrier"/
+> "Brisez la barrière de la langue"/etc., pulled straight from
+> `apps/ios/Meeshy/Localizable.xcstrings`). `MeeshyApp.kt` shows it via a plain `Box` overlay on
+> top of the already-composing `Scaffold`/`NavHost` (mirrors iOS's ZStack-overlay shape, not a
+> gate on `startDestination`) for a 1200ms floor (`SPLASH_MIN_DURATION_MS`, parity iOS's
+> `minSplashDuration`). **Deliberate, documented scope cuts vs. iOS** (per the routine prompt's
+> own framing — "correcte mais pas nécessairement exhaustive"): no pulsing ambient-orb animation
+> (the orbs `MeeshyBackground` already ships are static, reused as-is — animating them was
+> explicitly out of scope for this increment); no footer brand signature (no Android equivalent
+> exists yet); the floor is a PURE minimum-display-duration timer, not a combined readiness gate
+> the way iOS's `.task` block waits on cache hydration + socket handshake — Android's
+> `AuthViewModel.isAuthenticated` already resolves synchronously at construction, so there is no
+> async "boot work" period to additionally gate on yet; revisit once one exists. **+19 tests:**
+> `SplashLogoGeometryTest` (11 — bar count/decreasing-width/left-alignment/viewport-bounds/no-
+> overlap/equal-height invariants, plus the stagger-progress math: zero at global-progress 0,
+> one at 1 for every bar regardless of stagger, monotonic non-decreasing, clamped outside
+> [0,1]), `SplashThemeGuardTest` (5 — manifest theme attribute, style block contents, referenced
+> resources exist on disk, version-catalog + `build.gradle.kts` wiring, `installSplashScreen()`
+> precedes `super.onCreate()` — same source-guard shape as `LauncherIconManifestGuardTest`, since
+> this slice is fundamentally an asset+wiring feature with little branching logic to unit-test
+> otherwise). **Mutation (RED proof), both suites:** (a) replacing the stagger formula with a
+> flat pass-through of the clamped global progress failed **exactly** the one test asserting a
+> later bar stays at 0 while an earlier bar has already started (10 other tests stayed green,
+> correctly insensitive to the stagger specifically); (b) reverting the `<activity>` theme
+> attribute back to `Theme.Meeshy` failed **exactly** the manifest-attribute test, the other 4
+> guard tests staying green — both restored and re-run clean after. **Gate:** `./gradlew clean
+> assembleDebug testDebugUnitTest` → **`BUILD SUCCESSFUL`** (991 tasks, full clean rebuild, not
+> just incremental). Reviewer **PASS** (diff `apps/android` only — 2 new `:sdk-ui` files + 1 new
+> test file there, 1 new `:app` test file, `AndroidManifest.xml`/`themes.xml`/new `colors.xml`/4×
+> `strings.xml`/`MainActivity.kt`/`MeeshyApp.kt`/`libs.versions.toml`/`app/build.gradle.kts`
+> edits; SDK purity — the visual splash + logo geometry are stateless `:sdk-ui` building blocks
+> taking opaque params (`tagline: String`), the "when to show it, for how long" decision stays
+> in `:app`'s `MeeshyApp.kt`; SSOT — reused `MeeshyBackground`/`MeeshyGradients`/`MeeshyPalette`
+> wholesale, zero re-implementation; no coverage floor lowered; no tautological tests). **Verified
+> visually on-device**, not just compiled — installed on `meeshy_pixel8` (API 35): captured the
+> OS-level system splash (flat Indigo950 background + white glyph, pixel-sampled to confirm
+> uniform corners = the flat `splash_background` color, not a gradient) and, further into the
+> same cold start, the branded Compose splash in its real window (gradient background + ambient
+> glow + fully-revealed stacked-dashes logo + gradient "Meeshy" text + tagline — pixel-sampled
+> corners matching `MeeshyGradients.mainBackground(dark=true)`'s distinct top-left/bottom-right
+> stops, proving it's genuinely the NEW composable and not a mis-read of the system splash).
+> **Methodological note for future visual-verification runs on this shared dev box:** an early
+> single-shot capture landed at literally `progress≈0` of the logo's own 600ms entrance animation
+> — cold-start jitter from heavy concurrent Gradle activity on the same machine, not a product
+> bug — isolated by temporarily filling the logo's `Canvas` with a solid debug color (confirmed
+> both correct sizing AND correct draw calls), then reconfirmed clean with zero debug code via a
+> wider, multi-timestamp capture window; the debug fill was fully reverted before this commit.
+> **Next slice candidates (not attempted this run):** the §F Feed post composer ("texte seul"
+> sub-slice per the routine prompt's own decomposition — text-only first, proves the wiring,
+> before attachments/Reel classification/audio fast-follows); the §C inverted-list rewrite
+> decomposition (now several runs deferred without an attempt); the newly-flagged §M
+> `NotificationChannel` taxonomy gap (2 channels shipped vs. ~80 backend types).
 > On 2026-08-10 **the Flux/Conversations floating-button toggle got fixed** (slice
 > `feed-conversation-toggle`, feature-parity §Q, user-directed mid-session — the user reported
 > "le toggle feed et conversation ne semble pas encore fonctionner" while reviewing the just-

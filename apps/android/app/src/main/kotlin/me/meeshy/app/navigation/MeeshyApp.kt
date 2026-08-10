@@ -103,6 +103,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
+import me.meeshy.ui.component.chrome.MeeshySplashScreen
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.net.SessionExpiryNotifier
@@ -256,6 +257,17 @@ private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, R
  */
 private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
 
+/**
+ * Floor duration the branded [MeeshySplashScreen] stays up on cold start — parity with iOS
+ * `MeeshyApp.swift`'s `minSplashDuration` (1.2s), which exists so the animation never flashes
+ * away before it can register on a hot-cache launch. Android's `AuthViewModel.isAuthenticated`
+ * is resolved synchronously at construction (no async "session check" phase to additionally
+ * gate on the way iOS's `.task` block does — cache hydration + socket handshake), so this is a
+ * pure minimum-display-duration floor, not a readiness gate; deferred as a documented follow-up
+ * once Android grows an equivalent async boot sequence worth waiting on.
+ */
+private const val SPLASH_MIN_DURATION_MS = 1200L
+
 @Composable
 fun MeeshyApp(
     floatingButtonPositions: FloatingButtonPositionStore,
@@ -283,6 +295,18 @@ fun MeeshyApp(
     val scope = rememberCoroutineScope()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val onCallScreen = currentRoute == CallRoute.PATTERN
+
+    // Branded splash: shown ALWAYS on cold start (parity iOS `MeeshyApp.swift`'s
+    // `showSplash`), for a minimum floor duration so it never flashes away — see
+    // SPLASH_MIN_DURATION_MS. `rememberSaveable` would survive process death into a
+    // fresh cold start showing no splash at all, which defeats the purpose, so this
+    // stays a plain `remember`: a configuration change (rotation) keeps it, a real
+    // process restart correctly shows it again.
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(SPLASH_MIN_DURATION_MS)
+        showSplash = false
+    }
 
     // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
     // runs while it is composed, so an ended call left in the pill would strand the
@@ -329,6 +353,11 @@ fun MeeshyApp(
         }
     }
 
+    // Outer Box: the branded splash (below) draws OVER the whole Scaffold — app chrome,
+    // system-bar padding included — the same "boot overlay on top of the still-mounted
+    // real UI" shape as iOS's ZStack (`MeeshyApp.swift`'s `showSplash` branch), rather
+    // than gating the NavHost's own composition on it.
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         // Pas de floatingActionButton ici : ce slot positionne LUI-MEME son contenu,
@@ -788,6 +817,14 @@ fun MeeshyApp(
             )
         }
       }
+    }
+
+        if (showSplash) {
+            MeeshySplashScreen(
+                tagline = stringResource(R.string.splash_tagline),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

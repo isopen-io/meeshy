@@ -742,3 +742,38 @@ Append-only log of gotchas and decisions that save time next run.
   verification that only checked the first tap would have "passed" on the unfixed build too;
   screenshotting the full round-trip (tap, tap again, compare both against the pre-fix
   single-direction behaviour) is what makes the visual proof mean something here.
+
+## Slice `splash-screen` (2026-08-10)
+- **A single cold-start screenshot at a fixed `sleep N` delay is not reliable proof on a
+  shared, resource-contended dev box.** Cold-start latency (Hilt DI graph, ViewModel
+  construction, cold JIT across many feature modules) varied by SEVERAL SECONDS run-to-run
+  while heavy `./gradlew` test/build activity ran concurrently on the same machine — one
+  capture at `sleep 2.3` still showed the OS-level system splash, another at `sleep 5` already
+  showed the fully-hydrated conversations list, and one at `sleep 6` happened to land at
+  literally `progress≈0` of a 600ms Compose entrance animation (correctly rendering nothing
+  yet — not a bug). A `screenrecord` attempt was *worse*, not better: recording itself adds
+  enough overhead on an emulator to visibly stall the very cold start it's trying to observe
+  (all 29 extracted frames across 5.9s were pixel-identical). **What actually worked:**
+  temporarily widening the thing-being-verified's own duration constant by 10× (a 1200ms splash
+  floor bumped to 9000ms, purely for this manual pass, reverted before commit) turns a
+  needle-in-a-haystack timing problem into a wide, trivially-capturable window — the same "make
+  it observable, verify, put it back" trick as e.g. slowing down an animation to eyeball its
+  curve. Don't fight jitter with more samples; widen the window instead.
+- **When a screenshot shows an expected element completely missing, add a solid debug-color
+  `.background()` to the exact modifier chain before assuming a logic bug.** The suspect
+  Canvas-drawn logo appeared to render NOTHING in one capture (zero bright pixels in its whole
+  region, confirmed via pixel-scan, not just eyeballing). Filling the same `Modifier` with
+  `Color.Red` before investigating anything else immediately answered the only question that
+  mattered: was the LayoutNode sized correctly (yes — the red box appeared at the right size)
+  and did the `drawRoundRect` calls fire (yes — white bars appeared on top of the red once given
+  a wider capture window)? Both were fine; the "missing logo" was 100% the cold-start-jitter
+  timing issue above, caught in under two rebuild/install cycles instead of chasing the
+  Canvas/DrawScope/Animatable wiring for a phantom bug.
+- **A component-level asset-drift guard doesn't need runtime coupling across modules that
+  can't depend on each other.** `SplashLogoGeometry` (`:sdk-ui`) reuses the exact same bar
+  bounding-box numbers as `ic_launcher_foreground.xml` (`:app`'s resources) so the launcher icon
+  glyph and the splash logo glyph can never visually drift apart — but `:sdk-ui` cannot depend
+  on `:app`'s resources (dependency direction is the other way). The fix is citation, not
+  coupling: a code comment pointing at the source-of-truth file plus copying the literal
+  numbers, the same non-runtime "kept in lockstep by convention" relationship the launcher
+  icon's own vector XML already has with its legacy PNG generator script.

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Meeshy</string>
+    <string name="splash_tagline">Quebre a barreira do idioma</string>
 
     <!-- Navigation tabs -->
     <string name="tab_messages">Mensagens</string>
