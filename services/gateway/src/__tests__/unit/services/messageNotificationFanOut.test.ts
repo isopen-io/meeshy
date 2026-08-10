@@ -1052,3 +1052,60 @@ describe('notifyMessageRecipients — le rappel qui court après l’éventail',
     expect(onError).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('notifyMessageRecipients — l’échéance du message suit ses notifications', () => {
+  const EXPIRES_AT = new Date('2026-08-10T12:00:00Z');
+
+  it('un message éphémère transmet son échéance à la réponse ET aux mentions', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [SENDER_USER_ID, PEER_USER_ID, OTHER_USER_ID],
+      replyAuthorParticipantId: 'part-auteur-cite',
+      replyAuthorUserId: PEER_USER_ID,
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: 'msg-cite', expiresAt: EXPIRES_AT }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ça disparaît bientôt @autre',
+      validatedMentionUserIds: [OTHER_USER_ID],
+    });
+
+    expect(notificationService.createReplyNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ messageExpiresAt: EXPIRES_AT })
+    );
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      [OTHER_USER_ID],
+      expect.objectContaining({ messageExpiresAt: EXPIRES_AT }),
+      expect.anything()
+    );
+  });
+
+  it('témoin — un message ordinaire transmet null, jamais une échéance inventée', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [SENDER_USER_ID, OTHER_USER_ID],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou @autre',
+      validatedMentionUserIds: [OTHER_USER_ID],
+    });
+
+    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
+      [OTHER_USER_ID],
+      expect.objectContaining({ messageExpiresAt: null }),
+      expect.anything()
+    );
+  });
+});

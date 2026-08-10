@@ -137,6 +137,132 @@ Couverture globale lignes **95,76 %** (95,65 % au cycle 26 relevé) — en hauss
 
 ---
 
+# Cycle 49b — Le champ existait, le prédicat existait, personne ne les avait présentés
+
+> **Session parallèle.** Deux sessions ont livré un cycle 49 en même temps, sur des sujets sans
+> recouvrement : le 49 ci-dessous ferme la quatrième porte d'entrée d'une conversation (`unban`),
+> celui-ci la péremption des notifications. Aucun fichier commun hors ce relevé. Le 49 note en
+> backlog que « la péremption (`expiresAt`) sans équivalent au rappel » reste ouverte — c'est exact
+> à l'instant où il a été écrit, et c'est précisément ce que ce lot ferme.
+
+Le cycle 48 a laissé la péremption en tête de son backlog, correctement décrite :
+
+> `createMessageNotification` refuse un message déjà expiré, mais un message qui expire APRÈS la
+> création de sa notification laisse la ligne — et son extrait — en base. Contrairement au rappel, la
+> péremption n'est pas un événement : personne ne passe à l'instant T. Il faudrait un balayage, ou une
+> lecture qui filtre.
+
+Une seule chose y était fausse, et elle change le diagnostic : **l'extrait ne reste pas**, parce qu'il
+n'a jamais été écrit. `protectedPreview` remplace le contenu d'un message éphémère par un libellé
+générique AVANT la création. Ce qui survit n'est donc pas une fuite de contenu — c'est une ligne qui
+ne montre rien, ne mène nulle part (`action: view_message` ouvre un message absent), et porte un badge
+non lu que plus aucune lecture ne peut décrémenter : on ne lit pas ce qui n'est plus là.
+
+## Ce que l'enquête a trouvé
+
+`Notification.expiresAt` existe depuis l'origine du modèle. `formatNotification` le publie,
+`notificationStateSchema` le laisse traverser Fastify, `packages/shared/types/notification.ts` en
+dérive `isNotificationExpired`, et `isNotificationUnread` s'en sert pour définir « non lue ET valide ».
+Toute la moitié LECTURE de la règle était déjà écrite, jusqu'aux clients.
+
+Et aucun producteur n'écrivait la colonne. `createNotification` accepte un `expiresAt` que personne ne
+lui passait ; les sept lectures serveur l'ignoraient. Deux moitiés d'une même règle, mortes chacune de
+son côté, séparées par une ligne de plomberie. Il n'y avait pas de mécanisme à inventer — seulement à
+brancher.
+
+## Les trois choix
+
+**L'échéance vient du message, jamais de l'appelant.** Le chemin `new_message` la prend de sa
+relecture VIVANTE — celle que la garde d'admission fait déjà, donc zéro lecture ajoutée. La réponse et
+les mentions la reçoivent de l'éventail, qui la tient déjà dans `FanOutMessage`, plutôt que de la
+relire une fois par destinataire : le coût que les cycles 44 et 47 ont refusé deux fois. Les deux
+sources ne peuvent pas diverger — `Message.expiresAt` est écrit à l'insertion et jamais modifié
+ensuite (vérifié : aucun `message.update` ne le touche).
+
+**Un filtre à la lecture, pas un balayage.** La péremption n'est pas un événement ; un balayage
+périodique laisserait toujours une fenêtre entre l'expiration et son passage. Le filtre est exact à la
+milliseconde et ne coûte aucune écriture. Contrepartie assumée, et c'est l'inverse du cycle 48 : là où
+le rappel devait SUPPRIMER (la ligne détenait une copie du contenu), ici masquer suffit — la ligne ne
+détient rien.
+
+**Sept lectures, un seul prédicat.** `emitCountsUpdate` porte déjà en commentaire la trace d'une
+divergence passée entre le prédicat du badge et celui de la liste (`readAt: null` contre
+`isRead: false`). Sept copies de la nouvelle condition l'auraient rejouée : liste REST, son total,
+compte non-lus REST, les deux compteurs socket, le badge embarqué dans le push, le digest e-mail. Une
+unité, `visibleNotificationsWhere`.
+
+## Plan
+
+- [x] T1 — unité partagée `visibleNotificationsWhere`, appelée par les sept lectures
+- [x] T2 — RED : le compte non-lus laisse tomber la ligne dont le message a expiré
+- [x] T3 — témoins : une ligne sans échéance, et une échéance à VENIR, restent comptées
+- [x] T4 — RED : la liste ET son total excluent la ligne expirée (pagination fantôme sinon)
+- [x] T5 — RED : les compteurs poussés par socket disent la même chose que la liste
+- [x] T6 — RED : la route `/notifications` masque la ligne expirée, liste et total
+- [x] T7 — RED : le digest ne relance personne pour une ligne expirée
+- [x] T8 — RED : `new_message`, réponse et mention héritent de l'échéance du message
+- [x] T9 — index `[userId, isRead, expiresAt]` + migration 010 (idempotente, crée avant de supprimer)
+- [x] T10 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T11 — changeset + ce relevé
+
+## Revue
+
+Sonde en trois temps, parce que le lot a deux moitiés indépendantes et qu'une seule sonde n'aurait
+prouvé qu'une moitié :
+
+1. filtre de lecture neutralisé → **5 rouges**, et ce sont les cinq lectures (compte non-lus, liste +
+   total, compteurs socket, route REST, digest) ;
+2. estampille producteur neutralisée → **2 rouges** (message éphémère, mention) ;
+3. plomberie de l'éventail neutralisée → **2 rouges** (réponse + mention, et le témoin `null`).
+
+Les trois témoins de lecture — ligne sans échéance, échéance à venir, message ordinaire — sont verts
+avant comme après. Celui de l'échéance à venir n'est pas décoratif : il est le seul à distinguer un
+`gt` d'un `lt`, une inversion qui masquerait exactement les notifications qu'il faut montrer.
+
+Le double Prisma des tests n'enregistre pas les `where` : il les **évalue** contre des lignes
+(`__tests__/helpers/notification-where.ts`, partagé par les trois fichiers). Un test qui compare la
+clause reçue à celle qu'il attend ne vérifie que sa propre copie — il passe aussi bien sur une clause
+juste que sur une clause fausse écrite deux fois. Le double jette sur toute clé qu'il ne sait pas
+interpréter, pour qu'un filtre d'une autre forme échoue au lieu d'être ignoré en silence.
+
+L'index n'est pas un ajout mais un REMPLACEMENT : `[userId, isRead]` est un préfixe de
+`[userId, isRead, expiresAt]`, donc rien ne perd son plan et le coût d'écriture ne monte pas d'un
+index. Sans lui, le `$or` serait un filtre résiduel — un fetch de document par candidat sur un
+compteur qui tourne une fois par destinataire de CHAQUE message.
+
+## Reste ouvert après ce cycle
+
+- **Les clients ne s'auto-périment pas.** Une liste laissée ouverte à l'instant de l'expiration garde
+  la ligne jusqu'au prochain rafraîchissement : le serveur ne la sert plus, mais rien ne l'annonce.
+  `isNotificationExpired` existe côté partagé et n'est appelé nulle part ; le web l'importe sans
+  l'utiliser. Fermable côté client sans rien changer au serveur.
+- **Le parseur socket du web lit à la RACINE ce que le serveur envoie sous `state`.**
+  `notification-socketio.singleton.ts` lit `data.expiresAt` / `data.isRead` / `data.createdAt` (avec
+  un commentaire affirmant que le backend les met à la racine) alors que `formatNotification` les met
+  dans `state`. Conséquence aujourd'hui bénigne — `isRead` retombe sur `false` et `createdAt` sur
+  `new Date()`, ce qu'une notification neuve est de toute façon — mais `expiresAt` n'atteint jamais le
+  client par ce chemin. Défaut réel, non instruit ici.
+- **Une réaction sur un message éphémère n'hérite d'aucune échéance.**
+  `createReactionNotification` lit déjà le message (`select: { content: true }`) : y ajouter
+  `expiresAt` serait gratuit. Écarté de ce cycle pour ne pas mélanger deux familles de producteurs ;
+  le geste est identique.
+- **L'édition d'un message éphémère produit une mention sans échéance.**
+  `messageMentions.notifyNewlyMentioned` est le second appelant de
+  `createMentionNotificationsBatch` et son `MentionTargetMessage` ne porte pas `expiresAt` — il
+  faudrait le remonter jusqu'à ses propres appelants. Le nouveau paramètre est optionnel : ce chemin
+  garde exactement son comportement d'avant.
+- **`getUserNotifications` n'a aucun appelant en production.** La route `/notifications` refait la
+  requête à la main plutôt que d'appeler le service ; seuls des tests atteignent la méthode. Les deux
+  ont été traitées ici (elles répondent à la même question), mais la duplication elle-même reste, et
+  c'est elle qui rendait la divergence possible.
+- **Les points hérités restent ouverts tels quels** : le push DÉJÀ remis reste sur l'appareil au
+  rappel (aucun `apns-collapse-id` ni retrait à distance) ; les mentions du chemin de lien attendent
+  l'extraction qui écrit `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ;
+  les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine.
+
+---
+
 # Cycle 49 — Débannir n'est pas une porte d'entrée, mais ça en était devenu une
 
 Tête prise là où le cycle 40 avait laissé sa propre règle. Ce cycle-là avait unifié « que faire de

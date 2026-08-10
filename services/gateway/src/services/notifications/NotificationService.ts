@@ -34,6 +34,7 @@ import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type 
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
+import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
@@ -988,7 +989,7 @@ export class NotificationService {
           let unreadBadge: number | undefined;
           try {
             const count = await this.prisma.notification.count({
-              where: { userId: params.userId, isRead: false },
+              where: visibleNotificationsWhere({ userId: params.userId, unreadOnly: true }),
             });
             if (typeof count === 'number') unreadBadge = count;
           } catch {
@@ -1445,6 +1446,10 @@ export class NotificationService {
       content,
       collapseId: `conv-${params.conversationId}`,
       lang: recipientLang,
+      // La notification ne survit pas au message qu'elle annonce. La valeur
+      // vient de la relecture VIVANTE ci-dessus, pas de l'appelant : celui-ci
+      // ne pourrait que rapporter ce qu'il croyait savoir à l'envoi.
+      expiresAt: liveMessage.expiresAt ?? undefined,
 
       actor: {
         id: params.senderId,
@@ -1510,6 +1515,15 @@ export class NotificationService {
     messagePreview: string;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
+    /**
+     * Échéance du message qui mentionne, reportée sur la notification : elle ne
+     * doit pas survivre au message. Fournie par l'appelant plutôt que relue
+     * ici — l'éventail la tient déjà (`FanOutMessage.expiresAt`), et
+     * `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite,
+     * donc sa copie ne peut pas dériver. Absente : aucune échéance, le
+     * comportement de toujours.
+     */
+    messageExpiresAt?: Date | null;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1541,6 +1555,7 @@ export class NotificationService {
       priority: 'high',
       content: params.messagePreview,
       collapseId: `conv-${params.conversationId}`,
+      expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
         id: params.mentionerUserId,
@@ -1583,6 +1598,8 @@ export class NotificationService {
       messageContent: string;
       conversationId: string;
       messageId: string;
+      /** Échéance du message mentionnant — cf. `createMentionNotification`. */
+      messageExpiresAt?: Date | null;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -1608,6 +1625,7 @@ export class NotificationService {
           conversationId: commonData.conversationId,
           messagePreview: commonData.messageContent,
           senderProfile: commonData.senderProfile,
+          messageExpiresAt: commonData.messageExpiresAt,
         })
       )
     );
@@ -3021,6 +3039,12 @@ export class NotificationService {
     originalMessageId?: string;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
+    /**
+     * Échéance de la RÉPONSE — le message que cette notification désigne et
+     * ouvre —, jamais celle du message cité. Même contrat que
+     * `createMentionNotification.messageExpiresAt`.
+     */
+    messageExpiresAt?: Date | null;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3049,6 +3073,7 @@ export class NotificationService {
       priority: 'normal',
       content: params.messagePreview,
       collapseId: `conv-${params.conversationId}`,
+      expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
         id: params.replierUserId,
@@ -3941,12 +3966,12 @@ export class NotificationService {
   private async emitCountsUpdate(userId: string): Promise<void> {
     if (!this.io) return;
     try {
-      // `isRead: false` — même prédicat (indexé [userId, isRead]) que la liste
-      // et le badge REST. `readAt: null` divergeait sur les données legacy et
-      // tournait en collscan (aucun index sur readAt).
+      // `isRead: false` — même prédicat (indexé [userId, isRead, expiresAt])
+      // que la liste et le badge REST. `readAt: null` divergeait sur les
+      // données legacy et tournait en collscan (aucun index sur readAt).
       const [unread, total] = await Promise.all([
-        this.prisma.notification.count({ where: { userId, isRead: false } }),
-        this.prisma.notification.count({ where: { userId } }),
+        this.prisma.notification.count({ where: visibleNotificationsWhere({ userId, unreadOnly: true }) }),
+        this.prisma.notification.count({ where: visibleNotificationsWhere({ userId }) }),
       ]);
       this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_COUNTS, { unread, total });
     } catch (error) {
@@ -4153,10 +4178,10 @@ export class NotificationService {
     offset?: number;
     unreadOnly?: boolean;
   }): Promise<{ notifications: Notification[]; total: number }> {
-    const where: any = { userId: params.userId };
-    if (params.unreadOnly) {
-      where.isRead = false;
-    }
+    const where = visibleNotificationsWhere({
+      userId: params.userId,
+      unreadOnly: params.unreadOnly,
+    });
 
     const [notifications, total] = await Promise.all([
       this.prisma.notification.findMany({
@@ -4489,10 +4514,7 @@ export class NotificationService {
    */
   async getUnreadCount(userId: string): Promise<number> {
     return this.prisma.notification.count({
-      where: {
-        userId,
-        isRead: false,
-      },
+      where: visibleNotificationsWhere({ userId, unreadOnly: true }),
     });
   }
 
