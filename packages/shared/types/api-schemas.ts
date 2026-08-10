@@ -1284,6 +1284,25 @@ export const conversationMinimalSchema = {
     memberCount: { type: 'number', description: 'Member count' },
     lastMessage: { ...messageMinimalSchema, nullable: true, description: 'Last message' },
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
+    // Prisme Linguistique de la ligne de liste. Sans ces deux déclarations,
+    // fast-json-stringify les retirerait silencieusement du payload (même piège
+    // que `_count` et `location` plus haut) et l'aperçu resterait dans la langue
+    // de l'expéditeur alors que le serveur l'a bel et bien traduit.
+    // `lastMessageTranslations` est une carte `{ langue: aperçu tronqué }`
+    // restreinte aux langues du LECTEUR : clés dynamiques, d'où
+    // `additionalProperties`.
+    lastMessageOriginalLanguage: {
+      type: 'string',
+      nullable: true,
+      description: "Langue d'origine du dernier message (le contenu de `lastMessage.content`)"
+    },
+    lastMessageTranslations: {
+      type: 'object',
+      nullable: true,
+      additionalProperties: { type: 'string' },
+      description:
+        "Aperçus traduits du dernier message, restreints aux langues du prisme du lecteur — `{ langue: texte tronqué }`. null si aucune traduction utile (le client affiche alors l'original)."
+    },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread count' },
     members: {

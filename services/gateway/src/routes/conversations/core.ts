@@ -7,8 +7,13 @@ import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
-  generateDefaultConversationTitle
+  generateDefaultConversationTitle,
+  resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  buildLastMessagePreviewTranslations,
+  truncateMessagePreview
+} from './utils/last-message-preview';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -38,29 +43,10 @@ import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
-/**
- * Cap (in Unicode code points) applied to `lastMessage.content` in the GET
- * /conversations LIST response. The clients only ever render this field as a
- * 1–2 line row preview, yet it was shipped raw — a single long message
- * multiplied across every list refresh inflates payloads and forces the iOS
- * text engine to typeset the full string on every row measurement
- * (CoreText cost is O(total length), `lineLimit` does not bound it).
- * Truncation iterates code points, never splitting a surrogate pair.
- * The full content still flows through GET /conversations/:id/messages.
- */
-export const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 300;
-
-export function truncateMessagePreview(content: string | null | undefined): string | null | undefined {
-  if (content == null || content.length <= LAST_MESSAGE_PREVIEW_MAX_LENGTH) return content;
-  let result = '';
-  let count = 0;
-  for (const char of content) {
-    if (count >= LAST_MESSAGE_PREVIEW_MAX_LENGTH) break;
-    result += char;
-    count += 1;
-  }
-  return result;
-}
+export {
+  LAST_MESSAGE_PREVIEW_MAX_LENGTH,
+  truncateMessagePreview,
+} from './utils/last-message-preview';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -441,6 +427,14 @@ export function registerCoreRoutes(
               isViewOnce: true,
               effectFlags: true,
               expiresAt: true,
+              // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
+              // MÊME document Mongo que le message (`translations` est une
+              // colonne JSON, pas une relation) : les sélectionner ne coûte ni
+              // jointure ni requête. Sans eux, la ligne de liste restait dans la
+              // langue de l'expéditeur pour tout le monde — cf.
+              // `utils/last-message-preview.ts`.
+              translations: true,
+              originalLanguage: true,
               // Lot 3 : aperçu de conversation — sans `metadata`, un dernier
               // message géolocalisé n'affiche jamais sa position dans la
               // liste des conversations.
@@ -576,6 +570,26 @@ export function registerCoreRoutes(
         hasMore = conversations.length === limit;
       }
 
+      // Prisme Linguistique du lecteur : systemLanguage → regionalLanguage →
+      // customDestinationLanguage → deviceLocale. Résolu UNE fois pour la page
+      // entière, depuis l'utilisateur déjà chargé (et mis en cache) par le
+      // middleware d'auth — aucune requête supplémentaire sur ce hot path.
+      // `resolveUserLanguagesOrdered` est la seule autorité du dépôt sur cet
+      // ordre : ne jamais le réimplémenter ici.
+      const viewerPrefs = authRequest.authContext.registeredUser as
+        | {
+            systemLanguage?: string | null;
+            regionalLanguage?: string | null;
+            customDestinationLanguage?: string | null;
+            deviceLocale?: string | null;
+          }
+        | undefined;
+      const viewerLanguages = viewerPrefs
+        ? resolveUserLanguagesOrdered(viewerPrefs, {
+            deviceLocale: viewerPrefs.deviceLocale ?? undefined
+          })
+        : [];
+
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
@@ -627,13 +641,36 @@ export function registerCoreRoutes(
                   userId
                 ));
 
+        const latestMessage = conversation.messages[0] as
+          | { translations?: unknown; originalLanguage?: string | null }
+          | undefined;
+
         return {
           ...conversation,
           participants: membersWithUser,
           title: displayTitle,
+          // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
+          // au niveau CONVERSATION et non dans `lastMessage` parce que c'est là
+          // que le client les attend depuis toujours
+          // (`MeeshyConversation.lastMessageTranslations`), et parce que la
+          // carte compacte `{ langue: aperçu }` n'a pas la forme de
+          // `Message.translations` (un tableau de `MessageTranslation`) : deux
+          // formes sous un même nom auraient dérivé.
+          lastMessageOriginalLanguage: latestMessage?.originalLanguage ?? null,
+          lastMessageTranslations: buildLastMessagePreviewTranslations({
+            translations: latestMessage?.translations,
+            originalLanguage: latestMessage?.originalLanguage,
+            viewerLanguages: viewerLanguages
+          }),
           lastMessage: (() => {
             const msg = conversation.messages[0];
             if (!msg) return null;
+            // `translations` (JSON brut, potentiellement chiffré, une entrée par
+            // langue de la conversation) et `originalLanguage` sont consommés
+            // ci-dessus pour construire la carte d'aperçu ; les laisser fuiter
+            // dans le spread renverrait le blob complet à chaque ligne.
+            const { translations: _rawTranslations, originalLanguage: _originalLanguage, ...msgRest } =
+              msg as typeof msg & { translations?: unknown; originalLanguage?: string | null };
             const sender = msg.sender as any;
             const senderLiveOnline = sender
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
@@ -646,7 +683,7 @@ export function registerCoreRoutes(
             // seule présence de `location`), pas au serveur.
             const place = sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
             return {
-              ...msg,
+              ...msgRest,
               content: truncateMessagePreview(msg.content),
               ...(place ? { location: place } : {}),
               sender: sender ? {
