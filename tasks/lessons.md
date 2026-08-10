@@ -1,5 +1,87 @@
 # Lessons
 
+## Leçon 105 — Une convention tenue par les APPELANTS n'est pas testée par ce qui la consomme (2026-08-10, routine messaging, cycle 57)
+
+Le modèle `Message` fait tenir son soft-delete par ses écrivains : ~119 lectures filtrent
+`deletedAt: null`, et ce sont les sept `message.create` qui rendent ce filtre vrai en écrivant la
+colonne. Deux l'avaient perdu depuis longtemps. Aucune suite ne l'a vu.
+
+La sonde qui l'a établi vaut plus que le constat. Après avoir corrigé les deux sites, j'ai vidé la
+constante partagée (`{}`) et relancé 45 suites voisines : **seuls mes deux témoins neufs sont
+tombés.** Les cinq créateurs qui portaient le littéral correctement depuis toujours n'avaient AUCUNE
+couverture dessus. La couverture de leurs chemins était pourtant excellente — contenu, expéditeur,
+métadonnées, idempotence P2002, races — parce que les tests sont écrits contre ce que la méthode
+CALCULE, jamais contre ce qu'elle doit se contenter de recopier.
+
+**Règle** : quand une invariante est tenue par N appelants plutôt que par le type ou le schéma,
+elle n'a de couverture nulle part par défaut — les tests de chaque appelant portent sur ce qui lui
+est propre. Le geste qui le mesure : vider l'invariante à la source et regarder ce qui tombe. Si la
+réponse est « seulement les témoins que je viens d'écrire », la conclusion n'est pas « ma couverture
+est suffisante », c'est « voilà comment la divergence est née, et elle recommencera ».
+
+**Corollaire sur la forme du correctif.** La sonde a changé le correctif, pas seulement le rapport.
+Ajouter le littéral aux deux sites fautifs aurait rendu la suite verte en laissant sept copies sans
+propriétaire. Extraire UNE constante nommée fait deux choses qu'aucune des sept copies ne faisait :
+elle donne un endroit unique où écrire POURQUOI, et elle rend l'invariante testable par un témoin
+unique sur la source — sept témoins de créateur auraient été sept fois le même test.
+
+## Leçon 104 — Deux modèles, un même piège, deux moitiés opposées : ne jamais transporter la réparation de l'un chez l'autre (2026-08-10, routine messaging, cycle 57)
+
+`Post` et `Message` portent tous deux un `deletedAt DateTime?` et affrontent le même piège MongoDB
+(une colonne optionnelle jamais écrite est ABSENTE, pas `null`). Ils l'ont résolu par les deux
+moitiés OPPOSÉES : `Post` côté lecture (`NOT_DELETED` = `{ isSet: false }`, les posts vivants n'ont
+pas la colonne), `Message` côté écriture (les lectures filtrent `deletedAt: null`, les créateurs
+écrivent la colonne).
+
+Les deux marchent. Et **la réparation de l'un est un incident de production chez l'autre** :
+basculer les lectures de `Message` sur `NOT_DELETED` — le geste « d'alignement » qui saute aux yeux
+quand on vient de lire `softDelete.ts` — n'apparierait AUCUN message existant, tous portant un
+`deletedAt` présent-et-null. C'est très exactement le post-mortem de `postIncludes.ts`, à l'envers.
+
+Ce que ça ajoute aux leçons 89 et 90 : celles-ci disent qu'une symétrie de SCHÉMA ne prouve rien sur
+le comportement. Celle-ci dit qu'une symétrie de PIÈGE n'en prouve pas davantage. Deux modèles
+peuvent partager un piège à l'identique et avoir des données incompatibles avec la solution de
+l'autre. Le geste : avant de transporter un remède d'un modèle à l'autre, se demander non pas
+« le piège est-il le même ? » mais « à quoi ressemblent les LIGNES DÉJÀ ÉCRITES de ce modèle-ci ? ».
+La réponse tient dans un `create`, pas dans un schéma.
+
+## Leçon 103 — Un correctif juste sous les deux hypothèses n'attend pas la preuve de l'hypothèse (2026-08-10, routine messaging, cycle 57)
+
+La prémisse du cycle 57 — « sur MongoDB, `deletedAt: null` n'apparie pas une colonne absente » — est
+invérifiable dans cet environnement : aucun démon Docker, donc aucune vraie base. La leçon 90 dit
+qu'un double Prisma ne peut PAS trancher un prédicat, et elle a raison ; j'ai donc passé un moment à
+chercher comment prouver la prémisse avant de corriger.
+
+C'était la mauvaise question. La bonne : **le correctif dépend-il de l'hypothèse ?** Écrire
+`deletedAt: null` apparie `deletedAt: null` sous les deux sémantiques — si l'absence appariait aussi,
+le correctif est un no-op inoffensif ; sinon il répare un défaut réel. L'incertitude ne porte que sur
+l'AMPLEUR du défaut d'origine, jamais sur la validité de sa réparation.
+
+**Règle** : face à une prémisse non vérifiable ici, séparer deux questions que la prudence a
+tendance à fusionner — « qu'est-ce que je sais ? » et « qu'est-ce que mon correctif suppose ? ».
+Quand le correctif est correct sous toutes les branches de l'incertitude, la livrer et ÉCRIRE
+l'incertitude dans le relevé est supérieur à attendre une preuve qui ne viendra pas de cet
+environnement. Quand il n'est correct que sous une branche, la leçon 90 reprend la main : ne rien
+livrer sans base réelle.
+
+Le corollaire de rigueur : l'incertitude doit être écrite là où le prochain cycle la lira (relevé +
+ADR), et jamais présentée comme un fait établi. Ce cycle s'appuie sur trois indices convergents —
+le post-mortem de `postIncludes.ts`, sa reconfirmation par le cycle 54, et le fait que six créateurs
+sur sept écrivent une colonne qui n'aurait aucune raison d'être écrite si le filtre appariait
+l'absence — et cela reste trois indices, pas une mesure.
+
+## Leçon 102b — Un conteneur neuf a besoin de `bun install` AVANT le bootstrap de la leçon 102 (2026-08-10, routine messaging, cycle 57)
+
+La leçon 102 prescrit `prisma generate` + `bun run build` avant toute mesure. Dans un conteneur
+fraîchement cloné, les deux échouent : il n'y a aucun `node_modules`. Et `bun install` échoue lui
+aussi, sur le postinstall de `grpc-tools` (binaire précompilé récupéré hors du proxy → 403). La
+séquence qui marche est `bun install --ignore-scripts`, puis les deux commandes de la leçon 102.
+
+`grpc-tools` est une dépendance du gateway et son postinstall ne sert qu'à produire les stubs
+protobuf, dont aucune suite n'a besoin. Sauter les scripts n'a fait rougir aucune des 643 suites.
+
+---
+
 ## Leçon 102 — L'angle mort des « 20 suites rouges » n'est pas une fatalité de l'environnement : c'est une étape de bootstrap sautée (2026-08-10, routine messaging, cycle 56)
 
 La leçon 100, écrite le même jour, conclut que ~20 suites gateway ne compilent pas dans cet

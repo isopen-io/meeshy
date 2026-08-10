@@ -1,3 +1,113 @@
+# Cycle 57 — Les messages d'appel n'étaient pas des messages
+
+Le backlog du cycle 56 portait quatre têtes. Trois ont été instruites et écartées avant d'écrire une
+ligne, ce qui est le vrai résultat de la première moitié de ce cycle :
+
+- **« `post_comment` et `comment_like` n'exposent pas `context.commentId` »** — vrai au mot près, et
+  sans conséquence. Les TROIS consommateurs replient déjà sur `metadata.commentId` : le web
+  (`notification-helpers.ts:194`), le SDK iOS (`MessageSocketManager.swift:969` et
+  `SocketNotificationEvent+Persistence.swift:34`) et le payload push lui-même
+  (`NotificationService.ts`, clé `commentId` du bloc `data`). Corriger l'asymétrie ne changerait
+  rien pour personne. Retiré du backlog comme défaut — c'est une inélégance de forme.
+- **« `softDeleteRetentionMs` est du code mort »** — vrai, et déjà entièrement documenté dans
+  l'en-tête de sa propre classe, qui explique que les deux bornes valant sept jours, le champ ne
+  décrit plus le comportement. Le retirer est un nettoyage, pas un cycle.
+- **« le nom `ExpiredStoriesCleanupService` ment sur son périmètre »** — vrai, et l'en-tête dit
+  explicitement pourquoi il reste : il est cité par des plans et des analyses archivés que réécrire
+  fausserait. Décision déjà prise, pas une dette.
+
+L'item retenu ne venait pas du backlog. Il est sorti d'une question posée à `/sync` — « qu'est-ce
+qui garantit que le flux `changed` apparie quelque chose ? » — dont la réponse a mené un étage plus
+haut, chez les écrivains.
+
+## Le défaut
+
+Les deux modèles à soft-delete de ce dépôt ont résolu le MÊME piège MongoDB par deux moitiés
+opposées, et c'est cette asymétrie qui a fabriqué le défaut.
+
+`Post` l'a résolu côté LECTURE : un post vivant n'a pas de colonne `deletedAt`, et toutes ses
+requêtes apparient l'absence (`NOT_DELETED` = `{ isSet: false }`). `Message` l'a résolu côté
+ÉCRITURE : ses ~119 lectures filtrent `deletedAt: null`, et c'est chaque créateur qui rend ce filtre
+vrai en écrivant la colonne à `null`.
+
+La convention côté message marche, et n'était portée par aucun nom. Sept `message.create` répartis
+dans six fichiers répétaient le littéral. **Deux l'avaient perdu** — `createCallSummaryMessage` et
+`createLiveCallMessage`.
+
+## Ce que ça faisait à l'écran
+
+Un message d'appel n'était pas un message pour les lectures gardées par ce filtre :
+
+| Lecture | Ce qui manquait |
+|---|---|
+| `emitConversationPreviewUpdate` | « Appel audio en cours » ne devenait jamais l'aperçu ; la liste affichait le message d'avant |
+| `MessageReadStatusService` (3 sites) | un « Appel manqué » ne faisait monter aucun badge de non-lus |
+| delta `/sync` | les messages d'appel n'étaient jamais livrés à la synchro incrémentale |
+| `MessageHandler` (édition, suppression, réaction) | `{ id, deletedAt: null }` ne les trouvait pas — non réactionnables |
+| `ConversationMessageStatsService`, `ConversationStatsService` | non comptés |
+
+Le produit avait investi un cycle entier dans les messages d'appel riches
+(`tasks/2026-06-07-rich-call-system-messages.md`) ; ils entraient en base par une porte que le reste
+du gateway ne regarde pas.
+
+## Plan
+- [x] T1 — bootstrap d'environnement (leçon 102) : conteneur neuf, `bun install`, `prisma generate`, `bun run build`
+- [x] T2 — enquête : trois pistes du backlog instruites et écartées sur lecture des consommateurs
+- [x] T3 — RED : 2 témoins, un par créateur fautif, rouges pour la bonne raison
+- [x] T4 — GREEN : `LIVE_MESSAGE_MARK`, source unique étalée par les SEPT créateurs
+- [x] T5 — sondes de fidélité : trois défauts réintroduits un par un
+- [x] T6 — témoin de source, ajouté en RÉPONSE à ce que la 3e sonde a révélé
+- [x] T7 — gates : suite gateway complète, `tsc --noEmit`
+- [x] T8 — changeset + ADR + ce relevé + leçons
+
+## Vérification
+
+**Rouge observé avant correctif** : 2 témoins, un par créateur, sur `hasOwnProperty('deletedAt')`
+— l'assertion doit distinguer ABSENT de `null`, ce que `toMatchObject` ne fait pas de façon lisible.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| marqueur retiré du résumé d'appel | 1 (le sien ; le jumeau reste vert) |
+| marqueur retiré du message vivant | 1 (le sien ; symétrique) |
+| constante vidée en `{}` | 2, et RIEN d'autre sur 45 suites voisines |
+
+La troisième sonde est celle qui a appris quelque chose, et elle a changé le correctif : vider
+l'invariant ne fait tomber aucun témoin PRÉ-EXISTANT, sur aucun des sept chemins. Les cinq créateurs
+qui portaient le littéral depuis toujours n'avaient aucune couverture dessus — c'est exactement
+ainsi que les deux autres ont pu le perdre en silence. Le témoin de source (`liveMessage.test.ts`)
+a été écrit en réponse à ce constat, pas prévu au plan.
+
+**Gate** : suite gateway complète **643 suites / 16 273 tests, 0 échec, 0 suite rouge**
+(baseline leçon 102 : 640 / 16 261 sur un `main` antérieur). `tsc --noEmit` : 0 erreur.
+
+## Reste ouvert après ce cycle
+
+- **Les messages d'appel déjà écrits sans la colonne restent invisibles de ces lectures.** Réparables
+  par un `updateMany` sur `messageSource: 'system'` + `clientMessageId` préfixé `call-summary:`
+  dont la colonne est absente, sur le patron de `repair-mention-user-ids.ts`. Action humaine — cette
+  routine n'a aucun accès MongoDB.
+- **Rien n'empêche MÉCANIQUEMENT un huitième créateur d'omettre le marqueur.** Le prédicat défensif
+  `OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }]` — l'idiome que ce dépôt emploie déjà
+  pour `leftAt`, `expiresAt`, `parentId`, `mutedAt`, `invalidatedAt` — rendrait les lectures
+  indifférentes à la discipline des écrivains. C'est la solution de fond, sur 119 sites : un cycle
+  à elle seule, et la constante nommée de ce cycle en est le préalable (l'invariant est désormais
+  greppable). **Candidat sérieux pour le prochain cycle.**
+- **La sémantique `null` vs absent n'a pas été vérifiée contre une vraie base dans ce cycle.** Aucun
+  MongoDB n'est joignable depuis ce conteneur (pas de démon Docker). Elle repose sur le post-mortem
+  de `postIncludes.ts`, sur sa reconfirmation par le cycle 54, et sur le fait que six créateurs sur
+  sept écrivent la colonne — un geste sans objet si le filtre appariait l'absence. **Le correctif est
+  juste sous les DEUX sémantiques** : écrire `deletedAt: null` apparie `deletedAt: null` dans tous
+  les cas. Ce qui reste incertain est l'ampleur du défaut d'origine, pas la validité de sa réparation.
+- Hérités et non traités : `post_comment`/`comment_like` gardent leur asymétrie de forme (sans
+  conséquence, cf. ci-dessus) ; `softDeleteRetentionMs` reste du code mort documenté ; le push
+  APNs/FCM déjà délivré n'est pas rappelé ; iOS et Android ne lisent pas encore `deletedCommentIds`
+  (cycle 56) ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne
+  peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 56 — La suppression emportait le fil sans jamais le dire
 
 Le backlog du cycle 54 portait sa tête ailleurs : « les `TrackingLink` d'une story détruite ne sont

@@ -20,6 +20,7 @@ import {
   callSummaryClientMessageId
 } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
+import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import {
   buildCallHistoryItem,
   type CallHistoryItem,
@@ -2528,7 +2529,8 @@ export class CallService {
           messageType: 'system',
           messageSource: 'system',
           metadata: (callMetadata ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
-          clientMessageId: callSummaryClientMessageId(call.id)
+          clientMessageId: callSummaryClientMessageId(call.id),
+          ...LIVE_MESSAGE_MARK
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE
       });
@@ -2618,7 +2620,8 @@ export class CallService {
           messageType: 'system',
           messageSource: 'system',
           metadata: callMetadata as unknown as Prisma.InputJsonValue,
-          clientMessageId: callSummaryClientMessageId(call.id)
+          clientMessageId: callSummaryClientMessageId(call.id),
+          ...LIVE_MESSAGE_MARK
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE
       });

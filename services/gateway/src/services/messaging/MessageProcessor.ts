@@ -30,6 +30,7 @@ import {
   type PostReplyTo,
 } from './postReplySnapshot';
 import { parseSharedPlace } from '../location/sharedPlace';
+import { LIVE_MESSAGE_MARK } from './liveMessage';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -411,7 +412,7 @@ export class MessageProcessor {
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,
-      deletedAt: null,
+      ...LIVE_MESSAGE_MARK,
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
     } as const;
 
