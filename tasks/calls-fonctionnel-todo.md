@@ -6184,3 +6184,73 @@ relecture ligne à ligne directe de tous les fichiers cités.
   régression) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; delta de comptage
   `tsc --noEmit` (1190 vs. 1657 legacy) à investiguer si un futur cycle a besoin d'un chiffre de référence
   fiable.
+
+## Vague 96 — `addLocalMedia` attached every new peer's outbound video directly from the shared stream, aliasing sender.track objects across independent peer connections (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine — la Vague 95 (#2784) était déjà mergée
+sur `main`. `HEAD == origin/main` au démarrage. Toolchains iOS (`xcodebuild`/`swift`) et Android (gradle
+présent, aucun SDK) toujours hors d'atteinte. Audit dédié (agent Explore, lecture seule, périmètre
+web+gateway, mandaté avec la liste complète des Vagues 57-95 pour éviter toute redite) a remonté un
+candidat unique, vérifié ensuite ligne à ligne directement dans le code courant plutôt que pris tel quel.
+
+- **Root cause confirmée par lecture directe** : `addLocalMedia()` (`webrtc-service.ts`) — appelée une
+  fois par NOUVELLE connexion pair (`createOffer`/`handleOffer`, `use-webrtc-p2p.ts`) — attachait
+  directement `stream.getVideoTracks()[0]` au transceiver vidéo du pair, sans jamais cloner. `stream` est
+  la MÊME `MediaStream` partagée par TOUTES les instances `WebRTCService` d'un appel de groupe (documenté
+  explicitement dans `removeParticipant()` : « it's the same MediaStream reference every other still-
+  connected participant's service is sending »). Dès qu'un appel de groupe a déjà de la vidéo active sur
+  au moins un pair, `getVideoTracks()[0]` sur ce flux partagé N'EST PAS un master neutre : c'est déjà
+  l'objet `sender.track` **vivant** d'un pair déjà connecté — `enableVideo()`/`switchCamera()`
+  (`use-webrtc-p2p.ts`, Vague 95) donnent cet objet littéral au pair « index 0 » de leur instantané courant.
+  Un NOUVEAU pair rejoignant pendant cette fenêtre (`addLocalMedia` appelé pour lui) hérite donc du même
+  objet `MediaStreamTrack`, sans le savoir — deux `RTCRtpSender` indépendants pointant sur UN SEUL objet.
+  N'importe quel événement ordinaire qui arrête ensuite ce track côté pair « index 0 » —
+  `switchVideoSendTrack()` (flip caméra) ou `disableVideoSend()` (couper la caméra), toutes deux lisent
+  `sender.track` en vérité-terrain et l'arrêtent sans condition — gèle silencieusement la vidéo sortante du
+  nouveau pair aussi, sans aucun chemin de réparation avant le PROCHAIN `switchCamera()`/`enableVideo()` où
+  ce pair est enfin inclus dans l'instantané (s'il l'est un jour). Second défaut, indépendant de toute
+  fenêtre de course, découvert en traçant le premier : `addLocalMedia` ne renseignait JAMAIS
+  `exclusiveVideoTrack` (champ dont le commentaire affirmait déjà, à tort, que le track initial de
+  `addLocalMedia` « CAN be the same literal object across every peer's sender » — un compromis assumé mais
+  jamais bouclé). Résultat : le track vidéo qu'UN SEUL pair possède réellement (cas courant : pas de course,
+  jamais partagé avec personne) n'était jamais libéré par `close({ stopLocalTracks: false })` quand ce pair
+  quittait seul un appel de groupe encore actif — `else if (this.exclusiveVideoTrack)` restait `null`, fuite
+  déterministe d'une capture caméra vivante à chaque départ scoped d'un pair dont la vidéo avait démarré via
+  `addLocalMedia` (tout appel qui démarre directement en vidéo, pas seulement les upgrades audio→vidéo).
+- **Fix** : `addLocalMedia` clone désormais TOUJOURS `stream.getVideoTracks()[0]` avant de l'attacher
+  (`sourceVideoTrack.clone()`), l'ajoute au `localStream` partagé (`this.localStream.addTrack`, même
+  bookkeeping que `enableVideoSend`/`switchVideoSendTrack`), et l'enregistre comme `exclusiveVideoTrack` —
+  étendant à ce site le seul et même invariant que tous les autres points d'attache respectent déjà : chaque
+  instance `WebRTCService` possède un objet track exclusif, jamais partagé, toujours correctement libéré par
+  son propre `close()`/`disableVideoSend()`/`switchVideoSendTrack()`. Élimine la classe de bug entièrement
+  (aucun sender ne référence plus jamais l'objet littéral d'un autre) plutôt que de rétrécir la fenêtre de
+  course. Un seul fichier de production modifié : `webrtc-service.ts` (+31/-8, dont commentaires).
+- **Tests** (TDD, RED confirmé par `git stash` du seul diff source avant implémentation — les 3 tests neufs
+  échouaient précisément comme attendu, aucune régression annexe) : nouveau describe
+  `addLocalMedia — outgoing video track ownership (Vague 96)` (`webrtc-service.test.ts`) — (1) clone le
+  track source au lieu de l'attacher directement (`.clone()` appelé une fois, le track attaché au
+  transceiver EST le résultat du clone, ajouté au `localStream`) ; (2) `close({ stopLocalTracks: false })`
+  libère le clone de CETTE instance, jamais le track source partagé ; (3) deux instances `WebRTCService`
+  attachées au MÊME flux partagé reçoivent des objets track indépendants — l'une quittant l'appel de groupe
+  n'arrête jamais la vidéo de l'autre. Les deux fabriques de mocks `makeTrack` (`webrtc-service.test.ts` et
+  `webrtc-service.coverage.test.ts`, dupliquées, aucune préexistante n'exposait `.clone()`) gagnent un `id`
+  unique et un `clone: jest.fn(() => makeTrack(kind))` — chaque appel produit un objet frais et distinct,
+  fidèle à la sémantique réelle de `MediaStreamTrack.clone()`.
+- **Vérification** : `webrtc-service.test.ts` + `webrtc-service.coverage.test.ts` — **183/183 verts**
+  (180 préexistants + 3 neufs). Sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|
+  adaptive-degradation|audio-effect|webrtc-service` — **51 suites / 742 tests verts**, aucune régression.
+  Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`
+  (racine + `apps/web`), puis `packages/shared && npx prisma generate --generator client && bun run build`
+  sans erreur. `npx tsc --noEmit` sur `apps/web` : **1657 erreurs avant et après le diff** (`git stash`/
+  `stash pop`, diff ligne à ligne des deux sorties complètes) — décalages de NUMÉRO DE LIGNE uniquement
+  (mes lignes ajoutées poussent les erreurs préexistantes plus bas dans le même fichier de test), aucun
+  message d'erreur nouveau, zéro sur `webrtc-service.ts` lui-même. Diff strictement scopé à 3 fichiers web
+  (aucun fichier gateway touché) — suite gateway non rejouée ce cycle, hors du diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié ce cycle) :
+  dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+  `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
+  `removeParticipant()` ne nettoie pas `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-
+  régression) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; delta de comptage
+  `tsc --noEmit` (1190 vs. 1657 legacy, Vague 95) toujours non investigué.

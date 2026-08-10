@@ -102,13 +102,14 @@ export class WebRTCService {
   // a track — never by addTransceiver mid-call (which desyncs m-line order).
   private videoTransceiver: RTCRtpTransceiver | null = null;
   private currentVideoTier: VideoQualityTier = 'high';
-  // The track attached by enableVideoSend() — unlike addLocalMedia()'s
-  // initial video track (which CAN be the same literal object across every
-  // peer's sender in a group call), this one is always exclusive to this
-  // instance: use-webrtc-p2p.ts's enableVideo() gives the first peer the
-  // camera track and every other peer a `.clone()`. close({stopLocalTracks:
-  // false}) must still release it — nothing else references it — or it
-  // leaks as a dead track on the shared local preview stream forever.
+  // The track this instance's own sender is currently transmitting — set by
+  // addLocalMedia() (its own `.clone()` of the shared stream's video track,
+  // Vague 96 — see that method's doc comment for why a literal, unshared
+  // reference is unsafe) and by enableVideoSend()/switchVideoSendTrack().
+  // Always exclusive to this instance, never another peer's sender: nothing
+  // else references it, so close({stopLocalTracks: false})/disableVideoSend()/
+  // switchVideoSendTrack() can always stop it without risk of killing a
+  // sibling peer's outbound video in a group call.
   private exclusiveVideoTrack: MediaStreamTrack | null = null;
   // Grace timer for a transient ICE 'disconnected' before escalating to an ICE
   // restart. A blip often self-heals within a couple of seconds; restarting
@@ -902,6 +903,23 @@ export class WebRTCService {
    * track) when the call starts as video, recvonly (no track) for an audio-only
    * call — so it can later be upgraded by flipping direction + replaceTrack
    * without an addTransceiver (which would reorder m-lines).
+   *
+   * The outgoing video track is always a `.clone()` of `stream`'s current
+   * video track, never the literal object (Vague 96). This method runs once
+   * per NEW peer connection — including a late joiner added to an ALREADY
+   * video-active group call, at which point `stream.getVideoTracks()[0]` is
+   * another already-connected peer's live sender.track (enableVideo()/
+   * switchCamera() in use-webrtc-p2p.ts hand that same literal object to
+   * whichever peer is first in their snapshot). Attaching it here directly
+   * would alias two independent RTCRtpSenders to one MediaStreamTrack: the
+   * next unrelated switchVideoSendTrack()/disableVideoSend() on THAT other
+   * peer reads its own sender.track as ground truth and stops it
+   * unconditionally, silently freezing this peer's outbound video too.
+   * Cloning — and recording the clone as `exclusiveVideoTrack` — gives this
+   * instance the same self-contained ownership every other track-attaching
+   * path already keeps, so it can never be stopped by anyone else's cleanup,
+   * and is itself correctly released (instead of leaked) if this peer alone
+   * leaves the group call via close({ stopLocalTracks: false }).
    */
   addLocalMedia(stream: MediaStream, options: { sendVideo: boolean }): void {
     if (!this.peerConnection) {
@@ -909,7 +927,7 @@ export class WebRTCService {
     }
     this.localStream = stream;
     const audioTrack = stream.getAudioTracks()[0] ?? null;
-    const videoTrack = stream.getVideoTracks()[0] ?? null;
+    const sourceVideoTrack = stream.getVideoTracks()[0] ?? null;
 
     const audioTransceiver = this.peerConnection.addTransceiver(audioTrack ?? 'audio', {
       direction: 'sendrecv',
@@ -917,7 +935,8 @@ export class WebRTCService {
     });
     this.applyAudioCodecPreferences(audioTransceiver);
 
-    if (options.sendVideo && videoTrack) {
+    if (options.sendVideo && sourceVideoTrack) {
+      const videoTrack = sourceVideoTrack.clone();
       // Hint the encoder toward camera content (drop resolution before
       // framerate under constraint).
       try { videoTrack.contentHint = 'motion'; } catch { /* not supported */ }
@@ -925,6 +944,8 @@ export class WebRTCService {
         direction: 'sendrecv',
         streams: [stream],
       });
+      this.localStream.addTrack(videoTrack);
+      this.exclusiveVideoTrack = videoTrack;
     } else {
       // Reserve the video m-line without lighting the camera/LED. Still
       // pre-associate it with `stream` (same as the sendVideo branch above):
