@@ -394,11 +394,19 @@ const buildPrismaForDelete = (
   const updateMany = jest.fn().mockResolvedValue({ count: 0 });
   const update = jest.fn().mockResolvedValue({});
   const postUpdate = jest.fn().mockResolvedValue({});
+  // Le retrait des notifications produites par le commentaire lit par commande
+  // brute (le lien vit dans deux chemins JSON, que Prisma ne sait pas filtrer
+  // sur MongoDB). Défaut = fil vide : les cas de cascade ci-dessous portent sur
+  // les compteurs et n'ont pas à se soucier de l'inbox.
+  const runCommandRaw = jest.fn().mockResolvedValue({ cursor: { firstBatch: [] }, ok: 1 });
+  const notificationDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
   const prisma = {
     postComment: { findFirst, findMany, updateMany, update },
     post: { update: postUpdate },
+    $runCommandRaw: runCommandRaw,
+    notification: { deleteMany: notificationDeleteMany },
   } as unknown as PrismaClient;
-  return { prisma, findMany, updateMany, update, postUpdate };
+  return { prisma, findMany, updateMany, update, postUpdate, runCommandRaw, notificationDeleteMany };
 };
 
 describe('PostCommentService.deleteComment', () => {
@@ -481,6 +489,104 @@ describe('PostCommentService.deleteComment', () => {
     await service.deleteComment('c1', 'u1');
 
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteComment — les notifications que le commentaire a produites
+//
+// Sixième occurrence de la famille des cycles 46/47/48/50/51 : le retrait est
+// DOUX (`deletedAt`), le lien vers la ligne vit dans un blob JSON, et la
+// notification garde une copie DÉNORMALISÉE du contenu retiré (`content` =
+// l'extrait du commentaire). Aucune cascade ne peut se déclencher, aucun filtre
+// à la lecture ne peut rattraper : la ligne ne relit jamais le commentaire.
+//
+// Ce que ces témoins verrouillent, et que les compteurs ci-dessus ne voient
+// pas : le retrait porte sur le SOUS-ARBRE ENTIER — même liste d'ids que le
+// soft-delete — et il n'a pas le droit de transformer une suppression réussie
+// en erreur.
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.deleteComment — retrait des notifications', () => {
+  const announcer = { announceNotificationsRetracted: jest.fn().mockResolvedValue(undefined) };
+
+  beforeEach(() => {
+    announcer.announceNotificationsRetracted.mockClear();
+  });
+
+  it('retire les notifications de TOUT le sous-arbre soft-deleté, pas seulement de la cible', async () => {
+    const { prisma, runCommandRaw } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }], r1: [{ id: 'r1a' }] },
+    );
+    const service = new PostCommentService(prisma);
+
+    await service.deleteComment('c1', 'u1', announcer);
+
+    expect(runCommandRaw).toHaveBeenCalledWith(
+      expect.objectContaining({
+        find: 'Notification',
+        filter: {
+          $or: [
+            { 'context.commentId': { $in: ['c1', 'r1', 'r1a'] } },
+            { 'metadata.commentId': { $in: ['c1', 'r1', 'r1a'] } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("n'annonce le retrait qu'APRÈS le soft-delete durable", async () => {
+    const order: string[] = [];
+    const { prisma, updateMany, runCommandRaw, notificationDeleteMany } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    updateMany.mockImplementation(async () => {
+      order.push('soft-delete');
+      return { count: 1 };
+    });
+    runCommandRaw.mockResolvedValue({
+      cursor: { firstBatch: [{ _id: { $oid: 'n1' }, userId: { $oid: 'u9' } }] },
+      ok: 1,
+    });
+    notificationDeleteMany.mockImplementation(async () => {
+      order.push('retract');
+      return { count: 1 };
+    });
+    const service = new PostCommentService(prisma);
+
+    await service.deleteComment('c1', 'u1', announcer);
+
+    expect(order).toEqual(['soft-delete', 'retract']);
+    expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith([
+      { id: 'n1', userId: 'u9' },
+    ]);
+  });
+
+  /**
+   * Best-effort DÉLIBÉRÉ, comme les quatre effets du retrait de post : quand le
+   * retrait s'exécute, `deletedAt` est déjà committé. Une inbox récalcitrante ne
+   * doit pas transformer une suppression réussie en 500 — le commentaire EST
+   * retiré, c'est l'invariant qui compte pour la personne qui a cliqué.
+   */
+  it('rend la suppression réussie même si le retrait des notifications échoue', async () => {
+    const { prisma, runCommandRaw } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    runCommandRaw.mockRejectedValue(new Error('mongo down'));
+    const service = new PostCommentService(prisma);
+
+    await expect(service.deleteComment('c1', 'u1', announcer)).resolves.toEqual({ success: true });
+  });
+
+  it('ne retire rien quand la suppression est refusée', async () => {
+    const { prisma, runCommandRaw } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'owner', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+
+    await expect(service.deleteComment('c1', 'intruder', announcer)).rejects.toThrow('FORBIDDEN');
+    expect(runCommandRaw).not.toHaveBeenCalled();
   });
 });
 
