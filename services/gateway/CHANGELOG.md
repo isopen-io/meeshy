@@ -1,5 +1,226 @@
 # @meeshy/gateway
 
+## 1.22.14
+
+### Patch Changes
+
+- cf56be4: Supprimer une demande d'amitié laissait sa notification derrière, sans destination.
+
+  `DELETE /friend-requests/:id` retire la ligne `FriendRequest` **inconditionnellement** — que
+  l'expéditeur annule, ou que le destinataire écarte sans répondre. Il émettait bien
+  `friend_request:cancelled` à l'autre partie pour que sa liste d'attente s'invalide, mais il ne
+  touchait pas la seule chose durable que la demande avait produite : la notification
+  « X vous a envoyé une demande d'amitié », écrite par `createFriendRequestNotification` dans l'inbox
+  du destinataire.
+
+  Rien ne l'en retirait. `Notification.context` est un blob JSON, pas une clé étrangère : aucun
+  `onDelete: Cascade` ne peut se déclencher sur `context.friendRequestId`. Et son unique voie de
+  consommation — `markFriendRequestNotificationsAsRead`, appelée par la route soeur `PATCH` — devient
+  inatteignable au moment même où la ligne part : on ne peut plus répondre à une demande qui n'existe
+  plus. La notification restait donc **non lue indéfiniment**, à compter dans la cloche et dans le
+  badge, avec un `metadata.action: accept_or_reject_contact` qui n'ouvre plus qu'un écran de demande
+  répondant 404.
+
+  Quatrième occurrence du même mécanisme après les `TrackingLink`, les `Mention` et les
+  `Notification` d'un message rappelé : une ligne dénormalisée survit au retrait de son référent
+  parce que le retrait ne l'a jamais nommée.
+
+  **Retrait, pas marquage** — et c'est ce qui distingue cette route de sa voisine. Répondre
+  (accept/reject) laisse la ligne `FriendRequest` en place : la notification est _consommée_, donc
+  lue. Supprimer emporte la ligne : la notification n'a plus rien à afficher **et** rien où mener.
+  Même arbitrage, pour la même raison, que le rappel d'un message (`retractMessageNotifications`) — et
+  même geste, le seul que les clients savent déjà recevoir (`notification:deleted`, écouté par le web
+  et par le SDK iOS), doublé d'un `notification:counts` sans lequel la cloche resterait sur un
+  compteur incluant des lignes que le serveur vient de supprimer.
+
+  Trois conséquences du caractère inconditionnel de la suppression, chacune verrouillée par un test :
+
+  - **Aucun filtre `isRead`**, seule différence de prédicat avec le marquage. Une notification déjà
+    lue est tout aussi morte qu'une non lue ; la laisser garderait dans la liste une ligne sans
+    destination.
+  - **Le destinataire est toujours `receiverId`**, quel que soit celui des deux qui a appelé la
+    route : `createFriendRequestNotification` ne notifie que lui. Le scope `userId` reste la garde
+    anti-IDOR que porte déjà le marquage.
+  - **`context.friendRequestId` n'appartient qu'à `friend_request`** — le `friend_accepted` de
+    l'expéditeur porte `context.conversationId`, jamais cette clé, donc le retrait ne peut pas
+    l'emporter au passage.
+
+  La lecture passe par `$runCommandRaw` pour la raison déjà établie par le marquage (Prisma ne filtre
+  pas les chemins JSON sur MongoDB), mais la suppression porte sur les ids **relus**, pas sur le
+  prédicat : l'ensemble supprimé et l'ensemble annoncé sont alors identiques par construction, et
+  aucune ligne ne peut disparaître sans son `notification:deleted`. `singleBatch` ferme le curseur
+  côté serveur plutôt que de le laisser ouvert.
+
+  L'écriture ne dépend pas du câblage socket et l'échec n'est jamais fatal : la suppression est déjà
+  committée quand le retrait s'exécute, et un retrait qui échoue ne doit pas transformer une
+  suppression réussie en 500 — le test le verrouille, y compris sur le fait que le signal temps réel à
+  l'autre partie n'est pas emporté par cet échec.
+
+  Couvert (RED→GREEN, rouges observés sur les deux surfaces) par 6 tests neufs sur le service et 3 sur
+  la route, dont un témoin d'ordonnancement : l'annonce vient **après** l'écriture durable, sans quoi
+  les compteurs qu'elle recalcule liraient la base d'avant le retrait.
+
+- 7c2fb34: Une notification ne survit plus au message éphémère qu'elle annonce.
+
+  `createMessageNotification` refuse déjà de créer une notification pour un message DÉJÀ expiré. Rien
+  ne disait ce qu'il advient de celle qui est créée AVANT l'expiration : le message éphémère disparaît
+  quelques minutes plus tard, la ligne reste. Elle ne montre rien (l'extrait d'un message protégé est
+  déjà un libellé générique), elle ne mène nulle part (`action: view_message` ouvre un message absent),
+  et son badge non lu ne peut plus être décrémenté par une lecture — on ne lit pas ce qui n'est plus là.
+
+  `Notification.expiresAt` existait pour exactement ça, depuis l'origine du modèle, et le type partagé
+  le publie jusqu'aux clients (`state.expiresAt`, `isNotificationExpired`). Aucun producteur ne
+  l'écrivait, aucune lecture ne l'honorait : les deux moitiés d'une même règle, mortes chacune de son
+  côté. Ce lot les rebranche.
+
+  **Producteur.** La notification hérite de l'échéance du message qu'elle désigne — message régulier,
+  réponse et mention. Le chemin `new_message` la prend de sa propre relecture VIVANTE (celle de la
+  garde d'admission : aucune lecture ajoutée) ; la réponse et les mentions la reçoivent de l'éventail,
+  qui la tient déjà, plutôt que de la relire une fois par destinataire. Les deux sources ne peuvent pas
+  diverger : `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite.
+
+  **Lectures.** Un filtre à la lecture, et non un balayage : contrairement au rappel, la péremption
+  n'est pas un événement — personne ne passe à l'instant T, et un balayage périodique laisserait
+  toujours une fenêtre. Le filtre est exact à la milliseconde et ne coûte aucune écriture. Les sept
+  lectures qui répondent à la même question — liste REST et son total, compte non-lus REST, les deux
+  compteurs poussés par socket, le badge embarqué dans le push, le digest e-mail — la posent désormais
+  par une seule unité, `visibleNotificationsWhere`. `emitCountsUpdate` portait déjà en commentaire la
+  trace d'une divergence passée entre le prédicat du badge et celui de la liste ; sept copies l'auraient
+  rejouée.
+
+  **Index.** `Notification[userId, isRead]` devient `[userId, isRead, expiresAt]` — un remplacement, pas
+  un index de plus : l'ancienne clé est un préfixe de la nouvelle. Sans `expiresAt` dans l'index, le
+  filtre force un fetch de document par candidat sur un compteur qui tourne à CHAQUE notification créée,
+  donc une fois par destinataire de chaque message ; avec, les deux branches du OU restent des plages
+  d'index et le compte reste couvert. Migration `010_notification_expiry_index.js` pour les bases
+  existantes (idempotente, crée avant de supprimer).
+
+  Ce que ce lot ne fait pas : la ligne expirée reste en base (elle ne porte aucune copie du contenu), et
+  un badge déjà affiché ne se corrige qu'au prochain recalcul — cohérence à terme, pas immédiate.
+
+- 7510f76: Supprimer un post laissait derrière lui toutes les notifications qu'il avait produites — avec
+  l'extrait de son contenu et la vignette de son média.
+
+  `applyPostRemovalEffects` est l'unité qui NOMME tout ce qu'un retrait de post doit écrire en base,
+  créée précisément parce que la console avait rattrapé un par un, à trois cycles d'intervalle, ce que
+  le service faisait et qu'elle ne faisait pas. Elle listait l'audit de modération, la coupure des
+  liens de partage et la libération des usages de sons. Elle n'a jamais listé les **notifications**,
+  alors que son jumeau côté message (`applyMessageRemovalEffects`) les retire depuis deux cycles.
+
+  Rien ne les en retirait. Le retrait d'un post est **doux** (`deletedAt`), donc aucun
+  `onDelete: Cascade` ne se déclenche — et il n'y a de toute façon aucune relation à ne pas
+  déclencher : le lien vit dans `context.postId`, un chemin dans un blob JSON. Chaque `post_comment`,
+  `comment_reply`, `comment_like`, `post_repost`, `story_new_comment`, `story_thread_reply`,
+  `friend_story_comment`, `friend_new_story`, `friend_new_post` et `user_mentioned` de ce post
+  survivait donc indéfiniment, avec la copie **dénormalisée** que `createNotification` en a prise —
+  `content`, `metadata.commentPreview`, et `metadata.firstAttachmentUrl`, la vignette du média retiré.
+  Aucun filtre à la lecture ne peut les rattraper : la ligne ne relit jamais le post. Le
+  `action: view_post` qu'elles portent n'ouvre plus qu'un écran 404, et leur badge non lu n'est plus
+  décrémentable — on ne consomme pas ce qui n'est plus là. Le diagnostic du 2026-08-04 en comptait
+  **≈ 8 100 non lues** en production.
+
+  Cinquième occurrence du même mécanisme après les `TrackingLink`, les `Mention`, les `Notification`
+  d'un message rappelé et celles d'une demande d'amitié supprimée : une ligne dénormalisée survit au
+  retrait de son référent parce que le retrait ne l'a jamais nommée. C'est la plus large des cinq.
+
+  **Retrait plutôt que neutralisation**, même arbitrage et même geste que le rappel d'un message : une
+  notification dont le post n'existe plus n'a rien à afficher **et** rien où mener, et
+  `notification:deleted` est le seul geste que les clients savent déjà recevoir (écouté par le web et
+  par le SDK iOS), doublé d'un `notification:counts` par destinataire sans lequel la cloche resterait
+  sur un compteur incluant des lignes que le serveur vient de supprimer.
+
+  Deux différences de forme avec le jumeau message, et elles décident toute l'implémentation :
+
+  - **Aucune colonne ne porte le lien.** `Notification.messageId` existe ; rien d'équivalent pour un
+    post. La seule trace est `context.postId`, que l'API Prisma ne sait pas filtrer sur MongoDB —
+    d'où la commande brute, exactement comme `markPostNotificationsAsRead`. Et le filtre n'est **pas**
+    scopé à un `userId` : un post notifie une AUDIENCE (auteur, commentateurs du fil, amis prévenus de
+    la publication), donc la relecture projette `userId` et l'annonce se groupe par destinataire.
+  - **Le lot n'est pas la fin.** L'audience d'un post dépasse la taille d'un lot bien plus vite que
+    les quelques destinataires d'un message ; une lecture unique laisserait la queue en base sans le
+    moindre signal, puisque le premier lot, lui, a réussi. D'où le drainage, par lots de 200 en
+    série — taille modeste délibérément, `announceNotificationsRetracted` déclenchant un recalcul de
+    compteurs par destinataire distinct : le lot borne la rafale, et l'enchaînement en série garde le
+    pic à un lot quelle que soit l'audience.
+
+  La suppression porte sur les ids **relus** et non sur le prédicat : l'ensemble supprimé et
+  l'ensemble annoncé sont identiques par construction, et aucune ligne ne peut disparaître sans son
+  `notification:deleted`. La course avec une notification créée pendant le retrait est fermée de
+  l'autre côté, à l'admission — `canNotifyAboutPost` passe par `loadPostAcl`, qui rend `null` pour un
+  post supprimé.
+
+  Le retrait est placé **juste après l'audit** et avant les deux autres effets : l'audit reste le
+  premier écrit (c'est la trace de modération), mais le retrait est le seul des quatre dont le retard
+  se voit, l'extrait et la vignette restant affichés dans l'inbox de toute l'audience tant qu'il n'a
+  pas eu lieu. Il est **best-effort** comme les trois autres — `deletedAt` est déjà committé quand la
+  liste s'exécute, et un retrait qui échoue ne doit jamais transformer une suppression réussie en 500.
+
+  Les deux routes qui retirent un post (`DELETE /posts/:postId` via `PostService.deletePost`, et
+  `DELETE /admin/posts/:postId` qui écrit `deletedAt` en direct) n'ont **rien à câbler** : l'annonceur
+  se résout par défaut sur le service partagé du processus, le seul branché avec `io`, exactement
+  comme chez le jumeau message. Le port `RetractedNotificationAnnouncer` déménage de `messaging/` vers
+  `notifications/`, à côté de son unique implémenteur — le déclarer une seconde fois sous `posts/`
+  aurait fabriqué deux ports rivaux pour une seule règle, la configuration même que ces modules
+  existent pour empêcher ; `messaging/` le ré-exporte pour ses importateurs historiques.
+
+  Couvert (RED→GREEN, rouges observés sur les deux surfaces) par 9 tests sur l'unité de retrait et 3
+  sur la liste d'effets, dont deux témoins re-vérifiés par sonde — chaque ligne repart vers **son**
+  destinataire (le double rend des `userId` tous différents, un retrait qui les confondrait
+  adresserait des appareils qui n'ont jamais eu la ligne), et le drainage va bien au-delà d'un lot
+  plein. Ne rattrape pas les lignes déjà orphelines en base : action humaine, sur le patron des
+  scripts de réparation existants.
+
+- e4ada9e: Débannir quelqu'un qui était parti de lui-même le faisait rentrer.
+
+  `PATCH …/participants/:userId/ban` cherche sa cible **sans filtrer `isActive`**, et c'est
+  délibéré : bannir un ancien membre est précisément ce qui l'empêche de revenir par un lien de
+  partage, `resolveConversationEntry` refusant toute entrée sur `bannedAt`. Cette capacité n'est pas
+  retirée. Mais les deux moitiés du geste écrivaient sans condition —
+  `ban: { bannedAt: now, isActive: false, leftAt: now }`,
+  `unban: { bannedAt: null, isActive: true, leftAt: null }` — et composées sur un ancien membre,
+  elles font autre chose que ce que leurs noms annoncent.
+
+  **Bannir effaçait le départ.** `leftAt` était réécrit à l'instant du bannissement alors qu'il datait
+  un départ volontaire vieux de plusieurs mois. L'information n'était pas remplacée par une
+  meilleure : elle était perdue, et c'est elle qui aurait permis au débannissement de savoir quoi
+  rendre.
+
+  **Débannir faisait entrer.** `{ isActive: true, leftAt: null }` sur une personne que le bannissement
+  n'avait pas sortie — parce qu'elle était déjà dehors — n'annule rien : ça CRÉE une appartenance. Le
+  débannissement devenait une **quatrième porte d'entrée** dans la conversation, la seule qui
+  n'obéisse pas à `resolveConversationEntry`, qui ne redonne ni rang ni permissions de nouvel arrivant
+  (l'ancien `admin` retrouvait son rang dans une ligne périmée — l'inverse exact de ce que la
+  leçon 89 exige), et qui rebranchait de force les sockets de quelqu'un qui était parti seul.
+
+  La décision vit désormais dans une unité pure, `services/conversations/conversationBanState.ts` :
+  un bannissement ne retire une appartenance que s'il en trouve une ; un débannissement ne rend que ce
+  que le bannissement a pris. Il lève l'interdiction dans tous les cas — sinon « débannir » ne lèverait
+  rien, et toutes les portes continueraient de refuser. Savoir laquelle des deux histoires s'est
+  produite ne demande aucun champ nouveau : le bannissement laisse la trace dans la ligne
+  (`leftAt === bannedAt` ⟺ c'est lui qui a mis fin à l'appartenance), et l'égalité est **exacte par
+  construction**, les deux champs recevant le même objet `Date`. Les lignes écrites avant ce cycle
+  portent toutes cette égalité, donc conservent à l'identique le comportement qu'elles ont toujours eu :
+  aucune réparation de base n'est nécessaire.
+
+  **Le débannissement n'oubliait pas la ligne mise en cache.** `participant-lookup-cache` mémorise
+  `isActive` 30 s pour éviter une lecture par message envoyé ; le bannissement l'invalide, le
+  débannissement ne le faisait pas. Pendant une demi-minute, la personne réintégrée restait
+  `isActive: false` pour le chemin d'envoi et chacun de ses messages était refusé sans qu'aucune ligne
+  en base ne le justifie.
+
+  **Les compteurs de membres des clients suivaient l'événement, pas le fait.**
+  `conversation:participant-banned` et `conversation:participant-unbanned` portent maintenant
+  `membershipEnded` / `membershipRestored`. Web (`use-socket-cache-sync`) et iOS
+  (`ConversationListViewModel`) décrémentaient et incrémentaient sans condition : bannir un ancien
+  membre faisait dériver le compteur vers le bas, durablement côté iOS où la valeur fausse est
+  persistée dans le cache local. Les deux champs sont optionnels et leur absence se lit comme `true` —
+  un serveur antérieur à ce contrat ne bannissait qu'en retirant. Android expose bien les deux
+  événements mais n'en dérive aucun effectif : rien à corriger de ce côté.
+
+- Updated dependencies [7c2fb34]
+- Updated dependencies [e4ada9e]
+  - @meeshy/shared@1.8.9
+
 ## 1.22.13
 
 ### Patch Changes
