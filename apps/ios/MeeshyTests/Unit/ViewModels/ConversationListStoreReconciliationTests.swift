@@ -3,8 +3,11 @@ import MeeshySDK
 @testable import Meeshy
 
 /// W4 lot 1 — la liste visible ne fusionnait QUE `userState` depuis le store :
-/// un `conversation:deleted` laissait la ligne à l'écran et un
-/// `conversation:updated` (renommage, avatar) n'y arrivait jamais.
+/// un `conversation:deleted` laissait la ligne à l'écran. Les métadonnées
+/// (renommage, avatar) gardent leurs DEUX écrivains historiques — le sink
+/// `conversationUpdated` direct et le rechargement du cache disque — le store
+/// s'hydratant en asynchrone, une greffe depuis son snapshot réécrivait un
+/// titre périmé par-dessus un rename fraîchement appliqué.
 final class ConversationListStoreReconciliationTests: XCTestCase {
 
     private func makeConversation(id: String, title: String? = "Titre") -> Conversation {
@@ -36,19 +39,20 @@ final class ConversationListStoreReconciliationTests: XCTestCase {
         XCTAssertEqual(merged?.map(\.id), ["c-stays"])
     }
 
-    func test_reconciling_renamedConversation_graftsMetadata() {
-        let rows = [makeConversation(id: "c1", title: "Avant")]
-        var renamed = makeConversation(id: "c1", title: "Après")
-        renamed.avatar = "https://cdn/new.png"
-        renamed.slowModeSeconds = 30
+    func test_reconciling_staleStoreMetadata_neverOverwritesTheRow() {
+        let rows = [makeConversation(id: "c1", title: "Nouveau nom")]
+        var stale = makeConversation(id: "c1", title: "Ancien nom")
+        stale.avatar = "https://cdn/stale.png"
+        stale.slowModeSeconds = 30
 
         let merged = ConversationListViewModel.reconciling(
-            rows: rows, with: [renamed], removing: []
+            rows: rows, with: [stale], removing: []
         )
 
-        XCTAssertEqual(merged?.first?.title, "Après")
-        XCTAssertEqual(merged?.first?.avatar, "https://cdn/new.png")
-        XCTAssertEqual(merged?.first?.slowModeSeconds, 30)
+        XCTAssertNil(
+            merged,
+            "le store s'hydrate en asynchrone : greffer ses métadonnées réécrirait un rename fraîchement appliqué par le sink socket"
+        )
     }
 
     func test_reconciling_neverGraftsLastMessageFields() {

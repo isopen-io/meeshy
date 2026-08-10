@@ -630,11 +630,16 @@ class ConversationListViewModel: ObservableObject {
     /// être moins hydraté que la liste, et toutes les lignes s'évaporeraient.
     private var lastStoreSnapshotIds: Set<String> = []
 
-    /// Graft the store's `userState` AND the metadata a `conversation:updated`
-    /// can change onto the matching rows, then drop the rows the store just
-    /// deleted. Ordering is untouched. Guarded so an echo of an unchanged
-    /// snapshot (e.g. the publish that follows our own hydration) doesn't churn
-    /// the grouping pipeline.
+    /// Graft the store's `userState` onto the matching rows, then drop the
+    /// rows the store just deleted. Ordering is untouched. Guarded so an echo
+    /// of an unchanged snapshot (e.g. the publish that follows our own
+    /// hydration) doesn't churn the grouping pipeline.
+    ///
+    /// Les métadonnées (titre/avatar/…) ne sont JAMAIS greffées depuis le
+    /// store : elles ont déjà deux écrivains (le sink `conversationUpdated`
+    /// direct et le rechargement du cache disque écrit par le sync engine).
+    /// Le store s'hydrate en asynchrone — un snapshot en retard greffait le
+    /// titre périmé PAR-DESSUS un rename fraîchement appliqué par le sink.
     private func mergeUserStateFromStore(_ snapshot: [MeeshyConversation]) {
         let ids = Set(snapshot.map(\.id))
         // Un instantané VIDE est un teardown de session (`ConversationStore.reset`
@@ -657,7 +662,7 @@ class ConversationListViewModel: ObservableObject {
     /// `reloadFromCache` reverse déjà dans la liste. Les greffer depuis le
     /// store ferait régresser l'aperçu dès que le store est en retard d'un
     /// `message:new`.
-    static func reconciling(
+    nonisolated static func reconciling(
         rows: [Conversation],
         with snapshot: [MeeshyConversation],
         removing disappeared: Set<String>
@@ -670,22 +675,6 @@ class ConversationListViewModel: ObservableObject {
             if updated[i].userState != incoming.userState {
                 updated[i].userState = incoming.userState
                 changed = true
-            }
-            if updated[i].title != incoming.title { updated[i].title = incoming.title; changed = true }
-            if updated[i].avatar != incoming.avatar { updated[i].avatar = incoming.avatar; changed = true }
-            if updated[i].description != incoming.description { updated[i].description = incoming.description; changed = true }
-            if updated[i].banner != incoming.banner { updated[i].banner = incoming.banner; changed = true }
-            if updated[i].isAnnouncementChannel != incoming.isAnnouncementChannel {
-                updated[i].isAnnouncementChannel = incoming.isAnnouncementChannel; changed = true
-            }
-            if updated[i].defaultWriteRole != incoming.defaultWriteRole {
-                updated[i].defaultWriteRole = incoming.defaultWriteRole; changed = true
-            }
-            if updated[i].slowModeSeconds != incoming.slowModeSeconds {
-                updated[i].slowModeSeconds = incoming.slowModeSeconds; changed = true
-            }
-            if updated[i].autoTranslateEnabled != incoming.autoTranslateEnabled {
-                updated[i].autoTranslateEnabled = incoming.autoTranslateEnabled; changed = true
             }
         }
         return changed ? updated : nil
