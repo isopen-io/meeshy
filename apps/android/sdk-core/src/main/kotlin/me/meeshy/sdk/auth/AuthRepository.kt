@@ -61,6 +61,18 @@ class AuthRepository @Inject constructor(
         apiCall { authApi.requestMagicLink(me.meeshy.sdk.net.api.MagicLinkRequestBody(email)) }
             .map { it.expiresInSeconds ?: DEFAULT_MAGIC_LINK_VALIDITY_SECONDS }
 
+    /** Les sessions actives du compte (la courante marquee par le serveur). */
+    suspend fun listSessions(): NetworkResult<me.meeshy.sdk.net.api.SessionsListData> =
+        apiCall { authApi.listSessions() }
+
+    /** Revoque UNE session (jamais la courante cote UI). */
+    suspend fun revokeSession(sessionId: String): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.revokeSession(sessionId) }
+
+    /** Revoque toutes les sessions SAUF la courante. */
+    suspend fun revokeOtherSessions(): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.revokeOtherSessions() }
+
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
         sessionRepository.refresh()

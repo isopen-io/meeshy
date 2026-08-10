@@ -80,6 +80,7 @@ import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.AboutScreen
+import me.meeshy.app.settings.ActiveSessionsScreen
 import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.CrashReportScreen
@@ -151,6 +152,8 @@ object Routes {
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
+    const val ACTIVE_SESSIONS = "settings/sessions"
+    const val BLOCKED_USERS = "contacts/blocked"
     const val DATA_EXPORT = "settings/data-export"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val ABOUT = "settings/about"
@@ -618,6 +621,8 @@ fun MeeshyApp(
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                    onOpenActiveSessions = { navController.navigate(Routes.ACTIVE_SESSIONS) },
+                    onOpenBlockedUsers = { navController.navigate(Routes.BLOCKED_USERS) },
                     onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
                     onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
@@ -670,6 +675,15 @@ fun MeeshyApp(
             }
             composable(Routes.PRIVACY) {
                 PrivacySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACTIVE_SESSIONS) {
+                ActiveSessionsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BLOCKED_USERS) {
+                ContactsScreen(
+                    onBack = { navController.popBackStack() },
+                    initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
+                )
             }
             composable(Routes.STARRED) {
                 StarredMessagesScreen(

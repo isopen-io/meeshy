@@ -102,6 +102,8 @@ fun SettingsScreen(
     onOpenAutoDownload: () -> Unit = {},
     onOpenMediaCache: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
+    onOpenActiveSessions: () -> Unit = {},
+    onOpenBlockedUsers: () -> Unit = {},
     onOpenDataExport: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
@@ -292,12 +294,20 @@ fun SettingsScreen(
                     detail = null,
                     onClick = onOpenChangePassword,
                 )
+                // 2FA retire : aucune route gateway n'existe encore — une ligne
+                // cliquable inerte promettait une fonctionnalite fantome.
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_active_sessions),
+                    detail = null,
+                    onClick = onOpenActiveSessions,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_blocked_users), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_blocked_users),
+                    detail = null,
+                    onClick = onOpenBlockedUsers,
+                )
             }
 
             SettingsSection(

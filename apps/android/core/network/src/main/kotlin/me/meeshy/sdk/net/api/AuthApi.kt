@@ -9,8 +9,10 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /** Corps de POST auth/forgot-password — le gateway repond toujours succes (anti-enumeration). */
@@ -30,6 +32,32 @@ data class MagicLinkRequestBody(
 @Serializable
 data class MagicLinkRequestData(
     val expiresInSeconds: Int? = null,
+)
+
+/** Une session active du compte — sous-ensemble utile de GET auth/sessions. */
+@Serializable
+data class ActiveSessionInfo(
+    val id: String,
+    val deviceType: String? = null,
+    val deviceVendor: String? = null,
+    val deviceModel: String? = null,
+    val osName: String? = null,
+    val osVersion: String? = null,
+    val browserName: String? = null,
+    val isMobile: Boolean? = null,
+    val ipAddress: String? = null,
+    val country: String? = null,
+    val city: String? = null,
+    val createdAt: String? = null,
+    val lastActivityAt: String? = null,
+    val isCurrentSession: Boolean = false,
+)
+
+/** Enveloppe data de GET auth/sessions. */
+@Serializable
+data class SessionsListData(
+    val sessions: List<ActiveSessionInfo> = emptyList(),
+    val totalCount: Int = 0,
 )
 
 interface AuthApi {
@@ -63,4 +91,13 @@ interface AuthApi {
 
     @POST("auth/magic-link/request")
     suspend fun requestMagicLink(@Body body: MagicLinkRequestBody): ApiResponse<MagicLinkRequestData>
+
+    @GET("auth/sessions")
+    suspend fun listSessions(): ApiResponse<SessionsListData>
+
+    @DELETE("auth/sessions/{id}")
+    suspend fun revokeSession(@Path("id") sessionId: String): ApiResponse<Unit>
+
+    @DELETE("auth/sessions")
+    suspend fun revokeOtherSessions(): ApiResponse<Unit>
 }
