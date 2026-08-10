@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.search.GlobalSearchRepository
+import me.meeshy.sdk.search.InMemoryRecentSearchesStore
 import me.meeshy.sdk.search.GlobalSearchResults
 import org.junit.After
 import org.junit.Before
@@ -36,7 +37,9 @@ class GlobalSearchViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = GlobalSearchViewModel(repository)
+    private val recentSearches = InMemoryRecentSearchesStore()
+
+    private fun viewModel() = GlobalSearchViewModel(repository, recentSearches)
 
     // Une frappe sous le seuil ne part JAMAIS en reseau : la recherche a 1
     // caractere renverrait la moitie de la base et l'UI clignoterait a chaque
@@ -104,5 +107,22 @@ class GlobalSearchViewModelTest {
 
         vm.selectTab(GlobalSearchTab.USERS)
         coVerify(exactly = 1) { repository.search(any(), any(), any(), any()) }
+    }
+
+    // Seule une recherche COMMISE (debounce ecoule, requete partie) entre dans
+    // l'historique — les frappes intermediaires n'y laissent aucune trace.
+    @Test
+    fun `only committed searches enter the recent history`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults()
+        val vm = viewModel()
+        vm.setQuery("bel")
+        advanceTimeBy(100)
+        vm.setQuery("belva")
+        advanceUntilIdle()
+        assertThat(vm.state.value.recentSearches).containsExactly("belva")
+
+        vm.removeRecentSearch("belva")
+        advanceUntilIdle()
+        assertThat(vm.state.value.recentSearches).isEmpty()
     }
 }

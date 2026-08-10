@@ -2128,11 +2128,14 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_UNPINNED, { messageId: 'msg-pin' });
     });
 
-    // A share-link message is a CREATION, but it is not `message:new`: the two
-    // are different wire events with different payload shapes, and a link
-    // message replayed as `message:new` would hand the client a `{ message }`
-    // envelope where it expects the message object itself.
-    it('routes link-message entries to LINK_MESSAGE_NEW, not MESSAGE_NEW', async () => {
+    // A share-link message is a CREATION replayed under BOTH wire events, each
+    // in the shape that event carries: `link:message:new` keeps its `{ message }`
+    // envelope (the web reads it), `message:new` gets the message object itself
+    // (iOS and Android only ever listen to that one — replaying the envelope
+    // under it would hand them a payload with no `conversationId` to route on).
+    // Replaying only `link:message:new`, as this did, left a mobile recipient
+    // who was offline at send time with nothing to converge on at reconnect.
+    it('replays link-message entries under BOTH events, each in its own shape', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
           { payload: { message: { id: 'msg-link', conversationId: 'conv-link' } }, eventType: 'link-message' },
@@ -2142,6 +2145,26 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages('user-drain-link', false);
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
         message: { id: 'msg-link', conversationId: 'conv-link' },
+      });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-link',
+        conversationId: 'conv-link',
+      });
+    });
+
+    // The envelope is what every writer of this eventType produces, but a drain
+    // must never blast `message:new` with `undefined` if one ever drifts: the
+    // recipient would take a message it cannot route for a real one.
+    it('replays a shapeless link-message entry under LINK_MESSAGE_NEW alone', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { messageId: 'msg-shapeless' }, eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-shapeless', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
+        messageId: 'msg-shapeless',
       });
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });

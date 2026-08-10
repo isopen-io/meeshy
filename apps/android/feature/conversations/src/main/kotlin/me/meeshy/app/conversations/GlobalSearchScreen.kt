@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -88,6 +90,12 @@ fun GlobalSearchScreen(
                 state.isSearching -> SearchStatus(
                     label = stringResource(R.string.global_search_searching),
                     showSpinner = true,
+                )
+                !state.hasSearched && state.recentSearches.isNotEmpty() -> RecentSearchesSection(
+                    recents = state.recentSearches,
+                    onSelect = viewModel::setQuery,
+                    onRemove = viewModel::removeRecentSearch,
+                    onClear = viewModel::clearRecentSearches,
                 )
                 !state.hasSearched -> SearchStatus(
                     label = stringResource(R.string.global_search_empty_title),
@@ -406,6 +414,82 @@ private fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MeeshyPalette.Success,
             )
+        }
+    }
+}
+
+/** Section « Recherches recentes » (parite iOS) : tap = relance, croix = oubli. */
+@Composable
+private fun RecentSearchesSection(
+    recents: List<String>,
+    onSelect: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = MeeshySpacing.lg,
+            end = MeeshySpacing.lg,
+            top = MeeshySpacing.sm,
+            bottom = 120.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        item(key = "recent_header") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.History,
+                    contentDescription = null,
+                    tint = MeeshyPalette.Indigo500,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(MeeshySpacing.sm))
+                Text(
+                    text = stringResource(R.string.global_search_recent_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = stringResource(R.string.global_search_recent_clear),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MeeshyPalette.Error,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(MeeshyRadius.pill))
+                        .clickable(onClick = onClear)
+                        .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+                )
+            }
+        }
+        items(recents, key = { it }) { query ->
+            ResultCard(onClick = { onSelect(query) }) {
+                Icon(
+                    imageVector = Icons.Filled.History,
+                    contentDescription = null,
+                    tint = MeeshyTheme.tokens.textMuted,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(MeeshySpacing.md))
+                Text(
+                    text = query,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onRemove(query) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.global_search_recent_remove),
+                        tint = MeeshyTheme.tokens.textMuted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
         }
     }
 }

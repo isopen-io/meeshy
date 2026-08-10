@@ -229,6 +229,15 @@ fun ChatScreen(
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
+    // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
+    // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
+    // so newest content stays pinned to the bottom edge without any scroll-
+    // compensation code — the §C inverted-list rewrite's sub-slice 2 (see
+    // `PROGRESS.md`). `listItems` stays oldest-first (the natural,
+    // chronological SSOT `buildChatListItems` produces); `renderedItems` is
+    // the cheap `asReversed()` VIEW actually fed to the `LazyColumn` and to
+    // every pure function below that scrolls/indexes into rendered rows.
+    val orientation = ChatListOrientation.BottomUp
     val listItems = remember(state.messages, state.firstUnreadMessageId, state.showEncryptionDisclaimer) {
         buildChatListItems(
             state.messages,
@@ -237,6 +246,7 @@ fun ChatScreen(
             showEncryptionNotice = state.showEncryptionDisclaimer,
         )
     }
+    val renderedItems = remember(listItems) { listItems.asReversed() }
 
     val replyThreads = remember(state.messages) {
         ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
@@ -248,9 +258,9 @@ fun ChatScreen(
     // flag keeps the jump from firing against an empty/unsettled window; the
     // latch guarantees the boundary is stable, so this fires exactly once.
     var didOpenScroll by remember { mutableStateOf(false) }
-    LaunchedEffect(state.unreadBoundaryResolved, listItems) {
+    LaunchedEffect(state.unreadBoundaryResolved, renderedItems) {
         if (didOpenScroll || !state.unreadBoundaryResolved) return@LaunchedEffect
-        val target = InitialScrollTarget.of(listItems) ?: return@LaunchedEffect
+        val target = InitialScrollTarget.of(renderedItems, orientation) ?: return@LaunchedEffect
         listState.scrollToItem(target)
         didOpenScroll = true
     }
@@ -261,22 +271,33 @@ fun ChatScreen(
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
         if (listItems.isEmpty()) return@LaunchedEffect
         val isOwnMessage = state.messages.lastOrNull()?.isOutgoing == true
-        if (isOwnMessage || listState.isNearBottom(listItems.lastIndex)) {
-            listState.animateScrollToItem(listItems.lastIndex)
+        val nearBottom = ChatScrollGeometry.isNearBottom(
+            edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                lastVisibleIndex = listState.lastVisibleItemIndex(),
+                orientation = orientation,
+            ),
+            lastIndex = listItems.lastIndex,
+            orientation = orientation,
+        )
+        if (isOwnMessage || nearBottom) {
+            listState.animateScrollToItem(
+                ChatScrollGeometry.bottomIndex(listItems.lastIndex, orientation),
+            )
         }
     }
 
     // Jump to the focused search hit whenever it changes (new query, next/prev).
     LaunchedEffect(state.search.activeMessageId) {
         val target = state.search.activeMessageId ?: return@LaunchedEffect
-        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        val index = renderedItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
         if (index >= 0) listState.animateScrollToItem(index)
     }
 
     // Jump to the quoted original when a reply-preview tap requests it, then consume.
     LaunchedEffect(state.scrollToMessageId) {
         val target = state.scrollToMessageId ?: return@LaunchedEffect
-        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        val index = renderedItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
         if (index >= 0) listState.animateScrollToItem(index)
         viewModel.onScrollHandled()
     }
@@ -285,10 +306,27 @@ fun ChatScreen(
         state.messages.map { it.toAffordanceMessage() }
     }
     val isNearBottom by remember(listItems) {
-        derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
+        derivedStateOf {
+            ChatScrollGeometry.isNearBottom(
+                edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
+                    firstVisibleIndex = listState.firstVisibleItemIndex,
+                    lastVisibleIndex = listState.lastVisibleItemIndex(),
+                    orientation = orientation,
+                ),
+                lastIndex = listItems.lastIndex,
+                orientation = orientation,
+            )
+        }
     }
-    val pinnedDayMillis by remember(listItems) {
-        derivedStateOf { PinnedDayHeader.governingDayMillis(listItems, listState.firstVisibleItemIndex) }
+    val pinnedDayMillis by remember(renderedItems) {
+        derivedStateOf {
+            val topIndex = ChatScrollGeometry.topEdgeIndex(
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                lastVisibleIndex = listState.lastVisibleItemIndex(),
+                orientation = orientation,
+            )
+            PinnedDayHeader.governingDayMillis(renderedItems, topIndex, orientation)
+        }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var showConversationSettings by remember { mutableStateOf(false) }
@@ -302,12 +340,24 @@ fun ChatScreen(
     }
 
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }
+        snapshotFlow {
+            ChatScrollGeometry.topEdgeIndex(
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                lastVisibleIndex = listState.lastVisibleItemIndex(),
+                orientation = orientation,
+            )
+        }
             .distinctUntilChanged()
             .collect { index ->
-                if (index <= LOAD_OLDER_THRESHOLD) viewModel.loadOlder()
+                val nearOldEnd = ChatScrollGeometry.isNearOldEnd(
+                    edgeIndex = index,
+                    lastIndex = listItems.lastIndex,
+                    orientation = orientation,
+                )
+                if (nearOldEnd) viewModel.loadOlder()
             }
     }
+
 
     val accentColor = state.accentColorHex
         ?.let { hexColor(it) }
@@ -486,26 +536,15 @@ fun ChatScreen(
                     Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
+                        reverseLayout = true,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
                     ) {
-                        if (state.isLoadingOlder) {
-                            item(key = "loading-older") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = MeeshySpacing.sm),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = accentColor,
-                                    )
-                                }
-                            }
-                        }
-                        items(listItems, key = { it.key }) { item ->
+                        // Under `reverseLayout`, the HIGHEST Compose item index renders
+                        // at the visual TOP — so the "loading older history" spinner
+                        // goes AFTER `items(renderedItems)` (not before, as it did
+                        // pre-flip) to land above the oldest currently-loaded message.
+                        items(renderedItems, key = { it.key }) { item ->
                             when (item) {
                                 is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
                                 is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
@@ -600,6 +639,22 @@ fun ChatScreen(
                                 }
                             }
                         }
+                        if (state.isLoadingOlder) {
+                            item(key = "loading-older") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = MeeshySpacing.sm),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = accentColor,
+                                    )
+                                }
+                            }
+                        }
                     }
                     pinnedDayMillis?.let { millis ->
                         PinnedDayHeaderPill(
@@ -621,7 +676,9 @@ fun ChatScreen(
                             )
                             scope.launch {
                                 if (listItems.isNotEmpty()) {
-                                    listState.animateScrollToItem(listItems.lastIndex)
+                                    listState.animateScrollToItem(
+                                        ChatScrollGeometry.bottomIndex(listItems.lastIndex, orientation),
+                                    )
                                 }
                             }
                         },
@@ -955,9 +1012,6 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
     }
 }
 
-private const val LOAD_OLDER_THRESHOLD = 2
-private const val BOTTOM_TOLERANCE_ITEMS = 2
-
 /**
  * Seconds of the release velocity to project past the current translation when
  * resolving the overlay drag — the Compose analogue of UIKit's
@@ -965,11 +1019,18 @@ private const val BOTTOM_TOLERANCE_ITEMS = 2
  */
 private const val OVERLAY_DRAG_VELOCITY_PROJECTION_SECONDS = 0.1f
 
-private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
-    if (lastIndex <= 0) return true
-    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-    return lastVisible >= lastIndex - BOTTOM_TOLERANCE_ITEMS
-}
+/**
+ * The highest visible row index, or `0` when nothing has laid out yet.
+ * Combined with `LazyListState.firstVisibleItemIndex` (the lowest visible
+ * index), this is the raw Compose-native pair [ChatScrollGeometry.bottomEdgeIndex]
+ * / [ChatScrollGeometry.topEdgeIndex] translate into the chat's semantic
+ * bottom/old-end edges — which raw index means which edge flips with
+ * `reverseLayout`, so callers never read this directly for that purpose.
+ * Thin Compose glue over [LazyListState]'s layout info; the actual edge
+ * arithmetic is the pure, tested [ChatScrollGeometry].
+ */
+private fun LazyListState.lastVisibleItemIndex(): Int =
+    layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
 
 /**
  * Wraps a message bubble with the swipe-to-reply gesture. The bubble tracks the

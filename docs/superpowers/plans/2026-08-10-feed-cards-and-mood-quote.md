@@ -118,7 +118,7 @@ du dépôt pour les tests de modèles purs du SDK.
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy
+cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK
 xcodebuild test -scheme MeeshySDK-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
   -only-testing:MeeshySDKTests/FeedPostReelDisplayMediaTests -quiet
@@ -150,6 +150,7 @@ ligne 755) :
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
+cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK
 xcodebuild test -scheme MeeshySDK-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
   -only-testing:MeeshySDKTests/FeedPostReelDisplayMediaTests -quiet
@@ -196,7 +197,8 @@ puis remplacer la branche `case .audio:` du `switch kind` (ligne 208) par :
 - [ ] **Step 6: Vérifier la compile de l'app**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
+(cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate)
+cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build
 ```
@@ -288,7 +290,8 @@ final class FeedPostCardLayoutTests: XCTestCase {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
+(cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate)
+cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build
 ```
@@ -378,7 +381,8 @@ extension View {
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
+(cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate)
+cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build
 xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -468,7 +472,8 @@ Dans le même fichier, remplacer le bloc `count == 1` de `mediaPreview` (lignes 
 - [ ] **Step 8: Vérifier la compile et la suite complète des vues**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
+(cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate)
+cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build
 xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -803,7 +808,7 @@ final class MoodReplyAuthorTests: XCTestCase {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy
+cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK
 xcodebuild test -scheme MeeshySDK-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
   -only-testing:MeeshySDKTests/MoodReplyAuthorTests -quiet
@@ -857,6 +862,7 @@ Attendu : `test_moodReply_carriesAuthorName_fromServerSnapshot` ÉCHOUE — obte
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
+cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK
 xcodebuild test -scheme MeeshySDK-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
   -only-testing:MeeshySDKTests/MoodReplyAuthorTests -quiet
@@ -867,6 +873,7 @@ Attendu : 2 tests PASS.
 - [ ] **Step 5: Vérifier la non-régression du décodage des messages**
 
 ```bash
+cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK
 xcodebuild test -scheme MeeshySDK-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
   -only-testing:MeeshySDKTests/APIMessageToMessageTests -quiet
@@ -970,7 +977,8 @@ final class BubbleMoodQuoteLayoutTests: XCTestCase {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
+(cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate)
+cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build
 xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -1058,7 +1066,8 @@ Remplacer le `body` de `BubbleMoodReplyPreview` (lignes 232-257) par :
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
+(cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate)
+cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build
 xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \

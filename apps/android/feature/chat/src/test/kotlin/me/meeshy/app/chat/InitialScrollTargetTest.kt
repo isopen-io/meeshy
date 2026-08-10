@@ -73,4 +73,40 @@ class InitialScrollTargetTest {
 
         assertThat(InitialScrollTarget.of(items)).isEqualTo(0)
     }
+
+    // -- orientation-aware overload ----------------------------------------
+
+    @Test
+    fun `TopDown is the default orientation, unchanged from the orientation-less overload`() {
+        val items = listOf(row("m1"), row("m2"), row("m3"))
+
+        assertThat(InitialScrollTarget.of(items, ChatListOrientation.TopDown))
+            .isEqualTo(InitialScrollTarget.of(items))
+    }
+
+    @Test
+    fun `BottomUp -- with no unread separator the target is row zero (bottom of a reversed list)`() {
+        // caller passes the RENDERED (reversed, newest-first) list
+        val items = listOf(row("m3"), row("m2"), row("m1"))
+
+        assertThat(InitialScrollTarget.of(items, ChatListOrientation.BottomUp)).isEqualTo(0)
+    }
+
+    @Test
+    fun `BottomUp -- the unread separator still wins, found at its own position in the reversed list`() {
+        // reversed: [m3, m2, UnreadSeparator, m1]
+        val items = listOf(row("m3"), row("m2"), ChatListItem.UnreadSeparator, row("m1"))
+
+        assertThat(InitialScrollTarget.of(items, ChatListOrientation.BottomUp)).isEqualTo(2)
+    }
+
+    @Test
+    fun `BottomUp -- a single message targets its own row`() {
+        assertThat(InitialScrollTarget.of(listOf(row("only")), ChatListOrientation.BottomUp)).isEqualTo(0)
+    }
+
+    @Test
+    fun `BottomUp -- an empty list has no scroll target`() {
+        assertThat(InitialScrollTarget.of(emptyList(), ChatListOrientation.BottomUp)).isNull()
+    }
 }

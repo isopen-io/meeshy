@@ -754,6 +754,20 @@ public extension FeedPost {
         return list.first(where: { $0.type == .image })
     }
 
+    /// Média à afficher en FOND d'une surface réel : la vidéo si le post en
+    /// porte une, sinon la première image. `nil` quand aucun visuel n'existe —
+    /// l'appelant rend alors son propre fond (dégradé audio, couleur d'accent).
+    ///
+    /// Distinct de `primaryReelDisplayMedia`, qui désigne le média JOUÉ et
+    /// préfère l'audio à l'image. Les confondre ferait taire un réel audio
+    /// portant une image de couverture : son `kind` basculerait sur
+    /// `.imageOnly` et l'autoplay ne le prendrait plus.
+    var reelBackgroundMedia: FeedMedia? {
+        let list = reelDisplayMedia
+        if let video = list.first(where: { $0.type == .video }) { return video }
+        return list.first(where: { $0.type == .image })
+    }
+
     /// Filters a feed page down to the reels, preserving order. Seeds the reel
     /// pager from the already-loaded feed.
     static func reels(from posts: [FeedPost]) -> [FeedPost] {

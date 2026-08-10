@@ -17,11 +17,26 @@ object InitialScrollTarget {
     /**
      * The row index to scroll to on open, or `null` when the list is empty
      * (nothing to scroll to). The [ChatListItem.UnreadSeparator] row wins when
-     * present; otherwise the last row (bottom).
+     * present; otherwise the last row (bottom). Equivalent to
+     * `of(items, ChatListOrientation.TopDown)` — kept for
+     * [ChatListOrientation.TopDown] callers/tests that predate the
+     * orientation parameter.
      */
-    fun of(items: List<ChatListItem>): Int? {
+    fun of(items: List<ChatListItem>): Int? = of(items, ChatListOrientation.TopDown)
+
+    /**
+     * Orientation-aware form of the single-argument overload above. [items]
+     * must already be the list actually rendered by the `LazyColumn` —
+     * oldest-first in [ChatListOrientation.TopDown], `items.asReversed()`
+     * (newest-first) in [ChatListOrientation.BottomUp]. The
+     * [ChatListItem.UnreadSeparator] search is a plain content lookup over
+     * whichever list is passed in (orientation-agnostic by construction);
+     * only the "no separator, land on the newest message" fallback needs
+     * [orientation] — it delegates to [ChatScrollGeometry.bottomIndex].
+     */
+    fun of(items: List<ChatListItem>, orientation: ChatListOrientation): Int? {
         if (items.isEmpty()) return null
         val separator = items.indexOfFirst { it is ChatListItem.UnreadSeparator }
-        return if (separator >= 0) separator else items.lastIndex
+        return if (separator >= 0) separator else ChatScrollGeometry.bottomIndex(items.lastIndex, orientation)
     }
 }
