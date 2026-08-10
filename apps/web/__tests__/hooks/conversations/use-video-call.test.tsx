@@ -78,8 +78,18 @@ describe('useVideoCall', () => {
     ]),
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+
+    // useCallStore is a module-level singleton, not reset between tests by
+    // Jest itself — Vague 91's currentCall guard (startCall's ack-success
+    // handler now READS currentCall, where nothing in this hook ever did
+    // before) made every test in this file implicitly depend on it starting
+    // null, whatever an earlier test left behind. Reset explicitly, mirroring
+    // the same-purpose reset the "startCall sets currentCall" describe below
+    // already did locally.
+    const { useCallStore: storeModule } = await import('@/stores/call-store');
+    storeModule.setState({ currentCall: null, isInCall: false });
 
     // Setup navigator.mediaDevices mock
     Object.defineProperty(navigator, 'mediaDevices', {
@@ -828,6 +838,65 @@ describe('useVideoCall', () => {
 
       const { useCallStore: storeModule } = await import('@/stores/call-store');
       expect(storeModule.getState().currentCall).toBeNull();
+    });
+
+    it('abandons the newly-initiated call instead of clobbering an already-active different call', async () => {
+      // CALL_INITIATE_ACK_TIMEOUT_MS is 10s — long enough that the user can
+      // accept an unrelated incoming call (CallManager.acceptOrJoinCall sets
+      // currentCall/isInCall on its own, with no coordination with this
+      // hook) before this ack lands. Committing here would silently tear
+      // the call the user is already in out from under its mounted
+      // VideoCallInterface.
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      const activeCall = {
+        id: 'call-already-active',
+        conversationId: 'conv-other',
+        mode: 'p2p',
+        status: 'active',
+        initiatorId: 'peer-1',
+        startedAt: new Date(),
+        participants: [],
+      };
+      storeModule.setState({ currentCall: activeCall as any, isInCall: true });
+
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+
+      mockEmit.mockImplementation((event: string, _data: unknown, cb?: Function) => {
+        if (event === CLIENT_EVENTS.CALL_INITIATE) {
+          cb?.({ success: true, data: { callId: 'call-newcomer', mode: 'p2p', iceServers: [] } });
+        }
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      // The already-active call must survive untouched.
+      expect(storeModule.getState().currentCall).toBe(activeCall);
+      expect(storeModule.getState().isInCall).toBe(true);
+
+      // The newcomer is ended on the wire — the callee must not be left
+      // ringing forever for a call the caller will never use.
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_END,
+        { callId: 'call-newcomer', reason: 'rejected' }
+      );
+
+      // The pre-authorized stream acquired for the abandoned call is
+      // released, not left hot.
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+
+      expect(mockToastSuccess).not.toHaveBeenCalled();
     });
   });
 });

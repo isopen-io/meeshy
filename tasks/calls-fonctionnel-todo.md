@@ -5865,3 +5865,92 @@ trouver un candidat frais.
   needs on-device confirmation) ; `rejoinActiveCallAfterReconnect` (web, réévaluée ce cycle, confirmée
   non-régression — retirée du backlog) ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors
   d'atteinte dans ce sandbox ; bun local 1.3.11 vs. 1.3.14 attendu par CLAUDE.md (hors périmètre calling).
+
+## Vague 91 — `startCall()`'s ack-success handler clobbers an already-active different call when the ack lands after the user accepted an unrelated incoming call (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine (la Vague 90, #2755, était déjà mergée
+sur `main`). Un premier passage sur `main` s'est avéré STALE (fetch initial du sandbox pointait sur un ref
+`main` obsolète, 24h en retard — le git local a signalé un "forced update" en re-fetchant, ce qui a d'abord
+semblé être une réécriture d'historique inquiétante ; vérifié via `mcp__github__list_commits` sur `main`
+côté API GitHub que le tip réel était légitime, récent, linéaire, auteur réel — juste un cache local
+périmé). Deux candidats identifiés en cours de route (`call-store.ts` `addRemoteStream`, `enableVideo()`
+early-return desync) se sont révélés DÉJÀ corrigés par des sessions concurrentes de cette même routine
+(Vagues 85 et 86, mergées entre-temps) — travail redondant découvert et abandonné avant tout push, aucune
+duplication publiée. Toolchains iOS (`xcodebuild`/`swift`) et Android (`gradle` présent, aucun SDK) toujours
+hors d'atteinte. Audit dédié (agent Explore, lecture seule, périmètre web+gateway, mandaté pour éviter les 2
+doublons déjà rencontrés) a remonté 3 candidats frais ; le premier (confiance haute) retenu après relecture
+ligne à ligne directe de tous les fichiers cités.
+
+- **Root cause confirmée par lecture directe** : `use-video-call.ts` `startCall()` et `CallManager.tsx`
+  `acceptOrJoinCall()` sont deux flux TOTALEMENT INDÉPENDANTS qui écrivent tous les deux dans le même
+  singleton `currentCall`/`isInCall` (`call-store.ts`), sans aucune coordination entre eux — contrairement
+  aux races déjà corrigées à l'intérieur d'UN SEUL de ces flux (Vague 90 : deux appels ENTRANTS pendant une
+  acceptation en cours). `startCall()` attend son ack `call:initiate` jusqu'à `CALL_INITIATE_ACK_TIMEOUT_MS`
+  (10 s, Vague 89) avant d'appeler `useCallStore.getState().setCurrentCall({...})` — SANS jamais vérifier si
+  `currentCall` a, entre-temps, déjà été pris par un AUTRE appel. Scénario atteignable sans timing adverse :
+  utilisateur A tape sur « Appeler » (conversation X) → `getUserMedia` + `call:initiate` en vol. Pendant les
+  jusqu'à 10 s d'attente de l'ack, un appel entrant non lié (conversation Y) sonne — `CallNotification` est
+  une bannière flottante non bloquante (`fixed top-4`), pas un modal plein écran, donc parfaitement tapable
+  pendant que X est encore en train de composer. A accepte Y → `acceptOrJoinCall` fait son propre
+  `getUserMedia` + ack `call:join`, réussit, `setCurrentCall(Y)` + `setInCall(true)` — `VideoCallInterface`
+  se monte sur Y. QUAND l'ack de X arrive enfin (succès), `setCurrentCall(X)` s'exécute SANS CONDITION,
+  écrasant Y dans le store unique pendant que `VideoCallInterface` reste monté et câblé sur les
+  `WebRTCService`/peer connections de Y — son prop `callId` change sous ses pieds, en pleine conversation
+  active.Ct scénario n'exige aucune fenêtre de course étroite : n'importe quel délai réseau ordinaire sur
+  l'ack de X pendant que l'utilisateur — raisonnablement — répond à un autre appel suffit. Coté serveur, rien
+  ne bloque ce doublon : le nettoyage phantom cross-conversation (`CallService.initiateCall` →
+  `isPhantomCallStale`) épargne DÉLIBÉRÉMENT tout appel réel en cours dans une autre conversation, donc le
+  `call:initiate` de X est bien accepté par le gateway pendant que Y est déjà actif.
+- **Fix** : dans la branche succès de l'ack (`ack.data?.callId && user`), lecture de
+  `useCallStore.getState().currentCall` juste avant `setCurrentCall` — si un appel DIFFÉRENT est déjà actif
+  (`activeCall && activeCall.id !== ack.data.callId`), le nouvel appel (celui que l'utilisateur vient
+  d'abandonner en acceptant l'autre) est terminé sur le fil (`call:end reason=rejected`, même pattern que
+  `rejectWaitingCall` dans `CallManager.tsx` pour le cas symétrique côté callee) au lieu d'écraser l'appel en
+  cours, et le média pré-autorisé acquis pour lui est libéré (`stopPreauthorizedStream`) — sinon le
+  correspondant de X resterait à sonner indéfiniment et la caméra/micro acquis pour X resterait chaud sans
+  jamais être consommé. `socket.emit` casté en interface minimale (`{ emit: (e, d) => void }`), même pattern
+  que `rejectWaitingCall` — le typage strict de `ClientToServerEvents[CALL_END]` exige un callback d'ack que
+  ce site n'a pas besoin de consommer (fire-and-forget, comme son homologue). Un seul fichier de production
+  modifié (+14/-0 lignes).
+- **Tests** (TDD, RED confirmé avant fix) : nouveau test dans `use-video-call.test.tsx` (describe « startCall
+  sets currentCall for the initiator ») — pose un `currentCall` actif différent AVANT `startCall()`, force
+  l'ack de `call:initiate` à réussir avec un AUTRE `callId`, vérifie que l'appel actif survit intact
+  (référence stricte `toBe`), que `call:end {callId: newcomer, reason: 'rejected'}` est émis, que les pistes
+  du stream pré-autorisé sont arrêtées et le handoff global nettoyé, et que le toast de succès ne se déclenche
+  PAS. RED confirmé (le currentCall actif était bien écrasé par l'appel « newcomer » avant fix). **Effet de
+  bord découvert au RED** : `useCallStore` est un singleton de MODULE non réinitialisé entre tests dans ce
+  fichier (seul le describe « startCall sets currentCall » le faisait, localement) — rien avant cette vague
+  ne LISAIT jamais `currentCall` dans ce hook, donc l'absence de reset global était invisible. Le nouveau
+  garde en lit désormais un à chaque succès d'ack, ce qui a fait échouer 4 tests préexistants sans rapport
+  (`should allow a new startCall once the previous one has resolved via its ack`, 2 tests du describe
+  « call:initiate ack timeout (Vague 89) ») dont le `currentCall` résiduel d'un test antérieur dans le même
+  fichier collidait désormais avec leur propre 2e `startCall()`. Fixé à la racine : reset explicite de
+  `currentCall`/`isInCall` dans le `beforeEach` DE TOUT LE FICHIER (miroir du reset déjà local au describe
+  « startCall sets currentCall »), pas un correctif au cas par cas des 4 tests touchés — la prochaine
+  assertion sensible à cet état n'aura pas à redécouvrir le même trou.
+- **Vérification** : `use-video-call.test.tsx` (35 tests, +1 net, 4 régressions ci-dessus corrigées par le
+  reset) vert. Sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-degradation`
+  (45 suites / 517 tests) vert — aucune régression, notamment `CallManager.acceptInFlightBump.test.tsx`
+  (Vague 90, scénario sœur côté callee) et `CallManager.acceptCall.test.tsx`. Prérequis CLAUDE.md rejoués
+  (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`, puis `packages/shared && npx
+  prisma generate --generator client && bun run build` sans erreur. `npx tsc --noEmit` sur `apps/web` :
+  1 erreur neuve détectée au premier passage (`TS2554: Expected 3 arguments, but got 2` sur l'emit non casté)
+  — corrigée en adoptant le même cast que `rejectWaitingCall` ; diff final **0 erreur neuve** vs. la
+  baseline 1657 mesurée sur `git stash`/`stash pop` du seul diff de cette vague. `eslint`/`next lint` : même
+  échec sandbox-only de config ESLint v9 circulaire documenté aux vagues précédentes (65-90), non bloquant,
+  indépendant de ce diff (non ré-exécuté ce cycle).
+- **Reste ouvert** (reconduit + nouveaux candidats de l'agent d'exploration cette vague, non retenus) : dead
+  code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+  `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ; toolchains
+  iOS/Android toujours hors d'atteinte dans ce sandbox. Nouveaux candidats web non repris ce cycle : (2,
+  confiance moyenne-haute) `VideoCallInterface.tsx` `handleSwitchCamera` garde toujours son propre
+  `cameraSwitchInFlightRef` séparé, jamais unifié avec `videoToggleInFlightRef`/le contrôleur
+  adaptive-degradation (Vague 76 leur avait délibérément donné des refs distinctes, Vague 82 n'a unifié QUE
+  toggle-manuel-vs-dégradation) — un switch caméra concurrent à une suspension/reprise automatique du
+  contrôleur peut orpheliner une capture caméra, même classe de bug que Vagues 76/82 sur un chemin qu'elles ne
+  couvrent pas ; candidat sérieux pour la prochaine vague. (3, confiance basse) `use-audio-effects.ts` ne
+  dispose jamais l'ancien `MediaStreamAudioDestinationNode` si `inputStream` change de référence en cours de
+  montage — actuellement un piège latent plutôt qu'un bug actif, aucun chemin d'appel actuel ne remplace la
+  référence du stream en cours d'appel (le switch caméra mute le stream existant plutôt que de le remplacer).
