@@ -13,7 +13,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.auth.SavedAccount
+import me.meeshy.sdk.model.auth.ServerEnvironment
 import me.meeshy.ui.component.BrandLogo
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyPrimaryButton
@@ -118,7 +121,67 @@ fun LoginScreen(
                     )
                 }
             }
+
+            // Parity iOS LoginView.environmentSelector — developer/QA-only backend
+            // picker. iOS gates on `Self.isSimulator`; Android gates on
+            // `showEnvironmentSelector` (== BuildConfig.DEBUG via MeeshyConfig), the
+            // idiomatic Android equivalent (no reliable simulator-vs-device signal).
+            if (state.showEnvironmentSelector) {
+                EnvironmentSelector(
+                    state = state,
+                    viewModel = viewModel,
+                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
+                )
+            }
         }
+    }
+}
+
+/** Developer/QA backend picker — iOS `LoginView.environmentSelector`. */
+@Composable
+private fun EnvironmentSelector(
+    state: AuthUiState,
+    viewModel: AuthViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+            ServerEnvironment.entries.forEach { env ->
+                FilterChip(
+                    selected = state.selectedEnvironment == env,
+                    onClick = { viewModel.selectEnvironment(env) },
+                    label = { Text(env.label) },
+                )
+            }
+        }
+
+        if (state.showCustomHostInput) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.sm),
+            ) {
+                OutlinedTextField(
+                    value = state.customHostInput,
+                    onValueChange = viewModel::onCustomHostChange,
+                    label = { Text(stringResource(R.string.login_custom_host_label)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = viewModel::applyCustomHost, enabled = state.canApplyCustomHost) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = stringResource(R.string.login_apply_custom_host),
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.login_server_origin, state.serverOriginLabel),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textMuted,
+            modifier = Modifier.padding(top = MeeshySpacing.xs),
+        )
     }
 }
 

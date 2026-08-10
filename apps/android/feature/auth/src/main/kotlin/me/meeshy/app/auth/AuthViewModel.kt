@@ -15,7 +15,11 @@ import me.meeshy.sdk.auth.SavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.auth.SavedAccount
 import me.meeshy.sdk.model.auth.SavedAccounts
+import me.meeshy.sdk.model.auth.ServerEnvironment
+import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.ServerEnvironmentStore
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import javax.inject.Inject
 
@@ -29,11 +33,26 @@ data class AuthUiState(
     val savedAccounts: List<SavedAccount> = emptyList(),
     val selectedAccount: SavedAccount? = null,
     val showNormalLogin: Boolean = false,
+    val selectedEnvironment: ServerEnvironment = ServerEnvironment.PRODUCTION,
+    val customHostInput: String = "",
+    val showEnvironmentSelector: Boolean = false,
 ) {
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
     /** iOS `LoginView.showPicker` — the remembered-account list instead of the credential form. */
     val showPicker: Boolean get() = SavedAccounts.showPicker(savedAccounts, showNormalLogin)
+
+    /** iOS `LoginView`'s `showCustomInput || selectedEnv == .custom` — reveals the host field. */
+    val showCustomHostInput: Boolean get() = selectedEnvironment == ServerEnvironment.CUSTOM
+
+    /** iOS `LoginView`'s apply-button `.disabled(customHost.trimmingCharacters(...).isEmpty)`. */
+    val canApplyCustomHost: Boolean get() = ServerEnvironmentResolver.canApplyCustomHost(customHostInput)
+
+    /** iOS `LoginView`'s "Connecté à : %@" label — `MeeshyConfig.shared.serverOrigin`. */
+    val serverOriginLabel: String
+        get() = ServerEnvironmentResolver.serverOrigin(
+            ServerEnvironmentResolver.apiBaseUrl(selectedEnvironment, customHostInput),
+        )
 }
 
 @HiltViewModel
@@ -42,12 +61,22 @@ class AuthViewModel @Inject constructor(
     private val realtimeCoordinator: RealtimeSessionCoordinator,
     private val savedAccountsStore: SavedAccountsStore,
     private val cacheClock: CacheClock,
+    private val config: MeeshyConfig,
+    private val serverEnvironmentStore: ServerEnvironmentStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
         AuthUiState(
             isAuthenticated = authRepository.isAuthenticated,
             savedAccounts = savedAccountsStore.accounts.value,
+            selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
+            customHostInput = serverEnvironmentStore.customHost,
+            // Reuses `config.enableLogging` (itself `BuildConfig.DEBUG`) as the
+            // developer/QA-build signal — the Android equivalent of iOS
+            // `LoginView`'s `Self.isSimulator` gate. A second, independently-sourced
+            // "is this a debug build" flag would only ever agree with the existing
+            // one, so this reuses rather than duplicates it.
+            showEnvironmentSelector = config.enableLogging,
         ),
     )
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
@@ -107,6 +136,36 @@ class AuthViewModel @Inject constructor(
         savedAccountsStore.remove(userId)
     }
 
+    /**
+     * A pill tap on the developer/QA environment selector — iOS `LoginView`'s
+     * `selectedEnv = env; if env != .custom { MeeshyConfig.shared.applyEnvironment(env) }`.
+     * Selecting [ServerEnvironment.CUSTOM] only reveals the host field locally; it is
+     * NOT persisted until [applyCustomHost] confirms a host, mirroring iOS leaving
+     * `MeeshyConfig.shared.selectedEnvironment` untouched until the checkmark tap.
+     */
+    fun selectEnvironment(env: ServerEnvironment) {
+        _state.update { it.copy(selectedEnvironment = env) }
+        if (env != ServerEnvironment.CUSTOM) {
+            serverEnvironmentStore.select(env)
+        }
+    }
+
+    /** Custom-host text field binding — iOS `LoginView`'s `$customHost`. */
+    fun onCustomHostChange(value: String) {
+        _state.update { it.copy(customHostInput = value) }
+    }
+
+    /**
+     * The custom-host checkmark tap — iOS `LoginView.applyCustomHost()`. A blank/
+     * whitespace-only host is inert, mirroring the disabled apply button.
+     */
+    fun applyCustomHost() {
+        val host = _state.value.customHostInput
+        if (!ServerEnvironmentResolver.canApplyCustomHost(host)) return
+        serverEnvironmentStore.applyCustomHost(host.trim())
+        _state.update { it.copy(selectedEnvironment = ServerEnvironment.CUSTOM) }
+    }
+
     fun login() {
         val current = _state.value
         if (current.username.isBlank() || current.password.isBlank()) {
@@ -142,7 +201,15 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.logout()
             realtimeCoordinator.onAuthenticatedChanged(false)
-            _state.value = AuthUiState(savedAccounts = savedAccountsStore.accounts.value)
+            // The saved-account list AND the developer/QA environment selection are
+            // both device-level, cross-account state — neither is part of what a
+            // logout should reset (SessionTeardown.wipe() doesn't touch either).
+            _state.value = AuthUiState(
+                savedAccounts = savedAccountsStore.accounts.value,
+                selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
+                customHostInput = serverEnvironmentStore.customHost,
+                showEnvironmentSelector = config.enableLogging,
+            )
         }
     }
 }
