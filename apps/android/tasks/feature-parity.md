@@ -1465,8 +1465,35 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
+      **as swipe gestures specifically** — mute/mark-unread already reachable via
+      the context menu (see below), swipe stays capped at its 2 directions; this
+      list is genuinely swipe-only follow-up, not a full-feature gap.
 - [~] Context menu done (long-press → `DropdownMenu` : pin/unpin, mute/unmute,
-      mark-read si non lu, archive/unarchive) ; details/invite/favorite/move/
+      mark-read si non lu, archive/unarchive) ; **mark-read/mark-unread toggle
+      done** (slice `conversation-mark-unread`, 2026-08-10): the menu previously
+      only ever offered "Mark as read" (`hasUnread`-gated) — the reverse action
+      was entirely absent (confirmed via a zero-hit grep for `markUnread`/
+      `mark-unread` across `apps/android` before starting), even though the
+      gateway route (`POST conversations/{id}/mark-unread`) and iOS's own
+      `ConversationContextMenuView` toggle already existed. New
+      `ConversationApi.markUnread` + `ConversationRepository.markUnreadOptimistic`
+      (hints `unreadCount = 1` locally, server stays authoritative on the exact
+      count; no-op when already unread) + `OutboxKind.MARK_UNREAD` sharing the
+      `READ_RECEIPT` lane + `ConversationListViewModel.markUnread`, wired as a
+      second `DropdownMenuItem` shown only when `!hasUnread` (symmetric to the
+      existing `hasUnread`-gated "Mark as read" item — an `if/else`, not two
+      independent `if`s, since exactly one of the pair is always offered).
+      `MARK_UNREAD` coalesces against a pending `READ_RECEIPT` as opposite
+      terminal states (`OutboxCoalescer.terminalToggle`, same shape as
+      block/unblock and pin/unpin) rather than iOS's simpler always-replace
+      shared coalescing key — **SOTA over iOS**: a quick read-then-unread undo
+      cancels both mutations locally instead of firing a redundant round-trip
+      the gateway would just no-op anyway. +3 `ConversationRepositoryTest`, +2
+      `ConversationListViewModelTest`, +5 `OutboxCoalescerTest`, +1
+      `OutboxLaneMapTest`. Mutation-proven: dropping the already-unread no-op
+      guard fails **exactly**
+      `markUnreadOptimistic is a no-op when the conversation is already unread`
+      (18 run, 1 failed, no collateral). ; details/invite/favorite/move/
       lock/block/delete pending
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média

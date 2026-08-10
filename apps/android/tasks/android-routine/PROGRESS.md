@@ -2,6 +2,89 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **mark-unread landed in the conversation context menu** (slice
+> `conversation-mark-unread`, feature-parity §B, PR #2715). **RE-PROVEN before picking:** with Auth
+> §A's fully-local items exhausted (per the previous run's note), the four standing candidates
+> re-listed across the last several runs were the §C inverted-list rewrite (re-confirmed genuinely
+> large, still deferred — see below for why this run did NOT attempt the promised decomposition),
+> `TagInputField` (re-grepped `ApiConversation` for `tags`, still absent, still blocked), the Kover
+> coverage-gate infra (lowest priority — infra, not a parity gap), and moving to
+> Conversations/Chat per the `Auth → Conversations → Chat → …` build order. Rather than force the
+> §C decomposition on faith, this run first swept §B's own "Reste" follow-up notes for a smaller,
+> concretely-scoped, already-understood gap — found one at the swipe-actions bullet's "mute/lock/
+> **mark-unread**/block/hide pending" list: a real half of the read/unread toggle Android was
+> missing entirely (grepped `markUnread`/`mark-unread`/`MarkUnread` across all of `apps/android`,
+> zero hits in any casing, before starting — this was not stale). Confirmed via iOS
+> `ConversationContextMenuView.swift` (single `onMarkReadToggle` action, branching on
+> `unreadCount > 0`) + `ConversationListViewModel.markAsUnread`/`ConversationStore`'s
+> `.markAsUnread` case + the gateway's `POST /conversations/:id/mark-unread` route
+> (`conversations/messages.ts`, distinct from the `mark-as-read`/`message-read-status.ts` route
+> `markRead` already targets — no `mark-as-unread` alias exists) that this is a real, already-live
+> server capability iOS already exposes and Android simply never wired. **Added (production, all
+> `apps/android`):** `core:network` `ConversationApi.markUnread` (`POST
+> conversations/{id}/mark-unread`); `sdk-core` `ConversationRepository.markUnreadOptimistic` (hints
+> `unreadCount = 1` locally — the server stays authoritative on the exact count, matching iOS's own
+> "hint ≥ 1, let the server correct it" comment; no-op, returns `false`, when the conversation is
+> unknown or already unread, mirroring `markReadOptimistic`'s shape exactly); a new
+> `OutboxKind.MARK_UNREAD` sharing the `READ_RECEIPT` lane (`OutboxLaneMap`); and
+> `ConversationListViewModel.markUnread`, wired as a second `DropdownMenuItem` in
+> `ConversationContextMenu` shown only when `!hasUnread` (an `if`/`else` against the existing
+> `hasUnread`-gated "Mark as read" item, not two independent `if`s — exactly one of the pair is
+> always offered, matching iOS's single toggle action). **Deliberate deviation from iOS, called out
+> not silent:** iOS's `UserStateMutation.markAsRead`/`.markAsUnread` share one coalescing key
+> ("readState") with always-replace (last-write-wins) semantics; Android's `OutboxCoalescer`
+> instead routes `READ_RECEIPT`/`MARK_UNREAD` through the existing `terminalToggle` helper (the same
+> opposite-terminal-state shape already used for block/unblock and pin/unpin) — a queued
+> mark-unread followed by mark-read (or vice versa) **annihilates both** rather than replacing with
+> the latest. Traced through both approaches by hand: on a true two-state toggle they always
+> converge to the same final synced state, but `terminalToggle` additionally skips a redundant
+> network round-trip when a fast undo returns to the pre-mutation server state (iOS's replace-only
+> approach would still fire one no-op API call in that case) — **SOTA over iOS**, and reuses an
+> existing SSOT helper rather than introducing an iOS-style shared-coalescing-key mechanism Android
+> didn't have. **+3 `ConversationRepositoryTest`** (hints unreadCount=1 + queues MARK_UNREAD; no-op
+> when already unread; no-op for an unknown conversation id), **+2 `ConversationListViewModelTest`**
+> (calls the repository + schedules a flush; a no-op mutation schedules nothing), **+5
+> `OutboxCoalescerTest`** (mark-unread-then-mark-read annihilates the mark-unread; mark-read-then-
+> mark-unread annihilates the mark-read; a repeated mark-unread keeps the latest; a first
+> mark-unread enqueues; a different conversation is not coalesced), **+1 `OutboxLaneMapTest`**
+> (mark-unread shares the read-receipt lane). **Mutation (RED proof):** dropping the
+> already-unread no-op guard in `markUnreadOptimistic` fails **exactly**
+> `markUnreadOptimistic is a no-op when the conversation is already unread` (18 run, 1 failed, no
+> collateral) — verified by hand (guard removed, ran the suite, restored, re-ran clean) rather than
+> asserted from memory. **Gate:** `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL in 2m 4s`**
+> (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks), re-run clean after the
+> mutation-proof restore. Reviewer **PASS** (diff `apps/android` only — `core/network`
+> [`ConversationApi.kt` +1 endpoint], `sdk-core` [`OutboxModel.kt`/`OutboxCoalescer.kt`/
+> `OutboxFlushWorker.kt` +1 kind +1 lane share +1 sender (unregistered-sender risk noted below, not
+> introduced by this slice — see "Also flagged" at the end), `ConversationRepository.kt` +1 method],
+> `feature/conversations` [`ConversationListViewModel.kt` +1 transition, `ConversationListScreen.kt`
+> +1 menu item threaded through 3 composables, ×1 string ×4 locales]; SDK purity — the store/API/
+> outbox additions are stateless building blocks at `markReadOptimistic`'s exact grain, the product
+> decision (which action the menu offers) stays in `:feature:conversations`; SSOT — reused
+> `OutboxCoalescer.terminalToggle` and `runPrefMutation` untouched, no re-implementation;
+> instant-app — synchronous local write, no spinner; UDF — unchanged `ConversationListViewModel`
+> shape, immutable `StateFlow<ConversationListUiState>`; no dead end; no tautological tests; no
+> coverage floor lowered). **feature-parity.md's "Context menu" bullet gains the mark-read/
+> mark-unread toggle note** (swipe-actions' own "mark-unread pending" note left as-is but annotated:
+> it means swipe-gesture-specifically, not the whole feature — see feature-parity.md itself).
+> **Also flagged, not fixed this run (scope discipline):** `OutboxFlushWorker.buildSenders()` is a
+> plain non-exhaustive `mapOf`, not a compiler-enforced-complete `when` like `OutboxLaneMap` — the
+> exact shape of bug class NOTES.md documents being fixed for `OutboxLaneMap` (BLOCK/FRIEND
+> silently stranded off the drain list) could still recur here for a *sender* specifically (a kind
+> with a lane assignment but no registered sender). This run's own `MARK_UNREAD` sender was added
+> correctly and verified via the full local gate, but the structural gap in the map itself is a
+> candidate follow-up for a future iOS-dette-style hygiene pass, not addressed here to stay within
+> one slice's scope. **Next slice (no single obvious pick — re-verify each before committing a
+> run):** the §C inverted-list rewrite's promised decomposition attempt is still outstanding (two
+> runs in a row have deferred it after re-confirming it's large; a third re-confirmation without an
+> attempt would be worth flagging explicitly rather than silently re-deferring again).
+> `TagInputField` remains blocked on the same absent `ApiConversation.tags` field. The Kover
+> coverage-gate infra remains the lowest-priority standing candidate. Also worth sweeping: other §B
+> "Reste" follow-up notes (context menu's `details/invite/favorite/move/lock/block/delete`,
+> pinned/muted/archived's `locked/favorited (emoji) pending`) may hide similarly small,
+> concretely-scoped gaps the same way mark-unread did — worth checking before defaulting to a
+> brand-new Conversations/Chat area slice.
+>
 > On 2026-08-10 the **server environment selector's app-side wiring landed** (slice
 > `auth-server-environment-wiring`, feature-parity §A, the pure core's own follow-up, tracked since
 > `auth-server-environment-selector` on 2026-07-21 and re-surfaced as "the next best candidate" by the
