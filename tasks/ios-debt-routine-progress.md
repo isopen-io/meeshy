@@ -25,7 +25,7 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    PresenceState` et `isDark: Bool` en propriétés `let` primitives passées par le parent ; le
    commentaire ligne 13 documente explicitement la règle (« évite que chaque ligne observe
    PresenceManager »). Zéro `@ObservedObject` sur singleton dans le fichier. Aucune action prise.
-3. **[EN COURS — M2 sous-tranche app-side livrée 2026-08-10 (run #4), reste bloqué sur le VM lui-même]**
+3. **[FAIT — M2 conclu 2026-08-10 (run #29 de la routine dual-lane)]**
    UI State Aggregation — unifier les booléens de chargement de `ConversationViewModel` en un enum
    `ConversationLoadingPhase`. La note d'origine était **partiellement fausse**, pas seulement
    reportable telle quelle : le groupe des 4 booléens de pagination est
@@ -59,6 +59,20 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    bloqué tant que `ConversationFirstRenderWarmup.swift` continue de les lire directement (choix
    délibéré ci-dessus) — donc M2 ne peut jamais atteindre un état « 0 lecteur brut restant » sans une
    décision dédiée sur le contournement de crash lui-même.
+   **M2 étudié et conclu (run #29, 2026-08-10)** : la sémantique de mirroring de la copie
+   `ConversationStateStore` s'avère triviale — **ce n'est PAS un mirroring, c'est du scaffolding
+   mort**. Grep exhaustif de `\bisLoadingInitial\b`/`\bisLoadingOlder\b`/`\bisLoadingNewer\b`/
+   `\bisRevalidating\b` sous `apps/ios` + `packages/MeeshySDK` (hors le test lui-même) : les 4
+   propriétés déclarées sur `ConversationStateStore` (lignes 20-23 avant suppression) n'étaient
+   lues/écrites NULLE PART via une valeur typée `ConversationStateStore` — le store n'est jamais
+   référencé que comme `state`/`stateStore`, tous deux grep-propres. Les seules occurrences vivantes
+   restent les copies `@Published` de `ConversationViewModel` (lignes 142-149), intactes. Supprimées :
+   4 lignes mortes + garde de régression `ConversationStateStoreDeadLoadingBooleansSourceGuardTests`
+   (empêche leur réintroduction ET protège `ConversationViewModel`/`isLoadingReactions` contre un
+   balayage trop large). Le blocage documenté ci-dessus (`ConversationFirstRenderWarmup.swift`) ne
+   concernait que la copie VIVANTE sur `ConversationViewModel`, jamais cette copie morte sur le store —
+   les deux M2 sont donc indépendants, pas séquentiels comme la note précédente le laissait supposer.
+   Branche `claude/apps/ios/debt-state-store-dead-loading-booleans`.
 4. **[EN COURS — 2 sous-tranches livrées, triage exhaustif app-side terminé 2026-08-10 : ZÉRO site
    mécanique restant sous `apps/ios/Meeshy/`]** Swift Concurrency Migration — `DispatchQueue.main.async`
    restants → `@MainActor`/async-await structuré.
