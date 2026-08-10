@@ -61,14 +61,19 @@ extension ConversationView {
             }
         )
         .accessibilityLabel(scrollToBottomAccessibilityLabel)
-        .onReceive(
-            ConversationAudioCoordinator.sharedForTesting.$activeContext
-                .combineLatest(ConversationAudioCoordinator.sharedForTesting.$isPlaying)
-                .map { [id = unreadAttachment?.id] context, playing in
-                    playing && id != nil && context?.attachmentId == id
-                }
-                .removeDuplicates()
-        ) { scrollButtonAudioIsPlaying = $0 }
+        .onReceive(scrollButtonAudioStatePublisher) { context, playing in
+            updateScrollButtonAudioIsPlaying(context: context, playing: playing)
+        }
+        .adaptiveOnChange(of: unreadAttachment?.id) { _, _ in
+            let coordinator = ConversationAudioCoordinator.sharedForTesting
+            updateScrollButtonAudioIsPlaying(context: coordinator.activeContext, playing: coordinator.isPlaying)
+        }
+    }
+
+    func updateScrollButtonAudioIsPlaying(context: ActiveAudioContext?, playing: Bool) {
+        let id = unreadAttachment?.id
+        let newValue = playing && id != nil && context?.attachmentId == id
+        if scrollButtonAudioIsPlaying != newValue { scrollButtonAudioIsPlaying = newValue }
     }
 
     private var scrollToBottomAccessibilityLabel: String {

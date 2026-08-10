@@ -265,7 +265,7 @@ struct ConversationView: View {
     /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
     /// sheet de destinations se présente sans conflit).
     @StateObject var mediaSaveCoordinator = MediaSaveCoordinator()
-    
+
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
 
@@ -280,6 +280,15 @@ struct ConversationView: View {
     /// looks up the target message's frame here at gesture fire time and
     /// passes it to `MessageOverlayMenu` as the source frame.
     @State var frameTracker = MessageFrameTracker()
+
+    /// Publisher stable (référence identique à chaque body eval) : l'inline
+    /// dans scrollToBottomButton reconstruisait l'abonnement au coordinator à
+    /// chaque frappe. Le mapping vers le bool dérivé se fait dans la closure
+    /// onReceive (l'id d'attachment non-lu change avec les messages entrants).
+    let scrollButtonAudioStatePublisher = ConversationAudioCoordinator.sharedForTesting
+        .$activeContext
+        .combineLatest(ConversationAudioCoordinator.sharedForTesting.$isPlaying)
+        .eraseToAnyPublisher()
 
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
