@@ -9,6 +9,108 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **the Feed post composer's audio-attachment sub-slice landed — re-proven and
+> shipped in the same iteration the prior slice's own follow-up list flagged it as unblocked**
+> (slice `feed-composer-voice-capture`, feature-parity §F — the standing "files, location, audio,
+> per-post language" candidate's audio sub-slice, previously deferred: "blocked on the still-
+> pending `MediaRecorder`/`AudioRecord` capture core... no Android audio recorder exists yet at
+> all, chat or feed"). **RE-PROUVEN before starting** (per the orchestrator's explicit prompt to
+> re-verify this exact unblock): confirmed `chat-voice-recording-capture` (merged the same day,
+> `#2791`) really did land a working, reusable `MediaRecorder` capture stack — read
+> `VoiceRecordingSession.kt`/`VoiceRecordingFile.kt`/`VoiceRecordingPill.kt` end to end (all
+> living in `:feature:chat`, module-private) and confirmed `:feature:feed` has no dependency on
+> `:feature:chat` (checked `build.gradle.kts`), so a literal reuse across features wasn't
+> possible without first promoting the shared bits — reused, not duplicated, per the prompt's own
+> explicit instruction. `git branch -r`/`gh pr list --state open` found no interrupted run (no
+> `claude/apps/android/*`/`claude/apps/ios/debt-*` branch touched in the prior 24h, no matching
+> open PR). Also read iOS's `AudioPostComposerView.swift` (785 lines) end to end — confirmed it's
+> a full dedicated screen (on-device transcription via `EdgeTranscriptionService`, a language
+> picker, its own preview/publish flow), a materially larger scope than the chat voice pill's
+> inline capture; decomposed rather than ported whole, matching the routine's own established
+> sub-slice-decomposition precedent (`tus-chunked-upload-core`, `feed-composer-file-attachment`).
+> **Shipped (production, all `apps/android`)**: promoted `VoiceRecordingSession`/
+> `VoiceRecordingOutcome`/`VoiceRecordingStop`/`VoiceRecordingPhase`/`VoiceRecordingFile`
+> (pure — same file, same tests, only the package changed) from `:feature:chat` to
+> `:core:model`'s `me.meeshy.sdk.model.waveform` (alongside `MicAmplitudeDecibels`, which the
+> Feed composer already had transitive access to via `:sdk-core`'s `api(project(":core:model"))`
+> and needed no move) and `VoiceRecordingPill` (`internal` → `public`) from `:feature:chat` to
+> `:sdk-ui`'s `me.meeshy.ui.component.recording` — a behaviour-preserving move (`ChatScreen.kt`
+> gains 4 new imports, otherwise unchanged; its own two moved test files stay green verbatim) so
+> both composers share one state machine/pill instead of two drifting copies, honouring the
+> orchestrator's explicit "reuse, don't duplicate" instruction and CLAUDE.md's SSOT principle.
+> `FeedComposerSheet` gains a sixth attach tile (`Icons.Filled.Mic`, mirrors iOS's `mic.fill`)
+> wired with the **exact same** permission-request → `MediaRecorder` (`MPEG_4`/`AAC`) →
+> 100 ms tick-and-meter loop → Stop/Send-finalises-identically shape `ChatScreen` already proved
+> — Android-runtime I/O glue with no further pure decision to share, so duplicated rather than
+> promoted (matching this composer's own existing precedent of duplicating `readMediaUploadItem`
+> rather than importing chat's). While recording, `VoiceRecordingPill` **replaces**
+> `MediaAttachmentsRow` in place (same UX shape as the chat composer swapping its whole input row
+> for the pill) — already-attached media/spinner reappear immediately once the take is
+> cancelled/finalised. The take is handed to a new `dispatchItems(items: List<MediaUploadItem>)`
+> entry point — a small refactor extracting the shared "cap, upload, fold into draft+previews"
+> tail (`uploadAndAttach`) out of the existing `dispatchPicked`, so both the Uri-based pickers and
+> the directly-built voice `MediaUploadItem` (bytes + explicit `"audio/mp4"` MIME, matching
+> chat's approach rather than trusting `ContentResolver.getType()`'s `.m4a` MIME-sniffing, which
+> chat's own doc comments already flagged as unreliable) converge on one upload path — zero new
+> gateway/pipeline logic, reusing the already-tested `MediaKindClassifier`/
+> `UploadedMedia.hasThumbnailPreview` `AUDIO` case (generic-icon fallback). **New, genuinely
+> Feed-specific correctness fix**: a `DisposableEffect` releases the `MediaRecorder`/deletes the
+> in-flight file on composable disposal — unlike chat's composer (anchored to a screen, not
+> casually dismissed), this composer is a `ModalBottomSheet` provably dismissible via the system
+> back gesture mid-recording with no confirmation (the exact gotcha `feed-composer-file-
+> attachment`'s own on-device verification already documented) — an un-released `MediaRecorder`
+> left recording past the sheet's lifetime would leak an open microphone, a materially worse
+> consequence than that slice's lost picked-image edge case; `Header`'s Publish also gates on
+> `!recording.isRecording` so a live take can't be silently orphaned by publishing over it.
+> **No new tests** beyond the moved ones (which stay green unchanged) — every genuinely new
+> decision in this slice is either Android-runtime Compose/IO glue (exempt per `TDD-COVERAGE.md`,
+> matching this composer's own precedent for `dispatchPicked`/`launchCamera`) or a reuse of
+> already-tested pure logic (`MediaKindClassifier`'s `startsWith("audio/")` prefix match already
+> covers `audio/mp4` the same way the file-attachment slice's own `audio/mpeg` test proved).
+> **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full
+> `assembleDebug` + all-module `testDebugUnitTest`, zero failures — including the 2 relocated
+> `:core:model` waveform test files, confirmed individually via their test-result XML). Reviewer
+> **PASS** (diff `apps/android` only — 11 files: 5 moved [3 production, 2 test, one crossing into
+> `:sdk-ui`], `ChatScreen.kt` import-only, `FeedComposerSheet.kt` the real new wiring, 4 locale
+> `strings.xml` [en/fr/es/pt, `feed_composer_record_voice` carries zero format specifiers]; SDK
+> purity — the move is exactly the "stateless building block → `:sdk-core`/`:sdk-ui`" direction
+> `REVIEWER.md` names explicitly; SSOT — one recording state machine, one pill, shared; no
+> coverage floor lowered; no tautological tests). **Full on-device verification against the live
+> gateway**: tapped the real Mic tile (`uiautomator dump` bounds, `content-desc="Record audio"`),
+> confirmed Android's system mic-in-use indicator appeared and a real, growing
+> `voice_<millis>.m4a` file in the Feed composer's own `cacheDir/voice/` (24,950 → 35,707 bytes
+> across a 3s window); the pill's timer advanced (`0:01` → `0:20`) confirming the tick loop.
+> Tapped Send: `adb logcat` confirmed a real `POST`+`PATCH /api/v1/uploads` round-trip
+> (`filetype=audio/mp4`, `uploadcontext=post`) whose **response carried the gateway's own
+> independent audio probe** — `duration:15741,bitrate:12200.16,sampleRate:8000,
+> codec:"MPEG-4/AAC",channels:1` — definitive proof of genuine playable AAC, not silence-shaped
+> garbage (same verification depth as the chat slice). The attachment rendered as the expected
+> generic file-icon tile in the row (not a broken/blank thumbnail); its ≥3s duration correctly
+> triggered the **already-existing, untouched** `ReelComposition` reel-classification rule (the
+> `▶ Reel` chip appeared) — composes cleanly with an unrelated existing feature, zero
+> special-casing added. Published for real (`POST /api/v1/posts` → 201, `type:"REEL"`, media
+> attached); `GET /api/v1/posts/:id` confirmed the persisted post before `DELETE` →
+> `{"deleted":true}`, confirmed gone via a follow-up `GET` → 404. Confirmed the local recording
+> file is deleted after upload (`cacheDir/voice/` empty afterward — no orphan). `adb logcat`
+> checked for `FATAL EXCEPTION`/`AndroidRuntime` across the whole sequence — none. Emulator left
+> on the Feed screen afterward (a normal app screen, not mid-composer/mid-recording).
+> **feature-parity.md's §F Create-post bullet now records audio attachment done** alongside
+> photo/video/file; **§Q's "Universal audio recorder" line now cross-references both concrete
+> chat + Feed instances** instead of only chat's. **Deliberate, documented scope cut vs. iOS**: no
+> on-device transcription preview (`EdgeTranscriptionService`/`MobileTranscriptionPayload`), no
+> per-post language override tied to the clip, no dedicated full-screen composer — iOS's
+> `AudioPostComposerView` is a genuinely heavier, separately-scoped feature. **Next slice
+> candidates (not attempted this run)**: on-device transcription for the Feed audio attachment
+> (heavier — no Android on-device transcription capability exists anywhere in the app yet, would
+> need its own investigation/foundation, not a small follow-up); location attachment for the Feed
+> composer (needs a place-picker UI, still none exists); per-post language override (needs a
+> language-picker component, none exists outside registration's inline menu); the `OutboxFlushWorker`
+> same-run re-drain fix flagged by the chat voice slice (affects every dependent chat attachment
+> send, not Feed-specific); the §Q persistent TUS checkpoint store; widgets/PiP (re-grepped this
+> run too — still zero `AppWidgetProvider`/`GlanceAppWidget`/`PictureInPicture` hits, due for a
+> real categorical pass soon per the ~5-run cadence — this run's own categorical check stayed
+> negative).
+
 > On 2026-08-10 **real `MediaRecorder` voice capture landed, closing the chat voice pill's own
 > standing "pending follow-up"** (slice `chat-voice-recording-capture`, §Q — the routine's own
 > two-item candidate list from `chat-voice-recording-pill`, 2026-07-15: "real MediaRecorder/
