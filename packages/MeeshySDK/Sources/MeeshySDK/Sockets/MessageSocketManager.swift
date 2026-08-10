@@ -615,11 +615,31 @@ public struct ParticipantBannedEvent: Decodable, Sendable {
     public let userId: String
     public let bannedBy: SocketEventUser
     public let bannedAt: String
+    /// `false` quand la cible avait DÉJÀ quitté la conversation : bannir un
+    /// ancien membre reste possible — c'est ce qui l'empêche de revenir par un
+    /// lien de partage — mais ce bannissement-là ne retire aucune appartenance.
+    ///
+    /// Absent des serveurs antérieurs à ce contrat, où bannir retirait toujours :
+    /// `nil` se lit donc comme `true`, cf. `didEndMembership`.
+    public let membershipEnded: Bool?
+
+    /// La lecture à faire d'un champ optionnel dont l'absence signifie l'ancien
+    /// comportement — jamais `event.membershipEnded == true`, qui traiterait un
+    /// serveur plus ancien comme un bannissement sans effet.
+    public var didEndMembership: Bool { membershipEnded ?? true }
 }
 
 public struct ParticipantUnbannedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
+    /// Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
+    /// que si le bannissement l'avait prise. `false` quand la personne était
+    /// partie d'elle-même AVANT d'être bannie.
+    ///
+    /// Même lecture que `membershipEnded` : absent ⇒ `true`.
+    public let membershipRestored: Bool?
+
+    public var didRestoreMembership: Bool { membershipRestored ?? true }
 }
 
 public struct ConversationClosedEvent: Decodable, Sendable {
