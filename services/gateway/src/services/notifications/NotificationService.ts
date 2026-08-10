@@ -4455,6 +4455,38 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Annonce aux appareils connectés des lignes que le RAPPEL d'un message vient
+   * de retirer de la base.
+   *
+   * Pendant du geste unitaire de `deleteNotification`, pour un retrait qui a
+   * déjà eu lieu : l'écriture durable appartient à `applyMessageRemovalEffects`
+   * — le seul endroit que les trois écrivains de `deletedAt` traversent — et
+   * elle ne doit pas dépendre du câblage socket. Ce service n'en tient que la
+   * moitié volatile, celle qui s'annonce et ne se stocke pas.
+   *
+   * Les deux émissions comptent, et pour deux surfaces distinctes : la liste
+   * ouverte retire la ligne sur `notification:deleted`, la cloche recalcule son
+   * badge sur `notification:counts`. Sans la seconde, un rappel laisserait le
+   * compteur sur des lignes que le serveur vient de supprimer. Un seul
+   * `notification:counts` par destinataire, quel qu'ait été son nombre de
+   * lignes retirées.
+   */
+  async announceNotificationsRetracted(
+    retracted: readonly { readonly id: string; readonly userId: string }[]
+  ): Promise<void> {
+    const affectedUserIds = new Set<string>();
+
+    for (const { id, userId } of retracted) {
+      affectedUserIds.add(userId);
+      this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+    }
+
+    await Promise.all(
+      [...affectedUserIds].map((userId) => this.emitCountsUpdate(userId).catch(() => {}))
+    );
+  }
+
   // ==============================================
   // SOCKET.IO
   // ==============================================
