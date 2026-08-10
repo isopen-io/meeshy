@@ -2619,6 +2619,17 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
 /// sent, left ringing until the gateway's own ~60s timeout). Both sites must
 /// now reject the call being displaced via the same socket signal
 /// `rejectPendingCall()` already uses, before overwriting `pendingIncomingCall`.
+///
+/// Audit 2026-08-10 (Vague 87 fix): the original fix above landed
+/// `rejectSupersededPendingCall` calling the raw
+/// `MessageSocketManager.shared.emitCallEnd(callId:)` instead of the
+/// `emitCallReject(callId:)` helper `rejectPendingCall()` itself uses five
+/// lines above it — despite this file's own doc comment claiming to mirror
+/// it. `emitCallReject` sends `reason: "rejected"` (the raw `emitCallEnd`
+/// sends none, which the gateway resolves to `missed`) and defers+replays
+/// when the socket is down (the raw call is silently dropped by the SDK
+/// instead). `test_rejectSupersededPendingCall_helperExists_andSignalsCallEnd`
+/// below locked in the buggy call — updated to assert the correct one.
 @MainActor
 final class CallWaitingSupersedeTests: XCTestCase {
 
@@ -2648,8 +2659,18 @@ final class CallWaitingSupersedeTests: XCTestCase {
             XCTFail("rejectSupersededPendingCall not found"); return
         }
         XCTAssertTrue(
+            body.contains("emitCallReject(callId: superseded.callId)"),
+            "rejectSupersededPendingCall must go through emitCallReject(callId:) — same helper " +
+            "rejectPendingCall() uses — so the displaced caller's call:end carries reason=\"rejected\" " +
+            "(a bare emitCallEnd() resolves to CallStatus.missed on the gateway) and survives a " +
+            "socket-down window via the deferred-reconciliation path (a bare emitCallEnd() is " +
+            "silently dropped by the SDK when the socket isn't connected)."
+        )
+        XCTAssertFalse(
             body.contains("MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)"),
-            "rejectSupersededPendingCall must emit call:end for the call being displaced, mirroring rejectPendingCall()."
+            "rejectSupersededPendingCall must NOT call the raw MessageSocketManager.emitCallEnd " +
+            "directly — it bypasses the reason=\"rejected\" tagging and the socket-down deferral " +
+            "emitCallReject(callId:) provides."
         )
         XCTAssertTrue(
             body.contains("superseded.callId != newCallId"),

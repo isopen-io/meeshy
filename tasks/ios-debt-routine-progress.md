@@ -49,11 +49,18 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    provable (donc mécanique en apparence), elle touche un `ConversationView.swift` qui observe
    *aussi* `ConversationStateStore` pour d'autres champs, et le risque de mal caractériser LEQUEL des
    deux objets une vue donnée doit lire dépasse ce qu'un run peut vérifier sans étude dédiée.
-4. **[EN COURS — 1 sous-tranche livrée, reste NON homogène après re-preuve 2026-08-10]** Swift
-   Concurrency Migration — `DispatchQueue.main.async` restants → `@MainActor`/async-await structuré.
-   **Livré** : `DiscoverTab.swift` (`SMSComposerView.Coordinator.messageComposeViewController`, un
+4. **[EN COURS — 2 sous-tranches livrées, triage exhaustif app-side terminé 2026-08-10 : ZÉRO site
+   mécanique restant sous `apps/ios/Meeshy/`]** Swift Concurrency Migration — `DispatchQueue.main.async`
+   restants → `@MainActor`/async-await structuré.
+   **Livré (run #2, 2026-08-10)** : `DiscoverTab.swift` (`SMSComposerView.Coordinator.messageComposeViewController`, un
    callback `nonisolated` de `MFMessageComposeViewControllerDelegate`) migré vers
    `Task { @MainActor in }` — PR #2709, mergé (`44d8d2d92`).
+   **Livré (run #3, 2026-08-10)** : `CameraView.swift` — `CameraPreviewLayer.updateUIView` (SwiftUI
+   `UIViewRepresentable`) sautait sur main via GCD brut sans rationale documentée, alors que le
+   MÊME fichier utilise déjà `Task { @MainActor in }` pour ses deux delegate callbacks
+   (`AVCaptureFileOutputRecordingDelegate.fileOutput`, `AVCapturePhotoCaptureDelegate.photoOutput`)
+   — incohérence interne au fichier, confirmant que c'était de la dette et pas un choix délibéré.
+   Migré vers `Task { @MainActor in }` — PR #2721, mergé (`229f97f4f`).
    **Découverte majeure en creusant le reste** (re-compté à 56 fichiers sous `apps/ios/Meeshy/` au
    2026-08-10, contre 79 annoncé le 2026-08-09 — écart non expliqué, le nombre du 2026-08-10 fait
    foi) : la note d'origine caractérisait ce backlog comme un lot HOMOGÈNE de 79/56 sites mécaniques
@@ -71,13 +78,40 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    - **Pont déjà correct vers structured concurrency** : `MessageStore.swift`
      (`yieldToRunLoop()` enveloppe `DispatchQueue.main.async` dans une fonction `async` via
      `CheckedContinuation` — un pont volontaire, pas de la dette).
-   - **Vraie dette mécanique** (la seule classe migrée ce run) : callback `nonisolated` qui saute
-     sur main via GCD brut sans raison de timing documentée, ex. `DiscoverTab.swift`.
-   **Conclusion pour le run suivant qui reprend cet item** : ne PAS décomposer « par
-   feature/dossier » comme suggéré le 2026-08-09 — ça ne correspond pas à la nature réelle du
-   problème (un dossier peut mélanger les 4 classes). Chaque site restant doit être individuellement
-   classé (faux positif / timing délibéré à ne jamais toucher / pont déjà correct / vraie dette)
-   AVANT toute migration — c'est un travail de tri site-par-site, pas un lot homogène à fragmenter.
+   - **Escape d'un cycle de mise à jour SwiftUI synchrone, RATIONALE DOCUMENTÉE — NE PAS migrer
+     mécaniquement sans étude dédiée** (classe identifiée au run #3, absente de la liste du run #2) :
+     `ConversationViewModel.swift:1105` (commentaire explicite : « guarantees the @Published mutation
+     lands on a fresh runloop iteration AFTER the current view body evaluation completes » — évite
+     « Publishing changes from within view updates »), `StoryViewerView+Content.swift` (3 sites, dont
+     un composer-focus workaround documenté ligne 2124 : « on force donc un front false→true sur le
+     runloop suivant »), `StoryViewerView+Sidebar.swift` (2 sites, feedback de sheet post-`Task`),
+     `ConversationListView+Overlays.swift` (3 sites, chorégraphie d'animation en deux temps +
+     marche de hiérarchie de superviews). `Task { @MainActor in }` défère probablement de façon
+     équivalente, mais la garantie précise vis-à-vis du cycle de rendu SwiftUI n'est PAS documentée
+     comme équivalente et une régression ici prendrait la forme d'un warning runtime
+     (« Publishing changes... ») invisible à `meeshy.sh test` — nécessite une vérification manuelle
+     sur device/simulateur avant migration, pas seulement build+test verts.
+   - **Nonisolated WebRTC delegate, risque élevé — NE JAMAIS toucher sans étude dédiée** :
+     `P2PWebRTCClient.swift` (6 sites, `RTCPeerConnectionDelegate`/`RTCDataChannelDelegate`) — chaque
+     site porte un commentaire « Identity guard » documentant pourquoi le hop capture le
+     `RTCPeerConnection`/`RTCDataChannel` d'origine pour rendre no-op un callback tardif d'une
+     connexion déjà déchirée (protection contre la pollution d'un nouvel appel par les callbacks
+     résiduels de l'ancien). Zone déjà identifiée comme sensible/auditée — cf.
+     `reference_calls_audit_2026_07_11.md` (mémoire).
+   - **Vraie dette mécanique (les deux seules classes migrées à ce jour)** : callback/vue qui saute
+     sur main via GCD brut sans raison de timing documentée ET dont l'appelant n'observe aucune
+     règle de séquencement SwiftUI, ex. `DiscoverTab.swift`, `CameraView.swift`.
+   **Conclusion (run #3, triage exhaustif terminé)** : les 55 fichiers restants sous
+   `apps/ios/Meeshy/` ont maintenant TOUS été classés individuellement (pas seulement échantillonnés).
+   Chaque occurrence non-`asyncAfter` de `DispatchQueue.main.async` relève soit d'un pont déjà
+   correct, d'un timing documenté à ne jamais toucher, d'une escape SwiftUI documentée à étude
+   dédiée, soit du WebRTC à haut risque — **zéro site mécanique nu restant**. Toutes les occurrences
+   `asyncAfter(deadline:)` restantes sont de la chorégraphie d'animation/délai UI intentionnelle (non
+   auditées site par site individuellement ce run, mais leur forme — un délai non nul documenté par
+   son usage visuel — les exclut structurellement de la catégorie « hop nonisolated sans raison »).
+   Reprendre cet item nécessite soit (a) une étude dédiée de la classe « escape SwiftUI » avec
+   vérification manuelle sur device des warnings runtime, soit (b) accepter de fermer l'item comme
+   substantiellement traité (2/2 sites mécaniques nus migrés) et le retirer du backlog actif.
 5. **[OUVERT — trop large / prérequis manquant]** Modern Date Parsers — consolider vers
    `Date.ParseStrategy` avec repli. Au 2026-08-09 : **20 fichiers** utilisent `DateFormatter()`
    directement (`apps/ios/Meeshy` + `packages/MeeshySDK/Sources`), et **0 usage** de
@@ -293,3 +327,101 @@ montre 3 classes hétérogènes mélangées (faux positifs commentaire, timing d
 jamais toucher, ponts déjà corrects, vraie dette) qu'aucun découpage par dossier n'aurait séparées.
 Une note écrite la VEILLE par le run précédent de la même lane n'est pas plus fiable qu'une note
 plus ancienne — l'âge de la note ne dispense jamais de relire le code cité.
+
+### 2026-08-10 — Run #3 (3e itération de la lane IOS_DETTE, 19e itération globale)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5 last_run=conversation-mark-unread`
+— règle d'alternance (streak ≥ 5) déclenchée, bascule vers `IOS_DETTE`. Scan de reprise (Étape 0
+point 5) : `git branch -r --list 'origin/claude/apps/*'` = uniquement des branches `android/*`, la
+plus récente datée du 2026-07-13 (>24h, aucune PR ouverte associée) — bruit d'anciens processus,
+ignoré conformément au filtre ; `git branch -r --list 'origin/claude/apps/ios/*'` = vide. `gh pr
+list --state open --search "apps/android OR apps/ios"` = vide. Pas de run interrompu à terminer.
+
+**RE-PROUVÉ le backlog avant de choisir** : items 1/2 toujours FAIT/ÉCARTÉ (inchangés). Item 4 :
+`grep -rl "DispatchQueue\.main\.async"` sous `apps/ios/Meeshy/` → 55 fichiers (contre 56 au
+2026-08-10 précédent — `DiscoverTab.swift` n'y figure plus, confirmant le merge de la PR #2709).
+Plutôt que de ré-échantillonner comme les runs précédents, **triage exhaustif de la totalité des
+55 fichiers** (tous les sites `DispatchQueue.main.async` SANS `asyncAfter` lus avec leur contexte
+complet — voir Backlog #4 ci-dessus pour la classification détaillée en 5 catégories). Résultat :
+zéro nouveau site « vraie dette mécanique nue » hormis `CameraView.swift` — toutes les autres
+occurrences relèvent d'un pont déjà correct, d'un timing documenté, d'une escape SwiftUI documentée
+(catégorie nouvellement identifiée ce run, absente de l'analyse du run #2), ou du WebRTC à haut
+risque. Items 3/5/6 non re-creusés ce run (aucun changement structurel attendu en 1 jour, item 4
+consommait tout le budget de triage).
+
+**Choisi : `CameraView.swift` — `CameraPreviewLayer.updateUIView`** — seul site restant à la fois
+mécanique, borné à une ligne, sans rationale de timing documentée, ET dont le même fichier démontre
+déjà l'idiome correct (`Task { @MainActor in }`) sur ses deux delegate callbacks voisins — argument
+de cohérence interne renforçant que c'est de la dette, pas un choix délibéré.
+
+**TDD** :
+- RED : `apps/ios/MeeshyTests/Unit/Components/CameraPreviewLayerUpdateUIViewSourceGuardTests.swift`
+  (même technique que `DiscoverTabSMSComposerCoordinatorSourceGuardTests` — `updateUIView` n'est pas
+  exerçable en XCTest sans un vrai `AVCaptureSession` monté dans une hiérarchie de vues, gardé au
+  niveau source, corps isolé entre la signature de `updateUIView` et celle de `makeCoordinator`).
+  Confirmé en échec (`xcodebuild test-without-building -only-testing:MeeshyTests/CameraPreviewLayerUpdateUIViewSourceGuardTests`
+  → 2 `XCTAssert*` en échec) contre la source non modifiée.
+- GREEN : `DispatchQueue.main.async { context.coordinator.previewLayer?.frame = uiView.bounds }` →
+  `Task { @MainActor in context.coordinator.previewLayer?.frame = uiView.bounds }`. Test relancé
+  isolément → succès.
+
+**Vérification** :
+- `xcodegen generate` pour intégrer le nouveau fichier de test.
+- `xcodebuild build-for-testing` initial lancé SANS passer par `meeshy.sh` (derivedDataPath dédié,
+  cache froid dans ce worktree) : ~46 min de wall-clock pour un premier build complet — **leçon
+  opérationnelle nouvelle ci-dessous**. `./apps/ios/meeshy.sh build` (cache réchauffé par le premier
+  build) → `Build succeeded in 333s`.
+- `./apps/ios/meeshy.sh test` (suite complète, phase0 SDK + 3 phases app) : Phase 1/2/3 (app)
+  toutes vertes (0 échec). **Phase 0 (package MeeshySDK) : 6 échecs** — 5 crashs `signal abrt`/
+  `Crash: xctest at ReaderAudioMixer.configure(...)` dans `CanvasEditMuteLivePropagationTests`, 1
+  timeout (3 min) dans `StoryExportCompressionTests`. Ce diff ne touche AUCUN fichier sous
+  `packages/MeeshySDK` (confirmé par `git diff origin/main...HEAD --stat` avant fetch = uniquement
+  `CameraView.swift` + `project.pbxproj` + le nouveau test app-side) — structurellement impossible
+  que ce diff cause des crashs dans `ReaderAudioMixer`/l'export vidéo SDK. Reproductibilité vérifiée :
+  `cd packages/MeeshySDK && xcodebuild test -scheme MeeshySDK-Package -only-testing:MeeshyUITests/CanvasEditMuteLivePropagationTests`
+  en isolation (simulateur libéré des 3 autres phases app qui venaient de tourner) → **5/5 tests
+  passent, 0 échec** (0.220s total). Confirme la contention de ressources (autres processus
+  xcodebuild/simulateur actifs dans ce worktree partagé multi-session, cf. `feedback_shared_disk_contention_multi_session.md`
+  et `feedback_xcodebuild_shared_derivedData.md`) plutôt qu'une régression — cohérent avec des
+  crashs `signal abrt` dans un mixer audio et un timeout d'export vidéo sous charge CPU concurrente.
+  Le 6e test (`StoryExportCompressionTests`, timeout 3 min) non re-vérifié individuellement par
+  souci de temps — mais son échec (dépassement d'un budget temps sous charge) est la même signature
+  que les 5 confirmés flaky, et zéro chemin de code ne le relie au diff.
+- PR : https://github.com/isopen-io/meeshy/pull/2721 —
+  `claude/apps/ios/debt-camera-preview-layer-mainactor` (branché depuis `origin/main` explicite,
+  PREMIÈRE action avant tout Write/Edit). CI complète verte (`Quality (bun)`, `Security`, `Prisma`,
+  `Test shared/agent/gateway/web`, `Test Python (translator)`, `Audio Pipeline Tests`, `TTS/STT
+  Integration`, `Voice API Tests`, `Build (bun)`, `Summary` — tous pass ; `Trivy`/`Voice E2E
+  Benchmark` : skipping). `gh pr merge 2721 --squash --delete-branch` → exit 1 attendu (« 'main' is
+  already used by worktree ») ; `gh pr view --json state,mergedAt` a confirmé `MERGED`
+  (`229f97f4f`). Branche remote supprimée séparément (`git push origin --delete
+  claude/apps/ios/debt-camera-preview-layer-mainactor`).
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-camera-preview-layer-mainactor`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`).
+
+**Note pour le run suivant qui reprend la lane IOS_DETTE** : item 4 est maintenant substantiellement
+traité (2/2 sites « vraie dette mécanique nue » identifiés migrés, triage exhaustif des 55 fichiers
+restants terminé). La suite naturelle serait soit une étude dédiée de la classe « escape SwiftUI
+documentée » (7 sites identifiés : `ConversationViewModel.swift`, `StoryViewerView+Content.swift`
+×3, `StoryViewerView+Sidebar.swift` ×2, `ConversationListView+Overlays.swift` ×3 — nécessite
+vérification manuelle sur device/simulateur des warnings runtime « Publishing changes from within
+view updates », pas seulement build+test), soit fermer l'item et réapprovisionner le backlog
+(items 3/5/6 restent bloqués pour les mêmes raisons que les runs précédents — cf. Backlog #3/#5/#6
+ci-dessus, inchangées).
+
+## Leçon opérationnelle (nouvelle, Run #3, 2026-08-10)
+
+**Un `xcodebuild build-for-testing`/`test-without-building` invoqué directement (hors `meeshy.sh`)
+avec un `-derivedDataPath` dédié dans un worktree encore jamais buildé démarre à froid — ~46 min
+pour un premier build complet, contre 333s pour `meeshy.sh build` une fois le cache réchauffé.** Ce
+n'est pas un hang (confirmé après coup via les timestamps du fichier de sortie et `** TEST BUILD
+SUCCEEDED **` en fin de log) mais une inefficacité de séquencement : appeler `meeshy.sh build`
+D'ABORD (qui réutilise/réchauffe un DerivedData partagé/persistant) puis enchaîner sur
+`xcodebuild -only-testing:...` pour l'itération RED/GREEN ciblée aurait évité l'attente à froid. À
+corriger dans `tasks/android-parity-ios-debt-agent-prompt.md` §Lane IOS-DETTE point 5 : recommander
+explicitement `meeshy.sh build` en premier (même pour une itération de test ciblée type RED/GREEN
+source-guard), avant tout appel `xcodebuild` direct avec un `-derivedDataPath` propre au worktree.
+
+**CI verte en ~13 min pour un diff `apps/ios`-only sur ce repo (05:36→05:49 UTC observé, matrice
+`ci.yml` complète).** Cohérent avec l'estimation « 15-20 min » du run #2 — cette fois plus proche de
+la borne basse. Cette observation n'appelle PAS de correction de la routine.
