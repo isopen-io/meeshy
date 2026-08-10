@@ -146,6 +146,12 @@ Swift : **non exécuté localement** — aucune chaîne Swift sur ce conteneur L
 - **`TrackingLink.messageId` est une colonne morte** : trois écrivains, zéro lecteur (mesuré sur
   tout le dépôt). Le candidat « garde manquante sur le binder du chemin de partage » est retiré du
   backlog au profit de celui-ci — la remplir correctement OU la retirer.
+- **Un participant ANONYME n'a pas de prisme sur ce chemin.** `viewerLanguages` est dérivé de
+  `authContext.registeredUser`, absent d'un contexte anonyme : la carte est donc toujours `null`
+  pour lui et sa ligne retombe sur l'original. C'est le comportement d'AVANT, pas une régression —
+  mais `Participant.language` existe et pourrait le servir. Non fait : le prisme d'un participant
+  sans compte est un choix produit (une seule langue ? la locale de l'appareil via
+  `X-Device-Locale` ?) que ce cycle n'avait pas à trancher seul.
 - **Aucune traduction rétroactive de l'aperçu.** Un message dont la traduction arrive après coup
   ne rafraîchit pas la ligne de liste tant que le client ne refait pas de `GET /conversations` (ou
   ne reçoit pas un nouveau message) — c'est le point précédent (`emitConversationPreviewUpdate`)
