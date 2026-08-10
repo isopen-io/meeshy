@@ -140,28 +140,32 @@ function makeSocket(overrides: Partial<Socket> = {}): jest.Mocked<Socket> {
  * indistinguables, donc toute assertion de ciblage passait par accident — y
  * compris celles qui nommaient le mauvais salon.
  */
+/**
+ * Le double suit la CHAÎNE : `io.to(a).to(b).emit(e, p)` adresse a ET b, comme
+ * le vrai Socket.IO. Rabattre la chaîne sur son premier salon (ce que faisait
+ * `target.to.mockReturnValue(target)`) rendait un émetteur chaîné indiscernable
+ * d'un émetteur qui aurait oublié tous les salons sauf le premier.
+ */
 function makeIO(): jest.Mocked<SocketIOServer> {
-  const byRoom = new Map<string, { emit: jest.Mock; to: jest.Mock; except: jest.Mock }>();
-  return {
-    to: jest.fn((room: string) => {
-      const known = byRoom.get(room);
-      if (known) return known;
-      const target = { emit: jest.fn(), to: jest.fn(), except: jest.fn() };
-      target.to.mockReturnValue(target);
-      target.except.mockReturnValue(target);
-      byRoom.set(room, target);
-      return target;
+  const emitsByRoom = new Map<string, any[][]>();
+  const chain = (rooms: readonly string[]): any => ({
+    to: jest.fn((room: string) => chain([...rooms, room])),
+    except: jest.fn(() => chain(rooms)),
+    emit: jest.fn((...args: any[]) => {
+      for (const room of rooms) emitsByRoom.set(room, [...(emitsByRoom.get(room) ?? []), args]);
+      return true;
     }),
+  });
+  return {
+    to: jest.fn((room: string) => chain([room])),
     sockets: { adapter: { rooms: new Map() } },
+    __emitsByRoom: emitsByRoom,
   } as unknown as jest.Mocked<SocketIOServer>;
 }
 
 /** Les `(event, payload)` réellement émis vers CE salon, et eux seuls. */
 function emitsTo(io: SocketIOServer, room: string): any[][] {
-  const ioToMock = io.to as unknown as jest.Mock<any>;
-  const call = ioToMock.mock.calls.findIndex((args: any[]) => args[0] === room);
-  if (call === -1) return [];
-  return (ioToMock.mock.results[call]?.value as any).emit.mock.calls;
+  return ((io as unknown as { __emitsByRoom: Map<string, any[][]> }).__emitsByRoom.get(room)) ?? [];
 }
 
 function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<PrismaClient> {

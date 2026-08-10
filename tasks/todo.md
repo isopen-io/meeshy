@@ -1,3 +1,63 @@
+# Cycle 45b — Addendum d'une session parallèle : les tests du cycle 45 ne voyaient pas le défaut du cycle 45
+
+Deux sessions ont livré le cycle 45 en parallèle, sur **le même défaut**. Celle-ci arrive seconde.
+
+Arbitrage défaut par défaut (leçon du cycle 23), pas « qui est arrivé en premier » : **le correctif
+de production ci-dessous est strictement plus large** et il est conservé intégralement. Il couvre
+deux sites que cette session n'avait pas vus — la quatrième copie verbatim dans
+`POST /messages/:id/status`, et la garde contre un `select` amputé des deux identités, qui aurait
+déversé tout le trafic dans l'unique room `user:undefined`. Le module concurrent de cette session
+(`emitToParticipantRooms`) a été **supprimé** à la fusion : deux helpers rivaux pour la même règle
+valent moins que l'un ou l'autre.
+
+Ce qui est ajouté par-dessus ne touche donc à aucune ligne de production. **C'est la partie que la
+session arrivée première n'a pas faite, et elle n'est pas cosmétique : ses propres tests ne
+capturent pas le défaut qu'elle corrige.**
+
+## Le faux vert, mesuré et non supposé
+
+Dans `MeeshySocketIOManager.test.ts`, toutes les chaînes se déversent dans un `io.to` unique.
+`expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('part-anon'))` prouve alors qu'**un** émetteur a
+adressé cette room — **jamais lequel**. Or sur le chemin `broadcastMessage`, `conversation:updated`
+n'est pas seul à viser cette room : `emitUnreadCountsToRecipients` l'adresse déjà correctement
+depuis le cycle 42.
+
+Vérifié par expérience, pas par raisonnement : le fanout `conversation:updated` a été **re-cassé**
+localement (retour au `filter((p) => p.userId)`), puis les deux tests lancés sur ce code fautif.
+
+| test | sur le code re-cassé |
+|---|---|
+| `emits CONVERSATION_UPDATED to every participant user room…` (session 1) | **PASSE** |
+| `addresses an accountless participant by its participant id in CONVERSATION_UPDATED` (celui-ci) | **ÉCHOUE** |
+
+Le premier test resterait donc vert si quelqu'un régressait demain exactement le défaut que le
+cycle 45 vient de corriger. C'est la seule raison d'être de cet addendum.
+
+*(Le test de drain de la session 1 n'a pas ce défaut : il fait `ioState.to.mockClear()` et
+`_emitDeliveryForDrainedMessages` n'a qu'un émetteur — l'assertion lâche y suffit.)*
+
+## Trois doubles de test corrigés
+
+- **`MeeshySocketIOManager.test.ts`** — `recordEmitChains(ioState)` remplace le temps d'un test le
+  `io.to` partagé par une chaîne qui garde room et événement ensemble, et restaure le double
+  d'origine en `finally` pour qu'aucun test suivant n'hérite de l'override.
+- **`MessageHandler.test.ts`** — même problème sur `makeIO()` (un `mockToResult` unique). Le test du
+  chemin d'envoi WS monte un double enregistreur local et n'affirme que sur les rooms de
+  `conversation:updated`.
+- **`MessageHandlerEditDelete.test.ts`** — `target.to.mockReturnValue(target)` rabattait toute
+  chaîne sur son **premier** salon : un émetteur chaîné y était indiscernable d'un émetteur qui
+  aurait oublié tous les salons sauf le premier. `emitToConversationParticipants` chaînant les
+  accusés, le trou restait ouvert quelle que soit la forme retenue pour `conversation:updated`.
+
+## Écarté volontairement
+
+Cette session chaînait aussi `conversation:updated` (une émission au lieu de N). La session 1 a
+**délibérément** gardé la boucle, en argumentant que les deux familles d'émetteurs ne partagent pas
+une forme d'émission et que seule la liste de rooms leur est commune. L'argument tient ; le gain
+était marginal. Non réimposé — la structure de la session 1 est conservée telle quelle.
+
+---
+
 # Cycle 45 — La piste du cycle 43 nommait un émetteur ; il y en avait cinq, et le plus lourd n'était pas un accusé
 
 Tête prise dans la dernière ligne du cycle 43, littérale : « `emitConversationPreviewUpdate` et les

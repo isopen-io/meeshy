@@ -2114,14 +2114,29 @@ describe('MessageHandler', () => {
     });
   });
 
-  // ── Branch-gap-filling: participant.userId null in conversation:updated ────
+  // ── participant.userId null in conversation:updated ───────────────────────
 
-  describe('broadcastNewMessage — participant.userId null in conversation:updated (line 659)', () => {
-    it('skips null-userId participants in conversation:updated emit loop', async () => {
-      (deps.prisma.participant.findMany as jest.Mock<any>)
-        .mockResolvedValueOnce([{ userId: null }, { userId: USER_ID }]) // conversation:updated: one null
+  describe('broadcastNewMessage — accountless participant in conversation:updated', () => {
+    it('addresses an accountless participant by its participant id, not skips it', async () => {
+      // A recording chainable double: the shared `makeIO` funnels every chain
+      // into one `emit` mock, so `io.to` alone cannot say WHICH event reached a
+      // room — and `conversation:unread-updated` already addresses this room
+      // correctly, which would mask the defect under test.
+      const sent: Array<{ rooms: string[]; event: string }> = [];
+      const chain = (rooms: string[]): any => ({
+        to: (room: string) => chain([...rooms, room]),
+        except: () => chain(rooms),
+        emit: (event: string) => { sent.push({ rooms, event }); },
+      });
+      const localDeps = makeDeps({ io: { to: (room: string) => chain([room]), sockets: { adapter: { rooms: new Map() } }, emit: jest.fn() } as any });
+      (localDeps.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: 'part-anonymous', userId: null, joinedAt: new Date() },
+          { id: 'part-registered', userId: USER_ID, joinedAt: new Date() },
+        ]) // conversation:updated: one accountless
         .mockResolvedValue([]); // _updateUnreadCounts + _autoDeliver
-      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      (localDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      const h = new MessageHandler(localDeps);
 
       const msg = {
         id: 'msg-nulluid-cu', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
@@ -2129,8 +2144,15 @@ describe('MessageHandler', () => {
         createdAt: new Date(), sender: { userId: USER_ID }, attachments: [], translations: [],
       };
 
-      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
-      expect(deps.io.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+      await expect(h.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      const updateRooms = sent.filter((s) => s.event === 'conversation:updated').flatMap((s) => s.rooms);
+      expect(updateRooms).toContain(`user:${USER_ID}`);
+      // A share-link conversation is populated with accountless participants;
+      // `AuthHandler` joins them to `user:<Participant.id>`. Dropping them here
+      // is what left their conversation list frozen at its old sort order while
+      // the unread badge — emitted one helper away with the right key — moved.
+      expect(updateRooms).toContain('user:part-anonymous');
     });
   });
 
