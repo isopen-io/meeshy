@@ -5610,3 +5610,59 @@ pair. Vérifié ligne à ligne avant implémentation (leçon 18 : hypothèse à 
   trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
   needs on-device confirmation) ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) reconfirmées hors
   d'atteinte dans ce sandbox ce cycle.
+
+## Vague 87 — `rejectSupersededPendingCall` (iOS) bypassait `emitCallReject`, désynchronisant `reason` et le différé socket-down (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`HEAD == origin/main` au démarrage après merge de la Vague 86 (PR #2716, `enableVideo()` no-op silencieux)
+— trouvée déjà ouverte et verte (CI complète passée) au début de ce cycle, mergée directement avant de
+lancer un nouvel audit, aucune duplication avec cette vague.
+
+- **Root cause confirmée par lecture directe** (`apps/ios/Meeshy/Features/Main/Services/CallManager.swift`,
+  fonction `rejectSupersededPendingCall(replacingWithCallId:)`, introduite Vague/Audit 2026-07-07 Finding
+  2) : son propre doc comment affirme « Mirror `rejectPendingCall()`'s socket signal » — mais le corps
+  appelait `MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)` (le socket brut, sans
+  `reason`), alors que `rejectPendingCall()`, cinq lignes au-dessus dans le même fichier, appelle
+  `emitCallReject(callId: pending.callId)`, l'helper dédié de la classe. Deux divergences concrètes :
+  1. `emitCallReject` envoie `call:end` avec `reason: "rejected"` ; l'appel brut n'envoie aucune raison.
+     Côté gateway, `CallService.endCall()` résout un `call:end` pré-décroché sans `reason` en
+     `CallStatus.missed`/`CallEndReason.missed` (`resolveEndReason` retombe sur `completed` puis le
+     branchement `!wasPreAnswered ? .ended : resolvedReason === .rejected ? .rejected : .missed` choisit
+     `.missed`) — l'appelant déplacé reçoit une fausse notification « appel manqué » et son historique
+     classe l'appel dans le filtre « manqués » alors qu'il n'a jamais sonné dans le vide (A était joignable,
+     juste occupé à jongler entre deux appels entrants).
+  2. `emitCallReject` garde sur `MessageSocketManager.shared.isConnected` et diffère l'émission
+     (`pendingEndReconciliationCallId`/`Reason`, rejoué à la reconnexion) si la socket est down ; l'appel
+     brut `emitCallEnd` est silencieusement jeté par le SDK dans ce cas. Un des deux sites d'appel
+     (`reportIncomingVoIPCall`) peut s'exécuter de façon synchrone directement depuis la livraison d'un push
+     VoIP à froid — la socket peut plausiblement ne pas encore être connectée à cet instant précis, ce qui
+     rendrait le log « Superseded waiting call ended » trompeur (rien n'a été réellement signalé), l'appel
+     déplacé restant sonnant jusqu'au timeout serveur (~60-120s).
+  Trouvaille via un audit dédié : un audit antérieur (Vague 25) avait déjà mentionné en passant que cette
+  fonction « termine proprement le 2e appelant côté serveur » sans vérifier qu'elle envoyait bien
+  `reason=rejected` ni qu'elle survivait à une socket down — pris pour argent comptant, jamais reproduit.
+- **Fix** : une ligne, remplace l'appel brut par l'helper que le doc comment prétendait déjà utiliser :
+  `emitCallReject(callId: superseded.callId)`. Pas de changement de signature (`emitCallReject` est
+  `Void`, comme l'était l'appel remplacé), pas de nouvel import — les deux fonctions sont privées dans la
+  même classe/fichier.
+- **Tests** (source-level regression guard — `RTCAudioSession`/socket réels non exerçables en
+  comportemental dans ce sandbox, même limite que les fixes Vague 25/84) : le test existant
+  `test_rejectSupersededPendingCall_helperExists_andSignalsCallEnd`
+  (`CallManagerTests.swift`, classe `CallWaitingSupersedeTests`) verrouillait littéralement l'appel bugué
+  (`body.contains("MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)")`) — RED confirmé
+  par lecture (l'assertion matche exactement l'ancien code, donc passait à tort avant ce fix). Mis à jour :
+  assertion positive sur `emitCallReject(callId: superseded.callId)` + nouvelle assertion négative
+  (`XCTAssertFalse`) interdisant explicitement le retour de l'appel brut, pour qu'une régression future ne
+  puisse pas re-matcher les deux formes à la fois. Les deux autres tests de la classe (ordre
+  reject-avant-overwrite dans `reportIncomingVoIPCall`/`handleIncomingCallNotification`) restent inchangés
+  — ils testent l'ordonnancement de l'appel, pas son implémentation interne.
+- **Vérification** : lecture ligne à ligne de `emitCallReject`/`emitCallEnd` (SDK
+  `MessageSocketManager.swift`) et de `CallService.endCall` (gateway) pour confirmer la divergence
+  `reason`/`missed` avant d'écrire le fix. Non exécutable dans ce sandbox (pas de toolchain Swift/Xcode) —
+  seule preuve définitive : CI `iOS Tests`/`ci.yml` (déclenché sans filtre de chemin sur toute PR, cf.
+  leçon opérationnelle `tasks/ios-debt-routine-progress.md` Run #2) à surveiller au push avant merge.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84,
+  needs on-device confirmation) ; toolchains iOS (`xcodebuild`/`swift`) et Android (SDK) toujours hors
+  d'atteinte dans ce sandbox.
