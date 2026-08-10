@@ -51,14 +51,27 @@ describe('ConsentValidationService.getConsentStatus', () => {
     (process.env as any).NODE_ENV = 'test';
   });
 
-  it('derives canTranscribeAudio from schema default (transcriptionEnabled=true) when audio prefs are empty', async () => {
+  it('derives full audio pipeline from schema defaults when audio prefs are empty (2026-08-09: aligned with text)', async () => {
     const service = new ConsentValidationService(makePrisma({ user: fullVoiceConsent }));
 
     const status = await service.getConsentStatus('u1');
 
     expect(status.canTranscribeAudio).toBe(true);
     expect(status.canTranslateText).toBe(true);
-    // audioTranslationEnabled / ttsEnabled default to false
+    // audioTranslationEnabled / ttsEnabled default to true, aligned with text
+    // (2026-08-09) — seul un consentement voix manquant les bloque encore,
+    // pas ce défaut.
+    expect(status.canTranslateAudio).toBe(true);
+    expect(status.canGenerateTranslatedAudio).toBe(true);
+  });
+
+  it('respects an explicit audioTranslationEnabled=false even though the schema default flipped to true', async () => {
+    const service = new ConsentValidationService(
+      makePrisma({ user: fullVoiceConsent, audio: { audioTranslationEnabled: false } })
+    );
+
+    const status = await service.getConsentStatus('u1');
+
     expect(status.canTranslateAudio).toBe(false);
     expect(status.canGenerateTranslatedAudio).toBe(false);
   });
