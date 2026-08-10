@@ -19,6 +19,16 @@ private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
     override suspend fun register(body: RegisterRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun refresh(body: RefreshTokenRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun me() = meResponse
+    override suspend fun forgotPassword(body: me.meeshy.sdk.net.api.ForgotPasswordRequest) =
+        me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+    override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
+    override suspend fun listSessions() =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+    override suspend fun revokeSession(sessionId: String) =
+        me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+    override suspend fun revokeOtherSessions() =
+        me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
     override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
         ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
 }

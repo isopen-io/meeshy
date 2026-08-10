@@ -89,4 +89,20 @@
     <string name="stories_composer_filter_vivid">Vívido</string>
     <string name="stories_composer_filter_fade">Desvanecido</string>
     <string name="stories_composer_filter_chrome">Cromo</string>
+
+    <!-- Story options -->
+    <string name="stories_options">Opciones de la historia</string>
+    <string name="stories_action_report">Denunciar</string>
+    <string name="stories_action_delete">Eliminar</string>
+    <string name="stories_cancel">Cancelar</string>
+    <string name="stories_delete_confirm_title">¿Eliminar esta historia?</string>
+    <string name="stories_delete_confirm_message">Esta acción no se puede deshacer.</string>
+    <string name="stories_report_title">Denunciar esta historia</string>
+    <string name="stories_report_reason_spam">Spam</string>
+    <string name="stories_report_reason_harassment">Acoso</string>
+    <string name="stories_report_reason_inappropriate">Contenido inapropiado</string>
+    <string name="stories_report_reason_violence">Violencia</string>
+    <string name="stories_report_reason_hate_speech">Discurso de odio</string>
+    <string name="stories_report_reason_impersonation">Suplantación de identidad</string>
+    <string name="stories_report_reason_other">Otro</string>
 </resources>

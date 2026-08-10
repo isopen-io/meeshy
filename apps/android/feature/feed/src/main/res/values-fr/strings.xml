@@ -103,4 +103,26 @@
     <string name="feed_composer_type_reel">Réel</string>
     <string name="feed_composer_type_post">Publier</string>
     <string name="feed_composer_type_hint">Bascule entre réel et post</string>
+
+    <!-- Post options menu -->
+    <string name="feed_post_options">Options du post</string>
+    <string name="feed_action_share">Partager</string>
+    <string name="feed_action_copy_link">Copier le lien</string>
+    <string name="feed_action_repost">Reposter</string>
+    <string name="feed_action_bookmark">Enregistrer</string>
+    <string name="feed_action_unbookmark">Retirer des enregistrés</string>
+    <string name="feed_action_report">Signaler</string>
+    <string name="feed_action_delete">Supprimer</string>
+    <string name="feed_delete_confirm_title">Supprimer ce post ?</string>
+    <string name="feed_delete_confirm_message">Cette action est irréversible.</string>
+    <string name="feed_delete_confirm">Supprimer</string>
+    <string name="feed_delete_cancel">Annuler</string>
+    <string name="feed_report_title">Signaler ce post</string>
+    <string name="feed_report_reason_spam">Spam</string>
+    <string name="feed_report_reason_harassment">Harcèlement</string>
+    <string name="feed_report_reason_inappropriate">Contenu inapproprié</string>
+    <string name="feed_report_reason_violence">Violence</string>
+    <string name="feed_report_reason_hate_speech">Discours haineux</string>
+    <string name="feed_report_reason_impersonation">Usurpation d\'identité</string>
+    <string name="feed_report_reason_other">Autre</string>
 </resources>

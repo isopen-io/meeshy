@@ -25,6 +25,7 @@ private class FakeConversationApi(
     var response: ApiResponse<List<ApiConversation>>,
 ) : ConversationApi {
     override suspend fun list(offset: Int?, limit: Int?) = response
+    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
@@ -49,6 +50,7 @@ private class RecordingSettingsApi(
 
     override suspend fun list(offset: Int?, limit: Int?) =
         ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)

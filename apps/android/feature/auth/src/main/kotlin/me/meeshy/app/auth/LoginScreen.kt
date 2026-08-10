@@ -48,6 +48,8 @@ fun LoginScreen(
     viewModel: AuthViewModel,
     onAuthenticated: () -> Unit,
     onSignUp: () -> Unit = {},
+    onForgotPassword: () -> Unit = {},
+    onMagicLink: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -102,6 +104,26 @@ fun LoginScreen(
                     viewModel = viewModel,
                     showBackToPicker = state.showNormalLogin && state.savedAccounts.isNotEmpty(),
                 )
+            }
+
+            // Recuperation de compte : les deux chemins sans mot de passe,
+            // juste sous le formulaire (parite iOS LoginView).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = MeeshySpacing.sm),
+            ) {
+                TextButton(onClick = onForgotPassword, enabled = !state.isSubmitting) {
+                    Text(
+                        text = stringResource(R.string.login_forgot_password),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                TextButton(onClick = onMagicLink, enabled = !state.isSubmitting) {
+                    Text(
+                        text = stringResource(R.string.login_magic_link),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
 
             Row(
