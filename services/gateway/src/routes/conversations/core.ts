@@ -995,6 +995,11 @@ export function registerCoreRoutes(
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
           const creatorParticipant = existingDirect.participants.find((p: any) => p.role === 'creator');
+          // `!firstMessageSentAt` est ambigu (absent ET null donnent `null`
+          // côté client JS) mais sans risque ici : le flip ci-dessous est
+          // gardé par un `updateMany({ where: { firstMessageSentAt: null } })`
+          // qui ne matche jamais un champ absent (legacy) — 0 ligne, no-op.
+          // Ne jamais retirer ce garde sans revoir cette ambiguïté.
           const isEmptyDirect = existingDirect.type === 'direct' && !existingDirect.firstMessageSentAt;
 
           if (isEmptyDirect && creatorParticipant && callerParticipant?.role !== 'creator') {
