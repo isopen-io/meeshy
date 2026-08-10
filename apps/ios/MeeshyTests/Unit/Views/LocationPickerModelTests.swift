@@ -65,6 +65,42 @@ final class LocationPickerModelTests: XCTestCase {
     }
 }
 
+/// Géométrie du pin qui se soulève pendant le déplacement de la carte.
+///
+/// Le soulèvement ne se lit QUE si l'ombre au sol le contredit : un pin qui
+/// grossit sans que son ombre rétrécisse se lit comme un zoom, pas comme un
+/// décollage. Les quatre valeurs sont donc solidaires et testées ensemble.
+final class MapPinLiftTests: XCTestCase {
+
+    func test_auRepos_pinANormalEtOmbrePleine() {
+        let s = MapPinLift.style(lifted: false)
+
+        XCTAssertEqual(s.scale, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(s.yOffset, 0, accuracy: 1e-9)
+        XCTAssertEqual(s.shadowScale, 1.0, accuracy: 1e-9)
+    }
+
+    func test_souleve_pinDoubleEtMonte() {
+        let s = MapPinLift.style(lifted: true)
+
+        XCTAssertEqual(s.scale, 2.0, accuracy: 1e-9, "le pin doit doubler pendant le déplacement")
+        XCTAssertLessThan(s.yOffset, 0, "un décalage négatif = vers le haut de l'écran")
+    }
+
+    func test_souleve_lOmbreRetrecitEtPalit() {
+        let rest = MapPinLift.style(lifted: false)
+        let up = MapPinLift.style(lifted: true)
+
+        XCTAssertLessThan(up.shadowScale, rest.shadowScale,
+                          "une ombre qui ne rétrécit pas fait lire un zoom, pas un décollage")
+        XCTAssertLessThan(up.shadowOpacity, rest.shadowOpacity)
+    }
+
+    func test_lesDeuxEtatsSontDistincts() {
+        XCTAssertNotEqual(MapPinLift.style(lifted: true), MapPinLift.style(lifted: false))
+    }
+}
+
 /// Composition du titre affiché sur la carte du bas.
 ///
 /// `reverseGeocode` construit `addressString` en partant de `placemark.name` —

@@ -6,6 +6,32 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+// MARK: - Soulèvement du pin
+
+/// Géométrie du pin central pendant le déplacement de la carte.
+///
+/// Valeurs pures, sans SwiftUI : la règle « de combien il monte et de combien
+/// l'ombre rétrécit » est testable sans rendre quoi que ce soit.
+///
+/// L'ombre est ce qui fait lire le mouvement. Un pin qui grossit seul se lit
+/// comme un zoom ; c'est l'ombre qui rétrécit et pâlit sous lui qui le fait
+/// décoller.
+nonisolated enum MapPinLift {
+    struct Style: Equatable {
+        let scale: Double
+        /// Négatif = vers le haut de l'écran.
+        let yOffset: Double
+        let shadowScale: Double
+        let shadowOpacity: Double
+    }
+
+    static func style(lifted: Bool) -> Style {
+        lifted
+            ? Style(scale: 2.0, yOffset: -18, shadowScale: 0.55, shadowOpacity: 0.18)
+            : Style(scale: 1.0, yOffset: 0, shadowScale: 1.0, shadowOpacity: 0.38)
+    }
+}
+
 struct LocationPickerView: View {
     /// Couleur PRIMAIRE de la conversation — les appelants passent
     /// `conversation.accentColor`, qui est `colorPalette.primary`.
@@ -28,6 +54,8 @@ struct LocationPickerView: View {
     @State private var mapTarget: MapTarget?
     @State private var didCenterOnUser = false
     @State private var isShowingSettings = false
+    /// Vrai tant que la caméra bouge — pilote le soulèvement du pin.
+    @State private var isMapMoving = false
 
     /// Couleur d'ACCENT de la conversation, dérivée du primaire par la formule
     /// officielle du SDK. `DynamicColorGenerator.colorFor(context:)` calcule
@@ -82,6 +110,8 @@ struct LocationPickerView: View {
         NavigationStack {
             ZStack {
                 mapView
+
+                centerPin
 
                 VStack(spacing: 0) {
                     searchBar
@@ -164,7 +194,14 @@ struct LocationPickerView: View {
     private var mapView: some View {
         AdaptiveInteractiveMap(
             target: mapTarget,
-            annotationCoordinate: viewModel.selectedCoordinate,
+            // Plus d'annotation : le pin est une SURCOUCHE d'écran, posée au
+            // centre par le ZStack. Ancré à une coordonnée, il voyageait avec
+            // la carte pendant le déplacement — il quittait le centre puis y
+            // resautait au relâchement, quand `selectedCoordinate` rattrapait.
+            // Un pin qui dérive ne peut pas se soulever de façon lisible : le
+            // motif des sélecteurs de carte est une carte qui glisse SOUS un
+            // pin fixe.
+            annotationCoordinate: nil,
             style: preferencesStore.preferences.mapStyle,
             // Les contrôles système se rendent en haut-trailing, SOUS la barre
             // de recherche flottante — c'est exactement là que le bouton de
@@ -172,17 +209,57 @@ struct LocationPickerView: View {
             defaultControls: false,
             onRegionChange: { center in
                 viewModel.updateSelectedLocation(center)
+            },
+            onInteractionChange: { moving in
+                // Garde d'écriture UNIQUE par geste : `.continuous` tire
+                // plusieurs fois par seconde, et republier `true` à chaque
+                // trame re-rendrait la carte en boucle.
+                guard isMapMoving != moving else { return }
+                isMapMoving = moving
             }
         ) {
-            // Fixed: MapKit annotation marker anchored to a coordinate — system-pin
-            // chrome rendered at a fixed screen size, not reading text. Scaling it
-            // with Dynamic Type would detach it from the point it marks (74i/86i).
+            EmptyView()
+        }
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    // MARK: - Pin central
+
+    /// Le pin que la carte glisse dessous. Il se soulève au premier signe de
+    /// mouvement et se repose quand la caméra s'arrête.
+    ///
+    /// Non interactif (`allowsHitTesting(false)`) : il occupe le centre de
+    /// l'écran, exactement là où l'utilisateur pose le doigt pour déplacer la
+    /// carte — capter ce toucher rendrait la carte impossible à bouger par son
+    /// milieu.
+    private var centerPin: some View {
+        let lift = MapPinLift.style(lifted: isMapMoving)
+        // ZStack, PAS VStack : empilés verticalement, c'est la PAIRE
+        // pin + ombre qui se retrouve centrée, donc le pin lui-même flotte
+        // au-dessus du centre réel de la carte — il désignerait un point
+        // différent de celui que `onRegionChange` rapporte. Ici le pin est à
+        // l'exact centre au repos et l'ombre est décalée sous lui.
+        return ZStack {
+            Ellipse()
+                .fill(Color.black.opacity(lift.shadowOpacity))
+                .frame(width: 14, height: 5)
+                .scaleEffect(lift.shadowScale)
+                .blur(radius: 1)
+                .offset(y: 22)
+
             Image(systemName: "mappin.circle.fill")
+                // Chrome de carte à taille d'écran fixe, pas du texte à lire :
+                // le mettre à l'échelle du Dynamic Type le décrocherait du
+                // point qu'il marque (doctrine 74i/86i).
                 .font(.system(size: 36))
                 .foregroundStyle(Color(hex: onMap.primary), Color(hex: onMap.accent).opacity(0.35))
                 .shadow(color: Color(hex: onMap.accent).opacity(0.45), radius: 6, y: 3)
+                .scaleEffect(lift.scale)
+                .offset(y: lift.yOffset)
         }
-        .ignoresSafeArea(edges: .bottom)
+        .animation(.spring(response: 0.32, dampingFraction: 0.68), value: isMapMoving)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Contrôles flottants
@@ -410,16 +487,33 @@ struct LocationPickerView: View {
 
                     if let place = displayedPlace {
                         HStack(spacing: 6) {
+                            // Une paire de coordonnées est une valeur ATOMIQUE :
+                            // coupée en plusieurs lignes elle devient illisible.
+                            // Vérifié au simulateur en taille accessibilité XXXL
+                            // (2026-08-10) : « 20.00000, −0.00000 » se cassait
+                            // sur QUATRE lignes et faisait doubler la carte.
+                            // Elle rétrécit donc au lieu de passer à la ligne, et
+                            // sa croissance est plafonnée — le reste de la carte
+                            // continue de suivre le Dynamic Type normalement.
                             Text(formattedCoordinates(of: place))
                                 .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
                                 .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                             Text(verbatim: "·")
                                 .font(MeeshyFont.relative(10))
                                 .foregroundColor(.secondary)
                             Text(LocationSharingLabels.precisionBadge(precision))
                                 .font(MeeshyFont.relative(10, weight: .semibold))
                                 .foregroundColor(Color(hex: onMap.accent))
+                                .lineLimit(1)
                         }
+                        // Plafond de croissance sur CETTE ligne seulement : une
+                        // lecture technique n'a pas besoin d'atteindre les
+                        // tailles accessibilité pour rester exploitable, alors
+                        // que le titre du lieu juste au-dessus, lui, doit
+                        // continuer de grossir.
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     }
                 }
 
