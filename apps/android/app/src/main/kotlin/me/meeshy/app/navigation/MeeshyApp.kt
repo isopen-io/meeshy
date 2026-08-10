@@ -60,6 +60,8 @@ import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
+import me.meeshy.app.conversations.GlobalSearchScreen
+import me.meeshy.app.conversations.DashboardScreen
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
@@ -119,6 +121,8 @@ object Routes {
     fun guestJoin(identifier: String): String = "join/$identifier"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
+    const val GLOBAL_SEARCH = "search"
+    const val DASHBOARD = "dashboard"
     const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
     const val CREATE_SHARE_LINK =
         "conversations/{${CreateShareLinkViewModel.CONVERSATION_ID_ARG}}/share-link/new"
@@ -426,6 +430,8 @@ fun MeeshyApp(
                     },
                     onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
                     onContacts = { navController.navigate(Routes.CONTACTS) },
+                    onDashboard = { navController.navigate(Routes.DASHBOARD) },
+                    onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Routes.LOGIN) {
@@ -438,6 +444,29 @@ fun MeeshyApp(
                             onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
                         )
                     },
+                )
+            }
+            composable(Routes.GLOBAL_SEARCH) {
+                GlobalSearchScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
+                    onOpenUser = { userId ->
+                        navController.navigate(Routes.profile(userId))
+                    },
+                )
+            }
+            composable(Routes.DASHBOARD) {
+                DashboardScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
+                    onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
+                    onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
+                    onShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
+                    onContacts = { navController.navigate(Routes.CONTACTS) },
                 )
             }
             composable(

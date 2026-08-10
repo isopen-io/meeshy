@@ -133,4 +133,32 @@
     <string name="share_link_detail_cancel">Cancel</string>
     <string name="share_link_detail_not_found">This link is no longer available.</string>
     <string name="share_link_detail_dismiss">Dismiss</string>
+
+    <!-- Search bar trailing icons -->
+    <string name="conversations_open_dashboard">Dashboard</string>
+    <string name="conversations_open_global_search">Global search</string>
+
+    <!-- Global search screen -->
+    <string name="global_search_back">Back</string>
+    <string name="global_search_hint">Search everywhere…</string>
+    <string name="global_search_searching">Searching…</string>
+    <string name="global_search_empty_title">Search Meeshy</string>
+    <string name="global_search_empty_subtitle">Messages, conversations, users</string>
+    <string name="global_search_no_results">No results</string>
+    <string name="global_search_no_results_hint">Try different keywords</string>
+    <string name="global_search_tab_messages">Messages</string>
+    <string name="global_search_tab_conversations">Conversations</string>
+    <string name="global_search_tab_users">Users</string>
+    <string name="global_search_members">%1$d members</string>
+    <string name="global_search_online">Online</string>
+
+    <!-- Dashboard screen -->
+    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_unread">Unread messages</string>
+    <string name="dashboard_recent">Recent conversations</string>
+    <string name="dashboard_quick_actions">Quick actions</string>
+    <string name="dashboard_action_new_conversation">New conversation</string>
+    <string name="dashboard_action_search">Global search</string>
+    <string name="dashboard_action_share_links">Share links</string>
+    <string name="dashboard_action_contacts">Contacts</string>
 </resources>

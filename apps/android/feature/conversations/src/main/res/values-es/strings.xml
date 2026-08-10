@@ -133,4 +133,32 @@
     <string name="share_link_detail_cancel">Cancelar</string>
     <string name="share_link_detail_not_found">Este enlace ya no está disponible.</string>
     <string name="share_link_detail_dismiss">Descartar</string>
+
+    <!-- Search bar trailing icons -->
+    <string name="conversations_open_dashboard">Panel</string>
+    <string name="conversations_open_global_search">Búsqueda global</string>
+
+    <!-- Global search screen -->
+    <string name="global_search_back">Atrás</string>
+    <string name="global_search_hint">Buscar en todas partes…</string>
+    <string name="global_search_searching">Buscando…</string>
+    <string name="global_search_empty_title">Buscar en Meeshy</string>
+    <string name="global_search_empty_subtitle">Mensajes, conversaciones, usuarios</string>
+    <string name="global_search_no_results">Sin resultados</string>
+    <string name="global_search_no_results_hint">Prueba con otras palabras</string>
+    <string name="global_search_tab_messages">Mensajes</string>
+    <string name="global_search_tab_conversations">Conversaciones</string>
+    <string name="global_search_tab_users">Usuarios</string>
+    <string name="global_search_members">%1$d miembros</string>
+    <string name="global_search_online">En línea</string>
+
+    <!-- Dashboard screen -->
+    <string name="dashboard_title">Panel</string>
+    <string name="dashboard_unread">Mensajes no leídos</string>
+    <string name="dashboard_recent">Conversaciones recientes</string>
+    <string name="dashboard_quick_actions">Acciones rápidas</string>
+    <string name="dashboard_action_new_conversation">Nueva conversación</string>
+    <string name="dashboard_action_search">Búsqueda global</string>
+    <string name="dashboard_action_share_links">Enlaces para compartir</string>
+    <string name="dashboard_action_contacts">Contactos</string>
 </resources>
