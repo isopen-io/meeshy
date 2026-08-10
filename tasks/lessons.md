@@ -4109,7 +4109,7 @@ les seuls à porter un `null` explicite. Et comme seul un contexte d'auth anonym
    geste le plus coûteux du cycle. Documenter le défaut, dire pourquoi on ne le touche pas, et nommer
    le préalable (un essai à blanc contre la base) est un livrable complet — pas un aveu.
 
-## Leçon 93 — écrire le JUMEAU d'une implémentation existante n'est pas la recopier : c'est la première occasion de la juger (2026-08-10, routine messaging, cycle 61)
+## Leçon 93 — écrire le JUMEAU d'une implémentation existante n'est pas la recopier : c'est la première occasion de la juger (2026-08-10, routine messaging, cycle 62)
 
 Le cycle devait porter sur le web une règle qu'iOS appliquait depuis longtemps
 (`resolvedLastMessagePreview`). Le jumeau TypeScript a été écrit en miroir strict, ses 17 témoins
