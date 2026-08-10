@@ -298,6 +298,15 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addRemoteStream: (participantId, stream) => {
     const { remoteStreams } = get();
+
+    // Stop the previous stream's tracks if this participant's stream is being
+    // replaced (renegotiation / ICE restart / mid-call A/V switch re-fires
+    // ontrack with a new MediaStream) — mirrors setLocalStream's guard above.
+    const previousStream = remoteStreams.get(participantId);
+    if (previousStream && previousStream !== stream) {
+      previousStream.getTracks().forEach((track) => track.stop());
+    }
+
     const newStreams = new Map(remoteStreams);
     newStreams.set(participantId, stream);
     set({ remoteStreams: newStreams });

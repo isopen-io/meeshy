@@ -5504,3 +5504,47 @@ ligne avant implémentation.
   délivrer l'action ou terminer l'appel directement quand `supportsHolding=false`, indéterminable par
   lecture seule) ; candidats web Vague 83 non repris (`enableVideo()` no-op pré-connexion désynchronisant
   `controls.videoEnabled`, `call-store.ts.addRemoteStream` ne stoppant pas les pistes remplacées).
+
+## Vague 85 — `call-store.ts` `addRemoteStream` ne stoppait pas les pistes du stream remplacé (2026-08-09)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`HEAD == origin/main` au démarrage (Vague 84 déjà mergée, aucune PR ouverte de cette routine) — cycle
+démarré sur une base propre. Candidat repris directement du « reste ouvert » de la Vague 83/84
+(confiance moyenne à l'origine, vérifié ligne à ligne avant implémentation, cf. leçon 18 du journal :
+« reprendre la piste comme une hypothèse à réfuter, pas une consigne »).
+
+- **Root cause confirmée par lecture directe** : `addRemoteStream(participantId, stream)`
+  (`apps/web/stores/call-store.ts`) écrasait l'entrée `remoteStreams.get(participantId)` sans jamais
+  stopper les pistes du stream précédent — contrairement à `setLocalStream` (guard symétrique déjà
+  présent juste au-dessus dans le même fichier) et `removeRemoteStream`. Le call-site
+  (`use-webrtc-p2p.ts`, handler `onTrack` de `RTCPeerConnection`) rappelle `addRemoteStream` à chaque
+  livraison de piste distante, y compris en RENÉGOCIATION (ICE restart, switch A/V mi-appel — le chemin
+  d'association de m-line corrigé par cb7aeabd est justement une renégociation qui matérialise une
+  nouvelle association de stream). Un stream remplacé pour le même participant laissait donc ses pistes
+  (capture/décodage actifs) tourner indéfiniment jusqu'à la fin de l'appel.
+- **Fix** : même patron que `setLocalStream` — stopper les pistes du stream précédent uniquement s'il
+  diffère du nouveau (`previousStream !== stream`), pour ne pas pénaliser une re-livraison du même objet
+  stream (cas déjà couvert par le test « multiple remote streams », participants différents).
+- **Tests** (TDD, RED confirmé avant fix) : 2 nouveaux tests dans
+  `__tests__/stores/call-store.test.ts` — « should stop tracks of the previous stream when replacing it
+  for the same participant » (RED confirmé : `oldTrack.stopped === false` avant fix) et « should not stop
+  tracks when the same stream is reported again for the same participant » (garde la non-régression du
+  cas re-livraison identique).
+- **Vérification** : suite `call-store.test.ts` (68 tests) verte. Sweep complet
+  `call|webrtc|video-call` (48 suites / 609 tests) vert, aucune régression. `npx tsc --noEmit` : compte
+  d'erreurs inchangé avant/après (1179), 0 sur le fichier touché. `packages/shared` : `prisma generate` +
+  `bun run build` propres (prérequis CLAUDE.md rejoués, sandbox sans `node_modules` au démarrage — `bun
+  install --ignore-scripts`). `next lint` : échec sandbox-only de config ESLint v9 circulaire déjà
+  documenté (Vagues 65-84), non bloquant, indépendant de ce diff. PR #2706 ouverte, CI à surveiller.
+- **Reste ouvert** (reconduit, un candidat en moins) : dead code / god-object `CallManager.swift` iOS
+  (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall`
+  UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs.
+  `supportsHolding = false` (confiance basse, needs on-device confirmation). **Nouveau candidat
+  prioritaire pour la prochaine session** : `use-webrtc-p2p.ts` `enableVideo()` retourne tôt (no-op,
+  aucune exception) si `webrtcServicesRef.current` est vide — cas réel avant que le pair réponde
+  (`services.length === 0`, ex. sonnerie). `VideoCallInterface.handleToggleVideo` ne détecte pas ce
+  no-op silencieux (pas de throw → pas de `catch` → `setControls({ videoEnabled: true })` s'exécute quand
+  même) : désynchronise l'état UI de l'état média réel — le bouton affiche vidéo activée alors qu'aucune
+  piste caméra n'a été acquise ni attachée à aucun pair. Investigation entamée mais pas menée à bout ce
+  cycle (portée du fix — faire lever une erreur explicite depuis `enableVideo()` vs. gérer le cas dans
+  l'appelant — pas encore tranchée) ; à vérifier ligne à ligne avant d'implémenter (leçon 18).
