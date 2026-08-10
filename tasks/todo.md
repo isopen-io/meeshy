@@ -102,8 +102,19 @@ sur les quatre métriques.
 - **Les points hérités restent ouverts tels quels** : les mentions du chemin de lien attendent
   l'extraction qui écrit `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ;
   les pièces jointes du chemin de lien n'entrent pas dans le pipeline audio ; l'arbitrage
-  `delete-for-me` du cycle 12 attend une validation humaine ; les émetteurs par room personnelle
-  autres que l'éventail d'accusés n'ont pas été audités contre la clé `userId ?? id`.
+  `delete-for-me` du cycle 12 attend une validation humaine.
+- **Fermé ce cycle — l'audit des émetteurs par room personnelle contre la clé `userId ?? id`.**
+  Le backlog le portait depuis le cycle 25b, en soupçon (« rien ne garantit que les autres la
+  respectent »). Instruit par recherche et non par déduction, comme il le demandait : 53 sites
+  `ROOMS.user(` sur 19 fichiers. Le résultat est propre. `emitConversationPreviewUpdate`, celui que
+  le backlog nommait, charge `id` ET `userId` et émet par `participantUserRooms()` — le helper
+  canonique — avec la règle inscrite en commentaire au-dessus du `select`. Les sites qui passent un
+  identifiant nu le tiennent d'un `User.id` (destinataire de notification, créateur de conversation,
+  liste de participants inscrits), jamais d'un `Participant`. Une seule exception délibérée, et déjà
+  documentée en tant que telle : `callEndedFanout` filtre `userId: { not: null }` parce que
+  l'audience de terminaison doit refléter l'audience d'INVITATION — `call:initiated` porte le même
+  filtre, un participant sans compte n'est jamais sonné, et s'il rejoint l'appel il est de toute
+  façon dans `ROOMS.call(callId)`. Le point sort du backlog.
 - **Fermé depuis le cycle 47, vérifié ce cycle** : « iOS n'écoute pas `notification:deleted` » n'est
   plus vrai. `MessageSocketManager` l'écoute et le publie sur `notificationDeleted`, que
   `NotificationToastManager` consomme. Le point sort du backlog.
