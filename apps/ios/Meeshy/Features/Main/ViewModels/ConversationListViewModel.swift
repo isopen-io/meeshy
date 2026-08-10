@@ -617,25 +617,69 @@ class ConversationListViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Graft the store's `userState` onto the matching rows. Metadata and
-    /// ordering are untouched. Guarded so an echo of an unchanged snapshot
-    /// (e.g. the publish that follows our own hydration) doesn't churn the
-    /// grouping pipeline.
+    /// Ids présents dans la dernière émission du store. Une conversation qui
+    /// DISPARAÎT d'une émission à la suivante a été supprimée (`conversation:deleted`
+    /// → `applyConversationDeleted`) : c'est le seul signal de suppression que
+    /// le store publie. Comparer à l'absence pure serait faux — le store peut
+    /// être moins hydraté que la liste, et toutes les lignes s'évaporeraient.
+    private var lastStoreSnapshotIds: Set<String> = []
+
+    /// Graft the store's `userState` AND the metadata a `conversation:updated`
+    /// can change onto the matching rows, then drop the rows the store just
+    /// deleted. Ordering is untouched. Guarded so an echo of an unchanged
+    /// snapshot (e.g. the publish that follows our own hydration) doesn't churn
+    /// the grouping pipeline.
     private func mergeUserStateFromStore(_ snapshot: [MeeshyConversation]) {
+        let ids = Set(snapshot.map(\.id))
+        let disappeared = lastStoreSnapshotIds.subtracting(ids)
+        lastStoreSnapshotIds = ids
         guard !conversations.isEmpty else { return }
-        var stateById = [String: ConversationUserState](minimumCapacity: snapshot.count)
-        for conv in snapshot { stateById[conv.id] = conv.userState }
-        var updated = conversations
-        var changed = false
+        guard let merged = Self.reconciling(
+            rows: conversations, with: snapshot, removing: disappeared
+        ) else { return }
+        conversations = merged
+        schedulePersist()
+    }
+
+    /// Réconciliation pure — `nil` quand rien ne bouge.
+    ///
+    /// Les champs `lastMessage*` ne sont VOLONTAIREMENT pas greffés : ils sont
+    /// la propriété du cache disque (écrit par `ConversationSyncEngine`), que
+    /// `reloadFromCache` reverse déjà dans la liste. Les greffer depuis le
+    /// store ferait régresser l'aperçu dès que le store est en retard d'un
+    /// `message:new`.
+    static func reconciling(
+        rows: [Conversation],
+        with snapshot: [MeeshyConversation],
+        removing disappeared: Set<String>
+    ) -> [Conversation]? {
+        let byId = Dictionary(snapshot.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var updated = rows.filter { !disappeared.contains($0.id) }
+        var changed = updated.count != rows.count
         for i in updated.indices {
-            guard let newState = stateById[updated[i].id], updated[i].userState != newState else { continue }
-            updated[i].userState = newState
-            changed = true
+            guard let incoming = byId[updated[i].id] else { continue }
+            if updated[i].userState != incoming.userState {
+                updated[i].userState = incoming.userState
+                changed = true
+            }
+            if updated[i].title != incoming.title { updated[i].title = incoming.title; changed = true }
+            if updated[i].avatar != incoming.avatar { updated[i].avatar = incoming.avatar; changed = true }
+            if updated[i].description != incoming.description { updated[i].description = incoming.description; changed = true }
+            if updated[i].banner != incoming.banner { updated[i].banner = incoming.banner; changed = true }
+            if updated[i].isAnnouncementChannel != incoming.isAnnouncementChannel {
+                updated[i].isAnnouncementChannel = incoming.isAnnouncementChannel; changed = true
+            }
+            if updated[i].defaultWriteRole != incoming.defaultWriteRole {
+                updated[i].defaultWriteRole = incoming.defaultWriteRole; changed = true
+            }
+            if updated[i].slowModeSeconds != incoming.slowModeSeconds {
+                updated[i].slowModeSeconds = incoming.slowModeSeconds; changed = true
+            }
+            if updated[i].autoTranslateEnabled != incoming.autoTranslateEnabled {
+                updated[i].autoTranslateEnabled = incoming.autoTranslateEnabled; changed = true
+            }
         }
-        if changed {
-            conversations = updated
-            schedulePersist()
-        }
+        return changed ? updated : nil
     }
 
     private func reloadFromCache() async {
