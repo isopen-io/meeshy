@@ -504,4 +504,15 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
                        "playPrevious must not change track while a CallKit call is active")
         XCTAssertEqual(engine.playCallCount, playsBefore)
     }
+
+    // MARK: - AudioSessionProfile — Now Playing eligibility
+
+    /// The coordinator's default engine must opt into `.content` session profile
+    /// so that Now Playing and lock-screen controls are eligible (vs. transient
+    /// for UI sounds, alerts, etc.). Production engine: `AudioPlaybackManager()`
+    /// defaults `.transient`, so the coordinator explicitly sets `.content`.
+    func test_init_defaultEngine_optsIntoContentSessionProfile() {
+        let coordinator = ConversationAudioCoordinator()
+        XCTAssertEqual(coordinator.engineForBubble?.sessionProfile, .content)
+    }
 }

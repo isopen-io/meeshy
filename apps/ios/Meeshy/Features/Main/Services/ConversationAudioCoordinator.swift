@@ -118,6 +118,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // the coordinator's guards. Setting playbackPermissionGuard closes that gap
         // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
+            manager.sessionProfile = .content
             manager.playbackPermissionGuard = { !CallManager.shared.isCallActiveForAudioGuard }
         }
         wireEngineForwarding()

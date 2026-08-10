@@ -25,6 +25,8 @@ final class MockAudioPlaybackEngine: AudioPlaybackEngineDriving {
     private(set) var lastPlayedUrl: String?
     private(set) var stopCallCount = 0
     private(set) var togglePlayPauseCallCount = 0
+    private(set) var pauseCallCount = 0
+    private(set) var resumeFromInterruptionCallCount = 0
     private(set) var seekFractions: [Double] = []
     private(set) var setSpeedCalls: [PlaybackSpeed] = []
 
@@ -46,6 +48,16 @@ final class MockAudioPlaybackEngine: AudioPlaybackEngineDriving {
         stopCallCount += 1
         isPlaying = false
         currentUrl = nil
+    }
+
+    func pause() {
+        pauseCallCount += 1
+        isPlaying = false
+    }
+
+    func resumeFromInterruption() {
+        resumeFromInterruptionCallCount += 1
+        isPlaying = true
     }
 
     func seek(to fraction: Double) {

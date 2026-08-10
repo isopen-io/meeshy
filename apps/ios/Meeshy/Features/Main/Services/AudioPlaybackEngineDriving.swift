@@ -25,6 +25,8 @@ public protocol AudioPlaybackEngineDriving: AnyObject {
     func playLocal(url: URL)
     func togglePlayPause()
     func stop()
+    func pause()
+    func resumeFromInterruption()
     func seek(to fraction: Double)
     func skip(seconds: Double)
     func setSpeed(_ speed: PlaybackSpeed)
