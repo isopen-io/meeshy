@@ -80,7 +80,7 @@ final class CommentMediaPersistenceTests: XCTestCase {
             mediaJson: try makeMediaJson(transcription: "transcription prête")
         )
 
-        let fetched = try db.read { try CommentRecord.filter(Column("id") == "c_enrich").fetchOne($0) }
+        let fetched = try await db.read { try CommentRecord.filter(Column("id") == "c_enrich").fetchOne($0) }
         XCTAssertEqual(fetched?.media.first?.transcription?.resolvedText, "transcription prête")
         XCTAssertEqual(fetched?.changeVersion, 1)
     }
@@ -92,7 +92,7 @@ final class CommentMediaPersistenceTests: XCTestCase {
             commentId: "ghost", mediaJson: try makeMediaJson(transcription: "x")
         )
 
-        let count = try db.read { try CommentRecord.fetchCount($0) }
+        let count = try await db.read { try CommentRecord.fetchCount($0) }
         XCTAssertEqual(count, 0)
     }
 }

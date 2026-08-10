@@ -174,9 +174,10 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
             "content": "Appel", "createdAt": "2026-01-01T00:00:00Z",
             "updatedAt": "2026-01-01T00:05:00Z",
             "metadata": {
+                "kind": "call",
                 "callId": "call-1", "initiatorId": "s1", "callType": "audio",
                 "outcome": "completed", "durationSeconds": 272,
-                "bytesEstimated": false, "isLive": false
+                "bytesEstimated": false
             }
         }
         """.utf8))
