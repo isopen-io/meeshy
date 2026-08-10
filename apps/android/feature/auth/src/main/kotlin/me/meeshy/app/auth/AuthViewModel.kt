@@ -197,6 +197,16 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Adopte une session ouverte HORS de ce VM — le magic link valide dans son
+     * propre ecran via AuthRepository. Meme post-traitement que [login] :
+     * sockets reveilles, compte memorise pour le picker, etat aligne.
+     */
+    fun onExternalSessionOpened() {
+        realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
+        _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated) }
+    }
+
     fun logout() {
         viewModelScope.launch {
             authRepository.logout()

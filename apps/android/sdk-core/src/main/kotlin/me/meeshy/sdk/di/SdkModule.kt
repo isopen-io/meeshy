@@ -76,6 +76,14 @@ object SdkModule {
 
     @Provides
     @Singleton
+    fun providesRecentSearchesStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): me.meeshy.sdk.search.RecentSearchesStore =
+        me.meeshy.sdk.search.SharedPrefsRecentSearchesStore(context, json)
+
+    @Provides
+    @Singleton
     fun providesLocallyHiddenMessagesStore(
         @ApplicationContext context: Context,
     ): LocallyHiddenMessagesStore = SharedPrefsLocallyHiddenMessagesStore(context)

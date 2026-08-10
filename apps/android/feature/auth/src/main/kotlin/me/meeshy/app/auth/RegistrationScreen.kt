@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1155,10 +1156,10 @@ private fun LanguageTranslationPreviewCard(systemLanguage: String) {
  * `summaryItems` for both `StepProfileView` and `StepRecapView` — same
  * information, same card, no near-duplicate string/composable).
  *
- * Deliberate simplification over iOS: the avatar does not overlap the banner
- * (iOS offsets it -30pt over the banner's bottom edge). A plain stacked layout
- * avoids Compose's offset/clip interaction inside a rounded, clipped container
- * for a purely cosmetic flourish with no functional value.
+ * L'avatar chevauche le bas de la banniere (parite iOS -30pt), avec un anneau
+ * de la couleur du fond de carte pour l'effet "decoupe". Il remonte DANS le
+ * conteneur (sur la banniere, jamais au-dela des bords arrondis), donc le clip
+ * du conteneur ne le rogne pas.
  */
 @Composable
 private fun ProfileStepBody(state: RegistrationUiState, viewModel: RegistrationViewModel) {
@@ -1297,23 +1298,35 @@ private fun ProfilePreviewCard(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-            modifier = Modifier.padding(MeeshySpacing.md),
+            // Padding top nul : l'avatar remonte sur la banniere via son offset,
+            // le nom reste centre sur la hauteur restante.
+            modifier = Modifier.padding(
+                start = MeeshySpacing.md,
+                end = MeeshySpacing.md,
+                bottom = MeeshySpacing.md,
+            ),
         ) {
-            Box {
+            // -24dp : l'avatar chevauche le bas de la banniere (parite iOS -30pt).
+            Box(modifier = Modifier.offset(y = (-24).dp)) {
                 val avatar = state.profileImage
+                val ringColor = MeeshyTheme.tokens.backgroundSecondary
                 if (avatar != null) {
                     AsyncImage(
                         model = avatar.bytes,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(64.dp).clip(CircleShape),
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .border(3.dp, ringColor, CircleShape),
                     )
                 } else {
                     Box(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.2f)),
+                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.2f))
+                            .border(3.dp, ringColor, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(

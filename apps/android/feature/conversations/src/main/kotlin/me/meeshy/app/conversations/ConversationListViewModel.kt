@@ -147,17 +147,17 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             launch {
                 messageSocketManager.unreadUpdated.collect {
-                    repository.refresh()
+                    refreshSilently()
                 }
             }
             launch {
                 messageSocketManager.messageReceived.collect {
-                    repository.refresh()
+                    refreshSilently()
                 }
             }
             launch {
                 messageSocketManager.conversationUpdated.collect {
-                    repository.refresh()
+                    refreshSilently()
                 }
             }
             launch {
@@ -333,6 +333,24 @@ class ConversationListViewModel @Inject constructor(
 
     /** Pull-to-refresh: the visible spinner tracks the user gesture only —
      * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]). */
+    /**
+     * Revalidation declenchee par un evenement socket : silencieuse par
+     * construction. Un echec ici (session en cours de teardown — logout, bascule
+     * magic link —, reseau coupe) laisse la liste en cache intacte ; avant cette
+     * garde, un `conversation:updated` recu pendant un logout faisait remonter
+     * ConversationSyncException jusqu'au main thread et TUAIT le process.
+     */
+    private suspend fun refreshSilently() {
+        try {
+            repository.refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Silencieux : la prochaine emission du cache ou le pull-to-refresh
+            // resynchronisera.
+        }
+    }
+
     fun refresh() {
         _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
