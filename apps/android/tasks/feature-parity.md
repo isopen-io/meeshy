@@ -3101,7 +3101,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (a real screen swap with save/restore state) — functionally equivalent (same
       toggle semantics, same destination reached) but not a pixel-identical port of the
       overlay/animation mechanism.
-- [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
+- [~] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
+      — **text-only sub-slice done** (slice `feed-post-composer-text`, 2026-08-10): a new
+      `FeedComposerPlaceholder` row above the post list (iOS parity: `FeedView.composerPlaceholder`)
+      opens `FeedComposerSheet` (`ModalBottomSheet`, same shape as the existing `StatusComposerSheet`),
+      publishing a text-only `POST` via the existing, previously-unused-for-this-purpose
+      `PostRepository.create()`. Pure `FeedComposerDraft`/`FeedPostVisibility` (Public/Friends/Private,
+      port of iOS `postVisibility`) owns the publish gate (non-blank trimmed text) and the trimmed body.
+      A new `FeedRealtimeReducer.created()` prepends the network-confirmed post to the same realtime
+      head the socket `post:created` path already uses — visible at the top instantly, WITHOUT bumping
+      the "N new posts" banner (that's for arrivals from others), and defensively deduped against the
+      gateway's own `post:created` echo of this same publish (`state.posts.any { it.id == id }` already
+      true by the time the echo lands). **Still open** (attachments/photos/camera/files/location/audio,
+      per-post language override, the Réel⇄Post toggle, durable-outbox queueing for offline resilience —
+      each a separately-scoped follow-up, not attempted this run).
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket

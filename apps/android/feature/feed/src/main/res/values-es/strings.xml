@@ -86,4 +86,13 @@
     <string name="status_composer_visibility_community">Comunidades</string>
     <string name="status_composer_visibility_friends">Contactos</string>
     <string name="status_composer_visibility_private">Privado</string>
+    <string name="feed_composer_open_placeholder">Comparte algo con el mundo…</string>
+    <string name="feed_composer_open_label">Compartir algo</string>
+    <string name="feed_composer_title">Nueva publicación</string>
+    <string name="feed_composer_cancel">Cancelar</string>
+    <string name="feed_composer_publish">Publicar</string>
+    <string name="feed_composer_placeholder">¿Qué estás pensando?</string>
+    <string name="feed_composer_visibility_public">Público</string>
+    <string name="feed_composer_visibility_friends">Amigos</string>
+    <string name="feed_composer_visibility_private">Privado</string>
 </resources>

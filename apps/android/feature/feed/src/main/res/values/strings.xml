@@ -85,4 +85,13 @@
     <string name="status_composer_visibility_community">Communities</string>
     <string name="status_composer_visibility_friends">Contacts</string>
     <string name="status_composer_visibility_private">Private</string>
+    <string name="feed_composer_open_placeholder">Share something with the world…</string>
+    <string name="feed_composer_open_label">Share something</string>
+    <string name="feed_composer_title">New post</string>
+    <string name="feed_composer_cancel">Cancel</string>
+    <string name="feed_composer_publish">Publish</string>
+    <string name="feed_composer_placeholder">What\'s on your mind?</string>
+    <string name="feed_composer_visibility_public">Public</string>
+    <string name="feed_composer_visibility_friends">Friends</string>
+    <string name="feed_composer_visibility_private">Private</string>
 </resources>
