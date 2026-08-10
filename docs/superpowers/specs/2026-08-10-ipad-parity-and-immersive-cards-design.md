@@ -2,7 +2,8 @@
 
 Date : 2026-08-10
 Statut : proposé
-Périmètre : `apps/ios/Meeshy`, `packages/MeeshySDK/Sources/MeeshyUI`
+Périmètre : `apps/ios/Meeshy`, `packages/MeeshySDK/Sources`, et — pour le seul
+défaut 9 — `services/gateway/src/services/messaging`
 
 ## Problème
 
@@ -22,6 +23,7 @@ le code — aucune n'est une conjecture.
 | 6 | Aucun survol pointeur, aucun raccourci clavier | `onHover` : 0 occurrence, `hoverEffect` : 0, `pointerStyle` : 0. `keyboardShortcut` n'existe que dans la barre de transport de la timeline story. |
 | 7 | Carte de feed : un clip vertical s'affiche en petit, letterboxé au centre d'une carte large | `mediaPreview` impose `.frame(height: 220)` par-dessus `FeedVideoMediaCell`, dont la hauteur propre vaut `largeur / ratio` (≈ 1,6 × largeur pour un portrait). Le cadre extérieur écrase le calcul de la cellule. |
 | 8 | Citation d'une réponse à un mood : le contenu est écrasé et coupé à 2 lignes | `BubbleMoodReplyPreview` empile emoji + date relative + puce + contenu dans **un seul `HStack`**. La date consomme la largeur du contenu. |
+| 9 | Citation d'un mood : l'auteur disparaît après rechargement, le titre retombe sur le libellé générique « Humeur » | `APIMessage.uiReplyTo` construit la référence mood avec `authorName: ""` (`MessageModels.swift:743`). En amont, le snapshot gateway `PostReplyTo` (`postReplySnapshot.ts`) **ne porte aucun champ auteur**. Le nom n'existe que dans la référence optimiste locale (`entry.username`) et se perd au premier écho serveur. |
 
 Ce qui fonctionne déjà sur iPad et ne doit pas régresser : menu contextuel de
 ligne de conversation, menu d'avatar de story, menu d'avatar d'en-tête de
@@ -40,8 +42,11 @@ Actées avec le porteur du produit le 2026-08-10 :
    réels, composer de story et caméra. `lockPortrait()` / `unlock()` reprennent
    du service au lieu d'être supprimés.
 4. **Géométrie modale** : hôte d'overlay au niveau **fenêtre**.
-5. **Carte de feed** : tuile **entièrement immersive** — en-tête auteur, texte
-   et barre d'actions flottent tous sur le média.
+5. **Cartes de feed** : deux modèles distincts, et non un seul. La carte de
+   **réel** est immersive — média en fond, chrome en surimpression ; elle est
+   déjà conforme. La carte de **post** garde l'ordre texte puis média, sans
+   surimpression ; seul son cadrage de média est à corriger. Cette décision
+   révise en cours de spec un premier arbitrage « tout immersif » (cf. lot 4).
 
 ## Conception
 
@@ -260,6 +265,27 @@ Le slot de date est ajouté à la ligne de titre de `BubbleQuotedReply` et n'est
 peuplé que dans le cas mood ; les citations de message et de story sont
 inchangées.
 
+**Auteur du mood perdu à l'écho serveur (défaut 9).** Traité dans le même lot,
+parce qu'il touche la même ligne de titre : sans nom d'auteur, la date remontée
+sur cette ligne l'accompagnerait d'un libellé générique « Humeur » au lieu de
+« Belva Tano ». C'est visible sur la capture d'origine, dont le titre est
+littéralement « Mood ».
+
+Le champ manque de bout en bout, la correction traverse donc les deux côtés :
+
+- **Gateway** — `PostReplySnapshotablePost` et `PostReplyTo` gagnent l'auteur
+  (identifiant, nom d'affichage, nom d'utilisateur) ; `POST_REPLY_SNAPSHOT_SELECT`
+  charge la relation. Les snapshots déjà persistés n'ont pas le champ :
+  `normalizePostReplyTo` doit le rendre optionnel et ne pas invalider une
+  citation ancienne.
+- **iOS** — `APIMessage.uiReplyTo` peuple `authorName` depuis le snapshot au
+  lieu de la chaîne vide. Le repli existant de `quotedTitle` vers « Humeur »
+  reste en place : il redevient ce qu'il aurait dû être, un filet pour les
+  citations d'avant la correction, et non le cas nominal.
+
+Sans le volet gateway, le volet iOS n'a rien à afficher — l'ordre entre les deux
+n'est pas libre.
+
 ## Tests
 
 TDD par lot, selon les règles du repo (test rouge d'abord, comportement et non
@@ -274,8 +300,12 @@ implémentation, fonctions fabriques, pas de mutation partagée).
 - `OrientationManager` : verrous imbriqués — deux `lockPortrait` puis un
   `releasePortrait` laissent le verrou actif ; le second le lève. Un
   `releasePortrait` en trop ne descend pas sous zéro.
-- Hauteur de tuile immersive : fonction pure de (ratio source, largeur carte) →
-  bornes 0,75×/1,4× respectées pour portrait, paysage et carré.
+- Hauteur du média d'une carte de post : fonction pure de (ratio source, largeur
+  carte) → bornes 0,75×/1,4× respectées pour portrait, paysage et carré. Le test
+  du portrait est celui qui échoue aujourd'hui.
+- Sélection du média de fond d'un réel : `[vidéo, image]` → la vidéo ;
+  `[image, image]` → la première ; `[image, audio]` → l'image (c'est le cas qui
+  diverge du code actuel).
 
 **Gardes de source** — ancrées sur le comportement, pas sur une fenêtre de
 caractères (cf. dette connue des gardes à fenêtre fixe) :
@@ -286,9 +316,8 @@ caractères (cf. dette connue des gardes à fenêtre fixe) :
 
 **Snapshots** — enregistrés sur le runtime **18.2**, baseline du repo :
 en-tête de liste en `regular` conversation ouverte, login et onboarding en
-`regular`, carte de feed immersive (vidéo verticale, image paysage, audio), les
-trois cas extrêmes de contraste du voile (média blanc, noir, très contrasté),
-citation de mood à contenu long.
+`regular`, carte de post avec vidéo verticale (le cas letterboxé) et avec image
+paysage, carte de réel, citation de mood à contenu long.
 
 **Vérification réelle** sur simulateur iPad en **18.2 et en 26.1**, portrait et
 paysage. Le chemin des menus contextuels diffère entre les deux — overlay custom
@@ -311,9 +340,11 @@ Le lot 1 doit être vérifié écran par écran, pas seulement « ça tourne ».
 fonction de calcul pure, les gardes de source et le maintien de `AnyView` à
 l'hôte pour ne pas rouvrir le crash de décodage de métadonnées sur device.
 
-**Le chrome flottant peut devenir illisible** sur un média clair ou chargé. Les
-voiles dégradés à opacité plancher sont la mitigation ; les snapshots couvrent
-les cas extrêmes.
+**Le lot 4 a déjà changé de forme une fois.** Il est passé de « toute carte de
+feed devient immersive » à « la carte de réel l'est déjà, la carte de post ne le
+devient pas ». Toute nouvelle directive sur les cartes doit être rapportée à
+cette séparation avant d'être traduite en travail, sous peine de réintroduire la
+surimpression sur les posts.
 
 **Hygiène de dépôt** : `apps/ios/project.yml` est la source de vérité, tout
 nouveau `.swift` sous `Meeshy/` est auto-inclus par `xcodegen generate`. Ne
@@ -330,7 +361,8 @@ Décidé, pas oublié :
   (`UIApplicationSupportsMultipleScenes` est déjà à `true` ; le paysage rendra
   Split View utilisable, sans travail dédié à la gestion de scènes).
 - Apple Pencil, barre de menus macOS.
-- Carte de feed immersive sur iPhone.
+- Rendre la carte de post immersive, sur iPhone comme sur iPad — explicitement
+  écarté par la directive du 2026-08-10.
 
 ## Séquencement
 
