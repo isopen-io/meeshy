@@ -42,12 +42,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep link: meeshy://conversations/{id} -->
-            <intent-filter android:autoVerify="true">
+            <!-- Deep link: meeshy://conversations/{id} — autoVerify retire : un
+                 scheme custom ne peut pas etre verifie (source de l'erreur lint
+                 AppLinkUrlError), la verification appartient au filtre https. -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" />
+            </intent-filter>
+            <!-- App Link : le lien du mail magic link (https://meeshy.me/auth/magic-link?token=)
+                 ouvre l'app directement. La verification s'appuie sur
+                 apps/web/public/.well-known/assetlinks.json, qui doit contenir le
+                 SHA-256 de la cle de signature RELEASE. Procedure (obtenir + poser
+                 l'empreinte, verifier) : apps/android/docs/magic-link-app-links.md -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/auth/magic-link" />
             </intent-filter>
             <!-- Deep link: meeshy://chat/{conversationId} -->
             <intent-filter>

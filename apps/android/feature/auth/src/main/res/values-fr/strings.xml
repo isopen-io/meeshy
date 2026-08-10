@@ -125,4 +125,7 @@
     <string name="auth_magic_countdown">Lien valide pendant %1$s</string>
     <string name="auth_magic_expired">Le lien a expiré. Envoyez-en un nouveau.</string>
     <string name="auth_magic_resend">Renvoyer le lien</string>
+    <string name="auth_magic_validating">Connexion en cours…</string>
+    <string name="auth_magic_success">Connexion réussie !</string>
+    <string name="auth_magic_invalid">Lien invalide ou expiré</string>
 </resources>
