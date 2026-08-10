@@ -28,22 +28,23 @@ final class OfflineQueueMarkAsReadCoalescingTests: XCTestCase {
         try await super.tearDown()
     }
 
+    @discardableResult
     private func enqueueMarkAsRead(
         conv: String = "conv-read",
-        upTo: String,
         messageIds: [String]?,
         languages: [String: String]? = nil
-    ) async throws {
+    ) async throws -> String {
+        let cmid = ClientMutationId.generate()
         let payload = MarkAsReadPayload(
-            clientMutationId: ClientMutationId.generate(),
+            clientMutationId: cmid,
             conversationId: conv,
-            upToMessageId: upTo,
             messageIds: messageIds,
             language: nil,
             messageLanguages: languages,
             caughtUpToMessageId: nil
         )
         try await queue.enqueue(.markAsRead, payload: payload, conversationId: conv)
+        return cmid
     }
 
     private func storedPayload() async throws -> MarkAsReadPayload {
@@ -57,19 +58,19 @@ final class OfflineQueueMarkAsReadCoalescingTests: XCTestCase {
     }
 
     func test_enqueueMarkAsRead_twoOfflineBatches_unionsMessageIds() async throws {
-        try await enqueueMarkAsRead(upTo: "m3", messageIds: ["m1", "m2", "m3"])
-        try await enqueueMarkAsRead(upTo: "m7", messageIds: ["m7"])
+        try await enqueueMarkAsRead(messageIds: ["m1", "m2", "m3"])
+        let newest = try await enqueueMarkAsRead(messageIds: ["m7"])
 
         let merged = try await storedPayload()
 
         XCTAssertEqual(merged.messageIds, ["m1", "m2", "m3", "m7"],
                        "les reçus de lecture des lots précédents sont des faits, pas un état à jeter")
-        XCTAssertEqual(merged.upToMessageId, "m7", "le curseur reste celui du lot le plus récent")
+        XCTAssertEqual(merged.clientMutationId, newest, "la row survivante est celle du lot le plus récent")
     }
 
     func test_enqueueMarkAsRead_staleInformedThenNewestNil_keepsInformedBatch() async throws {
-        try await enqueueMarkAsRead(upTo: "m6", messageIds: ["m5", "m6"])
-        try await enqueueMarkAsRead(upTo: "m9", messageIds: nil)
+        try await enqueueMarkAsRead(messageIds: ["m5", "m6"])
+        try await enqueueMarkAsRead(messageIds: nil)
 
         let merged = try await storedPayload()
 
@@ -78,8 +79,8 @@ final class OfflineQueueMarkAsReadCoalescingTests: XCTestCase {
     }
 
     func test_enqueueMarkAsRead_bothNil_staysNil() async throws {
-        try await enqueueMarkAsRead(upTo: "m2", messageIds: nil)
-        try await enqueueMarkAsRead(upTo: "m4", messageIds: nil)
+        try await enqueueMarkAsRead(messageIds: nil)
+        try await enqueueMarkAsRead(messageIds: nil)
 
         let merged = try await storedPayload()
 
@@ -87,8 +88,8 @@ final class OfflineQueueMarkAsReadCoalescingTests: XCTestCase {
     }
 
     func test_enqueueMarkAsRead_mergesMessageLanguages() async throws {
-        try await enqueueMarkAsRead(upTo: "m1", messageIds: ["m1"], languages: ["m1": "fr"])
-        try await enqueueMarkAsRead(upTo: "m2", messageIds: ["m2"], languages: ["m2": "en"])
+        try await enqueueMarkAsRead(messageIds: ["m1"], languages: ["m1": "fr"])
+        try await enqueueMarkAsRead(messageIds: ["m2"], languages: ["m2": "en"])
 
         let merged = try await storedPayload()
 

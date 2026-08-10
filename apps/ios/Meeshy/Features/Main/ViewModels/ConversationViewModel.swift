@@ -3617,7 +3617,6 @@ class ConversationViewModel: ObservableObject {
         // tag it with a cmid for instrumentation parity with the other
         // outbox kinds. Fall back to the legacy `PendingStatusQueue` if
         // the outbox enqueue itself fails (e.g. pool not configured).
-        let lastMessageId = messages.last?.id ?? ""
         // Résolu ICI, pas au moment de l'envoi : la file d'attente peut partir
         // longtemps après, et une traduction arrivée entre-temps ne change pas
         // ce que le lecteur avait sous les yeux.
@@ -3627,7 +3626,6 @@ class ConversationViewModel: ObservableObject {
             let payload = MarkAsReadPayload(
                 clientMutationId: cmid,
                 conversationId: convId,
-                upToMessageId: lastMessageId,
                 messageIds: messageIds,
                 language: languages?.language,
                 messageLanguages: languages?.exceptions,
