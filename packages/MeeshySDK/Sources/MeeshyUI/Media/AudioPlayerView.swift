@@ -638,8 +638,11 @@ public struct AudioPlayerView: View {
     /// every existing call site) means "show the original". The SDK stays
     /// agnostic of the resolution rule itself (systemLanguage > regional >
     /// custom > deviceLocale); it only renders whichever code it is handed.
-    /// This ONLY seeds the transcription display — it never changes which
-    /// audio track plays, that stays the original by default.
+    /// Prisme audio-follow (2026-08-09) — this now ALSO seeds playback: a
+    /// non-nil/non-"orig" value marks `hasExplicitAudioLanguage = true` in
+    /// `init`, so the matching translated audio track (if one exists) plays
+    /// automatically, exactly like the transcription strip. See
+    /// `hasExplicitAudioLanguage`'s doc for the full contract.
     public var initialTranscriptionLanguage: String? = nil
 
     public var onFullscreen: (() -> Void)? = nil
@@ -713,19 +716,20 @@ public struct AudioPlayerView: View {
     /// can observe the seeding decision from MeeshyUITests without exposing
     /// it publicly — same pattern as `usesExternalPlayer` above.
     @State internal var selectedAudioLanguage: String
-    /// B9 fix — `selectedAudioLanguage` now doubles as the Prisme-seeded
-    /// transcription-STRIP default AND the user's explicit playback-language
-    /// pick, but only the latter may steer which audio track plays. Starts
-    /// `false` unconditionally (even when `initialTranscriptionLanguage` seeds
-    /// a non-"orig" value) and flips to `true` exclusively inside
-    /// `switchToLanguage` — the single choke point reached by an explicit
-    /// language-pill tap or an `externalLanguage` binding change, never by the
-    /// automatic Prisme seed. Consulted by `resolvePlaybackUrl` so
-    /// `currentAudioUrl` keeps resolving to the original track until the user
-    /// actually explores another language, per `initialTranscriptionLanguage`'s
-    /// own contract above. Internal for the same testability reason as
-    /// `selectedAudioLanguage`.
-    @State internal var hasUserSelectedAudioLanguage = false
+    /// Prisme audio-follow (2026-08-09) — `selectedAudioLanguage` doubles as
+    /// the Prisme-seeded transcription-STRIP default AND the playback
+    /// language: this flag says whether `selectedAudioLanguage` should steer
+    /// which audio track plays. Seeded in `init` to `true` when Prisme
+    /// already resolved a real translation (`initialTranscriptionLanguage !=
+    /// nil`/`!= "orig"`) — reversing the prior "B9 fix" policy that kept
+    /// transcription-strip language and playback language independent by
+    /// design. Also flips to `true` inside `switchToLanguage` on an explicit
+    /// language-pill tap or `externalLanguage` binding change (idempotent —
+    /// already `true` in that case). Consulted by `resolvePlaybackUrl` so
+    /// `currentAudioUrl` only ever falls back to the original when NEITHER
+    /// Prisme nor the user resolved a translated language. Internal for the
+    /// same testability reason as `selectedAudioLanguage`.
+    @State internal var hasExplicitAudioLanguage: Bool
     @State private var isRetranscribing = false
     /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
     /// and the moment the server-pushed transcription lands in `transcription`.
@@ -848,6 +852,9 @@ public struct AudioPlayerView: View {
         self.initialTranscriptionLanguage = initialTranscriptionLanguage
         self._selectedAudioLanguage = State(
             initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)
+        )
+        self._hasExplicitAudioLanguage = State(
+            initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage) != "orig"
         )
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
@@ -1001,12 +1008,10 @@ public struct AudioPlayerView: View {
         // which goes through handlePlayTap() — gated by availability.
         player.stop()
 
-        // B9 fix — this is the only place `selectedAudioLanguage` changes in
-        // response to genuine user intent (pill tap / externalLanguage
-        // binding), as opposed to the automatic Prisme seed applied once in
-        // `init`. Recording that here is what lets `resolvePlaybackUrl` tell
-        // the two apart.
-        hasUserSelectedAudioLanguage = true
+        // Explicit user intent (pill tap / externalLanguage binding) always
+        // marks the language explicit — idempotent if Prisme had already
+        // seeded it true in `init`.
+        hasExplicitAudioLanguage = true
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
         }
@@ -1356,33 +1361,29 @@ public struct AudioPlayerView: View {
     private var currentAudioUrl: String {
         AudioPlayerView.resolvePlaybackUrl(
             selectedLanguage: selectedAudioLanguage,
-            isUserSelected: hasUserSelectedAudioLanguage,
+            hasExplicitLanguage: hasExplicitAudioLanguage,
             translatedAudios: translatedAudios,
             originalUrl: attachment.fileUrl
         )
     }
 
     /// Pure resolution of the actual URL `handlePlayTap` hands the playback
-    /// engine. B9 fix — `selectedLanguage` alone is NOT sufficient: it is
-    /// also the Prisme-auto-seeded transcription-strip default (see
-    /// `initialTranscriptionLanguage`), which must never affect which audio
-    /// track plays. Only `isUserSelected == true` (set exclusively by
-    /// `switchToLanguage`, i.e. an explicit pill tap or `externalLanguage`
-    /// change) may steer playback to a translated track; otherwise this
-    /// always resolves to `originalUrl`, matching
-    /// `initialTranscriptionLanguage`'s documented contract and the Prisme
-    /// rule that playback defaults to the original. Extracted as a
-    /// `nonisolated static` helper — same pattern as
-    /// `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
+    /// engine. Prisme audio-follow (2026-08-09) — `selectedLanguage` is
+    /// steered to playback whenever `hasExplicitLanguage` is `true`, whether
+    /// that came from the automatic Prisme seed in `init` or from an
+    /// explicit `switchToLanguage` call. When `false` (no Prisme translation
+    /// resolved and no user action yet), this always resolves to
+    /// `originalUrl`. Extracted as a `nonisolated static` helper — same
+    /// pattern as `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
     /// elsewhere in this file — so it is unit-testable without a SwiftUI
     /// render lifecycle.
     nonisolated internal static func resolvePlaybackUrl(
         selectedLanguage: String,
-        isUserSelected: Bool,
+        hasExplicitLanguage: Bool,
         translatedAudios: [MessageTranslatedAudio],
         originalUrl: String
     ) -> String {
-        guard isUserSelected, selectedLanguage != "orig",
+        guard hasExplicitLanguage, selectedLanguage != "orig",
               let translated = translatedAudios.first(where: {
                   $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
               })

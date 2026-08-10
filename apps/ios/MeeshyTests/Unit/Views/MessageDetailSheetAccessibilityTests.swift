@@ -70,7 +70,9 @@ final class MessageDetailSheetAccessibilityTests: XCTestCase {
         let label = MessageDetailSheet.languageRowAccessibilityLabel(
             languageName: "日本語", isSelected: false, isTranslating: false, hasTranslation: false
         )
-        XCTAssertEqual(label, "日本語, traduire")
+        let state = String(localized: "message-detail.a11y.language.translate",
+                           defaultValue: "traduire", bundle: .main)
+        XCTAssertEqual(label, "日本語, \(state)")
     }
 
     func test_languageRowAccessibilityLabel_translatingTakesPriorityOverSelection() {
@@ -79,7 +81,12 @@ final class MessageDetailSheetAccessibilityTests: XCTestCase {
         let label = MessageDetailSheet.languageRowAccessibilityLabel(
             languageName: "Français", isSelected: true, isTranslating: true, hasTranslation: true
         )
-        XCTAssertEqual(label, "Français, traduction en cours")
+        let expected = String(
+            format: String(localized: "message-detail.a11y.language.translating",
+                           defaultValue: "%@, traduction en cours", bundle: .main),
+            "Français"
+        )
+        XCTAssertEqual(label, expected)
     }
 
     // MARK: - Icon-only buttons: must have an explicit accessibilityLabel
