@@ -1,3 +1,132 @@
+# Cycle 54 — Le balayage tournait toutes les heures et ne balayait rien
+
+Le backlog du cycle 53 portait une tête bien formée : « les posts `STATUS` expirent et ne sont
+balayés par rien ». Elle était juste. Mais en allant vérifier ce que le balayage faisait des
+stories — le type qu'il connaît — il est apparu qu'il n'en faisait rien non plus. La tête du
+backlog décrivait la moitié visible d'un défaut dont l'autre moitié était que **le balayage n'a
+jamais rien balayé**.
+
+## D1 — la passe de soft-delete n'appariait aucun post
+
+Son filtre était `deletedAt: null`. Sur le connecteur MongoDB de Prisma, un filtre nul ne matche
+QUE les documents où le champ est **présent-et-null** ; `post.create` n'écrit jamais cette colonne,
+donc sur un post vivant elle est **ABSENTE**.
+
+Ce n'est pas une déduction : le dépôt a déjà payé ce piège en production. `posts/softDelete.ts`
+existe pour lui, et le commentaire de `postIncludes.ts` en donne le compte-rendu — « the naive
+`null` filter then silently drops EVERY live post, which emptied the feed / reels / stories
+endpoints in production (all posts returned `data: []` while the collection was full) ». Le cycle 53
+lui-même a corrigé la même erreur sur `firstMessageSentAt`, en revue pré-merge, la veille.
+
+Cette passe portait **le dernier `deletedAt: null` du modèle `Post`** — tous les autres sites lisent
+`NOT_DELETED`. Du côté ÉCRITURE cette fois : au lieu de masquer tous les posts vivants d'une
+lecture, il les excluait tous d'un balayage. `softDeleted` valait 0 à chaque heure. Et comme la
+passe de hard-delete exige un `deletedAt` non nul, elle ne voyait que les stories supprimées **à la
+main** — ni la purge des médias (G7), ni la libération des usages de sons, ni le retrait des
+notifications (cycle 53) ne se sont jamais appliqués à une story périmée. Trois cycles de travail
+branchés sur un chemin mort.
+
+## D2 — un type éphémère sur deux
+
+`type: 'STORY'`. Un `STATUS` expire en 1 h, disparaît bien des lectures à l'échéance
+(`getStatuses`/`getDiscoverStatuses` filtrent `expiresAt > now`) et sa ligne vivait pour toujours.
+
+La cause n'est pas l'oubli mais la **duplication** : celui qui POSE l'échéance (`PostService`) et
+celui qui l'HONORE portaient chacun sa copie de la liste. Les deux dérivent désormais de
+`posts/ephemeralPosts.ts`, et la liste des types est elle-même dérivée des clés de la table des
+durées — un type éphémère ajouté là reçoit son échéance ET son balayage.
+
+## D3 — la fournée n'était bornée par rien
+
+Sans conséquence tant que D1 la gardait vide. Corrigée, la première passe affronte tout
+l'historique. Or le retrait des notifications **rejette** à son plafond (40 000 lignes) et s'exécute
+AVANT toute destruction : sans borne il aurait renoncé, rien n'aurait été détruit, et la passe
+suivante aurait retrouvé le même ensemble. **Non pas lente — bloquée.** C'est exactement la leçon
+89.5 du cycle précédent (« un plafond change de sens quand l'entrée change de nature »), rencontrée
+cette fois par anticipation plutôt qu'en revue.
+
+Fournée bornée à 500 posts, la plus anciennement périmée d'abord, réglable ; une fournée pleine est
+journalisée — le signal que le cycle 53 notait comme manquant.
+
+## D4 — réparer D1 éteignait une fonctionnalité livrée
+
+Trouvé en écrivant les conséquences de D1, pas en le codant. `getStories` renvoie à un AUTEUR ses
+propres stories périmées pendant **sept jours**, pour que « Mes stories » puisse les archiver — et
+sa requête est gardée par `deletedAt: NOT_DELETED`. Un soft-delete posé à l'échéance aurait donc
+vidé « Mes stories » au bout d'une heure. La fonctionnalité ne marchait que parce que D1 rendait la
+passe inerte : **la réparer la cassait.**
+
+Le balayage attend désormais la fin de la fenêtre d'archive avant de masquer — il est le lecteur
+SUIVANT, pas le concurrent. La fenêtre est passée dans `ephemeralPosts.ts` et `PostFeedService`
+l'en réexporte : deux copies dériveraient, et le jour où celle du feed s'allongerait, le balayage la
+devancerait en silence.
+
+## Plan
+- [x] T1 — enquête : la tête du backlog confirmée (D2), puis le chemin lui-même trouvé mort (D1)
+- [x] T2 — RED : 8 témoins sur D1/D2/D3, puis 2 de plus sur D4
+- [x] T3 — GREEN : `NOT_DELETED`, table des types éphémères, fournée bornée, attente de l'archive
+- [x] T4 — source unique : `PostService` et `PostFeedService` branchés sur `ephemeralPosts.ts`
+- [x] T5 — sondes de fidélité : cinq défauts réintroduits un par un, plus une re-sonde
+- [x] T6 — gates : suite gateway complète sous bun, comparée à une BASELINE sur arbre propre
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+Rouge observé avant correctif : 8 témoins sur 13 tombent (les 5 verts portent sur le module neuf).
+
+**Sondes de fidélité** — chaque témoin re-vérifié en réintroduisant volontairement son défaut,
+restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| `deletedAt: NOT_DELETED` → `null` (D1) | 2 |
+| type scalaire `'STORY'` au soft-delete (D2a) | 2 |
+| type scalaire `'STORY'` au hard-delete (D2b) | 3 |
+| borne de fournée retirée (D3) | 3 |
+| `STATUS` retiré de la table des durées | 3 |
+
+**Une sonde a trouvé un faux vert et l'a fait corriger.** À la première passe, la sonde D2b ne
+faisait tomber que 2 témoins : le témoin de bout en bout restait VERT sur un balayage borné aux
+stories, parce que son double Prisma rendait la même ligne quelle que soit la question posée. Il
+mesurait la chaîne de destruction, jamais ce qui y entre. Double corrigé pour HONORER le filtre de
+type ; la re-sonde fait bien tomber 3 témoins. C'est la leçon 2 (« le test passe » ≠ « le test
+verrait la régression ») rencontrée sur un double qui simplifiait l'API qu'il simule.
+
+**Baseline explicite plutôt que lecture d'un total.** L'environnement de cette routine porte une
+erreur de typage pré-existante (`PostReactionService.ts:354`, `groupBy` non typé par le client
+Prisma généré ici) qui empêche 20 suites de COMPILER — 0 test en échec, 20 suites qui ne démarrent
+pas. Comparer un total à celui d'un cycle précédent aurait été trompeur. Suite complète relancée sur
+l'arbre PROPRE (`git stash`) : **20 suites en échec, 619 vertes, 15 784 tests, 0 échec de test.**
+Avec le correctif : **mêmes 20 suites**, 620 vertes, la suite neuve en plus. Aucune régression, et
+la preuve ne repose pas sur ma parole quant à ce qui était déjà rouge.
+
+`tsc --noEmit` : aucune erreur imputable aux fichiers touchés (seul subsiste le bruit de résolution
+`@meeshy/shared/prisma/client`, présent à l'identique sur des fichiers jamais touchés — le
+type-check de la CI est d'ailleurs `continue-on-error`).
+
+## Reste ouvert après ce cycle
+
+- **Le passif ne se rattrape que passe par passe.** À la mise en production le balayage devient
+  effectif pour la première fois : 500 posts/heure, 12 000/jour. Aucune réparation rétroactive des
+  lignes DÉJÀ orphelines (médias au `postId` nul, usages de sons, notifications de posts détruits à
+  la main avant ce correctif) — action humaine, sur le patron de `repair-mention-user-ids.ts`.
+- **`softDeleteRetentionMs` reste du code mort** : le champ est assigné et journalisé, mais
+  `cleanup()` ne le lit pas. Il documente une intention (6 h de grâce entre masquage et destruction)
+  que la passe n'implémente pas — le hard-delete est ancré sur `expiresAt`, pas sur `deletedAt`.
+  Non touché ce cycle : le corriger, c'est choisir entre supprimer le champ et ré-ancrer la seconde
+  passe, ce qui est une décision de conception à part entière.
+- **Le nom `ExpiredStoriesCleanupService` ment maintenant sur son périmètre** (il balaie aussi les
+  `STATUS`). Renommer invaliderait six documents d'archive qui le citent nommément ; la doc de
+  classe porte la correction à la place. À trancher si le service prend un troisième type.
+- **Les `TrackingLink` d'une story détruite ne sont toujours pas désactivés par la passe** (hérité
+  du cycle 53) ; `broadcastCommentDeleted` n'annonce que la cible et pas le sous-arbre (hérité du
+  cycle 52, traverse le Swift que cet environnement ne compile pas — leçon 88c) ; `post_comment` et
+  `comment_like` n'exposent pas `context.commentId` ; le push APNs/FCM déjà délivré n'est pas
+  rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut
+  pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 53 — Une story périmée n'est pas une story détruite
 
 Le cycle 52 laissait cette tête en backlog sous le nom « les stories expirées ne retirent pas leurs

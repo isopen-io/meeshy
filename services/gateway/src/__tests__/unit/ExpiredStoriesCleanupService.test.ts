@@ -27,7 +27,10 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
     post: {
       updateMany: jest.fn(async () => ({ count: 0 })),
       findMany: jest.fn(async (args: any) => {
-        if (args.where?.type === 'STORY') {
+        // Le balayage interroge une LISTE de types éphémères (`{ in: [...] }`),
+        // pas le scalaire `'STORY'` : un double qui n'accepte que le scalaire
+        // rendrait une liste vide et ferait passer la passe pour un no-op.
+        if (Array.isArray(args.where?.type?.in)) {
           return opts.storyIds.map((id) => ({ id }));
         }
         if (args.where?.repostOfId) {

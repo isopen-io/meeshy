@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import {
   reelAffinityScore,
@@ -81,7 +82,13 @@ export class PostFeedService {
   /// expirées, pour que « Mes stories » puisse les archiver. Sept jours : au
   /// -delà, une story n'est plus un contenu qu'on republie ou dont on relit
   /// les vues, et la réponse doit rester bornée.
-  static readonly AUTHOR_ARCHIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  ///
+  /// Réexportée depuis `posts/ephemeralPosts.ts` plutôt que redéclarée : le
+  /// balayage du contenu éphémère attend la fin de cette fenêtre avant de
+  /// soft-supprimer, parce que la requête ci-dessous est gardée par
+  /// `deletedAt: NOT_DELETED`. Deux copies dériveraient — et le jour où
+  /// celle-ci s'allongerait, le balayage la devancerait en silence.
+  static readonly AUTHOR_ARCHIVE_WINDOW_MS = EPHEMERAL_AUTHOR_ARCHIVE_MS;
 
   constructor(
     private readonly prisma: PrismaClient,
