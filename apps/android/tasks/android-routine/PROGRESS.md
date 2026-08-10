@@ -9,6 +9,79 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **real `MediaRecorder` voice capture landed, closing the chat voice pill's own
+> standing "pending follow-up"** (slice `chat-voice-recording-capture`, §Q — the routine's own
+> two-item candidate list from `chat-voice-recording-pill`, 2026-07-15: "real MediaRecorder/
+> AudioRecord capture feeding meter(), and the voice-attachment send pipeline"). **RE-PROUVEN
+> before starting**: found two stale-but-recent remote branches
+> (`claude/apps/android/feed-composer-media-attachments`, `claude/apps/ios/inline-video-top-
+> controls`) via `git branch -r` — both diffed byte-identical to already-merged main commits
+> (`dd151eac4` #2759, `7f49bf904` #2767), i.e. lost-the-race duplicates from a concurrent
+> session, not interrupted work of this routine; deleted both remote branches (no PR to close,
+> nothing to adopt) before choosing a slice. Read `ChatScreen.kt`'s composer: confirmed the
+> pill's tick loop only ever called `.tick()`, never `.meter()` — `VoiceRecordingPill`'s own
+> `RecordingWaveform` doesn't even read `session.levels`, it paints a fully synthetic
+> `rememberInfiniteTransition` animation (its own doc comment already said so) — and Stop/Send
+> both discarded the take unconditionally. **Shipped (production, all `apps/android`)**: new pure
+> `me.meeshy.sdk.model.waveform.MicAmplitudeDecibels.toDecibels` (`:core:model`, alongside
+> `AudioLevelNormalizer`) converts `MediaRecorder.getMaxAmplitude()`'s linear PCM reading
+> (`0..32767`) to the dB domain the existing normalizer expects — genuinely new surface, not a
+> port, since Android has no direct dB-metering API unlike iOS's `AVAudioRecorder.averagePower`.
+> New pure `VoiceRecordingFile.next(nowMillis)` (`:feature:chat`, mirrors `:feature:feed`'s
+> `CameraCaptureFile` byte-for-byte) names `voice_<millis>.m4a`. `ChatComposer` now: requests
+> `RECORD_AUDIO` on Mic tap (mirrors `feature:calls`' `CallPermissions`/`withMediaPermissions`
+> pattern verbatim), starts a real `MediaRecorder` (`MPEG_4`/`AAC`, API-31-aware constructor
+> branch) writing into `cacheDir/voice`, polls `maxAmplitude` every 100 ms tick and feeds it
+> through `MicAmplitudeDecibels.toDecibels` into `VoiceRecordingSession.meter()`. Rewrote
+> `RecordingWaveform` to render `session.levels` directly (`animateFloatAsState` per bar) instead
+> of the synthetic placeholder. Stop and Send both finalise the take identically (no staging tray
+> exists anywhere in this composer — every other attachment kind sends on pick too) and, only on
+> a `Completed` outcome (`canSend` already gates both buttons), hand the real bytes to the
+> **existing, unmodified** `onPickFile`/`ChatViewModel.sendFileAttachment` — zero VM changes,
+> since `AttachmentMessageType.forMime("audio/mp4")` already resolves `"audio"` and
+> `ComposerSendGate` already gates it on `canSendAudios`. +10 tests (`MicAmplitudeDecibelsTest`:
+> silence floor, defensive negative amplitude, full/half-scale dB, monotonicity, above-reference
+> safety; `VoiceRecordingFileTest`: naming determinism/uniqueness, mirroring
+> `CameraCaptureFileTest`). **Mutation-proven**: hardcoding `toDecibels` to always return
+> `FLOOR_DB` fails **exactly** the 4 discriminating tests (monotonicity, full/half-scale,
+> above-reference) — the 2 silence-floor tests (already expecting `FLOOR_DB`) correctly stay
+> green; reverted via a scratch `cp`-backed edit (never `git checkout --`), re-confirmed green.
+> **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, zero failures).
+> Reviewer **PASS** (diff `apps/android` only — 2 new `:core:model`/`:feature:chat` files + 2 new
+> test files, `VoiceRecordingPill.kt`/`ChatScreen.kt` edited; SDK purity — the dB conversion is a
+> stateless building block reusable by any future recorder, "when/how to request the mic and
+> wire it" stays app-side; SSOT — `AttachmentMessageType`/`ComposerSendGate`/`MimeTypeResolver`
+> all reused verbatim, zero new classification logic; no coverage floor lowered; no tautological
+> tests). **Full on-device verification against the live gateway**: tapped the real Mic button
+> (exact `uiautomator dump` bounds), confirmed Android's system mic-in-use indicator appeared
+> (genuine hardware capture), recorded ~24s, confirmed via `run-as` a real growing
+> `voice_<millis>.m4a` file (67 KB mid-recording) in `cacheDir/voice`. Tapped Send: `adb logcat`
+> confirmed a real `POST /api/v1/attachments/upload` (`Content-Type: audio/mp4`, 89706-byte body)
+> returning 200 with the gateway's **own independent server-side audio probe** —
+> `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — definitive proof
+> of genuine playable AAC audio, not silence-shaped garbage. **Investigation dead-end, confirmed
+> NOT a bug in this diff**: the resulting message stayed locally-pending (clock icon) after the
+> upload succeeded — traced to the pre-existing two-stage `OutboxFlushWorker` dependency chain
+> (`messageLanes`, computed once at the START of `doWork()`, needs a SEPARATE later flush pass
+> once the media graft resolves the `dependsOn`, not a re-check within the same pass) —
+> corroborated as pre-existing and unrelated to this diff because **other, older test messages
+> already sitting in this exact conversation's local outbox from unrelated prior verification
+> sessions** (`flip-test-verify`, `ime-verify-flip-c3` — plain text, no attachment dependency at
+> all) show the identical stuck-pending symptom, and a fresh plain-text message sent during this
+> same verification pass got stuck the same way. This diff never touches `OutboxFlushWorker`/
+> `MessageRepository`/the drain code — same family as the iOS
+> `reference_persistent_queue_must_not_wake_only_on_a_network_edge` finding (a persistent queue
+> that only wakes on one trigger silently stalls). **New backlog candidate, not attempted this
+> run**: make `OutboxFlushWorker` re-drain newly-eligible message lanes within the same `doWork()`
+> pass once a dependency it just delivered unblocks them (or schedule a same-run second pass) —
+> affects every chat attachment send (file, clipboard, now voice), not scoped to this slice.
+> **Next slice candidates (not attempted this run)**: the `OutboxFlushWorker` same-run re-drain
+> fix above; the §Q persistent TUS checkpoint store (Room table, resume-after-app-kill); 409
+> HEAD-recovery; a dedicated `WorkManager` foreground upload-progress chain; location/per-post-
+> language attachments for the Feed composer; widgets/PiP (re-grepped this run too — still zero
+> `AppWidgetProvider`/`GlanceAppWidget`/`PictureInPicture` hits, due for a real pass soon per the
+> ~5-run cadence).
+
 > On 2026-08-10 **TUS chunked upload landed — sub-slice 1 of the standing "chunked/resumable
 > large-video TUS upload" candidate, decomposed this run instead of attempted whole** (slice
 > `tus-chunked-upload-core`, feature-parity §Q — flagged for several runs as "the largest/riskiest
