@@ -43,6 +43,7 @@ class StoryViewerViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val storyRepository: StoryRepository = mockk(relaxed = true)
+    private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
@@ -80,7 +81,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         coEvery { storyRepository.react(any(), any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to startUserId))
-        return StoryViewerViewModel(storyRepository, session, socialSocket, config, handle)
+        return StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
     }
 
     // Group "a"'s latest story is the newest overall so it sorts first; "b" follows.
@@ -328,7 +329,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, handle)
+        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
 
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.isDismissed).isFalse()
@@ -352,7 +353,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors())
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, handle)
+        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
 
         assertThat(vm.state.value.isOwnStory).isTrue() // group a, author == current user
 

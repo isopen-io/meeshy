@@ -726,6 +726,7 @@ fun MeeshyApp(
                 ReelsScreen(
                     seed = entry.arguments?.getString("seed"),
                     onClose = { navController.popBackStack() },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
             }
             composable(

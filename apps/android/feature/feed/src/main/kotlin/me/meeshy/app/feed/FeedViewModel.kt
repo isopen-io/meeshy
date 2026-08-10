@@ -20,6 +20,8 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
@@ -34,6 +36,8 @@ data class FeedUiState(
     val isLoadingMore: Boolean = false,
     /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
     val newPostsCount: Int = 0,
+    /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
+    val currentUserId: String? = null,
     /**
      * The fullscreen media gallery currently open (a tap on a post's image tile),
      * or `null` when the lightbox is dismissed. Ephemeral view state kept in the
@@ -49,6 +53,7 @@ class FeedViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     private val feedMediaUploader: FeedMediaUploader,
+    private val reportRepository: ReportRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -274,6 +279,43 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Repost simple (pas de quote) puis refresh : le repost cree un POST nouveau
+     * cote serveur, que seul un re-fetch peut faire apparaitre en tete de flux.
+     */
+    fun repost(postId: String) {
+        viewModelScope.launch {
+            when (val result = postRepository.repost(postId)) {
+                is NetworkResult.Success -> postRepository.refresh()
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /** Suppression confirmee cote UI ; le refresh retire le post du flux. */
+    fun deletePost(postId: String) {
+        viewModelScope.launch {
+            when (val result = postRepository.delete(postId)) {
+                is NetworkResult.Success -> postRepository.refresh()
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /** Signale [postId] pour [reason] — best effort, echec silencieux (parite report user). */
+    fun reportPost(postId: String, reason: ReportReason) {
+        viewModelScope.launch {
+            reportRepository.reportPost(postId, reason, details = null)
+        }
+    }
+
+    /** Comptabilise un partage cote serveur — l'intent systeme part sans attendre. */
+    fun recordShare(postId: String) {
+        viewModelScope.launch {
+            postRepository.share(postId)
+        }
+    }
+
     fun toggleBookmark(postId: String) {
         viewModelScope.launch {
             try {
@@ -443,5 +485,6 @@ private fun FeedUiState.project(
         showSkeleton = showSkeleton,
         errorMessage = clearedError,
         newPostsCount = newPostsCount,
+        currentUserId = user?.id,
     )
 }

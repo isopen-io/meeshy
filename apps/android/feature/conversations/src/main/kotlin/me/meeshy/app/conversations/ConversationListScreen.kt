@@ -150,6 +150,15 @@ fun ConversationListScreen(
                 onGlobalSearch = onGlobalSearch,
             )
         },
+        // Le chemin DIRECT vers une nouvelle conversation : l'item "New" du menu
+        // flottant reste, mais une action aussi centrale merite un bouton visible
+        // en permanence (l'import FloatingGradientFab dormait ici, jamais pose).
+        floatingActionButton = {
+            FloatingGradientFab(
+                onClick = onNewConversation,
+                contentDescription = stringResource(R.string.conversations_new),
+            )
+        },
     ) { padding ->
         Column(
             modifier = Modifier

@@ -102,4 +102,26 @@
     <string name="feed_composer_type_reel">Reel</string>
     <string name="feed_composer_type_post">Publicar</string>
     <string name="feed_composer_type_hint">Cambiar entre reel y publicación</string>
+
+    <!-- Post options menu -->
+    <string name="feed_post_options">Opciones de la publicación</string>
+    <string name="feed_action_share">Compartir</string>
+    <string name="feed_action_copy_link">Copiar enlace</string>
+    <string name="feed_action_repost">Republicar</string>
+    <string name="feed_action_bookmark">Guardar</string>
+    <string name="feed_action_unbookmark">Quitar de guardados</string>
+    <string name="feed_action_report">Denunciar</string>
+    <string name="feed_action_delete">Eliminar</string>
+    <string name="feed_delete_confirm_title">¿Eliminar esta publicación?</string>
+    <string name="feed_delete_confirm_message">Esta acción no se puede deshacer.</string>
+    <string name="feed_delete_confirm">Eliminar</string>
+    <string name="feed_delete_cancel">Cancelar</string>
+    <string name="feed_report_title">Denunciar esta publicación</string>
+    <string name="feed_report_reason_spam">Spam</string>
+    <string name="feed_report_reason_harassment">Acoso</string>
+    <string name="feed_report_reason_inappropriate">Contenido inapropiado</string>
+    <string name="feed_report_reason_violence">Violencia</string>
+    <string name="feed_report_reason_hate_speech">Discurso de odio</string>
+    <string name="feed_report_reason_impersonation">Suplantación de identidad</string>
+    <string name="feed_report_reason_other">Otro</string>
 </resources>

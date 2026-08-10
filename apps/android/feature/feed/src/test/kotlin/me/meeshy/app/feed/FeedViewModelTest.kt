@@ -57,6 +57,7 @@ class FeedViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
+    private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -74,7 +75,7 @@ class FeedViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
     @Test
@@ -219,7 +220,7 @@ class FeedViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
     @Test
