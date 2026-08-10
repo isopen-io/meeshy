@@ -2,6 +2,70 @@
 
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
+> On 2026-08-10 **the app launcher icon landed** (slice `app-launcher-icon`, feature-parity
+> §Q, user-directed run — the app had shipped with the generic Android robot icon since the
+> project's inception; not a single line anywhere flagged it because the integral iOS audit
+> (`tasks/audit/part-01..23.md`) only read `.swift` production files and never opened iOS's
+> `.xcassets` asset catalogs — a categorical audit blind spot found by the user, 2026-08-10,
+> documented in `tasks/android-parity-ios-debt-agent-prompt.md` §"Angle mort catégoriel").
+> **RE-PROVEN before starting:** re-confirmed the absence directly — `find
+> apps/android/app/src/main/res -maxdepth 1 -type d` showed only `values`/`xml`/
+> `values-{fr,es,pt}`, zero `mipmap-*`, and `AndroidManifest.xml`'s `<application>` had neither
+> `android:icon` nor `android:roundIcon`; unchanged from the user's own direct verification.
+> **Shipped (production, all `apps/android`):** the adaptive launcher icon —
+> `mipmap-anydpi-v26/ic_launcher{,_round}.xml` referencing three new vector layers
+> (`drawable/ic_launcher_background.xml` — the brand Indigo500→Indigo700 diagonal gradient;
+> `drawable/ic_launcher_foreground.xml` — the white "stacked-dashes" glyph, 3 rounded bars;
+> `drawable/ic_launcher_monochrome.xml` — the Android-13+ themed-icon layer) plus legacy PNG
+> fallback at all 5 densities (`mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher{,_round}.png`
+> — inert given `minSdk 26` always resolves the adaptive XML, shipped anyway for
+> tooling/launchers that still read the classic mipmap path) — plus `android:icon="@mipmap/
+> ic_launcher"`/`android:roundIcon="@mipmap/ic_launcher_round"` wired on `<application>`. **Not
+> eyeballed — pixel-measured off the iOS brand source**
+> (`apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png`): a
+> connected-component scan of the white glyph pixels (pure PIL, no manual tracing) gave the
+> exact 3 bar bounding boxes (`[222,344]-[801,423]`, `[222,472]-[701,551]`, `[222,600]-
+> [601,679]` on the 1024×1024 canvas, corner radius = half height on every bar, bbox center
+> within 0.5px of the canvas center); corner-pixel sampling gave the gradient endpoints exactly
+> — top-left `(99,102,241)` = Indigo500 `#6366F1`, bottom-right `(67,56,202)` = Indigo700
+> `#4338CA` — confirming `apps/ios/CLAUDE.md`'s documented brand identity to the pixel, not a
+> re-hue. The glyph is scaled 0.85× beyond the literal 108/1024 port so every bar corner clears
+> the 66dp adaptive-icon safe-zone circle (unscaled farthest corner ≈35.3dp vs. the 33dp safe
+> radius; scaled ≈30dp, a 3dp margin). The vector layers (rendered live by the OS on every
+> device this app can run on, API 26+) and the legacy PNGs are generated from the **exact same**
+> formula (`apps/android/scripts/generate_legacy_launcher_icons.py`, committed + documented —
+> mirrors the iOS `check_appicon_variants.py` convention of keeping brand-asset
+> generation/verification tooling in the repo, not a one-off hand edit) so the two can never
+> visually drift. **TDD:** `LauncherIconManifestGuardTest` (`app` module, 3 tests) — asserts
+> `<application>` declares both manifest attributes; the adaptive XML's `@drawable/` references
+> all resolve to files that exist on disk; every legacy density ships both the square and round
+> PNG. **Mutation (RED proof):** reverted the two manifest attributes by hand, re-ran the suite
+> — the icon-declaration test failed exactly as expected, the two resource-existence tests
+> stayed green (correctly independent of the manifest edit) — then restored the attributes and
+> re-ran clean. **Gate:** `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL in 6s`** (full
+> `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff
+> `apps/android` only — new `drawable/`/`mipmap-*` resources + `scripts/` generator + 1
+> `AndroidManifest.xml` 2-attribute edit + 1 new test file; no production Kotlin logic touched
+> outside the new guard test; SDK purity n/a — pure asset/manifest change; no coverage floor
+> touched). **Verified visually, not just compiled** — installed the debug APK on the
+> `meeshy_pixel8` emulator (API 35) and screenshotted two independent OS render surfaces: the
+> Overview task-switcher (circle mask) and the home-screen app drawer (squircle mask), both
+> showing the correct Indigo-gradient + white-glyph icon, zero generic Android robot icon
+> anywhere; the app itself also launches and renders its real Indigo-branded UI, confirming the
+> manifest wiring resolves a real launchable activity. **`feature-parity.md` gains an explicit
+> checked line under §Q** (was zero lines anywhere before this run — the audit-blind-spot fix
+> itself, not just the code fix) **+ a new unchecked line under §M** for the adjacent
+> `NotificationChannel` taxonomy gap (currently only 2 channels exist —
+> `CHANNEL_CALLS`/generic "Messages" — against the ~80 backend notification types
+> `ARCHITECTURE.md §18` calls for; flagged, not implemented this run, per the angle-mort sweep
+> the user asked for). **Also confirmed present (no edit needed, per the same angle-mort
+> sweep):** splash screen already has a line (§A, "Splash screen with brand animation +
+> minimum display duration") and Picture-in-Picture already has a line (§H, "Call states...
+> PiP / floating call pill", marked `[~]` — UI + WebRTC plumbing pending) — both pre-existing,
+> re-verified via grep, not newly added. **Next slice:** the §C inverted-list rewrite's
+> decomposition is still outstanding (now a 3rd run in a row deferring it — worth a dedicated
+> decomposition attempt next Android run rather than a 4th re-confirmation); the newly-flagged
+> `NotificationChannel` taxonomy line (§M) is a legitimate, concretely-scoped candidate too.
 > On 2026-08-10 **mark-unread landed in the conversation context menu** (slice
 > `conversation-mark-unread`, feature-parity §B, PR #2715). **RE-PROVEN before picking:** with Auth
 > §A's fully-local items exhausted (per the previous run's note), the four standing candidates

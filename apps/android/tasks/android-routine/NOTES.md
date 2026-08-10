@@ -649,3 +649,64 @@ Append-only log of gotchas and decisions that save time next run.
   differently, or just never having reached "Success" — it didn't), but the structural gap itself
   (no exhaustiveness guard on `buildSenders()`) is worth flagging as a real candidate for a future
   hygiene pass rather than silently living with it a second time.
+
+## Slice `app-launcher-icon` (2026-08-10)
+- **A "slice picker re-reads `feature-parity.md`" mechanism cannot surface a whole missing
+  CATEGORY — only a missing category has zero line to re-read.** The app had shipped with the
+  generic Android launcher icon since the project's inception; 18+ prior runs picked application
+  screens exclusively (auth/conversations/chat/...) because that's what `feature-parity.md`'s
+  ~4600 lines are *about* — it was built from `tasks/audit/part-01..23.md`, which read all 673
+  iOS `.swift` files but never opened a single `.xcassets` asset catalog, so the app icon (and by
+  the same blind spot: splash-screen detail, widgets, PiP, notification-channel taxonomy) never
+  got audited into a checklist line in the first place. Nothing was "left unchecked" — there was
+  no box to check. This is why the routine's angle-mort sweep periodically greps for whole
+  CATEGORIES (icon/splash/widgets/PiP/channels), not just unchecked boxes.
+- **Pillow (`PIL`) ships on this machine's `python3` but `numpy` does not** — a `numpy`-based
+  pixel scan (`np.array(img)`, boolean masking) fails immediately with `ModuleNotFoundError`.
+  Plain nested-loop pixel access via `img.load()` (`px[x,y]`) works fine and was fast enough for
+  a 1024×1024 one-off scan (~1-2s). Worth defaulting to pure-PIL pixel access for one-off brand-
+  asset analysis scripts in this repo rather than assuming `numpy` is present.
+- **A connected-component pixel scan of the iOS source PNG beats eyeballing the glyph geometry
+  by a wide margin, and is cheap.** Measuring the 3 bar bounding boxes by a white-pixel row/column
+  scan (not tracing the image by eye in an editor) gave exact integer pixel boxes (`[222,344]-
+  [801,423]` etc.), all sharing the same left edge (x=222) and same height (80px, so corner
+  radius = exactly half-height on every bar) — details easy to eyeball approximately but hard to
+  get pixel-exact by hand, and exactness here directly determines how close the scaled adaptive-
+  icon glyph sits to the 66dp safe-zone boundary (get it wrong and a launcher's non-circular mask
+  clips a corner). Corner-pixel sampling (4 corners + center) similarly gave the gradient
+  endpoints exactly rather than approximately — `(99,102,241)`/`(67,56,202)` are the *exact*
+  Indigo500/Indigo700 hex triples, not a close visual match, confirming the CLAUDE.md-documented
+  gradient is the literal source rather than a description of something slightly different.
+- **Android's adaptive-icon safe zone is a real numeric constraint worth computing, not
+  eyeballing "looks about centered."** The glyph's own bounding box happened to sit within 0.5px
+  of the iOS 1024-canvas center (a nice property of the source asset — the icon designer
+  centered it), but the un-scaled 108/1024 port of that same bbox reaches ~35.3dp from center,
+  which is *outside* the 33dp safe-zone radius (66dp diameter) — a literal 1:1 canvas-ratio port
+  would have shipped a foreground that some non-circular launcher masks (squircle, teardrop)
+  could clip at the corners. A single uniform scale factor (0.85, chosen to land ~30dp, a 3dp
+  margin) fixed it while preserving every internal proportion (bar widths/heights/gaps/radii all
+  scale together) — computed by hand from the measured bbox diagonal, not picked by trial and
+  error in an emulator.
+- **Truth's `Subject.named(...)` used in older examples elsewhere no longer compiles on this
+  BOM** — `assertThat(x).named("msg").isTrue()` fails with `Unresolved reference 'named'`; the
+  working replacement on the version pulled in here is `assertWithMessage("msg").that(x).isTrue()`
+  (import `com.google.common.truth.Truth.assertWithMessage`). Cheap to miss since `.named()` reads
+  as plausible Truth API from memory of older versions.
+- **A vector vs. raster pixel-perfect parity is achievable and worth proving, not asserting.**
+  Both the adaptive `drawable/ic_launcher_foreground.xml` path data and the legacy PNG generator
+  (`apps/android/scripts/generate_legacy_launcher_icons.py`) were derived from the exact same
+  formula (`size * (0.5 + (px - 511.5) * 0.85 / 1024)`) applied at two different output
+  resolutions (108-unit vector viewport vs. each mipmap density's pixel size) — not a vector
+  drawn by hand and a PNG separately eyeballed to "look the same." Verified by rendering both at
+  192px and visually comparing (`Read` tool on the generated PNGs) before writing them into the
+  resource tree, catching what would otherwise only surface as a subtle drift noticed much later
+  (or never, since nothing else in the pipeline would flag a few-percent size/position mismatch
+  between the two render paths).
+- **Real device/emulator screenshots caught nothing wrong here, but were still worth taking
+  BEFORE calling this done** — `./meeshy.sh check` (compile + unit tests) cannot verify that an
+  Android-OS-composited adaptive icon (background × foreground × the launcher's own mask shape)
+  actually renders as intended; only a real render surface can. Installed the debug APK on the
+  already-provisioned `meeshy_pixel8` emulator (from a prior run's environment bootstrap — no
+  fresh SDK setup needed this time) and screenshotted both the Overview task-switcher (circle
+  mask) and the home-screen app drawer (squircle mask) — two independently-masked real renders,
+  not just one, since a single mask shape passing doesn't prove the safe-zone math generalizes.
