@@ -3335,10 +3335,58 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       system-delegated tiles (photo, video) where iOS has one custom AVFoundation screen with an
       in-app photo/video toggle — functionally equivalent capture capability, different
       interaction shape; no `CAMERA` runtime permission needed on Android either way (the system
-      camera app owns it). **Still open**: files, location, audio+transcription, per-post language
-      override, durable-outbox queueing for offline resilience (media upload itself has no offline-retry
-      path yet either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
-      consistent, not a new gap) — each a separately-scoped follow-up.
+      camera app owns it). **Generic file attachment now done too** (slice
+      `feed-composer-file-attachment`, 2026-08-10 — the standing "files, location, audio,
+      per-post language" candidate's smallest, lowest-risk sub-slice, decomposed and picked
+      first): a fifth attach tile ([Icons.Filled.AttachFile]) mirrors iOS's `doc.fill` button —
+      [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the author pick ANY
+      document from the system picker, dispatched through the **exact same** `dispatchPicked`
+      pipeline every other tile already uses. **Re-proved the upload path was MIME-agnostic
+      before writing any code, rather than assuming it**: read `getAttachmentType`
+      (`packages/shared/types/attachment.ts`) and `UploadProcessor.validateFile`
+      (`services/gateway/src/services/attachments/UploadProcessor.ts`) end to end — arbitrary
+      MIME types are classified (image/audio/video/text/code/document) and only size-limited,
+      never type-rejected, so the existing `post`-context TUS pipeline needed zero changes.
+      Unlike `PickMultipleVisualMedia`, `OpenMultipleDocuments` has no `maxItems<=1` crash
+      constraint, so there is no picker-mode routing to do — `dispatchPicked` already caps to
+      `draft.remainingMediaSlots` and surfaces the limit message on overflow. The one genuinely
+      new rendering decision — a picked document has no image/video thumbnail — lives in a new
+      pure `UploadedMedia.hasThumbnailPreview` extension (`FeedComposerDraft.kt`), reusing the
+      already-tested `MediaKindClassifier` (`:core:model`, the SSOT for MIME→kind originally
+      built for the auto-download gate) rather than re-sniffing MIME prefixes: `IMAGE`/`VIDEO`
+      preview as a thumbnail, everything else (a document, `AUDIO`/`AUDIO_TRANSLATION`, an
+      unclassifiable/blank MIME type) falls back to a generic `InsertDriveFile` icon tile.
+      `ReelComposition`'s own doc comment ("documents and every other kind never qualify")
+      already anticipated this — confirmed no change needed there. +5 tests
+      (`FeedComposerDraftTest`: image/video preview, document/audio/blank-mime fallback).
+      Mutation-proof: hardcoding `hasThumbnailPreview` to always `true` fails **exactly** the 3
+      discriminating fallback tests, the other 37 (including every pre-existing test in the
+      file) stay green; reverted via `cp`-backed scratch edit, never `git checkout --`, re-run
+      green before continuing. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+      (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures).
+      Reviewer **PASS** (diff `apps/android` only — 2 production files, 4 locale `strings.xml`
+      [en/fr/es/pt, `feed_composer_attach_file` carries zero format specifiers], 1 test file;
+      SDK purity — the rendering rule lives in `:feature:feed`, reuses the `:core:model`
+      classifier rather than duplicating it; SSOT honoured; no coverage floor lowered).
+      **Full on-device verification against the live gateway**: pushed a real non-media file to
+      the emulator's Downloads, tapped the new tile, confirmed via `uiautomator dump` bounds
+      the system DocumentsUI picker opened and the picked file rendered as a generic file-icon
+      tile (screenshot-confirmed, not a broken/blank thumbnail) with the same remove-X overlay
+      every other tile has. `adb logcat` confirmed two independent real TUS round-trips for two
+      different non-media MIME types (`text/plain` and `text/xml`, both `uploadcontext=post`).
+      Published the resulting post for real (`POST /api/v1/posts` → success, `media` array
+      populated); `GET /api/v1/posts/:id` confirmed the persisted attachment plus Prisme
+      translations generated; the test post was deleted afterward (`DELETE` →
+      `{"deleted":true}`, confirmed gone via a follow-up 404). Emulator left idle at the home
+      screen afterward, pushed test file removed. **Deliberate, documented scope cut**: no
+      filename/size label on the file tile yet — `UploadedMedia` (`:core:model`) doesn't carry
+      the original filename the gateway's TUS response discards on this path, unlike iOS's
+      `MessageAttachment.fileName`; adding it is a separately-scoped follow-up touching the wire
+      model, not a rendering-only change. **Still open**: location, audio+transcription,
+      per-post language override, durable-outbox queueing for offline resilience (media upload
+      itself has no offline-retry path yet either, unlike the story composer's — the whole Feed
+      publish isn't durable yet, so this is consistent, not a new gap) — each a
+      separately-scoped follow-up.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket

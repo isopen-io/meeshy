@@ -9,6 +9,84 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-10 **the Feed post composer's generic file-attachment sub-slice landed** (slice
+> `feed-composer-file-attachment`, feature-parity §F — the routine's own standing "files,
+> location, audio, per-post language" candidate, decomposed this run rather than attempted
+> whole: file attachment picked first as the smallest/lowest-risk sub-slice, reusing the
+> composer's existing MIME-agnostic upload pipeline verbatim). **RE-PROUVEN before starting**:
+> read `FeedComposerDraft.kt`'s own doc comment (still listing "file, location and audio
+> attachments" as deferred) and `FeedComposerSheet.kt`'s doc comment (same), confirmed via
+> `git branch -r`/`gh pr list --state open` that the two most-recently-touched branches
+> (`feed-composer-media-attachments`, `ios/inline-video-top-controls`) were both already merged
+> with no open PR — no interrupted run to resume, nothing to adopt. Read `getAttachmentType`
+> (`packages/shared/types/attachment.ts`) and `UploadProcessor.validateFile`
+> (`services/gateway/src/services/attachments/UploadProcessor.ts`) end to end to re-prove the
+> `post`-context TUS pipeline already accepts arbitrary MIME types (classified, only
+> size-limited, never type-rejected) before assuming a document upload needed any gateway-side
+> plumbing — it didn't. **Shipped (production, all `apps/android`)**: a fifth attach tile
+> (`Icons.Filled.AttachFile`) launches `ActivityResultContracts.OpenMultipleDocuments()` (any
+> MIME type), dispatched through the **exact same** `dispatchPicked` pipeline every other tile
+> (gallery, camera-photo, camera-video) already uses — zero new upload/error-handling logic.
+> Unlike `PickMultipleVisualMedia`, `OpenMultipleDocuments` has no `maxItems<=1` crash
+> constraint (the reason `FeedMediaPicker`'s single-vs-multi routing exists for the gallery
+> tile), so the file tile needs no picker-mode routing of its own — `dispatchPicked` already
+> caps to `draft.remainingMediaSlots` and surfaces the limit message on overflow, and the tile
+> is disabled via the same `attachEnabled` gate as the other three. The one genuinely new
+> rendering decision — a picked document has no image/video thumbnail to show — lives in a new
+> pure `UploadedMedia.hasThumbnailPreview` extension (`FeedComposerDraft.kt`), **reusing**
+> `MediaKindClassifier` (`:core:model`, the SSOT for MIME→kind originally built for the
+> auto-download gate) rather than re-sniffing MIME prefixes locally: `IMAGE`/`VIDEO` preview as
+> a real thumbnail (`AsyncImage`, unchanged), everything else (a document, `AUDIO`/
+> `AUDIO_TRANSLATION`, an unclassifiable/blank MIME type) falls back to a generic
+> `Icons.AutoMirrored.Filled.InsertDriveFile` icon tile — `ReelComposition`'s own doc comment
+> ("documents and every other kind never qualify" as a reel) had already anticipated exactly
+> this case, confirmed no change needed there. +5 tests (`FeedComposerDraftTest`: image/video
+> preview as thumbnail, document/audio/blank-mime-type fallback to the generic icon).
+> **Mutation-proven**: hardcoding `hasThumbnailPreview` to always return `true` fails **exactly**
+> the 3 discriminating fallback tests — the other 37 in the file, including every pre-existing
+> reel-classification/publish-gate/media-accumulation test, stayed green; reverted via a scratch
+> `cp`-backed edit (never `git checkout --`), re-confirmed green before continuing. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
+> all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff `apps/android` only —
+> 2 production files edited [`FeedComposerDraft.kt`, `FeedComposerSheet.kt`], 4 locale
+> `strings.xml` [en/fr/es/pt, `feed_composer_attach_file` carries zero format specifiers so
+> `FeedStringLocalizationParityTest`'s positional-specifier check is a non-issue], 1 test file
+> extended; SDK purity — the "how to render an unpreviewable attachment" decision lives in
+> `:feature:feed`, the MIME classification itself is reused from `:core:model`, never
+> duplicated; SSOT honoured; no coverage floor lowered; no tautological tests). **Full
+> on-device verification against the live gateway this run**: pushed a real non-media file to
+> the emulator's Downloads folder, tapped the new tile via exact `uiautomator dump` bounds,
+> confirmed the system DocumentsUI picker opened (`mCurrentFocus` resolved to
+> `com.google.android.documentsui/...PickActivity`) and listed the pushed file; picked it,
+> confirmed via screenshot the composer rendered a genuine generic-file-icon tile (not a
+> broken/blank thumbnail) with the same remove-X overlay every other attached item has.
+> `adb logcat` confirmed two independent real TUS round-trips for two different non-media MIME
+> types across two attempts (`text/plain` and, when the system picker's Recent-file ordering
+> shifted between openings, `text/xml` — both equally valid proof the classifier handles
+> arbitrary document kinds, not just one), both carrying `uploadcontext=post`. Published the
+> resulting post for real (`POST /api/v1/posts` → success, `media` array populated with the
+> attached document); `GET /api/v1/posts/:id` (via the bearer token pulled straight from
+> logcat, no separate login) confirmed the persisted attachment plus Prisme translations
+> generated (fr/es/ar/pt); the test post was deleted afterward (`DELETE` →
+> `{"deleted":true}`), confirmed gone via a follow-up `GET` → 404. Emulator returned to the
+> home screen afterward (idle, not mid-app), the pushed test file and on-device dump artifacts
+> removed. **Deliberate, documented scope cut**: no filename/size label on the file tile yet —
+> `UploadedMedia` (`:core:model`) doesn't carry the original filename the gateway's TUS
+> response discards on this upload path, unlike iOS's `MessageAttachment.fileName`; adding it
+> is a separately-scoped follow-up touching the wire model, not a rendering-only change.
+> **feature-parity.md's §F Create-post bullet now records generic file attachment done**
+> alongside camera photo/video capture. **Next slice candidates (not attempted this run)**:
+> location attachment for the Feed composer (needs a place-picker UI — Android has no reusable
+> static location-picker component yet, only the unrelated live-location-sharing feature in
+> chat; a heavier lift than file attachment was); audio+transcription attachment (blocked on
+> the still-pending `MediaRecorder`/`AudioRecord` capture core, per feature-parity.md §Q — no
+> Android audio recorder exists yet at all, chat or feed); per-post language override (needs a
+> language-picker component — none exists yet outside the auth registration flow's inline
+> menu); chunked/resumable large-video TUS upload (still the largest/riskiest open candidate,
+> likely needs its own sub-slice decomposition); widgets/PiP (still zero
+> `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check, due for another
+> explicit re-check soon per the ~5-run cadence).
+
 > On 2026-08-10 **the Feed post composer's camera-video capture fast-follow landed** (slice
 > `feed-composer-video-capture`, feature-parity §F — the routine's own standing candidate from
 > the prior camera-photo-capture slice's deliberate scope cut, re-proven still genuinely unshipped

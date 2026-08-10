@@ -1125,3 +1125,55 @@ Append-only log of gotchas and decisions that save time next run.
   `clickable="false"` on the node you found by content-desc; check that its bounds sit inside a
   clickable ancestor's bounds (usually true for any icon-button pattern in this codebase) rather
   than hunting for a `clickable="true"` node with the same content-desc.
+
+## Slice `feed-composer-file-attachment` (2026-08-10)
+- **A literal `*/*` inside a `/** ... */` KDoc block comment prematurely closes it** — Kotlin's
+  block-comment terminator is the plain two-character sequence `*/`, and the doc engine doesn't
+  know a Markdown-style "any MIME type" phrasing was intended. Writing
+  `[ActivityResultContracts.OpenMultipleDocuments] (`*/*`) lets the author pick...` inside a KDoc
+  produced a wall of `Expecting a top level declaration` errors starting exactly at the line
+  containing the literal, because everything after the accidental `*/` was now parsed as top-level
+  code. The fix is to never spell out the literal MIME wildcard inside a doc comment — write "any
+  MIME type" or similar prose instead. Caught immediately by the compiler (not silent), but the
+  error location (line 124, the START of the doc comment's *closing* delimiter search, not line
+  105 where the literal actually sat) took a moment to trace back to the real cause — the
+  `Expecting a top level declaration` cascade begins wherever the NEXT real top-level construct
+  starts, not at the premature `*/` itself.
+- **`ActivityResultContracts.OpenMultipleDocuments()` has no `maxItems<=1`-style construction-time
+  crash constraint, unlike `PickMultipleVisualMedia`** — so a file-attach tile needs no picker-mode
+  routing (`FeedMediaPickMode`-equivalent) of its own; the existing `dispatchPicked` cap on
+  `draft.remainingMediaSlots` (already there for the gallery/camera tiles) is sufficient. Confirmed
+  by reading the contract's own Javadoc/behaviour rather than assuming parity with the visual-media
+  picker's crash-avoidance shape — the two contracts are superficially similar (`ActivityResult
+  Contracts.OpenMultipleDocuments`/`PickMultipleVisualMedia` both return `List<Uri>`) but have
+  different construction-time constraints, so "how the sibling tile handles this" isn't
+  automatically true of a new one without checking.
+- **A generic MIME→kind classifier built for one feature (auto-download gating) is often exactly
+  the right SSOT for an unrelated feature's rendering decision (composer thumbnail-vs-icon)** —
+  `MediaKindClassifier.fromMimeType` (`:core:model`, originally for `MediaAutoDownloadDecider`)
+  already encodes "is this image/video/audio, or something else" with the exact same `null` =
+  "unclassifiable" semantics the composer needed for "does this attachment get a real thumbnail or
+  a generic file icon". Reusing it outright (rather than writing a second, narrower MIME-prefix
+  check local to the composer) kept the two decisions from ever being able to drift on which MIME
+  types count as "media" vs "file" — worth searching the existing `:core:model` surface for a
+  general-purpose classifier before writing a feature-local one, even when the two call sites'
+  *purpose* looks unrelated at first glance.
+- **A system document picker's "Recent" list can reorder its top entries between two separate
+  openings of the SAME picker in the SAME on-device verification pass, even with no new file
+  pushed in between** — a second `OpenMultipleDocuments()` launch (after the first attempt's
+  picked file was lost to an accidental `KEYCODE_BACK` dismissing the composer's `ModalBottomSheet`
+  before publishing) tapped the exact same `uiautomator`-measured coordinate as the first attempt,
+  but DocumentsUI's Recent adapter had resorted and a different pre-existing file
+  (`window_dump7.xml`, a leftover artifact from an earlier routine iteration's own on-device
+  verification) ended up at that position instead of the intentionally-pushed `meeshy_test_doc.txt`.
+  Not a bug in the composer code — the real TUS/publish/GET/DELETE round-trip still fully proved the
+  feature end-to-end, just with a different (equally valid, also non-media) MIME type than planned.
+  Lesson: re-dump immediately before EVERY tap in a multi-step system-picker flow, even a repeat of
+  a step already done once in the same verification pass — never assume the second pass's list
+  order matches the first's.
+- **`ModalBottomSheet`'s system back-gesture/`KEYCODE_BACK` dismisses the sheet and discards its
+  `remember`-scoped state (picked-but-not-yet-published attachments) with no confirmation** —
+  pressing back mid-verification (intending to check current app state) silently lost the picked
+  file attachment and required reopening the composer and re-picking from scratch. When scripting
+  a multi-step on-device flow that ends in "tap Publish", avoid any exploratory `KEYCODE_BACK`
+  between attaching and publishing — dump/screenshot without navigating away instead.

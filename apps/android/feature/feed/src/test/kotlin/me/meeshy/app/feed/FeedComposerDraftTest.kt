@@ -331,4 +331,31 @@ class FeedComposerDraftTest {
         assertThat(request).isNotNull()
         assertThat(request!!.type).isEqualTo("POST")
     }
+
+    // --- file attachments: thumbnail-vs-generic-icon rendering decision ----
+
+    @Test
+    fun `an image attachment previews as a thumbnail`() {
+        assertThat(media("m1", mimeType = "image/jpeg").hasThumbnailPreview).isTrue()
+    }
+
+    @Test
+    fun `a video attachment previews as a thumbnail`() {
+        assertThat(media("m1", mimeType = "video/mp4").hasThumbnailPreview).isTrue()
+    }
+
+    @Test
+    fun `a document attachment falls back to a generic file icon`() {
+        assertThat(media("m1", mimeType = "application/pdf").hasThumbnailPreview).isFalse()
+    }
+
+    @Test
+    fun `an audio attachment falls back to a generic file icon in the composer`() {
+        assertThat(media("m1", mimeType = "audio/mpeg").hasThumbnailPreview).isFalse()
+    }
+
+    @Test
+    fun `a blank mime type falls back to a generic file icon`() {
+        assertThat(media("m1", mimeType = "").hasThumbnailPreview).isFalse()
+    }
 }
