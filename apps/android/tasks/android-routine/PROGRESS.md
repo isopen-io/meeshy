@@ -66,20 +66,26 @@
 > Confirmed via `adb logcat` that Publish fired the real `POST https://gate.meeshy.me/api/v1/posts`
 > with the typed content and the gateway returned `201`/`success:true` with the correct
 > `content`/`visibility`/`author` echoed back — the integration is genuinely wired end-to-end, not
-> just compiling. **Did not get a clean final screenshot of the published post rendering at the
-> head of the list**: partway through this pass the shared dev box's load average spiked to 600+
+> just compiling. **The final screenshot was initially inconclusive, then confirmed clean once the
+> box calmed down**: partway through this pass the shared dev box's load average spiked to 600–900+
 > (confirmed via `ps aux`/`uptime` — concurrent iOS Simulator + `jest-worker` processes from other
 > sessions on this shared multi-agent box, not this change), producing repeated genuine ANR dialogs
 > on cold start (`/data/anr/anr_*` traces confirmed the app was stuck inside `DexFile.openDexFile`
-> during process startup — classloading contention, nothing in this diff's code path) and the
-> emulator became too unresponsive to get a trustworthy final capture. Proceeding on: (1) the
-> render path (`FeedPostBuilder.build` → `PostCard`) is the exact same, already-shipped pipeline the
-> existing `post:created` socket-arrival tests already exercise (`FeedViewModelTest`'s "a realtime
-> post arrives at the head..." suite, green, unchanged by this diff) — `created()` differs from
-> `accept()` only in the banner-count field, proven by the mutation test above; (2) the confirmed
-> real network round-trip; (3) the confirmed sheet-level UI. Flagging the inconclusive final render
-> check explicitly rather than silently claiming a full visual pass — a future run on a quieter box
-> should grab that one remaining screenshot opportunistically.
+> during process startup — classloading contention, nothing in this diff's code path) and one capture
+> mid-spike showed the freshly-published card as a near-invisible sliver (only 2 of its 4 stats-row
+> icons in a `uiautomator dump`, no visible author/content pixels on close crop) — read at the time as
+> a possible rendering bug specific to a network-fresh `ApiPost`. Once the load average dropped back
+> under 20 (a background poll loop confirmed this), a clean cold relaunch + navigation to the Flux
+> showed the published post rendering **perfectly**: correct author ("Andre Tabeth"), avatar,
+> "1 h" relative time, and — bonus confirmation the Prisme pipeline round-tripped end to end —
+> the English original auto-translated server-side and displayed in French ("Test du flux de
+> publication") with the full 🇬🇧/🇫🇷/🇧🇷 language strip. Confirms the earlier collapsed-card capture
+> was purely a partial/incomplete GPU-compositor frame under extreme host contention, not a logic bug
+> — consistent with (1) the render path (`FeedPostBuilder.build` → `PostCard`) being the exact same,
+> already-shipped pipeline the existing `post:created` socket-arrival tests already exercise
+> (`FeedViewModelTest`'s "a realtime post arrives at the head..." suite, green, unchanged by this
+> diff) — `created()` differs from `accept()` only in the banner-count field, proven by the mutation
+> test above; and (2) the confirmed real network round-trip. Full on-device pass now closed cleanly.
 > **Next slice candidates (not attempted this run)**: the §F attachments fast-follow (photo/camera
 > first, matching the composer toolbar's own left-to-right priority); the §C inverted-list rewrite
 > decomposition (now several runs deferred without an attempt); the §M `NotificationChannel`

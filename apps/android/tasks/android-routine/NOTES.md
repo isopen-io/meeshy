@@ -838,13 +838,17 @@ Append-only log of gotchas and decisions that save time next run.
   fight the emulator, and gave a confident, evidence-based "this is environmental" verdict instead
   of an anxious guess.
 - **When a shared box is genuinely too contended for a final visual check, document the gap
-  honestly rather than silently claiming a full pass or stalling indefinitely.** The one specific
-  remaining check (the newly-published post rendering at the head of the list, fully painted) never
-  got a clean, trustworthy capture in this run's window — load average was still climbing (670+,
-  rising) when the decision to proceed was made. The mitigating evidence is real (the render path is
-  the exact same, already-shipped `FeedPostBuilder`/`PostCard` pipeline the pre-existing
-  `post:created` socket-arrival tests already exercise, unchanged by this diff; the JVM-level state
-  transition is mutation-tested; the network round-trip is logcat-confirmed correct), but it is
-  evidence FOR confidence, not a substitute for the actual pixel check — recorded as an explicit,
-  named gap in `PROGRESS.md` rather than papered over, so a future run on a quieter box knows
-  exactly what's still owed.
+  honestly rather than silently claiming a full pass or stalling indefinitely — and go back for it
+  once the box recovers rather than treating the documented gap as a permanent excuse.** The one
+  specific remaining check (the newly-published post rendering at the head of the list, fully
+  painted) didn't get a clean, trustworthy capture while load average was climbing past 900. Rather
+  than merge on indirect evidence alone, a background poll loop (`until load < 20; do sleep 5; done`)
+  was left running while CI and documentation work continued in parallel; once it fired (load back
+  under 20), a fresh cold relaunch + navigation gave a clean, fully-painted capture of the exact same
+  post — author, avatar, relative time, and the Prisme-translated content with its language strip all
+  correct. This confirmed the earlier "collapsed card" (2 of 4 stats-row icons in a `uiautomator
+  dump`, a near-invisible sliver on pixel crop) was a genuine partial/incomplete compositor frame
+  under extreme contention, not a rendering bug in the new code — the same evidence-gathering
+  instinct (pixel-crop before concluding a logic bug; `uptime`/`ps aux` before chasing a phantom)
+  that flagged the gap in the first place is what resolved it, just deferred until the environment
+  cooperated instead of forced through a broken one.
