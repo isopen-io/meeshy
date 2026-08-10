@@ -18,6 +18,7 @@ import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
@@ -102,11 +103,17 @@ export class MagicLinkService {
       }
 
       // 3. Revoke any existing magic link tokens
+      //
+      // `usedAt: null` n'atteignait AUCUN lien : `create` ne renseigne pas la
+      // colonne, elle est donc absente du document de tout lien encore cliquable.
+      // Demander un nouveau lien laissait les précédents valides jusqu'à leur
+      // expiration. Jumeau de `PasswordResetService.revokeExistingTokens` ; voir
+      // `utils/prisma-unset.ts`.
       await this.prisma.magicLinkToken.updateMany({
         where: {
           userId: user.id,
-          usedAt: null,
-          isRevoked: false
+          isRevoked: false,
+          ...unsetOrNull('usedAt')
         },
         data: {
           isRevoked: true,
