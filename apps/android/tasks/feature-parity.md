@@ -4570,14 +4570,62 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Push message prefetch + pre-persist into Room for instant cold-launch
 - [ ] `NotificationCoordinator` authority model (socket authoritative; cache only seeds)
 - [ ] Comprehensive notification system (~80 types)
-- [ ] Android `NotificationChannel` taxonomy (ARCHITECTURE.md §18: "~80 notification types
+- [~] Android `NotificationChannel` taxonomy (ARCHITECTURE.md §18: "~80 notification types
       map onto a curated notification-channel taxonomy"). Today only 2 channels exist
       (`CHANNEL_CALLS` full-screen ringer + a single generic "Messages" channel, both in
       `MeeshyFcmService`) — the ~80 backend notification types above are not mapped onto a
       curated per-category channel set (message/reaction/mention/social/call/etc, each with
       its own importance/sound/badge policy, mirroring iOS's per-category push handling).
       Line added by the app-icon-audit angle-mort pass (2026-08-10, `tasks/android-parity-
-      ios-debt-agent-prompt.md` §"Angle mort catégoriel") — not implemented this run.
+      ios-debt-agent-prompt.md` §"Angle mort catégoriel") — not implemented that run.
+      **A concrete, live bug behind this gap got found and fixed** (slice
+      `notification-channel-id-drift`, 2026-08-10): re-reading `services/gateway/src/services/
+      PushNotificationService.ts` `sendViaFCM` end to end (not just the taxonomy line's own
+      wording) found the gateway already sends `message.android.notification.channelId =
+      'meeshy_notifications'` for every Android non-call push — but `MeeshyFcmService` had only
+      ever created a channel named `meeshy_messages`, and only lazily, inside
+      `onMessageReceived`. FCM Android semantics: a push carrying both a `notification` and a
+      `data` block (every non-call push today) is auto-rendered by the OS/Play services when the
+      app is backgrounded or killed — `onMessageReceived` never runs in that case, so the system
+      posts directly against the gateway's `channelId`. With no `meeshy_notifications` channel
+      ever created and no `com.google.firebase.messaging.default_notification_channel_id`
+      manifest fallback declared either (grepped, absent), that push is either dropped or folded
+      into a generic, unbranded system "Miscellaneous" channel with none of the intended
+      importance/sound — exactly backwards from precisely the scenario push exists for
+      (foregrounded, where `onMessageReceived` DOES run and channel creation already worked, was
+      never actually affected). **Fixed (production, all `apps/android`)**: new `:app`
+      `NotificationChannelIds` object (SSOT for `CHANNEL_MESSAGES`/`CHANNEL_CALLS` + their legacy
+      predecessors, replacing the two ad-hoc constant sets previously duplicated in
+      `MeeshyFcmService`'s companion) renames the client's message channel id to
+      `meeshy_notifications` — byte-for-byte matching the gateway's own literal — and a new
+      `NotificationChannelInstaller` creates it **eagerly at process start**
+      (`MeeshyApplication.onCreate`, injected via Hilt) rather than only lazily inside the
+      handler that's exactly the one that doesn't run in the failure scenario; it also deletes
+      the orphaned pre-drift `meeshy_messages` channel (channels are immutable once created —
+      same "delete + recreate under a new id" migration `CHANNEL_CALLS` already took `meeshy_calls`
+      v1→v2). `MeeshyFcmService`'s own lazy `createNotificationChannel` call in the
+      foreground-received path is kept as a harmless, idempotent belt-and-suspenders, now
+      pointing at the same SSOT id. **+4 `NotificationChannelInstallerTest`** (Robolectric,
+      `@Config(sdk = [26])` pinned to the app's own `minSdk` floor — the module's ambient default
+      SDK resolution silently fell back to API 21, well below the O+ `NotificationChannel` API,
+      producing a `NoSuchMethodError` until pinned; `testImplementation(libs.androidx.test.ext.
+      junit)` added to `:app` for `ApplicationProvider`, missing before this slice): creates the
+      channel under the gateway-matching id at `IMPORTANCE_HIGH`, deletes the stale legacy
+      channel, idempotent across repeated `install()` calls (no duplicate), never touches the
+      calls channel. Mutation-proven: commenting out the legacy-delete call fails **exactly** the
+      1 discriminating test, the other 3 stay green. **Gate**: `./apps/android/meeshy.sh check`
+      → `BUILD SUCCESSFUL` (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`,
+      zero failures). **Verified on-device** (`meeshy_pixel8` emulator, fresh app launch, no push
+      sent): `adb shell dumpsys notification` confirms `NotificationChannel{mId=
+      'meeshy_notifications', mImportance=4, mDeleted=false}` exists for `me.meeshy.app.debug`
+      the instant the process starts, before any message push ever arrives. **Still open, and
+      honestly scoped as a separate, larger follow-up**: the full curated *multi*-channel
+      taxonomy (a distinct channel per category — messages/reactions/mentions/social/etc, each
+      individually mutable in system settings) needs the gateway to send a **per-type**
+      `channelId` instead of the one hardcoded literal it sends today for every non-call push —
+      a `services/gateway` change, outside this lane's `apps/android`-only diff scope. This slice
+      only closes the concrete id-mismatch defect and lays the SSOT + eager-install foundation a
+      future richer taxonomy would build on.
 - [x] Per-type semantic row accent (`notifications-type-accent-color`, 2026-07-13): pure
       `:core:model` `notificationTypeAccentHex(type)` SSOT — faithful port of iOS
       `MeeshyNotificationType.accentHex`, mapping all ~80 backend `type` strings (lowercase +
