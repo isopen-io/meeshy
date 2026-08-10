@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +28,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ManageSearch
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.MarkChatUnread
 import androidx.compose.material.icons.filled.SearchOff
@@ -104,6 +108,8 @@ fun ConversationListScreen(
     onLogout: () -> Unit,
     onNewConversation: () -> Unit = {},
     onContacts: () -> Unit = {},
+    onDashboard: () -> Unit = {},
+    onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
 ) {
@@ -140,6 +146,17 @@ fun ConversationListScreen(
             ConversationSearchBar(
                 query = state.searchText,
                 onQueryChange = viewModel::setSearch,
+                onDashboard = onDashboard,
+                onGlobalSearch = onGlobalSearch,
+            )
+        },
+        // Le chemin DIRECT vers une nouvelle conversation : l'item "New" du menu
+        // flottant reste, mais une action aussi centrale merite un bouton visible
+        // en permanence (l'import FloatingGradientFab dormait ici, jamais pose).
+        floatingActionButton = {
+            FloatingGradientFab(
+                onClick = onNewConversation,
+                contentDescription = stringResource(R.string.conversations_new),
             )
         },
     ) { padding ->
@@ -222,11 +239,16 @@ fun ConversationListScreen(
     }
 }
 
-/** iOS parity: a floating glass search pill anchored to the bottom of the screen. */
+/** iOS parity: a floating glass search pill anchored to the bottom of the screen.
+ *  Trailing, comme iOS `themedSearchBar` : l'icone grille ouvre le tableau de
+ *  bord (`square.grid.2x2` -> WidgetPreview) et la loupe-texte la recherche
+ *  globale (`text.magnifyingglass` -> GlobalSearch). */
 @Composable
 private fun ConversationSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
+    onDashboard: () -> Unit = {},
+    onGlobalSearch: () -> Unit = {},
 ) {
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.pill),
@@ -266,6 +288,23 @@ private fun ConversationSearchBar(
                     }
                 },
             )
+            IconButton(onClick = onDashboard, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.GridView,
+                    contentDescription = stringResource(R.string.conversations_open_dashboard),
+                    tint = MeeshyPalette.Warning,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            IconButton(onClick = onGlobalSearch, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.ManageSearch,
+                    contentDescription = stringResource(R.string.conversations_open_global_search),
+                    tint = MeeshyPalette.Indigo500,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
     }
 }

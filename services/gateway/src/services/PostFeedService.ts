@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import {
   reelAffinityScore,
@@ -81,7 +82,13 @@ export class PostFeedService {
   /// expirées, pour que « Mes stories » puisse les archiver. Sept jours : au
   /// -delà, une story n'est plus un contenu qu'on republie ou dont on relit
   /// les vues, et la réponse doit rester bornée.
-  static readonly AUTHOR_ARCHIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  ///
+  /// Réexportée depuis `posts/ephemeralPosts.ts` plutôt que redéclarée : le
+  /// balayage du contenu éphémère attend la fin de cette fenêtre avant de
+  /// soft-supprimer, parce que la requête ci-dessous est gardée par
+  /// `deletedAt: NOT_DELETED`. Deux copies dériveraient — et le jour où
+  /// celle-ci s'allongerait, le balayage la devancerait en silence.
+  static readonly AUTHOR_ARCHIVE_WINDOW_MS = EPHEMERAL_AUTHOR_ARCHIVE_MS;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -346,9 +353,14 @@ export class PostFeedService {
     // fetch (24 h) ou un pull-to-refresh.
     //
     // Couvre aussi l'expiration : `ExpiredStoriesCleanupService` soft-delete
-    // les stories périmées toutes les heures, ce qui pose `deletedAt` et
-    // remonte `updatedAt`. Le client garde néanmoins son propre filtre d'expiry
-    // pour ne pas dépendre du passage du balayeur.
+    // les stories périmées, ce qui pose `deletedAt` et remonte `updatedAt` —
+    // mais seulement une fois passée la fenêtre d'archive auteur
+    // (`EPHEMERAL_AUTHOR_ARCHIVE_MS`), pas à l'échéance. Le client garde donc
+    // bien son propre filtre d'expiry, et pas seulement « pour ne pas dépendre
+    // du passage du balayeur » : entre l'échéance et le masquage, il est le
+    // SEUL à filtrer. (Avant le cycle 54 le balayage n'appariait aucun post et
+    // ne posait jamais `deletedAt` — ce tombstone ne voyait que les
+    // suppressions décidées.)
     //
     // Même `visibilityFilter` que le tray : le delta ne doit pas divulguer
     // l'existence de stories que l'utilisateur n'a jamais eu le droit de voir.

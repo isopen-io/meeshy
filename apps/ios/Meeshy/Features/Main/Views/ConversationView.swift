@@ -461,7 +461,7 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var encryptionDisclaimer: some View {
-        if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.isLoadingInitial {
+        if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.paginationPhase.isBlockingSpinnerNeeded {
             VStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "lock.fill")
                     .font(MeeshyFont.relative(14, weight: .bold))
@@ -1068,7 +1068,7 @@ struct ConversationView: View {
             // in flight AND no cached messages exist yet. Renders above
             // the (empty) MessageListView so the layout stays stable
             // when the first batch lands and the placeholder fades out.
-            if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
+            if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty {
                 messageSkeletonOverlay
                     .transition(.opacity)
                     .zIndex(1)

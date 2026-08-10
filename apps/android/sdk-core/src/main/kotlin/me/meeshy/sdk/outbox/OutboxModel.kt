@@ -190,6 +190,22 @@ public object OutboxDependencies {
 public data class ReactionPayload(val emoji: String)
 
 /**
+ * Payload of an `UPLOAD_MEDIA` outbox row. [uploadContext] is the TUS
+ * `uploadcontext` wire string (`me.meeshy.sdk.model.media.TusUploadContext.wire`,
+ * e.g. `"story"`) the item was durably queued under, or `null` for a legacy
+ * `MessageAttachment` upload (chat attachments — `POST /attachments/upload`, the
+ * only path before TUS existed). Kept as a plain `String` rather than the enum
+ * itself so a row enqueued by a newer app build with a context value an OLDER
+ * build (mid-rollout, same device) doesn't know about still decodes — the drain
+ * sender treats an unrecognised string the same as `null` (legacy path), never a
+ * crash. An empty/blank row payload (every row enqueued before this field
+ * existed) also decodes as "no context" — see `OutboxFlushWorker`'s `UPLOAD_MEDIA`
+ * sender.
+ */
+@kotlinx.serialization.Serializable
+public data class MediaUploadPayload(val uploadContext: String? = null)
+
+/**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`
  * is the message id (so a pin+unpin of the same message coalesces per-message);
  * the pin/unpin REST route also needs the enclosing conversation id, which the

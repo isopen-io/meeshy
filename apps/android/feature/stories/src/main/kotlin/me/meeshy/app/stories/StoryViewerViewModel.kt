@@ -20,6 +20,8 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
@@ -67,6 +69,7 @@ class StoryViewerViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val reportRepository: ReportRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -281,5 +284,27 @@ class StoryViewerViewModel @Inject constructor(
 
     companion object {
         const val USER_ID_ARG: String = "userId"
+    }
+
+    /**
+     * Supprime la story COURANTE (la sienne uniquement — l'UI gate sur
+     * [StoryViewerUiState.isOwnStory]) puis avance ou ferme : rester sur un slide
+     * supprime rejouerait un fantome.
+     */
+    fun deleteCurrentStory(onEmpty: () -> Unit) {
+        val storyId = _state.value.currentStoryId ?: return
+        viewModelScope.launch {
+            if (storyRepository.delete(storyId) is NetworkResult.Success) {
+                if (_state.value.hasNext) advance() else onEmpty()
+            }
+        }
+    }
+
+    /** Signale la story courante — best effort, meme semantique que le report de post. */
+    fun reportCurrentStory(reason: ReportReason) {
+        val storyId = _state.value.currentStoryId ?: return
+        viewModelScope.launch {
+            reportRepository.reportStory(storyId, reason, details = null)
+        }
     }
 }

@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
+import { deactivatePostTrackingLinks } from './deactivatePostTrackingLinks';
 import { retractPostNotifications } from './retractPostNotifications';
 import { SoundCaptureService } from './SoundCaptureService';
 
@@ -94,7 +95,7 @@ export async function applyPostRemovalEffects(
   // Les liens de partage et les usages de sons, eux, ne se lisent nulle part en
   // temps réel.
   try {
-    await retractPostNotifications(prisma, post.id, announcer);
+    await retractPostNotifications(prisma, [post.id], announcer);
   } catch (err) {
     log.warn('post removal: notification retraction failed', { postId: post.id, err });
   }
@@ -103,11 +104,13 @@ export async function applyPostRemovalEffects(
   // Prisma ne se déclenche jamais. Les `/l/<token>` qui visent ce post
   // resteraient donc opérationnels, et un contenu retiré POUR MODÉRATION
   // resterait atteignable par le lien même qui l'a diffusé.
+  //
+  // Délégué depuis que le balayage du contenu éphémère — l'autre chemin qui
+  // rend un post inatteignable, et le seul qui le DÉTRUISE — applique le même
+  // effet : deux copies de la règle divergeraient, et c'est exactement ce que
+  // l'en-tête de ce module raconte être arrivé aux trois autres.
   try {
-    await prisma.trackingLink.updateMany({
-      where: { targetId: post.id },
-      data: { isActive: false },
-    });
+    await deactivatePostTrackingLinks(prisma, [post.id]);
   } catch (err) {
     log.warn('post removal: tracking link deactivation failed', { postId: post.id, err });
   }

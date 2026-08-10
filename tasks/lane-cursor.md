@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=3 last_run=splash-screen
+lane=ANDROID android_streak=5 last_run=feed-composer-camera-capture

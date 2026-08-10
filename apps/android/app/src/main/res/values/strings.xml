@@ -14,6 +14,7 @@
     <string name="menu_new_conversation">New</string>
     <string name="menu_reels">Reels</string>
     <string name="menu_contacts">Contacts</string>
+    <string name="menu_settings">Settings</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Welcome back</string>

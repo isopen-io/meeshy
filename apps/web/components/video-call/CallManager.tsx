@@ -345,6 +345,29 @@ export function CallManager() {
       // Explicitly decline the bumped call first, same call:end
       // reason=rejected path Decline/auto-timeout already use.
       if (incomingCall && incomingCall.callId !== event.callId) {
+        // Vague 90 (2026-08-10) — an Accept is already in flight for
+        // `incomingCall` (getUserMedia + call:join ack, up to
+        // CALL_JOIN_ACK_TIMEOUT_MS = 10s). isInCall/currentCall don't
+        // reflect that yet — acceptOrJoinCall's setInCall(true) is its LAST
+        // statement — so the busyInCall branch above hasn't triggered. Left
+        // unguarded, this branch would reject the very call the user just
+        // committed to accepting, racing a call:end against its own pending
+        // call:join for the SAME callId — the caller sees a spurious reject
+        // moments before the callee actually joins. Queue the new caller as
+        // a waiting call instead, same as the already-busy case — including
+        // the same "don't silently bump an existing waiting call" guard
+        // Vague 59 added to the sibling branch above.
+        if (acceptingCallIdRef.current === incomingCall.callId) {
+          if (waitingCall && waitingCall.callId !== event.callId) {
+            logger.info('[CallManager]', 'Third caller bumping waiting call ' + waitingCall.callId + ' — declining it for ' + event.callId + ' (accept in flight for ' + incomingCall.callId + ')');
+            clearWaitingTimeout();
+            rejectWaitingCall(waitingCall.callId);
+          }
+          logger.info('[CallManager]', 'Accept already in flight for ' + incomingCall.callId + ' — queuing ' + event.callId + ' as a waiting call instead of bumping it');
+          setWaitingCall(event);
+          startWaitingTimeout(event.callId);
+          return;
+        }
         logger.info('[CallManager]', 'Second incoming call bumping unanswered call ' + incomingCall.callId + ' — declining it for ' + event.callId);
         clearCallTimeout();
         rejectWaitingCall(incomingCall.callId);

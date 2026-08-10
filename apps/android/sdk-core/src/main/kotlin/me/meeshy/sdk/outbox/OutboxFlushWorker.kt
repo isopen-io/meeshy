@@ -22,10 +22,12 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
+import me.meeshy.sdk.media.TusUploadRepository
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
 import me.meeshy.sdk.net.api.BlockApi
@@ -62,6 +64,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val conversationApi: ConversationApi,
     private val postApi: PostApi,
     private val mediaRepository: MediaRepository,
+    private val tusUploadRepository: TusUploadRepository,
     private val mediaBlobStore: MediaBlobStore,
     private val blockApi: BlockApi,
     private val preferencesApi: PreferencesApi,
@@ -222,7 +225,19 @@ class OutboxFlushWorker @AssistedInject constructor(
         },
         OutboxKind.UPLOAD_MEDIA to MutationSender { row ->
             val item = mediaBlobStore.get(row.cmid)
-            val result = MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+            // A blank payload (every row enqueued before MediaUploadPayload existed,
+            // and every still-legacy chat-attachment enqueue) means "no TUS context" —
+            // not a decode failure, so it is not routed through the PermanentFailure
+            // path the other kinds use for a genuinely malformed payload.
+            val context = row.payload.takeIf { it.isNotBlank() }
+                ?.let { runCatching { json.decodeFromString<MediaUploadPayload>(it) }.getOrNull() }
+                ?.uploadContext
+                ?.let { TusUploadContext.fromWire(it) }
+            val result = if (context != null) {
+                MediaUploadSender.send(item) { tusUploadRepository.upload(it, context) }
+            } else {
+                MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+            }
             if (result !is SendResult.TransientFailure) {
                 mediaBlobStore.remove(row.cmid)
             }

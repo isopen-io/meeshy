@@ -20,8 +20,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +54,7 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -73,6 +79,67 @@ fun StoryViewerScreen(
 
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showOptions by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(stringResource(R.string.stories_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.stories_delete_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteCurrentStory(onEmpty = onClose)
+                }) { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text(stringResource(R.string.stories_cancel))
+                }
+            },
+        )
+    }
+    if (showReportDialog) {
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false },
+            title = { Text(stringResource(R.string.stories_report_title)) },
+            text = {
+                Column {
+                    ReportReason.entries.forEach { reason ->
+                        val label = when (reason) {
+                            ReportReason.SPAM -> stringResource(R.string.stories_report_reason_spam)
+                            ReportReason.HARASSMENT -> stringResource(R.string.stories_report_reason_harassment)
+                            ReportReason.INAPPROPRIATE -> stringResource(R.string.stories_report_reason_inappropriate)
+                            ReportReason.VIOLENCE -> stringResource(R.string.stories_report_reason_violence)
+                            ReportReason.HATE_SPEECH -> stringResource(R.string.stories_report_reason_hate_speech)
+                            ReportReason.IMPERSONATION -> stringResource(R.string.stories_report_reason_impersonation)
+                            ReportReason.OTHER -> stringResource(R.string.stories_report_reason_other)
+                        }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MeeshyPalette.White,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.reportCurrentStory(reason)
+                                    showReportDialog = false
+                                }
+                                .padding(vertical = MeeshySpacing.md),
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showReportDialog = false }) {
+                    Text(stringResource(R.string.stories_cancel))
+                }
+            },
+        )
+    }
 
     val progress = remember { Animatable(0f) }
 
@@ -230,6 +297,36 @@ fun StoryViewerScreen(
                             contentDescription = stringResource(R.string.stories_comments_open),
                             tint = MeeshyPalette.White,
                         )
+                    }
+                }
+                if (state.currentStoryId != null) {
+                    Box {
+                        IconButton(onClick = { showOptions = true }) {
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = stringResource(R.string.stories_options),
+                                tint = MeeshyPalette.White,
+                            )
+                        }
+                        DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            if (state.isOwnStory) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
+                                    onClick = {
+                                        showOptions = false
+                                        showDeleteDialog = true
+                                    },
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.stories_action_report)) },
+                                    onClick = {
+                                        showOptions = false
+                                        showReportDialog = true
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
                 IconButton(onClick = onClose) {

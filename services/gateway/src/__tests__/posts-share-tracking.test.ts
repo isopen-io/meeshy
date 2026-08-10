@@ -219,7 +219,11 @@ describe('PostService.deletePost — TrackingLink invalidation', () => {
     await service.deletePost(POST_ID, USER_ID, { actorRole: 'USER' });
     expect(prisma.trackingLink.updateMany).toHaveBeenCalledTimes(1);
     const arg = prisma.trackingLink.updateMany.mock.calls[0][0] as any;
-    expect(arg.where).toMatchObject({ targetId: POST_ID });
+    // `{ in: [id] }` et non le scalaire : la règle vit désormais dans
+    // `posts/deactivatePostTrackingLinks.ts`, partagée avec le balayage du
+    // contenu éphémère qui en coupe une fournée d'un coup. Même ensemble
+    // désactivé, une seule forme de requête.
+    expect(arg.where).toMatchObject({ targetId: { in: [POST_ID] } });
     expect(arg.data).toMatchObject({ isActive: false });
   });
 

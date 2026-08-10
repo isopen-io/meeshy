@@ -200,6 +200,26 @@ describe('CallService.createCallSummaryMessage', () => {
 
     await expect(sut.createCallSummaryMessage(CALL_ID)).rejects.toThrow('db down');
   });
+
+  /**
+   * Jumeau du témoin de `CallService.liveMessage.test.ts` : le résumé d'appel
+   * est un message comme un autre pour l'aperçu de conversation, le compte de
+   * non-lus et le delta `/sync`, tous gardés par `deletedAt: null`
+   * (présent-et-null — une colonne absente ne l'apparie pas sur MongoDB).
+   * Un « Appel manqué » sans la colonne ne ferait jamais monter le badge.
+   */
+  it('marks the call summary message as live so the deletedAt:null readers match it', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const { data } = prisma.message.create.mock.calls[0][0] as any;
+    expect(Object.prototype.hasOwnProperty.call(data, 'deletedAt')).toBe(true);
+    expect(data.deletedAt).toBeNull();
+  });
 });
 
 describe('CallService.createCallSummaryMessage — upsert du message vivant', () => {
@@ -492,4 +512,5 @@ describe('CallService.persistCallStats', () => {
 
     await expect(sut.persistCallStats(CALL_ID, { bytesSent: 500, bytesReceived: 600 })).resolves.toBeUndefined();
   });
+
 });

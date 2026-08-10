@@ -1,5 +1,285 @@
 # Lessons
 
+## Leçon 105 — Une convention tenue par les APPELANTS n'est pas testée par ce qui la consomme (2026-08-10, routine messaging, cycle 58)
+
+Le modèle `Message` fait tenir son soft-delete par ses écrivains : ~119 lectures filtrent
+`deletedAt: null`, et ce sont les sept `message.create` qui rendent ce filtre vrai en écrivant la
+colonne. Deux l'avaient perdu depuis longtemps. Aucune suite ne l'a vu.
+
+La sonde qui l'a établi vaut plus que le constat. Après avoir corrigé les deux sites, j'ai vidé la
+constante partagée (`{}`) et relancé 45 suites voisines : **seuls mes deux témoins neufs sont
+tombés.** Les cinq créateurs qui portaient le littéral correctement depuis toujours n'avaient AUCUNE
+couverture dessus. La couverture de leurs chemins était pourtant excellente — contenu, expéditeur,
+métadonnées, idempotence P2002, races — parce que les tests sont écrits contre ce que la méthode
+CALCULE, jamais contre ce qu'elle doit se contenter de recopier.
+
+**Règle** : quand une invariante est tenue par N appelants plutôt que par le type ou le schéma,
+elle n'a de couverture nulle part par défaut — les tests de chaque appelant portent sur ce qui lui
+est propre. Le geste qui le mesure : vider l'invariante à la source et regarder ce qui tombe. Si la
+réponse est « seulement les témoins que je viens d'écrire », la conclusion n'est pas « ma couverture
+est suffisante », c'est « voilà comment la divergence est née, et elle recommencera ».
+
+**Corollaire sur la forme du correctif.** La sonde a changé le correctif, pas seulement le rapport.
+Ajouter le littéral aux deux sites fautifs aurait rendu la suite verte en laissant sept copies sans
+propriétaire. Extraire UNE constante nommée fait deux choses qu'aucune des sept copies ne faisait :
+elle donne un endroit unique où écrire POURQUOI, et elle rend l'invariante testable par un témoin
+unique sur la source — sept témoins de créateur auraient été sept fois le même test.
+
+## Leçon 104 — Deux modèles, un même piège, deux moitiés opposées : ne jamais transporter la réparation de l'un chez l'autre (2026-08-10, routine messaging, cycle 58)
+
+`Post` et `Message` portent tous deux un `deletedAt DateTime?` et affrontent le même piège MongoDB
+(une colonne optionnelle jamais écrite est ABSENTE, pas `null`). Ils l'ont résolu par les deux
+moitiés OPPOSÉES : `Post` côté lecture (`NOT_DELETED` = `{ isSet: false }`, les posts vivants n'ont
+pas la colonne), `Message` côté écriture (les lectures filtrent `deletedAt: null`, les créateurs
+écrivent la colonne).
+
+Les deux marchent. Et **la réparation de l'un est un incident de production chez l'autre** :
+basculer les lectures de `Message` sur `NOT_DELETED` — le geste « d'alignement » qui saute aux yeux
+quand on vient de lire `softDelete.ts` — n'apparierait AUCUN message existant, tous portant un
+`deletedAt` présent-et-null. C'est très exactement le post-mortem de `postIncludes.ts`, à l'envers.
+
+Ce que ça ajoute aux leçons 89 et 90 : celles-ci disent qu'une symétrie de SCHÉMA ne prouve rien sur
+le comportement. Celle-ci dit qu'une symétrie de PIÈGE n'en prouve pas davantage. Deux modèles
+peuvent partager un piège à l'identique et avoir des données incompatibles avec la solution de
+l'autre. Le geste : avant de transporter un remède d'un modèle à l'autre, se demander non pas
+« le piège est-il le même ? » mais « à quoi ressemblent les LIGNES DÉJÀ ÉCRITES de ce modèle-ci ? ».
+La réponse tient dans un `create`, pas dans un schéma.
+
+## Leçon 103 — Un correctif juste sous les deux hypothèses n'attend pas la preuve de l'hypothèse (2026-08-10, routine messaging, cycle 58)
+
+La prémisse du cycle 57 — « sur MongoDB, `deletedAt: null` n'apparie pas une colonne absente » — est
+invérifiable dans cet environnement : aucun démon Docker, donc aucune vraie base. La leçon 90 dit
+qu'un double Prisma ne peut PAS trancher un prédicat, et elle a raison ; j'ai donc passé un moment à
+chercher comment prouver la prémisse avant de corriger.
+
+C'était la mauvaise question. La bonne : **le correctif dépend-il de l'hypothèse ?** Écrire
+`deletedAt: null` apparie `deletedAt: null` sous les deux sémantiques — si l'absence appariait aussi,
+le correctif est un no-op inoffensif ; sinon il répare un défaut réel. L'incertitude ne porte que sur
+l'AMPLEUR du défaut d'origine, jamais sur la validité de sa réparation.
+
+**Règle** : face à une prémisse non vérifiable ici, séparer deux questions que la prudence a
+tendance à fusionner — « qu'est-ce que je sais ? » et « qu'est-ce que mon correctif suppose ? ».
+Quand le correctif est correct sous toutes les branches de l'incertitude, la livrer et ÉCRIRE
+l'incertitude dans le relevé est supérieur à attendre une preuve qui ne viendra pas de cet
+environnement. Quand il n'est correct que sous une branche, la leçon 90 reprend la main : ne rien
+livrer sans base réelle.
+
+Le corollaire de rigueur : l'incertitude doit être écrite là où le prochain cycle la lira (relevé +
+ADR), et jamais présentée comme un fait établi. Ce cycle s'appuie sur trois indices convergents —
+le post-mortem de `postIncludes.ts`, sa reconfirmation par le cycle 54, et le fait que six créateurs
+sur sept écrivent une colonne qui n'aurait aucune raison d'être écrite si le filtre appariait
+l'absence — et cela reste trois indices, pas une mesure.
+
+## Leçon 102b — Un conteneur neuf a besoin de `bun install` AVANT le bootstrap de la leçon 102 (2026-08-10, routine messaging, cycle 58)
+
+La leçon 102 prescrit `prisma generate` + `bun run build` avant toute mesure. Dans un conteneur
+fraîchement cloné, les deux échouent : il n'y a aucun `node_modules`. Et `bun install` échoue lui
+aussi, sur le postinstall de `grpc-tools` (binaire précompilé récupéré hors du proxy → 403). La
+séquence qui marche est `bun install --ignore-scripts`, puis les deux commandes de la leçon 102.
+
+`grpc-tools` est une dépendance du gateway et son postinstall ne sert qu'à produire les stubs
+protobuf, dont aucune suite n'a besoin. Sauter les scripts n'a fait rougir aucune des 643 suites.
+
+---
+
+## Leçon 102 — L'angle mort des « 20 suites rouges » n'est pas une fatalité de l'environnement : c'est une étape de bootstrap sautée (2026-08-10, routine messaging, cycle 56)
+
+La leçon 100, écrite le même jour, conclut que ~20 suites gateway ne compilent pas dans cet
+environnement (`PostReactionService.ts:354`, `groupBy` non typé), que ce trou de 3 % ne peut
+contredire aucun cycle, et que « réparer cette compilation localement vaudrait plus qu'un cycle de
+correctif ».
+
+Elle vaut, et le correctif tient en une commande — **déjà écrite dans le `CLAUDE.md` racine**, au
+paragraphe « Local Test Parity (bun) » : `cd packages/shared && npx prisma generate --generator
+client` (« else ~17 gateway suites fail (commentId/PostMediaSelect) »), suivi de
+`cd packages/shared && bun run build` (sans quoi le web ne résout pas `@meeshy/shared/*`, dont le
+`moduleNameMapper` pointe sur `dist/`).
+
+Mesure de ce cycle, après ces deux commandes : **640 suites / 16 261 tests, 0 échec, 0 suite
+rouge** — y compris `posts-share-tracking.test.ts`, précisément la suite dont la leçon 100 dit
+qu'elle était invisible en local et n'a rougi qu'en CI. Le client Prisma généré n'est pas un artefact
+du dépôt ; un conteneur frais n'en a aucun, et les suites qui en dépendent ne compilent pas tant
+qu'on ne l'a pas généré.
+
+**Règle** : avant toute mesure de suite gateway ou web, exécuter les deux commandes de bootstrap et
+VÉRIFIER le nombre de suites rouges. S'il n'est pas nul, c'est un défaut d'environnement à réparer
+avant de mesurer quoi que ce soit — pas une baseline à documenter. Une baseline rouge qu'on accepte
+devient un angle mort qu'on transmet au cycle suivant.
+
+## Leçon 101 — Une piste nomme l'endroit où le défaut SE VOIT, pas celui où il est (2026-08-10, routine messaging, cycle 56)
+
+La piste héritée du cycle 52 disait : « `broadcastCommentDeleted` n'annonce que la cible et pas le
+sous-arbre ». Elle est confirmée mot pour mot — le broadcast ne portait bien que la cible. Et elle
+désigne quand même le mauvais fichier.
+
+Le broadcast n'annonçait pas le sous-arbre parce qu'il **ne l'avait pas**. `deleteComment` calculait
+la liste des ids retirés, s'en servait pour le soft-delete, le décompte et le retrait des
+notifications, puis rendait `{ success: true }` : la liste mourait dans la méthode. La route
+n'avait à sa disposition que le `commentId` de son propre chemin d'URL.
+
+Corriger à l'endroit nommé aurait voulu dire reconstruire le sous-arbre dans la route — une SECONDE
+dérivation d'une règle qui a déjà un propriétaire unique un étage plus bas, et qui plus est
+impossible après coup (le soft-delete est committé, `NOT_DELETED` masque désormais les lignes qu'il
+faudrait relire). C'est exactement la classe de défaut que le cycle 54 a payée sur les types
+éphémères : deux copies d'une même liste, qui dérivent.
+
+Ce que ça ajoute à la leçon 96 : celle-ci disait que le **remède** suggéré par une piste est une
+seconde hypothèse. Celle-là dit que le **lieu** l'est aussi. Une piste est écrite depuis le
+symptôme, donc depuis le dernier maillon — celui qu'on observe. Le geste qui la met à l'épreuve :
+remonter d'un étage et demander « d'où cette fonction tient-elle ce qu'elle annonce ? » avant
+d'écrire la moindre ligne à l'endroit nommé. Si la réponse est « elle ne le tient de nulle part »,
+le correctif n'est pas là.
+
+**Addendum, attrapé sur moi-même dans ce cycle.** Le premier jet de l'ADR et du relevé affirmait
+« iOS et Android retirent toujours la seule cible, leurs réponses dépliées survivent ». Faux sur les
+deux plateformes : iOS fait `repliesMap[id] = nil`, Android appelle `removedThread(commentId)`. Le
+web était le seul client sans compensation. J'avais déduit le comportement des deux autres du fait
+que le serveur ne leur envoyait pas l'information — un raisonnement qui confond « n'a pas la
+donnée » et « ne fait rien ». **Une conséquence affirmée sur un composant qu'on n'a pas lu est une
+hypothèse, même quand elle découle « logiquement » de ce qu'on vient de prouver ailleurs.** Trois
+`grep` l'ont réfutée en deux minutes, et la réfutation a rendu le cycle plus intéressant qu'il ne
+paraissait : le vrai défaut n'était pas « le serveur se tait », c'était « le serveur se tait, et
+chaque client paie sa propre traversée pour compenser ». Le coût de ne pas vérifier n'aurait pas été
+un bug — le code était bon — mais un relevé qui aurait envoyé le cycle suivant corriger sur iOS et
+Android un défaut qui n'y était pas.
+
+Corollaire de vérification : quand le correctif consiste à faire remonter une valeur, la sonde de
+fidélité qui compte est celle qui la fait remonter FAUSSE (ici : rendre `[commentId]` au lieu de la
+vraie liste), pas celle qui la supprime. Une valeur absente casse la compilation ou tous les
+témoins ; une valeur plausible mais fausse ne fait tomber que les témoins qui mesurent vraiment le
+comportement — et c'est le seul décompte qui prouve quelque chose.
+
+## Leçon 97 — Une réserve écrite en bas d'une ADR est un défaut daté, pas une note de prudence (2026-08-10, routine messaging, cycle 55)
+
+Les deux dernières ADR du gateway se terminaient par la même phrase, à un cycle d'intervalle : « les
+`TrackingLink` visant une story détruite ne sont pas désactivés par cette passe ». Elle a été écrite
+deux fois, relue deux fois, et n'a rien déclenché — parce que la rubrique qui l'accueille s'appelle
+« ce que la décision n'assure PAS », et qu'une limite ASSUMÉE se lit comme une limite RÉSOLUE. Le
+format transforme un défaut connu en périmètre.
+
+Ce qui l'a rendue actionnable n'est pas une relecture plus attentive : c'est que le cycle précédent
+a changé le monde autour d'elle. Tant que le balayage n'appariait aucun post, aucune story n'était
+jamais détruite et la réserve ne décrivait qu'un cas de figure. Le balayage rendu effectif, la même
+phrase décrit le sort de TOUTE story.
+
+**Règle** : quand un cycle rend effectif un mécanisme qui ne l'était pas, relire les réserves que
+les cycles précédents ont écrites SUR ce mécanisme — elles ont été rédigées sous l'hypothèse
+implicite qu'il ne s'exécutait pas, et leur gravité vient de changer sans qu'un mot n'ait bougé.
+Corollaire pratique : une réserve qui réapparaît à l'identique dans deux ADR successives n'est plus
+une réserve, c'est un point de backlog qui a échoué à se faire nommer comme tel.
+
+## Leçon 98 — Deux chemins qui appliquent la même règle ne l'appliquent pas au même INSTANT, et c'est correct (2026-08-10, routine messaging, cycle 55)
+
+Le retrait interactif d'un post coupe ses liens de partage au SOFT-delete ; le balayage du contenu
+éphémère les coupe au HARD-delete. La première lecture y voit une incohérence — deux chemins, une
+règle, deux moments — et pousse à aligner le second sur le premier.
+
+C'est cohérent, et la formulation qui le montre est la seule qui vaille : **chaque chemin agit au
+moment où SON contenu devient définitivement inatteignable par SON propre chemin.** Un post non
+éphémère n'est jamais hard-deleté — il reste soft-deleté pour toujours, donc le retrait interactif
+n'a pas d'instant ultérieur où agir. Un post éphémère, lui, est réellement détruit, et c'est cette
+destruction qui condamne le lien.
+
+La leçon de méthode est sur la formulation, pas sur le cas : quand deux implémentations d'une même
+règle divergent sur le QUAND, chercher l'énoncé sous lequel les deux deviennent le même geste avant
+de conclure qu'une des deux a tort. S'il n'existe pas, l'une a effectivement tort ; s'il existe, il
+est la bonne documentation des deux — et il dit du même coup ce qui se passerait si l'un des deux
+chemins changeait de nature.
+
+Contrepartie honnête, notée dans l'ADR : l'instant théoriquement juste dans les deux cas serait le
+soft-delete, et ne pas l'avoir retenu pour le balayage tient à un coût mesurable (la passe de
+soft-delete est un `updateMany` sans ids matérialisés, dont la conversion imposerait une borne et
+la réécriture des témoins du cycle précédent), pas à une justification de principe. **Une
+justification de coût s'écrit comme telle, avec la fenêtre résiduelle chiffrée** — sinon le cycle
+suivant la relira comme une justification de principe et ne rouvrira jamais le sujet. C'est
+exactement le mécanisme de la leçon 97, une rubrique plus haut dans le même document.
+
+## Leçon 100 — Une suite rouge en baseline pour une raison sans rapport ne peut avertir de RIEN (2026-08-10, routine messaging, cycle 55)
+
+L'extraction d'une règle a changé la forme d'un filtre (`{ targetId: id }` →
+`{ targetId: { in: [id] } }`). Deux témoins la pinnaient, tous deux trouvés et mis à jour, suite
+locale verte, PR ouverte. La CI en a trouvé un **troisième** — `posts-share-tracking.test.ts`.
+
+Il n'était pas caché : un `grep` l'aurait rendu. Ce qui a manqué, c'est que la baseline locale, si
+soigneusement mesurée soit-elle, comptait cette suite parmi ses **20 rouges pré-existantes** — elle
+ne COMPILE pas dans cet environnement (`PostReactionService.ts:354`, `groupBy` non typé par le
+client Prisma généré ici). Une suite qui ne démarre pas ne peut pas faire tomber une assertion. La
+comparaison « mêmes 20 suites avant/après » était exacte et prouvait bien l'absence de régression
+**parmi les suites qui tournent** — elle ne disait rien des 20 autres, et j'ai lu son silence comme
+une couverture.
+
+**Règle** : dès qu'un changement modifie la FORME d'un appel (arguments d'une requête, signature,
+nom d'événement), la liste des sites à corriger se fait par `grep` sur la forme, jamais par la liste
+des tests qui rougissent. Les tests qui rougissent sont un sous-ensemble de ce qu'il faut corriger,
+et le complément est exactement invisible.
+
+**Corollaire, plus important** : la baseline rouge de cet environnement n'est pas un décor, c'est un
+angle mort **mesurable**. 20 suites sur 642 — soit environ 3 % du dépôt — ne peuvent contredire
+aucun cycle. Tant qu'elles ne compilent pas, tout cycle qui touche `PostService`, `PostReactionService`
+ou leurs voisins doit lister ses sites par `grep` et considérer la CI comme le premier vrai contrôle.
+Réparer cette compilation localement vaudrait plus qu'un cycle de correctif.
+
+## Leçon 99 — Une baseline lancée en tâche de fond pendant qu'on code n'est pas une baseline (2026-08-10, routine messaging, cycle 55)
+
+La leçon 90.6 impose de comparer à une baseline MESURÉE sur arbre propre. Elle a été appliquée — et
+ratée, par une erreur d'ordonnancement : la suite complète a été lancée en tâche de fond « pendant
+ce temps », puis les fichiers du correctif ont été écrits dans les minutes qui ont suivi. Jest
+n'énumère pas ses suites une fois pour toutes au démarrage : les fichiers créés en cours de route
+sont ramassés, et ceux qu'on édite sont lus au moment où leur suite démarre. Le résultat annonçait
+21 suites rouges dont une, `postRemovalEffects`, que le correctif venait de toucher — une baseline
+qui décrit un arbre qui n'a jamais existé.
+
+Le tell est bon marché et vaut d'être cherché : **si la liste des suites rouges d'une baseline
+contient un fichier que le cycle touche, la baseline est contaminée.** Une baseline saine ne connaît
+rien du travail en cours.
+
+La parade est un ordre, pas une précaution : **commiter d'abord, mesurer ensuite.** Le travail
+commité, `git checkout HEAD~1` en tête détachée rend un arbre réellement propre sans rien risquer —
+tout est récupérable par un `git checkout` de retour sur la branche. C'est aussi ce qui évite le
+`git stash -u` que la leçon 93 apprend à redouter. Le seul coût est une seconde exécution complète,
+qui est précisément ce que la mesure vaut.
+
+**Addendum, la cause racine étant pire que le symptôme.** La contamination n'était pas un défaut de
+patience : les attentes étaient lancées en tâche de fond puis la question suivante posée sans
+attendre leur notification, si bien que **zéro seconde réelle s'écoulait entre deux sondages**. Ça a
+produit une seconde erreur, plus coûteuse : une étape de CI vue « en cours » à trois sondages
+d'intervalle a été déclarée BLOQUÉE depuis 50 minutes alors qu'elle tournait depuis deux, et un
+correctif de CI a été écrit — puis retiré — sur cette observation fabriquée. Elle avait duré
+93 secondes.
+
+Deux règles qui en sortent, et la seconde vaut au-delà de l'outillage :
+1. **Une attente en tâche de fond n'est une attente que si l'on rend la main jusqu'à sa
+   notification.** Sonder juste après l'avoir lancée mesure l'instant du lancement.
+2. **Une durée n'est jamais « le nombre de fois que j'ai regardé ».** Avant de qualifier quoi que ce
+   soit de bloqué, lire les HORODATAGES de la chose observée et les soustraire. Ici les deux
+   timestamps étaient dans la réponse même qui servait à conclure au blocage.
+
+
+## Leçon 96 — Une piste héritée peut être vraie sur le défaut et fausse sur son remède (2026-08-10, routine messaging, cycle 52)
+
+Le cycle 51 léguait une piste bien formée : « le même mécanisme a un sixième candidat, la
+suppression d'un commentaire ; `context.commentId` est écrit par sept types ». La leçon 18 dit d'en
+faire une hypothèse à réfuter. Réfutation tentée sur le **défaut** : confirmé. Mais la piste
+énonçait aussi, en passant, comment le corriger — et c'est là qu'elle était fausse.
+
+Deux des huit types producteurs (`post_comment` et `comment_like`) n'écrivent PAS
+`context.commentId` : leur lien ne vit que dans `metadata.commentId`. Le premier est la notification
+la plus fréquente de toute la famille. Un retrait transposé littéralement du jumeau côté post — qui
+ne connaît que `context.<clé>` — aurait laissé la majorité du volume en base, **en passant tous ses
+tests**, puisque les tests auraient été écrits sur la même énumération erronée.
+
+Ce que ça change à la méthode : la leçon 18 dit de vérifier qu'une piste désigne un vrai défaut.
+Elle ne suffit pas. **Le remède qu'une piste suggère est une seconde hypothèse, indépendante de la
+première, et elle se réfute par le même geste : relire les écrivains un par un.** Une piste qui
+énumère des sites (« sept types écrivent cette clé ») est une liste transcrite de mémoire par la
+session précédente — le format même dont la leçon 95 dit qu'il ne montre pas ce qui lui manque.
+
+La trace de l'asymétrie était dans le code depuis longtemps, à un endroit qu'on ne lit pas comme
+une alerte : le payload APNs fait `params.context.commentId || params.metadata.commentId`. **Un
+repli entre deux chemins est l'aveu écrit qu'aucun des deux n'est complet.** Chercher les `||`
+entre deux accès de forme parallèle est un moyen bon marché de trouver les colonnes dont le nom
+promet plus que les écrivains ne tiennent.
+
 ## Leçon 95 — Une liste d'effets ne montre pas ce qui lui manque ; seul son JUMEAU le montre (2026-08-10, routine messaging, cycle 51)
 
 `applyPostRemovalEffects` a été créée exactement pour empêcher ce défaut : son en-tête raconte que
@@ -3565,3 +3845,207 @@ l'autre** — c'est exactement la condition qui avait produit les quatre copies 
 Ne PAS réimposer un choix de structure différent (ici, chaîner plutôt que boucler) quand l'autre
 session l'a explicitement argumenté et que le gain est marginal. En revanche, **ce que l'autre
 session n'a pas fait reste à faire** : ici, la fidélité de ses propres tests.
+
+## Leçon 89 — un champ « contexte d'affichage » déjà consommé par les clients n'est PAS une donnée oubliée en route (2026-08-10, routine messaging, cycle 53)
+
+Audit du cœur temps-réel TS. Le cycle précédent venait de brancher les quatre producteurs ancrés
+sur un message pour qu'ils héritent de `Message.expiresAt`. La story étant le contenu éphémère
+canonique, la symétrie sautait aux yeux : **six** producteurs reçoivent déjà `postExpiresAt` de
+leurs appelants et le déposent dans `context.postExpiresAt` — une ligne au-dessus de la colonne
+`Notification.expiresAt` que les sept lectures d'inbox honorent. Toute la forme du défaut jumeau
+était là : « l'échéance arrive au producteur et s'arrête juste avant la colonne ».
+
+**C'était faux.** `context.postExpiresAt` est une fonctionnalité livrée sur les DEUX clients : le
+web en tire « · expirée » (`notification-helpers.ts`), iOS en tire `expiryLabel` et
+`isLinkedContentExpired`. Le produit montre délibérément la notification d'une story périmée,
+marquée. Estampiller la colonne l'aurait masquée côté serveur et rendu mort le code des deux
+clients. Le vrai défaut était sept jours plus loin et d'un cran plus sévère : le **hard-delete** du
+balayage, seul chemin de destruction de post du gateway — que le backlog du cycle 52 nommait
+correctement, et que la relecture « plus élégante » avait déplacé.
+
+**Leçons :**
+
+1. **Avant de déplacer une donnée d'un champ vers un autre, chercher qui LIT le champ de départ —
+   chez les clients, pas seulement dans le service.** Un `context.<clé>` a un consommateur par
+   définition : c'est ce que le mot « contexte » veut dire dans ce modèle. Le grep qui tranche
+   traverse `apps/web` et `packages/MeeshySDK`, pas `services/`. Une symétrie qui se vérifie
+   entièrement côté serveur peut être fausse pour une raison qui ne vit que côté client.
+2. **Deux entités éphémères ne se ressemblent pas parce qu'elles ont toutes deux un `expiresAt`.**
+   Ce qui décide, c'est ce que la ligne MONTRE et ce que sa cible RÉPOND. La notification de message
+   ne porte qu'un libellé générique et sa cible est détruite à l'échéance → masquer. Celle de story
+   porte un vrai extrait, un acteur, une vignette, et `getPostById` ne filtre pas l'expiration →
+   montrer, marqué. La forme du schéma suggère la symétrie ; seule la donnée la confirme ou la
+   réfute.
+3. **Une piste héritée peut être fausse sur un MOT et vraie sur le reste.** « Les stories expirées
+   ne retirent pas leurs notifications » : *expirées* est faux, *ne retirent pas* est vrai. Réfuter
+   une piste n'est pas la jeter — c'est trouver lequel de ses mots ne tient pas. Et quand la
+   relecture « améliore » l'énoncé d'origine, se demander laquelle des deux versions a lu le code.
+4. **La règle qu'on croit devoir inventer est souvent écrite trois lignes plus bas, pour son
+   voisin.** La passe portait déjà, au-dessus de `releasePosts`, l'exigence exacte du cas :
+   « placé AVANT les suppressions, et il REJETTE volontairement — ni relation ni cascade, donc
+   supprimer après un échec laisserait des lignes que plus aucun chemin n'atteindrait ».
+   `context.postId` a la même forme que `SoundUsage.postId`. Avant d'arbitrer un ordre ou un
+   contrat d'erreur, lire les effets VOISINS du même bloc : ils ont déjà tranché la même question.
+5. **Un plafond change de sens quand l'entrée change de nature.** Le plafond de drainage était un
+   garde-fou anti-boucle tant que l'entrée était UN post. L'entrée devenue « une heure
+   d'expirations de toute la plateforme », le même plafond devient atteignable — et l'avertissement
+   qui suffisait devient un silence qui orpheline. Élargir une signature oblige à relire ses bornes,
+   pas seulement son corps.
+
+## Leçon 90 — avant d'étendre un mécanisme, vérifier qu'il s'exécute (2026-08-10, routine messaging, cycle 54)
+
+Le backlog demandait d'étendre le balayage du contenu éphémère aux posts `STATUS`, que rien ne
+nettoie. La tête était juste. Mais en lisant ce que ce balayage faisait des `STORY` — le type qu'il
+connaît — il s'est avéré qu'il n'en faisait rien : son filtre de soft-delete était `deletedAt: null`
+sur une colonne dont l'état vivant est ABSENT, donc il n'appariait aucun post, donc la seconde passe
+(qui exige un `deletedAt` non nul) ne voyait que les stories supprimées à la main. Trois cycles de
+travail — purge des médias G7, libération des usages de sons, retrait des notifications du cycle 53 —
+avaient été branchés sur un chemin mort, et chacun avait été validé par des tests qui doublent
+Prisma et ne peuvent donc pas voir qu'un `where` n'apparie rien.
+
+**Leçons :**
+
+1. **Étendre un mécanisme suppose qu'il marche. Le vérifier coûte une lecture ; ne pas le vérifier
+   coûte le cycle entier.** Avant d'ajouter un cas à une passe/un job/un handler, lire son chemin
+   nominal en entier et se demander « qu'est-ce qui prouve que ceci s'exécute aujourd'hui ? ». Un
+   job périodique n'a pas d'utilisateur pour signaler qu'il ne fait rien : son silence est
+   indistinguable de son succès. Ici le tell était dans le code même — `softDeleted` retourné,
+   journalisé, et jamais autre chose que 0.
+2. **Un double de base de données ne teste jamais qu'un prédicat apparie.** Les suites qui couvrent
+   cette passe étaient nombreuses, précises et vertes : elles vérifient l'ORDRE des effets, les
+   `$in`, les cascades. Aucune ne pouvait attraper un `where` qui ne matche rien, parce que le
+   double rend ce qu'on lui dit de rendre. Le prédicat lui-même n'est vérifiable que par lecture,
+   contre la sémantique RÉELLE du connecteur — ou par un test d'intégration sur une vraie base,
+   qu'aucune de ces suites n'est.
+3. **Quand un dépôt a payé un piège une fois, chercher ses derniers exemplaires.** `deletedAt: null`
+   sur MongoDB avait déjà vidé le feed en production, ce qui a produit `NOT_DELETED` dans son propre
+   module ET un commentaire de post-mortem. Le cycle précédent venait de corriger la même erreur sur
+   `firstMessageSentAt` en revue pré-merge. Un `grep "deletedAt: null"` sur le modèle concerné aurait
+   trouvé le survivant en une commande — et il en restait exactement un. **Un piège documenté est une
+   requête à lancer, pas seulement une leçon à retenir.**
+4. **Réparer une chose morte peut en éteindre une vivante.** `getStories` renvoie à un auteur ses
+   stories périmées pendant sept jours, sous garde `deletedAt: NOT_DELETED` — fonctionnalité qui ne
+   marchait QUE parce que le soft-delete était inert. La réparer telle quelle aurait vidé « Mes
+   stories » en une heure. Avant de rendre effectif un code qui ne s'exécutait pas, énumérer qui
+   dépendait de son inertie : chercher les lectures gardées par le champ que le code mort allait
+   se mettre à écrire.
+5. **Une sonde de fidélité qui ne fait tomber que les témoins « de forme » dénonce le témoin « de
+   comportement ».** La sonde D2b faisait rougir les deux assertions sur la forme du `where` et
+   laissait VERT le témoin de bout en bout — parce que son double rendait la même ligne quelle que
+   soit la question. Quand une sonde épargne le témoin le plus intégratif, ce n'est pas que celui-ci
+   est redondant : c'est qu'il ne discrimine pas. Faire honorer le filtre par le double, puis
+   re-sonder.
+6. **Comparer à une BASELINE mesurée, pas à un total mémorisé.** L'environnement portait 20 suites
+   qui ne compilent pas pour une raison sans rapport. Annoncer « 620 vertes » contre les « 639 »
+   d'un cycle précédent aurait été ininterprétable. Relancer la suite complète sur l'arbre propre
+   (`git stash`) et comparer les LISTES de suites en échec transforme une impression en preuve —
+   et ne coûte qu'un second passage.
+
+## Leçon 91 — un compteur dénormalisé et son registre par acteur se contredisent en silence (2026-08-10, routine messaging, cycle 57)
+
+`Message.viewOnceCount` était incrémenté par un `update` inconditionnel à chaque appel de la route
+`consume`. Deux instructions plus bas, le même gestionnaire écrivait
+`MessageStatusEntry.viewedOnceAt` — la vérité par participant — et ne la relisait jamais. Le
+compteur mesurait des OUVERTURES là où tous ses lecteurs (`isFullyConsumed`, l'annonce à la room,
+la disparition du média) le lisent comme un nombre de SPECTATEURS.
+
+**Leçons :**
+
+1. **Quand un agrégat et un registre par acteur coexistent, vérifier lequel des deux est écrit
+   sans consulter l'autre.** C'est la forme jumelle de la leçon 89 : là, un champ avait un
+   consommateur qu'on n'avait pas cherché ; ici, un champ a un producteur et pas de consommateur.
+   Le tell est le même — deux écritures dans le MÊME gestionnaire, dont une seule décide. Le grep
+   qui tranche est `grep -n "<champ>"` sur le service : si toutes les occurrences sont des
+   écritures, l'agrégat voisin ne peut pas être exact.
+2. **Un compteur sans clé d'idempotence n'est pas « approximatif », il est faux dès le premier
+   rejeu.** File hors-ligne, double tap, retry réseau : chacun de ces chemins existe déjà dans le
+   produit. Avant d'accepter une mutation nue, se demander qui la rejoue — la réponse est rarement
+   « personne ».
+3. **Une garde de concurrence vit dans un `where`, jamais dans un `if` qui suit une lecture.**
+   « Lire si c'est nul, puis écrire » se trompe dès que deux appels se croisent, et déplace le
+   défaut d'un cran au lieu de le corriger. L'`updateMany` filtré tranche côté base ; quand il
+   n'apparie rien, c'est l'ÉCRITURE suivante (et son conflit d'unicité) qui distingue « la ligne
+   manque » de « la ligne est déjà prise » — pas une seconde lecture, qui rouvrirait la fenêtre
+   qu'on vient de fermer.
+4. **Un `catch` qui avale tout transforme une panne en fait accompli.** Ne traiter comme « déjà
+   fait » que le code d'erreur qui le PROUVE (`P2002`), et laisser remonter le reste : sinon une
+   base indisponible se lit comme une action antérieure, et l'utilisateur perd son geste sans que
+   rien ne le signale. Un témoin dédié à ce cas coûte quatre lignes.
+5. **Le piège `{ champ: null }` sur MongoDB se relance à CHAQUE nouveau prédicat, pas une fois par
+   modèle.** `viewedOnceAt` a deux états « pas encore » — absent (l'entrée créée par la livraison
+   n'écrit que `deliveredAt`/`readAt`) et présent-et-nul (une entrée qu'un autre chemin a posée).
+   Le dépôt a déjà payé ce piège trois fois (`deletedAt` sur `Post`, `leftAt` sur les participants
+   d'appel, le balayage éphémère du cycle 54). La question à poser devant tout filtre sur une
+   colonne `DateTime?` : *quel chemin écrit cette colonne, et est-ce que TOUS les créateurs de la
+   ligne l'écrivent ?* Si non, il faut la forme `OR`.
+6. **Un test nommé d'après un numéro de ligne épingle une implémentation, et peut épingler un
+   défaut.** Les deux témoins de couverture de branche tombés ici — « line 2265 false branch » —
+   figeaient `viewParticipant = null` comme un chemin de SUCCÈS, c'est-à-dire le corollaire anonyme
+   du défaut lui-même. Un tel témoin ne se supprime pas et ne se plie pas : on lui rend l'intention
+   qu'il visait, formulée en comportement. Quand un correctif fait rougir un test de couverture,
+   lire ce qu'il croyait garantir avant de le juger obsolète.
+7. **Une piste héritée peut se réfuter par lecture seule, et c'est un résultat.** « `post_comment`
+   et `comment_like` n'exposent pas `context.commentId` » était exact et sans conséquence : le
+   retrait couvre déjà les deux chemins par un `$or`, son en-tête dit pourquoi, et aucun client ne
+   lit ce champ. Une demi-heure de lecture a évité un changement de contrat qui n'aurait corrigé
+   aucun défaut observable. Réfuter la tête du backlog n'est pas perdre le cycle — c'est ce qui
+   autorise à en chercher un vrai.
+
+## Leçon 92 — un backlog nomme un IDIOME à propager ; la question utile est « où n'apparie-t-il RIEN ? » (2026-08-10, routine messaging, cycle 59)
+
+Le cycle 58 léguait un candidat précis : appliquer le prédicat défensif
+`OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }]` aux 119 lectures de `Message.deletedAt`.
+Suivi tel quel, c'était 119 fichiers touchés pour **zéro défaut observable** : le cycle 58 venait de
+rendre complète la discipline d'écriture qui rend ces 119 filtres exacts.
+
+Reformulée — *sur quelle colonne le filtre naïf n'apparie-t-il RIEN aujourd'hui ?*, ce qui se réduit à
+*une colonne optionnelle dont AUCUN créateur n'écrit la valeur* — la même question rend quatre sites,
+dont une **porte d'accès fermée à toute une population d'utilisateurs** : `canAccessConversation`
+filtrait `bannedAt: null` sur un modèle dont les neuf créateurs omettent la colonne. Les seuls
+participants que cette garde laissait entrer étaient ceux qui avaient été bannis **puis débannis** —
+les seuls à porter un `null` explicite. Et comme seul un contexte d'auth anonyme porte un
+`participantId`, la branche concernée était celle de tous les arrivants par lien de partage.
+
+**Leçons :**
+
+1. **Un idiome à propager n'est pas un défaut à corriger.** Une entrée de backlog qui dit « appliquer
+   X partout » décrit un GESTE, pas un symptôme. Avant de l'exécuter, la retourner en question sur
+   l'état du monde : *où est-ce que l'absence de X se voit ?* Les sites nommés par le backlog étaient
+   précisément ceux où ça ne se voyait pas — leur défaut venait d'être fermé par l'autre bout.
+2. **La forme greppable de ce piège n'est pas le filtre, c'est le couple filtre/créateurs.** Un
+   `{ champ: null }` dans un `where` n'est suspect que si l'on a vérifié que les créateurs de la ligne
+   omettent le champ. La vérification est mécanique — `grep "<Model>.create"` puis lire chaque `data`
+   — et elle tranche : six créateurs sur sept qui écrivent la colonne disent que le filtre marche
+   presque partout ; **zéro sur neuf** disent qu'il ne marche nulle part. Le second cas coûte une
+   ligne à réparer et casse une fonctionnalité entière ; c'est celui qu'il faut chercher d'abord.
+3. **Écriture ou lecture : le choix se décide sur les lignes DÉJÀ en base, pas par symétrie avec le
+   cycle précédent.** Le cycle 58 a réparé par l'écriture (nommer le marqueur, l'étaler chez les
+   créateurs) parce que ses lignes fautives étaient rares. Transposer ce geste ici n'aurait rien
+   réparé : les participants anonymes déjà enregistrés sont exactement ceux dont l'accès est cassé.
+   **Une discipline d'écriture répare l'avenir ; un prédicat défensif répare le passé.** Demander
+   « qui est déjà dehors ? » avant de choisir la moitié.
+4. **Une garde qui paraît redondante ne l'est peut-être que sur le chemin nominal.** `bannedAt: null`
+   semble recouvert par `isActive: true`, puisqu'un bannissement écrit `isActive: false` — d'où la
+   tentation de simplement retirer la garde cassée. Un troisième écrivain la rend porteuse :
+   `routes/me/delete-account.ts` rallume `isActive` à la restauration d'un compte sans regarder
+   `bannedAt`. Avant de retirer un filtre au motif qu'un autre le recouvre, chercher **tous** les
+   écrivains du champ qui recouvre, pas seulement celui qui porte le nom du geste.
+5. **Un test qui compare un `where` à sa copie attendue ÉPINGLE le défaut quand celui-ci est dans le
+   `where`.** Trois témoins de ce cycle affirmaient `toHaveBeenCalledWith({ where: { …, usedAt: null } })`
+   ou son équivalent : ils passaient exactement parce que la clause était fausse, et ils auraient
+   rougi à sa réparation. Le remède n'est pas de les supprimer mais de leur rendre leur intention en
+   comportement — ici, un double qui ÉVALUE la clause contre des documents nus, où une clé absente de
+   l'objet est une colonne absente du document (`__tests__/helpers/mongo-where.ts`, sur le patron de
+   `notification-where.ts`). C'est la seule forme de double qui peut voir « cette clause n'apparie
+   rien ».
+6. **Une sonde qui VIDE l'invariant teste la direction opposée du correctif.** Vider `unsetOrNull` en
+   `{}` fait tomber 8 témoins — dont le refus d'un participant banni resté actif. Ce n'est pas du
+   bruit : c'est la preuve que le harnais attrape aussi un prédicat trop PERMISSIF, pas seulement un
+   prédicat trop strict. Un correctif qui n'a de sonde que dans le sens « j'ai oublié une branche »
+   ne dit rien de ce qui se passe si quelqu'un neutralise la garde.
+7. **Réparer un mécanisme mort peut être un ACTE DESTRUCTEUR — et alors le bon cycle est celui qui
+   s'abstient.** Le cinquième site trouvé, `cleanupOrphanedAttachments`, porte le même défaut à la
+   ligne près. Le corriger arme un effacement irréversible de fichiers sur des données qu'aucune
+   commande de ce conteneur ne peut inspecter. Le corriger « pour la cohérence du lot » aurait été le
+   geste le plus coûteux du cycle. Documenter le défaut, dire pourquoi on ne le touche pas, et nommer
+   le préalable (un essai à blanc contre la base) est un livrable complet — pas un aveu.

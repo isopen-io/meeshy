@@ -800,3 +800,258 @@ Append-only log of gotchas and decisions that save time next run.
   distinguish "the new splash composable" from "any other screen using the same shared
   background." Confirm with content that's unique to the screen under test (the "Meeshy" wordmark
   text, or the footer signature text), not just background color sampling.
+
+## Slice `feed-post-composer-text` (2026-08-10)
+- **`adb shell input tap` needs coordinates in the screenshot's REAL pixel dimensions, not the
+  dimensions a viewing tool displays it at — mixing the two silently mis-taps.** A screenshot
+  captured at 1080×2400 (`adb exec-out screencap -p`) was shown back at a scaled-down 900×2000;
+  reading a tap target's position off the DISPLAYED image and sending it to `adb shell input tap`
+  verbatim (unscaled) lands roughly 17% short on both axes. One tap forgot to scale the y-coordinate
+  specifically (scaled x, forgot y) and silently hit "Cancel"/the scrim instead of "Publish" —
+  the sheet closed, looking superficially like success, but no network call fired and no post
+  appeared. Always multiply BOTH axes by the same real/displayed ratio before tapping, and verify
+  the fix by capturing a screenshot immediately after a tap that's supposed to change state (an
+  empty text field or a still-open sheet after a "successful" Cancel-that-was-meant-to-be-Publish
+  is the tell).
+- **A `uiautomator dump` accessibility-tree snapshot is not a reliable oracle for "did this render
+  correctly" under load — cross-check against raw pixels before concluding a rendering bug.** A
+  freshly-published post's card appeared to render with only 2 of its 4 stats-row icons
+  (Like/Bookmark, no Comments/Reposts) and no author/content text at all in the dump, which read
+  at first like a genuine `PostCard`/`FeedPostBuilder` bug specific to a network-fresh `ApiPost`
+  (vs. a cache-hydrated one). Before concluding that, the same region was pixel-cropped and
+  zoomed directly from the screenshot — the "card" was a near-invisible rounded-corner sliver with
+  no visible icon glyphs either, consistent with an incomplete/partial GPU compositor frame under
+  severe host contention, not a logic bug (see the load-average finding below). uiautomator's own
+  dump completeness is not guaranteed once the device itself is struggling to keep up.
+- **`uptime`/`ps aux` are cheap, decisive tools for telling "my code is broken" apart from "this
+  shared box is out of capacity" before chasing a rendering mystery.** A repeating "Meeshy isn't
+  responding" ANR on cold start, right after a successful, logcat-confirmed `POST /api/v1/posts`
+  201 response, initially looked like it might be caused by the newly-added `publishPost`/
+  `FeedRealtimeReducer.created` code path. Pulling the actual `/data/anr/anr_*` trace (`adb root`
+  + `adb shell cat`) showed the main thread blocked inside `DexFile.openDexFile`/classloading
+  during process **startup** — before any app code, let alone this diff's code, runs — and
+  `uptime` showed the load average climbing past 600 (confirmed via `ps aux` to be concurrent iOS
+  Simulator + `jest-worker` processes from OTHER sessions on this shared multi-agent dev box, not
+  this session's own work). Multiple older `/data/anr/anr_*` traces predating this session's start
+  time were also present, confirming the ANR pattern was already recurring before this change
+  existed. Two minutes of `adb shell cat /data/anr/<latest>` was far cheaper than continuing to
+  fight the emulator, and gave a confident, evidence-based "this is environmental" verdict instead
+  of an anxious guess.
+- **When a shared box is genuinely too contended for a final visual check, document the gap
+  honestly rather than silently claiming a full pass or stalling indefinitely — and go back for it
+  once the box recovers rather than treating the documented gap as a permanent excuse.** The one
+  specific remaining check (the newly-published post rendering at the head of the list, fully
+  painted) didn't get a clean, trustworthy capture while load average was climbing past 900. Rather
+  than merge on indirect evidence alone, a background poll loop (`until load < 20; do sleep 5; done`)
+  was left running while CI and documentation work continued in parallel; once it fired (load back
+  under 20), a fresh cold relaunch + navigation gave a clean, fully-painted capture of the exact same
+  post — author, avatar, relative time, and the Prisme-translated content with its language strip all
+  correct. This confirmed the earlier "collapsed card" (2 of 4 stats-row icons in a `uiautomator
+  dump`, a near-invisible sliver on pixel crop) was a genuine partial/incomplete compositor frame
+  under extreme contention, not a rendering bug in the new code — the same evidence-gathering
+  instinct (pixel-crop before concluding a logic bug; `uptime`/`ps aux` before chasing a phantom)
+  that flagged the gap in the first place is what resolved it, just deferred until the environment
+  cooperated instead of forced through a broken one.
+
+## Slice `story-media-tus-upload` (2026-08-10)
+- **A "reuse the pipeline already shipped for X" note in `PROGRESS.md` can be wrong on the
+  ARCHITECTURE, not just on "is it already done" — read the actual wire contract, not just the
+  call sites.** The routine prompt's own framing for the Feed-attachments fast-follow said to
+  "réutiliser le pipeline de compression déjà livré pour PROFILE" — reading `ImageCompressionPlanner`
+  showed it was dead code (zero call sites), and reading the gateway's upload routes showed
+  something far more consequential: Android's *only* upload path (`MediaRepository`/
+  `POST /attachments/upload`) creates a `MessageAttachment`, a collection `CreatePostRequest`/
+  `CreateStoryRequest.mediaIds` can never claim against (that id space is exclusively `PostMedia`,
+  minted only by the gateway's TUS handler). The lesson isn't "the note was stale" (the usual
+  RE-PROUVER finding) — it's that a plausible-sounding reuse suggestion can point at the wrong
+  ABSTRACTION LEVEL entirely, and only reading the actual server-side claim logic
+  (`prisma.postMedia.updateMany`/`claimableMediaWhere`), not just the client call site, surfaces
+  that. Worth the extra read before trusting a "just reuse X" note whenever a wire contract (not
+  just a client-side function) is involved.
+- **Tracing a "we'd reproduce the same bug on a new surface" risk backward found the bug was
+  ALREADY LIVE, not merely a future risk.** Feed's composer has no attachment UI yet, so building
+  one on the wrong pipeline would have been a *new* silent-data-loss bug. But Story's composer
+  ALREADY ships a picker that calls the same wrong pipeline and sends the resulting ids as
+  `CreateStoryRequest.mediaIds` — meaning every published story with a picked photo/video has
+  been silently publishing without its media since that slice shipped. Always check whether a
+  wrong pattern about to be copied is *already in production somewhere else* before assuming the
+  fix is purely preventative.
+- **TUS's session-creation result lives in a response HEADER (`Location`), not the JSON body** —
+  the codebase's existing `apiCall`/`rawApiCall` pair (`ApiCall.kt`) only handles a typed
+  `ApiResponse<T>` body envelope, so neither fits a call whose entire useful result is a header on
+  an otherwise-bodyless `201 Created`. Needed a genuinely new primitive (`headerCall`), not a
+  workaround bent to fit the existing two.
+- **A module boundary that hides `retrofit2` behind `implementation` (not `api`) in `:core:network`
+  is a real wall, not just a style preference** — `:sdk-core` cannot reference `retrofit2.Response`
+  even transitively through Kotlin's generic type inference (a lambda whose inferred return type is
+  `Response<Unit>` fails to compile in `:sdk-core` even with zero explicit `Response` import,
+  because the compiler still needs the class descriptor resolvable). The fix that keeps the
+  boundary intact: an extension function (`TusApi.createSession`) living IN `:core:network`
+  alongside `TusApi`/`headerCall`, so `:sdk-core` only ever touches `NetworkResult`/`ApiError`.
+  MockK still exercises the real `createUpload` interface method through it in tests (extension
+  functions aren't part of the mocked interface, so calling them runs the real body, which then
+  calls through to the mocked member) — no `mockkStatic` needed. The one remaining wrinkle: a test
+  that wants to construct raw `Response`/`Headers` FIXTURES (not mock a method) still needs
+  `retrofit2` on that module's *test* classpath even though production code never touches it —
+  added as `testImplementation(libs.retrofit)` in `:sdk-core/build.gradle.kts`, a narrow,
+  test-only carve-out of an otherwise-real module boundary, not a leak of it.
+- **The durable offline-retry path is a SEPARATE code path from the eager one, and both need the
+  same fix or the "fix" is half-true.** `StoryComposerViewModel.onMediaPicked`'s happy path and
+  its offline fallback (`queueDurably` → `MediaUploadQueue.enqueue` → `OutboxFlushWorker`'s
+  `UPLOAD_MEDIA` sender) are two independent call sites to the network layer, sharing nothing but
+  the outbox row schema. Fixing only the eager path would have left a `TusUploadContext`-shaped
+  hole in the SAME bug for exactly the offline case — the least observable, hardest-to-notice one
+  (a story published from a spotty connection, retried minutes later, coming out media-less would
+  read as "flaky network," not "known wire-format bug"). Threading the context through
+  `MediaUploadPayload` on the outbox row (a `String?`, not the enum itself, so a row enqueued by a
+  newer build with a context an older build doesn't recognise still decodes safely to "legacy
+  path" rather than crashing) closed both call sites in the same run rather than leaving one half
+  fixed and undocumented.
+- **Mutating the exact line the fix touches, not a nearby one, is what makes a mutation-proof
+  actually mean something.** For the `queueDurably` fix specifically, reverting the explicit
+  `context = TusUploadContext.STORY` argument (not some other unrelated line) and re-running the
+  FULL 131-test suite is what proved the new precise test — not just the ~24 already-existing
+  `enqueue(any(), any())` wildcard-matcher tests, which are correctly blind to WHICH context gets
+  passed — was the only one sensitive to this specific regression.
+
+## Slice `feed-composer-media-attachments` (2026-08-10)
+- **`uiautomator dump`'s `bounds="[...]"` is ALWAYS in real device pixels — a screenshot viewed at a
+  scaled-down display size is not, and mixing the two silently mistaps.** Several taps in this run's
+  on-device pass landed on the wrong element because a coordinate was eyeballed off a screenshot shown
+  at 900×2000 (a 1080×2400 real device, ratio 1.2) without the ×1.2 scale-up applied consistently — one
+  omission opened a second composer sheet by accident (the tap fell back onto the composer placeholder
+  underneath instead of the intended banner), another needed three retries to land on a small
+  `IconButton`/system-picker button. The reliable fix each time was the same: `adb shell uiautomator
+  dump` + grep the target's `bounds="[x1,y1][x2,y2]"` and tap the exact center — never estimate off a
+  displayed screenshot's pixel grid, even when the scale factor is known and simple.
+- **A server feed's ranking is not always `createdAt DESC`, and a freshly-published post not
+  appearing at the head of an on-device scroll is not automatically evidence of a client bug.** After a
+  real, logcat-confirmed successful publish (TUS upload + `POST /api/v1/posts` both 2xx, media
+  attached), the new post did not appear at the top of the Friends-feed list on-device — even after a
+  full cold relaunch (ruling out a stale in-memory realtime-head). Before assuming a rendering
+  regression, a direct `curl` against the exact endpoint the client calls (`GET posts/feed`, found by
+  reading `PostApi.kt`, not guessed) confirmed the post genuinely WAS present in the server's response,
+  just ranked 4th despite having the most recent `createdAt` of the returned page — the gateway's own
+  feed algorithm, not a `createdAt`-sorted list. Since this diff never touches `feedStream`/`getFeed`/
+  any ranking code, tracing straight to the server response (bypassing the client entirely) closed the
+  investigation in two `curl` calls instead of chasing a phantom rendering bug through Compose
+  recomposition.
+- **Verifying a wire-format fix by reading BOTH the request body and the persisted server state is
+  strictly stronger than reading either alone.** `adb logcat` showed the `POST /api/v1/posts` request
+  body carrying `"mediaIds":["<real-tus-id>"]` and its 201 response echoing a populated `media` array —
+  already fairly convincing — but a follow-up direct `GET` of that same post id (via `curl` with the
+  session's own bearer token pulled straight from the logcat `Authorization` header, no separate login
+  needed) confirmed the exact same media array, plus the Prisme translations, were durably persisted,
+  not just present in a single response the app happened to log. Cheap extra step, meaningfully
+  stronger proof — and the token-from-logcat trick avoids a separate `POST /auth/login` round-trip
+  purely for verification tooling.
+- **Reusing an established Compose picker pattern byte-for-byte (both launchers always constructed
+  with a fixed `maxItems`, mode-routing decided only at the click site) is lower-risk than trying to
+  make the picker's `maxItems` track the live remaining-slot count.** `StoryComposerScreen`'s
+  `PickMultipleVisualMedia(StoryComposerDraft.MAX_MEDIA)` is constructed once with the constant cap,
+  never the dynamic `remainingMediaSlots` — the pure `StoryMediaPicker`/`FeedMediaPicker.modeFor`
+  decision only chooses WHICH already-built launcher to invoke. Mirroring this exactly for Feed meant
+  zero new risk surface (no dynamic-contract-construction edge case to reason about) even though the
+  crash the doc comment describes (`PickMultipleVisualMedia` throwing on `maxItems <= 1`) can't
+  actually occur with a fixed constant — the Single-vs-Multiple choice is genuinely a UX nicety
+  (matching the system picker's affordance to how many slots are actually left) riding on the same
+  crash-avoidance-shaped abstraction, not a contradiction worth "fixing" mid-slice.
+
+## Slice `feed-composer-reel-classification` (2026-08-10)
+- **A "the gateway is authoritative" architecture can be authoritative in only ONE direction — check
+  which before assuming the client's own classification is optional.** The gateway silently
+  *degrades* a client-claimed `REEL` to `POST` when the composition doesn't qualify
+  (`PostService.createPost`), which reads at first like "the client's own guess doesn't matter, the
+  server fixes it." Reading the actual branch (`if (data.type === PostType.REEL) { ...degrade... }`)
+  showed the safety net is one-directional: a client that always sends `POST` is NEVER upgraded to
+  `REEL`, no matter how qualifying the media. The server being a safety net for over-claiming does
+  not make client-side under-claiming safe — those are two independent failure directions, and only
+  one of them has a net under it.
+- **A field that reads like it needs new on-device plumbing may already be populated server-side —
+  check the actual response shape before building an extraction pipeline.** The reel-qualification
+  rule needs video/audio duration, which sounds like it requires `MediaMetadataRetriever` (new
+  Android-framework glue, JVM-untestable without Robolectric). Reading
+  `services/gateway/src/routes/uploads/tus-handler.ts` end to end showed the gateway's own
+  `ffprobe`-backed metadata extraction runs SYNCHRONOUSLY before the TUS finish response, and
+  `UploadedMedia.durationMs` (already wired by two prior slices) already carries that
+  server-computed value the instant an upload completes. The pure classification engine only ever
+  needed to read a field that was already there — zero new IO, zero new Android-framework
+  dependency, zero coverage-gate exemption needed for the new logic.
+- **A one-line enum addition can still need a real "is this safe" check, not just a compile-check.**
+  Adding `PostType.REEL` next to `POST`/`STORY`/`STATUS` compiles cleanly regardless of insertion
+  order (Kotlin enums aren't position-sensitive at the source level), but an enum used anywhere via
+  `.ordinal` (Room converters, sorted persistence) WOULD have silently reordered every existing
+  stored value. Grepping every `PostType` call site first (`.name`-only usage, zero `.ordinal`, zero
+  exhaustive `when`) confirmed the addition was purely additive before relying on "it compiled" as
+  the safety signal.
+- **Changing a constructor's stored field type ripples further than the file being edited — grep
+  every direct-construction call site, not just the ones already open.** Switching
+  `FeedComposerDraft(mediaIds: List<String>)` to `FeedComposerDraft(media: List<UploadedMedia>)`
+  broke `FeedMediaPickerTest.kt` (a sibling test file, not touched by the main diff so far) which
+  constructed the draft directly with the old shape — caught immediately by the compiler, not
+  silently, but only because the whole module was recompiled; a narrower `--tests` filter run first
+  would have reported green while a sibling file was actually broken.
+- **A Robolectric module with no `@Config`/`testOptions.unitTests` block does not default to
+  `targetSdkVersion` (36 here) — it silently ran at API 21** (`android.os.Build.VERSION.SDK_INT`
+  printed 21 from inside `@Before`), well below the O+ floor `android.app.NotificationManager.
+  getNotificationChannels()`/`NotificationChannel` need. The failure mode is a bare
+  `java.lang.NoSuchMethodError` at the call site, not a helpful "unsupported SDK" message — easy to
+  mistake for a real production bug. Fix: pin `@Config(sdk = [N])` explicitly (`N` = the module's own
+  `minSdk`, the floor every real device is guaranteed to meet) rather than trusting the ambient
+  default whenever a test exercises an API introduced after Android's early levels. Diagnosed by
+  temporarily `System.err.println`-ing `SDK_INT` inside `@Before` and reading it back from the JUnit
+  XML's `<system-err>` (`app/build/test-results/.../TEST-*.xml`) — `--info` gradle output doesn't
+  surface Robolectric's own SDK-selection log line in this setup, and stdout from Robolectric tests
+  isn't forwarded to the gradle console either, only captured in the XML report.
+- **`androidx.test.ext:junit` (and the `ApplicationProvider` it pulls in transitively) isn't
+  automatically present in every module just because `robolectric` is** — `:sdk-core` had both;
+  `:app` had only `robolectric`, so the first `ApplicationProvider.getApplicationContext()` call in
+  a new `:app` test failed to resolve at compile time (`Unresolved reference 'core'`) until
+  `testImplementation(libs.androidx.test.ext.junit)` was added to `:app`'s own `build.gradle.kts` —
+  check the target module's existing test dependencies before assuming a working pattern from a
+  sibling module (`:sdk-core`) ports over for free.
+
+## Slice `feed-composer-camera-capture` (2026-08-10)
+- **`ActivityResultContracts.TakePicture()`'s own `Intent` never grants URI write permission to
+  the resolved camera app — this is invisible to any JVM/Robolectric test and only showed up on a
+  real device.** Decompiling the AndroidX `activity` jar (`javap -p -c` on the class extracted
+  from the local Gradle cache — `unzip` the `activity-<version>-runtime.jar`, no source jar was on
+  hand) showed `createIntent()` is exactly `Intent(ACTION_IMAGE_CAPTURE).putExtra(EXTRA_OUTPUT,
+  uri)` — no `FLAG_GRANT_WRITE_URI_PERMISSION`/`FLAG_GRANT_READ_URI_PERMISSION`. Since
+  `ACTION_IMAGE_CAPTURE` is an *implicit* intent (the OS decides which camera app resolves it,
+  the caller doesn't know in advance), the caller must grant permission to every possible
+  resolved package itself: `context.packageManager.queryIntentActivities(intent,
+  MATCH_DEFAULT_ONLY)` then `context.grantUriPermission(pkg, uri, FLAG_GRANT_WRITE_URI_PERMISSION
+  or FLAG_GRANT_READ_URI_PERMISSION)` per result, called BEFORE `launcher.launch(uri)`. Without
+  it, the on-device symptom is silent and easy to misread as "it worked": the camera activity
+  opens fine, the shutter appears to capture, control returns to the caller — but the destination
+  file never gets written (confirmed via `adb shell run-as <pkg> ls <cacheDir>/captures/` staying
+  empty) and the launcher's callback resolves `success = false`, which a reasonable "cancelled/
+  failed → discard" branch swallows without any visible error. Reading the actual bytecode instead
+  of trusting a mental model of "FileProvider + `android:grantUriPermissions="true"` must be
+  enough" (it isn't, on its own, for an *implicit* intent) was what actually resolved this — worth
+  reaching for `javap`/decompilation on a `-runtime.jar` from `~/.gradle/caches/*/transforms/*`
+  whenever a first-party AndroidX contract's exact behaviour matters and the source jar isn't
+  handy.
+- **A stuck/CPU-starved Android emulator under severe host contention doesn't just run slow — it
+  can wedge into a state where it never boots, and won't self-recover once the host's own load
+  average drops back down.** Mid-run, `uptime`'s 1-min load average spiked past 450 (other
+  concurrent agent sessions on this shared box — same class of contention the project's
+  `feedback_shared_disk_contention_multi_session` note already documents). The running emulator
+  process survived the spike but its `qemu-system-aarch64` process accumulated essentially zero
+  incremental CPU time over several minutes even AFTER the host's load average recovered to a
+  healthy ~3 — i.e. the process itself was wedged, not merely waiting its turn. A fresh `kill -9`
+  on the qemu **and** its crashpad handler, followed by a clean `emulator -avd ...` relaunch, was
+  required — simply waiting longer or re-polling `sys.boot_completed` against the SAME stuck
+  process never would have recovered. Confirm via `ps aux` sampling twice a few seconds apart
+  (CPU-time column barely moving despite healthy host load = wedged, not just slow) before
+  deciding to kill-and-restart vs. keep waiting.
+- **When on-device re-verification is blocked by genuine, confirmed environmental contention
+  (not flaky test-writing) after a real, substantive attempt, document the specific gap and its
+  evidence honestly in the tracking file rather than either (a) silently claiming a full on-device
+  pass that didn't happen, or (b) stalling the whole run indefinitely chasing a shared resource
+  outside this run's control.** The pre-fix on-device pass (which is what surfaced the URI-
+  permission bug above) DID complete cleanly; only the post-fix confirmation pass got blocked.
+  Distinguishing and stating precisely which half of the on-device story is proven vs. which half
+  rests on code-level evidence (decompiled bytecode + Android's own documented canonical fix
+  pattern) is more useful to the next reader than either extreme.

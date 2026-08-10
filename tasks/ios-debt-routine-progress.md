@@ -25,30 +25,40 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    PresenceState` et `isDark: Bool` en propriétés `let` primitives passées par le parent ; le
    commentaire ligne 13 documente explicitement la règle (« évite que chaque ligne observe
    PresenceManager »). Zéro `@ObservedObject` sur singleton dans le fichier. Aucune action prise.
-3. **[OUVERT — caractérisation corrigée, preuve 2026-08-10]** UI State Aggregation — unifier les
-   booléens de chargement de `ConversationViewModel` en un enum `ConversationLoadingPhase`. La note
-   d'origine était **partiellement fausse**, pas seulement reportable telle quelle : le groupe des 4
-   booléens de pagination est `isLoadingInitial`/`isLoadingOlder`/`isLoadingNewer`/**`isRevalidating`**
-   (PAS `isLoadingReactions`, qui est une préoccupation sans rapport — le chargement du sheet de
-   détail des réactions — la note d'origine confondait les deux). Surtout : **M1 est déjà livré**,
-   depuis longtemps — `ConversationLoadingPhase.swift` (enum + `derive()`) existe depuis le commit
-   `f734bc731` (2026-05-21, « refactor(ios/conv): add ConversationLoadingPhase enum (additive) »),
-   bien avant le bootstrap de ce backlog le 2026-08-09 ; `ConversationViewModel.paginationPhase` en
-   est déjà la projection canonique. Le run bootstrap avait grep les booléens (qui existent toujours,
-   à raison) sans remarquer que la projection dérivée existait déjà et documentait elle-même le
-   travail restant (« M2 follow-up to PR #280 »).
-   Reste (M2, non tenté ce run) : migrer les call sites qui lisent encore les booléens bruts vers
-   `paginationPhase`/`isBlockingSpinnerNeeded`/`isPaginating`, puis supprimer les booléens. Les
-   call sites hors VM identifiés au 2026-08-10 : `ConversationView.swift` (2 sites,
-   `viewModel.isLoadingInitial`), `ConversationFirstRenderWarmup.swift` (1 site, valeur ignorée).
-   Complication non documentée par la note d'origine : une **DEUXIÈME copie non synchronisée
-   explicitement** des mêmes 4 booléens existe dans `ConversationStateStore.swift` (scaffolding de
-   découpage du god-object, cf. `apps/ios/tasks/ios-simplification-passes-2026-06-24.md`) — la
-   sémantique exacte de mirroring entre les deux n'a pas été étudiée ce run. Reporté : même si la
-   substitution `isLoadingInitial` → `paginationPhase.isBlockingSpinnerNeeded` est une équivalence
-   provable (donc mécanique en apparence), elle touche un `ConversationView.swift` qui observe
-   *aussi* `ConversationStateStore` pour d'autres champs, et le risque de mal caractériser LEQUEL des
-   deux objets une vue donnée doit lire dépasse ce qu'un run peut vérifier sans étude dédiée.
+3. **[EN COURS — M2 sous-tranche app-side livrée 2026-08-10 (run #4), reste bloqué sur le VM lui-même]**
+   UI State Aggregation — unifier les booléens de chargement de `ConversationViewModel` en un enum
+   `ConversationLoadingPhase`. La note d'origine était **partiellement fausse**, pas seulement
+   reportable telle quelle : le groupe des 4 booléens de pagination est
+   `isLoadingInitial`/`isLoadingOlder`/`isLoadingNewer`/**`isRevalidating`** (PAS `isLoadingReactions`,
+   qui est une préoccupation sans rapport — le chargement du sheet de détail des réactions — la note
+   d'origine confondait les deux). Surtout : **M1 est déjà livré**, depuis longtemps —
+   `ConversationLoadingPhase.swift` (enum + `derive()`) existe depuis le commit `f734bc731`
+   (2026-05-21, « refactor(ios/conv): add ConversationLoadingPhase enum (additive) »), bien avant le
+   bootstrap de ce backlog le 2026-08-09 ; `ConversationViewModel.paginationPhase` en est déjà la
+   projection canonique. Le run bootstrap avait grep les booléens (qui existent toujours, à raison)
+   sans remarquer que la projection dérivée existait déjà et documentait elle-même le travail restant
+   (« M2 follow-up to PR #280 »).
+   **Livré (run #4, 2026-08-10)** : les 2 call sites hors-VM identifiés au 2026-08-10 dans
+   `ConversationView.swift` (`encryptionDisclaimer`, `bodyContent` cold-start skeleton) migrés de
+   `viewModel.isLoadingInitial` vers `viewModel.paginationPhase.isBlockingSpinnerNeeded` — équivalence
+   provable, `paginationPhase` et `isLoadingInitial` vivent sur la MÊME instance `ConversationViewModel`
+   pour ces deux sites précis (aucune ambiguïté `ConversationStateStore`, vérifié par grep exhaustif de
+   `\.isLoadingInitial\b` avant de choisir ce slice — les seuls autres lecteurs sont le VM lui-même et
+   `ConversationFirstRenderWarmup.swift`). PR #2757, mergé (`007c09e64`).
+   **Exclusion délibérée, NE PAS toucher sans étude dédiée** : `ConversationFirstRenderWarmup.swift`'s
+   `_ = vm.isLoadingInitial` n'est PAS un call site logique — c'est un contournement de crash DEBUG-only
+   qui matérialise le pattern de keypath `@Published` exact qui débordait la pile main-thread (voir
+   doc du fichier). Le migrer vers `paginationPhase` changerait l'émission matérialisée et risquerait
+   de faire réapparaître ce crash pour zéro bénéfice utilisateur. Un test de garde
+   (`test_conversationFirstRenderWarmup_keepsReadingRawBoolean_untouchedByThisMigration`) documente
+   cette exclusion pour qu'une future passe « complète la migration » ne l'emporte pas mécaniquement.
+   Reste (M2, non tenté) : la **DEUXIÈME copie non synchronisée explicitement** des mêmes 4 booléens
+   dans `ConversationStateStore.swift` (scaffolding de découpage du god-object, cf.
+   `apps/ios/tasks/ios-simplification-passes-2026-06-24.md`) — la sémantique exacte de mirroring entre
+   les deux n'a toujours pas été étudiée. Supprimer les 4 booléens de `ConversationViewModel` reste
+   bloqué tant que `ConversationFirstRenderWarmup.swift` continue de les lire directement (choix
+   délibéré ci-dessus) — donc M2 ne peut jamais atteindre un état « 0 lecteur brut restant » sans une
+   décision dédiée sur le contournement de crash lui-même.
 4. **[EN COURS — 2 sous-tranches livrées, triage exhaustif app-side terminé 2026-08-10 : ZÉRO site
    mécanique restant sous `apps/ios/Meeshy/`]** Swift Concurrency Migration — `DispatchQueue.main.async`
    restants → `@MainActor`/async-await structuré.
@@ -425,3 +435,93 @@ source-guard), avant tout appel `xcodebuild` direct avec un `-derivedDataPath` p
 **CI verte en ~13 min pour un diff `apps/ios`-only sur ce repo (05:36→05:49 UTC observé, matrice
 `ci.yml` complète).** Cohérent avec l'estimation « 15-20 min » du run #2 — cette fois plus proche de
 la borne basse. Cette observation n'appelle PAS de correction de la routine.
+
+### 2026-08-10 — Run #4 (4e itération de la lane IOS_DETTE, 24e itération globale)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5 last_run=story-media-tus-upload`
+— règle d'alternance (streak ≥ 5) déclenchée, bascule vers `IOS_DETTE`. Scan de reprise (Étape 0
+point 5) : `git branch -r --list 'origin/claude/apps/*'` = 254 branches, toutes `android/*`, la plus
+récente datée du 2026-07-27 (>24h avant le run, aucune PR ouverte associée) — bruit d'anciens
+processus, ignoré conformément au filtre ; `git branch -r --list 'origin/claude/apps/ios/*'` = vide ;
+`gh pr list --state open --search "apps/android OR apps/ios"` = vide. Pas de run interrompu à
+terminer.
+
+**RE-PROUVÉ le backlog avant de choisir** : items 1/2 toujours FAIT/ÉCARTÉ (inchangés, re-vérifiés par
+grep). Item 4 recompté : `grep -rl "DispatchQueue\.main\.async"` sous `apps/ios/Meeshy/` → 54 fichiers
+(contre 55 au run #3 — `CameraView.swift` n'y figure plus, confirmant le merge de la PR #2721) ; aucun
+nouveau site mécanique nu détecté, le triage exhaustif du run #3 tient. Item 5 recompté :
+`DateFormatter()` toujours 20 fichiers, `ParseStrategy` 0 usage réel — inchangé. Item 6 recompté :
+`ObservableObject` 119 fichiers, `@Observable` 0 usage réel en code — toujours bloqué par le plancher
+iOS 16.0+ (`apps/ios/CLAUDE.md`). Grep de réapprovisionnement (`print(`, `#file\b`, `.system(size:`) :
+`print(` = 0 site sous `apps/ios/Meeshy` (déjà propre) ; `#file\b` = 0 violation réelle restante (seule
+occurrence = commentaire dans le guard lui-même) ; `.system(size:` = 190 fichiers mais tous des
+tailles d'icônes/emoji décoratives explicitement documentées comme fixes-par-conception dans
+`OnboardingAnimations.swift` (« stay fixed on purpose ») — pas la classe de dette Dynamic Type déjà
+résolue par le rapport qualité (Finding #3, « Resolved »). Aucun nouvel item de réapprovisionnement
+retenu.
+
+**Choisi : sous-tranche M2 de l'item 3** — la note du run #2 disait la migration `isLoadingInitial` →
+`paginationPhase.isBlockingSpinnerNeeded` trop risquée à cause d'une ambiguïté `ConversationStateStore`
+sans l'avoir vérifiée sur le code réel. Re-preuve : `grep -rn "\.isLoadingInitial\b\|isLoadingInitial ="`
+sur tout `apps/ios/Meeshy` montre que `ConversationStateStore.isLoadingInitial` (ligne 20) n'est JAMAIS
+lu/écrit ailleurs que sa propre déclaration — scaffolding mort, aucun call site ne le lit. Les 3 seuls
+lecteurs réels de `ConversationViewModel.isLoadingInitial` sont : `ConversationView.swift` (2 sites,
+`encryptionDisclaimer` + `bodyContent`) et `ConversationFirstRenderWarmup.swift` (1 site). Lecture de
+`ConversationFirstRenderWarmup.swift` en entier : ce site n'est PAS un call site logique — c'est un
+contournement de crash DEBUG-only (doc en tête de fichier) qui matérialise volontairement le pattern
+de keypath `@Published` exact qui débordait la pile main-thread au premier rendu sur device ; migrer
+CE site changerait ce qui est matérialisé et risquerait de faire réapparaître le crash pour zéro
+bénéfice. Conclusion : migration des 2 sites `ConversationView.swift` uniquement, exclusion
+délibérée + testée du site `ConversationFirstRenderWarmup.swift`.
+
+**TDD** :
+- RED : `apps/ios/MeeshyTests/Unit/Views/ConversationViewLoadingPhaseSourceGuardTests.swift` (3 tests)
+  — corps de `encryptionDisclaimer`/`bodyContent` isolés via `DeclarationBodyScanner.body(containing:in:)`
+  (accolades équilibrées, pas de fenêtre de caractères fixe — cf. `d60973459`), assertions
+  `!contains("viewModel.isLoadingInitial")` + `contains("viewModel.paginationPhase.isBlockingSpinnerNeeded")` ;
+  3e test regression-guard vérifiant que `ConversationFirstRenderWarmup.swift` garde `_ =
+  vm.isLoadingInitial` intact. Confirmé en échec sur les 2 premiers tests (4 assertions XCTAssert*
+  en échec), le 3e passait déjà (rien à migrer côté warmup) — RED partiel attendu et documenté.
+- GREEN : 2 substitutions dans `ConversationView.swift` (`encryptionDisclaimer` ligne ~464,
+  `bodyContent` cold-start skeleton ligne ~1071) de `viewModel.isLoadingInitial` vers
+  `viewModel.paginationPhase.isBlockingSpinnerNeeded`. Les 3 tests passent.
+
+**Vérification** :
+- `xcodegen generate` pour intégrer le nouveau fichier de test.
+- `./apps/ios/meeshy.sh build` → `Build succeeded in 68s` (RED), puis `60s` (re-run post-fetch).
+- Run ciblé (`ConversationViewLoadingPhaseSourceGuardTests` + `ConversationViewLifecycleTests` +
+  `ConversationViewHeaderButtonsClusterTests`) → 7/7 verts.
+- `./apps/ios/meeshy.sh test` (suite complète) : Phase 0 (SDK) verte, Phase 1/3 verte (1893 tests, 1
+  skip), Phase 2/3 verte (3402 tests, 0 échec), Phase 3/3 verte (1 test, 1 skip — DEMO_USER/PASSWORD
+  absents localement, XCTSkip attendu). Zéro échec sur l'ensemble.
+- `origin/main` a dérivé PENDANT la vérification locale (1 commit gateway sans rapport) — re-fetch +
+  `git rebase origin/main` juste avant le push, conformément à la leçon du run #2 ; rebase propre,
+  aucun conflit.
+- PR : https://github.com/isopen-io/meeshy/pull/2757 —
+  `claude/apps/ios/debt-conversation-loading-phase-m2` (branché depuis `origin/main` explicite,
+  PREMIÈRE action avant tout Write/Edit). CI complète verte (`Quality (bun)`, `Security`, `Prisma`,
+  `Test shared/agent/gateway/web`, `Test Python (translator)` 10m28s, `Test gateway` 6m7s, `Audio
+  Pipeline Tests`, `TTS/STT Integration`, `Voice API Tests`, `Build (bun)`, `Summary` — tous pass ;
+  `Trivy`/`Voice E2E Benchmark` : skipping). `mergeStateStatus: CLEAN` confirmé via `gh pr view --json`
+  avant merge.
+- Merge : `gh pr merge 2757 --squash --delete-branch` → **exit 0 cette fois** (pas d'échec worktree
+  contrairement aux runs #2/#3 — comportement `gh` visiblement non déterministe sur ce point, ne pas
+  supposer l'un ou l'autre). `gh pr view --json state,mergedAt,mergeCommit` a confirmé `MERGED`
+  (`007c09e64`). **Re-vérification indépendante sur le SHA exact** (règle dure du prompt de routine,
+  ne jamais faire confiance à un signal externe) : `gh api
+  repos/isopen-io/meeshy/compare/main...007c09e644b2091a33f2d33972f2a1677d4138da` → `identical,
+  ahead_by=0, behind_by=0`, confirmant que ce SHA est bien la tête de `main`. `check-runs` sur ce SHA
+  montrait des workflows post-merge (`docker.yml`/release) en cours, sans rapport avec le gate PR
+  déjà vérifié vert avant merge.
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-conversation-loading-phase-m2`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`).
+
+**Note pour le run suivant qui reprend la lane IOS_DETTE** : item 3 (M2) a maintenant sa sous-tranche
+app-side entièrement traitée (2/2 call sites hors-VM migrés, 1 exclusion documentée et testée). Le
+reste de M2 (supprimer les 4 booléens `@Published` de `ConversationViewModel` lui-même) reste bloqué
+tant que `ConversationFirstRenderWarmup.swift` continue de les lire directement par nécessité — ce
+n'est plus un « prochain call site à migrer » mais une décision dédiée sur le contournement de crash
+(faut-il le refactorer pour matérialiser le keypath autrement, ou accepter que les booléens survivent
+indéfiniment pour ce seul lecteur). Items 4/5/6 inchangés depuis le run #3 (mêmes blocages). Le
+backlog reste à réapprovisionner activement si items 3/4/5 finissent par se clore complètement — pas
+encore le cas ce run (grep de réapprovisionnement fait, rien de neuf trouvé).

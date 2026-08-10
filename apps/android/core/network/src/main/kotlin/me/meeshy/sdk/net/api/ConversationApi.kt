@@ -39,6 +39,10 @@ interface ConversationApi {
     @GET("conversations/{id}")
     suspend fun getById(@Path("id") id: String): ApiResponse<ApiConversation>
 
+    /** Recherche par titre OU par nom de participant — gateway `conversations/search.ts`. */
+    @GET("conversations/search")
+    suspend fun search(@Query("q") query: String): ApiResponse<List<ApiConversation>>
+
     @POST("conversations")
     suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
 

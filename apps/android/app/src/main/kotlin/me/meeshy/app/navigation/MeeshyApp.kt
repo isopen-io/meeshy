@@ -7,12 +7,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +38,9 @@ import kotlinx.coroutines.delay
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.GuestJoinScreen
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ForgotPasswordScreen
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.auth.MagicLinkScreen
 import me.meeshy.app.auth.RegistrationScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
@@ -47,6 +49,8 @@ import me.meeshy.app.calls.CallScreen
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
+import me.meeshy.sdk.model.chrome.menuGrowsRightward
+import me.meeshy.sdk.model.chrome.menuUnfoldsUpward
 import me.meeshy.ui.component.chrome.MeeshyMenuFab
 import me.meeshy.ui.component.chrome.RadialMenuItem
 import me.meeshy.ui.theme.MeeshyPalette
@@ -58,6 +62,8 @@ import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
+import me.meeshy.app.conversations.GlobalSearchScreen
+import me.meeshy.app.conversations.DashboardScreen
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
@@ -74,6 +80,7 @@ import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.AboutScreen
+import me.meeshy.app.settings.ActiveSessionsScreen
 import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.CrashReportScreen
@@ -112,11 +119,15 @@ import me.meeshy.sdk.net.SessionExpiryNotifier
 object Routes {
     const val LOGIN = "login"
     const val REGISTRATION = "register"
+    const val FORGOT_PASSWORD = "forgot-password"
+    const val MAGIC_LINK = "magic-link"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
     fun guestJoin(identifier: String): String = "join/$identifier"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
+    const val GLOBAL_SEARCH = "search"
+    const val DASHBOARD = "dashboard"
     const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
     const val CREATE_SHARE_LINK =
         "conversations/{${CreateShareLinkViewModel.CONVERSATION_ID_ARG}}/share-link/new"
@@ -141,6 +152,8 @@ object Routes {
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
+    const val ACTIVE_SESSIONS = "settings/sessions"
+    const val BLOCKED_USERS = "contacts/blocked"
     const val DATA_EXPORT = "settings/data-export"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val ABOUT = "settings/about"
@@ -187,7 +200,7 @@ internal fun menuItemLabelKeys(): List<String> = listOf(
     "tab_calls",
     "tab_activity",
     "menu_contacts",
-    "tab_profile",
+    "menu_settings",
 )
 
 /**
@@ -218,11 +231,11 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
     val messages = stringResource(R.string.tab_messages)
     val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
-    val profile = stringResource(R.string.tab_profile)
+    val settings = stringResource(R.string.menu_settings)
     val newConversation = stringResource(R.string.menu_new_conversation)
     val reels = stringResource(R.string.menu_reels)
     val contacts = stringResource(R.string.menu_contacts)
-    return remember(messages, calls, activity, profile, newConversation, reels, contacts) {
+    return remember(messages, calls, activity, settings, newConversation, reels, contacts) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -243,7 +256,7 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
             RadialMenuItem(Icons.Filled.People, contacts, MeeshyPalette.PinnedBlue) {
                 navController.navigate(Routes.CONTACTS)
             },
-            RadialMenuItem(Icons.Filled.Settings, profile, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
+            RadialMenuItem(Icons.Filled.Settings, settings, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
         )
     }
 }
@@ -380,7 +393,15 @@ fun MeeshyApp(
                         }
                     },
                     onSignUp = { navController.navigate(Routes.REGISTRATION) },
+                    onForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
+                    onMagicLink = { navController.navigate(Routes.MAGIC_LINK) },
                 )
+            }
+            composable(Routes.FORGOT_PASSWORD) {
+                ForgotPasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.MAGIC_LINK) {
+                MagicLinkScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.REGISTRATION) {
                 RegistrationScreen(
@@ -424,6 +445,8 @@ fun MeeshyApp(
                     },
                     onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
                     onContacts = { navController.navigate(Routes.CONTACTS) },
+                    onDashboard = { navController.navigate(Routes.DASHBOARD) },
+                    onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Routes.LOGIN) {
@@ -436,6 +459,29 @@ fun MeeshyApp(
                             onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
                         )
                     },
+                )
+            }
+            composable(Routes.GLOBAL_SEARCH) {
+                GlobalSearchScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
+                    onOpenUser = { userId ->
+                        navController.navigate(Routes.profile(userId))
+                    },
+                )
+            }
+            composable(Routes.DASHBOARD) {
+                DashboardScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
+                    onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
+                    onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
+                    onShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
+                    onContacts = { navController.navigate(Routes.CONTACTS) },
                 )
             }
             composable(
@@ -575,6 +621,8 @@ fun MeeshyApp(
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                    onOpenActiveSessions = { navController.navigate(Routes.ACTIVE_SESSIONS) },
+                    onOpenBlockedUsers = { navController.navigate(Routes.BLOCKED_USERS) },
                     onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
                     onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
@@ -627,6 +675,15 @@ fun MeeshyApp(
             }
             composable(Routes.PRIVACY) {
                 PrivacySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACTIVE_SESSIONS) {
+                ActiveSessionsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BLOCKED_USERS) {
+                ContactsScreen(
+                    onBack = { navController.popBackStack() },
+                    initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
+                )
             }
             composable(Routes.STARRED) {
                 StarredMessagesScreen(
@@ -695,6 +752,7 @@ fun MeeshyApp(
                 ReelsScreen(
                     seed = entry.arguments?.getString("seed"),
                     onClose = { navController.popBackStack() },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
             }
             composable(
@@ -791,29 +849,30 @@ fun MeeshyApp(
                 leftContentDescription = stringResource(R.string.tab_feed),
                 rightContentDescription = stringResource(R.string.a11y_floating_menu),
                 leftContent = {
-                    // Filled quand le Flux est la destination active (on peut taper
-                    // pour en repartir), outline sinon (un tap y mene) — le seul
-                    // signal visuel de bascule que ce bouton porte, faute d'un
-                    // equivalent Android au logo anime iOS de `showFeed == true`.
+                    // Icone de FLUX, pas de maison : ce bouton mene au Feed (et aux
+                    // Reels par appui long), une maison promettait un "home" qui
+                    // n'existe pas. Filled quand le Flux est la destination active
+                    // (on peut taper pour en repartir), outline sinon (un tap y
+                    // mene) — le seul signal visuel de bascule que ce bouton porte.
                     Icon(
-                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.Home else Icons.Outlined.Home,
+                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.DynamicFeed else Icons.Outlined.DynamicFeed,
                         contentDescription = null,
                         tint = MeeshyPalette.Success,
                     )
                 },
                 rightContent = {
                     // Etat HISSE: le menu s'ouvre du premier tap, comme sur iOS.
-                    // Sans cela, MeeshyMenuFab garde son propre etat et il faut deux
-                    // taps — un pour l'afficher replie, un pour le deplier.
-                    if (menuExpanded) {
-                        MeeshyMenuFab(
-                            items = radialItems,
-                            expandedOverride = true,
-                            onExpandedChange = { menuExpanded = it },
-                        )
-                    } else {
-                        MeeshyInitialsButton(username = authState.username)
-                    }
+                    // Direction et cote de deploiement suivent la POSITION de la
+                    // pastille (geometrie pure core:model) : vers le haut si elle
+                    // est en bas, libelles tournes vers l'interieur de l'ecran.
+                    MeeshyMenuFab(
+                        items = radialItems,
+                        expanded = menuExpanded,
+                        onExpandedChange = { menuExpanded = it },
+                        unfoldUpward = menuUnfoldsUpward(rightButtonPosition),
+                        growRightward = menuGrowsRightward(rightButtonPosition),
+                        collapsedContent = { MeeshyInitialsButton(username = authState.username) },
+                    )
                 },
             )
         }

@@ -247,3 +247,53 @@ describe('Producteur — la notification hérite de l’expiration de son messag
     );
   });
 });
+
+/**
+ * Le cycle précédent a branché les trois producteurs que l'éventail d'un message
+ * appelle. Il en restait deux ancrés sur un `context.messageId` — la réaction et
+ * la traduction prête —, nommés en backlog sans être traités. L'un est ici ; de
+ * l'autre il ne reste rien à brancher (aucun appelant, retiré par ce cycle).
+ */
+describe('Producteur — une réaction n’ouvre pas un message que l’expiration a emporté', () => {
+  const reactionParams = {
+    messageAuthorId: USER_ID,
+    reactorUserId: SENDER_ID,
+    messageId: MSG_ID,
+    conversationId: CONV_ID,
+    reactionEmoji: '🔥',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers().setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('une réaction à un message éphémère hérite de son échéance', async () => {
+    const prisma = makePrisma([]);
+    prisma.message.findUnique.mockResolvedValue({ content: 'coucou', expiresAt: FUTURE });
+
+    await new NotificationService(prisma).createReactionNotification(reactionParams);
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ expiresAt: FUTURE }) })
+    );
+  });
+
+  it('témoin — une réaction à un message ordinaire n’invente aucune échéance', async () => {
+    const prisma = makePrisma([]);
+    prisma.message.findUnique.mockResolvedValue({ content: 'coucou', expiresAt: null });
+
+    await new NotificationService(prisma).createReactionNotification({
+      ...reactionParams,
+      reactorUserId: '507f1f77bcf86cd799439099',
+    });
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ expiresAt: null }) })
+    );
+  });
+});

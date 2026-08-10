@@ -38,6 +38,13 @@ const log = enhancedLogger.child({ module: 'retractPostNotifications' });
  *     lecture unique laisserait la queue en base sans le moindre signal,
  *     puisque le premier lot, lui, a réussi. D'où le drainage.
  *
+ * L'entrée est une LISTE, comme celle du jumeau `retractCommentNotifications`.
+ * Le retrait interactif n'en passe qu'un ; le balayage des stories expirées —
+ * seul chemin de hard-delete de post du gateway — en détruit une fournée d'un
+ * coup (stories du jour ∪ leurs reposts), et ce qui part ensemble se retire
+ * ensemble : un `$in` là où un retrait post par post ferait autant de lectures
+ * que de posts.
+ *
  * La suppression porte sur les ids RELUS et non sur le prédicat : l'ensemble
  * supprimé et l'ensemble annoncé sont alors identiques par construction, et
  * aucune ligne ne peut disparaître sans son `notification:deleted`. La course
@@ -59,6 +66,16 @@ export const POST_NOTIFICATION_RETRACTION_BATCH_SIZE = 200;
  * Plafond de sécurité du drainage. Il ne borne pas une audience réaliste
  * (40 000 lignes pour un seul post) — il empêche une boucle infinie si la
  * suppression cessait un jour de faire progresser la lecture.
+ *
+ * Atteint, il REJETTE. Tant que l'entrée était un post unique, un
+ * avertissement suffisait : le plafond n'était pas atteignable. Le balayage
+ * des stories expirées, lui, entre une heure d'expirations de toute la
+ * plateforme — un ensemble que rien ne borne. Or il retire AVANT de détruire,
+ * précisément pour pouvoir renoncer : un plafond atteint en silence le
+ * laisserait détruire les posts, et les lignes restantes n'auraient alors plus
+ * aucun chemin de retrait, puisque la passe suivante ne verra plus les posts.
+ * Le rejet rend la reprise possible, et elle converge — les lots déjà lus ont
+ * bien été supprimés.
  */
 const MAX_RETRACTION_BATCHES = 200;
 
@@ -92,15 +109,21 @@ function objectId(raw: RawObjectId | undefined): string | undefined {
 
 export async function retractPostNotifications(
   prisma: PostNotificationRetractionPrisma,
-  postId: string,
+  postIds: readonly string[],
   announcer: RetractedNotificationAnnouncer | undefined
 ): Promise<number> {
+  // Une liste vide n'est pas un `$in: []` à envoyer à Mongo : c'est une
+  // question qui n'a pas lieu d'être posée. Le balayage horaire tombe sur ce
+  // cas à chaque passe où rien n'a expiré, c'est-à-dire la plupart du temps.
+  if (postIds.length === 0) return 0;
+
+  const targets = [...postIds];
   let total = 0;
 
   for (let batch = 0; batch < MAX_RETRACTION_BATCHES; batch += 1) {
     const raw = (await prisma.$runCommandRaw({
       find: 'Notification',
-      filter: { 'context.postId': postId },
+      filter: { 'context.postId': { $in: targets } },
       projection: { _id: 1, userId: 1 },
       singleBatch: true,
       batchSize: POST_NOTIFICATION_RETRACTION_BATCH_SIZE,
@@ -127,9 +150,11 @@ export async function retractPostNotifications(
     if (rows.length < POST_NOTIFICATION_RETRACTION_BATCH_SIZE) return total;
   }
 
-  log.warn('post notification retraction: batch ceiling reached, rows may remain', {
-    postId,
+  log.warn('post notification retraction: batch ceiling reached, rows remain', {
+    posts: targets.length,
     retracted: total,
   });
-  return total;
+  throw new Error(
+    `post notification retraction: drainage inachevé après ${MAX_RETRACTION_BATCHES} lots (${total} lignes retirées)`
+  );
 }

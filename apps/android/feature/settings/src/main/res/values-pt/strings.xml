@@ -250,4 +250,10 @@
     <string name="support_info_version">Versão</string>
     <string name="support_info_build">Compilação</string>
     <string name="support_info_platform">Plataforma</string>
+
+    <!-- Active sessions -->
+    <string name="sessions_current">Este dispositivo</string>
+    <string name="sessions_revoke">Desconectar</string>
+    <string name="sessions_revoke_others">Desconectar todos os outros dispositivos</string>
+    <string name="sessions_retry">Tentar novamente</string>
 </resources>

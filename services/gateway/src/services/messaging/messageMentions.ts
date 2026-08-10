@@ -16,6 +16,13 @@ export interface MentionTargetMessage {
   readonly id: string;
   readonly conversationId: string;
   readonly senderId: string;
+  /**
+   * Échéance du message, reportée sur la notification de mention : celle-ci
+   * DÉSIGNE ce message et ne doit pas lui survivre. Optionnelle parce que les
+   * transports d'édition ne construisent pas tous un `Message` Prisma complet
+   * — absente, aucune échéance, le comportement d'avant.
+   */
+  readonly expiresAt?: Date | null;
 }
 
 /**
@@ -350,6 +357,7 @@ async function notifyNewlyMentioned(
         messageContent: content,
         conversationId: message.conversationId,
         messageId: message.id,
+        messageExpiresAt: message.expiresAt ?? null,
       },
       conversation.participants
         .map((participant) => participant.userId)
@@ -374,6 +382,7 @@ export interface MentionNotifier {
       messageContent: string;
       conversationId: string;
       messageId: string;
+      messageExpiresAt?: Date | null;
     },
     memberIds: string[]
   ): Promise<unknown>;

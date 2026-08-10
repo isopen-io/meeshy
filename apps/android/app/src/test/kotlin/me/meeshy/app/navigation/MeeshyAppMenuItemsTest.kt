@@ -26,6 +26,15 @@ class MeeshyAppMenuItemsTest {
         assertTrue(menuItemLabelKeys().contains("menu_reels"))
     }
 
+    // L'entree reglages dit ce qu'elle FAIT : libelle "Settings", icone engrenage,
+    // route settings. L'ancien libelle "Profile" sous un engrenage menant aux
+    // reglages cumulait trois signaux contradictoires pour une meme entree.
+    @Test
+    fun `the deployed menu labels the settings entry as settings, not profile`() {
+        assertTrue(menuItemLabelKeys().contains("menu_settings"))
+        assertFalse(menuItemLabelKeys().contains("tab_profile"))
+    }
+
     // Le menu reste la voie d'acces aux sections sans bouton dedie.
     @Test
     fun `the deployed menu keeps the sections that have no dedicated button`() {

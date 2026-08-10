@@ -27,6 +27,7 @@ import me.meeshy.sdk.net.api.ReportApi
 import me.meeshy.sdk.net.api.ShareLinkApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
 import javax.inject.Singleton
 
@@ -128,6 +129,9 @@ internal object NetworkModule {
 
     @Provides
     fun providesMediaApi(api: MeeshyApi): MediaApi = api.media
+
+    @Provides
+    fun providesTusApi(api: MeeshyApi): TusApi = api.tus
 
     @Provides
     fun providesPreferencesApi(api: MeeshyApi): PreferencesApi = api.preferences

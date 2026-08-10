@@ -77,7 +77,7 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
     await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
 
     expect(runCommandRaw).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: { 'context.postId': POST_ID } })
+      expect.objectContaining({ filter: { 'context.postId': { $in: [POST_ID] } } })
     );
     expect(notificationDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n1', 'n2'] } } });
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
@@ -100,7 +100,7 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
 
     expect(auditCreate).toHaveBeenCalled();
     expect(trackingLinkUpdateMany).toHaveBeenCalledWith({
-      where: { targetId: POST_ID },
+      where: { targetId: { in: [POST_ID] } },
       data: { isActive: false },
     });
     expect(releasePost).toHaveBeenCalledWith(POST_ID);

@@ -1064,6 +1064,79 @@ describe('DELETE /posts/:postId/comments/:commentId — broadcastCommentDeleted 
   });
 });
 
+// ─── Le broadcast annonce le SOUS-ARBRE retiré, pas la seule cible ───────────
+//
+// `deleteComment` soft-delete le fil entier (cible + descendants) et décompte
+// `commentCount` d'autant. Le broadcast, lui, ne portait que `commentId` : un
+// client qui avait déplié les réponses gardait à l'écran des lignes que le
+// serveur venait de retirer, et aucun refetch ne les enlevait (`getComments`
+// filtre `parentId: null`, donc `getReplies` n'est plus appelé pour un parent
+// supprimé). Le fil ne se nettoyait qu'au rechargement complet de la page.
+// ────────────────────────────────────────────────────────────────────────────
+
+function buildDeleteApp(broadcastCommentDeleted: any) {
+  const delApp = Fastify({ logger: false });
+  const prisma = makeDefaultPrisma();
+  delApp.decorate('prisma', prisma);
+  delApp.decorate('socialEvents', {
+    broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastCommentLiked: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastCommentDeleted,
+  });
+  registerCommentRoutes(delApp, prisma as any, makePreValidationAuth(true));
+  return delApp;
+}
+
+describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', () => {
+  it('annonce tous les ids retirés quand le commentaire portait des réponses', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({
+      success: true,
+      deletedCommentIds: [COMMENT_ID, 'reply-1', 'reply-1a'],
+    });
+    const app = buildDeleteApp(broadcast);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        deletedCommentIds: [COMMENT_ID, 'reply-1', 'reply-1a'],
+      }),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
+    await app.close();
+  });
+
+  /**
+   * Le rejeu idempotent (`onDuplicate`) ne rend qu'un `{ id }` : la suppression
+   * a déjà eu lieu, son sous-arbre est soft-deleté et n'est plus reconstructible
+   * par une lecture vivante. Le repli sur la seule cible reproduit EXACTEMENT le
+   * comportement d'avant ce correctif — jamais une liste vide, qui ferait
+   * survivre la cible elle-même à l'écran.
+   */
+  it('se replie sur la seule cible quand le service ne rend aucune liste (rejeu)', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({ id: COMMENT_ID });
+    const app = buildDeleteApp(broadcast);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({ commentId: COMMENT_ID, deletedCommentIds: [COMMENT_ID] }),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
+    await app.close();
+  });
+});
+
 // ─── Branch coverage: FeedQuerySchema false branches (lines 44, 76-79) ────────
 
 describe('GET /posts/:postId/comments — invalid limit query uses default (line 44)', () => {

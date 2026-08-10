@@ -100,7 +100,7 @@ describe('DELETE /admin/posts/:postId — effets durables du retrait', () => {
 
     expect(res.statusCode).toBe(200);
     expect(trackingLinkUpdateMany).toHaveBeenCalledWith({
-      where: { targetId: POST_ID },
+      where: { targetId: { in: [POST_ID] } },
       data: { isActive: false },
     });
     await app.close();

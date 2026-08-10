@@ -1,5 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
+import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
 
 const VALID_CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const VALID_USER_ID = '507f1f77bcf86cd799439022';
@@ -94,24 +95,103 @@ describe('canAccessConversation', () => {
     });
   });
 
-  describe('participantId-based access', () => {
-    it('should allow access when participant is active and not banned', async () => {
-      const auth = createAuthContext({ participantId: VALID_PARTICIPANT_ID });
-      mockPrisma.participant.findFirst.mockResolvedValue({ id: VALID_PARTICIPANT_ID, isActive: true, bannedAt: null });
-
-      const result = await canAccessConversation(mockPrisma, auth, VALID_CONVERSATION_ID, 'some-id');
-
-      expect(result).toBe(true);
-      expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith({
-        where: {
-          id: VALID_PARTICIPANT_ID,
-          conversationId: VALID_CONVERSATION_ID,
-          isActive: true,
-          bannedAt: null,
-        },
-      });
+  /**
+   * Le filtre de bannissement, jugé sur des DOCUMENTS et non sur la forme de la
+   * clause.
+   *
+   * Aucun des neuf créateurs de `Participant` n'écrit `bannedAt` : la colonne est
+   * ABSENTE du document de tout participant jamais banni. Un double qui rend ce
+   * qu'on lui dit de rendre ne peut pas voir qu'un filtre `{ bannedAt: null }`
+   * n'apparie alors RIEN — d'où ce bloc, qui applique la clause à des lignes.
+   *
+   * Les trois états réels de la colonne :
+   *  - absente        → l'immense majorité : rejoint par lien, invité, ajouté…
+   *  - `null` écrit   → seul `resolveUnbanWrite` en produit (un débanni)
+   *  - date           → banni ; `resolveBanWrite` écrit aussi `isActive: false`,
+   *                     SAUF si une restauration de compte a rallumé `isActive`
+   *                     (`routes/me/delete-account.ts` écrit `isActive: true`
+   *                     sans regarder `bannedAt`) — c'est ce cas qui rend le
+   *                     filtre porteur, et pas seulement redondant.
+   */
+  describe('participantId-based access — jugé sur des documents Mongo', () => {
+    const participantRow = (overrides: MongoDocument = {}): MongoDocument => ({
+      id: VALID_PARTICIPANT_ID,
+      conversationId: VALID_CONVERSATION_ID,
+      type: 'anonymous',
+      isActive: true,
+      ...overrides,
     });
 
+    const prismaOver = (rows: readonly MongoDocument[]) =>
+      ({ participant: { findFirst: findFirstIn(rows) }, conversation: { findFirst: jest.fn<any>() } }) as any;
+
+    it('admet un participant anonyme fraîchement joint, dont la colonne bannedAt est ABSENTE', async () => {
+      const auth = createAuthContext({ isAnonymous: true, participantId: VALID_PARTICIPANT_ID });
+
+      const result = await canAccessConversation(
+        prismaOver([participantRow()]),
+        auth,
+        VALID_CONVERSATION_ID,
+        'some-id'
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('admet un participant débanni, dont la colonne bannedAt vaut null', async () => {
+      const auth = createAuthContext({ isAnonymous: true, participantId: VALID_PARTICIPANT_ID });
+
+      const result = await canAccessConversation(
+        prismaOver([participantRow({ bannedAt: null })]),
+        auth,
+        VALID_CONVERSATION_ID,
+        'some-id'
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('refuse un participant banni resté actif — la garde reste porteuse', async () => {
+      const auth = createAuthContext({ isAnonymous: true, participantId: VALID_PARTICIPANT_ID });
+
+      const result = await canAccessConversation(
+        prismaOver([participantRow({ bannedAt: new Date('2026-01-01T00:00:00Z') })]),
+        auth,
+        VALID_CONVERSATION_ID,
+        'some-id'
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('refuse un participant inactif dont la colonne bannedAt est absente', async () => {
+      const auth = createAuthContext({ isAnonymous: true, participantId: VALID_PARTICIPANT_ID });
+
+      const result = await canAccessConversation(
+        prismaOver([participantRow({ isActive: false })]),
+        auth,
+        VALID_CONVERSATION_ID,
+        'some-id'
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it("refuse une ligne d'une AUTRE conversation", async () => {
+      const auth = createAuthContext({ isAnonymous: true, participantId: VALID_PARTICIPANT_ID });
+
+      const result = await canAccessConversation(
+        prismaOver([participantRow({ conversationId: '507f1f77bcf86cd7994390ff' })]),
+        auth,
+        VALID_CONVERSATION_ID,
+        'some-id'
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('participantId-based access', () => {
     it('should deny access when participant not found', async () => {
       const auth = createAuthContext({ participantId: VALID_PARTICIPANT_ID });
       mockPrisma.participant.findFirst.mockResolvedValue(null);

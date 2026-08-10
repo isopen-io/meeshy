@@ -520,9 +520,23 @@ export function registerCommentRoutes(
           select: { authorId: true, commentCount: true, visibility: true, visibilityUserIds: true },
         });
         if (post) {
+          // Le fil retiré, pas la seule cible : `deleteComment` soft-delete la
+          // cible ET tous ses descendants. Un client qui avait déplié les
+          // réponses garderait sinon à l'écran des lignes déjà retirées, sans
+          // aucun refetch pour l'en débarrasser (`getComments` filtre
+          // `parentId: null`, donc `getReplies` n'est plus appelé pour un parent
+          // supprimé).
+          //
+          // Repli sur `[commentId]` : le rejeu idempotent (`onDuplicate`) ne
+          // rend qu'un `{ id }` — la suppression a déjà eu lieu et son
+          // sous-arbre n'est plus reconstructible par une lecture vivante. Le
+          // repli reproduit exactement le comportement d'avant ce correctif ;
+          // une liste vide, elle, ferait survivre la cible elle-même.
+          const deletedCommentIds = result.deletedCommentIds ?? [commentId];
           socialEvents.broadcastCommentDeleted({
             postId,
             commentId,
+            deletedCommentIds,
             commentCount: post.commentCount,
           }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/comments/:commentId]: broadcast comment deleted failed'));
         }

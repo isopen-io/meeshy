@@ -1,3 +1,1045 @@
+# Cycle 59 — Les anonymes n'entraient plus dans leur propre conversation
+
+Le backlog du cycle 58 laissait un candidat nommé : le prédicat défensif
+`OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }]` sur les 119 lectures de
+`Message.deletedAt`. Ce cycle ne l'a pas pris, et c'est le premier résultat.
+
+La tête du backlog dit « appliquez cet idiome aux 119 sites ». Or ces 119 sites ne sont PAS cassés :
+le cycle 58 vient de rendre la discipline d'écriture complète, les sept créateurs écrivent la
+colonne, les lectures apparient. Le prédicat y serait de la ceinture par-dessus des bretelles — 119
+fichiers touchés pour zéro défaut observable. La question utile n'était pas « où cet idiome
+manque-t-il ? » mais **« sur quelle colonne le filtre naïf n'apparie-t-il RIEN aujourd'hui ? »**, ce
+qui se réduit à : *une colonne `DateTime?`/`String?` dont AUCUN créateur n'écrit la valeur.*
+
+Un balayage des `where` du gateway sous cette question rend quatre sites. Le premier est une porte
+d'accès.
+
+## Le défaut
+
+`canAccessConversation` — la garde de toutes les routes de conversation — filtrait
+`bannedAt: null` sur `Participant`. **Aucun des neuf créateurs de `Participant` n'écrit `bannedAt`.**
+La colonne est donc ABSENTE du document de tout participant jamais banni, et sur le connecteur
+MongoDB de Prisma l'égalité à `null` ne l'apparie pas.
+
+Le seul producteur d'un `null` EXPLICITE sur cette colonne est `resolveUnbanWrite`. Autrement dit :
+**les seuls participants que cette porte laissait entrer étaient ceux qui avaient été bannis puis
+débannis.** Tous les autres étaient dehors.
+
+Et cette branche n'est empruntée que par un contexte d'auth portant un `participantId`, ce qui
+d'après `middleware/auth.ts` désigne exactement une population : **les anonymes venus par un lien de
+partage.**
+
+| Route | Ce qu'un anonyme obtenait |
+|---|---|
+| `GET /conversations/:id/messages` | 403 « Unauthorized access to this conversation » |
+| `POST /conversations/:id/messages` | 403 |
+| `GET /conversations/:id` | 403 |
+| fils, statistiques, liste des participants, épinglage | 403 |
+
+La fonctionnalité d'entrée par lien anonyme — celle que `routes/anonymous.ts` provisionne, dont
+`routes/conversations/messages.ts` gère explicitement le cas trois lignes plus bas (`joinedAt`,
+`allowViewHistory`, `shareLinkId`) — était fermée au niveau de sa garde.
+
+## Les trois autres sites, même piège
+
+- **`PasswordResetService.revokeExistingTokens` et le jumeau magic-link n'ont jamais révoqué un seul
+  jeton.** `create` ne renseigne pas `usedAt`, donc la colonne est absente de tout jeton encore
+  vierge — soit exactement la cible. Demander un nouveau lien laissait le précédent valide jusqu'à
+  son expiration ; `revokedReason: 'NEW_REQUEST'` n'a jamais été écrit. La validation, elle, lit la
+  ligne et teste `token.usedAt` en JS : elle est juste, et c'est pour ça que le défaut est resté
+  invisible — un jeton consommé était bien refusé, il n'y avait simplement aucune exclusivité.
+- **`MessageProcessor.updateTrackingLinksWithMessageId` n'écrivait aucune attribution.** La
+  réécriture crée le lien avec un `messageId` encore indisponible, donc omis — son propre
+  commentaire dit « sera null », il est ABSENT. Le rattachement post-envoi ne retrouvait pas le lien
+  qu'elle venait de créer.
+- **`activeTokens` du balayage des jetons périmés rendait toujours 0.**
+
+## Le correctif
+
+`unsetOrNull(champ)` (`utils/prisma-unset.ts`) — le prédicat de LECTURE, nommé, typé sur le nom du
+champ, pendant du `LIVE_MESSAGE_MARK` côté écriture du cycle 58. Un nom par colonne (à la
+`NOT_DELETED`) ne convenait pas : quatre colonnes différentes dans quatre modules, l'invariant est
+commun, pas la colonne.
+
+**Pourquoi la lecture et non l'écriture, cette fois** : ajouter `bannedAt: null` aux neuf créateurs —
+le geste exact du cycle 58 — n'aurait rien réparé pour les participants anonymes DÉJÀ en base, c'est-
+à-dire pour tous ceux dont l'accès est cassé. Une discipline d'écriture répare l'avenir ; un prédicat
+défensif répare le passé. Le cycle 58 pouvait choisir l'écriture parce que ses lignes fautives
+étaient rares et rejouables ; ici, elles sont la population.
+
+## Plan
+- [x] T1 — bootstrap (leçon 102b) : `bun install --ignore-scripts`, `prisma generate`, build shared
+- [x] T2 — reformuler la question du backlog, puis balayer les `where` sous la bonne question
+- [x] T3 — vérifier créateur par créateur que la colonne n'est écrite par personne (9 pour `Participant`, 2 pour chaque modèle de jeton)
+- [x] T4 — double Prisma qui HONORE « absent ≠ null » (`__tests__/helpers/mongo-where.ts`)
+- [x] T5 — RED : 4 témoins de comportement, un par site
+- [x] T6 — GREEN : `unsetOrNull`, étalé par les quatre sites
+- [x] T7 — 3 témoins pré-existants qui ÉPINGLAIENT la clause fautive, réécrits en comportement
+- [x] T8 — sondes de fidélité en sept temps
+- [x] T9 — gates : suite gateway complète, `tsc --noEmit`
+- [x] T10 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Rouge observé avant correctif** : 4 témoins, un par site, tous sur un document dont la colonne est
+absente. Chacun a échoué pour la bonne raison — la lecture ne rend rien / la clause n'apparie pas la
+ligne fraîche.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| `canAccessConversation` remis à `bannedAt: null` | 1 (le sien) |
+| `revokeExistingTokens` remis à `usedAt: null` | 1 (le sien) |
+| magic-link remis à `usedAt: null` | 2 — il y avait DEUX copies du témoin de forme |
+| balayage des jetons remis à `usedAt: null` | 1 (le sien) |
+| rattachement des liens remis à `messageId: null` | 1 (le sien) |
+| `unsetOrNull` vidé en `{}` | **8**, dont « refuse un banni resté actif » |
+| branche `null` retirée du prédicat | **3**, dont « admet un débanni » |
+
+Les deux dernières sondes sont celles qui apprennent quelque chose. Vider le prédicat ne produit pas
+seulement des échecs de forme : il fait tomber le refus d'un participant BANNI, donc un prédicat trop
+permissif est attrapé comme une régression de sécurité et pas comme une faute de frappe. Et retirer
+la branche `null` ne fait tomber que le débanni — le seul cas au monde que cette branche protège,
+puisque `resolveUnbanWrite` est le seul à écrire un `null` explicite.
+
+**Gate** : suite gateway complète **646 suites / 16 300 tests, 0 échec** (baseline du cycle 58 :
+643 / 16 273 sur un `main` antérieur ; +1 suite de ce cycle, +2 amont). `tsc --noEmit` : 0 erreur —
+et il a servi : la première forme du prédicat rendait un tuple `readonly` que
+`ParticipantWhereInput` refuse, ce qu'aucun test n'aurait vu.
+
+## Reste ouvert après ce cycle
+
+- **`MaintenanceService.cleanupOrphanedAttachments` porte le MÊME défaut et n'a PAS été corrigé.**
+  Son `messageId: null` sur `MessageAttachment` n'apparie rien (le chemin TUS crée la ligne sans la
+  colonne), donc la passe n'a jamais rien supprimé. La réparer est une ligne — et arme un effacement
+  irréversible de fichiers et de lignes sur des données que ce conteneur ne connaît pas. C'est
+  exactement la leçon 90.4 (« réparer une chose morte peut en éteindre une vivante ») : le préalable
+  est un essai à blanc contre la base de production, hors de portée de cette routine. Le liage
+  légitime (`associateAttachmentsToMessage`) filtre par `id`, lui, donc il fonctionne — les lignes
+  visées sont bien des orphelines. **Candidat pour un cycle avec accès base, jamais pour un cycle
+  aveugle.**
+- **Aucune attribution rétroactive.** Les `TrackingLink` et les jetons déjà écrits gardent leur
+  colonne absente ; les nouvelles lectures les apparient, mais rien ne remplit le passé.
+- **Les ~12 copies inline correctes de l'idiome** (`leftAt`, `expiresAt`, `parentId`, `mutedAt`,
+  `invalidatedAt`) n'ont pas été migrées vers `unsetOrNull`. Volontaire : elles fonctionnent, et
+  certaines vivent dans un `where` portant DÉJÀ un `OR`, où un spread écraserait l'existant. Le
+  spread silencieux est le seul piège de cet utilitaire, et son en-tête le dit.
+- **`updateTrackingLinksMessageId` (le binder du chemin de PARTAGE) écrase sans aucune garde** —
+  ni `conversationId`, ni `messageId` déjà pris. Le défaut est documenté dans
+  `messageRemovalEffects.ts` comme un fait admis ; ce cycle n'y touche pas, mais maintenant que le
+  binder du chemin d'ENVOI écrit vraiment, les deux se disputent la colonne pour de bon.
+- **La sémantique `absent` vs `null` n'a pas été vérifiée contre une vraie base** (aucun MongoDB
+  joignable, pas de démon Docker). Elle repose sur trois post-mortems de production internes
+  (`postIncludes.ts`, `CallService.initiateCall`, cycle 54) et sur les cycles 57-58. **Le correctif
+  est juste sous les DEUX sémantiques** : la forme `OR` apparie l'absent ET le nul. Ce qui reste
+  incertain est l'ampleur du défaut, pas la validité de sa réparation.
+- Hérités et non traités : le prédicat défensif sur les 119 lectures de `Message.deletedAt` (écarté
+  ci-dessus, avec sa raison) ; les messages d'appel écrits avant le cycle 58 restent invisibles ;
+  `post_comment`/`comment_like` gardent leur asymétrie de forme sans conséquence ;
+  `softDeleteRetentionMs` reste du code mort documenté ; iOS et Android ne lisent pas
+  `deletedCommentIds` ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+# Cycle 58 — Les messages d'appel n'étaient pas des messages
+
+Une session sœur a livré le cycle 57 en parallèle (« le budget d'une vue unique se dépense par
+spectateur »). Aucun recouvrement : son lot touche `recordViewOnceConsumption` et la route des
+messages, le mien les sept `message.create` et `CallService`. Les deux ne se croisent que dans les
+trois fichiers de suivi, fusionnés à la main en gardant les deux relevés. Ce cycle est donc
+renuméroté 58 — son numéro d'origine était 57.
+
+Le backlog du cycle 56 portait quatre têtes. Trois ont été instruites et écartées avant d'écrire une
+ligne, ce qui est le vrai résultat de la première moitié de ce cycle :
+
+- **« `post_comment` et `comment_like` n'exposent pas `context.commentId` »** — vrai au mot près, et
+  sans conséquence. Les TROIS consommateurs replient déjà sur `metadata.commentId` : le web
+  (`notification-helpers.ts:194`), le SDK iOS (`MessageSocketManager.swift:969` et
+  `SocketNotificationEvent+Persistence.swift:34`) et le payload push lui-même
+  (`NotificationService.ts`, clé `commentId` du bloc `data`). Corriger l'asymétrie ne changerait
+  rien pour personne. Retiré du backlog comme défaut — c'est une inélégance de forme.
+- **« `softDeleteRetentionMs` est du code mort »** — vrai, et déjà entièrement documenté dans
+  l'en-tête de sa propre classe, qui explique que les deux bornes valant sept jours, le champ ne
+  décrit plus le comportement. Le retirer est un nettoyage, pas un cycle.
+- **« le nom `ExpiredStoriesCleanupService` ment sur son périmètre »** — vrai, et l'en-tête dit
+  explicitement pourquoi il reste : il est cité par des plans et des analyses archivés que réécrire
+  fausserait. Décision déjà prise, pas une dette.
+
+L'item retenu ne venait pas du backlog. Il est sorti d'une question posée à `/sync` — « qu'est-ce
+qui garantit que le flux `changed` apparie quelque chose ? » — dont la réponse a mené un étage plus
+haut, chez les écrivains.
+
+## Le défaut
+
+Les deux modèles à soft-delete de ce dépôt ont résolu le MÊME piège MongoDB par deux moitiés
+opposées, et c'est cette asymétrie qui a fabriqué le défaut.
+
+`Post` l'a résolu côté LECTURE : un post vivant n'a pas de colonne `deletedAt`, et toutes ses
+requêtes apparient l'absence (`NOT_DELETED` = `{ isSet: false }`). `Message` l'a résolu côté
+ÉCRITURE : ses ~119 lectures filtrent `deletedAt: null`, et c'est chaque créateur qui rend ce filtre
+vrai en écrivant la colonne à `null`.
+
+La convention côté message marche, et n'était portée par aucun nom. Sept `message.create` répartis
+dans six fichiers répétaient le littéral. **Deux l'avaient perdu** — `createCallSummaryMessage` et
+`createLiveCallMessage`.
+
+## Ce que ça faisait à l'écran
+
+Un message d'appel n'était pas un message pour les lectures gardées par ce filtre :
+
+| Lecture | Ce qui manquait |
+|---|---|
+| `emitConversationPreviewUpdate` | « Appel audio en cours » ne devenait jamais l'aperçu ; la liste affichait le message d'avant |
+| `MessageReadStatusService` (3 sites) | un « Appel manqué » ne faisait monter aucun badge de non-lus |
+| delta `/sync` | les messages d'appel n'étaient jamais livrés à la synchro incrémentale |
+| `MessageHandler` (édition, suppression, réaction) | `{ id, deletedAt: null }` ne les trouvait pas — non réactionnables |
+| `ConversationMessageStatsService`, `ConversationStatsService` | non comptés |
+
+Le produit avait investi un cycle entier dans les messages d'appel riches
+(`tasks/2026-06-07-rich-call-system-messages.md`) ; ils entraient en base par une porte que le reste
+du gateway ne regarde pas.
+
+## Plan
+- [x] T1 — bootstrap d'environnement (leçon 102) : conteneur neuf, `bun install`, `prisma generate`, `bun run build`
+- [x] T2 — enquête : trois pistes du backlog instruites et écartées sur lecture des consommateurs
+- [x] T3 — RED : 2 témoins, un par créateur fautif, rouges pour la bonne raison
+- [x] T4 — GREEN : `LIVE_MESSAGE_MARK`, source unique étalée par les SEPT créateurs
+- [x] T5 — sondes de fidélité : trois défauts réintroduits un par un
+- [x] T6 — témoin de source, ajouté en RÉPONSE à ce que la 3e sonde a révélé
+- [x] T7 — gates : suite gateway complète, `tsc --noEmit`
+- [x] T8 — changeset + ADR + ce relevé + leçons
+
+## Vérification
+
+**Rouge observé avant correctif** : 2 témoins, un par créateur, sur `hasOwnProperty('deletedAt')`
+— l'assertion doit distinguer ABSENT de `null`, ce que `toMatchObject` ne fait pas de façon lisible.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| marqueur retiré du résumé d'appel | 1 (le sien ; le jumeau reste vert) |
+| marqueur retiré du message vivant | 1 (le sien ; symétrique) |
+| constante vidée en `{}` | 2, et RIEN d'autre sur 45 suites voisines |
+
+La troisième sonde est celle qui a appris quelque chose, et elle a changé le correctif : vider
+l'invariant ne fait tomber aucun témoin PRÉ-EXISTANT, sur aucun des sept chemins. Les cinq créateurs
+qui portaient le littéral depuis toujours n'avaient aucune couverture dessus — c'est exactement
+ainsi que les deux autres ont pu le perdre en silence. Le témoin de source (`liveMessage.test.ts`)
+a été écrit en réponse à ce constat, pas prévu au plan.
+
+**Gate** : suite gateway complète **643 suites / 16 273 tests, 0 échec, 0 suite rouge**
+(baseline leçon 102 : 640 / 16 261 sur un `main` antérieur). `tsc --noEmit` : 0 erreur.
+
+## Reste ouvert après ce cycle
+
+- **Les messages d'appel déjà écrits sans la colonne restent invisibles de ces lectures.** Réparables
+  par un `updateMany` sur `messageSource: 'system'` + `clientMessageId` préfixé `call-summary:`
+  dont la colonne est absente, sur le patron de `repair-mention-user-ids.ts`. Action humaine — cette
+  routine n'a aucun accès MongoDB.
+- **Rien n'empêche MÉCANIQUEMENT un huitième créateur d'omettre le marqueur.** Le prédicat défensif
+  `OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }]` — l'idiome que ce dépôt emploie déjà
+  pour `leftAt`, `expiresAt`, `parentId`, `mutedAt`, `invalidatedAt` — rendrait les lectures
+  indifférentes à la discipline des écrivains. C'est la solution de fond, sur 119 sites : un cycle
+  à elle seule, et la constante nommée de ce cycle en est le préalable (l'invariant est désormais
+  greppable). **Candidat sérieux pour le prochain cycle.**
+- **La sémantique `null` vs absent n'a pas été vérifiée contre une vraie base dans ce cycle.** Aucun
+  MongoDB n'est joignable depuis ce conteneur (pas de démon Docker). Elle repose sur le post-mortem
+  de `postIncludes.ts`, sur sa reconfirmation par le cycle 54, et sur le fait que six créateurs sur
+  sept écrivent la colonne — un geste sans objet si le filtre appariait l'absence. **Le correctif est
+  juste sous les DEUX sémantiques** : écrire `deletedAt: null` apparie `deletedAt: null` dans tous
+  les cas. Ce qui reste incertain est l'ampleur du défaut d'origine, pas la validité de sa réparation.
+- Hérités et non traités : `post_comment`/`comment_like` gardent leur asymétrie de forme (sans
+  conséquence, cf. ci-dessus) ; `softDeleteRetentionMs` reste du code mort documenté ; le push
+  APNs/FCM déjà délivré n'est pas rappelé ; iOS et Android ne lisent pas encore `deletedCommentIds`
+  (cycle 56) ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne
+  peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+# Cycle 57 — Le budget d'une vue unique se dépensait par ouverture, pas par spectateur
+
+Le backlog du cycle 56 laissait six items ouverts. Aucun n'a été pris : trois relèvent d'une
+plateforme que cet environnement ne compile pas, un attend une validation humaine, un est un
+outillage cassé (`eslint` sur le gateway), et le dernier — « `post_comment` et `comment_like`
+n'exposent pas `context.commentId` » — s'est **réfuté à la lecture**. Le retrait des notifications
+de commentaire couvre déjà les deux chemins JSON par un `$or`, son en-tête explique pourquoi, et
+aucun client ne lit `context.commentId` : uniformiser les huit producteurs changerait un contrat
+sans corriger aucun défaut observable. C'est la leçon 89 appliquée AVANT d'écrire, pour une fois.
+
+Le cycle est donc parti d'un audit du contrat temps-réel plutôt que d'une piste héritée : les 175
+constantes de `socketio-events.ts` confrontées à leurs émetteurs (gateway) et à leurs auditeurs
+(web, iOS). L'audit a rendu surtout de l'hygiène — trois `*_SYNC` déclarés que personne n'émet,
+un `socket.on(REACTION_SYNC)` mort côté web, `MESSAGE_READ_STATUS_UPDATED` émis en doublon de
+`READ_STATUS_UPDATED`. Mais il a mené à la route `consume`, et c'est là que le défaut était.
+
+## Le défaut
+
+`POST /conversations/:id/messages/:messageId/consume` incrémentait `Message.viewOnceCount` par un
+`update` **inconditionnel**. Le compteur mesurait donc des OUVERTURES. Tous ses lecteurs le lisent
+comme un nombre de SPECTATEURS : `isFullyConsumed`, l'annonce `message:consumed` diffusée à la
+room, la disparition du média chez les clients.
+
+Dans un groupe où l'émetteur a posé `maxViewOnceCount: 2`, le premier destinataire qui rouvre la
+photo une seconde fois porte `isFullyConsumed` à vrai. La route l'ANNONCE à toute la conversation.
+Le second destinataire perd un média qu'il n'a jamais ouvert. Et la route étant une mutation nue,
+sans clé d'idempotence, un rejeu — file hors-ligne, double tap, retry réseau — suffit à produire
+le même effet à lui seul.
+
+**La donnée qui rend le compte exact était écrite par ce même gestionnaire, deux instructions plus
+bas** : `MessageStatusEntry.viewedOnceAt`, par participant. Écrite, jamais relue.
+
+Un corollaire, trouvé en suivant la même ligne : cette écriture cherchait le participant par
+`userId`. Un anonyme porte un jeton de session dans `authContext.userId` — la ligne n'était jamais
+trouvée. Il dépensait donc le budget **sans qu'aucune trace n'enregistre qu'il l'avait fait**, et
+pouvait le dépenser indéfiniment.
+
+## Plan
+- [x] T1 — audit : contrat d'événements gateway/web/iOS, piste héritée réfutée, défaut localisé
+- [x] T2 — RED : 8 témoins de module + 5 de route, rouges pour la bonne raison
+- [x] T3 — GREEN : la revendication gardée, l'incrément n'en est que la conséquence
+- [x] T4 — câblage : résolution du spectateur, annonce conditionnée, `ROOMS`/`SERVER_EVENTS`
+- [x] T5 — sondes de fidélité : cinq défauts réintroduits un par un, restauration par copie
+- [x] T6 — gates : baseline mesurée sur arbre propre, suite complète, `tsc`
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Baseline mesurée, pas mémorisée** (leçon 90 #6) : arbre propre via `git stash`, suite gateway
+complète → **642 suites / 16 269 tests, 0 échec**. Après le lot : **644 / 16 282, 0 échec** —
++2 suites, +13 témoins, aucune régression. `tsc --noEmit` : **0 erreur**.
+
+**Rouge observé avant correctif** : les 5 témoins de route tombent sur le corps d'origine, et le
+témoin central reproduit le défaut utilisateur littéralement —
+
+```
+- "isFullyConsumed": false,   - "viewOnceCount": 1,
++ "isFullyConsumed": true,    + "viewOnceCount": 2,
+```
+
+deux ouvertures du même destinataire, sur un budget de deux, et le pair est dépossédé.
+
+**Sondes de fidélité** — chaque défaut réintroduit volontairement, restauration par **copie**
+(leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| incrément inconditionnel (le défaut d'origine) | 2 (seconde ouverture + création concurrente perdante) |
+| prédicat réduit à `{ viewedOnceAt: null }` | 1 (la colonne absente) |
+| toute panne d'écriture lue comme « déjà vu » | 1 (la panne remonte) |
+| création retirée quand l'entrée manque | 2 (spectateur sans entrée + la panne) |
+| corps de route d'origine restauré | 4 sur 5 |
+
+Aucune sonde n'a fait tomber un témoin qu'elle ne visait pas, et aucune n'a laissé tout vert. Le
+survivant de la dernière sonde est le **verrou du chemin nominal** — vert avant ET après, c'est
+exactement son rôle : interdire au correctif de rétrécir le cas courant.
+
+**Le double Prisma HONORE le filtre** (leçon 90 #5) : une entrée déjà estampillée n'est plus
+appariée par l'`updateMany`, et une création en double lève P2002. Un double qui aurait rendu la
+même ligne quelle que soit la question aurait laissé le témoin central vert sur un correctif
+absent — c'est précisément la configuration qui avait fait passer le balayage éphémère pour vivant
+pendant trois cycles.
+
+**Deux témoins pré-existants mis à jour, pas affaiblis.** `messages-routes.test.ts` portait deux
+cas de couverture de branche nommés d'après des numéros de ligne, qui épinglaient
+`viewParticipant = null` comme un chemin de **succès** — c'est-à-dire le corollaire anonyme
+lui-même, figé en contrat. Leur intention est conservée (« l'arithmétique de repli des colonnes
+nullables », « aucune entrée de statut n'est écrite ») et le second est ÉTENDU : le budget ne se
+dépense pas davantage. Un témoin nommé d'après une ligne de code mesure l'implémentation ; celui-ci
+mesure maintenant un comportement.
+
+## Reste ouvert après ce cycle
+
+- **Le serveur ne redacte pas le contenu d'un message à vue unique épuisé.** L'application de la
+  règle est entièrement côté client et le compteur reste consultatif : un client modifié lit le
+  contenu après `isFullyConsumed`. C'est une décision de conception (chiffrement, cache, pièces
+  jointes déjà téléchargées), pas un oubli — relevé pour mémoire.
+- **Rien ne rattrape les `viewOnceCount` déjà gonflés en base** par l'ancien chemin. Un script de
+  réparation les recalculerait depuis `MessageStatusEntry.viewedOnceAt`, qui porte la vérité par
+  participant. Action humaine : cette routine n'a aucun accès MongoDB.
+- **Hygiène du contrat d'événements, trouvée par l'audit et non traitée** : `REACTION_SYNC`,
+  `COMMENT_REACTION_SYNC` et `POST_REACTION_SYNC` sont déclarés dans `socketio-events.ts` et émis
+  par personne — les trois synchronisations répondent par ACK, ce que le SDK iOS documente
+  explicitement à ses deux sites. Le web porte en face un `socket.on(SERVER_EVENTS.REACTION_SYNC)`
+  qui ne se déclenchera jamais, et qui pousserait de surcroît un payload de synchronisation dans
+  ses auditeurs de `reaction:added`. Trois constantes et un auditeur à retirer.
+- **`MESSAGE_READ_STATUS_UPDATED` est émis en doublon de `READ_STATUS_UPDATED`** sur les cinq sites
+  de diffusion des accusés de lecture, et aucun client n'écoute le premier. Un alias qui double le
+  trafic de la famille d'événements la plus fréquente après `message:new`.
+- **`onMessageConsumed` n'a aucun consommateur applicatif côté web** : la couche socket l'expose,
+  aucun cache React Query ne s'y abonne. Un média épuisé par un pair ne change donc rien à l'écran
+  d'un utilisateur web avant rechargement.
+- Hérités et non traités : `softDeleteRetentionMs` reste du code mort et le nom
+  `ExpiredStoriesCleanupService` ment sur son périmètre ; le push APNs/FCM déjà délivré n'est pas
+  rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne
+  peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9) ; iOS et Android ne
+  lisent pas encore `deletedCommentIds`.
+
+---
+
+# Cycle 56 — La suppression emportait le fil sans jamais le dire
+
+Le backlog du cycle 54 portait sa tête ailleurs : « les `TrackingLink` d'une story détruite ne sont
+toujours pas désactivés ». Elle est juste — et elle était **déjà prise** : la PR #2761, ouverte par
+une session sœur vingt minutes avant ce cycle, la traitait ; elle a fusionné pendant celui-ci et
+porte le numéro 55. Prendre l'item suivant de la même liste plutôt que le doubler. Celui-ci y
+figurait sous le nom hérité du cycle 52 : « `broadcastCommentDeleted` n'annonce que la cible et pas
+le sous-arbre ».
+
+## Ce que la piste héritée disait, et ce qu'elle ne disait pas
+
+Elle est confirmée telle quelle — chose rare. Mais son énoncé la fait passer pour un défaut de
+broadcast, et elle ne l'est pas : **le broadcast n'a jamais eu la liste**. Elle mourait un étage plus
+bas.
+
+`PostCommentService.deleteComment` soft-delete le sous-arbre ENTIER depuis le cycle qui a corrigé
+l'invariant de `commentCount` — cible + descendants, profondeur arbitraire, une seule liste d'ids
+qui sert aussi au décompte et au retrait des notifications. Sa valeur de retour : `{ success: true }`.
+La liste ne sortait pas de la méthode. Son seul appelant n'avait donc rien d'autre à annoncer que le
+`commentId` qu'il tenait déjà de son propre chemin d'URL.
+
+## Ce que ça faisait à l'écran
+
+Chez tout client qui avait déplié les réponses, elles restaient affichées. Le serveur venait de les
+retirer.
+
+**Et rien ne les enlevait jamais.** `getComments` filtre `parentId: null` : le parent supprimé n'est
+plus rendu, donc `getReplies` n'est plus jamais appelé pour ses réponses. Ni le refetch, ni
+l'invalidation, ni un aller-retour sur le post ne les faisaient disparaître — seulement un
+rechargement complet de la page.
+
+Le compteur, lui, était juste depuis le début : `commentCount` voyage en ABSOLU. L'écran affichait
+donc « 1 commentaire » au-dessus de trois lignes visibles, et c'est cette contradiction-là que
+l'utilisateur voyait, pas l'absence d'un id dans un payload.
+
+## Plan
+- [x] T1 — enquête : piste héritée confirmée, mais l'étage fautif n'est pas celui qu'elle nomme
+- [x] T2 — RED : 5 témoins (3 service, 2 route) + 2 web, tous rouges pour la bonne raison
+- [x] T3 — GREEN : la liste remonte, la route l'annonce, le web en purge ses caches
+- [x] T4 — source unique : liste calculée UNE fois, partagée par soft-delete/décompte/retrait/annonce
+- [x] T5 — sondes de fidélité : trois défauts réintroduits un par un
+- [x] T6 — gates : suites gateway + web, `tsc` sur les trois paquets touchés
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+**Rouge observé avant correctif** : 5 témoins gateway (les 3 du service sur `deletedCommentIds`
+absent, les 2 de la route sur le payload sans la liste) + 1 web (les réponses orphelines survivent
+en cache — le défaut utilisateur reproduit tel quel). Le 2e témoin web (repli sans liste) passait
+déjà : il verrouille le comportement d'AVANT, qui doit survivre au correctif.
+
+**Sondes de fidélité** — chaque défaut réintroduit volontairement, restauration par **copie**
+(leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| le service ne rend que `[commentId]` | 2 (sous-arbre profond + égalité avec la liste soft-deletée) |
+| repli de la route `?? [commentId]` → `?? []` | 1 (le rejeu) |
+| le web ignore `deletedCommentIds` | 1 (les réponses orphelines) |
+
+Aucune sonde n'a fait tomber un témoin qu'elle ne visait pas, et aucune n'a laissé tout vert.
+Le témoin « cible seule sur une feuille » reste vert sous la 1ère sonde — c'est correct : sur une
+feuille, `[commentId]` EST la bonne réponse. Un témoin qui serait tombé là aurait mesuré
+l'implémentation, pas le comportement.
+
+**Suites** : gateway `(omment|SocialEvents|posts)` → 92 suites / 1862 tests verts ; web
+`__tests__/hooks/{queries,social}` → 24 suites / 529 verts ; web `__tests__/components` → 201 suites
+/ 4155 verts. `tsc --noEmit` : **0 erreur** sur gateway, 0 sur shared, aucune sur le fichier web
+touché.
+
+**Deux témoins pré-existants mis à jour, pas affaiblis** : `PostCommentService.test.ts` et
+`PostService.test.ts` asseyaient `toEqual({ success: true })` — une égalité EXACTE que le champ
+ajouté casse mécaniquement. Passés à `expect.objectContaining({ success: true })` : leur intention
+(« la suppression reste réussie même si le retrait des notifications échoue », « le décompte est
+juste ») est intacte, et ils ne prétendent plus verrouiller la forme complète du retour, ce qu'ils
+ne cherchaient pas à faire.
+
+## Reste ouvert après ce cycle
+
+- **iOS et Android ne lisent pas encore `deletedCommentIds`, et n'en souffraient pas** — vérifié en
+  lisant leur code plutôt qu'en le supposant (la première rédaction de ce relevé affirmait
+  l'inverse). iOS `PostDetailViewModel` fait `repliesMap[id] = nil` + `expandedThreads.remove(id)`
+  sur chaque `comment:deleted` ; Android `PostCommentsViewModel.onCommentDeleted` appelle
+  `CommentRepliesState.removedThread(commentId)`. **Le web était le seul client sans cette
+  compensation** — le défaut n'était donc pas « le serveur se tait » tout court, mais « le serveur
+  se tait, et deux clients sur trois ont chacun payé une traversée locale pour compenser ». C'est
+  cette duplication-là que `deletedCommentIds` rend caduque : les deux traversées peuvent céder la
+  place à un retrait autoritatif, un cycle par plateforme (cet environnement ne compile ni Swift ni
+  Kotlin — leçon 88c), avec leur propre gate.
+- **Le rejeu idempotent annonce toujours la seule cible.** `onDuplicate` ne rend qu'un `{ id }` et
+  le sous-arbre n'est plus reconstructible par une lecture vivante. Le repli reproduit exactement
+  l'existant ; le faire mieux demanderait de stocker la liste dans la `MutationLog`, ce qui est une
+  décision de conception sur le journal, pas sur la suppression.
+- Hérités et non traités ce cycle : `softDeleteRetentionMs` reste du code mort (le champ est assigné
+  et journalisé, `cleanup()` ne le lit pas) ; le nom `ExpiredStoriesCleanupService` ment sur son
+  périmètre ; `post_comment` et `comment_like` n'exposent pas `context.commentId` ; le push APNs/FCM
+  déjà délivré n'est pas rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation
+  humaine ; `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
+# Cycle 55 — Le lien de partage survivait à la story qu'il partageait
+
+Les deux ADR du gateway se terminent, l'une et l'autre, par la même réserve : « les `TrackingLink`
+visant une story détruite ne sont pas désactivés par cette passe ». Portée en backlog depuis le
+cycle 53, elle a cessé d'être théorique au cycle 54 : celui-ci a rendu le balayage effectif pour la
+première fois, donc toute story finit désormais par être détruite, donc tout lien de partage de
+story finissait par pointer sur une ligne qui n'existe plus.
+
+## Le défaut
+
+Le retrait interactif d'un post — l'app comme la console — coupe ses `/l/<token>` depuis trois
+cycles. C'est le troisième effet de `applyPostRemovalEffects`, et son commentaire dit exactement
+pourquoi : « le soft-delete ne bascule que `deletedAt`, le `onDelete: Cascade` ne se déclenche
+jamais, les `/l/<token>` qui visent ce post resteraient donc opérationnels ». Le balayage du contenu
+éphémère est l'AUTRE chemin qui rend un post inatteignable, et le SEUL qui le DÉTRUISE. Il ne
+coupait rien.
+
+Et rien ne pouvait le rattraper après coup : `TrackingLink.targetId` n'a ni relation ni cascade vers
+`Post` — le champ est polymorphe, il porte indifféremment un `postId`, un `conversationId` ou un
+`userId`, et le schéma l'écrit. La ligne `Post` détruite, plus aucun chemin du gateway ne sait
+relier le lien à sa cible disparue. Le lien survivait `isActive: true`, pour toujours :
+`/l/:token` comptait son clic, incrémentait `totalClicks`, écrivait un `TrackingLinkClick`, puis
+redirigeait vers une page morte. `resolveTarget` rendait `isActive: true` avec un `targetId` que
+plus rien ne résout, et la page web comme le `DeepLinkRouter` iOS ouvraient un post inexistant.
+
+Le même contenu retiré à la main répondait, lui, 410 `LINK_INACTIVE`. **Un objet, deux fins de vie
+selon le chemin de retrait — et la plus fréquente des deux, l'expiration que TOUTE story atteint,
+était la mauvaise.**
+
+## Réfutation du remède avant de l'écrire (leçon 94)
+
+Trois cas cherchés nommément, chacun capable de rendre le correctif faux :
+
+1. **Un lecteur légitime d'un lien actif vers un post détruit.** Aucun : `getPostById` est gardé par
+   `NOT_DELETED`, et le tableau de bord du partageur lit les statistiques, pas la cible.
+2. **Un `targetId` qui désignerait autre chose qu'un post.** Le champ est polymorphe, mais les
+   ObjectId ne se confondent pas d'une collection à l'autre — et le retrait interactif filtre déjà
+   sur `targetId` seul, sans `targetType`, depuis trois cycles. S'aligner sur lui, et non inventer
+   un filtre plus étroit que celui de la règle qu'on extrait.
+3. **Une désactivation qui emporterait des données.** Elle en emporterait si elle SUPPRIMAIT : les
+   `TrackingLinkClick` référencent le lien sans cascade déclarée. D'où le geste retenu — désactiver,
+   comme le fait déjà le retrait interactif.
+
+## L'instant retenu, et celui qui ne l'a pas été
+
+Le post devient inatteignable au SOFT-delete (`getPostById` est gardé par `NOT_DELETED`), pas au
+hard-delete. C'est donc l'instant théoriquement juste, et c'est celui du retrait interactif — qui
+n'a d'ailleurs pas le choix : un post non éphémère n'est JAMAIS hard-deleté, il reste soft-deleté
+pour toujours. Les deux chemins agissent en fait au même endroit logique : **le moment où leur
+contenu devient définitivement inatteignable par leur propre chemin.**
+
+Ancrer dans la passe de hard-delete a été retenu pour une raison de coût, notée honnêtement : la
+passe de soft-delete est un `updateMany` qui ne matérialise aucun id. Lui en faire produire
+demanderait de la convertir en `findMany` + `updateMany`, donc de la BORNER — un `$in` de tout le
+passif n'est pas une requête à émettre (leçon 89.5 : un plafond change de sens quand l'entrée change
+de nature) — donc de réécrire les témoins que le cycle 54 vient de construire autour de la forme
+actuelle. Le gain réel se mesure : les deux bornes valant sept jours depuis `expiresAt`, un post
+devient éligible aux deux au même instant et la fenêtre résiduelle est d'une passe en régime
+permanent. Elle s'allonge pendant un rattrapage de passif — c'est la réserve de ce cycle.
+
+## Plan
+- [x] T1 — enquête : réserve héritée confirmée par diff avec le jumeau (leçon 95), impact tracé
+      jusqu'aux deux clients (route `/l/:token` ET `resolveTarget`)
+- [x] T2 — réfutation du remède avant écriture : trois cas cherchés, aucun ne tient
+- [x] T3 — RED : 8 témoins, 3 rouges + 1 suite qui ne résout pas son module
+- [x] T4 — GREEN : module de règle unique, câblé aux deux chemins
+- [x] T5 — sondes de fidélité : cinq défauts réintroduits un par un, restauration par COPIE
+- [x] T6 — gates : suite gateway complète, comparée à une BASELINE mesurée sur arbre propre
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+Rouge observé avant correctif : 3 témoins sur 8 tombent, plus la suite du module neuf qui ne résout
+pas son import.
+
+**Sondes de fidélité** — chaque témoin re-vérifié en réintroduisant son défaut, restauration par
+**copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| appel retiré du balayage | 3 |
+| `ids` au lieu de `allPostIds` (reposts oubliés) | 1 |
+| erreur avalée par un `try/catch` | 1 |
+| désactivation placée APRÈS les suppressions | 2 |
+| garde de liste vide retirée du module | 1 |
+
+Le témoin « rien à détruire ⇒ aucune requête sur les liens » est **double-gardé** (garde externe
+`toDelete.length > 0` ET garde du module) et ne discrimine donc aucune des deux prise isolément —
+la sonde 5 fait tomber le témoin du module, pas celui-ci. Il pinne le contrat de bout en bout et son
+en-tête le dit, sur le patron de la note équivalente de la suite des sons. Ne pas le prendre pour
+un témoin fort.
+
+**Baseline mesurée, pas mémorisée** (leçon 90.6). Une première baseline a été lancée en tâche de
+fond pendant que le correctif s'écrivait : elle est ressortie à 21 suites rouges dont
+`postRemovalEffects` — c'est-à-dire qu'elle avait lu un arbre déjà modifié. **Jetée.** Le travail a
+été commité d'abord (rien à perdre), puis la baseline relancée sur `HEAD~1` en tête détachée, arbre
+réellement propre :
+
+- **Avant** : 20 suites en échec, 620 vertes, 640 au total, **15 799 tests, 0 échec de test**.
+- **Après** : **mêmes 20 suites**, 622 vertes, 642 au total, 15 807 tests — les deux suites neuves
+  et leurs 8 témoins.
+- **`diff` des LISTES de suites en échec : identiques.** Aucune régression, et la preuve ne repose
+  pas sur une parole.
+
+Les 20 suites rouges sont la condition pré-existante notée au cycle 54 (`PostReactionService.ts:354`,
+`groupBy` non typé par le client Prisma généré dans cet environnement) : 0 test en échec, 20 suites
+qui ne compilent pas.
+
+`tsc --noEmit` : 362 lignes, identiques avant et après ; les deux seules erreurs sur des fichiers
+touchés sont le bruit de résolution `@meeshy/shared/prisma/client` en ligne 1, présent à
+l'identique sur des fichiers jamais touchés. Le module neuf n'en produit aucune — il ne dépend pas
+du client Prisma généré, seulement de la surface qu'il déclare.
+
+**Ce que la CI a trouvé et que la baseline locale ne pouvait pas voir.** Un TROISIÈME témoin pinnait
+la forme scalaire du filtre : `posts-share-tracking.test.ts:222`. Il fait partie des 20 suites qui ne
+COMPILENT pas dans cet environnement — une suite qui ne démarre pas ne peut faire tomber aucune
+assertion. La comparaison « mêmes 20 suites avant/après » prouvait l'absence de régression parmi les
+suites qui TOURNENT, et rien du tout sur les 20 autres, soit ~3 % du dépôt. Corrigé au même titre
+que les deux premiers ; leçon 100. **Le geste juste, pour tout changement de FORME d'un appel, est
+un `grep` sur la forme — pas la liste des tests qui rougissent, qui en est un sous-ensemble dont le
+complément est exactement invisible.**
+
+**Une observation fabriquée, écrite puis retirée.** Une étape de CI vue « en cours » à trois
+sondages d'intervalle a été déclarée bloquée depuis 50 min ; un correctif de CI (borner le job
+`quality`, sans `timeout-minutes` alors que tout le pipeline l'attend) a été écrit sur cette base,
+puis retiré avant merge. L'étape avait duré **93 secondes** : les sondages se suivaient sans qu'une
+seule seconde réelle s'écoule entre eux. Le manque de borne sur `quality` est réel et reste au
+backlog ci-dessous — mais il se justifiera par le défaut lui-même, pas par un incident inventé.
+
+## Reste ouvert après ce cycle
+
+- **Les 20 suites rouges de cet environnement sont un angle mort mesurable, pas un décor.** Elles ne
+  compilent pas (`PostReactionService.ts:354`, `groupBy` non typé par le client Prisma généré ici) et
+  ne peuvent donc contredire aucun cycle — c'est ce qui a laissé passer le troisième témoin de ce
+  cycle. **Réparer cette compilation locale vaudrait plus qu'un cycle de correctif** ; en attendant,
+  tout cycle touchant `PostService`/`PostReactionService` liste ses sites par `grep`.
+- **Le job CI `quality` n'a aucun `timeout-minutes`** alors que `test`, `prisma` et `build`
+  l'attendent tous par `needs: quality` : il hérite du défaut GitHub de 6 h, et une étape bloquée y
+  gèlerait tout le pipeline. Ses deux étapes étant `continue-on-error`, une borne ne peut pas faire
+  échouer une PR pour du bruit. Onze des douze jobs du fichier sont dans ce cas ; seul `test` est
+  borné. Changement d'un mot par job, à faire dans sa propre PR.
+- **La fenêtre soft-delete → hard-delete laisse les liens actifs sur un post déjà masqué.** Une
+  passe en régime permanent, davantage pendant un rattrapage de passif. Se ferme en bornant la passe
+  de soft-delete (`findMany` + `updateMany`), ce qui est aussi ce que réclamerait tout autre effet
+  ancré sur le masquage — **candidat sérieux pour un prochain cycle, à faire d'un bloc plutôt que
+  deux fois à moitié.**
+- **Les liens des posts détruits AVANT ce correctif restent `isActive: true` en base**, sans cible
+  et sans chemin pour les retrouver — leur `targetId` désigne des ObjectId qui n'existent plus. Un
+  script les détecterait par absence de cible, sur le patron de `repair-mention-user-ids.ts`. Action
+  humaine : cette routine n'a aucun accès MongoDB.
+- **`softDeleteRetentionMs` reste du code mort** (hérité du cycle 54) : assigné et journalisé, jamais
+  lu par `cleanup()`. Le corriger, c'est choisir entre supprimer le champ et ré-ancrer la seconde
+  passe — décision de conception à part entière, et elle se pose en même temps que la borne
+  ci-dessus.
+- **Le nom `ExpiredStoriesCleanupService` ment sur son périmètre** (hérité du cycle 54).
+- **`createStoryCommentNotificationsBatch` garde son `visibility?` optionnel à défaut `PUBLIC`** —
+  footgun mécanique, sans risque à fermer, en file depuis le cycle 26.
+- **`post_comment` et `comment_like` n'exposent pas `context.commentId`** (hérité du cycle 52) —
+  leur lien ne vit que dans `metadata.commentId`, et le payload APNs porte l'aveu écrit de
+  l'asymétrie (`params.context.commentId || params.metadata.commentId`).
+- Inchangés : `broadcastCommentDeleted` n'annonce que la cible et pas le sous-arbre (traverse le
+  Swift que cet environnement ne compile pas) ; le push APNs/FCM déjà délivré n'est pas rappelé ;
+  l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut pas
+  tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
+# Cycle 54 — Le balayage tournait toutes les heures et ne balayait rien
+
+Le backlog du cycle 53 portait une tête bien formée : « les posts `STATUS` expirent et ne sont
+balayés par rien ». Elle était juste. Mais en allant vérifier ce que le balayage faisait des
+stories — le type qu'il connaît — il est apparu qu'il n'en faisait rien non plus. La tête du
+backlog décrivait la moitié visible d'un défaut dont l'autre moitié était que **le balayage n'a
+jamais rien balayé**.
+
+## D1 — la passe de soft-delete n'appariait aucun post
+
+Son filtre était `deletedAt: null`. Sur le connecteur MongoDB de Prisma, un filtre nul ne matche
+QUE les documents où le champ est **présent-et-null** ; `post.create` n'écrit jamais cette colonne,
+donc sur un post vivant elle est **ABSENTE**.
+
+Ce n'est pas une déduction : le dépôt a déjà payé ce piège en production. `posts/softDelete.ts`
+existe pour lui, et le commentaire de `postIncludes.ts` en donne le compte-rendu — « the naive
+`null` filter then silently drops EVERY live post, which emptied the feed / reels / stories
+endpoints in production (all posts returned `data: []` while the collection was full) ». Le cycle 53
+lui-même a corrigé la même erreur sur `firstMessageSentAt`, en revue pré-merge, la veille.
+
+Cette passe portait **le dernier `deletedAt: null` du modèle `Post`** — tous les autres sites lisent
+`NOT_DELETED`. Du côté ÉCRITURE cette fois : au lieu de masquer tous les posts vivants d'une
+lecture, il les excluait tous d'un balayage. `softDeleted` valait 0 à chaque heure. Et comme la
+passe de hard-delete exige un `deletedAt` non nul, elle ne voyait que les stories supprimées **à la
+main** — ni la purge des médias (G7), ni la libération des usages de sons, ni le retrait des
+notifications (cycle 53) ne se sont jamais appliqués à une story périmée. Trois cycles de travail
+branchés sur un chemin mort.
+
+## D2 — un type éphémère sur deux
+
+`type: 'STORY'`. Un `STATUS` expire en 1 h, disparaît bien des lectures à l'échéance
+(`getStatuses`/`getDiscoverStatuses` filtrent `expiresAt > now`) et sa ligne vivait pour toujours.
+
+La cause n'est pas l'oubli mais la **duplication** : celui qui POSE l'échéance (`PostService`) et
+celui qui l'HONORE portaient chacun sa copie de la liste. Les deux dérivent désormais de
+`posts/ephemeralPosts.ts`, et la liste des types est elle-même dérivée des clés de la table des
+durées — un type éphémère ajouté là reçoit son échéance ET son balayage.
+
+## D3 — la fournée n'était bornée par rien
+
+Sans conséquence tant que D1 la gardait vide. Corrigée, la première passe affronte tout
+l'historique. Or le retrait des notifications **rejette** à son plafond (40 000 lignes) et s'exécute
+AVANT toute destruction : sans borne il aurait renoncé, rien n'aurait été détruit, et la passe
+suivante aurait retrouvé le même ensemble. **Non pas lente — bloquée.** C'est exactement la leçon
+89.5 du cycle précédent (« un plafond change de sens quand l'entrée change de nature »), rencontrée
+cette fois par anticipation plutôt qu'en revue.
+
+Fournée bornée à 500 posts, la plus anciennement périmée d'abord, réglable ; une fournée pleine est
+journalisée — le signal que le cycle 53 notait comme manquant.
+
+## D4 — réparer D1 éteignait une fonctionnalité livrée
+
+Trouvé en écrivant les conséquences de D1, pas en le codant. `getStories` renvoie à un AUTEUR ses
+propres stories périmées pendant **sept jours**, pour que « Mes stories » puisse les archiver — et
+sa requête est gardée par `deletedAt: NOT_DELETED`. Un soft-delete posé à l'échéance aurait donc
+vidé « Mes stories » au bout d'une heure. La fonctionnalité ne marchait que parce que D1 rendait la
+passe inerte : **la réparer la cassait.**
+
+Le balayage attend désormais la fin de la fenêtre d'archive avant de masquer — il est le lecteur
+SUIVANT, pas le concurrent. La fenêtre est passée dans `ephemeralPosts.ts` et `PostFeedService`
+l'en réexporte : deux copies dériveraient, et le jour où celle du feed s'allongerait, le balayage la
+devancerait en silence.
+
+## Plan
+- [x] T1 — enquête : la tête du backlog confirmée (D2), puis le chemin lui-même trouvé mort (D1)
+- [x] T2 — RED : 8 témoins sur D1/D2/D3, puis 2 de plus sur D4
+- [x] T3 — GREEN : `NOT_DELETED`, table des types éphémères, fournée bornée, attente de l'archive
+- [x] T4 — source unique : `PostService` et `PostFeedService` branchés sur `ephemeralPosts.ts`
+- [x] T5 — sondes de fidélité : cinq défauts réintroduits un par un, plus une re-sonde
+- [x] T6 — gates : suite gateway complète sous bun, comparée à une BASELINE sur arbre propre
+- [x] T7 — changeset + ADR + ce relevé + leçon
+
+## Vérification
+
+Rouge observé avant correctif : 8 témoins sur 13 tombent (les 5 verts portent sur le module neuf).
+
+**Sondes de fidélité** — chaque témoin re-vérifié en réintroduisant volontairement son défaut,
+restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| `deletedAt: NOT_DELETED` → `null` (D1) | 2 |
+| type scalaire `'STORY'` au soft-delete (D2a) | 2 |
+| type scalaire `'STORY'` au hard-delete (D2b) | 3 |
+| borne de fournée retirée (D3) | 3 |
+| `STATUS` retiré de la table des durées | 3 |
+
+**Une sonde a trouvé un faux vert et l'a fait corriger.** À la première passe, la sonde D2b ne
+faisait tomber que 2 témoins : le témoin de bout en bout restait VERT sur un balayage borné aux
+stories, parce que son double Prisma rendait la même ligne quelle que soit la question posée. Il
+mesurait la chaîne de destruction, jamais ce qui y entre. Double corrigé pour HONORER le filtre de
+type ; la re-sonde fait bien tomber 3 témoins. C'est la leçon 2 (« le test passe » ≠ « le test
+verrait la régression ») rencontrée sur un double qui simplifiait l'API qu'il simule.
+
+**Baseline explicite plutôt que lecture d'un total.** L'environnement de cette routine porte une
+erreur de typage pré-existante (`PostReactionService.ts:354`, `groupBy` non typé par le client
+Prisma généré ici) qui empêche 20 suites de COMPILER — 0 test en échec, 20 suites qui ne démarrent
+pas. Comparer un total à celui d'un cycle précédent aurait été trompeur. Suite complète relancée sur
+l'arbre PROPRE (`git stash`) : **20 suites en échec, 619 vertes, 15 784 tests, 0 échec de test.**
+Avec le correctif : **mêmes 20 suites**, 620 vertes, la suite neuve en plus. Aucune régression, et
+la preuve ne repose pas sur ma parole quant à ce qui était déjà rouge.
+
+`tsc --noEmit` : aucune erreur imputable aux fichiers touchés (seul subsiste le bruit de résolution
+`@meeshy/shared/prisma/client`, présent à l'identique sur des fichiers jamais touchés — le
+type-check de la CI est d'ailleurs `continue-on-error`).
+
+## Reste ouvert après ce cycle
+
+- **Le passif ne se rattrape que passe par passe.** À la mise en production le balayage devient
+  effectif pour la première fois : 500 posts/heure, 12 000/jour. Aucune réparation rétroactive des
+  lignes DÉJÀ orphelines (médias au `postId` nul, usages de sons, notifications de posts détruits à
+  la main avant ce correctif) — action humaine, sur le patron de `repair-mention-user-ids.ts`.
+- **`softDeleteRetentionMs` reste du code mort** : le champ est assigné et journalisé, mais
+  `cleanup()` ne le lit pas. Il documente une intention (6 h de grâce entre masquage et destruction)
+  que la passe n'implémente pas — le hard-delete est ancré sur `expiresAt`, pas sur `deletedAt`.
+  Non touché ce cycle : le corriger, c'est choisir entre supprimer le champ et ré-ancrer la seconde
+  passe, ce qui est une décision de conception à part entière.
+- **Le nom `ExpiredStoriesCleanupService` ment maintenant sur son périmètre** (il balaie aussi les
+  `STATUS`). Renommer invaliderait six documents d'archive qui le citent nommément ; la doc de
+  classe porte la correction à la place. À trancher si le service prend un troisième type.
+- **Les `TrackingLink` d'une story détruite ne sont toujours pas désactivés par la passe** (hérité
+  du cycle 53) ; `broadcastCommentDeleted` n'annonce que la cible et pas le sous-arbre (hérité du
+  cycle 52, traverse le Swift que cet environnement ne compile pas — leçon 88c) ; `post_comment` et
+  `comment_like` n'exposent pas `context.commentId` ; le push APNs/FCM déjà délivré n'est pas
+  rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut
+  pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
+# Cycle 53 — Une story périmée n'est pas une story détruite
+
+Le cycle 52 laissait cette tête en backlog sous le nom « les stories expirées ne retirent pas leurs
+notifications ». La leçon 18 dit quoi en faire : une piste héritée est une **hypothèse à réfuter
+d'abord**. Elle a été réfutée sur le mot qui décide tout — *expirées* — puis confirmée sur l'autre
+moitié, celle que son propre énoncé nommait déjà sans qu'on l'entende : *hard-delete*.
+
+## D1 (la piste, et pourquoi elle était fausse)
+
+L'audit est parti d'une piste plus élégante que celle du backlog. `Notification.expiresAt` existe,
+les sept lectures d'inbox l'honorent depuis `visibleNotificationsWhere`, et le cycle précédent
+(PR #2751) venait de brancher les **quatre** producteurs ancrés sur un message pour qu'ils en
+héritent. Une story est le contenu éphémère canonique : `Post.expiresAt`, écrit à l'insertion et
+jamais modifié — vérifié, les deux seuls autres sites d'écriture sont des `create` de repost.
+Mieux encore, **six** producteurs reçoivent déjà `postExpiresAt` de leurs appelants et le déposent
+dans `context.postExpiresAt`, une ligne au-dessus de la colonne qui les masquerait. Toute la forme
+du défaut jumeau était là : *l'échéance arrive au producteur et s'arrête juste avant la colonne.*
+
+**C'est faux, et le vérifier a demandé de lire les clients.** `context.postExpiresAt` n'est pas une
+échéance oubliée en route : c'est une fonctionnalité livrée des deux côtés. Le web en tire
+« · expirée » (`notification-helpers.ts:553`), iOS en tire `expiryLabel` et
+`isLinkedContentExpired` (`NotificationModels.swift:823/829`). Le produit **montre** délibérément
+la notification d'une story périmée, marquée comme telle. Estampiller la colonne l'aurait masquée
+côté serveur et rendu mort le code des deux clients — la régression exacte que le cycle 51 avait
+appris à chercher sous le nom de « faux positif ».
+
+La différence avec le message éphémère est réelle et se lit dans la donnée, pas dans l'intention :
+
+| | message éphémère | story périmée |
+|---|---|---|
+| Ce que la ligne montre | un libellé générique (`protectedPreview`) | un vrai extrait, un acteur, une vignette |
+| Ce que la cible répond | rien, le message est détruit à l'échéance | **encore le post** — `getPostById` ne filtre pas l'expiration |
+| Geste juste | masquer | montrer, marqué « expirée » |
+
+## D2 (le défaut, là où il est vraiment)
+
+`ExpiredStoriesCleanupService` est le **seul chemin de hard-delete de post du gateway** (vérifié :
+les deux seuls `post.deleteMany` du dépôt sont les siens). Sept jours après l'expiration, il détruit
+les lignes `Post` des stories, de leurs reposts et de tous leurs commentaires. À cet instant les
+deux appuis de la notification tombent **ensemble** : sa copie dénormalisée décrit un contenu qui
+n'existe plus, et son `view_post` n'ouvre plus qu'un 404. Le badge non lu, lui, ne peut plus être
+décrémenté par personne — on ne lit pas ce qui n'est plus là.
+
+Toutes les stories expirent. Toutes finissaient donc par laisser leurs lignes.
+
+C'est bien ce que le backlog du cycle 52 décrivait — « hard-delete les posts après 7 jours sans
+passer par `applyPostRemovalEffects` ». La piste « plus élégante » l'avait déplacé de sept jours et
+d'un cran de sévérité. **La note d'origine avait raison ; c'est la relecture qui s'était trompée.**
+
+Sa question ouverte — « le hard-delete déclenche-t-il une cascade que le soft-delete ne déclenchait
+pas ? » — se répond en lisant le modèle : `Notification` n'a de relation que vers `User` et
+`Message`. Aucune vers `Post`. Rien ne se déclenche, dans un sens comme dans l'autre.
+
+## D3 (placement) — la passe nommait déjà la règle, pour un autre effet
+
+Le retrait ne passe PAS par `applyPostRemovalEffects` : cette liste écrirait une ligne
+`AdminAuditLog` pour un balayage sans acteur, et re-libérerait des usages de sons que la passe
+libère déjà. Elle nomme les effets d'un retrait **décidé par quelqu'un** ; ceci est une fin de vie.
+
+En revanche la passe porte déjà, au-dessus de `releasePosts`, la règle qui gouverne exactement ce
+cas : « placé AVANT les suppressions de posts, et il REJETTE volontairement : `SoundUsage.postId`
+n'a ni relation ni cascade, donc supprimer les posts après un échec de libération laisserait des
+usages que plus aucun chemin n'atteindrait. » `context.postId` a la même forme — ni relation, ni
+cascade. Le retrait prend donc la même place et le même contrat, et la règle n'a pas eu à être
+inventée : **elle était écrite trois lignes plus bas, pour son voisin.**
+
+## D4 (la cible est une fournée) — et le plafond change de sens avec elle
+
+`retractPostNotifications` prend désormais une **liste**, comme son jumeau
+`retractCommentNotifications` : un `$in` sur stories ∪ reposts, au lieu d'une lecture par post. Les
+notifications des commentaires détruits partent avec — toute la famille du fil porte aussi
+`context.postId`.
+
+Son plafond de drainage **rejette** au lieu d'avertir, et c'est l'entrée qui l'exige, pas un goût
+pour la sévérité : tant qu'elle était UN post, le plafond ne bornait aucune audience réaliste. Elle
+est maintenant une heure d'expirations de toute la plateforme — un ensemble que rien ne borne. Un
+plafond atteint en silence laisserait l'appelant détruire les posts, et les lignes restantes
+n'auraient alors plus **aucun** chemin de retrait, la passe suivante ne voyant plus les posts. Le
+rejet rend la reprise possible, et elle converge : les lots déjà lus ont bien été supprimés.
+
+## Plan
+- [x] T1 — enquête : la piste héritée réfutée sur les clients, puis confirmée sur le hard-delete
+- [x] T2 — RED (unité) : liste, `$in`, liste vide, plafond qui rejette
+- [x] T3 — RED (câblage) : stories ∪ reposts, retrait avant destruction, renoncement sur échec,
+      annonce par destinataire, aucune question quand rien n'a expiré, sans annonceur
+- [x] T4 — GREEN : `retractPostNotifications` élargi + appel gardé dans la passe de hard-delete
+- [x] T5 — sondes de fidélité (leçon 45b/93) : cinq défauts réintroduits un par un
+- [x] T6 — gates : suite gateway complète sous bun, `tsc --noEmit` propre
+- [x] T7 — changeset + ADR + ce relevé
+
+## Vérification
+
+Rouge observé avant le correctif : les six témoins de câblage tombent, l'appel n'existant pas.
+
+**Sondes de fidélité** — chaque témoin re-vérifié en réintroduisant volontairement le défaut qu'il
+prétend attraper, restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| appel du retrait supprimé de la passe | 5 |
+| retrait borné aux stories (reposts oubliés) | 1 |
+| retrait placé APRÈS les suppressions | 2 |
+| plafond qui avertit au lieu de rejeter | 1 |
+| liste vide qui interroge quand même Mongo | 1 |
+
+**Deux suites voisines ont dû être réparées, et les deux réparations disent quelque chose.**
+`postRemovalEffects.test.ts` verrouillait la forme scalaire du filtre — assertion mise à jour, le
+comportement mesuré est inchangé. `ExpiredStoriesCleanupService.sounds.test.ts`, lui, est tombé
+parce que son double Prisma ne connaît pas `$runCommandRaw` : le retrait rejetait, et la libération
+des usages — ce que cette suite mesure — n'était plus atteinte. C'est **exactement** le contrat
+voulu (le retrait gouverne la passe), observé depuis une suite qui ne le teste pas. Ajouter les deux
+doubles n'affaiblit donc rien : c'est la même leçon que le commentaire déjà présent dans ce fichier
+à propos de `soundUsage` — un double manquant transforme une garde en avale-tout silencieux.
+
+Suite gateway complète sous bun (parité CI) : **639 suites, 16 241 tests, tout vert**.
+Couverture globale lignes **95,76 %** — inchangée. `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Aucune ligne déjà orpheline n'est rattrapée**, comme aux cycles 51 et 52 : le correctif ne vaut
+  que pour les destructions à venir. Réparable par le patron de `repair-mention-user-ids.ts` —
+  action humaine, cette routine n'a aucun accès MongoDB.
+- **Les posts `STATUS` expirent et ne sont balayés par rien.** Le balayage filtre `type: 'STORY'` ;
+  une story dure 21 h et meurt à 7 jours, un statut dure 1 h et sa ligne vit pour toujours. Leurs
+  notifications mènent donc toujours quelque part — ce n'est pas un défaut de notification, c'est
+  un balayage qui manque, et le trou de disque associé (médias, usages de sons) est le même que
+  celui que le cycle G7 a fermé pour les stories. À instruire pour lui-même.
+- **Les `TrackingLink` d'une story détruite ne sont pas désactivés par la passe.** Sur le chemin de
+  retrait DÉCIDÉ, `applyPostRemovalEffects` les désactive ; une story qui meurt de vieillesse n'y
+  passe jamais. Un `/l/<token>` visant une story détruite reste donc actif et pointe une ligne
+  absente. Défaut voisin, non instruit ce cycle — vérifier d'abord ce que résout un lien dont la
+  cible n'existe plus.
+- **Une passe peut désormais bloquer sur elle-même.** Plafond de drainage atteint ⇒ rien n'est
+  détruit cette heure-là. Voulu (la reprise converge), mais retarde d'autant la récupération de
+  disque, et rien ne mesure aujourd'hui la fréquence de ce cas.
+- **`broadcastCommentDeleted` n'annonce que la cible, pas le sous-arbre** (hérité du cycle 52,
+  inchangé) : la route émet un seul `commentId` là où `deleteComment` en a soft-deleté N, et les
+  réponses restent affichées chez les clients connectés jusqu'au prochain chargement du fil. Le
+  correctif traverse gateway + shared + web + SDK iOS — dont le Swift, que cet environnement ne
+  sait pas compiler (leçon 88c : ne pas livrer ce qu'on ne peut pas prouver).
+- **`post_comment` et `comment_like` n'exposent pas `context.commentId`** (hérité du cycle 52) ;
+  le retrait des `Mention` d'un post n'est pas dans la liste d'effets ; le push APNs/FCM déjà
+  délivré n'est pas rappelé ; l'arbitrage `delete-for-me` du cycle 12 attend une validation
+  humaine ; `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
+# Cycle 52 — Le commentaire partait ; ce qu'il avait écrit dans l'inbox des autres restait
+
+Le cycle 51 nommait cette tête en la donnant explicitement pour une **hypothèse à réfuter d'abord**
+(leçon 18), avec trois questions à instruire dans l'ordre. Les trois ont été instruites. Le défaut
+est confirmé ; **la piste, elle, était fausse sur le point qui décide toute l'implémentation.**
+
+## D1 (les trois questions du cycle 51, dans l'ordre)
+
+**Q1 — qui écrit `PostComment.deletedAt`, et est-ce la configuration « quatre écrivains sans
+unité » du cycle 14 ?** Non. Un seul écrivain interactif : `PostCommentService.deleteComment`,
+atteint par la seule route `DELETE /posts/:postId/comments/:commentId`. Le second site,
+`ExpiredStoriesCleanupService`, ne soft-delete pas : il **hard-delete** les commentaires d'une story
+expirée depuis 7 jours, dans un cycle de vie où c'est le post entier qui part. Pas de liste d'effets
+nommée à créer, donc — l'écrire pour un unique appelant aurait fabriqué l'indirection que les
+cycles 45b/51 justifient par la PLURALITÉ des écrivains. L'appel va directement dans `deleteComment`.
+
+**Q2 — `context.commentId` désigne-t-il toujours LE commentaire supprimé ?** Oui quand il est
+présent — et c'est ce « quand » qui est le vrai résultat. En relisant les écrivains plutôt que le
+nom de la colonne (leçon 18 du cycle 18), les huit types producteurs se répartissent en **trois**
+familles, pas une :
+
+| Chemin qui porte le lien | Types |
+|---|---|
+| `context.commentId` SEUL | `comment_reaction` |
+| `metadata.commentId` SEUL | **`post_comment`**, `comment_like` |
+| les deux | `comment_reply`, `user_mentioned` (mention en commentaire), `story_new_comment`, `story_thread_reply`, `friend_story_comment` |
+
+La piste du cycle 51 énumérait les sept premiers comme écrivains de `context.commentId`. Deux d'entre
+eux ne l'écrivent pas — dont `post_comment`, la notification la **plus fréquente** de toute la
+famille : une par commentaire, vers l'auteur du contenu. Un retrait transposé littéralement du
+jumeau post, qui ne connaît que `context.<clé>`, aurait donc laissé en base la majorité du volume,
+en passant tous ses tests. La trace de cette asymétrie était déjà dans le code — le payload APNs
+lit `params.context.commentId || params.metadata.commentId` — et personne ne l'avait lue comme
+l'aveu qu'elle est.
+
+**Q3 — retrait ou MARQUAGE, comme la réponse à une demande d'amitié ?** Retrait. Ce qui tranche est
+ce qui reste au bout du lien : le commentaire est filtré partout à la lecture (`getComments` et
+`getReplies` excluent `deletedAt`), donc la ligne n'a plus rien à afficher **et** rien où mener. Le
+marquage était l'arbitrage de la demande d'amitié RÉPONDUE parce que la ligne `FriendRequest`, elle,
+survit — la notification y est *consommée*, pas orpheline. Ici rien ne survit. Et `deleteComment`
+rejette `FORBIDDEN` pour tout autre que l'auteur : il n'existe donc pas de retrait de modération
+dont la notification serait la seule trace, le troisième faux positif cherché au cycle 51.
+
+## D2 (la seconde différence) — la cible est une liste, pas un id
+
+`deleteComment` soft-delete le **sous-arbre entier**, à profondeur arbitraire, parce que
+`commentCount` compte le fil complet. Le retrait reçoit exactement la liste d'ids que le soft-delete
+a écrite. Traiter la seule cible aurait laissé les notifications des réponses emportées avec elle —
+un défaut invisible depuis la cible, puisque la cible, elle, aurait été correctement nettoyée.
+
+`parentCommentId` reste VOLONTAIREMENT hors du filtre. C'est la seule autre clé de `context` qui
+désigne un commentaire, et elle ne désigne jamais le sujet de la ligne : sur un `comment_reply`,
+`commentId` est la réponse et `parentCommentId` le commentaire auquel on répond. Le cas « le parent
+disparaît » est déjà couvert par le sous-arbre.
+
+## D3 (câblage) — la route n'a rien à câbler
+
+Même résolution que `applyPostRemovalEffects` et `applyMessageRemovalEffects` : l'annonceur est un
+**défaut de paramètre** sur `getSharedNotificationService()`. Sur une méthode, le défaut est évalué
+à chaque appel — ce qui est ici nécessaire et pas seulement commode : le service partagé n'est
+enregistré qu'au démarrage du socket, après la construction des routes. Une injection par
+constructeur aurait capturé `undefined`.
+
+## Plan
+- [x] T1 — enquête : les trois questions du cycle 51, écrivains relus un par un
+- [x] T2 — RED (unité) : les deux chemins JSON lus ; chaque famille de types couverte
+- [x] T3 — RED (unité) : sous-arbre, annonce par destinataire, voisins épargnés, ordre, drainage,
+      liste vide, sans annonceur, échec Mongo remonté
+- [x] T4 — RED (câblage) : même liste d'ids que le soft-delete, annonce après l'écriture durable,
+      suppression réussie malgré un retrait en échec, rien de retiré si la suppression est refusée
+- [x] T5 — GREEN : `retractCommentNotifications` + appel best-effort dans `deleteComment`
+- [x] T6 — sondes de fidélité (leçon 45b) : quatre défauts réintroduits un par un
+- [x] T7 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T8 — changeset + CHANGELOG + ce relevé
+
+## Vérification
+
+Rouge observé avant le correctif : `Cannot find module '../retractCommentNotifications'`.
+
+**Sondes de fidélité** — chaque témoin central re-vérifié en réintroduisant volontairement le défaut
+qu'il prétend attraper, restauration par **copie** et non par `git checkout` (leçon 93) :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| filtre sur le seul `context.commentId` | 3 (dont « retire aussi les lignes dont le lien ne vit que dans metadata ») |
+| retrait borné à `[commentId]` au lieu du sous-arbre | 1 (« TOUT le sous-arbre soft-deleté ») |
+| appel au retrait supprimé de `deleteComment` | 2 |
+| annonce placée AVANT l'écriture durable | 1 (« annonce APRÈS l'écriture durable ») |
+
+Suite gateway complète sous bun (parité CI) : **639 suites, 16 220 tests, tout vert** (333 s).
+Couverture globale lignes **95,76 %** — inchangée. `tsc --noEmit` propre.
+
+## Reste ouvert après ce cycle
+
+- **Aucune ligne déjà orpheline n'est rattrapée**, comme au cycle 51 : le correctif ne vaut que pour
+  les suppressions à venir. Réparable par le patron de `repair-mention-user-ids.ts` — action
+  humaine, cette routine n'a aucun accès MongoDB.
+- **`post_comment` et `comment_like` n'exposent pas `context.commentId`**, alors que leurs six
+  cousins le font. Ce n'est pas qu'une gêne pour le retrait : le commentaire de `createNotification`
+  dit que « `postId`/`commentId` vivent dans `context` (cible de navigation) » et que le schéma de
+  réponse REST les expose — donc la navigation **in-app** vers le commentaire exact ne peut pas
+  fonctionner pour ces deux types, seul le payload APNs s'en sortant par son repli sur `metadata`.
+  À instruire comme un défaut de navigation à part entière (lire d'abord ce que le web et le SDK iOS
+  consomment réellement), et non à corriger en passant : c'est un contrat client.
+- **Les stories expirées ne retirent pas leurs notifications.** `ExpiredStoriesCleanupService`
+  hard-delete les posts après 7 jours sans passer par `applyPostRemovalEffects` : toutes les
+  notifications d'une story expirée survivent, exactement comme celles d'un post supprimé avant le
+  cycle 51. Volume potentiellement supérieur au cas post (toutes les stories expirent). À vérifier
+  avant d'écrire : le hard-delete déclenche-t-il une cascade que le soft-delete ne déclenchait pas ?
+  `Notification` n'a pas de relation vers `Post`, donc a priori non — mais c'est précisément le genre
+  de déduction que ce cycle a appris à ne pas faire sans lire.
+- **`broadcastCommentDeleted` n'annonce que la cible, pas le sous-arbre.** La route émet un seul
+  `commentId` alors que `deleteComment` en a soft-deleté N. Les réponses restent affichées chez les
+  clients connectés jusqu'au prochain chargement du fil. Défaut voisin, non instruit ce cycle.
+- **Le retrait des `Mention` d'un post n'est pas dans la liste d'effets** (hérité du cycle 51,
+  inchangé) ; le push APNs/FCM déjà délivré n'est pas rappelé ; `.gitignore:177` porte un `post-*`
+  non ancré et non scopé ; `login_new_device` sans contexte de consommation ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le
+  gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
 # Cycle 51 — Le jumeau côté post avait reçu la liste, jamais les notifications
 
 Le cycle 50 nommait cette tête en toutes lettres, et la leçon 18 dit quoi en faire : une piste
@@ -149,6 +1191,89 @@ Couverture globale lignes **95,76 %** — inchangée. `tsc --noEmit` propre.
 - Hérités et inchangés : `login_new_device` sans contexte de consommation ; l'arbitrage
   `delete-for-me` du cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le
   gateway (aucun `eslint.config.js` depuis ESLint v9).
+
+---
+
+# Cycle 50b — La famille était de cinq. Elle est de quatre, et les quatre héritent.
+
+> **Session parallèle.** Deux sessions ont livré un cycle 50 en même temps, et pour une fois dans la
+> MÊME famille : le 50 ci-dessous retire la notification d'une demande d'amitié annulée, celui-ci
+> fait hériter aux notifications l'échéance du message qu'elles désignent. Aucun recouvrement de
+> code — l'un touche le retrait par référent, l'autre la péremption par échéance.
+
+Le cycle 49b a branché les trois producteurs que l'éventail d'un message appelle et a nommé les deux
+qui restaient, sans les traiter : la réaction et la traduction prête. Ce cycle les prend, et l'un des
+deux se révèle ne pas être un producteur.
+
+## L'énumération, parce qu'elle est vérifiable
+
+Quatre — pas trois, pas six — méthodes `create*` de `NotificationService` posent un
+`context.messageId`. Le compte se refait en une commande, et c'est ce qui fait la valeur de la
+revendication « la famille est complète » : `createMessageNotification`, `createMentionNotification`,
+`createReactionNotification`, `createReplyNotification`. Les quatre estampillent désormais
+l'échéance.
+
+## Ce que chacun coûte : rien
+
+**La réaction** lisait déjà le message pour en tirer l'extrait (`select: { content: true }`) —
+`expiresAt` voyage dans la même lecture. **La mention par édition** avait son paramètre depuis le
+cycle précédent, sans personne pour le lui passer : les deux transports REST chargent le message par
+`include` (l'échéance était déjà là, à portée de main), et le transport socket ajoute un champ à un
+`select` qu'il émettait déjà. Zéro requête ajoutée sur les deux chemins — la même contrainte que le
+cycle 49b s'était donnée, tenue pour les mêmes raisons.
+
+## Le cinquième n'écrivait rien
+
+`createTranslationReadyNotification` n'avait **aucun appelant de production** : un test était sa
+seule invocation dans tout le dépôt. Il n'a jamais écrit une ligne `Notification`, et aucun client
+n'a jamais reçu ce type. Ce n'était donc pas « le producteur qui n'hérite pas d'échéance » — c'était
+un producteur qui ne produit pas.
+
+Retiré. Mais retirer la méthode ne suffisait pas : `NotificationTypeEnum.TRANSLATION_READY` reste
+déclaré (le SDK iOS le décode, et un client déployé ne doit pas buter dessus), et c'est exactement la
+forme que la leçon 92 décrit — une valeur déclarée qu'un audit lit comme une fonctionnalité. Elle
+porte désormais la mention explicite qu'aucun producteur ne l'émet, et le renvoi vers l'homonyme ZMQ
+`translation_ready`, lui bien vivant, qui annonce une traduction au gateway sans notifier personne.
+
+Le test qui l'atteignait est retiré avec elle, et remplacé par la phrase qui explique pourquoi : un
+test qui est le SEUL appelant de son sujet ne mesure pas du code vivant, il en entretient
+l'apparence.
+
+## Plan
+
+- [x] T1 — RED : une réaction à un message éphémère hérite de son échéance
+- [x] T2 — témoin : une réaction à un message ordinaire n'invente aucune échéance
+- [x] T3 — RED : une mention ajoutée en ÉDITANT un message éphémère hérite de son échéance
+- [x] T4 — témoin : l'édition d'un message ordinaire transmet `null`, jamais une échéance inventée
+- [x] T5 — les trois transports d'édition alimentent le champ (socket + PUT + PATCH)
+- [x] T6 — retrait du producteur sans appelant + annotation de l'énumération partagée
+- [x] T7 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T8 — changeset + ce relevé
+
+## Revue
+
+Sonde : les deux estampilles neutralisées ensemble → **3 rouges**. Les deux attendus, plus un
+troisième qui mérite d'être nommé : le test « réconcilie et ne notifie QUE les entrants » compare la
+totalité de `commonData`. Il tombe parce que le champ a disparu de l'objet — c'est-à-dire qu'il tient
+aussi, gratuitement, le témoin `messageExpiresAt: null` du chemin ordinaire. C'est le cas où
+l'égalité stricte, que le cycle 49b a assouplie ailleurs, se révèle utile : ici l'objet EST le
+contrat de l'appel, et personne d'autre ne le compose.
+
+`tsc --noEmit` a d'abord rendu deux erreurs sur `routes/conversations/core.ts` (`firstMessageSentAt`
+absent du type Prisma) : client généré périmé après la fusion de `main`, aucun rapport avec ce lot.
+Régénéré, la compilation est propre.
+
+## Reste ouvert après ce cycle
+
+- **Les clients ne s'auto-périment toujours pas**, et le parseur socket du web lit à la RACINE ce
+  que le serveur envoie sous `state` — les deux points hérités du 49b, inchangés.
+- **`getUserNotifications` reste sans appelant de production.** Même forme que le producteur retiré
+  ici, mais la route `/notifications` refait sa requête à la main : supprimer la méthode demanderait
+  d'abord de faire appeler le service par la route, ce qui est un autre geste.
+- **Les points hérités restent ouverts tels quels** : le push déjà remis reste sur l'appareil au
+  rappel ; les mentions du chemin de lien attendent l'extraction qui écrit `Message.validatedMentions` ;
+  aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas
+  dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
 
 ---
 

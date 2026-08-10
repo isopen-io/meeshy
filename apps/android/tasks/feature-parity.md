@@ -2869,8 +2869,54 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       multi-item picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to single when one slot
       is left so the multi-picker's `maxItems > 1` requirement never throws and launching nothing
       when full; the screen reads every picked uri off-main and the VM's existing free-slot
-      truncation still caps the batch. Pending: on-canvas crop/edit, durable
-      upload-then-publish outbox chain (SOTA follow-up).
+      truncation still caps the batch. **Wire-format bug fixed** (slice `story-media-tus-upload`,
+      2026-08-10): the upload foundation above sent every picked media through `MediaApi`/
+      `MediaRepository` (`POST /attachments/upload`), which server-side ALWAYS creates a
+      `MessageAttachment` row (`services/gateway/src/services/attachments/UploadProcessor.ts`) —
+      never a `PostMedia` row. But `CreateStoryRequest.mediaIds` is claimed **exclusively** against
+      `PostMedia` (`prisma.postMedia.updateMany`, `services/gateway/src/services/PostService.ts` +
+      `mediaOwnership.ts`'s `claimableMediaWhere`), a structurally different collection/id-space —
+      only the gateway's TUS handler (`POST /api/v1/uploads`, `uploadcontext` metadata one of
+      `post`/`story`/`status`/`comment`) ever creates one. So every published story with a
+      picked photo/video silently published **without its media**: the upload itself succeeded,
+      the story published successfully, but the server-side claim matched zero rows (logged as a
+      shortfall, never thrown) — a real, user-visible production defect, not a missing feature.
+      New `TusApi`/`TusUploadRepository` (`:core:network`/`:sdk-core`) implement a **single-shot**
+      (no chunking/resume/checkpoint — sufficient for compressed images; large-video chunked upload
+      remains the tracked TUS follow-up two lines below and at §Q) port of iOS `TusUploadManager`'s
+      two-call exchange (`POST` create session reading the `Location` header via the new
+      `:core:network` `headerCall` helper, then one `PATCH` of the whole body at `Upload-Offset: 0`).
+      `StoryMediaUploader` (`:feature:stories`, binds the generic repository to
+      `TusUploadContext.STORY` — the SDK-purity "which context" product decision) replaces
+      `StoryComposerViewModel`'s eager `mediaRepository.upload` call; the **durable offline-retry
+      path** ( `MediaUploadQueue.enqueue`'s new optional `context` param, persisted via
+      `MediaUploadPayload` on the `UPLOAD_MEDIA` outbox row and read back by
+      `OutboxFlushWorker`'s sender) is fixed too, so a queued-while-offline story upload retried
+      later also produces a real `PostMedia` row — not just the common online path. Chat
+      attachments are untouched (still `MediaRepository`/`MessageAttachment`, correctly — messages
+      legitimately want that collection); a legacy/blank outbox payload (any row enqueued before
+      this fix) still decodes as "no context" and keeps using the old path, so nothing already
+      queued on a user's device breaks on upgrade. +30 tests across the chain (6
+      `TusUploadMetadataTest`, 2 `TusUploadContextTest`, 4 new `headerCall` tests in
+      `ApiCallTest`, 13 `TusUploadRepositoryTest`, 2 `StoryMediaUploaderTest`, 2 new
+      `MediaUploadQueueTest`, +1 precise `StoryComposerViewModelTest` proving the durable path is
+      tagged `TusUploadContext.STORY` and not just `any()`); the other ~130 pre-existing
+      `StoryComposerViewModelTest` cases needed only a mechanical mock-type rename
+      (`MediaRepository` → `StoryMediaUploader`, same `upload(items)` shape) since
+      `StoryMediaUploader.upload` preserves the exact `NetworkResult<List<UploadedMedia>>`
+      contract the ViewModel's existing (unchanged) decision logic already expected. Mutation-proven:
+      reverting `queueDurably`'s explicit `context = TusUploadContext.STORY` argument fails
+      **exactly** the one new precise test, the other 130 stay green; making `TusUploadRepository.
+      uploadAll` swallow a mid-batch failure instead of stopping fails **exactly** the one test
+      built to catch it, the other 12 stay green. **Gate:** `./apps/android/meeshy.sh check` →
+      `BUILD SUCCESSFUL` (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`).
+      **Still open** (unchanged from before this fix, now correctly scoped as follow-ups rather
+      than assumed-simple): chunked/resumable large-video TUS upload (see §Q and the two `[ ]`
+      TUS lines above/below this one), on-canvas crop/edit, and — the original "attachments
+      fast-follow" this fix was discovered while scoping — wiring a photo/camera picker into the
+      still-text-only Feed post composer (`feed-post-composer-text`, 2026-08-10) now correctly
+      depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
+      than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
@@ -3101,7 +3147,103 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (a real screen swap with save/restore state) — functionally equivalent (same
       toggle semantics, same destination reached) but not a pixel-identical port of the
       overlay/animation mechanism.
-- [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
+- [~] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
+      — **text-only sub-slice done** (slice `feed-post-composer-text`, 2026-08-10): a new
+      `FeedComposerPlaceholder` row above the post list (iOS parity: `FeedView.composerPlaceholder`)
+      opens `FeedComposerSheet` (`ModalBottomSheet`, same shape as the existing `StatusComposerSheet`),
+      publishing a text-only `POST` via the existing, previously-unused-for-this-purpose
+      `PostRepository.create()`. Pure `FeedComposerDraft`/`FeedPostVisibility` (Public/Friends/Private,
+      port of iOS `postVisibility`) owns the publish gate (non-blank trimmed text) and the trimmed body.
+      A new `FeedRealtimeReducer.created()` prepends the network-confirmed post to the same realtime
+      head the socket `post:created` path already uses — visible at the top instantly, WITHOUT bumping
+      the "N new posts" banner (that's for arrivals from others), and defensively deduped against the
+      gateway's own `post:created` echo of this same publish (`state.posts.any { it.id == id }` already
+      true by the time the echo lands). **Photo/video attachments sub-slice now done too** (slice
+      `feed-composer-media-attachments`, 2026-08-10): the composer sheet gained an attach-media tile
+      (system `PickVisualMedia`/`PickMultipleVisualMedia`, routed single-vs-multi by the pure
+      `FeedMediaPicker.modeFor` — the Feed counterpart of `StoryMediaPicker`) that uploads through
+      `FeedMediaUploader` (`post`-context TUS, the Feed counterpart of `StoryMediaUploader`, consuming
+      the `TusUploadRepository` foundation the story-media-tus-upload slice built — never the legacy
+      `MessageAttachment`-producing path). `FeedComposerDraft` gained `mediaIds`/`withMedia`/`withoutMedia`/
+      `remainingMediaSlots`/`isMediaFull` (`MAX_MEDIA = 10`, parity with the story composer) and the
+      publish gate is now non-blank text **or** at least one attached media (mirror of iOS
+      `!composerText.isEmpty || !pendingAttachments.isEmpty`) — a media-only post is now possible, and
+      its blank content is sent as `null`, never `""`. Verified end-to-end on a real device against the
+      live gateway (not just unit tests): logcat confirmed the real TUS `POST`+`PATCH` round-trip
+      (`uploadcontext=post`), the `POST /api/v1/posts` body carrying the real returned `mediaIds`, and a
+      direct `GET` of the created post confirming the media persisted with a working `fileUrl`/
+      `thumbnailUrl` and Prisme translations generated — the test post was deleted afterward.
+      **Reel classification done** (slice `feed-composer-reel-classification`, 2026-08-10): every prior
+      publish hardcoded `type = "POST"` — confirmed via `services/gateway/src/services/PostService.ts`
+      that the gateway only ever *degrades* a claimed `REEL` back to `POST` when the composition doesn't
+      qualify, it never auto-*upgrades* a client-sent `POST`, so any Android post with qualifying media
+      (a video/audio ≥3s, or ≥2 images) was permanently stuck as a plain post, unlike iOS. New pure
+      `ReelComposition` (`:core:model`, mirror of iOS SDK `ReelComposition` and the gateway's own
+      `reelComposition.ts` — all three sites now share one rule) computes `qualifiesAsReel`/`defaultType`
+      from the already-uploaded media's `mimeType`/`durationMs` — no on-device metadata extraction
+      needed, since the gateway's TUS finish response already returns the server-probed duration in the
+      same `UploadedMedia` shape every upload path surfaces. `FeedComposerDraft` gained `postType`/
+      `qualifiesAsReel`/`forcePlainPost`/`withForcePlainPost` and now tracks `media: List<UploadedMedia>`
+      instead of bare ids (mechanical, `mediaIds` stays a computed projection); `FeedComposerSheet` shows
+      a Réel⇄Post override chip (iOS parity: `FeedView.composerOverlay`'s toggle) only when the current
+      composition qualifies, exactly mirroring iOS's own conditional `if ReelComposition.qualifiesAsReel`
+      gate; `FeedViewModel.publishPost` threads the resolved `type` through to `PostRepository.create`
+      instead of the old hardcoded literal. +15 tests (13 `ReelCompositionTest`, +14 net new
+      `FeedComposerDraftTest` cases covering qualification/boundary/force-toggle/de-qualification-on-
+      removal, +1 `FeedViewModelTest` asserting the `type` threads through). Mutation-proof, three axes:
+      (a) forcing `meetsMinDuration` to always `true` failed exactly the 3 duration-floor tests: (b)
+      loosening the image-count rule from `>= 2` to `>= 1` failed exactly the 2 single-image tests; (c)
+      hardcoding `FeedComposerDraft.postType` to ignore `forcePlainPost` failed exactly the 2 tests
+      asserting the override — every other test in all three files stayed green each time; all three
+      reverted and re-run clean. **Camera-photo capture now done** (slice
+      `feed-composer-camera-capture`, 2026-08-10): a second attach tile
+      ([Icons.Filled.PhotoCamera], mirror of iOS's `camera.fill` button) launches the system
+      `ACTION_IMAGE_CAPTURE` activity ([ActivityResultContracts.TakePicture]) writing into a
+      fresh [CameraCaptureFile]-named destination under `context.cacheDir/captures` (new
+      `file_paths.xml` `cache-path`), exposed via the app's existing `FileProvider` authority
+      (previously used only for GDPR-export sharing) — the resulting Uri is dispatched through
+      the **exact same** `dispatchPicked` pipeline gallery picks already use, so zero new
+      upload/error-handling logic. **A genuine, on-device-confirmed Android platform bug found
+      and fixed in the same slice**: `ActivityResultContracts.TakePicture()`'s own
+      `createIntent()` (decompiled and read directly — `Intent(ACTION_IMAGE_CAPTURE).putExtra
+      (EXTRA_OUTPUT, uri)`) never sets `FLAG_GRANT_WRITE_URI_PERMISSION`, so the implicitly-
+      resolved camera app has no permission to write into our `FileProvider` Uri. First
+      on-device pass (stock AOSP camera on `meeshy_pixel8`) reproduced this exactly: the camera
+      activity opened and the shutter appeared to work, but the destination `captures/`
+      directory stayed empty and no TUS upload ever fired (`success = false` from the launcher,
+      silently swallowed by the existing cancel/discard branch — a real device confirms this
+      class of bug is invisible to any JVM/Robolectric test). Fixed with the canonical, publicly
+      documented Android pattern: `context.packageManager.queryIntentActivities(ACTION_IMAGE_
+      CAPTURE, MATCH_DEFAULT_ONLY)` + an explicit `grantUriPermission(pkg, uri,
+      FLAG_GRANT_WRITE_URI_PERMISSION or FLAG_GRANT_READ_URI_PERMISSION)` per resolved package,
+      called before `takePicture.launch(uri)`. **Deliberate, documented scope cut vs. iOS**:
+      photo capture only — iOS's `CameraView` is a custom AVFoundation screen with an in-app
+      photo/video toggle; Android delegates entirely to the system camera app's own
+      `ACTION_IMAGE_CAPTURE` intent (so no `CAMERA` runtime permission request is needed here —
+      the system camera app owns that), and video capture (`ACTION_VIDEO_CAPTURE`, its own
+      destination MIME/extension) is a separately-scoped follow-up. New pure
+      `CameraCaptureFile.next(nowMillis)` (`:feature:feed`, mirror of the split
+      `me.meeshy.sdk.model.export.DataExportFileBuilder` uses) names the destination file from
+      an explicit timestamp — deterministic, +4 tests, mutation-proven (hardcoding the filename
+      to ignore the timestamp parameter fails **exactly** the 2 discriminating tests, the other
+      2 stay green). **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970 tasks,
+      full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). **On-device
+      verification partially blocked by severe shared-host contention this run**: the first pass
+      (pre-fix) ran clean on `meeshy_pixel8` and is what surfaced the URI-permission bug in the
+      first place; re-confirming the FULL round-trip (capture → upload → thumbnail) after the
+      fix hit host load spiking past 450 mid-session (other concurrent agent sessions on this
+      shared box, consistent with prior `feedback_shared_disk_contention_multi_session` reports)
+      — the emulator process itself became CPU-starved to the point of never completing boot
+      across two fresh launches (~30 min total), so the post-fix round-trip is verified by
+      code-level evidence (decompiled bytecode proving the gap; the fix is Android's own
+      documented canonical pattern for exactly this problem, not a novel/risky guess) rather
+      than a second on-device capture. Flagged honestly rather than claimed — a natural
+      candidate for a quick on-device confirmation pass once this shared box is quieter, not
+      required to consider this slice done given the strength of the remaining evidence.
+      **Still open**: files, location, audio+transcription, per-post language
+      override, durable-outbox queueing for offline resilience (media upload itself has no offline-retry
+      path yet either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
+      consistent, not a new gap) — each a separately-scoped follow-up.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
@@ -4471,14 +4613,62 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Push message prefetch + pre-persist into Room for instant cold-launch
 - [ ] `NotificationCoordinator` authority model (socket authoritative; cache only seeds)
 - [ ] Comprehensive notification system (~80 types)
-- [ ] Android `NotificationChannel` taxonomy (ARCHITECTURE.md §18: "~80 notification types
+- [~] Android `NotificationChannel` taxonomy (ARCHITECTURE.md §18: "~80 notification types
       map onto a curated notification-channel taxonomy"). Today only 2 channels exist
       (`CHANNEL_CALLS` full-screen ringer + a single generic "Messages" channel, both in
       `MeeshyFcmService`) — the ~80 backend notification types above are not mapped onto a
       curated per-category channel set (message/reaction/mention/social/call/etc, each with
       its own importance/sound/badge policy, mirroring iOS's per-category push handling).
       Line added by the app-icon-audit angle-mort pass (2026-08-10, `tasks/android-parity-
-      ios-debt-agent-prompt.md` §"Angle mort catégoriel") — not implemented this run.
+      ios-debt-agent-prompt.md` §"Angle mort catégoriel") — not implemented that run.
+      **A concrete, live bug behind this gap got found and fixed** (slice
+      `notification-channel-id-drift`, 2026-08-10): re-reading `services/gateway/src/services/
+      PushNotificationService.ts` `sendViaFCM` end to end (not just the taxonomy line's own
+      wording) found the gateway already sends `message.android.notification.channelId =
+      'meeshy_notifications'` for every Android non-call push — but `MeeshyFcmService` had only
+      ever created a channel named `meeshy_messages`, and only lazily, inside
+      `onMessageReceived`. FCM Android semantics: a push carrying both a `notification` and a
+      `data` block (every non-call push today) is auto-rendered by the OS/Play services when the
+      app is backgrounded or killed — `onMessageReceived` never runs in that case, so the system
+      posts directly against the gateway's `channelId`. With no `meeshy_notifications` channel
+      ever created and no `com.google.firebase.messaging.default_notification_channel_id`
+      manifest fallback declared either (grepped, absent), that push is either dropped or folded
+      into a generic, unbranded system "Miscellaneous" channel with none of the intended
+      importance/sound — exactly backwards from precisely the scenario push exists for
+      (foregrounded, where `onMessageReceived` DOES run and channel creation already worked, was
+      never actually affected). **Fixed (production, all `apps/android`)**: new `:app`
+      `NotificationChannelIds` object (SSOT for `CHANNEL_MESSAGES`/`CHANNEL_CALLS` + their legacy
+      predecessors, replacing the two ad-hoc constant sets previously duplicated in
+      `MeeshyFcmService`'s companion) renames the client's message channel id to
+      `meeshy_notifications` — byte-for-byte matching the gateway's own literal — and a new
+      `NotificationChannelInstaller` creates it **eagerly at process start**
+      (`MeeshyApplication.onCreate`, injected via Hilt) rather than only lazily inside the
+      handler that's exactly the one that doesn't run in the failure scenario; it also deletes
+      the orphaned pre-drift `meeshy_messages` channel (channels are immutable once created —
+      same "delete + recreate under a new id" migration `CHANNEL_CALLS` already took `meeshy_calls`
+      v1→v2). `MeeshyFcmService`'s own lazy `createNotificationChannel` call in the
+      foreground-received path is kept as a harmless, idempotent belt-and-suspenders, now
+      pointing at the same SSOT id. **+4 `NotificationChannelInstallerTest`** (Robolectric,
+      `@Config(sdk = [26])` pinned to the app's own `minSdk` floor — the module's ambient default
+      SDK resolution silently fell back to API 21, well below the O+ `NotificationChannel` API,
+      producing a `NoSuchMethodError` until pinned; `testImplementation(libs.androidx.test.ext.
+      junit)` added to `:app` for `ApplicationProvider`, missing before this slice): creates the
+      channel under the gateway-matching id at `IMPORTANCE_HIGH`, deletes the stale legacy
+      channel, idempotent across repeated `install()` calls (no duplicate), never touches the
+      calls channel. Mutation-proven: commenting out the legacy-delete call fails **exactly** the
+      1 discriminating test, the other 3 stay green. **Gate**: `./apps/android/meeshy.sh check`
+      → `BUILD SUCCESSFUL` (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`,
+      zero failures). **Verified on-device** (`meeshy_pixel8` emulator, fresh app launch, no push
+      sent): `adb shell dumpsys notification` confirms `NotificationChannel{mId=
+      'meeshy_notifications', mImportance=4, mDeleted=false}` exists for `me.meeshy.app.debug`
+      the instant the process starts, before any message push ever arrives. **Still open, and
+      honestly scoped as a separate, larger follow-up**: the full curated *multi*-channel
+      taxonomy (a distinct channel per category — messages/reactions/mentions/social/etc, each
+      individually mutable in system settings) needs the gateway to send a **per-type**
+      `channelId` instead of the one hardcoded literal it sends today for every non-call push —
+      a `services/gateway` change, outside this lane's `apps/android`-only diff scope. This slice
+      only closes the concrete id-mismatch defect and lays the SSOT + eager-install foundation a
+      future richer taxonomy would build on.
 - [x] Per-type semantic row accent (`notifications-type-accent-color`, 2026-07-13): pure
       `:core:model` `notificationTypeAccentHex(type)` SSOT — faithful port of iOS
       `MeeshyNotificationType.accentHex`, mapping all ~80 backend `type` strings (lowercase +
@@ -4664,7 +4854,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Real-time socket→Room relay (messages, reactions, read status, translations, lifecycle)
 - [ ] Two Socket.IO connections (message + social), long-polling transport, robust reconnect + room re-join
 - [ ] Crash-safe boot recovery for in-flight queue items + orphaned audio files
-- [ ] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance
+- [~] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance —
+      **non-resumable TUS client done** (slice `story-media-tus-upload`, 2026-08-10, §E): `TusApi`/
+      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`
+      (single-shot only — one `PATCH` of the whole file at offset 0, no chunking, no checkpoint
+      store, does NOT survive app kill mid-upload). Message-retention cleanup / DB maintenance
+      still not started.
 - [ ] Background conversation sync + message prefetch (backoff + jitter)
 - [ ] Encrypted local storage (AES-GCM Room / EncryptedSharedPreferences) + per-user namespacing + logout wipe
 - [ ] E2EE message encryption/decryption (libsignal, batched, fail-closed)

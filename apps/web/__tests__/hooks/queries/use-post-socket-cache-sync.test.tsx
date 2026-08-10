@@ -692,6 +692,60 @@ describe('usePostSocketCacheSync', () => {
 
       expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
     });
+
+    /**
+     * Supprimer un commentaire soft-delete tout son sous-arbre côté serveur.
+     * Retirer la seule cible laissait ses réponses dépliées à l'écran — et
+     * aucun refetch ne les enlevait : `getComments` filtre `parentId: null`,
+     * leur parent supprimé n'est plus rendu, donc `getReplies` n'est plus
+     * jamais appelé pour elles.
+     */
+    it('retire tout le sous-arbre annoncé des caches de réponses', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      const mkComment = (id: string) => ({ id, content: id, likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() });
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [mkComment('c-1'), mkComment('c-keep')], meta: {} }],
+        pageParams: [undefined],
+      });
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-1'], {
+        pages: [{ data: [mkComment('r-1'), mkComment('r-1a')], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        deletedCommentIds: ['c-1', 'r-1', 'r-1a'],
+        commentCount: 0,
+      }));
+
+      const top = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      const replies = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-1']);
+      expect(top?.pages[0].data.map((c) => c.id)).toEqual(['c-keep']);
+      expect(replies?.pages[0].data).toHaveLength(0);
+    });
+
+    /**
+     * Repli sur la seule cible quand le serveur n'annonce aucune liste (rejeu
+     * idempotent d'une suppression) : exactement le comportement d'avant.
+     */
+    it('retire la seule cible quand aucune liste n\'est annoncée', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      const mkComment = (id: string) => ({ id, content: id, likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() });
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [mkComment('c-1'), mkComment('c-keep')], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'c-1', commentCount: 0 }));
+
+      const top = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(top?.pages[0].data.map((c) => c.id)).toEqual(['c-keep']);
+    });
   });
 
   describe('comment:liked', () => {

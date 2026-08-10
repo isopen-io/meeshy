@@ -8,6 +8,7 @@ import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { qualifiesAsReel } from './posts/reelComposition';
+import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
@@ -41,13 +42,14 @@ interface StoryTextObjectRaw {
   [key: string]: unknown;
 }
 
-const STORY_EXPIRY_HOURS = 21;
-const STATUS_EXPIRY_HOURS = 1;
-
+/**
+ * Les durées vivent dans `posts/ephemeralPosts.ts`, avec la liste des types
+ * qu'elles rendent éphémères — la même que celle du balayage. Elles étaient
+ * ici, en copie privée : le balayage en avait sa propre version, réduite aux
+ * stories, et les statuts recevaient donc une échéance que personne n'honorait.
+ */
 function computeExpiresAt(type: PostType): Date | undefined {
-  if (type === PostType.STORY) return new Date(Date.now() + STORY_EXPIRY_HOURS * 3600_000);
-  if (type === PostType.STATUS) return new Date(Date.now() + STATUS_EXPIRY_HOURS * 3600_000);
-  return undefined;
+  return ephemeralExpiresAt(type, new Date());
 }
 
 // Minimal language detection (first word heuristics + fallback)
@@ -132,13 +134,7 @@ export class PostService {
     discoverabilityPrecision?: unknown;
   }, userId: string) {
     const now = new Date();
-    let expiresAt: Date | undefined;
-
-    if (data.type === PostType.STORY) {
-      expiresAt = new Date(now.getTime() + STORY_EXPIRY_HOURS * 3600_000);
-    } else if (data.type === PostType.STATUS) {
-      expiresAt = new Date(now.getTime() + STATUS_EXPIRY_HOURS * 3600_000);
-    }
+    const expiresAt = ephemeralExpiresAt(data.type, now);
 
     // Canonicalize the client claim at the write boundary — clients send the raw
     // platform locale (iOS `fr_FR`, web `fr-FR`). `detectLanguage` already returns

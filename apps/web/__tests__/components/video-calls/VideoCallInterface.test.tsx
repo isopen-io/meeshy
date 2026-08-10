@@ -871,4 +871,144 @@ describe('VideoCallInterface (container)', () => {
       await suspendPromise;
     });
   });
+
+  // Vague 92: Vague 82 unified the manual toggle with the adaptive-degradation
+  // controller's suspend()/resume(), but `handleSwitchCamera` kept its own,
+  // entirely disconnected `cameraSwitchInFlightRef` — a camera flip could
+  // still race either path, letting one replaceTrack/stop a track the other
+  // was still mid-acquisition on.
+  describe('mutual exclusion — camera switch vs. manual toggle / adaptive-degradation controller (Vague 92)', () => {
+    type CapturedDegradationActions = {
+      applyTier: (tier: string) => void;
+      suspend: () => Promise<void>;
+      resume: () => Promise<void>;
+    };
+
+    const capturedActions = (): CapturedDegradationActions => {
+      const calls = useAdaptiveDegradationMock.mock.calls;
+      const lastCall = calls[calls.length - 1] as unknown as [{ actions: CapturedDegradationActions }];
+      return lastCall[0].actions;
+    };
+
+    const setupCameraSwitchFixture = (getUserMediaImpl: jest.Mock) => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
+      const localStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+        removeTrack: jest.fn(),
+        addTrack: jest.fn(),
+      };
+      storeState.localStream = localStream as unknown as MediaStream;
+      storeState.peerConnections = new Map([
+        ['peer1', { getSenders: () => [{ track: { kind: 'video' }, replaceTrack: jest.fn().mockResolvedValue(undefined) }] }],
+      ]) as unknown as typeof storeState.peerConnections;
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest.fn().mockResolvedValue([{ kind: 'videoinput' }, { kind: 'videoinput' }]),
+          getUserMedia: getUserMediaImpl,
+        },
+      });
+    };
+
+    const clickSwitchCamera = async () => {
+      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+      fireEvent.click(button);
+    };
+
+    afterEach(() => {
+      webrtc.enableVideo.mockResolvedValue(undefined);
+      webrtc.disableVideo.mockResolvedValue(undefined);
+      // @ts-expect-error -- test-only cleanup of a property defined per-test below
+      delete navigator.mediaDevices;
+      storeState.localStream = null;
+      storeState.peerConnections = new Map();
+    });
+
+    it('a camera switch in flight blocks a concurrent manual toggle from calling disableVideo', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveGetUserMedia: (stream: unknown) => void = () => {};
+      const getUserMedia = jest.fn(() => new Promise((resolve) => { resolveGetUserMedia = resolve; }));
+      setupCameraSwitchFixture(getUserMedia);
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera(); // camera switch now in flight
+
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button);
+
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveGetUserMedia({ getVideoTracks: () => [{}] });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    });
+
+    it('an in-flight manual toggle blocks a concurrent camera switch from calling getUserMedia', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+      const getUserMedia = jest.fn().mockResolvedValue({ getVideoTracks: () => [{}] });
+      setupCameraSwitchFixture(getUserMedia);
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button); // manual disableVideo now in flight
+
+      await clickSwitchCamera();
+
+      expect(getUserMedia).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+    });
+
+    it('a camera switch in flight blocks a concurrent auto-suspend from calling disableVideo', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveGetUserMedia: (stream: unknown) => void = () => {};
+      const getUserMedia = jest.fn(() => new Promise((resolve) => { resolveGetUserMedia = resolve; }));
+      setupCameraSwitchFixture(getUserMedia);
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera(); // camera switch now in flight
+
+      await expect(capturedActions().suspend()).rejects.toThrow();
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveGetUserMedia({ getVideoTracks: () => [{}] });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    });
+
+    it('an in-flight auto-suspend blocks a concurrent camera switch from calling getUserMedia', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+      const getUserMedia = jest.fn().mockResolvedValue({ getVideoTracks: () => [{}] });
+      setupCameraSwitchFixture(getUserMedia);
+
+      render(<VideoCallInterface callId="call1" />);
+      const suspendPromise = capturedActions().suspend(); // auto suspend now in flight
+
+      await clickSwitchCamera();
+
+      expect(getUserMedia).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+      await suspendPromise;
+    });
+  });
 });

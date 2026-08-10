@@ -24,6 +24,7 @@ import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -602,13 +603,20 @@ export class PasswordResetService {
     await this.cache.del(lockKey);
   }
 
+  /**
+   * `usedAt: null` n'atteignait AUCUN jeton : `create` ne renseigne pas la
+   * colonne, elle est donc absente du document de tout jeton encore vierge — soit
+   * exactement ceux que cette révocation existe pour annuler. Chaque demande
+   * laissait la précédente cliquable jusqu'à son expiration, et `revokedReason:
+   * 'NEW_REQUEST'` n'a jamais été écrit. Voir `utils/prisma-unset.ts`.
+   */
   private async revokeExistingTokens(userId: string): Promise<void> {
     await this.prisma.passwordResetToken.updateMany({
       where: {
         userId,
-        usedAt: null,
         isRevoked: false,
-        expiresAt: { gt: new Date() }
+        expiresAt: { gt: new Date() },
+        ...unsetOrNull('usedAt')
       },
       data: {
         isRevoked: true,

@@ -24,6 +24,7 @@ import {
   SendMessageInput
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
+import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
 
 /**
  * Corps d'un message de lien de partage, construit UNE fois par envoi.
@@ -269,7 +270,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null,
+          ...LIVE_MESSAGE_MARK,
           ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
@@ -565,7 +566,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null,
+          ...LIVE_MESSAGE_MARK,
           ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
