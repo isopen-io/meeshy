@@ -6,6 +6,15 @@ import {
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import {
+  retractMessageNotifications,
+  type RetractedNotificationAnnouncer,
+} from './retractMessageNotifications';
+
+export type {
+  RetractedNotification,
+  RetractedNotificationAnnouncer,
+} from './retractMessageNotifications';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -241,73 +250,6 @@ export async function recomputeConversationLastMessageAt(
     where: { id: conversationId, lastMessageAt: conversation.lastMessageAt },
     data: { lastMessageAt: lastAlive?.createdAt ?? conversation.createdAt },
   });
-}
-
-/** Une ligne `Notification` retirée, réduite à ce que l'annonce doit adresser. */
-export interface RetractedNotification {
-  readonly id: string;
-  readonly userId: string;
-}
-
-/**
- * La seule chose dont ce chemin ait besoin du `NotificationService` : dire aux
- * appareils connectés que ces lignes n'existent plus.
- *
- * Un port étroit plutôt que le service entier, pour la même raison que
- * `PostSoundReleaser` côté post : l'unité déclare ce qu'elle appelle, et un
- * test l'observe sans monter un service qui parle à Redis, à APNs et à
- * Socket.IO. Le défaut est le service PARTAGÉ du processus — le seul câblé
- * avec `io`, donc le seul capable d'émettre.
- */
-export interface RetractedNotificationAnnouncer {
-  announceNotificationsRetracted(retracted: readonly RetractedNotification[]): Promise<void>;
-}
-
-/**
- * Les notifications que le message rappelé a produites — et le contenu qu'elles
- * en gardent.
- *
- * `Notification.content` et `metadata.messagePreview` sont un EXTRAIT du
- * message, dénormalisé à la création (`createNotification`). Aucun filtre à la
- * lecture ne peut donc les rattraper : la ligne ne relit jamais le message,
- * elle en détient une copie. C'est ce qui distingue ce cas de l'inbox de
- * mentions du cycle précédent, où la ligne `Mention` ne portait qu'une clé
- * étrangère et où une garde d'admission suffisait.
- *
- * La cascade `Notification.message` ne se déclenche pas : elle demande une
- * suppression PHYSIQUE, et le retrait doux ne bascule que `deletedAt`. La ligne
- * `Message` reste, donc les `Notification` aussi — même mécanisme que les
- * `TrackingLink` et les `Mention` survivants des deux cycles précédents.
- *
- * Retrait plutôt que neutralisation du contenu : une notification dont le
- * message n'existe plus n'a rien à afficher ET rien où mener — son `action:
- * view_message` ouvrirait une conversation sur un message absent. C'est aussi
- * le seul geste que les clients savent déjà recevoir (`notification:deleted`).
- *
- * Le filtre porte sur `messageId`, PAS sur la conversation : les autres
- * messages gardent les leurs.
- */
-async function retractMessageNotifications(
-  prisma: PrismaClient,
-  messageId: string,
-  announcer: RetractedNotificationAnnouncer | undefined
-): Promise<void> {
-  const retracted = await prisma.notification.findMany({
-    where: { messageId },
-    select: { id: true, userId: true },
-  });
-  if (retracted.length === 0) return;
-
-  // Filtré sur `messageId` et non sur les ids relus : une notification créée
-  // entre la lecture et l'écriture (l'éventail court après le retrait) part
-  // avec les autres. Elle n'est alors pas annoncée — un écran en retard, à
-  // corriger par une garde d'admission côté éventail — là où la garder aurait
-  // laissé la copie du contenu en base.
-  await prisma.notification.deleteMany({ where: { messageId } });
-
-  // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
-  // qu'elle recalcule doivent voir la base d'après le retrait.
-  await announcer?.announceNotificationsRetracted(retracted);
 }
 
 export async function applyMessageRemovalEffects(

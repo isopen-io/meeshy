@@ -32,6 +32,12 @@ function makePrisma(options: {
   suppressed?: string[];
   replyAuthorParticipantId?: string | null;
   replyAuthorUserId?: string | null;
+  /** Ce que la relecture d'après-éventail trouve sur le message envoyé. */
+  retractedAt?: Date | null;
+  /** Le message a disparu de la base entre l'envoi et la relecture. */
+  messageVanished?: boolean;
+  /** Les lignes `Notification` que la relecture trouvera ancrées sur le message. */
+  anchoredNotifications?: Array<{ id: string; userId: string }>;
 } = {}) {
   const members = options.members ?? [PEER_USER_ID];
   const conversation =
@@ -56,14 +62,28 @@ function makePrisma(options: {
     participant: { findUnique: participantFindUnique },
     user: { findUnique: jest.fn<any>().mockResolvedValue(options.user ?? null) },
     conversation: { findUnique: jest.fn<any>().mockResolvedValue(conversation) },
+    // Deux questions distinctes passent par ce délégué, et elles ne portent pas
+    // sur le même message : l'auteur du message CITÉ (avant l'éventail) et
+    // l'état vivant du message ENVOYÉ (après). Un mock qui rendrait la même
+    // ligne aux deux ne pourrait pas distinguer un défaut de l'un du défaut de
+    // l'autre — d'où l'aiguillage sur `where.id`.
     message: {
-      findUnique: jest
-        .fn<any>()
-        .mockResolvedValue(
+      findUnique: jest.fn<any>(({ where }: any) => {
+        if (where.id === MSG_ID) {
+          return Promise.resolve(
+            options.messageVanished ? null : { deletedAt: options.retractedAt ?? null }
+          );
+        }
+        return Promise.resolve(
           options.replyAuthorParticipantId === undefined
             ? null
             : { senderId: options.replyAuthorParticipantId }
-        ),
+        );
+      }),
+    },
+    notification: {
+      findMany: jest.fn<any>().mockResolvedValue(options.anchoredNotifications ?? []),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     messageAttachment: { findMany: jest.fn<any>().mockResolvedValue(options.attachments ?? []) },
     userConversationPreferences: {
@@ -874,5 +894,161 @@ describe('notifyMessageRecipients — l’éventail', () => {
 
     expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
     expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Le rappel qui court APRÈS l'éventail.
+ *
+ * Le cycle 47 a fait retirer, au rappel d'un message, les notifications qu'il
+ * avait produites — et a nommé la course qu'il laissait ouverte : une ligne
+ * créée APRÈS le `deleteMany` du rappel survit, avec la copie de l'extrait que
+ * `createNotification` a dénormalisée. Aucun filtre à la lecture ne la rattrape.
+ *
+ * Une garde d'ADMISSION en tête d'éventail — la piste que le cycle 47 avait
+ * inscrite — rétrécit la fenêtre sans jamais la fermer : `deletedAt` peut être
+ * committé entre la relecture et la création. La relecture d'APRÈS, elle, la
+ * ferme : toute ligne que le `deleteMany` du rappel n'a pas vue est
+ * nécessairement née avant une relecture qui, elle, voit `deletedAt`.
+ */
+describe('notifyMessageRecipients — le rappel qui court après l’éventail', () => {
+  const anchored = [
+    { id: 'notif-peer', userId: PEER_USER_ID },
+    { id: 'notif-other', userId: OTHER_USER_ID },
+  ];
+
+  it('un message rappelé pendant l’éventail perd les notifications qu’il vient de produire', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [SENDER_USER_ID, PEER_USER_ID, OTHER_USER_ID],
+      retractedAt: new Date('2026-08-10T10:00:00Z'),
+      anchoredNotifications: anchored,
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ce que je regrette',
+    });
+
+    expect(notificationService.createMessageNotification).toHaveBeenCalledTimes(2);
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID } });
+  });
+
+  // Le témoin. Il interdit d'élargir : un éventail qui retirerait ses propres
+  // lignes sans lire `deletedAt` rendrait TOUTE notification éphémère.
+  it('un message vivant garde ses notifications', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [SENDER_USER_ID, PEER_USER_ID],
+      anchoredNotifications: anchored,
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('annonce à leurs destinataires les lignes que le rappel emporte', async () => {
+    // Les lignes retirées ici ont DÉJÀ été émises en `notification:new` et
+    // comptées dans la cloche : sans annonce, le badge resterait sur un
+    // compteur incluant des lignes que le serveur vient de supprimer.
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [SENDER_USER_ID, PEER_USER_ID, OTHER_USER_ID],
+      retractedAt: new Date('2026-08-10T10:00:00Z'),
+      anchoredNotifications: anchored,
+    });
+    const announceNotificationsRetracted = jest.fn<any>().mockResolvedValue(undefined);
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: makeNotificationService(),
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'ce que je regrette',
+      retractionAnnouncer: { announceNotificationsRetracted },
+    });
+
+    expect(announceNotificationsRetracted).toHaveBeenCalledWith(anchored);
+  });
+
+  // La relecture est le prix de la fermeture ; un éventail qui n'a rien créé
+  // n'a rien à fermer, et ne doit pas le payer.
+  it('un éventail qui n’a rien créé ne relit pas le message', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [SENDER_USER_ID] });
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: makeNotificationService(),
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'personne à notifier',
+    });
+
+    expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+  });
+
+  // Sens sûr : `deletedAt` non nul est la SEULE preuve d'un rappel. Une ligne
+  // absente ne prouve rien — et aucun chemin de la gateway ne supprime un
+  // message physiquement. Retirer sur une non-preuve viderait des inboxes.
+  it('un message introuvable à la relecture ne fait retirer aucune ligne', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [SENDER_USER_ID, PEER_USER_ID],
+      messageVanished: true,
+      anchoredNotifications: anchored,
+    });
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: makeNotificationService(),
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'coucou',
+    });
+
+    expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('une relecture qui jette n’emporte ni l’éventail ni son compte rendu', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [SENDER_USER_ID, PEER_USER_ID] });
+    prisma.message.findUnique.mockRejectedValue(new Error('mongo down'));
+    const notificationService = makeNotificationService();
+    notificationService.createMessageNotification.mockResolvedValue({ id: 'notif-peer' });
+    const onFanOut = jest.fn<any>();
+    const onError = jest.fn<any>();
+
+    await expect(
+      notifyMessageRecipients({
+        prisma: prisma as any,
+        notificationService,
+        message: makeMessage(),
+        senderParticipantId: SENDER_PART_ID,
+        conversationId: CONV_ID,
+        processedContent: 'coucou',
+        onFanOut,
+        onError,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(onFanOut).toHaveBeenCalledWith({ mentions: 0, regular: 1, reply: false });
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 });
