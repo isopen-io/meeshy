@@ -670,9 +670,12 @@ struct AudioMediaView: View, Equatable {
     /// (→ show original, `nil`) or has a matching translated-audio transcript
     /// (→ that language code). `nil` when nothing matches — the strip then
     /// defaults to the original, per the Prisme rule (never falls back to
-    /// `.first`). This ONLY seeds which transcription TEXT is shown; it never
-    /// changes which audio track plays — playback stays the original by
-    /// default (`AudioPlayerView`'s own play/pause selection is untouched).
+    /// `.first`). Prisme audio-follow (2026-08-09) — this value now ALSO
+    /// seeds which audio track plays, not just which transcription TEXT is
+    /// shown: it flows into `AudioPlayerView`'s `initialTranscriptionLanguage`
+    /// parameter, whose doc comment (`Sources/MeeshyUI/Media/AudioPlayerView.swift`,
+    /// search "Prisme audio-follow (2026-08-09)") carries the full playback
+    /// contract — see that doc rather than assuming playback is unaffected.
     /// Internal (not `private`) so `@testable import` can observe the
     /// resolution from MeeshyTests without exposing it publicly.
     internal var resolvedPreferredTranscriptionLanguage: String? {
