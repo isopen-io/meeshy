@@ -1,3 +1,142 @@
+# Cycle 50 — La demande d'amitié partait ; sa notification restait, sans destination
+
+Tête prise dans la famille que les cycles 46/47/48 ont ouverte sans la fermer : **une ligne
+dénormalisée survit au retrait de son référent parce que le retrait ne l'a jamais nommée.** Trois
+occurrences déjà traitées (`TrackingLink` d'un message rappelé, `Mention`, `Notification` d'un
+message rappelé), toutes du côté message. La quatrième est ailleurs, et c'est ce qui l'avait
+gardée invisible : elle est sur la route qui supprime une demande d'amitié.
+
+## D1 (racine) — le seul consommateur devient inatteignable au moment où la ligne part
+
+`DELETE /friend-requests/:id` fait trois choses : il lit la demande, il **supprime la ligne**, il
+émet `friend_request:cancelled` à l'autre partie. Il ne touche pas la seule chose DURABLE que la
+demande avait produite — la notification « X vous a envoyé une demande d'amitié », écrite par
+`createFriendRequestNotification` dans l'inbox du **destinataire**.
+
+Rien d'autre ne l'en retirait :
+
+- `Notification.context` est un blob JSON, pas une clé étrangère. Aucun `onDelete: Cascade` ne peut
+  se déclencher sur `context.friendRequestId` — même mécanisme exactement que celui qui laissait les
+  `Notification` d'un message rappelé en base (cycle 47), à ceci près qu'ici il n'y a même pas de
+  relation déclarée à ne pas se déclencher.
+- Sa seule voie de consommation est `markFriendRequestNotificationsAsRead`, appelée par la route
+  soeur `PATCH …/:id` quand on **répond**. Or on ne répond plus à une demande qui n'existe plus : la
+  route 404 sur `findFirst`. La voie de sortie se ferme à l'instant même où la ligne part.
+
+Résultat : notification **non lue indéfiniment**, comptée dans la cloche et dans le badge, avec un
+`metadata.action: accept_or_reject_contact` qui n'ouvre plus qu'un écran répondant 404. Les deux
+sous-cas de la route la produisent, parce que la suppression est inconditionnelle : l'expéditeur qui
+annule, et le destinataire qui écarte sans répondre.
+
+## D2 (pourquoi ça a survécu) — la route voisine fait le geste correct, sous un autre nom
+
+Le `PATCH` marque comme lues (cycle antérieur, `markFriendRequestNotificationsAsRead`). À la
+relecture d'un seul fichier, la famille « demande d'amitié » a donc l'air pourvue : le mot
+`notification` apparaît, scopé sur `context.friendRequestId`, avec sa garde anti-IDOR et son
+`notification:counts`. Ce qui manque n'est pas un contrôle absent partout — c'est **le même contrôle
+sous un verbe différent**, et le verbe différent est précisément ce qui le rend invisible.
+
+C'est la configuration du cycle 14 (un écrivain sur quatre hors du rang), avec une variante : les
+deux routes ne DOIVENT pas faire le même geste, donc leur asymétrie n'est pas en soi un signal.
+
+## D3 (arbitrage) — retrait, pas marquage
+
+Ce qui tranche est ce qui reste au bout du lien, pas qui a cliqué.
+
+| Route | La ligne `FriendRequest` | La notification est… | Geste |
+|---|---|---|---|
+| `PATCH` accept/reject | reste, statut changé | **consommée** | marquer lue |
+| `DELETE` (les deux sous-cas) | **partie** | **morte** — rien à afficher, rien où mener | retirer |
+
+Même arbitrage, pour la même raison, que le rappel d'un message (`retractMessageNotifications`,
+cycle 47), et même geste — le seul que les clients savent déjà recevoir (`notification:deleted`,
+écouté par le web et par le SDK iOS), doublé d'un `notification:counts` sans lequel la cloche
+resterait sur un compteur incluant des lignes que le serveur vient de supprimer.
+
+## D4 (trois corollaires du caractère inconditionnel de la suppression)
+
+1. **Aucun filtre `isRead`** — seule différence de prédicat avec le marquage. Une notification déjà
+   lue est tout aussi morte qu'une non lue ; la laisser garderait dans la liste une ligne sans
+   destination.
+2. **Le destinataire est toujours `receiverId`**, quel que soit celui des deux qui a appelé :
+   `createFriendRequestNotification` ne notifie que lui. Le scope `userId` reste la garde anti-IDOR
+   que porte déjà le marquage — le retrait ne l'élargit pas.
+3. **`context.friendRequestId` n'appartient qu'à `friend_request`.** Vérifié plutôt que supposé : le
+   `friend_accepted` de l'expéditeur porte `context.conversationId`, jamais cette clé. Le retrait ne
+   peut donc pas l'emporter au passage — y compris sur une demande ACCEPTÉE puis supprimée, la route
+   ne filtrant pas sur `status`.
+
+## D5 (forme de la requête) — supprimer les ids RELUS, pas le prédicat
+
+La lecture passe par `$runCommandRaw` pour la raison déjà établie par le marquage (Prisma ne filtre
+pas les chemins JSON sur MongoDB). Mais la suppression porte sur les ids **relus**, pas sur le
+prédicat : l'ensemble supprimé et l'ensemble annoncé sont alors identiques par construction, et
+aucune ligne ne peut disparaître sans son `notification:deleted`. C'est l'inverse du choix fait par
+`retractMessageNotifications`, et délibérément : là-bas, filtrer sur le prédicat FERMAIT une course
+avec l'éventail de notification du même message (cycle 48) ; ici il n'y a pas d'éventail — une
+demande produit UNE notification, à sa création, longtemps avant. `singleBatch` ferme le curseur
+côté serveur au lieu de le laisser ouvert.
+
+## Plan
+- [x] T1 — RED (service) : lecture par chemin JSON **sans** filtre `isRead`
+- [x] T2 — RED (service) : suppression des ids relus + `notification:deleted` par ligne + un
+      `notification:counts`
+- [x] T3 — RED (service) : l'annonce vient APRÈS l'écriture durable
+- [x] T4 — verrous (service) : aucune ligne → aucune suppression, aucune annonce ; userId
+      non-ObjectId (session anonyme) → 0 sans requête ; Mongo en échec → 0 sans exception
+- [x] T5 — RED (route) : les DEUX sous-cas retirent la notification du **receveur**
+- [x] T6 — RED (route) : un retrait en échec ne fait pas échouer la route et n'emporte pas
+      `friend_request:cancelled`
+- [x] T7 — GREEN : `NotificationService.retractFriendRequestNotifications` + appel dans la route
+- [x] T8 — gates : suite gateway complète, `tsc --noEmit` propre
+- [x] T9 — changeset + CHANGELOG + ce relevé
+
+## Vérification
+
+Rouges observés sur les deux surfaces avant le correctif : la suite service ne COMPILAIT pas
+(`retractFriendRequestNotifications` inexistante — TS2551 pointant sur
+`createFriendRequestNotification`), les deux tests de route tombaient sur `Number of calls: 0`.
+Après : 69/69 sur les deux fichiers, `tsc --noEmit` propre.
+
+Suite gateway complète sous bun (parité CI) : **635 suites, 16 180 tests, tout vert** (479 s).
+Couverture globale lignes **95,76 %** (95,65 % au cycle 26 relevé) — en hausse.
+
+## Reste ouvert après ce cycle
+
+- **`applyPostRemovalEffects` ne retire pas les notifications du post supprimé — même défaut, blast
+  radius bien plus large. TÊTE DU PROCHAIN CYCLE.** Le cycle 47 nomme lui-même `applyPostRemovalEffects`
+  comme « le jumeau côté post » de `applyMessageRemovalEffects` ; le jumeau a reçu l'audit, les liens
+  de partage et les usages de sons, jamais les notifications. Or la suppression d'un post est un
+  retrait DOUX (`deletedAt`), donc, comme pour le message, aucune cascade ne se déclenche : toutes
+  les notifications portant `context.postId` (`post_like`, `post_comment`, `comment_reply`,
+  `story_new_comment`, `friend_new_story`, `friend_new_post`, …) survivent avec l'extrait
+  dénormalisé du contenu retiré. Le diagnostic du 2026-08-04 en compte **≈ 8 100 non lues** en
+  production, contre une dizaine pour la famille demande d'amitié fermée ici. Deux différences de
+  forme à traiter, aucune bloquante : le filtre n'est PAS scopé à un `userId` (un post notifie N
+  destinataires, donc la relecture doit projeter `userId` et l'annonce se grouper par destinataire —
+  `announceNotificationsRetracted` le fait déjà), et l'annonceur doit descendre jusqu'à
+  `applyPostRemovalEffects`, qui ne reçoit aujourd'hui ni `NotificationService` ni port étroit (le
+  patron existe : `PostSoundReleaser` dans le même fichier, `RetractedNotificationAnnouncer` côté
+  message) — `PostService` n'a pas de `notificationService` dans son constructeur, mais les deux
+  routes appelantes (`routes/posts/core.ts`, `routes/admin/posts.ts`) ont `fastify.notificationService`.
+  L'écriture durable ne doit pas dépendre du câblage socket : port **optionnel**, comme
+  `retractMessageNotifications(prisma, id, announcer?)`.
+- **Aucune notification déjà écrite n'est rattrapée.** Le correctif ne vaut que pour les suppressions
+  à venir ; les lignes orphelines des demandes déjà supprimées restent en base. Réparable par le
+  patron des scripts existants (`repair-mention-user-ids.ts`) — action humaine, cette routine n'a
+  aucun accès MongoDB.
+- **Le push APNs/FCM déjà délivré n'est pas rappelé.** Retirer la ligne éteint la liste in-app et la
+  cloche, pas la bannière déjà posée sur l'écran verrouillé. Fermer ça demanderait un push silencieux
+  de collapse — chantier de contrat, pas correctif.
+- **`login_new_device` reste sans contexte de consommation** (159 non lues en prod au 2026-08-04) :
+  aucune des trois clés supportées par `markContextNotificationsAsRead` ne s'y applique, et sa seule
+  sortie est le read-by-types. Relevé, pas un défaut de correction évidente.
+- Hérités et inchangés : l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `eslint` ne peut pas tourner sur le gateway (aucun `eslint.config.js` depuis ESLint v9) ;
+  `getMentionsForMessage`/`getRecentMentionsForUser` n'ont aucun consommateur d'écran.
+
+---
+
 # Cycle 49 — Débannir n'est pas une porte d'entrée, mais ça en était devenu une
 
 Tête prise là où le cycle 40 avait laissé sa propre règle. Ce cycle-là avait unifié « que faire de

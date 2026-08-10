@@ -536,6 +536,25 @@ type MemberJoinedSnapshot = {
   readonly memberCount: number;
 };
 
+/**
+ * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
+ * d'amitié produit UNE notification, à sa création — et `singleBatch` en fait
+ * une lecture close plutôt qu'un curseur laissé ouvert côté serveur.
+ */
+const RETRACTION_BATCH_SIZE = 1000;
+
+/**
+ * Le retour d'une commande Mongo `find` brute réduite à sa projection d'ids.
+ *
+ * `_id` arrive en Extended JSON (`{ $oid }`) et non en `string` : c'est la
+ * différence entre la commande brute et un `findMany` Prisma, et la raison pour
+ * laquelle le retrait relit puis supprime par ids typés plutôt que d'enchaîner
+ * deux commandes brutes.
+ */
+type RawNotificationIdBatch = {
+  cursor?: { firstBatch?: ReadonlyArray<{ _id: string | { $oid: string } }> };
+};
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -4348,6 +4367,86 @@ export class NotificationService {
    */
   async markFriendRequestNotificationsAsRead(userId: string, friendRequestId: string): Promise<number> {
     return this.markContextNotificationsAsRead(userId, 'friendRequestId', friendRequestId);
+  }
+
+  /**
+   * RETIRE les notifications liées à une demande d'amitié dont la ligne vient
+   * d'être supprimée (`DELETE /friend-requests/:id` — annulation par
+   * l'expéditeur, ou retrait par le destinataire sans répondre).
+   *
+   * Pendant de `markFriendRequestNotificationsAsRead`, et l'arbitrage entre les
+   * deux tient à ce qui reste au bout du lien. Répondre (accept/reject) laisse
+   * la ligne `FriendRequest` en place : la notification est CONSOMMÉE, donc lue.
+   * Supprimer emporte la ligne : la notification n'a plus rien à afficher ET
+   * rien où mener — son `metadata.action: accept_or_reject_contact` ouvrirait
+   * un écran de demande qui répond 404. Même conclusion que le rappel d'un
+   * message (`retractMessageNotifications`), pour la même raison, et le même
+   * geste — le seul que les clients savent déjà recevoir (`notification:deleted`,
+   * écouté par le web et par le SDK iOS).
+   *
+   * Trois conséquences du fait que la ligne part INCONDITIONNELLEMENT :
+   *
+   *  1. **Aucun filtre `isRead`.** Une notification déjà lue est tout aussi
+   *     morte qu'une non lue ; la laisser garderait une ligne sans destination
+   *     dans la liste. C'est la seule différence de filtre avec le marquage.
+   *  2. **Le destinataire est toujours `receiverId`**, quel que soit celui des
+   *     deux qui a appelé la route : `createFriendRequestNotification` ne
+   *     notifie que lui. Le scope `userId` reste la garde anti-IDOR, comme pour
+   *     le marquage.
+   *  3. **`context.friendRequestId` n'appartient qu'à `friend_request`.** Le
+   *     `friend_accepted` de l'expéditeur porte `context.conversationId`, jamais
+   *     cette clé — le retrait ne peut pas l'emporter au passage.
+   *
+   * La lecture passe par `$runCommandRaw` pour la même raison que le marquage
+   * (Prisma ne filtre pas les chemins JSON sur MongoDB), puis la suppression
+   * porte sur les ids RELUS et non sur le prédicat : l'ensemble supprimé et
+   * l'ensemble annoncé sont alors identiques par construction, et aucune ligne
+   * ne peut disparaître sans son `notification:deleted`. `singleBatch` ferme le
+   * curseur côté serveur ; le lot est très au-dessus du réel (une demande
+   * produit UNE notification, à sa création).
+   */
+  async retractFriendRequestNotifications(userId: string, friendRequestId: string): Promise<number> {
+    if (!/^[0-9a-f]{24}$/i.test(userId)) {
+      return 0;
+    }
+
+    try {
+      const raw = await (this.prisma as unknown as {
+        $runCommandRaw: (cmd: Record<string, unknown>) => Promise<RawNotificationIdBatch>;
+      }).$runCommandRaw({
+        find: 'Notification',
+        filter: {
+          userId: { $oid: userId },
+          'context.friendRequestId': friendRequestId,
+        },
+        projection: { _id: 1 },
+        singleBatch: true,
+        batchSize: RETRACTION_BATCH_SIZE,
+      });
+
+      const ids = (raw?.cursor?.firstBatch ?? []).map((row) =>
+        typeof row._id === 'string' ? row._id : row._id.$oid
+      );
+
+      if (ids.length === 0) {
+        return 0;
+      }
+
+      await this.prisma.notification.deleteMany({ where: { id: { in: ids } } });
+
+      // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
+      // qu'elle recalcule doivent voir la base d'après le retrait.
+      await this.announceNotificationsRetracted(ids.map((id) => ({ id, userId })));
+
+      return ids.length;
+    } catch (error) {
+      notificationLogger.error('Failed to retract friend request notifications', {
+        error,
+        userId,
+        friendRequestId,
+      });
+      return 0;
+    }
   }
 
   /**
