@@ -10,6 +10,7 @@ public enum class OutboxKind {
     ADD_REACTION,
     REMOVE_REACTION,
     READ_RECEIPT,
+    MARK_UNREAD,
     UPDATE_CONVERSATION_PREFS,
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
@@ -92,7 +93,10 @@ public object OutboxLaneMap {
         OutboxKind.REMOVE_REACTION,
         -> OutboxLaneAssignment.Shared(OutboxLanes.REACTION)
 
-        OutboxKind.READ_RECEIPT -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+        OutboxKind.READ_RECEIPT,
+        OutboxKind.MARK_UNREAD,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+
         OutboxKind.UPDATE_CONVERSATION_PREFS ->
             OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_PREFS)
         OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)

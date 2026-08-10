@@ -43,6 +43,7 @@
     <string name="conversations_action_archive">Archive</string>
     <string name="conversations_action_unarchive">Unarchive</string>
     <string name="conversations_action_mark_read">Mark as read</string>
+    <string name="conversations_action_mark_unread">Mark as unread</string>
     <string name="conversations_action_move_to_category">Move to category</string>
     <string name="conversations_category_search_hint">Search or create a category…</string>
     <string name="conversations_action_create_category">Create \"%1$s\"</string>
