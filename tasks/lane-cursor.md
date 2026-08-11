@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=2 last_run=widget-quick-reply
+lane=IOS ios_streak=1 last_run=delta-page-walk

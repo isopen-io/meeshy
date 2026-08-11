@@ -29,6 +29,97 @@ Deux bornes avant d'ouvrir :
 ---
 
 
+# Cycle 78 — Une page delta pleine n'est pas une fin de fenêtre, et une réaction n'est pas une ligne de liste
+
+Les deux têtes instruites pour le cycle 78 sont traitées. Elles n'ont rien en commun sauf leur
+forme : **un client qui croit avoir fini alors qu'il n'a aucune preuve de l'avoir fini**, et
+**un cache qu'on croit tenir à jour alors qu'on écrit à côté**.
+
+## D1 — iOS avançait son curseur delta par-dessus une page coupée (`ConversationSyncEngine`)
+
+`deltaSyncCore` demandait `limit=500` à une route qui plafonne à 100. La page revenait donc à
+100 et **rien ne la distinguait d'une fenêtre épuisée** : le curseur avançait au max des
+`updatedAt` reçus, et la borne stricte `gt` du tour suivant enjambait le reste — jusqu'au
+`fullSync` périodique, borné à 1×/24 h. Pendant ce temps la liste iOS montre des non-lus et des
+aperçus périmés, sans aucun signal.
+
+Le cycle 77 (D2) avait fait la moitié du chemin côté serveur en triant la page delta par
+`updatedAt` croissant. Il restait la moitié client. Trois règles, dans cet ordre :
+
+1. **Page COURTE ⇒ fin de fenêtre.** C'est la seule preuve possible, et c'est pour l'obtenir
+   qu'on demande exactement le plafond serveur. `limit=500` n'était pas seulement un mensonge
+   d'hygiène : il rendait la détection **structurellement impossible**.
+2. **Page PLEINE ⇒ curseur juste SOUS son groupe d'`updatedAt` le plus haut**
+   (`SyncWatermark.resumeAfterFullPage`). C'est le point qui ne se devine pas : la coupure peut
+   tomber AU MILIEU d'un groupe de lignes partageant une milliseconde. Avancer au max de la page
+   perd les survivantes de ce groupe. Reprendre sous le groupe le relit entier au tour suivant —
+   l'upsert est idempotent, donc relire coûte, mais ne casse rien. Une page pleine coûte donc
+   toujours une requête de plus ; c'est le prix de la preuve.
+3. **Le résidu que l'ordre ne rattrape pas** — page pleine dont TOUTES les lignes portent la même
+   milliseconde (écriture en masse) — n'a **aucun curseur qui progresse sans sauter une ligne**.
+   Le curseur ne bouge pas et la boucle escalade vers `fullSync`. Idem au-delà de
+   `maxDeltaPages` (5) : une fenêtre qui demande plus de pages n'est plus un delta.
+
+Une décision explicite : **l'escalade IGNORE la borne des 24 h.** `fullReconcileInterval` borne
+un entretien PÉRIODIQUE (purger les fantômes hard-supprimés) ; il n'a pas à throttler une
+RÉPARATION que le delta vient lui-même de demander. Les confondre laisserait la liste
+sciemment trouée jusqu'à 24 h.
+
+Ordre des gestes, tel qu'instruit : ne pas avancer, PUIS escalader. Une escalade partant d'un
+curseur déjà trop haut hériterait du trou qu'elle existe pour fermer.
+
+## D2 — deux invalidations de réaction ne matchaient aucun cache (web)
+
+`use-reactions-query.ts` invalidait `conversations.lists()` (`['conversations','list']`) sur
+réaction ajoutée / retirée. La sidebar lit `conversations.infinite()`
+(`['conversations','infinite']`) : **préfixes disjoints, intention jamais exécutée**.
+
+Le geste juste n'était PAS de rediriger vers `infinite()` — ça aurait relu toutes les pages
+chargées à chaque réaction, exactement le refetch que le cycle 77 venait de retirer du chemin de
+focus. Vérifié avant de trancher : **une ligne de liste ne porte rien qui dérive des réactions**
+(aperçu, non-lus, horodatage). Le `reaction` rendu par `ConversationList` est l'emoji de
+PRÉFÉRENCE de conversation, homonyme et sans rapport. Les deux invalidations sont donc
+supprimées ; le seul cache concerné (celui du message) était déjà mis à jour deux lignes plus
+bas par `updateReactionSummaryInMessageCache`.
+
+## Vérification
+
+- **12 témoins neufs**, écrits AVANT le code :
+  - `SyncWatermarkTests` (4) — le groupe du haut est laissé de côté, l'ordre d'arrivée
+    n'influe pas, et les deux cas sans point de reprise (page à une seule milliseconde, page
+    vide) rendent `nil`.
+  - `ConversationSyncEngineTests` (6) — `limit=100` demandé ; une page pleine enchaîne une 2ᵉ
+    page dont l'`updatedSince` est le timestamp SOUS le groupe du haut ; page courte ⇒ une
+    requête, curseur au max, zéro escalade ; page pleine à une seule milliseconde ⇒ la marche
+    s'arrête et `fullSync` court ; l'escalade court MALGRÉ une réconciliation récente ; la
+    marche s'arrête à `maxDeltaPages` en escaladant.
+  - `use-reactions-query.test.tsx` (2) — **RED observé** (`flatFetch` appelé 2× au lieu de 1×).
+- `stubSequence` ajouté à `MockAPIClient` : sans lui une pagination se teste contre la même page
+  rendue à l'infini, ce qui passe au vert quoi que fasse la boucle.
+- Web : **562 suites / 12 098 tests verts** en local (bun/jest).
+- iOS/SDK : **non exécutable ici** (conteneur Linux, ni Xcode ni toolchain Swift) — la
+  vérification est déléguée à `sdk-tests` + `ios-tests` sur macOS. Dit franchement plutôt
+  qu'implicitement : c'est la borne de ce cycle.
+
+## Reste ouvert après ce cycle
+
+- **Les écrivains morts de la liste PLATE** (`use-socket-cache-sync`, `unread-cache`,
+  `use-send-message-mutation`, `use-conversations-query` — ~20 sites) ne sont PAS retirés. D2 a
+  traité la seule PANNE du lot ; le reste est un retrait de code mort, à faire d'un bloc avec
+  les deux hooks sans consommateur (`useConversationsQuery`,
+  `useConversationsWithPagination`) plutôt qu'en miettes. Le coût est la lisibilité : le code
+  se lit comme si deux caches étaient tenus en phase alors qu'un seul existe.
+- **Le résidu des égalités reste un résidu.** iOS escalade désormais au lieu de perdre, mais
+  une écriture en masse de plus de 100 conversations à la même milliseconde force toujours une
+  relecture complète. La vraie fermeture demanderait un curseur composite
+  (`updatedAt`, `id`) côté route — chantier de contrat, pas garde de client.
+- **`apps/web` porte 1224 erreurs `tsc --noEmit` préexistantes** sous son propre tsconfig
+  (aucune introduite ici ; le fichier de tests touché en portait déjà 20 de la même forme). Ce
+  n'est pas un gate CI aujourd'hui, et c'est précisément pourquoi ça mérite d'être écrit.
+
+---
+
+
 # Cycle 77 — L'enrichissement audio n'atteignait que les lecteurs déjà dans le fil, et une page delta tronquée sautait des lignes
 
 Deux défauts de la même famille, tous deux côté gateway, tous deux du type « la convergence

@@ -4763,3 +4763,60 @@ Deux bornes à écrire noir sur blanc :
 - **L'ordre est conditionnel au filtre.** Une page ordinaire garde la récence : la même
   route sert deux besoins, et trier par `updatedAt` un écran de liste lui rendrait ses
   conversations les plus vieilles en tête.
+
+## Leçon 122 — une page PLEINE n'est jamais une preuve de fin ; demander plus que le plafond détruit la preuve (2026-08-11, routine messaging, cycle 78)
+
+`deltaSyncCore` (iOS) demandait `limit=500` à une route plafonnée à 100. On lit ça comme de
+l'hygiène — « le serveur cappe, tant pis ». C'en est l'inverse : **la seule façon de savoir
+qu'une page a été coupée est de la comparer au plafond, et demander plus que le plafond rend
+cette comparaison impossible**. Une page à 100 devenait indistinguable d'une fenêtre épuisée.
+
+Trois règles à reprendre partout où un curseur pagine :
+
+1. **Demander EXACTEMENT le plafond serveur.** Une page courte devient alors la preuve — la
+   seule — que la fenêtre est finie. Le nombre demandé n'est pas un réglage de performance,
+   c'est le dénominateur d'un test.
+2. **Sur une page pleine, reprendre SOUS le groupe du haut, jamais à son max.** La coupure peut
+   tomber au milieu d'un groupe de lignes partageant la même valeur de curseur ; une borne
+   stricte `gt` posée sur le max enjambe les survivantes du groupe. Reprendre sous le groupe le
+   relit entier (idempotent) au lieu d'en perdre une partie. Corollaire : **une page pleine coûte
+   toujours une requête de plus**, et c'est le prix de la preuve, pas un défaut à optimiser.
+3. **Quand aucun curseur ne progresse sans perdre une ligne, NE PAS AVANCER, puis escalader.**
+   L'ordre est le contenu du correctif. Une escalade partant d'un curseur déjà trop haut hérite
+   du trou qu'elle existe pour fermer.
+
+Et une distinction qui vaut au-delà de ce cas : **une borne de fréquence sur un entretien
+PÉRIODIQUE ne doit jamais throttler une RÉPARATION.** `fullReconcileInterval` (24 h) borne la
+purge des fantômes ; il n'a rien à dire à un `fullSync` que le delta vient lui-même de réclamer
+parce qu'il sait sa fenêtre incomplète. Les confondre, c'est laisser la liste sciemment trouée
+pendant une journée.
+
+Côté test : une pagination ne se teste pas contre un mock qui rend la MÊME page à chaque appel —
+la boucle passe au vert quoi qu'elle fasse. Il faut une file de réponses (`stubSequence`). Le
+mock qui ne sait pas répondre différemment au 2ᵉ appel est un mock qui ne teste pas la marche.
+
+## Leçon 123 — une invalidation qui ne matche aucun cache est une PANNE, et sa correction n'est pas de la rebrancher (2026-08-11, routine messaging, cycle 78)
+
+`use-reactions-query.ts` invalidait `conversations.lists()` sur chaque réaction, commentaire
+explicite à l'appui (« réaction ajoutée = conversation modifiée »). La sidebar lit
+`conversations.infinite()` : préfixes disjoints, donc **l'intention déclarée n'a jamais été
+exécutée**. C'est pire que du code mort : le commentaire fait foi pour le prochain lecteur.
+
+Le réflexe est de rebrancher sur la bonne clé. Deux questions AVANT :
+
+1. **L'intention est-elle vraie ?** Ici non : une ligne de liste ne porte rien qui dérive des
+   réactions. Le piège était un homonyme — `ConversationList` rend bien un `reaction`, mais
+   c'est l'emoji de PRÉFÉRENCE de conversation, sans aucun rapport. Vérifier ce que la vue
+   AFFICHE, pas ce que le nom suggère.
+2. **Que coûterait la version qui marche ?** Sur un cache `infinite`, une invalidation relit
+   TOUTES les pages chargées. Rebrancher aurait réintroduit, sur chaque réaction, le refetch que
+   le cycle précédent venait de retirer du chemin de focus.
+
+Quand les deux réponses sont « non » et « cher », le correctif est la SUPPRESSION. Une
+invalidation morte qu'on répare sans rouvrir son intention devient une régression de perf
+présentée comme un correctif.
+
+Corollaire de test : une `invalidateQueries` ne refetch que les requêtes ACTIVES. Un témoin qui
+pose son cache à la main (`setQueryData`, `fetchQuery`) reste muet et passe au vert sans rien
+prouver. Il faut monter de VRAIS observateurs — et sur les DEUX formes de clé, pour que le
+témoin échoue aussi bien sur l'invalidation morte que sur sa « correction » coûteuse.
