@@ -38,6 +38,7 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
@@ -1402,12 +1403,38 @@ export function registerCoreRoutes(
       const socketIOHandler = fastify.socketIOHandler
       const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
-        const room = ROOMS.conversation(id)
-        io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        // La room de conversation ne suffit pas, et c'est le MÊME raisonnement
+        // qui a fait naître `emitConversationPreviewUpdate` pour l'autre moitié
+        // de ce payload : un participant posé sur l'écran de LISTE a quitté
+        // `conversation:<id>` et n'est joignable que par sa room personnelle.
+        // Sans elle, un renommage — ou un changement d'avatar, de bannière, de
+        // mode lent, de canal d'annonce — n'atteignait que ceux qui avaient le
+        // fil ouvert. La ligne de liste de tous les autres gardait l'ancien
+        // titre jusqu'à un rechargement complet.
+        //
+        // Le helper chaîne les rooms (au plus UNE copie par socket, même pour
+        // un client qui est à la fois dans le fil et dans sa room) et nomme la
+        // room d'un participant sans compte par son `Participant.id`
+        // (`userId ?? id`) — la seule ligne que chaque copie de ce code avait
+        // ratée. Les participants inactifs sont écartés : quitter une
+        // conversation, c'est cesser d'en recevoir les métadonnées.
+        //
+        // Le payload ne porte AUCUNE clé `lastMessage*`, et c'est délibéré :
+        // le tri-état client distingue « clé absente » (cet événement ne parle
+        // pas du dernier message) de « clé nulle » (la carte du Prisme est
+        // périmée). Un `lastMessageTranslations: null` posé ici effacerait une
+        // traduction parfaitement valide sur toutes les lignes de liste.
+        emitToConversationParticipants({
+          io,
           conversationId: id,
-          ...changedFields,
-          updatedBy: { id: userId },
-          updatedAt: new Date().toISOString(),
+          participants: updatedConversation.participants.filter(p => p.isActive),
+          events: [SERVER_EVENTS.CONVERSATION_UPDATED],
+          payload: {
+            conversationId: id,
+            ...changedFields,
+            updatedBy: { id: userId },
+            updatedAt: new Date().toISOString(),
+          },
         })
       }
 
@@ -1485,18 +1512,30 @@ export function registerCoreRoutes(
 
       // Marquer la conversation comme inactive plutôt que de la supprimer
       const now = new Date()
-      await prisma.conversation.update({
+      // Les participants sont ramenés PAR l'écriture : le fan-out ci-dessous a
+      // besoin de nommer leurs rooms personnelles, et une seconde requête pour
+      // les lire pourrait tomber sur un état déjà modifié.
+      const closedConversation = await prisma.conversation.update({
         where: { id: conversationId },
-        data: { isActive: false, closedAt: now, closedBy: userId }
+        data: { isActive: false, closedAt: now, closedBy: userId },
+        include: { participants: { select: { id: true, userId: true, isActive: true } } }
       });
 
-      // Broadcast closure to all members
+      // Broadcast closure to all members — ce que le commentaire annonçait sans
+      // que le code le fasse. Adressée à la seule room de conversation, la
+      // clôture n'atteignait que les membres ayant le fil OUVERT ; tous les
+      // autres gardaient la ligne dans leur liste et n'apprenaient la fermeture
+      // qu'en tapant dessus. Même raison que le renommage ci-dessus : la room
+      // personnelle est le seul endroit où joindre un client posé sur la liste.
       const io = fastify.socketIOHandler?.getManager()?.getIO()
       if (io) {
-        io.to(ROOMS.conversation(conversationId)).emit(
-          SERVER_EVENTS.CONVERSATION_CLOSED,
-          { conversationId, closedBy: userId, closedAt: now.toISOString() }
-        )
+        emitToConversationParticipants({
+          io,
+          conversationId,
+          participants: closedConversation.participants.filter(p => p.isActive),
+          events: [SERVER_EVENTS.CONVERSATION_CLOSED],
+          payload: { conversationId, closedBy: userId, closedAt: now.toISOString() }
+        })
       }
 
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
