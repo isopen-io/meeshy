@@ -5204,4 +5204,140 @@ describe('MeeshySocketIOManager', () => {
       await expect(manager.joinUserToConversationRoom('user-stale', 'conv-new-1234')).resolves.toBeUndefined();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // _broadcastNewMessage — contrat `clientMessageId` (Phase 4 §6.2)
+  // -------------------------------------------------------------------------
+
+  /**
+   * `recordEmitChains` ne retient que (rooms, event) : il ne peut pas dire ce
+   * qu'un emit TRANSPORTE, ni quelles rooms une chaîne a exclues. Les deux sont
+   * précisément l'objet de ce groupe — la moitié « cid porté » et la moitié
+   * « cid retiré » du contrat vivent dans le payload, et la garde anti-doublon
+   * vit dans le `.except()`.
+   */
+  function recordEmitPayloads(state: ReturnType<typeof getIoState>) {
+    const sent: Array<{ rooms: string[]; excepted: string[]; event: string; payload: any }> = [];
+    const chain = (rooms: string[], excepted: string[]): any => ({
+      to: (room: string) => chain([...rooms, room], excepted),
+      except: (arg: string | string[]) =>
+        chain(rooms, [...excepted, ...(Array.isArray(arg) ? arg : [arg])]),
+      emit: (event: string, payload: any) => { sent.push({ rooms, excepted, event, payload }); },
+    });
+    state.to.mockImplementation(((room: string) => chain([room], [])) as never);
+    return {
+      forEvent: (event: string) => sent.filter((s) => s.event === event),
+      restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
+    };
+  }
+
+  describe('_broadcastNewMessage — clientMessageId reconciliation contract', () => {
+    const CONV = 'conv-123456789012';
+    const SENDER = {
+      id: 'part-sender',
+      userId: 'user-sender',
+      displayName: 'Alice',
+      nickname: null,
+      avatar: null,
+      type: 'registered',
+      user: null,
+    };
+
+    function makeCidMessage(overrides: Record<string, unknown> = {}) {
+      return makeMessage({
+        conversationId: CONV,
+        senderId: 'part-sender',
+        sender: SENDER,
+        clientMessageId: 'cid_abc123',
+        ...overrides,
+      });
+    }
+
+    async function broadcast(msg: any) {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      const sent = recordEmitPayloads(ioState);
+      try {
+        await manager.broadcastMessage(msg, CONV);
+      } finally {
+        sent.restore();
+      }
+      return sent;
+    }
+
+    it("carries clientMessageId to the sender's own user room so an optimistic row can promote by cid", async () => {
+      // Le chemin REST est celui que prend iOS pour TOUT envoi non éligible au
+      // socket-first (pièce jointe, E2EE, vue-unique, éphémère, effets) — cf.
+      // `socketFirstEligible`, ConversationViewModel. Sans cid sur le fil, la
+      // seule promotion possible reste la réponse HTTP ; perdue (app en fond,
+      // réseau coupé), le renvoi de l'outbox est dédupliqué par la route
+      // (`!isDuplicate`) qui ne rebroadcaste PAS — la bulle optimiste reste
+      // bloquée en `.sending` jusqu'à un rechargement complet.
+      const sent = await broadcast(makeCidMessage());
+
+      const toSender = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.user('user-sender')));
+
+      expect(toSender).toHaveLength(1);
+      expect(toSender[0].payload).toEqual(expect.objectContaining({ clientMessageId: 'cid_abc123' }));
+    });
+
+    it('strips clientMessageId from the copy every peer receives', async () => {
+      // Invariant #2 de `message-ack-shaping` : un pair ne doit jamais apprendre
+      // l'espace d'ids optimistes de l'expéditeur.
+      const sent = await broadcast(makeCidMessage());
+
+      const toRoom = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.conversation(CONV)));
+
+      expect(toRoom).toHaveLength(1);
+      expect(toRoom[0].payload).not.toHaveProperty('clientMessageId');
+    });
+
+    it("excepts the sender's user room from the conversation-room emit so their devices get exactly one copy", async () => {
+      const sent = await broadcast(makeCidMessage());
+
+      const toRoom = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.conversation(CONV)));
+
+      expect(toRoom[0].excepted).toContain(ROOMS.user('user-sender'));
+    });
+
+    it('falls back to a single cid-stripped room-wide emit when the sender has no account', async () => {
+      // Invité de lien partagé : aucune `ROOMS.user(User.id)` à adresser. Le
+      // chemin doit rester exactement celui d'avant — une seule émission, sans
+      // cid — plutôt que d'adresser `user:undefined`.
+      const sent = await broadcast(makeCidMessage({ sender: { ...SENDER, userId: null } }));
+
+      const news = sent.forEvent(SERVER_EVENTS.MESSAGE_NEW);
+      expect(news).toHaveLength(1);
+      expect(news[0].rooms).toEqual([ROOMS.conversation(CONV)]);
+      expect(news[0].excepted).toEqual([]);
+      expect(news[0].payload).not.toHaveProperty('clientMessageId');
+    });
+
+    it('enqueues the cid-stripped payload for an offline recipient', async () => {
+      // Même règle que `enqueueOfflineLinkMessage` : « payload must be the
+      // peer-facing (cid-stripped) body, identical to the live emit ».
+      const fakeQueue = { enqueue: jest.fn().mockResolvedValue(undefined), drain: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-offline', userId: 'user-offline', joinedAt: new Date() },
+      ]);
+
+      await manager.broadcastMessage(makeCidMessage(), CONV);
+
+      expect(fakeQueue.enqueue).toHaveBeenCalledWith(
+        'user-offline',
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+      const [, entry] = fakeQueue.enqueue.mock.calls[0];
+      expect(entry.payload).not.toHaveProperty('clientMessageId');
+    });
+  });
 });
