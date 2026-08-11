@@ -134,7 +134,9 @@ Each feature MUST have its own ErrorBoundary.
 A crash in message list MUST NOT crash the conversation list.
 
 ### Dead Code
-`conversation-store.ts` has been removed. Use React Query hooks (`useConversationsQuery`, `useConversationMessages`) for all conversation data.
+`conversation-store.ts` has been removed. Use React Query hooks (`useConversationsPaginationRQ` pour la liste, `useConversationMessagesRQ` pour un fil) for all conversation data.
+
+**Il n'y a QU'UN cache de liste de conversations : `queryKeys.conversations.infinite()`.** La forme plate `['conversations','list']` a été retirée (2026-08-11) : elle avait une dizaine d'écrivains et zéro lecteur, et son préfixe est DISJOINT de `infinite()` — chaque écriture était un no-op silencieux. Tout code qui met la liste à jour écrit dans `infinite()`, jamais ailleurs.
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (state management, data fetching, routing, auth, WebSocket, styling, i18n, build, encryption, audio/media, URL config) avec contexte, alternatives rejetes et consquences.

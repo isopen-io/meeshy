@@ -1,4 +1,5 @@
 import XCTest
+import CoreVideo
 @testable import Meeshy
 
 // MARK: - VideoFilterConfig Tests
@@ -125,6 +126,14 @@ final class VideoFilterPipelineTests: XCTestCase {
         VideoFilterPipeline()
     }
 
+    private func makePixelBuffer(width: Int = 64, height: Int = 64) -> CVPixelBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
+        precondition(status == kCVReturnSuccess, "CVPixelBufferCreate failed")
+        return pixelBuffer!
+    }
+
     func test_init_hasDefaultConfig() {
         let sut = makeSUT()
         XCTAssertEqual(sut.config, VideoFilterConfig.default)
@@ -147,6 +156,49 @@ final class VideoFilterPipelineTests: XCTestCase {
     func test_isAutoDegraded_initiallyFalse() {
         let sut = makeSUT()
         XCTAssertFalse(sut.isAutoDegraded)
+    }
+
+    // MARK: - process() gate — advanced filters without a colorimetry preset
+
+    // Regression guard — `process()` used to gate the ENTIRE pipeline
+    // (colorimetry AND background blur AND skin smoothing) behind
+    // `cfg.isEnabled` alone. `isEnabled` is only ever set true by picking a
+    // colorimetry preset (VideoFilterPreset.config); the two advanced
+    // toggles below never touch it. A user who enabled background blur or
+    // skin smoothing WITHOUT ever picking a preset got a silent no-op: every
+    // frame returned completely unmodified, with no error/log/UI indication.
+    // `lastFrameProcessingTime` (only ever set on the non-early-return path,
+    // per test_lastFrameProcessingTime_initiallyNil above) is the pipeline's
+    // own observable signal that a frame was actually processed.
+
+    func test_process_withOnlyBackgroundBlurEnabled_stillProcessesFrame() {
+        let sut = makeSUT()
+        sut.config.isEnabled = false
+        sut.config.backgroundBlurEnabled = true
+
+        _ = sut.process(makePixelBuffer())
+
+        XCTAssertNotNil(sut.lastFrameProcessingTime, "background blur alone must run the pipeline, not no-op it")
+    }
+
+    func test_process_withOnlySkinSmoothingEnabled_stillProcessesFrame() {
+        let sut = makeSUT()
+        sut.config.isEnabled = false
+        sut.config.skinSmoothingEnabled = true
+
+        _ = sut.process(makePixelBuffer())
+
+        XCTAssertNotNil(sut.lastFrameProcessingTime, "skin smoothing alone must run the pipeline, not no-op it")
+    }
+
+    func test_process_withNeitherEnabledNorAdvancedFilters_doesNotProcessFrame() {
+        // Non-regression: the base "no filters at all" case must still
+        // early-return without running the (costly) CI pipeline.
+        let sut = makeSUT()
+
+        _ = sut.process(makePixelBuffer())
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "with no filters active at all, process() must still early-return")
     }
 
     // Regression test for a data race: `config` used to be a plain

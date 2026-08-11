@@ -1,33 +1,140 @@
+# Tête instruite pour le cycle 79 — iOS avance son curseur delta par-dessus une page TRONQUÉE
 
-*Trouvé en instruisant le cycle 76, vérifié, NON corrigé.*
+*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur.*
 
-Le cycle 76 a fermé la fenêtre du reconnect SOCKET avec un delta non destructeur. Il reste, sur la
-même surface, un chemin destructeur en place — hérité, pas introduit :
-| Messages d'une conversation | `refetchOnWindowFocus: **false**` + `syncNewerMessages` débouncé (« Trigger 2 ») |
-| **Liste de conversations** | `refetchOnWindowFocus: **'always'**` hérité du QueryClient global — aucune dérogation |
+> **RÉDUITE PAR LE CYCLE 77 (D2).** La route trie désormais une page delta par `updatedAt`
+> croissant : les lignes coupées sont celles d'`updatedAt` supérieur à la dernière rendue,
+> donc le watermark pointe dessus au lieu de les enjamber. Ce qui suit reste vrai pour le
+> SEUL résidu que l'ordre ne rattrape pas — plus de 100 conversations portant la même
+> milliseconde d'`updatedAt` — et le point 2 (« ne pas avancer le curseur sur une page qu'on
+> sait tronquée ») garde toute sa valeur.
 
-C'est exactement le réglage que `use-conversation-messages-rq.ts` a désactivé, avec le motif écrit
-au-dessus de la ligne : *« Focus / reconnexion restent servis par le catch-up incrémental, moins
-coûteux qu'un refetch complet des pages »*. La liste, elle, prend le refetch complet : sur une
-`useInfiniteQuery`, `'always'` relit TOUTES les pages chargées, une par une, et REMPLACE le cache
-par le résultat — donc peut perdre ce que le socket y a écrit entre-temps.
+`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
+`GET /conversations?updatedSince=`. La route plafonne à 100
+(`Math.min(parseInt(limit), 100)`, `services/gateway/src/routes/conversations/core.ts`)
+et trie par **`lastMessageAt` décroissant, pas par `updatedAt`**. Trois faits qui
+s'additionnent :
 
-Deux bornes avant d'ouvrir :
-1. **Ne pas simplement basculer à `false`.** Le refetch de focus est aujourd'hui le SEUL chemin web
-   qui purge une ligne fantôme : le delta est upsert-only et une conversation HARD-supprimée côté
-   serveur n'y apparaît jamais. iOS a rencontré exactement ce cas (E2E 2026-07-02, « Test Conv »
-   épinglée et absente du serveur) et l'a réglé par une réconciliation complète bornée à 1× par
-   24 h (`fullReconcileInterval`), chaînée APRÈS le delta. Le vrai contenu du chantier est le
-   pendant web de cette borne, pas la désactivation.
-2. **Le coût croît avec la profondeur de scroll**, pas seulement avec la fréquence de focus : dix
-   pages chargées = dix requêtes à chaque retour d'onglet. C'est une question de charge autant que
-   de correction.
+1. une fenêtre aveugle ayant touché plus de 100 conversations rend une page tronquée ;
+2. les lignes coupées ne sont pas « les plus anciennes mises à jour » — l'ordre du tri
+   n'a aucun rapport avec le filtre ;
+3. `lastSyncTimestamp` avance quand même au max des `updatedAt` REÇUS
+   (`SyncWatermark.advanced`), ce qui enjambe définitivement les lignes coupées.
+
+Elles ne reviennent qu'au `fullSync` périodique — borné à 1× par 24 h
+(`fullReconcileInterval`). Pendant ce temps la liste iOS affiche des compteurs de
+non-lus et des aperçus périmés, sans qu'aucun signal ne l'indique.
+
+Le web a fermé ce cas au cycle 76 : une page PLEINE (`conversations.length >=
+DELTA_PAGE_LIMIT`) est traitée comme une preuve d'incomplétude et escalade vers la
+relecture complète. Le geste iOS est le même, mais il ne suffit PAS de copier le test :
+`deltaSyncCore` ne pagine pas, et son curseur est persisté — il faut décider si
+l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fait déjà
+`syncSinceLastCheckpoint`) ou une boucle de pages. Deux bornes avant d'ouvrir :
+
+1. **`limit=500` est un mensonge silencieux depuis toujours** — le corriger à 100 ne
+   change rien au défaut, il le rend seulement lisible. La détection est le correctif ;
+   la constante n'est que de l'hygiène.
+2. **Le curseur ne doit pas avancer sur une page dont on sait qu'elle est tronquée**,
+   sinon l'escalade elle-même repart d'un watermark déjà trop haut. L'ordre des gestes
+   (ne pas avancer, PUIS escalader) est le contenu du correctif, pas un détail.
+
+Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
+— la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
 
 ---
 
-
 ---
 
+# Cycle 78 — Une dizaine d'écrivains tenaient un cache que personne ne lisait
+
+## Le défaut
+
+`queryKeys.conversations` exposait deux formes de liste : `lists()` / `list(filters)` valant
+`['conversations','list', …]`, et `infinite()` valant `['conversations','infinite']`. **Les deux
+préfixes sont DISJOINTS** — un `setQueriesData` sur l'un ne touche jamais l'autre.
+
+Et **aucun écran ne lisait la forme plate.** La sidebar passe par `useConversationsPaginationRQ`
+→ `useInfiniteConversationsQuery`, donc `infinite()`. `rg` sur tout le dépôt : les hooks de la
+forme plate n'apparaissaient que dans leur propre fichier, leur fichier de témoins, et le baril
+`hooks/queries/index.ts`.
+
+Une dizaine d'écrivains l'alimentaient quand même, à chaque événement.
+
+Le coût n'était pas la performance — un `setQueriesData` sans correspondance est un no-op. C'était
+la LECTURE : le code se lisait comme si deux caches étaient tenus en phase alors qu'un seul
+existait. Le prochain à corriger un aperçu de liste avait une chance sur deux de corriger la copie
+morte et de conclure que son correctif ne marchait pas.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Les témoins passaient au vert sans rien prouver.** Trois blocs de `use-socket-cache-sync` —
+« déplacer la conversation en tête sur message:new », « avancer l'aperçu quand le dernier message
+est supprimé », « purger la conversation refusée » — n'étaient assertés QUE sur la forme plate. Le
+chemin réel, celui que la sidebar lit, n'avait donc **aucune couverture**. C'est le vrai danger
+d'un cache mort : il ne se contente pas de dormir, il capte les témoins.
+
+**`use-send-message-mutation.ts` était mort en entier.** Ses quatre mutations
+(`useSendMessageMutation`, `useEditMessageMutation`, `useDeleteMessageMutation`,
+`useMarkAsReadMutation`) n'ont aucun appelant : l'envoi réel passe par l'orchestrateur Socket.IO
+(`services/socketio/orchestrator.service.ts` + `createOptimisticMessage`). Le module est un vestige
+d'une approche abandonnée. Ses six écritures de liste n'étaient PAS doublées d'une écriture
+`infinite()` — les « corriger » plutôt que les supprimer aurait ressuscité un chemin d'envoi
+concurrent de celui qui fonctionne.
+
+**Deux `invalidateQueries` de réaction ne visaient rien.** `use-reactions-query.ts` invalidait
+`conversations.lists()` sur réaction ajoutée / retirée, commentaire à l'appui (« réaction ajoutée =
+conversation modifiée »). Préfixe disjoint ⇒ **l'intention déclarée ne s'exécutait jamais.**
+
+## L'ordre des gestes, qui EST le correctif
+
+Rebrancher les témoins sur `infinite()` **avant** de retirer quoi que ce soit, puis vérifier qu'ils
+sont ROUGES contre une écriture `infinite()` cassée. Fait : neutraliser
+`updateInfiniteConversationCache` dans `advanceConversationPreviewOnDelete` fait tomber 3 témoins
+sur 30. Sans cette étape, le retrait des écritures plates aurait fait passer les témoins du vert au
+vert — en supprimant toute couverture du chemin réel sans qu'une seule ligne ne rougisse.
+
+## D1 — rediriger n'est pas toujours le geste juste
+
+Pour les six écritures de `use-socket-cache-sync`, chacune était DOUBLÉE d'une écriture `infinite()`
+identique : le retrait est strictement neutre. Pour les deux invalidations de réaction, rediriger
+vers `infinite()` aurait déclenché **une relecture de TOUTES les pages chargées à chaque réaction**
+— exactement ce que le cycle 77 (lot focus) venait de retirer du chemin de focus. Vérifié avant de
+trancher : la ligne de liste ne porte rien qui dépende des réactions de message
+(`reaction={prefs?.reaction}` dans `ConversationList` est une PRÉFÉRENCE de conversation, pas un
+agrégat de réactions). Supprimées.
+
+## D2 — une option silencieusement ignorée est un piège de la même famille
+
+`useInfiniteConversationsQuery` acceptait un `filters` que sa clé de requête n'incluait pas : un
+appelant qui l'aurait passé aurait reçu la liste NON filtrée, sans erreur. Retiré avec le reste.
+Une liste filtrée, le jour où elle existera, devra naître avec sa propre clé ET son lecteur.
+
+## Vérification
+
+- `apps/web` : **561 suites, 12 055 tests verts**. Le compte de témoins baisse de 41 : ceux des
+  hooks morts, qui ne testaient rien de vivant. Une suite en moins — le fichier de témoins du module
+  supprimé.
+- Les témoins rebranchés sur `infinite()` ont été vérifiés ROUGES contre une écriture cassée AVANT
+  le retrait — la couverture est réelle, pas déplacée.
+- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+- Bilan : **545 lignes retirées, 92 ajoutées**, dont un fichier de production entier.
+
+## Reste ouvert après ce cycle
+
+- **`conversations.all` reste, et couvre bien `infinite()`** (préfixe commun). Les
+  `invalidateQueries({ queryKey: conversations.all })` sont vivants et hors lot — ne pas les
+  confondre avec ce qui vient d'être retiré.
+- **La règle « un seul cache de liste » n'est portée que par une note** dans `apps/web/CLAUDE.md` et
+  le commentaire de `queryKeys.conversations`. Rien de mécanique n'empêche une deuxième forme de
+  renaître sans lecteur ; un lint maison sur « clé de requête sans `useQuery` correspondant » serait
+  la seule garde réelle.
+- **Le même audit n'a PAS été mené sur les autres familles de clés** (`posts`, `notifications`),
+  qui portent toutes le couple `lists()` / `infinite()`. `queryKeys.messages.list` est, lui, bien
+  vivant — il sert de PRÉFIXE à `messages.infinite(id)`. Les autres sont à instruire par le même
+  `rg`, pas par déduction.
+
+---
 
 # Cycle 78 — Une page delta pleine n'est pas une fin de fenêtre, et une réaction n'est pas une ligne de liste
 
@@ -230,110 +337,6 @@ milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que la bor
   impossible sur le gateway faute de `eslint.config.js`).
 
 ---
-
-# Tête instruite pour le cycle 78 (2/2) — la liste PLATE de conversations a des écrivains, aucun lecteur
-
-*Trouvé en instruisant le cycle 76 depuis la session parallèle, vérifié, NON corrigé.
-Indépendant de la tête iOS ci-dessous ; les deux peuvent être pris séparément.*
-
-`queryKeys.conversations.lists()` vaut `['conversations','list']` ; `infinite()` vaut
-`['conversations','infinite']`. Les deux préfixes sont DISJOINTS — un `setQueriesData`
-sur l'un ne touche jamais l'autre. Or **aucun hook ne LIT la forme plate** :
-`useConversationsQuery` et `useConversationsWithPagination` n'ont zéro consommateur dans
-`apps/web`. La sidebar lit `useConversationsPaginationRQ`, donc `infinite()`.
-
-Ce qui écrit quand même dedans, à chaque événement :
-
-| Écrivain | Sites |
-|---|---|
-| `use-socket-cache-sync.ts` | `handleNewMessage`, `handleMessageEdited`, `advanceConversationPreviewOnDelete`, `applyMemberCount`, `handleLinkMessageNew`, `handleConversationJoinError` |
-| `unread-cache.ts` | `setConversationUnreadInCache` |
-| `use-send-message-mutation.ts` | 6 sites |
-| `use-conversations-query.ts` | les deux mutations create/delete |
-
-Le coût n'est pas la performance (un `setQueriesData` sans correspondance est un no-op) :
-c'est que **le code se LIT comme si deux caches étaient tenus en phase alors qu'un seul
-existe**. Le prochain à corriger un aperçu de liste a une chance sur deux de corriger la
-copie morte et de conclure que son correctif ne marche pas. Le delta du cycle 76 n'écrit
-volontairement QUE dans `infinite()`, pour cette raison exacte.
-
-Trois bornes avant d'ouvrir :
-1. **Trancher le SENS avant de supprimer.** Soit la forme plate visait un écran filtré
-   jamais livré (⇒ retirer les écrivains ET les deux hooks), soit un consommateur existe
-   hors `apps/web` (⇒ rien à faire). `rg "conversations\.list\("` sur tout le repo est la
-   première commande, pas une vérification après coup.
-2. **`useCreateConversationMutation` CRÉE l'entrée** via `setQueryData` sur une clé sans
-   observateur : elle vit puis se fait ramasser au `gcTime`. Un lecteur ajouté plus tard
-   verrait donc parfois une liste partielle.
-3. **Ne pas confondre avec `conversations.all`.** Les `invalidateQueries({ queryKey:
-   conversations.all })` couvrent bien le cache infinite (préfixe commun) : ceux-là sont
-   vivants et hors lot.
-
-**Complément instruit pendant le cycle 77 — la borne 1 est levée, et il y a une VRAIE panne
-dans le lot.** `rg` sur tout le dépôt : `useConversationsQuery` et `useConversationsWithPagination`
-n'apparaissent QUE dans leur propre fichier, dans leur fichier de tests, et dans le baril
-`hooks/queries/index.ts`. Aucun consommateur, ni dans `apps/web` ni ailleurs. La forme plate est
-donc bien morte, et le lot est un retrait — pas une réconciliation.
-
-Mais deux sites ne sont pas de simples écritures mortes : `use-reactions-query.ts:427` et `:460`
-font `invalidateQueries({ queryKey: queryKeys.conversations.lists() })` sur réaction ajoutée /
-retirée, commentaire à l'appui (« réaction ajoutée = conversation modifiée »). Le préfixe ne
-matche pas `infinite()` : **l'intention déclarée n'est jamais exécutée.** C'est une panne
-silencieuse, pas du code mort — et sa correction n'est PAS « rediriger vers `infinite()` », ce
-qui déclencherait une relecture de toutes les pages chargées à chaque réaction, exactement ce que
-le cycle 77 vient de retirer du chemin de focus. Le geste juste est probablement de **supprimer
-ces deux invalidations** : une réaction ne change pas l'aperçu de la ligne de liste. À trancher
-en ouvrant le lot, en regardant si la ligne de liste porte quoi que ce soit qui dépende des
-réactions.
-
----
-# Tête instruite pour le cycle 78 — iOS ne détecte pas une page delta tronquée
-# Tête instruite pour le cycle 78 — iOS avance son curseur delta par-dessus une page TRONQUÉE
-
-*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur.*
-
-> **RÉDUITE PAR LE CYCLE 77 (D2).** La route trie désormais une page delta par `updatedAt`
-> croissant : les lignes coupées sont celles d'`updatedAt` supérieur à la dernière rendue,
-> donc le watermark pointe dessus au lieu de les enjamber. Ce qui suit reste vrai pour le
-> SEUL résidu que l'ordre ne rattrape pas — plus de 100 conversations portant la même
-> milliseconde d'`updatedAt` — et le point 2 (« ne pas avancer le curseur sur une page qu'on
-> sait tronquée ») garde toute sa valeur.
-
-`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
-`GET /conversations?updatedSince=`. La route plafonne à 100
-(`Math.min(parseInt(limit), 100)`, `services/gateway/src/routes/conversations/core.ts`)
-et trie par **`lastMessageAt` décroissant, pas par `updatedAt`**. Trois faits qui
-s'additionnent :
-
-1. une fenêtre aveugle ayant touché plus de 100 conversations rend une page tronquée ;
-2. les lignes coupées ne sont pas « les plus anciennes mises à jour » — l'ordre du tri
-   n'a aucun rapport avec le filtre ;
-3. `lastSyncTimestamp` avance quand même au max des `updatedAt` REÇUS
-   (`SyncWatermark.advanced`), ce qui enjambe définitivement les lignes coupées.
-
-Elles ne reviennent qu'au `fullSync` périodique — borné à 1× par 24 h
-(`fullReconcileInterval`). Pendant ce temps la liste iOS affiche des compteurs de
-non-lus et des aperçus périmés, sans qu'aucun signal ne l'indique.
-
-Le web a fermé ce cas au cycle 76 : une page PLEINE (`conversations.length >=
-DELTA_PAGE_LIMIT`) est traitée comme une preuve d'incomplétude et escalade vers la
-relecture complète. Le geste iOS est le même, mais il ne suffit PAS de copier le test :
-`deltaSyncCore` ne pagine pas, et son curseur est persisté — il faut décider si
-l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fait déjà
-`syncSinceLastCheckpoint`) ou une boucle de pages. Deux bornes avant d'ouvrir :
-
-1. **`limit=500` est un mensonge silencieux depuis toujours** — le corriger à 100 ne
-   change rien au défaut, il le rend seulement lisible. La détection est le correctif ;
-   la constante n'est que de l'hygiène.
-2. **Le curseur ne doit pas avancer sur une page dont on sait qu'elle est tronquée**,
-   sinon l'escalade elle-même repart d'un watermark déjà trop haut. L'ordre des gestes
-   (ne pas avancer, PUIS escalader) est le contenu du correctif, pas un détail.
-
-Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
-— la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
-
----
-
 # Cycle 77 — Le retour d'onglet relisait la liste de conversations page par page, et l'écrasait
 
 ## Le défaut

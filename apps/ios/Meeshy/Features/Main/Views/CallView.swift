@@ -1520,8 +1520,12 @@ struct CallView: View {
 
     private var hasActiveEffects: Bool {
         // Voice effects are no longer settable from the UI (dead pipeline,
-        // entry removed) — only video filters light this up.
-        callManager.videoFilters.config.isEnabled
+        // entry removed) — only video filters light this up. `isEnabled`
+        // alone misses background blur/skin smoothing enabled without ever
+        // picking a colorimetry preset — same root cause as the pipeline's
+        // own gate (VideoFilterPipeline.process), mirrored here.
+        let config = callManager.videoFilters.config
+        return config.isEnabled || config.hasAdvancedFilters
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a

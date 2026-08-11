@@ -8,6 +8,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -18,11 +19,14 @@ import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -63,6 +67,14 @@ class ContactsListViewModelTest {
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
 
+    private val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+    private val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
+
+    private fun socketManager(): MessageSocketManager = mockk<MessageSocketManager> {
+        every { userStatus } returns userStatusFlow
+        every { presenceSnapshot } returns presenceSnapshotFlow
+    }
+
     private fun user(
         id: String,
         username: String = id,
@@ -97,11 +109,43 @@ class ContactsListViewModelTest {
         session: SessionRepository = session(),
         cached: List<FriendRequestUser>? = null,
         statuses: StatusBarCache = statusBarCache(),
+        socket: MessageSocketManager = socketManager(),
     ): ContactsListViewModel {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(received)
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(sent)
         coEvery { listRepository.cachedSnapshot() } returns cached
-        return ContactsListViewModel(repository, listRepository, cache, session, statuses)
+        return ContactsListViewModel(repository, listRepository, cache, session, statuses, socket)
+    }
+
+    @Test
+    fun `a live user status event updates the friend's presence without a full reload`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
+        assertThat(vm.state.value.friends.single().isOnline).isFalse()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "alice", isOnline = true, lastActiveAt = "2026-08-11T20:00:00.000Z"))
+
+        assertThat(vm.state.value.friends.single().isOnline).isTrue()
+        assertThat(vm.state.value.friends.single().lastActiveAt).isEqualTo("2026-08-11T20:00:00.000Z")
+        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
+    fun `a presence snapshot updates matching friends without a full reload`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
+
+        presenceSnapshotFlow.emit(PresenceSnapshotEvent(users = listOf(UserStatusEvent(userId = "alice", isOnline = true))))
+
+        assertThat(vm.state.value.friends.single().isOnline).isTrue()
+        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
+    fun `a status event for a user not in the roster is a no-op`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
+
+        userStatusFlow.emit(UserStatusEvent(userId = "ghost", isOnline = true))
+
+        assertThat(vm.state.value.friends.single().isOnline).isFalse()
     }
 
     @Test
@@ -142,7 +186,7 @@ class ContactsListViewModelTest {
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("nope"))
         coEvery { listRepository.cachedSnapshot() } returns null
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
         assertThat(vm.state.value.friends).isEmpty()
         assertThat(vm.state.value.errorMessage).isEqualTo("boom")
@@ -204,7 +248,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { listRepository.cachedSnapshot() } returns null
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
         vm.dismissError()
 
@@ -218,7 +262,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
         // The Room cache painted at once; the network fetch is still suspended, so
         // there is no cold spinner while a stale-but-present roster is on screen.
@@ -236,7 +280,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob").inOrder()
         assertThat(vm.state.value.errorMessage).isNull()
@@ -250,7 +294,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
         assertThat(vm.state.value.friends).isEmpty()
         assertThat(vm.state.value.showSkeleton).isTrue()

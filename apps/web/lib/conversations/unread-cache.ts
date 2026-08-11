@@ -1,12 +1,11 @@
 /**
- * Écriture centralisée du compteur non-lu d'une conversation dans les DEUX
- * caches React Query : la liste plate (`conversations.lists()`) et le cache
- * infinite (`conversations.infinite()`, celui que lit la sidebar).
+ * Écriture centralisée du compteur non-lu d'une conversation dans
+ * `conversations.infinite()` — le SEUL cache de liste que l'application lit.
  *
  * Consommateurs : le handler socket `conversation:unread-updated` (après garde
  * de conversation active) et le reset optimiste à l'ouverture d'une
- * conversation. La structure de pages du cache infinite est préservée telle
- * quelle — seule la valeur `unreadCount` change, jamais la composition.
+ * conversation. La structure de pages est préservée telle quelle — seule la
+ * valeur `unreadCount` change, jamais la composition.
  */
 
 import type { QueryClient } from '@tanstack/react-query';
@@ -23,14 +22,6 @@ export function setConversationUnreadInCache(
   conversationId: string,
   unreadCount: number
 ): void {
-  queryClient.setQueriesData<Conversation[]>(
-    { queryKey: queryKeys.conversations.lists() },
-    (old) =>
-      old?.map((conv) =>
-        conv.id === conversationId ? { ...conv, unreadCount } : conv
-      )
-  );
-
   queryClient.setQueryData(
     queryKeys.conversations.infinite(),
     (old: InfiniteConversationData | undefined) => {

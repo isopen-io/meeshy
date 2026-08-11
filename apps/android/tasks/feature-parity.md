@@ -4428,6 +4428,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       other 3 tabs, not a regression (iOS itself has no live-update wiring into this specific row either,
       only through re-render on the shared `statusViewModel`'s own `@Published` updates when SwiftUI
       happens to re-evaluate the row).
+      **Presence dot now updates LIVE (2026-08-11, slice `presence-live-contacts-overlay`)** — a
+      DIFFERENT gap than the mood-emoji one just above: the three-state online/away/offline dot
+      shipped by `presence-away-indicator` (2026-07-04) read `FriendRequestUser.isOnline`/
+      `lastActiveAt` off the roster's last full `/friends` fetch only, frozen until the next reload
+      — unlike mood, this one already HAD a live wire target ready to use: `MessageSocketManager`
+      already listened for `user:status`/`presence:snapshot` (both real, gateway-emitted events —
+      confirmed via `SERVER_EVENTS.USER_STATUS`/`_broadcastUserStatus` in
+      `MeeshySocketIOManager.ts`), just with zero consumers anywhere in the app. **A genuine
+      correctness bug found and fixed en route**: `UserStatusEvent`/`PresenceSnapshotEvent`
+      (`:core:model`) didn't even match the real payload shape (`status`/`lastSeenAt`/flat
+      `onlineUserIds: List<String>` vs. the gateway's actual `isOnline`/`lastActiveAt`/`username` /
+      `{users: [...]}`) — so even wiring a consumer to the OLD shape would have silently decoded
+      every live frame to blank defaults. Fixed both DTOs against the shared TS type
+      (`packages/shared/types/socketio-events.ts`), then wired `ContactsListViewModel.
+      observePresence()` (mirrors the existing `observeFriendshipCache()` pattern) to overlay live
+      updates via new pure `PresenceOverlay.applyStatus`/`.applySnapshot` (`:feature:contacts`).
+      +15 tests (4 `UserStatusEventTest` decode-contract, 6 `PresenceOverlayTest`, 3 new
+      `ContactsListViewModelTest`). Mutation-proven on the filter/decode branches. Conversation-
+      participant presence (a separate, still-open gap noted in the Home-screen widgets item
+      above) can now reuse this same corrected wire in a future slice.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
