@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
+    implementation(libs.androidx.glance.appwidget)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

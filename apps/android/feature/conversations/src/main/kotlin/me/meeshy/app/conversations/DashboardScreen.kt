@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.totalUnreadCount
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -53,9 +54,13 @@ import me.meeshy.ui.theme.MeeshyTheme
 /** Les conversations les plus recentes montrees sur le tableau de bord. */
 internal const val DASHBOARD_RECENT_COUNT: Int = 3
 
-/** Total de non-lus et selection des recentes — extraits purs, testables en JVM. */
+/**
+ * Total de non-lus et selection des recentes — extraits purs, testables en JVM.
+ * Le total delegue au SSOT partage `List<ApiConversation>.totalUnreadCount()`
+ * (`:core:model`), aussi consomme par le widget ecran d'accueil.
+ */
 internal fun dashboardUnreadTotal(conversations: List<ApiConversation>): Int =
-    conversations.sumOf { it.unreadCount }
+    conversations.totalUnreadCount()
 
 internal fun dashboardRecents(conversations: List<ApiConversation>): List<ApiConversation> =
     conversations

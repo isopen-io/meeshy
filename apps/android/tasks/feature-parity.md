@@ -5272,6 +5272,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`meeshy://` + `https://meeshy.me`)
 - [ ] Universal Link / push / socket notification routing into the correct screen
 - [ ] Home-screen widgets (recent conversations, unread count, favorite contacts, quick reply, mark-read)
+      **Angle mort catégoriel comblé (2026-08-11)** : premier `GlanceAppWidget`/`AppWidgetProvider` de
+      `apps/android` (slice `widget-unread-count-scaffold`) — foundation minimale + sous-tranche
+      "unread count" (`UnreadCountWidget`, parité avec iOS `MeeshyWidgets.UnreadCountWidget`
+      `.systemSmall`). Statique/déclenché par l'OS, pas de push-refresh sur changement de données
+      (l'analogue Android de `WidgetCenter.reloadAllTimelines()`). Restent : recent conversations,
+      favorite contacts, quick reply, mark-read, tailles/kinds additionnels, push-refresh.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
 - [ ] Crash / hang / ANR diagnostics with on-device persistence + remote report
