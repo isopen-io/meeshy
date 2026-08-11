@@ -1445,3 +1445,88 @@ Append-only log of gotchas and decisions that save time next run.
   attach-tile bounds convention (content-desc-first) carries over; the clickable node is a
   sibling `android.widget.Button` with a `resource-id` in that package's namespace, not the
   app's.
+
+## Slice `feed-composer-location-attachment` (2026-08-11)
+- **A single visually-estimated tap coordinate broke the routine's own hard rule mid-verification
+  — caught and corrected, but worth restating precisely why the rule exists.** After reading the
+  "Publish" button's approximate on-screen position from a screenshot and computing a tap
+  coordinate by eye, the tap landed nowhere near the button (the composer sheet didn't dismiss,
+  no request fired) — the screenshot viewer displays the 1080×2400 PNG scaled to 900 px wide, and
+  every coordinate read off it needs the stated 1.2× multiplier back to device pixels, a step
+  that's easy to silently skip when eyeballing a position rather than reading a bounds attribute.
+  Every OTHER tap in this same verification session used `uiautomator dump` + a grepped `bounds="
+  [x1,y1][x2,y2]"` attribute (already in real device pixels, no scaling needed) and landed
+  correctly on the first try. Re-confirms the standing rule in absolute terms: there is no
+  "close enough" visual estimate that's actually reliable once a screenshot's display scale
+  enters the picture — the dump-and-grep step is not optional even for "obvious" targets.
+- **A `String.format("%.Nf", …)` call with no explicit `Locale` is a live production bug waiting
+  for a comma-decimal device locale (`fr_FR`, `de_DE`, …), not a theoretical one.** Kotlin's
+  `String.format` without a `Locale` argument defaults to the JVM's current default locale, which
+  on a real device tracks the user's system language — a French or German device would silently
+  render `"48,86"` instead of `"48.86"` for a value the gateway's `parseSharedPlace` treats as a
+  `Double` on the wire. `Locale.ROOT` (not `Locale.US`, which has its own regional quirks over
+  the JDK versions) pins the format regardless of device locale. Proven, not assumed: a dedicated
+  test temporarily calls `Locale.setDefault(Locale.FRANCE)`, asserts the output is still
+  dot-separated, then restores the original default in a `finally` block so no other test in the
+  suite observes a changed JVM-wide default — this is the kind of gotcha that a CI running in a
+  single fixed locale (typically `en_US`) will never catch on its own, so the test has to force
+  the adversarial locale itself rather than rely on the ambient one.
+- **A full port of an iOS map-based picker (search, "my position", `CLGeocoder` reverse-geocoding)
+  is a multi-part epic requiring a new Maps SDK dependency with its own API-key provisioning — not
+  a slice an unattended routine run should attempt whole.** Confirmed by reading iOS's
+  `LocationPickerView.swift` end to end (879 lines) before writing any Android code: the map UI
+  alone needs `com.google.android.gms:play-services-maps`/Maps Compose plus a provisioned API key
+  outside this routine's reach, on top of the picker's own state machine (search debounce,
+  precision degrading, coarse-name fallback). The right-sized first sub-slice instead captured
+  the device's raw coordinate via the plain Android SDK's `android.location.LocationManager` (no
+  new Gradle dependency at all) and shipped a genuinely valuable, wire-compatible "attach my
+  location" capability — deferring map/search/geocoding as explicitly-scoped, heavier follow-ups
+  rather than either attempting the whole epic in one run or silently skipping the candidate
+  again.
+- **`LocationManager.requestLocationUpdates` wrapped in `suspendCancellableCoroutine` +
+  `withTimeoutOrNull` is a clean, dependency-free way to get "one fresh fix or a timeout" without
+  Play Services** — the coroutine resumes on the listener's first `onLocationChanged` callback
+  (which also unregisters itself via `removeUpdates(this)`), and `continuation.invokeOnCancellation
+  { removeUpdates(listener) }` covers the timeout/cancellation path so the listener never leaks
+  past the call's lifetime either way.
+
+## Slice `feed-composer-language-override` (2026-08-11)
+- **The exact screenshot-estimated-tap mistake this file already documents once (previous
+  slice's own note) recurred mid-verification, on the identical "Publish" button, within the
+  same run.** After confirming the language-picker dialog worked correctly via dump-derived
+  bounds, the very next tap (Publish, after typing text) was read off a *displayed* screenshot
+  coordinate without reapplying the 1.2x scale-to-device-pixel correction — the tap silently
+  landed nowhere near the button and the composer sheet stayed open with no request fired. Caught
+  by checking the resulting screenshot (composer still open) rather than assuming success, then
+  corrected by dumping `uiautomator` fresh and reading the real `bounds="[874,1360][1006,1414]"`
+  for "Publish" — center `(940,1387)`, not the eyeballed `(783,1156)` from the scaled screenshot.
+  Confirms the standing rule needs restating even more bluntly: **every single tap in a
+  verification session needs its own fresh bounds lookup, including ones that feel "the same
+  button I already located a few steps ago"** — a sheet can re-render (draft reset on reopen,
+  keyboard IME changing layout, a dialog closing) and shift coordinates between two visually
+  similar-looking moments, and muscle-memory-reusing an earlier screenshot-derived guess is just
+  as unreliable as never having read a bounds attribute at all.
+- **A wire request parameter that has existed on a `Repository`/`ApiRequest` DTO for a long time
+  can still be entirely dead for one specific call site.** `PostRepository.create(originalLanguage
+  ...)` and `CreatePostRequest.originalLanguage` both already existed (used by other flows), but
+  `FeedViewModel.publishPost` never threaded a value into that parameter — every Feed post ever
+  published from this composer silently sent `originalLanguage: null`. No production change was
+  needed in `PostRepository`/`PostApi` at all; the gap was entirely in the two callers above it
+  (`FeedComposerDraft` never carried a language field, `FeedViewModel.publishPost` never had a
+  parameter to forward). Worth grepping the full call chain of an "already-wired" field before
+  assuming a gap needs wire-model changes — sometimes only the composer-side plumbing is missing.
+- **Giving a ViewModel-level pass-through parameter a `null` default (not the app's own real
+  default) is what keeps every pre-existing test green when threading a new field through an
+  established, heavily-tested method.** `FeedComposerDraft.language` defaults to
+  `ComposerLanguage.DEFAULT` ("fr", matching iOS's own composer always having *some* language
+  selected) — but `FeedViewModel.publishPost(language: String? = null)` deliberately defaults to
+  `null`, not `"fr"`, even though the real composer always supplies a non-null value. Defaulting
+  the ViewModel param to `"fr"` would have silently changed the `originalLanguage` argument
+  every existing `publishPost(content=.., visibility=..)` test call implicitly sends to
+  `repository.create(...)` — MockK's `coEvery`/`coVerify` match on the exact argument values a
+  call site passes (defaults included), so every pre-existing stub omitting `originalLanguage`
+  (implicitly `null`) would have stopped matching and gone red, with zero relation to the actual
+  new behavior under test. Mirrors the established `location: SharedPlace? = null` precedent from
+  the prior slice — an additive, nullable pass-through parameter is the only shape that adds new
+  forwarding capability without silently mutating the default behavior every untouched caller
+  relies on.

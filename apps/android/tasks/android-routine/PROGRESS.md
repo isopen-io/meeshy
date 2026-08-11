@@ -9,6 +9,181 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-11 **the Feed post composer's per-post language override landed** (slice
+> `feed-composer-language-override`, feature-parity §F — the last item of the standing "files,
+> location, audio, per-post language" candidate besides on-device transcription). **RE-PROUVEN
+> before starting**: `git branch -r`/`gh pr list --state open` found no interrupted run of this
+> routine (no recently-touched `claude/apps/android/*`/`claude/apps/ios/debt-*` branch, no
+> matching open PR). Re-checked whether a reusable cross-feature language-picker UI component now
+> exists outside the registration inline menu (per the orchestrator's explicit prompt): the pure
+> catalogue/filter core (`LanguageStepSelection`, `:core:model`) is reusable and reachable from
+> every feature module transitively — reused verbatim here — but no shared *Composable* picker UI
+> exists in `:sdk-ui` yet; Settings' own `RegionalLanguageDialog` is module-private to
+> `:feature:settings`, unreachable from `:feature:feed`. Read iOS's `FeedView+Attachments.swift`
+> closely before coding: `FeedComposerSheet.composerLanguage` does **not** auto-detect from the
+> typed text (unlike chat's `UniversalComposerBar`, which wires `ComposeLanguageDetector`/
+> `TextAnalyzer`) — it starts hardcoded `"fr"` (`DefaultComposerLanguage.resolve()`) and only a
+> manual flag-pill → `AudioLanguagePickerView` picker changes it, so this slice mirrors that exact
+> shape rather than reusing Android chat's existing auto-detection. **Shipped (production, all
+> `apps/android`)**: new pure `ComposerLanguage` (`:core:model`, port of iOS `ComposerModels.
+> swift`'s `DefaultComposerLanguage.resolve()`/`ComposerLanguageFlag.label(for:)`) — `DEFAULT`
+> reuses `LanguageResolver.FALLBACK_LANGUAGE` (no second hardcoded `"fr"` literal), `flag(code)`
+> the catalogue flag or an uppercased raw-code fallback (blank-safe). `FeedComposerDraft` gained
+> `language` (defaults to `ComposerLanguage.DEFAULT`) + `withLanguage(code)` (replaces, mirrors
+> `withLocation`) — always forwarded on publish via `FeedPostPublishRequest.language` →
+> `FeedViewModel.publishPost(language:)` → `PostRepository.create(originalLanguage:)`, an
+> already-existing (previously always-`null`, effectively dead for this composer) wire parameter.
+> `FeedComposerSheet` gains a compact flag pill under the header (port of iOS's
+> `ComposerLanguageFlag` — collapsed state shows ONLY the flag, matching iOS's 2026-07-30
+> directive) opening `ComposerLanguagePickerDialog`, a plain `AlertDialog` search-filtered list
+> (mirrors `SettingsScreen`'s `RegionalLanguageDialog` shape rather than nesting a second
+> `ModalBottomSheet` — an established anti-pattern this codebase avoids) over
+> `LanguageStepSelection.pickerLanguages`/`.filter` — no catalogue/filter re-implementation.
+> **Flagged, not fixed, this slice**: the picker dialog UI itself is now duplicated a third time
+> (registration's inline grid, Settings' dialog, this dialog) — a legitimate `:sdk-ui` promotion
+> candidate for a future pass, deliberately deferred to keep this slice's diff scoped to
+> `:feature:feed`/`:core:model` alone (SDK-purity convention: duplicate small UI glue until 3+
+> call sites force a shared abstraction — this is now exactly 3, worth revisiting next time this
+> candidate resurfaces). +12 new tests (5 `ComposerLanguageTest`, 5 `FeedComposerDraftTest`, 2
+> `FeedViewModelTest`). **Mutation-proven**, three axes: `publishRequest().language` hardcoded to
+> the default fails **exactly** the override test (54 others green); `ComposerLanguage.flag`'s
+> uppercase fallback dropped fails **exactly** the unknown-code test (4 others green);
+> `FeedViewModel.publishPost`'s repository call hardcoded to `originalLanguage = null` fails
+> **exactly** the override-forwarding test (58 others green) — each reverted via a scratch
+> `cp`-backed edit, never `git checkout --`. **Gate**: `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice — no build-graph regression).
+> Reviewer **PASS** (diff `apps/android` only — 2 new `:core:model` files, 4 `:feature:feed`
+> production files edited [1 gaining 2 new Composables], 4 locale `strings.xml` [en/fr/es/pt, 3
+> new keys each], 2 test files edited; SDK purity, SSOT, no coverage floor lowered, no
+> tautological tests). **Full on-device verification against the live gateway**
+> (`meeshy_pixel8`): every tap resolved via `uiautomator dump` + a grepped `bounds=` attribute —
+> including catching and correcting, mid-verification, a repeat of the exact screenshot-estimated-
+> coordinate mistake this routine's own NOTES.md already documents once (the first Publish tap,
+> read off a scaled screenshot without the 1.2x device-pixel correction, missed entirely and left
+> the sheet open; the dump-derived bounds landed correctly on retry). Tapped the new flag pill
+> (`content-desc="Francais"` confirmed the default), the dialog opened with all 6 catalogue
+> languages and French pre-selected via `RadioButton`, selected "Deutsch" — pill updated to the
+> German flag (`content-desc="Deutsch"` on a fresh dump), typed text, tapped the dump-verified
+> Publish bounds: `adb logcat` confirmed the real request body `{"content":
+> "TestLanguageOverride_de2","originalLanguage":"de"}` and the gateway's `201` response echoed
+> `"originalLanguage":"de"` on the persisted post — the full composer-to-gateway pipeline
+> round-trips the override correctly, confirmed beyond the unit-test level. Deleted the test post
+> via `curl DELETE /api/v1/posts/:id` (confirmed gone via a follow-up `GET` → 404). `adb logcat`
+> checked across the whole session for `FATAL EXCEPTION`/`AndroidRuntime` — none. Emulator left
+> idle on the Feed screen afterward (composer closed, not mid-flow). **With this slice, the Feed
+> post composer now covers every base attachment/option iOS's `composerOverlay` toolbar exposes
+> except on-device transcription and the emoji picker.** **Next slice candidates (not attempted
+> this run)**: on-device transcription for the Feed audio attachment (still the only unshipped
+> item of this composer's standing candidate — needs its own foundation, no Android on-device
+> transcription capability exists anywhere in the app yet); promote a shared `:sdk-ui`
+> `LanguagePickerDialog`/similar component now that 3 near-identical picker UIs exist
+> (registration inline grid, Settings' `RegionalLanguageDialog`, this slice's
+> `ComposerLanguagePickerDialog`) — a refactor-only, safe candidate; map/search/reverse-geocoding
+> for the location attachment (still needs a Maps SDK dependency + API key provisioning); widgets/
+> PiP categorical re-check — per the orchestrator's explicit guidance this iteration, NOT
+> re-grepped this run (multiple prior consecutive re-checks already confirmed zero hits and both
+> already have checklist lines from the iteration-19 audit-gap fix); this is now a documented,
+> real, multi-slice-epic gap rather than an open question — the right next action is a concrete
+> sub-slice decomposition planning pass, not another bare re-grep. **Housekeeping**: this run's
+> own `NOTES.md` addition pushed that file to 1532 lines, just over the ~1500 hygiene threshold —
+> deliberately NOT archived in this same run (archiving is its own dedicated increment per
+> §Hygiène, and this run's chosen increment was already the slice above); a future run should
+> archive `NOTES.md`'s oldest ~300 lines to `NOTES-archive-2026-08.md` as its own dedicated
+> `chore(tasks): archive NOTES.md` commit before appending further lessons.
+
+> On 2026-08-11 **the Feed post composer's location-attachment sub-slice landed** (slice
+> `feed-composer-location-attachment`, feature-parity §F — the standing "files, location,
+> audio, per-post language" candidate's last unshipped attachment kind, decomposed to its
+> smallest safe first step rather than porting iOS's full `LocationPickerView` map picker
+> whole). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open` found only
+> one open PR (`apps/web/calls`-scoped, unrelated to this routine) and a long tail of
+> mono-commit `claude/apps/android/*` branches all >24h old with no matching open PR — none an
+> interrupted run of this routine. Confirmed via `grep` that `apps/android` had **zero**
+> `FusedLocationProviderClient`/`LocationServices`/`ACCESS_*_LOCATION` usage anywhere (not even
+> in chat's existing static-location *display* path) — the send-side capability genuinely did
+> not exist yet, matching the prior iteration's own re-scoping note. Read iOS's
+> `LocationPickerView.swift` (879 lines) end to end: a full-screen MapKit picker with search,
+> "my position" recentring, precision-degrading and `CLGeocoder` reverse-geocoding into a
+> name/address — confirmed porting it whole would need a new Maps SDK dependency (with its own
+> API-key provisioning, out of scope for an unattended run) and is a materially larger, multi-part
+> feature, so **explicitly decomposed** before coding (matching this routine's own established
+> precedent — `tus-chunked-upload-core`, `feed-composer-file-attachment`): this slice ships only
+> the smallest genuinely-valuable step (capture the device's raw coordinate, attach it, publish
+> it), map/search/geocoding deferred as separately-scoped, heavier follow-ups. **Shipped
+> (production, all `apps/android`)**: new pure `SharedPlace` (`:core:model`, mirrors the
+> gateway's `services/gateway/src/services/location/sharedPlace.ts` and iOS's
+> `packages/MeeshySDK/.../SharedPlace.swift` field-for-field: `{latitude, longitude, name,
+> address, category}`) + `formattedCoordinates(decimalPlaces)` extension (`Locale.ROOT`-pinned,
+> never the JVM default — see NOTES.md). Threaded through `CreatePostRequest.location` →
+> `PostRepository.create(location:)` → `FeedComposerDraft.withLocation`/`withoutLocation`
+> (replaces rather than accumulates — a post carries at most one location, mirroring iOS's
+> single `pendingPlace`; does NOT affect `canPublish`, mirroring iOS where `pendingPlace` is not
+> itself part of the publish gate) → `FeedPostPublishRequest.location` →
+> `FeedViewModel.publishPost(location:)`. `FeedComposerSheet` gains a seventh attach tile
+> (`Icons.Filled.LocationOn`, mirrors iOS's `location.fill`): requests
+> `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` (both declared in `AndroidManifest.xml`), then
+> captures a single fresh fix via a new `LocationManager.awaitFreshFix()` suspend extension (GPS
+> preferred, network fallback, 12s timeout via `withTimeoutOrNull` + `suspendCancellableCoroutine`
+> — **no Play Services dependency added**, a deliberate choice to keep this slice's footprint
+> minimal even though `play-services-location` would have been low-friction given `firebase-
+> messaging` already pulls Play Services transitively). The attached place renders as a
+> removable `LocationAttachmentChip` (same pill-with-close visual language as `ReelTypeToggle`),
+> separate from `MediaAttachmentsRow` since a post carries at most one location, never a list.
+> +20 new tests (8 `SharedPlaceTest`: default/custom decimal places, rounding not truncating,
+> negative-coordinate sign, JVM-default-locale independence, zero-decimal rounding, equality,
+> null defaults; 8 `FeedComposerDraftTest`: fresh-draft-has-none, attach, replace-not-accumulate,
+> remove, remove-when-absent-is-inert, location-alone-does-not-unlock-publish, publish-request-
+> carries-location, publish-request-null-when-absent; 2 `PostRepositoryTest`: null-location
+> forwarding, location forwarded verbatim via a captured `CreatePostRequest` slot; 2
+> `FeedViewModelTest`: null and non-null location forwarding to the repository).
+> **Mutation-proven**: dropping `Locale.ROOT` from `formattedCoordinates` fails **exactly** the
+> one locale-independence test (the other 7 stay green); adding `|| location != null` to
+> `canPublish` fails **exactly** the "location alone does not unlock publishing" test (the other
+> 47 `FeedComposerDraftTest` cases stay green). Both mutations applied via a scratch `cp`-backed
+> edit (never `git checkout --`), restored via `cp`, re-confirmed green. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching the prior
+> slice's task count — no build-graph regression). Reviewer **PASS** (diff `apps/android` only —
+> 2 new `:core:model` files, 12 edited across `:core:network`/`:sdk-core`/`:feature:feed`
+> [production + tests] + 4 locale `strings.xml` [en/fr/es/pt] + `AndroidManifest.xml`
+> [`ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`]; SDK purity — the `SharedPlace` model/
+> formatting is a stateless building block in `:core:model`, the permission-request →
+> `LocationManager` capture glue stays app-side in `:feature:feed` [Android-runtime I/O glue
+> with no further pure decision to extract, matching this composer's own established convention
+> for `readMediaUploadItem`/`startVoiceRecording`]; SSOT — one `SharedPlace` shape reused
+> verbatim from the gateway's own wire contract, no reimplementation; no coverage floor lowered;
+> no tautological tests). **Full on-device verification against the live gateway**
+> (`meeshy_pixel8`, real GNSS provider active): tapped the real Location tile
+> (`uiautomator dump` bounds throughout — including catching and correcting an earlier mistake
+> where a `Publish` tap coordinate was estimated visually from a screenshot without a bounds
+> dump, which missed the target entirely; see NOTES.md), the real Android system permission
+> dialog appeared (`Precise`/`Approximate`, `While using the app`/`Only this time`/`Don't
+> allow`), granted `While using the app` — confirmed the tile then showed a genuine loading
+> spinner and the status bar's live-location indicator appeared. A real `GnssLocationProvider`
+> fix streamed in (`adb logcat`: `Gnss:onGnssLocationCb`) and the composer rendered a chip
+> reading `37.42200, -122.08400` — the emulator's real default GPS coordinate
+> (37.421998, -122.084), confirming the value is a genuine device fix, not a stub. Typed text,
+> tapped Publish: `adb logcat` (background-captured to a file to survive the noisy post-tap
+> window) confirmed the real request body —
+> `{"content":"Meeshy_","location":{"latitude":37.421998333333335,"longitude":-122.084}}` — and
+> the gateway's `201` response echoed the persisted `location` both in `metadata.location` and
+> the hoisted top-level `location` field, proving the full `parseSharedPlace`/`hoistLocationDeep`
+> gateway pipeline round-tripped it correctly end to end. Deleted the test post via `curl DELETE
+> /api/v1/posts/:id` (confirmed gone via a follow-up `GET` → 404). `adb logcat` checked for
+> `FATAL EXCEPTION`/`AndroidRuntime` app crashes across the whole session — none (only unrelated
+> `uiautomator` process-start noise, which also logs under the `AndroidRuntime` tag). Emulator
+> left on the Feed screen afterward (composer closed, not mid-flow). **Next slice candidates
+> (not attempted this run)**: map/search/reverse-geocoding for the location attachment (needs a
+> Maps SDK dependency + API key provisioning — a separately-scoped, heavier follow-up, not a
+> small addition); on-device transcription for the Feed audio attachment (still no Android
+> on-device transcription capability anywhere in the app); per-post language override; the
+> gateway `POST /conversations/:id/messages` 400 flagged out-of-lane by a prior slice
+> (unconfirmed whether still live — worth re-checking, cross-platform, not Android-scoped);
+> widgets/PiP categorical re-check — **the orchestrator flagged this iteration that this
+> category has produced zero hits across several re-checks now and suggested treating it as a
+> documented gap needing a planning pass rather than continuing to bare re-grep it**; this run
+> deliberately did not re-run that grep, deferring to that guidance rather than repeating a
+> negative-result check with no forward progress.
+
 > On 2026-08-11 **TUS uploads gained a Room-backed checkpoint so a retried upload resumes past
 > already-acknowledged chunks instead of restarting from byte zero** (slice
 > `tus-upload-checkpoint-resume`, §Q — the "persistent checkpoint" candidate `tus-chunked-upload-
