@@ -1,5 +1,94 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **home-screen widgets' second sub-slice landed**: `RecentConversationsWidget`
+> (slice `widget-recent-conversations`, feature-parity §"Home-screen widgets" — RE-PROUVEN via the
+> orchestrator's explicit candidate list: "sous-tranches suivantes du widget écran d'accueil").
+> **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open` found no interrupted
+> run of this routine — the one open PR (`#2835`, `claude/keen-hamilton-lvgpqw`) is an unrelated
+> concurrent session on `apps/ios` (naming doesn't match this routine, CI still running at scan
+> time). Re-read the actual widget code from the prior slice (`UnreadCountWidget.kt`,
+> `UnreadWidgetEntryPoint.kt`) rather than trusting the note: confirmed only the unread-count face
+> exists (`grep`-confirmed zero `RecentConversations`/`FavoriteContacts`/`QuickReply` widget files),
+> matching the prior run's own "Restent" list. Read iOS's `MeeshyWidgets.swift` (all 4 widgets) +
+> `WidgetDataManager.swift` end to end before coding — the ordering rule (`isPinned` first, then
+> `lastMessageAt` descending, `.reversed()` composition) and the sender-prefix rule
+> (`formatLastMessage`: `"\(sender): \(preview)"` only when `type != .direct`) both come directly
+> from there, not invented. **Shipped (production, all `apps/android`)**: new
+> `RecentConversationsWidgetPresentation` (`:app/widget`, pure — mirrors the `UnreadWidgetPresentation`
+> precedent's placement, a product decision not a reusable atom) sorts cached conversations
+> pinned-first then by `ConversationRowTime.epochMillis` (existing `:feature:conversations` SSOT,
+> reused not reimplemented), caps at 5, and maps each row via **three existing SSOTs**:
+> `ApiConversation.displayTitle()` (`:sdk-core/theme`), `ApiConversation.accentHex()`
+> (`:sdk-core/theme` — satisfies root `CLAUDE.md`'s "every conversation-context component uses
+> accentColor" rule), and `lastMessagePreview()` (`:feature:conversations`, string resources reused
+> via `me.meeshy.feature.conversations.R` — zero re-implementation of the photo/video/voice/file/
+> location/sender-prefix labels). `RecentConversationsWidget` (Glance `LazyColumn`, up to 5 rows,
+> a small accent-hex color chip per row, bold title when unread) reads the same Room-only
+> `ConversationRepository.cachedConversations()` the unread-count widget already reads (no
+> network, renders instantly from cache even offline). Tapping a row launches an explicit
+> `Intent(ACTION_VIEW, "meeshy://conversation/{id}", context, MainActivity::class.java)` via
+> `androidx.glance.appwidget.action.actionStartActivity(Intent)` (a DIFFERENT overload than the
+> base `androidx.glance.action.actionStartActivity<T>()` the empty state still uses — verified via
+> `javap` on the Glance 1.1.1 jars in `~/.gradle/caches` before writing any code, since the base
+> package has no `Intent`-accepting overload at all) — matched by the app's own pre-existing
+> `Routes.CONVERSATION_SINGULAR_DEEP_LINK` `navDeepLink` (Navigation-Compose 2.8.3's automatic
+> Activity-intent deep-link consumption, confirmed via `libs.versions.toml` + the absence of any
+> manual `handleDeepLink()` call — this Navigation version wires it automatically). **A genuine
+> foundation gap found and closed en route**: resolving a direct conversation's *other* participant
+> needs the current user's id, but `SessionRepository.currentUserId` is in-memory only, populated
+> exclusively by the app's normal startup flow (`AuthRepository.restoreSession()` from
+> `MainActivity`/a ViewModel) — a `GlanceAppWidgetReceiver`-triggered cold process never runs that
+> flow, so it would have silently read `null` most of the time (misattributing "the other
+> participant" whenever the signed-in user happens to sort first in `participants`). Added
+> `TokenStore.userId: String?` (`:core:network`, same shape as the existing `jwt`/`sessionToken`
+> fields, persisted via the same `EncryptedSharedPreferences` — `EncryptedTokenStore.clear()`
+> already wiped it for free since it clears the whole prefs file), written by
+> `SessionRepository.adopt()`/`.refresh()` alongside the in-memory publish, cleared by `.clear()`.
+> The widget's shared `WidgetEntryPoint` (renamed from `UnreadWidgetEntryPoint` — it now serves
+> both widgets, `git mv` preserved history) exposes `tokenStore()` alongside
+> `conversationRepository()`. **+16 new tests** (12 `RecentConversationsWidgetPresentationTest`:
+> empty list, other-participant-name resolution, direct-vs-group sender prefix incl. the "vous"
+> label, unread true/false, pinned-before-recent ordering, recency ordering among unpinned, the
+> 5-row cap, accent-color passthrough, no-last-message fallback; 4 new `SessionRepositoryTest`
+> cases covering `adopt`/`clear`/`refresh` persisting-or-clearing `tokenStore.userId`).
+> **Mutation-proven**, two axes on the new presentation logic: neutralizing the pinned-first sort
+> key (`it.resolvedPreferences?.isPinned == true` → `false`) fails **exactly**
+> `a pinned conversation sorts before a more recently active unpinned one` (11 others green);
+> neutralizing the sender-prefix gate (`!in directConversationTypes` → `true`) fails **exactly**
+> `a direct conversation's preview carries no sender prefix` (11 others green). Both applied via a
+> scratch `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the
+> backup afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression; zero test failures across every module,
+> confirmed via `grep -rL 'failures="0"'` over every touched module's XML reports). Reviewer
+> **PASS** (diff `apps/android` only, confirmed via `git diff --stat origin/main` — 16 files, all
+> under `apps/android`; SDK purity — the pure ordering/mapping decision lives in `:app/widget`
+> (correctly, per the grain test: it's a product decision, not a reusable atom — mirrors the
+> `UnreadWidgetPresentation` precedent exactly), `TokenStore.userId` is a passive persisted field
+> with zero "when to do X" logic (an atom, correctly in `:core:network`); SSOT — reuses
+> `displayTitle`/`accentHex`/`lastMessagePreview`/`ConversationRowTime`/`cachedConversations`, zero
+> re-implementation; no coverage floor lowered; no tautological tests). **Not attempted this run**
+> (compile+test-only per the local JVM gate; no simulator/emulator session for on-device
+> verification against the live gateway and a real signed-in `TokenStore.userId` — a future run
+> should install-and-verify with the shared `atabeth` account, confirming a real direct
+> conversation's row shows the CONTACT's name and a group row shows the correct sender prefix on a
+> genuine cold-process widget update, not just the unit-tested decision). **Deliberate, documented
+> scope cut**: no mark-read quick action yet (iOS's `MarkConversationReadIntent` uses
+> `AppIntent`/`Button(intent:)`; the Android equivalent is Glance's `actionRunCallback` +
+> `ActionCallback` — confirmed present in the Glance 1.1.1 API via the same `javap` pass, so the
+> plumbing exists, but wiring the first `ActionCallback` in this app is its own increment, not
+> bundled into a widget that already touched `TokenStore`/`SessionRepository`); no push-refresh on
+> data change (still the standing `WidgetCenter.reloadAllTimelines()`-equivalent gap, shared with
+> `UnreadCountWidget`); only one resizable face (iOS ships 3 explicit `WidgetFamily` layouts —
+> Android's continuous resize was judged sufficient parity for a first pass, matching the existing
+> `UnreadCountWidget`'s own single-face precedent). **Next slice candidates (not attempted this
+> run)**: Favorite contacts / Quick reply widgets (both still zero-hit); the mark-read widget
+> action just scoped above; on-device transcription for the Feed audio composer (still the
+> standing candidate); a shared `:sdk-ui` `LanguagePickerDialog`; Voice-cloning onboarding wizard;
+> map/search/reverse-geocoding for the location attachment; PiP (calls + media) — per the
+> orchestrator's guidance this remains a documented, real, multi-slice-epic gap warranting a
+> planning/decomposition pass rather than a bare re-grep (last re-confirmed zero-hit iteration
+> 44/45, not re-checked again this run).
+
 > On 2026-08-11 **Contacts-list mood-emoji presence landed** (slice
 > `contacts-mood-emoji-presence`, feature-parity §J — a broad-sweep find, per the orchestrator's
 > "continue the broad sweep of `feature-parity.md`" guidance). **RE-PROUVEN before starting**:

@@ -68,4 +68,9 @@
     <string name="widget_unread_count_description">See how many unread messages you have at a glance</string>
     <string name="widget_unread_label">Unread</string>
     <string name="widget_all_read_label">All caught up</string>
+
+    <!-- Home-screen widget: recent conversations -->
+    <string name="widget_recent_conversations_title">Recent Conversations</string>
+    <string name="widget_recent_conversations_description">View your recent conversations at a glance</string>
+    <string name="widget_recent_conversations_empty">Open Meeshy to get started</string>
 </resources>

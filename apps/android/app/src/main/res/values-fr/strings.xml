@@ -68,4 +68,9 @@
     <string name="widget_unread_count_description">Voyez d\'un coup d\'œil vos messages non lus</string>
     <string name="widget_unread_label">Non lus</string>
     <string name="widget_all_read_label">Tout est lu</string>
+
+    <!-- Widget écran d'accueil : conversations récentes -->
+    <string name="widget_recent_conversations_title">Conversations récentes</string>
+    <string name="widget_recent_conversations_description">Voyez vos conversations récentes d\'un coup d\'œil</string>
+    <string name="widget_recent_conversations_empty">Ouvrez Meeshy pour commencer</string>
 </resources>
