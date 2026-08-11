@@ -20,7 +20,7 @@ public struct ErrorBannerView: View {
             }
             Spacer()
         }
-        .onChange(of: error?.errorDescription) { _ in
+        .adaptiveOnChange(of: error?.errorDescription) { _, _ in
             guard error != nil else {
                 withAnimation(MeeshyAnimation.springDefault) {
                     isVisible = false
