@@ -7,6 +7,7 @@ import { useToast } from '@/components/v2';
 import { FeedTabs } from '@/components/feed/PostsFeedScreen';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import { CommentList } from '@/components/v2/CommentList';
+import { RepostModal } from '@/components/v2/RepostModal';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
   useLikePostMutation,
@@ -14,6 +15,7 @@ import {
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
   useSharePostMutation,
+  useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import {
@@ -65,6 +67,7 @@ export function ReelsFeedScreen() {
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const shareMutation = useSharePostMutation();
+  const repostMutation = useRepostMutation();
   const createCommentMutation = useCreateCommentMutation();
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();
@@ -72,6 +75,7 @@ export function ReelsFeedScreen() {
 
   const [index, setIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
 
   // Clamp the cursor if the thread shrinks (cache eviction / refetch).
   useEffect(() => {
@@ -162,6 +166,41 @@ export function ReelsFeedScreen() {
       .catch(() => toastCtx.addToast(t('report.error', "Couldn't report the reel"), 'error'));
   }, [current, toastCtx, t]);
 
+  const onRepost = useCallback(() => {
+    if (current) setRepostModalOpen(true);
+  }, [current]);
+
+  const handleRepost = useCallback(() => {
+    if (!current) return;
+    repostMutation.mutate(
+      { postId: current.id, data: { isQuote: false } },
+      {
+        onSuccess: () => {
+          setRepostModalOpen(false);
+          toastCtx.addToast(t('repost.success', 'Reposted!'), 'success');
+        },
+        onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
+      },
+    );
+  }, [current, repostMutation, toastCtx, t]);
+
+  const handleQuote = useCallback(
+    (quoteContent: string) => {
+      if (!current) return;
+      repostMutation.mutate(
+        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        {
+          onSuccess: () => {
+            setRepostModalOpen(false);
+            toastCtx.addToast(t('repost.quoted', 'Quoted!'), 'success');
+          },
+          onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [current, repostMutation, toastCtx, t],
+  );
+
   const content = useMemo(() => {
     if (current) {
       return (
@@ -184,6 +223,7 @@ export function ReelsFeedScreen() {
           onShare={onShare}
           onBookmark={onBookmark}
           onReport={onReport}
+          onRepost={onRepost}
         />
       );
     }
@@ -221,7 +261,7 @@ export function ReelsFeedScreen() {
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, reelsQuery, t]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, reelsQuery, t]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">
@@ -278,6 +318,19 @@ export function ReelsFeedScreen() {
           </div>
         )}
       </div>
+
+      {/* Repost Modal */}
+      {repostModalOpen && current && (
+        <RepostModal
+          open
+          originalAuthor={current.author?.displayName ?? current.author?.username}
+          originalContent={current.content ?? undefined}
+          onRepost={handleRepost}
+          onQuote={handleQuote}
+          onClose={() => setRepostModalOpen(false)}
+          saving={repostMutation.isPending}
+        />
+      )}
     </DashboardLayout>
   );
 }

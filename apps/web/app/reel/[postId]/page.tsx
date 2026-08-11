@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import { useToast } from '@/components/v2';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
+import { RepostModal } from '@/components/v2/RepostModal';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
@@ -15,6 +16,7 @@ import {
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
   useSharePostMutation,
+  useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
@@ -59,6 +61,8 @@ export default function ReelPage() {
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const shareMutation = useSharePostMutation();
+  const repostMutation = useRepostMutation();
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
 
   // Only a REEL seeds the immersive player; any other post type (stale/scraped
   // link) is treated as unavailable rather than forced into reel chrome.
@@ -179,27 +183,76 @@ export default function ReelPage() {
       .catch(() => toastCtx.addToast(t('reportError', "Couldn't report the reel"), 'error'));
   }, [current, toastCtx, t]);
 
+  const onRepost = useCallback(() => {
+    if (current) setRepostModalOpen(true);
+  }, [current]);
+
+  const handleRepost = useCallback(() => {
+    if (!current) return;
+    repostMutation.mutate(
+      { postId: current.id, data: { isQuote: false } },
+      {
+        onSuccess: () => {
+          setRepostModalOpen(false);
+          toastCtx.addToast(t('reposted', 'Reposted!'), 'success');
+        },
+        onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
+      },
+    );
+  }, [current, repostMutation, toastCtx, t]);
+
+  const handleQuote = useCallback(
+    (quoteContent: string) => {
+      if (!current) return;
+      repostMutation.mutate(
+        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        {
+          onSuccess: () => {
+            setRepostModalOpen(false);
+            toastCtx.addToast(t('quoted', 'Quoted!'), 'success');
+          },
+          onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [current, repostMutation, toastCtx, t],
+  );
+
   if (current) {
     return (
-      <ReelPlayer
-        key={current.id}
-        reel={current}
-        index={index}
-        total={thread.length}
-        hasPrev={index > 0}
-        hasNext={index < thread.length - 1}
-        isLiked={isReelLiked(current)}
-        isBookmarked={!!current.bookmarkedAt}
-        userLanguage={userLanguage}
-        onPrev={() => setIndex((i) => Math.max(0, i - 1))}
-        onNext={() => setIndex((i) => Math.min(thread.length - 1, i + 1))}
-        onClose={close}
-        onLike={onLike}
-        onComment={onComment}
-        onShare={onShare}
-        onBookmark={onBookmark}
-        onReport={onReport}
-      />
+      <>
+        <ReelPlayer
+          key={current.id}
+          reel={current}
+          index={index}
+          total={thread.length}
+          hasPrev={index > 0}
+          hasNext={index < thread.length - 1}
+          isLiked={isReelLiked(current)}
+          isBookmarked={!!current.bookmarkedAt}
+          userLanguage={userLanguage}
+          onPrev={() => setIndex((i) => Math.max(0, i - 1))}
+          onNext={() => setIndex((i) => Math.min(thread.length - 1, i + 1))}
+          onClose={close}
+          onLike={onLike}
+          onComment={onComment}
+          onShare={onShare}
+          onBookmark={onBookmark}
+          onReport={onReport}
+          onRepost={onRepost}
+        />
+        {repostModalOpen && (
+          <RepostModal
+            open
+            originalAuthor={current.author?.displayName ?? current.author?.username}
+            originalContent={current.content ?? undefined}
+            onRepost={handleRepost}
+            onQuote={handleQuote}
+            onClose={() => setRepostModalOpen(false)}
+            saving={repostMutation.isPending}
+          />
+        )}
+      </>
     );
   }
 
