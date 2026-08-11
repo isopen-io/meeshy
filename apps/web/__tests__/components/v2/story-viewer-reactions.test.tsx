@@ -135,3 +135,66 @@ describe('StoryViewer — reaction wiring', () => {
     expect(screen.queryByTestId('story-reaction-picker')).not.toBeInTheDocument();
   });
 });
+
+describe('StoryViewer — report action (Task 3, point 2 follow-up)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('shows a Report button for a viewer who is not the story author', () => {
+    render(
+      <StoryViewer
+        stories={[{ ...makeStory('story-rep'), authorId: 'author-1' }]}
+        currentUserId="viewer-1"
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+        onReport={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Report')).toBeInTheDocument();
+  });
+
+  it('calls onReport with the current story id', () => {
+    const onReport = jest.fn();
+    render(
+      <StoryViewer
+        stories={[{ ...makeStory('story-rep-2'), authorId: 'author-1' }]}
+        currentUserId="viewer-1"
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+        onReport={onReport}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Report'));
+    expect(onReport).toHaveBeenCalledWith('story-rep-2');
+  });
+
+  it('does not show Report on the viewer own story', () => {
+    render(
+      <StoryViewer
+        stories={[{ ...makeStory('story-own'), authorId: 'viewer-1' }]}
+        currentUserId="viewer-1"
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+        onReport={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Report')).not.toBeInTheDocument();
+  });
+
+  it('does not show Report without an onReport handler', () => {
+    render(
+      <StoryViewer
+        stories={[{ ...makeStory('story-noreport'), authorId: 'author-1' }]}
+        currentUserId="viewer-1"
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Report')).not.toBeInTheDocument();
+  });
+});

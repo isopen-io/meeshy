@@ -133,6 +133,7 @@ interface StoryViewerProps {
   onView?: (storyId: string) => void;
   onReply?: (storyId: string, text: string) => void;
   onDelete?: (storyId: string) => void;
+  onReport?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
   /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
@@ -367,6 +368,19 @@ function SendIcon() {
   );
 }
 
+function FlagIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M3 3v18M3 4h13l-2 4 2 4H3"
+      />
+    </svg>
+  );
+}
+
 // ============================================================================
 // StoryViewer
 // ============================================================================
@@ -380,6 +394,7 @@ function StoryViewer({
   onView,
   onReply,
   onDelete,
+  onReport,
   enableComments = true,
   targetCommentId,
   targetParentCommentId,
@@ -955,6 +970,18 @@ function StoryViewer({
                 {timeAgo(story.createdAt)}
               </span>
             </div>
+            {onReport && currentUserId && story.authorId && story.authorId !== currentUserId && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReport(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('report', 'Report')}
+              >
+                <FlagIcon />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();

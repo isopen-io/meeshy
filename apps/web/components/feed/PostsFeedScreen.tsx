@@ -33,6 +33,7 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
+import { reportService } from '@/services/report.service';
 import type { MobileTranscription } from '@/services/posts.service';
 import type { Post, PostVisibility } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
@@ -414,6 +415,28 @@ export function PostsFeedScreen() {
     [deletePostMutation, showToast, t],
   );
 
+  const handleReportPost = useCallback(
+    (postId: string) => {
+      if (!window.confirm(t('post.reportConfirm', 'Report this post?'))) return;
+      reportService
+        .reportPost(postId, 'inappropriate', '')
+        .then(() => showToast(t('toast.postReported', 'Post reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the post.")));
+    },
+    [showToast, t],
+  );
+
+  const handleReportStory = useCallback(
+    (storyId: string) => {
+      if (!window.confirm(t('story.reportConfirm', 'Report this story?'))) return;
+      reportService
+        .reportStory(storyId, 'inappropriate', '')
+        .then(() => showToast(t('toast.storyReported', 'Story reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the story.")));
+    },
+    [showToast, t],
+  );
+
   const handlePinPost = useCallback(
     (postId: string, isPinned: boolean) => pinPostMutation.mutate({ postId, pin: !isPinned }),
     [pinPostMutation],
@@ -713,6 +736,7 @@ export function PostsFeedScreen() {
                     onEdit={() => handleEditPost(post.id)}
                     onDelete={() => handleDeletePost(post.id)}
                     onPin={() => handlePinPost(post.id, post.isPinned)}
+                    onReport={() => handleReportPost(post.id)}
                     onClick={() => {
                       if (post.type === 'REEL') {
                         router.push(`/reel/${post.id}`);
@@ -753,6 +777,7 @@ export function PostsFeedScreen() {
           onView={handleStoryView}
           onReply={handleStoryReply}
           onDelete={handleStoryDelete}
+          onReport={handleReportStory}
         />
       )}
 

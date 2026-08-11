@@ -21,9 +21,10 @@ const COMPONENTS_EN: Record<string, string> = {
 
 jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, string>) => {
+    t: (key: string, paramsOrFallback?: Record<string, string> | string) => {
+      if (typeof paramsOrFallback === 'string') return COMPONENTS_EN[key] ?? paramsOrFallback;
       const val = COMPONENTS_EN[key] ?? key;
-      if (params) return val.replace(/\{(\w+)\}/g, (_: string, k: string) => params[k] ?? `{${k}}`);
+      if (paramsOrFallback) return val.replace(/\{(\w+)\}/g, (_: string, k: string) => paramsOrFallback[k] ?? `{${k}}`);
       return val;
     },
     tArray: () => [],
@@ -139,5 +140,32 @@ describe('PostCard enhanced features', () => {
     render(<PostCard {...baseProps} onClick={onClick} />);
     fireEvent.click(screen.getByText('Hello world'));
     expect(onClick).toHaveBeenCalled();
+  });
+
+  describe('report menu item (non-author)', () => {
+    it('shows a menu with a Report entry for a non-author post', () => {
+      render(<PostCard {...baseProps} isAuthor={false} onReport={jest.fn()} />);
+      fireEvent.click(screen.getByLabelText('Post menu'));
+      expect(screen.getByText('Report')).toBeInTheDocument();
+    });
+
+    it('calls onReport from the menu', () => {
+      const onReport = jest.fn();
+      render(<PostCard {...baseProps} isAuthor={false} onReport={onReport} />);
+      fireEvent.click(screen.getByLabelText('Post menu'));
+      fireEvent.click(screen.getByText('Report'));
+      expect(onReport).toHaveBeenCalled();
+    });
+
+    it('does not offer Report on the author own post', () => {
+      render(<PostCard {...baseProps} isAuthor onEdit={jest.fn()} onReport={jest.fn()} />);
+      fireEvent.click(screen.getByLabelText('Post menu'));
+      expect(screen.queryByText('Report')).not.toBeInTheDocument();
+    });
+
+    it('still hides the menu entirely for a non-author without onReport', () => {
+      render(<PostCard {...baseProps} isAuthor={false} />);
+      expect(screen.queryByLabelText('Post menu')).not.toBeInTheDocument();
+    });
   });
 });
