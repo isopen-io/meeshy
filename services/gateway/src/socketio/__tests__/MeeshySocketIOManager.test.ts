@@ -1496,6 +1496,104 @@ describe('MeeshySocketIOManager', () => {
       // Should not throw
       await expect((manager as any)._handleTextTranslationReady(baseData)).resolves.not.toThrow();
     });
+
+    // Cycle 73 — LE défaut. `message:translation` ne porte que la room de
+    // CONVERSATION. Un lecteur resté sur l'écran de liste n'y est pas ; sa ligne
+    // garde l'aperçu servi à l'ENVOI, quand aucune traduction n'existait encore.
+    // Rien ne repassait ensuite : le Prisme de la ligne de liste dépendait donc
+    // de l'ordre d'arrivée, et un francophone gardait « Hello » indéfiniment.
+    describe('preview refresh on the conversation list (cycle 73)', () => {
+      const FR_READER = {
+        id: 'p-fr',
+        userId: 'user-fr',
+        user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+      };
+
+      function armPreview(latest: unknown) {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-prisme-0001', senderId: 'part-author' });
+        prisma.conversation.findUnique.mockResolvedValue(null);
+        prisma.participant.findMany.mockResolvedValue([FR_READER]);
+        prisma.message.findFirst.mockResolvedValue(latest);
+      }
+
+      const frData = { ...baseData, targetLanguage: 'fr', result: { ...baseData.result, translatedText: 'Bonjour' } };
+
+      it('fans conversation:updated with the freshly translated preview to the reader personal room', async () => {
+        armPreview({
+          id: 'msg-txt-1',
+          content: 'Hello',
+          senderId: 'part-author',
+          createdAt: new Date('2026-08-11T10:00:00Z'),
+          originalLanguage: 'en',
+          translations: { fr: { text: 'Bonjour', targetLanguage: 'fr' } },
+        });
+
+        await (manager as any)._handleTextTranslationReady(frData);
+
+        expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-fr'));
+        expect(ioState.toEmit).toHaveBeenCalledWith(
+          SERVER_EVENTS.CONVERSATION_UPDATED,
+          expect.objectContaining({
+            conversationId: 'conv-prisme-0001',
+            lastMessageId: 'msg-txt-1',
+            lastMessageTranslations: { fr: 'Bonjour' },
+            lastMessageOriginalLanguage: 'en',
+            updatedBy: { id: 'part-author' },
+          }),
+        );
+      });
+
+      // Un message plus récent est arrivé pendant que la traduction volait : son
+      // propre chemin d'envoi a déjà servi l'aperçu. Re-servir l'ancien ferait
+      // RECULER la ligne de liste — pire que le défaut corrigé.
+      it('stays silent when the translated message is no longer the conversation latest', async () => {
+        armPreview({
+          id: 'msg-newer',
+          content: 'Une autre chose',
+          senderId: 'part-author',
+          createdAt: new Date('2026-08-11T10:05:00Z'),
+          originalLanguage: 'fr',
+          translations: null,
+        });
+
+        await (manager as any)._handleTextTranslationReady(frData);
+
+        expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UPDATED, expect.anything());
+      });
+
+      // La traduction espagnole n'apprend rien au lecteur français : sa carte est
+      // filtrée à SON prisme, donc identique à l'octet près. Une conversation à
+      // N langues émettrait sinon N fan-outs complets par message.
+      it('stays silent for a reader whose prism does not carry the language that landed', async () => {
+        armPreview({
+          id: 'msg-txt-1',
+          content: 'Hello',
+          senderId: 'part-author',
+          createdAt: new Date('2026-08-11T10:00:00Z'),
+          originalLanguage: 'en',
+          translations: { es: { text: 'Hola', targetLanguage: 'es' } },
+        });
+
+        await (manager as any)._handleTextTranslationReady({ ...baseData, targetLanguage: 'es' });
+
+        expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UPDATED, expect.anything());
+      });
+
+      // Canal latéral best-effort : la traduction elle-même est déjà partie dans
+      // la room de conversation et ne doit pas tomber avec le rafraîchissement.
+      it('still broadcasts the translation when the preview refresh query fails', async () => {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-prisme-0001', senderId: 'part-author' });
+        prisma.conversation.findUnique.mockResolvedValue(null);
+        prisma.participant.findMany.mockRejectedValue(new Error('DB down'));
+
+        await expect((manager as any)._handleTextTranslationReady(frData)).resolves.not.toThrow();
+
+        expect(ioState.toEmit).toHaveBeenCalledWith(
+          SERVER_EVENTS.MESSAGE_TRANSLATION,
+          expect.objectContaining({ messageId: 'msg-txt-1' }),
+        );
+      });
+    });
   });
 
   // -------------------------------------------------------------------------

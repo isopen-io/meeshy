@@ -1,4 +1,140 @@
-# Tête instruite pour le cycle 73 — la fenêtre de transition dépasse la moitié du slide le plus court
+# Tête instruite pour le cycle 74 — Android ne DÉCODE pas le Prisme de la ligne de liste
+
+*Trouvé en instruisant le cycle 73, vérifié, NON corrigé : le défaut est réel et user-visible, mais
+il vit entièrement dans `apps/android/`, c'est-à-dire dans la lane d'une AUTRE routine
+(`tasks/android-parity-ios-debt-agent-prompt.md`, curseur `tasks/lane-cursor.md`). Le corriger ici
+aurait produit un conflit de fichiers avec une routine qui travaille sur les mêmes écrans.*
+
+## Le fait
+
+Le gateway sert `lastMessageTranslations` + `lastMessageOriginalLanguage` au niveau CONVERSATION,
+sur les trois chemins (`GET /conversations` → `routes/conversations/core.ts:678`, la recherche →
+`search.ts:277`, et le temps réel → `resolveLastMessagePreviewPrism`). Web les lit
+(`transformers.service.ts:490`, `use-socket-cache-sync.ts:75`), iOS les lit
+(`MeeshyConversation.resolvedLastMessagePreview`, `ConversationStore.merging`).
+
+**Android ne les déclare nulle part.** `ApiConversation` (`core/model/.../Conversation.kt:6`) n'a
+aucun des deux champs, `ApiConversationLastMessage` (`:55`) porte `content` et `originalLanguage`
+mais aucune traduction, et `lastMessagePreview()`
+(`feature/conversations/.../LastMessagePreview.kt:42`) rend `message.content` brut.
+
+L'asymétrie est interne à Android et c'est ce qui la rend coûteuse : le FIL applique le Prisme
+(`Message.resolvedContent` → `LanguageResolver.preferredTranslation`, `Message.kt:98`), la LISTE
+non. Un lecteur francophone voit donc « Hello » dans sa liste et « Bonjour » dès qu'il ouvre — la
+friction linguistique exacte que le principe produit interdit.
+
+## Ce que le cycle 74 doit faire
+
+1. Ajouter `lastMessageTranslations: Map<String, String>? = null` et
+   `lastMessageOriginalLanguage: String? = null` à `ApiConversation`.
+2. Un résolveur `resolvedLastMessagePreview` porté de `MeeshyConversation` (Swift) — **règle #3 du
+   Prisme** : parcourir les langues du lecteur DANS L'ORDRE, la première servie gagne, par une
+   traduction OU parce que le message est déjà écrit dedans. Ne jamais court-circuiter sur la
+   langue d'origine.
+3. Brancher `lastMessagePreview()` dessus, et le cache disque (`ConversationCacheSource.kt`) doit
+   persister les deux champs — sinon le démarrage à froid re-perd le prisme.
+4. La source socket : `conversation:updated` porte les deux champs par destinataire depuis le cycle
+   69, et depuis CE cycle il en porte aussi après une traduction. Android doit les appliquer au même
+   endroit que `lastMessagePreview`.
+
+---
+
+# Cycle 73 — Le Prisme de la ligne de liste dépendait de l'ORDRE D'ARRIVÉE
+
+## Le défaut
+
+`message:translation` n'est diffusé que dans `ROOMS.conversation(id)`
+(`MeeshySocketIOManager._handleTextTranslationReady`). Le rafraîchissement de la LIGNE DE LISTE,
+lui, n'existait pas : `conversation:updated` n'était émis que par l'envoi, l'édition, la
+suppression et l'épinglage. Or l'aperçu est servi **à l'envoi**, à un instant où la traduction
+n'existe pas encore — la traduction NLLB atterrit une à deux secondes plus tard, par ZMQ.
+
+Résultat : la carte `lastMessageTranslations` posée sur la ligne vaut `null` au moment où elle est
+servie, et **rien ne repasse jamais**. Un lecteur francophone garde « Hello » dans sa liste,
+indéfiniment, jusqu'à un rechargement complet.
+
+Ce qui rend le défaut coûteux, c'est qu'il est **conditionnel au parcours** : ouvrir la conversation
+traduit la ligne (le fil reçoit `message:translation`, le refetch de liste suivant réhydrate), ne
+pas l'ouvrir la laisse dans la langue de l'expéditeur. Le même compte, sur le même appareil, voit
+deux comportements selon ce qu'il a fait avant. « Le prisme s'applique à TOUT le contenu — previews
+comprises » : c'était la seule surface où il dépendait de l'ordre d'arrivée plutôt que des
+préférences du lecteur.
+
+## Le correctif
+
+Le chemin de traduction devient le **troisième appelant** de `emitConversationPreviewUpdate` — le
+fan-out qui existait déjà pour l'édition/suppression, avec son Prisme PAR destinataire, sa
+recomputation du dernier message non supprimé et son contrat best-effort. Aucune copie.
+
+Mais une traduction n'est pas une édition, et la différence est la moitié du travail : une édition
+change la ligne pour TOUT LE MONDE, une traduction ne la change que pour **les lecteurs de cette
+langue-là**, et seulement **tant que le message traduit est encore le dernier**. D'où
+`PreviewUpdateScope`, deux bornes optionnelles que les appelants d'édition ne passent pas :
+
+- `onlyIfLatestIs` — un message plus récent est arrivé pendant que la traduction volait ? Son propre
+  chemin d'envoi a déjà servi l'aperçu. Ré-émettre l'ancien ferait **RECULER** la ligne de liste,
+  c'est-à-dire pire que le défaut corrigé.
+- `onlyIfPreviewCarriesLanguage` — le test porte sur la carte SORTIE, pas sur les préférences en
+  entrée. C'est elle qui décide, et elle applique déjà les quatre exclusions de
+  `buildLastMessagePreviewTranslations` (hors prisme, langue d'origine, traduction chiffrée, texte
+  inexploitable). Un lecteur dont la carte ne bouge pas recevrait un payload **identique à l'octet
+  près** : le filtrer n'est pas une optimisation opportuniste, c'est la définition de « qui est
+  concerné par CETTE traduction ». Sans lui, une conversation à N langues paie N fan-outs complets
+  par message, sur le chemin le plus chaud du service.
+
+`updatedBy` est OBLIGATOIRE dans `ConversationUpdatedEventData` et une traduction n'a pas d'acteur
+humain. L'auteur du message traduit est la seule identité honnête à porter là — et c'est déjà le
+repli que le chemin d'envoi utilise (`senderUserId ?? message.senderId`). Les deux clients ignorent
+le champ (web le destructure et le jette, iOS le décode en optionnel).
+
+## Ce qui a été VÉRIFIÉ, pas déduit
+
+- **Les deux clients appliquent bien un `conversation:updated` dont seul le prisme a changé.** Le
+  payload garde le même `lastMessageId`, le même `lastMessagePreview`, le même `lastMessageAt` : un
+  client qui ne réagirait qu'au changement d'identité du dernier message l'avalerait.
+  - iOS : `ConversationStore.merging` compare `lastMessageAt >= conv.lastMessageAt` — **`>=`, pas
+    `>`**, et le commentaire dit pourquoi (une édition garde le `createdAt`). L'égalité passe, donc
+    tout le groupe d'aperçu est appliqué.
+  - Web : `normalizeConversationPatch` traite `lastMessageTranslations` comme une clé toujours
+    présente, `null` compris, et le cache applique `{ ...conv, ...patch }`.
+- **Le lecteur sur l'écran de liste EST joignable.** `AuthHandler._joinUserConversations` fait
+  rejoindre TOUTES les rooms de conversation à l'authentification — le lecteur reçoit donc bien
+  `message:translation`, mais aucun client ne s'en sert pour patcher la ligne de liste : iOS le
+  range dans `CacheCoordinator.cacheTranslation` (cache MESSAGE, jamais la liste), web ne l'écoute
+  que depuis `ConversationLayout`/`bubble-stream-page`, c'est-à-dire depuis la vue conversation. La
+  ligne de liste se nourrit exclusivement de `lastMessageTranslations`.
+
+## Vérification
+
+- **10 témoins neufs.** 6 sur `emitConversationPreviewUpdate` (la portée), 4 sur le manager (le
+  câblage).
+- **RED prouvé par mutation**, pas supposé : les deux gardes retirées ⇒ 3 témoins de portée rouges ;
+  l'appel au fan-out neutralisé ⇒ le témoin de câblage rouge.
+- Deux témoins de portée sont volontairement non-discriminants seuls (« fan-out normal quand le
+  message EST le dernier », « les appelants d'édition restent intacts ») : ils verrouillent ce qui
+  ne doit PAS changer, et c'est leur seule fonction.
+- `tsc --noEmit` du gateway : vert. Suite Jest complète du gateway : verte.
+
+## Reste ouvert après ce cycle
+
+- **Android ne décode pas le Prisme de la ligne de liste** — tête instruite du cycle 74 ci-dessus.
+  Lane d'une autre routine, pas un arbitrage.
+- **Le coût des deux requêtes quand la garde `onlyIfLatestIs` échoue.** Le helper interroge
+  participants et dernier message EN PARALLÈLE, puis abandonne. Sérialiser (dernier message d'abord,
+  bail, puis participants) économiserait la requête participants sur ce chemin-là mais ralentirait
+  l'appelant DOMINANT (l'édition, où les deux sont toujours nécessaires). Arbitrage assumé en faveur
+  du chemin dominant ; mesuré ici pour que le prochain cycle n'ait pas à le redécouvrir.
+- **Le chemin AUDIO n'est pas touché.** Une transcription/traduction audio ne change pas
+  `Message.content` — l'aperçu d'un vocal est un libellé de type, pas un texte. À revérifier si
+  l'aperçu venait un jour à porter la transcription.
+- Les points hérités restent tels quels — voir « Reste ouvert » du cycle 72 ci-dessous.
+
+---
+
+# Tête instruite (cycle 73, NON traitée) — la fenêtre de transition dépasse la moitié du slide le plus court
+
+*Reportée telle quelle : c'est un arbitrage PRODUIT, et cette routine tourne sans personne pour le
+trancher. Elle reste intégralement valable pour le prochain cycle qui disposera d'un avis produit.*
 
 *Trouvé en corrigeant le cycle 72, mesuré, NON corrigé : contrairement aux deux défauts de ce
 cycle-là, celui-ci demande un arbitrage produit, pas un correctif mécanique. L'arithmétique est

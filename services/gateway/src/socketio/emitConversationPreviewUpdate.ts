@@ -19,6 +19,38 @@ export interface PreviewEmitIO {
 type PreviewPrisma = Pick<PrismaClient, 'participant' | 'message'>;
 
 /**
+ * Restreint le fan-out d'un appelant qui ne parle PAS au nom d'une mutation du
+ * contenu.
+ *
+ * Une édition ou une suppression change l'aperçu pour tout le monde : ces
+ * appelants ne passent rien et gardent la diffusion complète. Une TRADUCTION qui
+ * atterrit est l'autre cas — elle ne change la ligne que pour les lecteurs de
+ * cette langue-là, et seulement tant que le message traduit est encore le
+ * dernier. Sans ces deux bornes, chaque traduction re-diffuserait la ligne
+ * entière à tous les participants, une fois par langue de la conversation, sur
+ * le chemin le plus chaud du service.
+ */
+export interface PreviewUpdateScope {
+  /**
+   * Abandonne tout le fan-out si le dernier message recalculé n'est pas
+   * celui-ci. Un message plus récent est arrivé entre-temps : son propre chemin
+   * d'envoi a déjà servi l'aperçu, et celui qu'on tenait est devenu hors sujet.
+   */
+  readonly onlyIfLatestIs?: string;
+  /**
+   * N'émet qu'aux destinataires dont la carte résolue porte cette langue.
+   * Comparaison insensible à la casse, comme partout ailleurs dans le Prisme.
+   *
+   * Le test porte sur la carte SORTIE (`lastMessageTranslations`), pas sur les
+   * préférences en entrée : c'est elle qui décide, et elle applique déjà les
+   * quatre exclusions de `buildLastMessagePreviewTranslations` (hors prisme,
+   * langue d'origine, traduction chiffrée, texte inexploitable). Un lecteur dont
+   * la carte ne bouge pas recevrait un payload identique à l'octet près.
+   */
+  readonly onlyIfPreviewCarriesLanguage?: string;
+}
+
+/**
  * Fan a `conversation:updated` preview refresh to every active
  * participant's personal user room after a message edit or delete.
  *
@@ -53,6 +85,17 @@ type PreviewPrisma = Pick<PrismaClient, 'participant' | 'message'>;
  * dire sur le fil. Le message garde le même id : le client ne peut pas
  * l'inférer.
  *
+ * Le troisième appelant n'est pas une mutation humaine : une TRADUCTION qui
+ * atterrit (`message:translation`) change la ligne de liste sans changer une
+ * ligne de la base côté message. Le serveur écrit `Message.translations`, diffuse
+ * la traduction dans la room de CONVERSATION — et s'arrêtait là. Un lecteur sur
+ * l'écran de liste garde donc l'aperçu dans la langue de l'expéditeur : au
+ * moment de l'envoi la traduction n'existait pas encore, et rien ne repasse
+ * ensuite. Le Prisme s'applique « à TOUT le contenu, previews comprises » ;
+ * c'était la seule surface où il dépendait de l'ORDRE d'arrivée. Cet appelant
+ * passe un `scope` (voir `PreviewUpdateScope`) parce qu'il ne concerne ni tous
+ * les destinataires ni tous les instants — contrairement à l'édition.
+ *
  * Best-effort side channel — never throws. A failure here must not fail the
  * edit/delete that already succeeded; the optional `onError` hook lets
  * callers log it against the originating request.
@@ -63,6 +106,7 @@ export async function emitConversationPreviewUpdate(
   conversationId: string,
   updatedByUserId: string,
   onError?: (error: unknown) => void,
+  scope?: PreviewUpdateScope,
 ): Promise<void> {
   if (!io) return;
   try {
@@ -93,6 +137,8 @@ export async function emitConversationPreviewUpdate(
       }),
     ]);
 
+    if (scope?.onlyIfLatestIs != null && latest?.id !== scope.onlyIfLatestIs) return;
+
     // Un message géolocalisé sans légende a un `lastMessagePreview` vide —
     // hisser `location` ne fabrique aucun texte de repli côté serveur ; le
     // client décide comment rendre "" + location (ex. via messageType ou la
@@ -120,13 +166,22 @@ export async function emitConversationPreviewUpdate(
     // lecteur, donc deux participants de langues différentes n'ont pas la même.
     // La boucle par participant existait déjà — elle envoyait le même objet à
     // tout le monde.
+    const wantedLanguage = scope?.onlyIfPreviewCarriesLanguage?.toLowerCase();
+
     for (const { room, participant } of participantUserRoomTargets(participants)) {
+      const prism = resolveLastMessagePreviewPrism(participant, latest);
+      if (wantedLanguage != null && !carriesLanguage(prism.lastMessageTranslations, wantedLanguage)) continue;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         ...basePayload,
-        ...resolveLastMessagePreviewPrism(participant, latest),
+        ...prism,
       });
     }
   } catch (error) {
     onError?.(error);
   }
+}
+
+function carriesLanguage(map: Record<string, string> | null, wantedLowercase: string): boolean {
+  if (!map) return false;
+  return Object.keys(map).some((lang) => lang.toLowerCase() === wantedLowercase);
 }
