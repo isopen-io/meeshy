@@ -573,6 +573,27 @@ struct AudioMediaView: View, Equatable {
     /// re-evaluation on every refresh.
     var onPlayAudio: ((String) -> Void)? = nil
 
+    /// Nom de la conversation — cold-open (F1) : porté par le cover plein
+    /// écran comme `AudioFullscreenSource.nowPlayingContextName` pour que la
+    /// carte Now Playing affiche la CONVERSATION, pas l'auteur seul. `nil`
+    /// pour les surfaces sans conversation (feed/commentaire/post/réel), qui
+    /// gardent le repli existant sur le nom de l'auteur. Wired par
+    /// `BubbleStandardLayout` -> `ThemedMessageBubble` ->
+    /// `MessageListViewController` depuis `ConversationViewModel.currentConversationName`.
+    /// **Excluded from Equatable** : n'affecte jamais le rendu de la bulle,
+    /// seulement une valeur consommée par une feuille présentée plus tard
+    /// (même traitement que `allAudioItems`).
+    var conversationName: String? = nil
+    /// Fournit, pour un `attachmentId` donné, les vocaux non écoutés qui le
+    /// suivent dans la conversation — cold-open (F1) : porté par le cover
+    /// plein écran comme `AudioFullscreenSource.queueTailProvider` pour que
+    /// l'avance auto fonctionne dès l'ouverture directe (sans lecture déjà
+    /// active). `nil` pour les surfaces sans conversation. Reçoit
+    /// `ConversationViewModel.audioQueueTail(after:)` verbatim (jamais
+    /// redéfini ici). **Excluded from Equatable** pour la même raison que
+    /// `onPlayAudio`.
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
+
     /// Caption pattern (MIMI-compatible, SOTA WhatsApp/Telegram) : quand le
     /// message contient à la fois un audio attachment et du texte content,
     /// le texte est rendu DANS le playerBackground d'AudioBubbleRouter
@@ -692,6 +713,31 @@ struct AudioMediaView: View, Equatable {
         return nil
     }
 
+    /// Cold-open (F1) : mappe un `AudioItem` vers l'`AudioFullscreenSource`
+    /// consommée par le `.fullScreenCover`, en portant `nowPlayingContextName`
+    /// / `queueTailProvider` — sans quoi un tap direct sur un vocal (aucune
+    /// lecture déjà active) perdrait le contexte conversation : la carte Now
+    /// Playing retomberait sur l'auteur seul et l'avance auto vers les
+    /// vocaux non écoutés suivants ne se déclencherait jamais.
+    /// `conversationName` vide (VM pas encore hydraté) est traité comme
+    /// absent — laisse `AudioFullscreenSource` retomber sur l'auteur plutôt
+    /// que d'afficher un titre vide. `queueTailProvider` capture
+    /// `item.attachment.id` PAR ITEM (pas l'attachment actif à l'ouverture) :
+    /// chaque page du pager doit résoudre SA PROPRE file "à suivre".
+    /// Internal (pas `private`) pour que `@testable import` teste le mapping
+    /// sans exposer publiquement le point de câblage.
+    internal func fullscreenSource(for item: ConversationViewModel.AudioItem) -> AudioFullscreenSource {
+        let contextName = (conversationName?.isEmpty ?? true) ? nil : conversationName
+        let attachmentId = item.attachment.id
+        return AudioFullscreenSource(
+            from: item,
+            nowPlayingContextName: contextName,
+            queueTailProvider: audioQueueTailProvider.map { provider in
+                { provider(attachmentId) }
+            }
+        )
+    }
+
     /// Résout `resolvedAvailability` depuis l'URL courante (langue active).
     /// Ré-exécuté par `.task(id: currentAudioUrl)` quand l'URL bascule
     /// (file:// -> https:// à la réconciliation, ou changement de langue
@@ -755,11 +801,13 @@ struct AudioMediaView: View, Equatable {
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
-                // Wrapper explicite requis : `init(from:)` porte désormais des
-                // paramètres additionnels par défaut (conversationId /
-                // nowPlayingContextName / queueTailProvider — coordinator
-                // fusion), ce que la référence de fonction nue ne résout plus.
-                allAudioItems: allAudioItems.map { AudioFullscreenSource(from: $0) },
+                // Cold-open (F1) : `fullscreenSource(for:)` câble
+                // conversationName / audioQueueTailProvider (nowPlayingContextName
+                // / queueTailProvider) sur CHAQUE item — un simple
+                // `AudioFullscreenSource(from:)` les laissait à leurs défauts
+                // (auteur seul, pas d'avance auto) même quand cette conversation
+                // les avait déjà résolus.
+                allAudioItems: allAudioItems.map(fullscreenSource(for:)),
                 startAttachmentId: attachment.id,
                 contactColor: contactColor,
                 mentionDisplayNames: mentionDisplayNames,

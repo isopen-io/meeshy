@@ -1943,7 +1943,12 @@ struct PostDetailView: View {
                                 author: ProfileSheetUser.from(feedPost: post),
                                 originalLanguage: post.originalLanguage,
                                 caption: post.content,
-                                createdAt: post.timestamp
+                                createdAt: post.timestamp,
+                                // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                                // le plein écran de CETTE entité (repost cité
+                                // ou post extérieur) doit être vu comme la
+                                // même session coordinator.
+                                conversationId: resolvedOwner?.id ?? audioAttachment.id
                             )
                         },
                         availability: availability,
