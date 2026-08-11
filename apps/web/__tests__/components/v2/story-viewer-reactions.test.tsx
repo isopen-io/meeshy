@@ -4,7 +4,7 @@
  * and tested but never imported anywhere — this wires it to a reaction button
  * in the story viewer.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -28,13 +28,15 @@ jest.mock('@/components/v2/CommentList', () => ({
 
 const mockCommentMutate = jest.fn();
 
+const mockUseCommentsInfiniteQuery = jest.fn(() => ({
+  isLoading: false,
+  hasNextPage: false,
+  isFetchingNextPage: false,
+  fetchNextPage: jest.fn(),
+}));
+
 jest.mock('@/hooks/queries/use-comments-query', () => ({
-  useCommentsInfiniteQuery: () => ({
-    isLoading: false,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: jest.fn(),
-  }),
+  useCommentsInfiniteQuery: (...args: unknown[]) => mockUseCommentsInfiniteQuery(...args),
   useCommentsList: () => [],
 }));
 
@@ -196,5 +198,85 @@ describe('StoryViewer — report action (Task 3, point 2 follow-up)', () => {
     );
 
     expect(screen.queryByLabelText('Report')).not.toBeInTheDocument();
+  });
+});
+
+describe('StoryViewer — reaction picker pauses auto-advance (fix: two-tap reaction survives the 6s timer)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('does not auto-advance while the reaction picker is open', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-pause-1'), makeStory('story-pause-2')]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('story-reaction-button'));
+    expect(screen.getByTestId('story-reaction-picker')).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(6000 + 500);
+    });
+
+    // The picker must survive the would-be auto-advance — still on story 1.
+    expect(screen.getByTestId('story-reaction-picker')).toBeInTheDocument();
+    expect(mockUseCommentsInfiniteQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ postId: 'story-pause-1' }),
+    );
+  });
+
+  it('resumes auto-advance after closing the picker without reacting', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-resume-1'), makeStory('story-resume-2')]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('story-reaction-button'));
+    fireEvent.click(screen.getByTestId('story-reaction-button'));
+    expect(screen.queryByTestId('story-reaction-picker')).not.toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(6000 + 500);
+    });
+
+    expect(mockUseCommentsInfiniteQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ postId: 'story-resume-2' }),
+    );
+  });
+
+  it('resumes auto-advance after sending a reaction', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-react-1'), makeStory('story-react-2')]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('story-reaction-button'));
+    fireEvent.click(screen.getByText('🔥'));
+
+    act(() => {
+      jest.advanceTimersByTime(6000 + 500);
+    });
+
+    expect(mockUseCommentsInfiniteQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ postId: 'story-react-2' }),
+    );
   });
 });

@@ -643,13 +643,35 @@ function StoryViewer({
     setShowReactionPicker(false);
   }, [currentIndex]);
 
+  // Mirrors handleOpenComments/handleCloseComments: the picker pauses the
+  // auto-advance timer for the same reason the comments panel does — a
+  // two-tap emoji pick must survive the 6s window instead of being wiped by
+  // the currentIndex-change reset when the timer fires mid-interaction.
+  const handleOpenReactionPicker = useCallback(() => {
+    setShowReactionPicker(true);
+    setIsPaused(true);
+  }, []);
+
+  const handleCloseReactionPicker = useCallback(() => {
+    setShowReactionPicker(false);
+    setIsPaused(false);
+  }, []);
+
+  const handleToggleReactionPicker = useCallback(() => {
+    if (showReactionPicker) {
+      handleCloseReactionPicker();
+    } else {
+      handleOpenReactionPicker();
+    }
+  }, [showReactionPicker, handleOpenReactionPicker, handleCloseReactionPicker]);
+
   const handleReact = useCallback(
     (emoji: string) => {
       if (!currentStoryId) return;
       reactToStoryMutation.mutate({ storyId: currentStoryId, emoji });
-      setShowReactionPicker(false);
+      handleCloseReactionPicker();
     },
-    [currentStoryId, reactToStoryMutation],
+    [currentStoryId, reactToStoryMutation, handleCloseReactionPicker],
   );
 
   // Comments handlers
@@ -1145,7 +1167,7 @@ function StoryViewer({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowReactionPicker((prev) => !prev);
+                      handleToggleReactionPicker();
                     }}
                     className="text-white/70 hover:text-white transition-colors"
                     aria-label={t('react', 'React')}
