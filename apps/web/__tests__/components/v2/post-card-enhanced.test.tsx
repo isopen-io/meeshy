@@ -117,6 +117,43 @@ describe('PostCard enhanced features', () => {
     expect(screen.getByAltText('A photo')).toBeInTheDocument();
   });
 
+  describe('media download (Task 4, point 3)', () => {
+    it('triggers a download and calls onDownloadMedia with the media id', () => {
+      const media = [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'https://example.com/img.jpg', alt: 'A photo' }];
+      const onDownloadMedia = jest.fn();
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      render(<PostCard {...baseProps} media={media} onDownloadMedia={onDownloadMedia} />);
+
+      fireEvent.click(screen.getByLabelText('Download'));
+
+      expect(clickSpy).toHaveBeenCalled();
+      expect(onDownloadMedia).toHaveBeenCalledWith('m-1');
+      clickSpy.mockRestore();
+    });
+
+    it('does not render a download button without onDownloadMedia', () => {
+      const media = [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'https://example.com/img.jpg', alt: 'A photo' }];
+      render(<PostCard {...baseProps} media={media} />);
+      expect(screen.queryByLabelText('Download')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('audio media tile (Task 4, point 0bis)', () => {
+    it('renders an identifiable audio tile with duration instead of an empty grey square', () => {
+      const media = [{ id: 'm-1', mimeType: 'audio/webm', fileUrl: 'https://example.com/clip.webm', duration: 75 }];
+      render(<PostCard {...baseProps} media={media} />);
+      expect(screen.getByTestId('post-card-audio-tile')).toBeInTheDocument();
+      expect(screen.getByText('1:15')).toBeInTheDocument();
+    });
+
+    it('renders the audio tile without a duration label when duration is unavailable', () => {
+      const media = [{ id: 'm-1', mimeType: 'audio/mpeg', fileUrl: 'https://example.com/clip.mp3' }];
+      render(<PostCard {...baseProps} media={media} />);
+      expect(screen.getByTestId('post-card-audio-tile')).toBeInTheDocument();
+      expect(screen.queryByText(/^\d+:\d{2}$/)).not.toBeInTheDocument();
+    });
+  });
+
   it('renders pinned badge', () => {
     render(<PostCard {...baseProps} isPinned />);
     expect(screen.getByText('Pinned')).toBeInTheDocument();

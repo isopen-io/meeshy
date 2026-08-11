@@ -134,6 +134,8 @@ interface StoryViewerProps {
   onReply?: (storyId: string, text: string) => void;
   onDelete?: (storyId: string) => void;
   onReport?: (storyId: string) => void;
+  onShare?: (storyId: string) => void;
+  onRepost?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
   /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
@@ -381,6 +383,32 @@ function FlagIcon() {
   );
 }
 
+function ShareIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+      />
+    </svg>
+  );
+}
+
+function RepostIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+  );
+}
+
 // ============================================================================
 // StoryViewer
 // ============================================================================
@@ -395,6 +423,8 @@ function StoryViewer({
   onReply,
   onDelete,
   onReport,
+  onShare,
+  onRepost,
   enableComments = true,
   targetCommentId,
   targetParentCommentId,
@@ -992,6 +1022,30 @@ function StoryViewer({
                 {timeAgo(story.createdAt)}
               </span>
             </div>
+            {onShare && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('share', 'Share')}
+              >
+                <ShareIcon />
+              </button>
+            )}
+            {onRepost && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRepost(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('repost', 'Repost')}
+              >
+                <RepostIcon />
+              </button>
+            )}
             {onReport && currentUserId && story.authorId && story.authorId !== currentUserId && (
               <button
                 onClick={(e) => {
