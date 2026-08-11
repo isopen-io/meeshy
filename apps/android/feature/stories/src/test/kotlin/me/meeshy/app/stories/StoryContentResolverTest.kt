@@ -60,20 +60,13 @@ class StoryContentResolverTest {
 
     @Test
     fun `without override the Prisme picks the preferred translation`() {
-        val item = StoryItem(
-            id = "s1",
-            content = "original english",
-            translations = listOf(
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
                 StoryTranslation(language = "fr", content = "texte francais"),
                 StoryTranslation(language = "es", content = "texto espanol"),
-            ),
+            )),
+            prefs(system = "fr"),
         )
-        val prefs = object : LanguageResolver.ContentLanguagePreferences {
-            override val systemLanguage: String? = "fr"
-            override val regionalLanguage: String? = null
-            override val customDestinationLanguage: String? = null
-        }
-        val resolved = StoryContentResolver.resolve(item, prefs)
         assertThat(resolved.content).isEqualTo("texte francais")
         assertThat(resolved.isTranslated).isTrue()
         assertThat(resolved.languageCode).isEqualTo("fr")
@@ -81,77 +74,52 @@ class StoryContentResolverTest {
 
     @Test
     fun `an override wins over the preferred chain`() {
-        val item = StoryItem(
-            id = "s1",
-            content = "original english",
-            translations = listOf(
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
                 StoryTranslation(language = "fr", content = "texte francais"),
                 StoryTranslation(language = "es", content = "texto espanol"),
-            ),
+            )),
+            prefs(system = "fr"),
+            overrideLanguage = "es",
         )
-        val prefs = object : LanguageResolver.ContentLanguagePreferences {
-            override val systemLanguage: String? = "fr"
-            override val regionalLanguage: String? = null
-            override val customDestinationLanguage: String? = null
-        }
-        val resolved = StoryContentResolver.resolve(item, prefs, overrideLanguage = "es")
         assertThat(resolved.content).isEqualTo("texto espanol")
         assertThat(resolved.languageCode).isEqualTo("es")
     }
 
     @Test
     fun `the override match is case-insensitive`() {
-        val item = StoryItem(
-            id = "s1",
-            content = "original english",
-            translations = listOf(
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
                 StoryTranslation(language = "fr", content = "texte francais"),
                 StoryTranslation(language = "es", content = "texto espanol"),
-            ),
+            )),
+            prefs(system = "fr"),
+            overrideLanguage = "ES",
         )
-        val prefs = object : LanguageResolver.ContentLanguagePreferences {
-            override val systemLanguage: String? = "fr"
-            override val regionalLanguage: String? = null
-            override val customDestinationLanguage: String? = null
-        }
-        val resolved = StoryContentResolver.resolve(item, prefs, overrideLanguage = "ES")
         assertThat(resolved.content).isEqualTo("texto espanol")
     }
 
     @Test
     fun `an override without a matching translation falls back to the preferred chain`() {
-        val item = StoryItem(
-            id = "s1",
-            content = "original english",
-            translations = listOf(
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
                 StoryTranslation(language = "fr", content = "texte francais"),
                 StoryTranslation(language = "es", content = "texto espanol"),
-            ),
+            )),
+            prefs(system = "fr"),
+            overrideLanguage = "de",
         )
-        val prefs = object : LanguageResolver.ContentLanguagePreferences {
-            override val systemLanguage: String? = "fr"
-            override val regionalLanguage: String? = null
-            override val customDestinationLanguage: String? = null
-        }
-        val resolved = StoryContentResolver.resolve(item, prefs, overrideLanguage = "de")
         assertThat(resolved.content).isEqualTo("texte francais")
     }
 
     @Test
     fun `no matching translation at all shows the original, never an arbitrary one`() {
-        val item = StoryItem(
-            id = "s1",
-            content = "original english",
-            translations = listOf(
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
                 StoryTranslation(language = "it", content = "testo"),
-            ),
+            )),
+            prefs(system = "fr"),
         )
-        val prefs = object : LanguageResolver.ContentLanguagePreferences {
-            override val systemLanguage: String? = "fr"
-            override val regionalLanguage: String? = null
-            override val customDestinationLanguage: String? = null
-        }
-        val resolved = StoryContentResolver.resolve(item, prefs)
         assertThat(resolved.content).isEqualTo("original english")
         assertThat(resolved.isTranslated).isFalse()
         assertThat(resolved.languageCode).isNull()
