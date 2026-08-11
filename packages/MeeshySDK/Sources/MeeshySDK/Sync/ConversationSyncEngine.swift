@@ -583,6 +583,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         return ok
     }
 
+    /// JUMEAU WEB — `syncConversationsDelta`
+    /// (`apps/web/hooks/queries/use-conversations-delta-sync.ts`), dont les
+    /// règles pures vivent dans `apps/web/lib/conversations/delta-merge.ts`
+    /// (`mergeDeltaConversations`, `sortConversationsByRecency`,
+    /// `reconcileDeltaUnread`, `conversationDeltaWatermark`).
+    ///
+    /// Deux divergences ASSUMÉES, pas des dérives :
+    /// - le web CALCULE son curseur depuis le contenu du cache au lieu de le
+    ///   persister — il n'a donc aucune purge d'identité à orchestrer ;
+    /// - le web n'a pas de frontière locale `userState.lastReadAt` : sa
+    ///   réconciliation de non-lus laisse le delta baisser la pastille, et ne
+    ///   la laisse monter que s'il apporte aussi un `lastMessageAt` plus récent.
+    ///
+    /// Toute évolution de la règle touche les deux fichiers.
     private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,

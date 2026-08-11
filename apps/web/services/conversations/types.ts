@@ -35,6 +35,14 @@ export interface GetConversationsOptions {
   type?: ConversationType;
   withUserId?: string;
   before?: string;
+  /**
+   * Delta-sync : timestamp ISO 8601 au-delà duquel le serveur ne renvoie que
+   * les conversations dont l'`updatedAt` a bougé (index dédié
+   * `@@index([isActive, updatedAt])`). C'est le rattrapage bon marché du
+   * reconnect socket, par opposition au refetch complet qui REMPLACE le cache.
+   * Consommateur : `hooks/queries/use-conversations-delta-sync.ts`.
+   */
+  updatedSince?: string;
 }
 
 /**

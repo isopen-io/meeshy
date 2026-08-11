@@ -4554,3 +4554,50 @@ ce qui est de la plateforme.
    front `false → true` du socket, les notifications non (corrigé), la liste de conversations non
    plus (documentée en tête du cycle suivant). Sans ce balayage, le rapport aurait annoncé « le web
    n'a pas de rattrapage », ce qui est faux, au lieu de nommer la seule surface restante.
+
+
+## Leçon 114 — un mutant qui n'a pas été appliqué se lit EXACTEMENT comme un mutant survivant (2026-08-11, routine messaging, cycle 76)
+
+Le cycle a prouvé son RED par mutation (pas de toolchain de bascule git en cours de route :
+`sed` sur le fichier, relance des témoins, restauration). Trois mutants lancés, **deux annoncés
+survivants** — donc deux règles porteuses apparemment non couvertes : le cooldown partagé et le
+re-tri de la liste. La conclusion naturelle était « mes témoins ne discriminent pas, il faut les
+renforcer ».
+
+C'était faux. Les deux `sed` avaient une indentation de motif erronée (8 espaces là où le code
+en a 4, parce que les lignes vivent dans une closure). Ils n'ont RIEN remplacé. Les témoins
+tournaient contre le code d'origine et passaient — évidemment.
+
+1. **« 15 passed » après une mutation n'est une information que si la mutation a eu lieu.**
+   `sed`/`perl -pi` échouent SILENCIEUSEMENT sur un motif non trouvé : code de sortie 0, fichier
+   inchangé. Un mutant se vérifie avant de se juger — `git diff --stat` sur le fichier muté, ou
+   mieux, muter par NUMÉRO DE LIGNE (`sed -i '92s|.*|...|'`) après avoir localisé la ligne au
+   `grep -n`. Refait ainsi, les trois mutants sont tombés du premier coup.
+2. **Le faux négatif de la mutation pousse à SUR-tester, pas à sous-tester** — c'est ce qui le
+   rend coûteux sans avoir l'air dangereux. On ajoute des témoins redondants pour couvrir une
+   règle déjà couverte, on gonfle la suite, et on ne découvre jamais que l'outil de preuve était
+   cassé. Le symptôme « mon témoin nommé pour CETTE règle ne tombe pas alors qu'il devrait » est
+   un signal sur le HARNAIS avant d'être un signal sur le témoin.
+3. Corollaire de la leçon 6 (« sans toolchain locale, le RED se prouve par inspection ET se dit
+   comme tel ») : ici la toolchain existait, et c'est l'instrument de mutation qui mentait. Une
+   preuve n'est jamais plus solide que la vérification que l'expérience a bien été menée.
+
+## Leçon 114b — recharger un module pour remettre à zéro son état partagé recharge aussi son React
+
+Le cooldown du delta-sync vit au niveau MODULE (c'est sa raison d'être : N écrans montent la même
+liste). Pour isoler les témoins, premier réflexe : `jest.resetModules()` + `await import(...)`
+dans chaque test.
+
+Les témoins de fonction pure passaient ; les trois `renderHook` tombaient sur
+`TypeError: Cannot read properties of null (reading 'useContext')` — qui se lit comme un
+`QueryClientProvider` manquant, alors que le provider était bien là.
+
+`resetModules` ne recharge pas que le module visé : il vide le registre, donc le module
+fraîchement importé résout un `react` et un `@tanstack/react-query` **différents** de ceux que le
+fichier de test a importés statiquement. Deux instances de React ⇒ dispatcher nul, deux instances
+de react-query ⇒ contexte jamais trouvé.
+
+**L'état partagé d'un module se remet à zéro par la porte que la PRODUCTION utilise, pas en
+détruisant le module.** Ici le garde lit `Date.now()` : un `jest.spyOn(Date, 'now')` qui avance
+de dix minutes entre les tests rouvre la fenêtre exactement comme le temps réel le fait — sans
+toucher au registre, sans exiger d'export test-only dans le code de production.

@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conversationsService } from '@/services/conversations.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { useConversationsDeltaSync } from './use-conversations-delta-sync';
 import type { Conversation, CreateConversationRequest } from '@meeshy/shared/types';
 
 interface ConversationsFilters {
@@ -55,6 +56,14 @@ interface UseInfiniteConversationsOptions {
 
 export function useInfiniteConversationsQuery(options: UseInfiniteConversationsOptions = {}) {
   const { limit = 20, filters, enabled = true } = options;
+
+  // Rattrapage au reconnect SOCKET, monté ici — dans le hook qui POSSÈDE
+  // l'entrée de cache — pour qu'aucun écran ne puisse l'oublier. Même
+  // placement que le « Trigger 1 » de `use-conversation-messages-rq`.
+  // `refetchOnReconnect: 'always'` du QueryClient global ne le couvre PAS :
+  // il écoute l'`onlineManager` (réseau navigateur), et une coupure purement
+  // socket ne bouge pas `navigator.onLine`.
+  useConversationsDeltaSync({ enabled });
 
   return useInfiniteQuery({
     queryKey: queryKeys.conversations.infinite(),
