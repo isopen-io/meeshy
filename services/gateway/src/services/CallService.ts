@@ -2059,11 +2059,29 @@ export class CallService {
       }
     }
 
+    // Resolve, for each call the current user did NOT initiate, whether they
+    // have their own `CallParticipant` row — i.e. they actually joined this
+    // specific call, as opposed to merely being a conversation member. A P2P
+    // call is capped at 2 active participants; a 3rd group member whose
+    // auto-early-join lost that race never gets a row, and must never be
+    // shown "incoming" just because the call's shared `answeredAt` was set by
+    // one of the two real participants. See `deriveCallDirection`.
+    const nonOutgoingCallIds = page.filter((r) => r.initiatorId !== userId).map((r) => r.id);
+    const participatedCallIds = new Set<string>();
+    if (nonOutgoingCallIds.length > 0) {
+      const myParticipations = await this.prisma.callParticipant.findMany({
+        where: { callSessionId: { in: nonOutgoingCallIds }, participant: { userId } },
+        select: { callSessionId: true }
+      });
+      for (const p of myParticipations) participatedCallIds.add(p.callSessionId);
+    }
+
     const items = page.map((row) =>
       buildCallHistoryItem(
         row as CallHistoryRow,
         userId,
-        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null
+        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null,
+        participatedCallIds.has(row.id)
       )
     );
 

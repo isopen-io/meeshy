@@ -470,6 +470,39 @@ final class ConversationListViewModelTests: XCTestCase {
                        "4xx must roll back to the previous unread count")
     }
 
+    /// Bug user 2026-08-11 : une conversation déjà ouverte réaffichait parfois
+    /// sa pastille de non-lu indéfiniment. Cause racine — `ConversationStore`
+    /// (RAM, tiers) n'apprenait jamais qu'une conversation venait d'être lue
+    /// via le flux normal d'ouverture (`.conversationMarkedRead`, posté par
+    /// `ConversationViewModel.markAsRead`/les quick-actions push/le widget) :
+    /// sa prochaine republication — déclenchée par N'IMPORTE QUELLE mutation
+    /// sur N'IMPORTE QUELLE AUTRE conversation — regreffait son `unreadCount`
+    /// périmé sur la ligne pourtant déjà lue.
+    func test_conversationMarkedRead_correctsTheStore_survivesAnUnrelatedRepublish() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([
+            makeConversation(id: "conv1", unreadCount: 9),
+            makeConversation(id: "conv2", unreadCount: 0)
+        ])
+        await sut.storeHydrationTask?.value
+
+        NotificationCenter.default.post(name: .conversationMarkedRead, object: "conv1")
+        await waitForListState(sut, id: "conv1") { $0.unreadCount == 0 }
+
+        // N'IMPORTE QUELLE autre mutation republie TOUT le snapshot du store
+        // (`ConversationStore.commit` → `publishList`) — avant le correctif,
+        // le store n'ayant jamais appris la lecture de "conv1", cette
+        // republication regreffait son vieux `unreadCount=9` sur la ligne.
+        try await store.apply(.setPinned(true), for: "conv2")
+        await waitForListState(sut, id: "conv2") { $0.isPinned }
+
+        XCTAssertEqual(
+            sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+            "Une mutation SANS RAPPORT sur une autre conversation ne doit pas ressusciter le badge d'une conversation déjà lue"
+        )
+    }
+
     // MARK: - deleteConversation: Success (soft delete via store)
 
     func test_deleteConversation_softDeletesViaStore() async throws {
