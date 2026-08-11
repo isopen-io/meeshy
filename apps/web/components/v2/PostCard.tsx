@@ -37,6 +37,7 @@ export interface PostCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onPin?: () => void;
+  onReport?: () => void;
   onTranslate?: () => void;
   onClick?: () => void;
   className?: string;
@@ -69,6 +70,7 @@ function PostCard({
   onEdit,
   onDelete,
   onPin,
+  onReport,
   onTranslate,
   onClick,
   className,
@@ -167,8 +169,8 @@ function PostCard({
             <span className="text-sm text-[var(--gp-text-muted)]">{time}</span>
           </div>
 
-          {/* Context menu (author only) */}
-          {isAuthor && (
+          {/* Context menu: author gets Edit/Pin/Delete, non-author gets Report */}
+          {(isAuthor || onReport) && (
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setShowContextMenu(!showContextMenu)}
@@ -184,7 +186,7 @@ function PostCard({
 
               {showContextMenu && (
                 <div className="absolute right-0 top-full mt-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[140px] py-1">
-                  {onEdit && (
+                  {isAuthor && onEdit && (
                     <button
                       onClick={() => { onEdit(); setShowContextMenu(false); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-text-primary)] hover:bg-[var(--gp-parchment)] transition-colors"
@@ -192,7 +194,7 @@ function PostCard({
                       {t('post.edit')}
                     </button>
                   )}
-                  {onPin && (
+                  {isAuthor && onPin && (
                     <button
                       onClick={() => { onPin(); setShowContextMenu(false); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-text-primary)] hover:bg-[var(--gp-parchment)] transition-colors"
@@ -200,12 +202,20 @@ function PostCard({
                       {isPinned ? t('post.unpin') : t('post.pin')}
                     </button>
                   )}
-                  {onDelete && (
+                  {isAuthor && onDelete && (
                     <button
                       onClick={() => { onDelete(); setShowContextMenu(false); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-error)] hover:bg-[var(--gp-parchment)] transition-colors"
                     >
                       {t('post.delete')}
+                    </button>
+                  )}
+                  {!isAuthor && onReport && (
+                    <button
+                      onClick={() => { onReport(); setShowContextMenu(false); }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-error)] hover:bg-[var(--gp-parchment)] transition-colors"
+                    >
+                      {t('post.report', 'Report')}
                     </button>
                   )}
                 </div>

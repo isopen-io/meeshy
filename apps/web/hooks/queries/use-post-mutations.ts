@@ -6,7 +6,7 @@ import { postsService } from '@/services/posts.service';
 import type { CreatePostRequest, UpdatePostRequest, RepostRequest } from '@/services/posts.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostMedia } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
 import { decrementReactionSummary } from '@/lib/reaction-summary';
@@ -108,12 +108,24 @@ function removePostFromFeed(
 // Post CRUD mutations
 // ---------------------------------------------------------------------------
 
+/**
+ * `optimisticMedia` is a client-only echo of already-uploaded media (TUS
+ * response: id/mimeType/fileUrl are known before the post exists server-side)
+ * used to seed the optimistic post's `media` field so a media-only publish
+ * never flashes an empty card. Stripped before hitting the wire — the server
+ * derives `media` from `mediaIds` alone.
+ */
+export type CreatePostVariables = CreatePostRequest & {
+  readonly optimisticMedia?: readonly PostMedia[];
+};
+
 export function useCreatePostMutation() {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
 
   return useMutation({
-    mutationFn: (data: CreatePostRequest) => postsService.createPost(data),
+    mutationFn: ({ optimisticMedia: _optimisticMedia, ...data }: CreatePostVariables) =>
+      postsService.createPost(data),
 
     onMutate: async (data) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
@@ -128,6 +140,7 @@ export function useCreatePostMutation() {
         visibility: data.visibility ?? 'PUBLIC',
         /* istanbul ignore next -- media-only posts legitimately omit content */
         content: data.content ?? null,
+        media: data.optimisticMedia,
         likeCount: 0,
         commentCount: 0,
         repostCount: 0,
@@ -427,7 +440,8 @@ export function useBookmarkPostMutation() {
       if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
 
-    onSettled: () => {
+    onSettled: (_data, _err, postId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.detail(postId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.bookmarks() });
     },
   });
@@ -467,7 +481,8 @@ export function useUnbookmarkPostMutation() {
       if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
 
-    onSettled: () => {
+    onSettled: (_data, _err, postId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.detail(postId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.bookmarks() });
     },
   });
