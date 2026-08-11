@@ -63,4 +63,48 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
             "pointing initialItem at an item absent from moreSections."
         )
     }
+
+    // MARK: - Site 2 : menu contextuel natif iOS 26 (`case .more:` → Button)
+
+    func test_nativeMoreButton_gatesInitialItemOnShowReadReceipts() throws {
+        let view = try source("Features/Main/Views/ConversationView.swift")
+        guard let caseRange = view.range(of: "case .more:") else {
+            XCTFail("ConversationView's native menu builder must define a `case .more:` branch")
+            return
+        }
+        let afterCase = String(view[caseRange.upperBound...])
+        guard let body = closureBody(after: "Button {", in: afterCase) else {
+            XCTFail("The .more case must wrap its action in a Button { } closure")
+            return
+        }
+        XCTAssertFalse(
+            body.contains("moreSheetInitialItem = nil"),
+            "The native .more Button must no longer hard-code moreSheetInitialItem = nil — same " +
+            "jump-to-Vues fix as the overlay site, on the iOS 26 native contextMenu path."
+        )
+        XCTAssertTrue(
+            body.contains("UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil"),
+            "The native .more Button must gate moreSheetInitialItem on showReadReceipts directly " +
+            "(ctx is built in buildNativeMessageMenu and never passed to nativeMenuButton), falling " +
+            "back to nil (full grid) when reciprocity is off."
+        )
+    }
+
+    // MARK: - Invariant global : aucun 3e chemin, aucune régression du repli
+
+    /// Repli explicite (2026-08-11) : si un futur refactor supprime la branche
+    /// `: nil` du ternaire (ex. en codant en dur `.views` sans condition), plus
+    /// aucune occurrence de la chaîne littérale ne resterait pour l'attraper —
+    /// ce test lit donc les DEUX sites en une passe, indépendamment des deux
+    /// tests ciblés ci-dessus.
+    func test_noUnconditionalNilFallbackRemainsOnEitherMoreSite() throws {
+        let view = try source("Features/Main/Views/ConversationView.swift")
+        let occurrences = view.components(separatedBy: "moreSheetInitialItem = nil").count - 1
+        XCTAssertEqual(
+            occurrences, 0,
+            "ConversationView must not hard-code `moreSheetInitialItem = nil` anywhere — both " +
+            "« Plus… » call sites (overlay + native menu) must gate on " +
+            "UserPreferencesManager.shared.privacy.showReadReceipts instead."
+        )
+    }
 }

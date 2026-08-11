@@ -1986,7 +1986,8 @@ struct ConversationView: View {
             }
         case .more:
             Button {
-                overlayState.moreSheetInitialItem = nil
+                overlayState.moreSheetInitialItem =
+                    UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                 overlayState.detailSheetMessage = msg
             } label: {
                 Label(String(localized: "action.more", defaultValue: "Plus…", bundle: .main), systemImage: "ellipsis")
