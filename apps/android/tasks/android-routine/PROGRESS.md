@@ -9,6 +9,92 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-11 **TUS uploads gained a Room-backed checkpoint so a retried upload resumes past
+> already-acknowledged chunks instead of restarting from byte zero** (slice
+> `tus-upload-checkpoint-resume`, §Q — the "persistent checkpoint" candidate `tus-chunked-upload-
+> core` flagged as the next sub-slice). **RE-PROUVEN before starting**: `git branch -r`/`gh pr
+> list --state open` found no interrupted run (no `claude/apps/android/*`/`claude/apps/ios/debt-*`
+> branch touched recently, the one open PR — `apps/web/calls`-scoped — unrelated to this routine).
+> Read `TusUploadRepository.upload()`/`MediaUploadItem` closely: confirmed the prior slice's own
+> doc comment was accurate — every retry always called `createUpload` fresh and PATCHed from
+> offset zero, discarding any prior progress unconditionally. Also confirmed the true remaining
+> surface is bigger than "persistent checkpoint" alone: `MediaUploadItem.bytes` is a `ByteArray`
+> fully resident in memory for the call's lifetime, so genuine app-kill survival additionally needs
+> a lazily-read file source (the bytes themselves don't outlive the process) — scoped this slice to
+> the checkpoint's honest, immediately-valuable subset (resume across retries within a session/
+> process) rather than over-claim app-kill survival the current architecture can't yet deliver.
+> **Shipped (production, all `apps/android`)**: new `tus_upload_checkpoint` Room table
+> (`:core:database`, `TusUploadCheckpointEntity`/`Dao`, `MeeshyDatabase` v11→v12,
+> `fallbackToDestructiveMigration` — no migration test needed per existing convention) + pure
+> `TusCheckpointKey.of(context, fileName, mimeType, totalBytes)` (`:core:model` — deliberately
+> content-agnostic, no hash of the bytes: capture paths already name files with millis-precision
+> timestamps and a picked gallery item keeps its display name across a retry, so this is a cheap,
+> strong-enough identity) + pure `TusResumePlanner.plan(...)` deciding `Fresh` vs
+> `Resume(location, offset)` — conservatively `Fresh` whenever confirmed progress is zero (no HEAD-
+> recovery exists yet to verify the gateway's own view of a stale/unconfirmed session, so only
+> genuinely multi-chunk uploads that got at least one chunk acknowledged ever resume; a single-
+> chunk upload, the common case, behaves byte-identical to before). `TusUploadRepository.upload()`
+> now looks up a checkpoint by key before choosing to call `createSession` or reuse an existing
+> `location`, writes the checkpoint after every acknowledged intermediate chunk, and defensively
+> clears it on completion (a harmless no-op when absent, confirmed by a dedicated DAO test) —
+> covers the failure path too (a failed chunk never writes, a failed final chunk leaves the row
+> untouched for the next retry). +29 new tests: 13 pure (`TusCheckpointKeyTest`/
+> `TusResumePlannerTest`, `:core:model`), 6 DAO (`TusUploadCheckpointDaoTest`, Robolectric
+> in-memory Room, `:core:database`), 10 repository (`TusUploadRepositoryTest`, `:sdk-core` —
+> single-chunk never upserts, successful/failed intermediate and final chunks, a checkpoint with
+> confirmed progress resumes without calling `createUpload`, a checkpoint with zero progress still
+> starts fresh). **Mutation-proven**: hardcoding `TusResumePlanner.plan` to always return `Fresh`
+> fails **exactly** the 2 discriminating "resumes" tests, the 6 "starts fresh" tests correctly stay
+> green — reverted via a scratch `cp`-backed edit, never `git checkout --`, re-confirmed green.
+> **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, zero failures,
+> matching the prior slice's task count — no build-graph regression). Reviewer **PASS** (diff
+> `apps/android` only — 5 new files, 4 edited [`MeeshyDatabase`/`DatabaseModule`/
+> `TusUploadRepository`/its test]; SDK purity — the checkpoint key/resume decision are stateless
+> building blocks in `:core:model`/`:core:database`, matching the prior slice's own precedent of
+> putting TUS protocol orchestration in `:sdk-core`'s `TusUploadRepository`, reused identically by
+> every composer that calls it (post/story/status/comment) — no per-feature duplication; no
+> coverage floor lowered; no tautological tests). **Full on-device verification against the live
+> gateway** (`meeshy_pixel8`): pushed three distinct ~17.9 MB synthetic (noise-source, so
+> incompressible and genuinely multi-chunk) videos via `adb push` + a media-scanner broadcast,
+> attached each through the real Feed post composer's gallery picker (`uiautomator dump` bounds
+> throughout, including chasing the system photo-picker's `Add (N)` button across two
+> re-verifications after a stale-bounds miss dismissed the sheet). `adb logcat` confirmed the real
+> two-chunk sequence **twice**: `POST /uploads` → `201` → `PATCH` (non-final, 10 MB) → `204` →
+> `PATCH` (final, ~7.9 MB) → `200` with the gateway's own attachment JSON (real probed
+> `duration`/`bitrate`/`codec`, not garbage). Queried the on-device Room DB directly
+> (`run-as … sqlite3 databases/meeshy.db`): confirmed the `tus_upload_checkpoint` table exists with
+> exactly the designed columns (proving the v11→v12 migration applied cleanly on a real device, no
+> crash) and reads back **empty** after each successful upload (proving the defensive
+> delete-on-completion path really executed against the real Room DB, not just a mock). Attempted
+> (twice) to catch the transient mid-upload row via a tight polling loop timed right after the
+> picker's "Add" tap; both attempts' polling windows landed outside the ~2.3 s intermediate-PATCH
+> window (`adb shell run-as … sqlite3` round-trip overhead made the window hard to hit reliably) —
+> noted honestly rather than fabricated: the transient write itself is unconfirmed live, but the
+> pre/post states (empty → real progress implied by the resumed-PATCH unit tests → empty again) and
+> the mutation-proven pure logic together close the loop without it. `adb logcat` checked across
+> the whole session for `FATAL EXCEPTION`/`AndroidRuntime` — none. App force-stopped and emulator
+> left on the home screen afterward (not mid-composer). **Categorical re-check (due again per the
+> ~5-run cadence, flagged by the orchestrator this iteration)**: re-grepped
+> `AppWidgetProvider`/`GlanceAppWidget`/`glance-appwidget`/`PictureInPicture`/
+> `enterPictureInPictureMode`/`PipParams` across `apps/android` (excluding `build/`) — **zero hits,
+> unchanged from prior runs**. Both already have checklist lines in `feature-parity.md` (§ "Home-
+> screen widgets", §P "Picture-in-Picture", §Calls "PiP / floating call pill") from the iteration-19
+> audit-gap fix, so this is not a fresh audit hole — just confirms genuinely zero progress, both
+> still correctly deferred as multi-slice epics (a new Gradle module + Glance dependency for
+> widgets; WebRTC-adjacent surface + system PiP API wiring for calls) rather than pickable as a
+> single thin slice. **Next slice candidates (not attempted this run)**: the persistent-checkpoint
+> follow-ups this slice explicitly scoped out (lazy file-source read, boot-time orphan/checkpoint
+> recovery scan, 409 HEAD-recovery, dedicated `WorkManager` foreground chain); on-device
+> transcription for the Feed audio composer (still no Android on-device transcription capability
+> anywhere, needs its own foundation); location attachment for the Feed composer (re-confirmed
+> this run to be a bigger gap than previously scoped — no `FusedLocationProviderClient`/
+> `LocationServices` usage anywhere in `apps/android`, not even in chat's existing static-location
+> *display* path, so a send-side location capability doesn't exist at all yet, not just "no
+> picker UI"); a concrete sub-slice decomposition write-up for widgets/PiP (both confirmed real but
+> too large for one slice — worth a dedicated planning pass rather than another bare re-grep next
+> time); the gateway `POST /conversations/:id/messages` 400 flagged out-of-lane by the prior slice
+> (unconfirmed whether still live — worth re-checking, cross-platform, not Android-scoped).
+
 > On 2026-08-11 **`OutboxFlushWorker` never drained per-conversation message lanes in
 > production — root-caused and fixed** (slice `outbox-message-lane-discovery`, §Q — the
 > "`OutboxFlushWorker` re-drain même-run" candidate the previous iteration flagged without
