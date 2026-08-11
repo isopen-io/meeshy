@@ -1657,4 +1657,237 @@ describe('usePostSocketCacheSync', () => {
       expect(data?.pages[0].data[0].currentUserReactions ?? []).not.toContain('❤️'); // line 322 ?? [] right branch
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Nested repostOf cache patches (Task 8): a liked/commented ORIGINAL can be
+  // embedded as `repostOf` on any number of OTHER cache entries (every
+  // displayed simple repost of it) — the socket sync must patch those too,
+  // not only the top-level entry whose id === postId.
+  // ---------------------------------------------------------------------------
+
+  type RepostOfEntry = typeof mockPost & { isQuote?: boolean; repostOf?: { id: string; likeCount?: number; commentCount?: number } | null };
+
+  function seedRepostOfFeed(qc: QueryClient, original: unknown, repost: RepostOfEntry) {
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{
+        data: [original, repost],
+        meta: { pagination: { total: 2, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+      }],
+      pageParams: [undefined],
+    });
+  }
+
+  function getFeedEntry(qc: QueryClient, id: string): RepostOfEntry | undefined {
+    return (getFeedPosts(qc) as RepostOfEntry[]).find((p) => p.id === id);
+  }
+
+  describe('post:liked - nested repostOf', () => {
+    it('bumps repostOf.likeCount on every feed entry embedding the liked original', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'original-1', userId: 'user-2', emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 },
+      }));
+
+      expect(getFeedEntry(qc, 'original-1')?.likeCount).toBe(6);
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(6);
+    });
+
+    it('bumps repostOf.likeCount on every reels entry embedding the liked original', () => {
+      const qc = createQueryClient();
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedReels(qc, [repost]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'original-1', userId: 'user-2', emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 },
+      }));
+
+      const reel = getReels(qc)[0] as unknown as RepostOfEntry;
+      expect(reel.repostOf?.likeCount).toBe(6);
+    });
+
+    it('bumps repostOf.likeCount on a post detail cache showing the repost', () => {
+      const qc = createQueryClient();
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      qc.setQueryData(['posts', 'detail', 'repost-1'], { data: repost });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'original-1', userId: 'user-2', emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 },
+      }));
+
+      const detail = qc.getQueryData<{ data: RepostOfEntry }>(['posts', 'detail', 'repost-1']);
+      expect(detail?.data.repostOf?.likeCount).toBe(6);
+    });
+
+    it('does not corrupt an unrelated comments cache sharing the details() key prefix', () => {
+      const qc = createQueryClient();
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      qc.setQueryData(['posts', 'detail', 'repost-1'], { data: repost });
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'repost-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'original-1', userId: 'user-2', emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 },
+      }));
+
+      const comments = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'detail', 'repost-1', 'comments', 'infinite']);
+      expect(comments?.pages[0].data).toEqual([comment]);
+    });
+
+    it('leaves an unrelated repost (of a different original) untouched', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+      const unrelated: RepostOfEntry = {
+        ...mockPost, id: 'repost-2', likeCount: 0, isQuote: false,
+        repostOf: { id: 'other-original', likeCount: 9, commentCount: 1 },
+      };
+      seedRepostOfFeed(qc, original, unrelated);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'original-1', userId: 'user-2', emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 },
+      }));
+
+      expect(getFeedEntry(qc, 'repost-2')?.repostOf?.likeCount).toBe(9);
+    });
+  });
+
+  describe('post:unliked - nested repostOf', () => {
+    it('sets repostOf.likeCount to the authoritative new count on every embedding entry', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:unliked', {
+        postId: 'original-1', userId: 'user-2', emoji: '❤️', likeCount: 4, reactionSummary: { '❤️': 4 },
+      }));
+
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(4);
+    });
+  });
+
+  describe('comment:added - nested repostOf.commentCount', () => {
+    it('sets repostOf.commentCount on every entry embedding the commented original', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', commentCount: 2 };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', commentCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:added', {
+        postId: 'original-1',
+        comment: { id: 'c-new', content: 'Nice', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() },
+        commentCount: 3,
+      }));
+
+      expect(getFeedEntry(qc, 'original-1')?.commentCount).toBe(3);
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.commentCount).toBe(3);
+    });
+  });
+
+  describe('comment:deleted - nested repostOf.commentCount', () => {
+    it('sets repostOf.commentCount on every entry embedding the original', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', commentCount: 2 };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', commentCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'original-1', commentId: 'c-1', commentCount: 1 }));
+
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.commentCount).toBe(1);
+    });
+  });
+
+  describe('post:reaction-added - nested repostOf.likeCount', () => {
+    it('bumps repostOf.likeCount by the authoritative delta for a remote reactor', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', likeCount: 5, reactionSummary: { '😂': 2 } as Record<string, number> };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'original-1', userId: 'user-99', emoji: '😂', action: 'add',
+        aggregation: { emoji: '😂', count: 3 }, timestamp: new Date().toISOString(),
+      }));
+
+      expect(getFeedEntry(qc, 'original-1')?.likeCount).toBe(6);
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(6);
+    });
+
+    it('does not touch repostOf when the reactor own self-echo has a zero delta', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', likeCount: 6, reactionSummary: { '😂': 3 } as Record<string, number>, currentUserReactions: ['😂'] as string[] };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 6, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'original-1', userId: 'user-2', emoji: '😂', action: 'add',
+        aggregation: { emoji: '😂', count: 3 }, timestamp: new Date().toISOString(),
+      }));
+
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(6);
+    });
+  });
+
+  describe('post:reaction-removed - nested repostOf.likeCount', () => {
+    it('decrements repostOf.likeCount by the authoritative delta', () => {
+      const qc = createQueryClient();
+      const original = { ...mockPost, id: 'original-1', likeCount: 5, reactionSummary: { '❤️': 1 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-removed', {
+        postId: 'original-1', userId: 'user-1', emoji: '❤️', action: 'remove',
+        aggregation: { emoji: '❤️', count: 0 }, timestamp: new Date().toISOString(),
+      }));
+
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(4);
+    });
+  });
 });

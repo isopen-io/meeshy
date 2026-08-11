@@ -121,6 +121,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         likeCount: data.likeCount,
         reactionSummary: data.reactionSummary,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, likeCount: data.likeCount }));
     }
 
     function handlePostUnliked(data: PostUnlikedEventData) {
@@ -129,6 +130,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         likeCount: data.likeCount,
         reactionSummary: data.reactionSummary,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, likeCount: data.likeCount }));
     }
 
     function handlePostReposted(data: PostRepostedEventData) {
@@ -160,6 +162,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         ...p,
         commentCount: data.commentCount,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, commentCount: data.commentCount }));
 
       const parentId = data.comment.parentId;
       if (parentId) {
@@ -207,6 +210,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         ...p,
         commentCount: data.commentCount,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, commentCount: data.commentCount }));
 
       // Deleting a comment soft-deletes its WHOLE reply subtree server-side, so
       // the payload announces every removed id — not just the target. Dropping
@@ -246,6 +250,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     // ── Post reaction events (Phase 3B) ─────────────────────────────────
 
     function handlePostReactionAdded(data: PostReactionUpdateEventData) {
+      let capturedDelta = 0;
       patchPostInAllCaches(queryClient, data.postId, (p) => {
         // Derive the total-count change from the AUTHORITATIVE per-emoji delta
         // (`aggregation.count` minus the cached count for that emoji) rather than
@@ -256,6 +261,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         // emoji badges. The delta is 0 for an already-applied optimistic reaction
         // and idempotent against duplicate echoes.
         const delta = reactionDelta(p, data);
+        capturedDelta = delta;
         return {
           ...p,
           reactionCount: Math.max(0, (p.reactionCount ?? p.likeCount) + delta),
@@ -272,11 +278,23 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
               : p.currentUserReactions,
         };
       });
+      // `reactionDelta` needs the ORIGINAL's own `reactionSummary` — a snapshot
+      // `repostOf` never carries — so the nested sweep reuses the delta the
+      // top-level patch just derived instead of recomputing it against the
+      // (absent) nested state.
+      if (capturedDelta !== 0) {
+        patchRepostOfCounts(queryClient, data.postId, (original) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + capturedDelta),
+        }));
+      }
     }
 
     function handlePostReactionRemoved(data: PostReactionUpdateEventData) {
+      let capturedDelta = 0;
       patchPostInAllCaches(queryClient, data.postId, (p) => {
         const delta = reactionDelta(p, data);
+        capturedDelta = delta;
         const newSummary = { ...p.reactionSummary };
         if (data.aggregation.count === 0) {
           delete newSummary[data.emoji];
@@ -294,6 +312,12 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
               : p.currentUserReactions,
         };
       });
+      if (capturedDelta !== 0) {
+        patchRepostOfCounts(queryClient, data.postId, (original) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + capturedDelta),
+        }));
+      }
     }
 
     // ── Comment reaction events ─────────────────────────────────────────
@@ -569,6 +593,52 @@ function patchPostInAllCaches(
   });
 
   patchReelCaches(queryClient, postId, patcher);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: patch the NESTED `repostOf` snapshot wherever a given
+// original post is embedded — feed, reels, and post-detail caches. A liked/
+// commented original can appear as `repostOf` on any number of displayed
+// simple reposts, each caching its own stale snapshot of the original's
+// counters (what PostCard/PostDetail/ReelPlayer actually render). The detail
+// sweep is length-filtered to the exact `['posts','detail',id]` shape —
+// `queryKeys.posts.details()` is also a PREFIX of the comments/replies cache
+// families, which carry a `{ pages }` shape, not `{ data: Post }`.
+// ---------------------------------------------------------------------------
+
+function patchRepostOfCounts(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  const patchEntry = (p: Post): Post =>
+    p.repostOf && p.repostOf.id === originalId ? { ...p, repostOf: patchOriginal(p.repostOf) } : p;
+
+  queryClient.setQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'), (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({ ...page, data: page.data.map(patchEntry) })),
+    };
+  });
+
+  queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
+    { queryKey: [...queryKeys.posts.lists(), 'reels'] },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({ ...page, data: (page.data ?? []).map(patchEntry) })),
+      };
+    },
+  );
+
+  const detailKeyLength = queryKeys.posts.details().length + 1;
+  for (const [key, value] of queryClient.getQueriesData<{ data?: Post }>({ queryKey: queryKeys.posts.details() })) {
+    if (key.length !== detailKeyLength) continue;
+    if (!value?.data?.repostOf || value.data.repostOf.id !== originalId) continue;
+    queryClient.setQueryData(key, { ...value, data: patchEntry(value.data) });
+  }
 }
 
 // ---------------------------------------------------------------------------
