@@ -21,6 +21,7 @@ final class MediaLifecycleBridgeTests: XCTestCase {
         ConversationAudioCoordinator.testResetShared()
         PlaybackCoordinator.shared.testStopAllProbe = nil
         MediaSessionCoordinator.shared.testProbe = nil
+        SharedAVPlayerManager.shared.isPlaying = false
         try await super.tearDown()
     }
 
@@ -84,6 +85,43 @@ final class MediaLifecycleBridgeTests: XCTestCase {
 
         XCTAssertEqual(stopProbe.stopAllCount, 0,
             "Une file en pause (activeContext non-nil) doit survivre au background — la carte permet la reprise depuis le lock screen")
+        XCTAssertEqual(sessionProbe.deactivateCount, 0)
+    }
+
+    // MARK: - Vidéo (réels / lecteur partagé)
+
+    func test_prepareForBackground_videoPlayingWithoutPip_pausesVideoAndTearsDown() async {
+        _ = setupCoordinator(isPlaying: false)
+        SharedAVPlayerManager.shared.isPlaying = true
+        let stopProbe = PlaybackCoordinatorStopAllProbe()
+        PlaybackCoordinator.shared.testStopAllProbe = stopProbe
+        let sessionProbe = MediaSessionCoordinatorTestProbe()
+        MediaSessionCoordinator.shared.testProbe = sessionProbe
+
+        await MediaLifecycleBridge.shared.prepareForBackground()
+
+        XCTAssertFalse(SharedAVPlayerManager.shared.isPlaying,
+            "Une vidéo (réel) hors PiP ne doit JAMAIS continuer de jouer en arrière-plan")
+        XCTAssertEqual(stopProbe.stopAllCount, 1)
+        XCTAssertEqual(sessionProbe.deactivateCount, 1)
+    }
+
+    func test_prepareForBackground_videoPlayingWhileAudioQueueActive_pausesVideoButKeepsSession() async {
+        let engine = MockAudioPlaybackEngine()
+        let coordinator = ConversationAudioCoordinator(engine: engine)
+        coordinator.test_setActiveContext(attachmentId: "paused-att")
+        ConversationAudioCoordinator.testSetShared(coordinator)
+        SharedAVPlayerManager.shared.isPlaying = true
+        let stopProbe = PlaybackCoordinatorStopAllProbe()
+        PlaybackCoordinator.shared.testStopAllProbe = stopProbe
+        let sessionProbe = MediaSessionCoordinatorTestProbe()
+        MediaSessionCoordinator.shared.testProbe = sessionProbe
+
+        await MediaLifecycleBridge.shared.prepareForBackground()
+
+        XCTAssertFalse(SharedAVPlayerManager.shared.isPlaying)
+        XCTAssertEqual(stopProbe.stopAllCount, 0,
+            "La file audio active doit survivre — seul le lecteur vidéo est mis en pause")
         XCTAssertEqual(sessionProbe.deactivateCount, 0)
     }
 }

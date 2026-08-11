@@ -99,6 +99,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// Gate lue par `pushNowPlayingInfo()`. Sans elle, le premier tick de
     /// progression republierait la carte que la suspension vient d'effacer.
     var _isSuspendedBySystemCall = false
+    /// Mémo de l'artwork composé (avatar + badge icône) : `pushNowPlayingInfo`
+    /// tire à 4Hz — sans mémo, chaque tick relancerait la résolution d'avatar
+    /// et la composition. Clé = URL d'avatar retenue ("" = icône seule).
+    var _nowPlayingArtworkKey: String?
+    var _nowPlayingArtwork: UIImage?
     /// Capturé À L'ENTRÉE de la suspension, avant que `PlaybackCoordinator.stopAll()`
     /// n'écrase `isPlaying`. Décide si la fin d'appel relance la lecture.
     private var _wasPlayingBeforeSystemCall = false
