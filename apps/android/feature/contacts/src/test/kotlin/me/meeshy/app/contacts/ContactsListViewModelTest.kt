@@ -12,15 +12,19 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -42,6 +46,19 @@ class ContactsListViewModelTest {
 
     private val repository: FriendRepository = mockk(relaxed = true)
     private val listRepository: FriendListRepository = mockk(relaxed = true)
+
+    private class FixedClock(private val now: Long = 0L) : CacheClock {
+        override fun nowMillis(): Long = now
+    }
+
+    private fun statusBarCache(vararg entries: Pair<StatusFeedMode, List<StatusEntry>>): StatusBarCache {
+        val cache = StatusBarCache(FixedClock())
+        entries.forEach { (mode, statuses) -> cache.save(mode, statuses) }
+        return cache
+    }
+
+    private fun status(userId: String, moodEmoji: String) =
+        StatusEntry(id = "status-$userId", userId = userId, moodEmoji = moodEmoji)
 
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
@@ -79,11 +96,12 @@ class ContactsListViewModelTest {
         cache: FriendshipCache = FriendshipCache(),
         session: SessionRepository = session(),
         cached: List<FriendRequestUser>? = null,
+        statuses: StatusBarCache = statusBarCache(),
     ): ContactsListViewModel {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(received)
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(sent)
         coEvery { listRepository.cachedSnapshot() } returns cached
-        return ContactsListViewModel(repository, listRepository, cache, session)
+        return ContactsListViewModel(repository, listRepository, cache, session, statuses)
     }
 
     @Test
@@ -124,7 +142,7 @@ class ContactsListViewModelTest {
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("nope"))
         coEvery { listRepository.cachedSnapshot() } returns null
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
 
         assertThat(vm.state.value.friends).isEmpty()
         assertThat(vm.state.value.errorMessage).isEqualTo("boom")
@@ -186,7 +204,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { listRepository.cachedSnapshot() } returns null
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
 
         vm.dismissError()
 
@@ -200,7 +218,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
 
         // The Room cache painted at once; the network fetch is still suspended, so
         // there is no cold spinner while a stale-but-present roster is on screen.
@@ -218,7 +236,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
 
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob").inOrder()
         assertThat(vm.state.value.errorMessage).isNull()
@@ -232,7 +250,7 @@ class ContactsListViewModelTest {
         coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
 
-        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache())
 
         assertThat(vm.state.value.friends).isEmpty()
         assertThat(vm.state.value.showSkeleton).isTrue()
@@ -322,5 +340,45 @@ class ContactsListViewModelTest {
         val cold = ContactsListUiState()
         assertThat(cold.isFilteredEmpty).isFalse()
         assertThat(cold.isEmpty).isTrue()
+    }
+
+    // --- mood-emoji presence (parity §J "Contacts list ... + mood-emoji") -------
+
+    @Test
+    fun `moodEmojiFor resolves the live mood emoji from moodStatuses`() {
+        val state = ContactsListUiState(
+            moodStatuses = listOf(status("alice", "🔥"), status("bob", "")),
+        )
+
+        assertThat(state.moodEmojiFor("alice")).isEqualTo("🔥")
+        assertThat(state.moodEmojiFor("bob")).isNull() // blank moodEmoji never surfaces
+        assertThat(state.moodEmojiFor("nobody")).isNull()
+    }
+
+    @Test
+    fun `a friend with a live status paints its mood emoji from the shared FRIENDS status cache`() = runTest {
+        val vm = viewModel(
+            received = listOf(accepted("r1", sender = user("alice"))),
+            statuses = statusBarCache(StatusFeedMode.FRIENDS to listOf(status("alice", "🔥"))),
+        )
+
+        assertThat(vm.state.value.moodEmojiFor("alice")).isEqualTo("🔥")
+    }
+
+    @Test
+    fun `a friend with no live status has no mood emoji`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice"))))
+
+        assertThat(vm.state.value.moodEmojiFor("alice")).isNull()
+    }
+
+    @Test
+    fun `the DISCOVER status cache never leaks into a Contacts row's mood emoji`() = runTest {
+        val vm = viewModel(
+            received = listOf(accepted("r1", sender = user("alice"))),
+            statuses = statusBarCache(StatusFeedMode.DISCOVER to listOf(status("alice", "🎉"))),
+        )
+
+        assertThat(vm.state.value.moodEmojiFor("alice")).isNull()
     }
 }

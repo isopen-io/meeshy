@@ -1,5 +1,85 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **Contacts-list mood-emoji presence landed** (slice
+> `contacts-mood-emoji-presence`, feature-parity §J — a broad-sweep find, per the orchestrator's
+> "continue the broad sweep of `feature-parity.md`" guidance). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (zero open
+> PRs, no branch with recent commits/activity — every `origin/claude/apps/*` branch is stale, oldest
+> observed 2026-07-10, none within 24h). Re-read the actual §J "Contacts list" bullet's own
+> "**Pending:** mood-emoji presence" note against the real code, not just the note: grepped
+> `moodEmoji` across `apps/android/feature/contacts` — genuinely zero hits, all 4
+> `MeeshyAvatar(...)` call sites (`ContactsListTab`, `ContactsScreen`, `DiscoverTab`, `BlockedTab`)
+> never pass it. **The twist**: `MeeshyAvatar` (`:sdk-ui`) already renders a full `moodEmoji: String?`
+> badge (bottom-end overlay, mutually exclusive with the presence dot) — it shipped with the avatar
+> atom itself at some earlier, undocumented point, just never fed a real value from any contacts
+> surface. So this slice is purely the missing **orchestration wire** (which screen decides *which*
+> mood to show), not a new UI atom — exactly the SDK-purity grain test in root `CLAUDE.md`: the atom
+> was already SDK-side, the "when/which" decision was the actual gap, and that decision is app-side.
+> Read iOS `ContactsListTab.swift` (`statusViewModel.statusForUser(userId:)?.moodEmoji` fed into
+> `MeeshyAvatar`) and `StatusViewModel.statusForUser` (`statuses.first { $0.userId == userId }`)
+> before coding. **Shipped (production, all `apps/android`)**: new pure
+> `List<StatusEntry>.statusForUser(userId) → StatusEntry?` (`:sdk-core/status/StatusMapper.kt`,
+> exact port of the iOS lookup, sits next to the existing `orderedForBar` SSOT) backs a new
+> `ContactsListUiState.moodEmojiFor(userId) → String?` (blank-guarded, defense-in-depth even though
+> `StatusMapper.toStatusEntry()` already structurally guarantees a non-blank `moodEmoji` at
+> creation). `ContactsListViewModel` gains a `StatusBarCache` dependency — **reused, not
+> reimplemented**: it's the same `:sdk-core` singleton the Feed status bar already populates as its
+> L1 in-memory cache — and reads its **FRIENDS**-mode snapshot synchronously in `load()`, no
+> dedicated network fetch of its own. `valueOrNull` (existing `CacheResult` SSOT, precedent:
+> `CategoryRepository`) collapses Fresh/Stale/Syncing uniformly since a decorative avatar badge
+> doesn't need a freshness distinction; a cold/never-loaded cache just means no badges paint yet —
+> exactly iOS's own behaviour before its Feed status bar has ever loaded (no popup, no error, the
+> row simply renders without the badge). +9 tests (4 `StatusMapperTest`: found/absent/empty-list/
+> first-of-duplicates; 5 `ContactsListViewModelTest`: pure state blank-guard, live emoji painted
+> from the FRIENDS cache on load, no emoji for a friend with no live status, and — the one genuinely
+> risky wiring detail — the DISCOVER-mode cache never leaking into a Contacts row). **Mutation-
+> proven**, two axes: dropping `moodEmojiFor`'s `.takeIf { it.isNotBlank() }` guard fails **exactly**
+> the pure state test `moodEmojiFor resolves the live mood emoji from moodStatuses` (21 others
+> green); swapping the cache read from `StatusFeedMode.FRIENDS` to `.DISCOVER` fails **exactly** the
+> two mode-scoped tests (`a friend with a live status paints...` + `the DISCOVER status cache never
+> leaks...`, 19 others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`),
+> restored via `cp`, diffed clean against the backup afterward. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice —
+> no build-graph regression). Reviewer **PASS** (diff `apps/android` only, confirmed via
+> `git diff --stat origin/main` — 5 files, `feature/contacts` + `sdk-core/status` only; SDK purity —
+> the pure lookup lives in `:sdk-core`, the injected `StatusBarCache` singleton is consumed not
+> reimplemented, all "which mode / when to read" orchestration stays app-side in the
+> `:feature:contacts` ViewModel; SSOT — reuses `MeeshyAvatar`'s existing badge slot, `StatusBarCache`,
+> `valueOrNull`, zero re-implementation; no coverage floor lowered; no tautological tests). **Not
+> attempted this run** (compile+test-only per the local JVM gate; no simulator/emulator session for
+> on-device verification — a future run should install-and-verify against the live gateway with the
+> shared `atabeth` account, confirming a real friend's live mood status renders on their Contacts
+> avatar). **Deliberate, documented scope cut**: only the Contacts tab is wired (the checklist bullet
+> this closes is specifically "Contacts list"); Discover/Requests/Blocked tabs' `MeeshyAvatar(...)`
+> call sites still pass no `moodEmoji` — a natural, small follow-up (same pattern, Discover would read
+> the **DISCOVER**-mode cache, not FRIENDS). No cross-screen reactivity: a mood set/cleared while
+> Contacts is already open only shows up on the next `load()` (pull-to-retry or re-entry), never live
+> via a socket/Flow — matches the "best-effort decoration, not primary content" scope; iOS itself has
+> no dedicated live-update wiring into this specific row either. **Housekeeping still outstanding,
+> not actioned this run**: `NOTES.md` remains ~1650 lines, over the ~1500-line hygiene threshold —
+> still needs its own dedicated archive commit (never bundled with a slice) on a future run; flagged
+> again at the prior run and not yet picked up. **This very entry now also pushes `PROGRESS.md`
+> itself just past ~1500 lines** — the next run (any lane) should open a dedicated
+> `chore(tasks): archive PROGRESS.md` increment (keep the ~300 newest lines, move the rest to
+> `PROGRESS-archive-2026-08.md`) before or alongside the `NOTES.md` archive, never bundled with a
+> slice/item commit. **Next slice candidates (not attempted this run)**:
+> the Discover/Requests/Blocked mood-emoji follow-up just noted above; on-device transcription for
+> the Feed audio composer (still the standing candidate, needs its own foundation — parallel
+> `AudioRecord` PCM capture or a post-hoc `MediaCodec` AAC→PCM decode, since the composer currently
+> records MPEG_4/AAC not raw PCM); a shared `:sdk-ui` `LanguagePickerDialog` (3 near-identical picker
+> UIs still exist); Voice-cloning onboarding wizard / voice-profile management (§K, both still
+> unshipped); map/search/reverse-geocoding for the location attachment; **widgets/PiP categorical
+> re-check, re-confirmed zero-hit this run too**: `grep -rli "glanceappwidget\|appwidgetprovider"` and
+> `grep -rli "picture-in-picture\|pictureinpicture\|enterPip\|PipParams"` across all of `apps/android`
+> both return **zero** matches (Q. Cross-cutting infrastructure already carries the explicit
+> `- [ ] Home-screen widgets (...)` line from the iteration-19 audit-gap fix; PiP only has the H.
+> Calls section's partial `- [~] Call states: ... PiP / floating call pill` line, not a standalone
+> entry). This remains a real, planned, multi-slice-epic gap — not a missing checklist line, not a
+> false "next slice" note — needing its own concrete sub-slice decomposition pass (e.g. a minimal
+> static `GlanceAppWidget` scaffold as the first foundation slice) before it can be picked up as a
+> right-sized single-run slice; documented here again explicitly per the orchestrator's standing
+> guidance rather than re-grepped-and-dropped silently.
+
 > On 2026-08-11 **the hard-press conversation preview popover landed** (slice
 > `conversation-hardpress-preview`, feature-parity §B — a genuine gap RE-PROUVEN, not just
 > re-copied from the note, via a broad sweep of `feature-parity.md`'s ~136 unchecked boxes per the

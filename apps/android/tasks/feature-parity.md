@@ -4370,7 +4370,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       are now live** (Contacts / Requests / Discover / Blocked) — no placeholder remains
       (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
       Requests (Blocked/Discover counts).
-- [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
+- [x] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
       **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
       `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
       All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
@@ -4382,7 +4382,38 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
       is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
       online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
-      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
+      and the friend row renders green/amber/none accordingly. **Mood-emoji presence shipped** (slice
+      `contacts-mood-emoji-presence`, 2026-08-11): port of iOS `ContactsListTab.swift`'s
+      `statusViewModel.statusForUser(userId:)?.moodEmoji` passed into `MeeshyAvatar`. `MeeshyAvatar`
+      (`:sdk-ui`) already rendered a `moodEmoji: String?` badge (shipped with the avatar atom itself,
+      just never fed a real value from Contacts) — this slice is the missing orchestration wire, not a
+      new UI atom. New pure `List<StatusEntry>.statusForUser(userId) → StatusEntry?` (`:sdk-core/status`,
+      exact port of iOS's `statuses.first { $0.userId == userId }`) backs a new
+      `ContactsListUiState.moodEmojiFor(userId) → String?` (blank-guarded — a structurally-impossible-
+      but-defended-against blank `moodEmoji`). `ContactsListViewModel` now injects the already-existing
+      `StatusBarCache` (`:sdk-core`, the Feed status bar's L1 in-memory cache) and reads its **FRIENDS**-
+      mode snapshot synchronously on every `load()` — deliberately best-effort, no dedicated network
+      fetch of its own: `valueOrNull` collapses Fresh/Stale/Syncing uniformly (a decorative avatar badge
+      doesn't need a freshness distinction, mirrors the existing `CategoryRepository` precedent), and a
+      cold/never-loaded cache just means no badges yet — exactly iOS's own behaviour before its Feed
+      status bar has ever loaded (no popup, no error, the row simply renders without the badge). +9 tests
+      (4 `StatusMapperTest`: found/absent/empty-list/first-of-duplicates; 5 `ContactsListViewModelTest`:
+      pure state blank-guard, live emoji painted from the FRIENDS cache, no emoji when the user has no
+      live status, and the DISCOVER cache never leaking into a Contacts row). Mutation-proven: dropping
+      `moodEmojiFor`'s blank-guard fails **exactly** the pure state test (21 others green); swapping the
+      cache read from `StatusFeedMode.FRIENDS` to `.DISCOVER` fails **exactly** the two mode-scoped tests
+      (19 others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`), restored
+      via `cp`, diffed clean against the backup afterward. **Deliberate, documented scope cut**: only the
+      Contacts tab is wired this slice (the checklist bullet this closes is specifically "Contacts list")
+      — Discover/Requests/Blocked tabs' `MeeshyAvatar(...)` call sites still pass no `moodEmoji` and are
+      a natural, small follow-up (same `moodEmojiFor` pattern, same `StatusBarCache` injection, per-tab
+      `StatusFeedMode` where relevant — Discover reads the DISCOVER-mode cache, not FRIENDS). No
+      cross-screen reactivity: a mood set/cleared while the Contacts tab is already open only shows up on
+      the next `load()` (pull-to-retry or re-entry), never live via a socket/Flow — matches the
+      "best-effort decoration, not primary content" scope, tracked as a future refinement alongside the
+      other 3 tabs, not a regression (iOS itself has no live-update wiring into this specific row either,
+      only through re-render on the shared `statusViewModel`'s own `@Published` updates when SwiftUI
+      happens to re-evaluate the row).
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
