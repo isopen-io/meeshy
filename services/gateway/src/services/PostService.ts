@@ -1324,10 +1324,64 @@ export class PostService {
   }
 
   /**
+   * Dédup + incrément d'UN post : singleton `PostView` (postId,userId) + `viewCount`
+   * au premier insert, `duration` promue au max sur ré-ouverture. Factorisé hors de
+   * `recordView` pour être appliqué IDENTIQUEMENT au post affiché ET, pour un
+   * repost, à la racine créditée ci-dessous — même mécanique de dédup, aucune
+   * règle nouvelle inventée pour la racine.
+   */
+  private async creditPostView(
+    postId: string,
+    userId: string,
+    safeDuration: number | undefined,
+  ): Promise<boolean> {
+    const existing = await this.prisma.postView.findUnique({
+      where: { postId_userId: { postId, userId } },
+    });
+
+    if (existing) {
+      if (safeDuration !== undefined) {
+        // Le PostView est un singleton (postId,userId) : `duration` est le
+        // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
+        // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
+        // rétrograder la plus longue durée déjà observée — on conserve le max.
+        const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
+        if (nextDuration !== existing.duration) {
+          await this.prisma.postView.update({
+            where: { id: existing.id },
+            data: { duration: nextDuration },
+          });
+        }
+      }
+      return false;
+    }
+
+    await this.prisma.postView.create({
+      data: { postId, userId, duration: safeDuration },
+    });
+
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: { viewCount: { increment: 1 } },
+    });
+
+    return true;
+  }
+
+  /**
    * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
    * réelle (création du PostView) — permet à l'appelant de ne déclencher les
    * effets de bord coûteux « une fois » (ex : marquer les notifications du post
    * comme lues) sans les rejouer à chaque impression répétée du feed.
+   *
+   * Repost (chantier reposts cohérents & watermark, tâche 1) : quand le post
+   * visionné pointe vers un original (`repostOfId`), la RACINE de la chaîne
+   * (`originalRepostOfId ?? repostOfId` — jamais le parent intermédiaire) est
+   * créditée EN PLUS via `creditPostView`, donc avec EXACTEMENT les mêmes
+   * règles de dédup que le post affiché. Même garde-fou anti-auto-inflation
+   * que ci-dessus : l'auteur de la racine qui ouvre un repost de son propre
+   * contenu ne gonfle pas son propre compteur. Le post affiché garde SON
+   * propre enregistrement, strictement inchangé.
    */
   async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
     try {
@@ -1338,7 +1392,7 @@ export class PostService {
       const visibilityFilter = await this.buildVisibilityFilter(userId);
       const post = await this.prisma.post.findFirst({
         where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-        select: { id: true, authorId: true },
+        select: { id: true, authorId: true, repostOfId: true, originalRepostOfId: true },
       });
       if (!post) return false;
 
@@ -1351,37 +1405,20 @@ export class PostService {
         ? Math.max(0, Math.min(300_000, Math.round(duration)))
         : undefined;
 
-      const existing = await this.prisma.postView.findUnique({
-        where: { postId_userId: { postId, userId } },
-      });
+      const isNewView = await this.creditPostView(postId, userId, safeDuration);
 
-      if (existing) {
-        if (safeDuration !== undefined) {
-          // Le PostView est un singleton (postId,userId) : `duration` est le
-          // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
-          // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
-          // rétrograder la plus longue durée déjà observée — on conserve le max.
-          const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
-          if (nextDuration !== existing.duration) {
-            await this.prisma.postView.update({
-              where: { id: existing.id },
-              data: { duration: nextDuration },
-            });
-          }
+      const rootId = post.originalRepostOfId ?? post.repostOfId;
+      if (rootId && rootId !== postId) {
+        const root = await this.prisma.post.findFirst({
+          where: { id: rootId, deletedAt: NOT_DELETED },
+          select: { id: true, authorId: true },
+        });
+        if (root && root.authorId !== userId) {
+          await this.creditPostView(rootId, userId, safeDuration);
         }
-        return false;
       }
 
-      await this.prisma.postView.create({
-        data: { postId, userId, duration: safeDuration },
-      });
-
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: { viewCount: { increment: 1 } },
-      });
-
-      return true;
+      return isNewView;
     } catch (error) {
       // P7-2 — course double-submit : l'index unique (postId,userId) fait
       // lever P2002 sur le create concurrent. Dédup ATTENDUE → no-op

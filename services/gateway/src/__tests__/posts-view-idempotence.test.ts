@@ -37,9 +37,16 @@ const p2002 = () => {
   return err;
 };
 
+type MockedPost = {
+  id: string;
+  authorId: string;
+  repostOfId?: string | null;
+  originalRepostOfId?: string | null;
+};
+
 const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
   const post = {
-    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string } | null>>()
+    findFirst: jest.fn<(arg?: unknown) => Promise<MockedPost | null>>()
       .mockResolvedValue({ id: POST_A, authorId: 'author' }),
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
@@ -150,5 +157,84 @@ describe('PostService.recordView — watch-time (duration) monotone sur ré-ouve
       where: { id: 'v1' },
       data: { duration: 1_200 },
     }));
+  });
+});
+
+describe('PostService.recordView — crédit de la racine à travers un repost (chantier reposts cohérents, tâche 1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const ROOT_ID = '507f1f77bcf86cd799439099';
+  const INTERMEDIATE_ID = '507f1f77bcf86cd799439055';
+
+  it('vue sur un repost direct : la racine reçoit +1 viewCount ET son propre PostView, le repost garde le sien', async () => {
+    const { prisma, post, postView } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'original-author' });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(postView.create).toHaveBeenCalledWith({ data: { postId: POST_A, userId: 'viewer-1', duration: undefined } });
+    expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it("chaîne repost-de-repost : la RACINE (originalRepostOfId) est créditée, jamais le parent intermédiaire", async () => {
+    const { prisma, post } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter-2', repostOfId: INTERMEDIATE_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'original-author' });
+    const svc = makeService(prisma);
+
+    await svc.recordView(POST_A, 'viewer-1');
+
+    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).not.toHaveBeenCalledWith({ where: { id: INTERMEDIATE_ID }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it("l'auteur de la racine visionnant un repost de son propre contenu ne gonfle pas son propre compteur (même garde que la ré-ouverture directe)", async () => {
+    const { prisma, post, postView } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'viewer-1' });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).not.toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: ROOT_ID }) }));
+  });
+
+  it('racine introuvable (supprimée entre-temps) : la vue du repost reste comptée, pas de crash', async () => {
+    const { prisma, post } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce(null);
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it('vue sur un post non-repost : comportement inchangé — une seule résolution, aucun crédit de racine', async () => {
+    const { prisma, post, postView } = buildPrisma();
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(post.findFirst).toHaveBeenCalledTimes(1);
+    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(postView.create).toHaveBeenCalledTimes(1);
   });
 });
