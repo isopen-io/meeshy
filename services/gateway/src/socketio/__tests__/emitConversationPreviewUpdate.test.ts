@@ -219,6 +219,88 @@ describe('emitConversationPreviewUpdate', () => {
     expect(emitted[0].payload.lastMessageTranslations).toBeNull();
   });
 
+  // --- Portée d'un rafraîchissement déclenché par une traduction (cycle 73) ---
+  //
+  // Une traduction qui atterrit N'EST PAS une édition : elle ne change l'aperçu
+  // que pour les lecteurs qui LISENT cette langue, et seulement tant que le
+  // message traduit est encore le dernier de la conversation. Sans ces deux
+  // bornes, le chemin `message:translation` re-diffuserait la ligne entière à
+  // tout le monde, une fois par langue de la conversation, sur le chemin le plus
+  // chaud du service.
+  describe('scope', () => {
+    it('skips the whole fan-out when the recomputed latest is not the message the caller scoped to', async () => {
+      const emitted: Emitted[] = [];
+      const prisma = makePrisma([FR_READER], englishLatest);
+
+      await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor', undefined, {
+        onlyIfLatestIs: 'msg-older',
+      });
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('fans out normally when the scoped message IS the recomputed latest', async () => {
+      const emitted: Emitted[] = [];
+      const prisma = makePrisma([FR_READER], englishLatest);
+
+      await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor', undefined, {
+        onlyIfLatestIs: 'msg-latest',
+      });
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0].payload.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+    });
+
+    // Le lecteur espagnol reçoit exactement la même carte qu'avant l'arrivée du
+    // français : un octet identique, donc un événement pur gaspillage. Le
+    // filtrer n'est pas une optimisation opportuniste — c'est la définition de
+    // « qui est concerné par CETTE traduction ».
+    it('emits only to the readers whose own prism carries the language that just landed', async () => {
+      const emitted: Emitted[] = [];
+      const prisma = makePrisma([FR_READER, ES_READER], englishLatest);
+
+      await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor', undefined, {
+        onlyIfPreviewCarriesLanguage: 'fr',
+      });
+
+      expect(emitted.map((e) => e.room)).toEqual(['user:user-fr']);
+      expect(emitted[0].payload.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+    });
+
+    it('matches the landed language case-insensitively, as the prism does everywhere else', async () => {
+      const emitted: Emitted[] = [];
+      const prisma = makePrisma([FR_READER, ES_READER], englishLatest);
+
+      await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor', undefined, {
+        onlyIfPreviewCarriesLanguage: 'FR',
+      });
+
+      expect(emitted.map((e) => e.room)).toEqual(['user:user-fr']);
+    });
+
+    // Règle #1 du Prisme : pas de traduction utile ⇒ l'original. Un participant
+    // sans carte n'a rien appris de cette traduction.
+    it('never emits to an accountless participant, whose map is null by construction', async () => {
+      const emitted: Emitted[] = [];
+      const prisma = makePrisma([{ id: 'p-anon', userId: null, user: null }], englishLatest);
+
+      await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor', undefined, {
+        onlyIfPreviewCarriesLanguage: 'fr',
+      });
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('leaves the edit/delete callers untouched — no scope means every participant, whatever the latest', async () => {
+      const emitted: Emitted[] = [];
+      const prisma = makePrisma([FR_READER, ES_READER], englishLatest);
+
+      await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+      expect(emitted.map((e) => e.room).sort()).toEqual(['user:user-es', 'user:user-fr']);
+    });
+  });
+
   it('is a no-op when the Socket.IO layer is unavailable', async () => {
     const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
     await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1', 'user-editor')).resolves.toBeUndefined();

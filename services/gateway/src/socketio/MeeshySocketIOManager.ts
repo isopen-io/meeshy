@@ -1468,12 +1468,21 @@ export class MeeshySocketIOManager {
       
       // Récupérer la conversation du message pour broadcast
       let conversationIdForBroadcast: string | null = null;
+      // `senderId` ne sert qu'à remplir `updatedBy`, OBLIGATOIRE dans
+      // ConversationUpdatedEventData, sur le rafraîchissement d'aperçu ci-dessous.
+      // Une traduction n'a pas d'acteur humain : l'auteur du message traduit est
+      // la seule identité honnête à porter là, et c'est déjà le repli que le
+      // chemin d'envoi utilise (`senderUserId ?? message.senderId`). La colonne
+      // est non-nullable et la ligne a forcément été lue quand on arrive au
+      // rafraîchissement — `conversationIdForBroadcast` sort du MÊME `msg`.
+      let senderIdForPreview = '';
       try {
         const msg = await this.prisma.message.findUnique({
           where: { id: result.messageId },
-          select: { conversationId: true }
+          select: { conversationId: true, senderId: true }
         });
         conversationIdForBroadcast = msg?.conversationId || null;
+        senderIdForPreview = msg?.senderId ?? '';
       } catch (error) {
         logger.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
       }
@@ -1508,7 +1517,29 @@ export class MeeshySocketIOManager {
         
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
-        
+
+        // `message:translation` ne porte QUE la room de conversation. Un lecteur
+        // resté sur l'écran de liste n'y apprend rien : sa ligne garde l'aperçu
+        // servi à l'ENVOI, quand aucune traduction n'existait encore, et rien ne
+        // repasse jamais. Le Prisme devenait donc fonction de l'ordre d'arrivée —
+        // ouvrir la conversation traduisait la ligne, ne pas l'ouvrir la laissait
+        // dans la langue de l'expéditeur, indéfiniment.
+        //
+        // Borné aux deux seuls cas où la ligne change VRAIMENT : le message
+        // traduit est encore le dernier de la conversation, et le destinataire
+        // lit la langue qui vient d'atterrir (cf. `PreviewUpdateScope`).
+        await emitConversationPreviewUpdate(
+          this.prisma,
+          this.io,
+          normalizedId,
+          senderIdForPreview,
+          (error) => logger.warn('preview refresh after translation failed (best-effort)', {
+            messageId: result.messageId,
+            targetLanguage,
+            error,
+          }),
+          { onlyIfLatestIs: result.messageId, onlyIfPreviewCarriesLanguage: targetLanguage },
+        );
       } else {
         logger.warn(`⚠️ [SocketIOManager] No conversation found for message ${result.messageId} — translation dropped (no room to broadcast to)`);
       }

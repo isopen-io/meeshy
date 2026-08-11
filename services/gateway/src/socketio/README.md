@@ -412,6 +412,45 @@ participant sans compte n'est jamais sonne. La raison est ecrite dans le fichier
 
 ---
 
+## L'apercu de la ligne de liste — qui l'emet, et A QUEL INSTANT
+
+`conversation:updated` est le SEUL evenement qui rafraichit la ligne de la liste
+de conversations. Il porte un groupe indissociable — `lastMessagePreview`,
+`lastMessageTranslations`, `lastMessageOriginalLanguage` — resolu **par
+destinataire**, parce que la carte de traductions est filtree au prisme du
+lecteur (`resolveLastMessagePreviewPrism`).
+
+Quatre emetteurs, et leur difference n'est pas le transport mais l'INSTANT :
+
+| Emetteur | Declencheur | Portee |
+|---|---|---|
+| `MessageHandler` (WS `message:send`) | envoi | tous les participants |
+| `MeeshySocketIOManager._broadcastNewMessage` (REST/ZMQ) | envoi | tous les participants |
+| `emitConversationPreviewUpdate` (edition, suppression, epinglage) | mutation | tous les participants |
+| `MeeshySocketIOManager._handleTextTranslationReady` | **traduction NLLB qui atterrit** | `PreviewUpdateScope` |
+
+Le quatrieme existe parce que les trois premiers ne suffisent pas : l'apercu est
+servi **a l'envoi**, a un instant ou `Message.translations` vaut encore `null` —
+la traduction arrive une a deux secondes plus tard par ZMQ. Sans lui, la carte
+n'est jamais reservie et la ligne reste dans la langue de l'expediteur pour
+toujours. `message:translation`, lui, ne rafraichit rien : les clients le rangent
+dans leur cache MESSAGE, jamais dans la ligne de liste.
+
+Il est le seul a passer un `scope`, et les deux bornes sont obligatoires :
+
+- **`onlyIfLatestIs`** — un message plus recent est arrive pendant que la
+  traduction volait ? Reservir l'ancien ferait RECULER la ligne de liste.
+- **`onlyIfPreviewCarriesLanguage`** — un lecteur hors de cette langue recevrait
+  un payload identique a l'octet pres. Sans ce filtre, une conversation a N
+  langues paie N fan-outs complets par message.
+
+**Regle** : tout nouvel ecrivain de `Message.translations` ou de `Message.content`
+doit se demander si le message touche est le DERNIER de sa conversation — et si
+oui, appeler `emitConversationPreviewUpdate`. Un champ d'apercu qui n'est jamais
+reservi n'est pas « en retard », il est faux definitivement.
+
+---
+
 ## `message:new` — le split `clientMessageId` (Phase 4 §6.2)
 
 **Tout emetteur de `message:new` doit envoyer DEUX payloads**, jamais un seul :
