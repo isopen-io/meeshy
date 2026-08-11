@@ -208,7 +208,7 @@ describe('PostComposer — Reel ⇄ Post toggle (Task 5)', () => {
     render(<PostComposer onPublish={onPublish} />);
     expandComposer();
 
-    fireEvent.click(screen.getByRole('button', { name: /post as a regular post/i }));
+    fireEvent.click(screen.getByTestId('post-composer-type-post'));
     publish(onPublish);
 
     expect(onPublish).toHaveBeenCalledWith(expect.objectContaining({ type: 'POST' }));
@@ -223,8 +223,8 @@ describe('PostComposer — Reel ⇄ Post toggle (Task 5)', () => {
     render(<PostComposer onPublish={onPublish} />);
     expandComposer();
 
-    fireEvent.click(screen.getByRole('button', { name: /post as a regular post/i }));
-    fireEvent.click(screen.getByRole('button', { name: /post as a reel/i }));
+    fireEvent.click(screen.getByTestId('post-composer-type-post'));
+    fireEvent.click(screen.getByTestId('post-composer-type-reel'));
     publish(onPublish);
 
     expect(onPublish).toHaveBeenCalledWith(expect.objectContaining({ type: 'REEL' }));

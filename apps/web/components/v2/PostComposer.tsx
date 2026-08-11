@@ -370,14 +370,15 @@ function PostComposer({
                     <div
                       className="flex items-center gap-0.5 rounded-lg border border-[var(--gp-border)] p-0.5"
                       role="group"
-                      aria-label="Post type"
+                      aria-label={t('postComposer.reelToggle.groupLabel')}
                       data-testid="post-composer-type-toggle"
                     >
                       <button
                         type="button"
                         onClick={() => setPostType('REEL')}
                         aria-pressed={postType === 'REEL'}
-                        aria-label="Post as a Reel"
+                        aria-label={t('postComposer.reelToggle.reel')}
+                        data-testid="post-composer-type-reel"
                         className={cn(
                           'px-2 py-1 rounded-md text-xs transition-colors',
                           postType === 'REEL'
@@ -385,13 +386,14 @@ function PostComposer({
                             : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
                         )}
                       >
-                        🎬 Reel
+                        🎬 {t('postComposer.reelToggle.reel')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setPostType('POST')}
                         aria-pressed={postType === 'POST'}
-                        aria-label="Post as a regular post"
+                        aria-label={t('postComposer.reelToggle.post')}
+                        data-testid="post-composer-type-post"
                         className={cn(
                           'px-2 py-1 rounded-md text-xs transition-colors',
                           postType === 'POST'
@@ -399,7 +401,7 @@ function PostComposer({
                             : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
                         )}
                       >
-                        Post
+                        {t('postComposer.reelToggle.post')}
                       </button>
                     </div>
                   )}

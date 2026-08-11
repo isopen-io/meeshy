@@ -14,9 +14,8 @@
  * (packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift). Toute
  * évolution de la règle touche les deux sites — c'est la seule doctrine.
  *
- * Consommateurs : `PostService.createPost`/`updatePost` (gateway, via
- * `services/gateway/src/services/posts/reelComposition.ts` — re-export de ce
- * module), `PostComposer` (web, classification client avant publication) et
+ * Consommateurs : `PostService.createPost`/`updatePost` (gateway, import
+ * direct), `PostComposer` (web, classification client avant publication) et
  * le backfill `scripts/migrations/reclassify-nonqualifying-reels-to-post.ts`.
  */
 

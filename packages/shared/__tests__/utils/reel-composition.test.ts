@@ -1,9 +1,8 @@
 /**
  * Règle de composition d'un RÉEL — prédicat PUR, source unique partagée
- * (gateway + web). Miroir exact du SDK iOS `ReelComposition.qualifiesAsReel`
- * (packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift) et de
- * l'ancienne copie gateway (services/gateway/src/services/posts/reelComposition.ts,
- * désormais un simple re-export de ce module).
+ * (gateway + web, import direct de `@meeshy/shared/utils/reel-composition`).
+ * Miroir exact du SDK iOS `ReelComposition.qualifiesAsReel`
+ * (packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift).
  *
  * Règle : vidéo (>= MIN_QUALIFYING_DURATION_MS) || audio (>= même seuil) ||
  * au moins deux images. Une durée absente/nulle sur vidéo/audio est TOUJOURS
