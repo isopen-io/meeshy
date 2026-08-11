@@ -411,3 +411,38 @@ Append-only log of gotchas and decisions that save time next run.
   fully-local Android analogue (`ShortcutManagerCompat` dynamic launcher shortcuts). Read the
   intent bodies, not just the shortcut list, before deciding whether "port the App Shortcuts
   epic" is one slice or several.
+
+## Slice `chat-composer-prefill-draft` (2026-08-11)
+- **`android.net.Uri.decode(...)` silently returns `null` — not a thrown exception — in a plain
+  JVM unit test module (no Robolectric), which turns a real decode call into a quiet no-op rather
+  than a visible crash.** Wrote `initialDraft = savedStateHandle.get<String>(DRAFT_ARG)
+  ?.let(Uri::decode)?.takeIf { it.isNotBlank() }` first; the RED test failed with `expected:
+  Thanks! but was an empty string` — no stack trace, no exception, just a plain assertion mismatch
+  that looked exactly like a logic bug in the seeding code itself. The actual cause: this app
+  module's unit-test config runs under Android Gradle Plugin's default `returnDefaultValues`
+  posture for un-mocked framework classes, so `Uri.decode("Thanks!")` returns `null` (the "default
+  value" for a `String?`-returning method) instead of either working or throwing — silently
+  collapsing the whole `?.let{}` chain to `null`. Switching to `java.net.URLDecoder.decode(text,
+  "UTF-8")` (a real JVM class, not an Android framework stub) fixed it immediately and made the
+  decode step itself unit-testable without Robolectric. **Lesson generalizes**: any
+  `android.*`-package call inside code that's exercised by a plain (non-Robolectric) JVM test
+  class is a candidate for this exact silent-null trap — prefer a `java.*`/Kotlin-stdlib
+  equivalent when one exists (here, `URLDecoder` vs `Uri.decode` — near-identical behavior for
+  plain percent-encoded text, the only real difference being `+`-as-space handling, irrelevant for
+  this call site's short canned-reply text), rather than reaching for Robolectric just to make one
+  static call resolve.
+- **`DraftAutosave.restore`'s existing idle guard (`currentDraft.isNotBlank() -> null`) already
+  encodes the exact precedence rule a new "seed the composer from elsewhere" feature needs, with
+  zero changes.** Wanted an incoming deep-link draft (a future Quick Reply tap) to win over
+  whatever a stale per-conversation persisted draft would otherwise restore. Before writing a new
+  precedence decision, re-read `DraftAutosave.restore`'s own doc comment: it already refuses to
+  restore over a non-blank composer ("never clobbers an in-flight edit nor text the user has
+  already begun typing"). Seeding the ViewModel's INITIAL `_state.draft` value from the nav arg
+  (before the async `draftStore.load()` restore coroutine ever runs) means that guard does 100% of
+  the precedence work for free — the incoming draft simply IS the "already begun typing" state
+  from the guard's own point of view. Zero new branches added to `DraftAutosave`; the only new
+  code is the wiring that populates the initial value. Worth checking whether an existing pure
+  decision function's guard already covers a new feature's precedence need before writing a
+  parallel rule next to it — this is the same "check whether an adjacent mechanism is already
+  complete and just unreachable" lesson from the `outbox-message-lane-discovery` slice, applied to
+  a much smaller case.
