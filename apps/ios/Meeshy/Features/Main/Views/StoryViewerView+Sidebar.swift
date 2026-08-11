@@ -233,20 +233,32 @@ struct StoryActionSidebarView: View {
     /// (< 0.25 s) fait échouer le longpress et laisse le Button réagir
     /// normalement ; un longpress capture la séquence — le canvas ne voit rien,
     /// le swipe de navigation est donc structurellement neutralisé.
+    /// Ouvre la barre de réactions au moment où le longpress est ACQUIS.
+    /// Appelé des cas `.first(true)` ET `.second(true, _)` : en pratique
+    /// SwiftUI ne livre souvent JAMAIS `.first(true)` — la séquence saute
+    /// directement à `.second(true, nil)` quand le longpress aboutit
+    /// (prouvé au log HID 2026-08-11 : premier onChanged = `second(true,
+    /// nil)`). Ne traiter que `.first(true)` laissait la barre fermée à
+    /// jamais.
+    private func beginReactionScrubIfNeeded() {
+        guard !isScrubbingReactions else { return }
+        isScrubbingReactions = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showEmojiStrip = true
+        }
+    }
+
     private var reactionScrubGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.25)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
             .onChanged { value in
                 switch value {
                 case .first(true):
-                    guard !isScrubbingReactions else { return }
-                    isScrubbingReactions = true
-                    onScrubStateChanged(true)
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showEmojiStrip = true
-                    }
+                    beginReactionScrubIfNeeded()
                 case .second(true, let drag):
+                    beginReactionScrubIfNeeded()
                     guard let drag else { return }
                     let hovered = StoryScrubSelectionResolver.hoveredIndex(
                         tileFrames: reactionTileFrames,
@@ -279,20 +291,27 @@ struct StoryActionSidebarView: View {
 
     /// Même mécanique pour la barre de langues (relâchement = sélection de la
     /// langue ; « + » = liste complète ; hors barre = barre posée).
+    /// Même contrat que `beginReactionScrubIfNeeded` — cf. son commentaire :
+    /// le longpress est acquis à l'entrée en `.second`, pas en `.first(true)`.
+    private func beginLanguageScrubIfNeeded() {
+        guard !isScrubbingLanguages else { return }
+        isScrubbingLanguages = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showLanguageOptions = true
+        }
+    }
+
     private var languageScrubGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.25)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
             .onChanged { value in
                 switch value {
                 case .first(true):
-                    guard !isScrubbingLanguages else { return }
-                    isScrubbingLanguages = true
-                    onScrubStateChanged(true)
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showLanguageOptions = true
-                    }
+                    beginLanguageScrubIfNeeded()
                 case .second(true, let drag):
+                    beginLanguageScrubIfNeeded()
                     guard let drag else { return }
                     let hovered = StoryScrubSelectionResolver.hoveredIndex(
                         tileFrames: languageTileFrames,
@@ -416,7 +435,8 @@ struct StoryActionSidebarView: View {
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
                     accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
-                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55"),
+                    handlesTapViaGesture: true
                 ) {
                     // Tap court = ❤️ immédiat (pattern Instagram/WhatsApp) —
                     // la barre s'ouvre désormais au LONGPRESS (scrub).
@@ -748,7 +768,8 @@ struct StoryActionSidebarView: View {
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions || showFullLanguagePicker,
                     activeColor: MeeshyColors.indigo400,
-                    activeGlow: MeeshyColors.indigo400
+                    activeGlow: MeeshyColors.indigo400,
+                    handlesTapViaGesture: true
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

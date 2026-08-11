@@ -199,4 +199,96 @@ final class StoryViewerReactionFlowTests: XCTestCase {
         XCTAssertEqual(storyCurrentUserReactions, ["🔥"], "Successful reaction keeps the optimistic emoji")
         XCTAssertEqual(storyReactionCount, 1)
     }
+
+    // MARK: - Montage du geste scrub (bug longpress inerte, 2026-08-11)
+
+    /// Reproduit + verrouille le correctif du longpress mort sur le rail :
+    /// un `LongPressGesture.sequenced(before: DragGesture)` posé en
+    /// `.highPriorityGesture` sur un `Button` SwiftUI ne s'active JAMAIS —
+    /// le tap interne du Button consomme le touch, un hold de 0,9 s part en
+    /// ❤️ direct au relâchement au lieu d'ouvrir le strip (reproduit au
+    /// stream HID simulateur, build 1751 et main). Le pattern qui marche
+    /// (bulles, bouton Sound) sort le tap du monde Button : vue plate +
+    /// `TapGesture`, VoiceOver servi par une `accessibilityAction` explicite
+    /// (VO ne synthétise PAS de TapGesture — leçon du bouton Sound).
+    private func sidebarSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Stories
+            .deletingLastPathComponent()  // Features
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func actionButtonSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_scrubSites_optOutOfButtonTap_soTheSequencedGestureCanActivate() throws {
+        let source = try sidebarSource()
+        for (site, gesture) in [("heart.fill", "reactionScrubGesture"),
+                                ("textformat.abc", "languageScrubGesture")] {
+            guard let iconPos = source.range(of: "icon: \"\(site)\""),
+                  let gesturePos = source.range(of: ".highPriorityGesture(\(gesture))", range: iconPos.upperBound..<source.endIndex) else {
+                XCTFail("site \(site) ou son geste \(gesture) introuvable dans StoryViewerView+Sidebar.swift")
+                return
+            }
+            let siteBlock = String(source[iconPos.lowerBound..<gesturePos.upperBound])
+            XCTAssertTrue(
+                siteBlock.contains("handlesTapViaGesture: true"),
+                "le bouton \(site) doit passer handlesTapViaGesture: true — sans cela le tap interne du Button consomme le touch et le geste scrub séquencé ne s'active jamais (longpress mort)"
+            )
+        }
+    }
+
+    /// Second défaut empilé sous le premier : SwiftUI ne livre souvent JAMAIS
+    /// `.first(true)` pour un `LongPressGesture.sequenced(DragGesture)` — le
+    /// premier `onChanged` observé est `.second(true, nil)` (prouvé au log
+    /// HID, 2026-08-11). Ouvrir la barre uniquement dans `case .first(true)`
+    /// la laissait fermée à jamais : le cas `.second` doit appeler le helper
+    /// d'ouverture AVANT son `guard let drag`.
+    func test_scrubGestures_openTheBarOnSecondStageToo() throws {
+        let source = try sidebarSource()
+        for (gestureVar, begin) in [("reactionScrubGesture", "beginReactionScrubIfNeeded()"),
+                                    ("languageScrubGesture", "beginLanguageScrubIfNeeded()")] {
+            guard let gesturePos = source.range(of: "private var \(gestureVar)"),
+                  let secondCase = source.range(of: "case .second(true, let drag):", range: gesturePos.upperBound..<source.endIndex),
+                  let dragGuard = source.range(of: "guard let drag else { return }", range: secondCase.upperBound..<source.endIndex) else {
+                XCTFail("structure du geste \(gestureVar) introuvable")
+                return
+            }
+            let betweenSecondAndGuard = String(source[secondCase.upperBound..<dragGuard.lowerBound])
+            XCTAssertTrue(
+                betweenSecondAndGuard.contains(begin),
+                "\(gestureVar) : le cas .second(true, _) doit appeler \(begin) AVANT le guard du drag — c'est LE signal « longpress acquis » (SwiftUI saute .first(true))"
+            )
+        }
+    }
+
+    func test_storyActionButton_gestureWorldPath_keepsVoiceOverAndTap() throws {
+        let source = try actionButtonSource()
+        guard let structPos = source.range(of: "struct StoryActionButton") else {
+            XCTFail("StoryActionButton introuvable"); return
+        }
+        let body = String(source[structPos.lowerBound...])
+        XCTAssertTrue(
+            body.contains("handlesTapViaGesture"),
+            "StoryActionButton doit exposer le mode handlesTapViaGesture (chemin sans Button pour les sites scrub)"
+        )
+        XCTAssertTrue(
+            body.contains(".accessibilityAction"),
+            "le chemin gesture-world doit garder une accessibilityAction explicite — VoiceOver ne synthétise pas de TapGesture (leçon bouton Sound)"
+        )
+        XCTAssertTrue(
+            body.contains(".accessibilityAddTraits(.isButton)"),
+            "le chemin gesture-world doit annoncer le trait bouton à VoiceOver"
+        )
+    }
 }
