@@ -13,6 +13,7 @@ import { CommentList } from './CommentList';
 import { StoryViewersSheet } from './StoryViewersSheet';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
+import { useReactToStoryMutation } from '@/hooks/social/use-stories';
 import { useAuthStore } from '@/stores/auth-store';
 
 // ============================================================================
@@ -151,6 +152,8 @@ const DEFAULT_STORY_DURATION_MS = 6000;
 /// Reference canvas width the iOS composer authors against (`CanvasGeometry`).
 /// Design-pixel text sizes are projected back to the live canvas relative to it.
 const STORY_DESIGN_WIDTH = 1080;
+
+const REACTION_EMOJIS = ['❤️', '🔥', '😂', '😮', '😢', '👏'];
 
 const FILTER_MAP: Record<string, string> = {
   vintage: 'sepia(0.5) saturate(1.3)',
@@ -387,6 +390,7 @@ function StoryViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const viewedRef = useRef<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -404,6 +408,7 @@ function StoryViewer({
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
+  const reactToStoryMutation = useReactToStoryMutation();
 
   const story = stories[currentIndex];
 
@@ -620,7 +625,17 @@ function StoryViewer({
     setReplyText('');
     setShowComments(false);
     setShowViewers(false);
+    setShowReactionPicker(false);
   }, [currentIndex]);
+
+  const handleReact = useCallback(
+    (emoji: string) => {
+      if (!currentStoryId) return;
+      reactToStoryMutation.mutate({ storyId: currentStoryId, emoji });
+      setShowReactionPicker(false);
+    },
+    [currentStoryId, reactToStoryMutation],
+  );
 
   // Comments handlers
   const handleOpenComments = useCallback(() => {
@@ -1099,6 +1114,39 @@ function StoryViewer({
                     </svg>
                   </button>
                 )}
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowReactionPicker((prev) => !prev);
+                    }}
+                    className="text-white/70 hover:text-white transition-colors"
+                    aria-label={t('react', 'React')}
+                    data-testid="story-reaction-button"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </button>
+
+                  {showReactionPicker && (
+                    <div
+                      data-testid="story-reaction-picker"
+                      className="absolute bottom-full left-0 mb-2 z-30 flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/20"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(emoji)}
+                          className="text-xl p-1 rounded-full transition-transform duration-150 hover:scale-125"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <input
                   ref={inputRef}
                   type="text"
