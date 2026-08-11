@@ -1,3 +1,147 @@
+# Cycle 67 — Épingler un message rendait la route d'épingles inexploitable
+
+## Contrainte d'environnement (identique aux cycles 61/63/64/65/66, revérifiée)
+
+Même conteneur Linux distant. Aucune chaîne Swift (`swift: command not found`), aucun SDK Android
+(`~/Android` absent → pas de `./apps/android/meeshy.sh check`, seul gate de cette lane).
+`tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane reste matériellement impossible ici :
+**le curseur n'a donc PAS été touché.** Lanes gatables : gateway, web, shared.
+
+## Le candidat de backlog a été RE-PROUVÉ, et il a mené ailleurs
+
+Le cycle 66 nommait comme tête « le mensonge de type qui a rendu ce défaut possible » :
+`message-types.ts:211` annonce `translations?: readonly MessageTranslation[]` alors que la valeur
+qui sort de Prisma est une **carte Mongo** (`Message.translations Json?`). Il ajoutait, prudemment,
+« le chantier n'est pas mécanique ».
+
+Le balayage d'ouverture a cherché ce que ce mensonge PRODUIT plutôt que de démêler le type :
+tous les sites qui sélectionnent `Message.translations` puis servent le résultat à un client. Sur
+les dix routes de messages, huit passent par `transformTranslationsToArray`. **Deux ne le font
+pas**, et l'une d'elles ne dégrade pas — elle casse.
+
+## Le défaut, prouvé et non supposé
+
+`GET /conversations/:id/pinned-messages` déclare `data: { type: 'array', items: messageSchema }`,
+et `messageSchema.properties.translations` vaut `{ type: 'array' }`
+(`packages/shared/types/api-schemas.ts:834`). La route y versait `translations: message.translations`
+— la carte Mongo brute.
+
+`fast-json-stringify`, le sérialiseur de Fastify, **ne coerce pas** :
+
+```
+MAP   => THREW: The value of '#/properties/data/items/properties/translations'
+                does not match schema definition.
+NULL  => {"success":true,"data":[{…,"translations":[]}]}
+ARRAY => {"success":true,"data":[{…,"translations":[{"targetLanguage":"fr",…}]}]}
+```
+
+L'échec de sérialisation remonte en **500 sur la route entière**. Meeshy traduit automatiquement
+chaque message : la colonne est peuplée dès que le Prisme a tourné. **Épingler un message traduit
+rendait donc la liste d'épingles inaccessible** — pas une dégradation partielle, l'endpoint entier.
+
+## Pourquoi personne ne l'a vu
+
+Les quatre témoins du groupe 9 de `messages-routes.test.ts` posent tous `translations: null` — le
+SEUL cas qui ne déclenche pas le défaut. Le fixture de `threads.test.ts` posait `translations: []`,
+une forme que Prisma ne rend jamais. Les deux suites décrivaient donc fidèlement un monde où le
+défaut n'existe pas.
+
+## Le second défaut, au même endroit — la bannière ne s'était jamais affichée
+
+`apps/web/components/conversations/PinnedMessageBanner.tsx` lisait `data?.messages?.[0]` alors que
+l'enveloppe du dépôt est `{ success, data: [...] }` (`sendSuccess`). `data.messages` vaut toujours
+`undefined` : **la bannière rendait `null` même sur un 200 parfaitement valide**. Elle est pourtant
+montée en production (`ConversationView.tsx:319`) — et les deux suites qui montent
+`ConversationView` / `ConversationLayout` la remplacent par `() => null`. Aucun témoin n'avait
+jamais exercé son chemin de données.
+
+Les deux défauts se masquaient l'un l'autre : sur un compte sans message épinglé traduit, la route
+répondait 200 et la bannière restait vide « parce qu'il n'y a rien à épingler ». Sur un compte avec,
+la requête échouait en 500 et React Query gardait la bannière vide pareillement.
+
+## Le troisième — le Prisme
+
+La bannière rendait `pinnedMessage.content` brut : la ligne restait dans la langue de l'expéditeur
+pour tout le monde, sur une surface que `CLAUDE.md` couvre nommément (« le prisme s'applique à TOUT
+le contenu »). Une fois le premier défaut corrigé, les traductions sont réellement sur le fil ; les
+résoudre n'est pas un supplément, c'est la conséquence directe du correctif.
+
+La résolution délègue à `resolveLastMessagePreview` (`@meeshy/shared`) — jumelle de
+`MeeshyConversation.resolvedLastMessagePreview` côté iOS — et l'ordre du prisme vient de
+`getUserLanguagePreferences`, seul point d'entrée autorisé côté web (il injecte la `deviceLocale`
+en 4e priorité, ce qu'un appel direct au shared perdrait).
+
+**Une exclusion a été ajoutée dans le même geste, et elle appartient à ce cycle et pas à un autre :
+les traductions CHIFFRÉES sont écartées.** `transformTranslationsToArray` recopie `isEncrypted`, et
+c'est ce correctif-ci qui met ces entrées sur le fil de la bannière pour la première fois. Sans
+l'exclusion, corriger le Prisme aurait affiché du base64 dans la bannière des conversations
+chiffrées — le défaut exact que le cycle 65 venait de fermer sur la ligne de liste iOS. Sans
+traduction lisible, `resolveLastMessagePreview` rend l'original, ce que prescrit la règle #1 du
+Prisme.
+
+## La copie du même défaut, corrigée dans le même cycle
+
+`routes/conversations/threads.ts` sert le résultat Prisma verbatim, donc la même carte brute. Son
+schéma de réponse est `additionalProperties: true` : pas de 500, la carte part telle quelle sur le
+fil. `APIMessage.init(from:)` décode `translations` avec `try` et non `try?`
+(`MessageModels.swift:521`) — un message de fil serait **indécodable EN ENTIER**, pas seulement
+privé de ses traductions. Aucun consommateur client de cette route aujourd'hui (`grep` sur web,
+SDK, iOS, Android : rien) ; c'est précisément pourquoi il fallait la corriger maintenant, avant que
+le premier appelant hérite du défaut.
+
+## Le témoin qui nomme la cause plutôt que le symptôme
+
+`message-translations-response-contract.test.ts` fait passer les deux formes à travers le VRAI
+`messageSchema` compilé par `fast-json-stringify` : la carte jette, la sortie du transformateur se
+sérialise. Il ne dépend d'aucune route — il épingle l'invariant que le compilateur ne peut pas
+tenir, et il protégera toute route future déclarant `messageSchema`. C'est la réponse la plus utile
+au « mensonge de type » du cycle 66 : on ne peut pas le faire disparaître sans démêler deux formes
+qui circulent réellement sous le même nom, mais on peut le rendre **détectable**.
+
+## Vérification
+
+- Gateway : `tsc --noEmit` propre après `prisma generate --generator client` + `bun run build` du
+  shared (prérequis CI documentés dans `CLAUDE.md`).
+- Gateway : **suite complète — 650 suites / 16 366 tests verts.** Base du cycle 66 : 649 / 16 358.
+  L'écart est exactement ce que ce cycle ajoute (1 suite, 8 témoins : 3 de contrat, 2 sur
+  `pinned-messages`, 3 sur `threads`) — aucune régression, aucun témoin perdu.
+- Gateway : RED observé avant implémentation sur les 5 témoins de route. `pinned-messages` rendait
+  `{"fr": {…}}` là où le témoin attend le tableau API ; `threads` idem sur le parent ET les
+  réponses, plus `null` au lieu de `[]` sur colonne vide.
+- Web : `__tests__/components/conversations` — 32 suites / 607 tests verts (dont les 6 neufs).
+  RED observé : 4 des 5 premiers témoins échouaient sur un DOM vide (« Unable to find an element »),
+  la bannière ne rendant rien du tout.
+- Web : `tsc --noEmit` — zéro erreur sur le fichier modifié (le dépôt en porte 1 190 préexistantes).
+
+## Reste ouvert après ce cycle
+
+- **Le mensonge de type lui-même n'est pas résolu**, il est seulement instrumenté. Les deux formes
+  circulent toujours sous `Message.translations`. Le démêler demande de nommer la forme de stockage
+  (`MessageTranslationJSON`, déjà exportée par le transformateur) dans les types de retour Prisma
+  côté gateway — chantier de contrat, à instruire avant d'être écrit.
+- **`PinnedMessageBanner` n'affiche qu'UNE épingle** (`limit: 1`) sans compteur ni accès à la liste.
+  Signal produit, pas défaut : à trancher avec un humain.
+- **Piste voisine INSTRUITE puis ÉCARTÉE — `messageAttachmentSchema` va bien.** Cherché pendant ce
+  cycle une seconde source de 500 sur la même route, du côté des pièces jointes. Il n'y en a pas :
+  le schéma déclare `translations` en entier (`api-schemas.ts:467`), carte langue → traduction V2.
+  Noté ici parce que le mécanisme mérite d'être connu : la sous-entrée porte
+  `required: ['type', 'transcription', 'createdAt']`, et `fast-json-stringify` **fait respecter
+  `required` en jetant**, exactement comme pour le type de ce cycle. Une entrée à laquelle il
+  manquerait l'un des trois ferait donc tomber `GET /conversations/:id/messages` — la liste
+  principale. Les deux écrivains les posent tous les trois (`AudioTranslateService.ts:867-880`,
+  `AttachmentTranslateService.ts:378/435/484`) : **pas de défaut de code.** Le risque résiduel est
+  une ligne Mongo héritée d'avant la forme V2, donc une question de DONNÉES, à instruire par une
+  requête et non par une lecture de code.
+- **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** (cycle 64) — dernier rendu
+  d'aperçu web hors Prisme identifié.
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60) : payload PAR
+  DESTINATAIRE, question de conception non tranchée.
+- **`isDuplicate` n'est protégé par aucun témoin au niveau du spread** (cycle 66).
+- Les points hérités restent inchangés : `eslint` ne peut pas tourner sur le gateway (pas
+  d'`eslint.config.js` depuis ESLint v9) ; les deux scripts de réparation base attendent une
+  exécution humaine ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `getMentionsForMessage` / `getRecentMentionsForUser` n'ont toujours aucun écran.
+
 # Cycle 66 — Le chemin socket avait sa propre copie du sérialiseur de traductions
 
 ## Contrainte d'environnement (identique aux cycles 61/63/64/65)
