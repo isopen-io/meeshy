@@ -792,6 +792,11 @@ extension StoryViewerView {
         showFullLanguagePicker = false
         showEmojiStrip = false
         showFullEmojiPicker = false
+        // Reset seam for a scrub whose .onEnded never fires (competing
+        // recognizer / system interruption drops it, same hazard documented
+        // for gestureAxis above): without this, isScrubbingRail could stay
+        // stuck true and shouldPauseTimer would freeze the story forever.
+        isScrubbingRail = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []

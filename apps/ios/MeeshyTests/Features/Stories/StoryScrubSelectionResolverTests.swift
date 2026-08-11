@@ -40,6 +40,19 @@ final class StoryScrubSelectionResolverTests: XCTestCase {
         XCTAssertNil(hovered(500, 120))
     }
 
+    func test_hoveredIndex_inGapBetweenTiles_hoversNearestByCenterX() {
+        XCTAssertEqual(hovered(41, 120), 0)
+        XCTAssertEqual(hovered(43, 120), 1)
+    }
+
+    func test_hoveredIndex_inGapWithinToleranceBand_stillHovers() {
+        XCTAssertEqual(hovered(43, 90), 1)
+    }
+
+    func test_hoveredIndex_rightOfBarFootprint_hoversNothing() {
+        XCTAssertNil(hovered(180, 120))
+    }
+
     func test_hoveredIndex_emptyFrames_hoversNothing() {
         XCTAssertNil(StoryScrubSelectionResolver.hoveredIndex(
             tileFrames: [:], point: CGPoint(x: 60, y: 120), verticalTolerance: 16))

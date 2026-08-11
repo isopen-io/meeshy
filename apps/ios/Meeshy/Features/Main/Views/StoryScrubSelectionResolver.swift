@@ -21,8 +21,15 @@ nonisolated enum StoryScrubRelease: Equatable {
 /// publient leurs cadres dans `StoryScrubSpace` ; la position du doigt est
 /// d'abord matchée exactement, puis dans une bande de tolérance verticale pour
 /// qu'une petite dérive au-dessus/au-dessous de la barre ne perde jamais le
-/// survol. Pur et sans effet de bord — testé isolément (pattern
-/// StoryGestureDecisions).
+/// survol. En dernier recours, une position tombant dans l'espace horizontal
+/// entre deux tuiles (6pt sur cette barre, les cadres étant publiés sur le
+/// glyphe du Text) mais toujours dans l'emprise globale de la barre et la
+/// bande de tolérance verticale d'une tuile résout à la tuile la plus proche
+/// par centre X — sans quoi un drag traversant un interstice clignotait
+/// survol -> nil -> survol (double haptique, tuile qui rebondit) et un
+/// relâchement dans l'interstice avalait la sélection. Un point hors de
+/// l'emprise de la barre reste sans tuile. Pur et sans effet de bord — testé
+/// isolément (pattern StoryGestureDecisions).
 nonisolated struct StoryScrubSelectionResolver {
 
     static func hoveredIndex(
@@ -30,16 +37,30 @@ nonisolated struct StoryScrubSelectionResolver {
         point: CGPoint,
         verticalTolerance: CGFloat
     ) -> Int? {
+        guard !tileFrames.isEmpty else { return nil }
         if let exact = tileFrames.first(where: { $0.value.contains(point) })?.key {
             return exact
         }
-        return tileFrames
-            .filter { _, frame in
+        if let strict = tileFrames
+            .filter({ _, frame in
                 point.x >= frame.minX && point.x < frame.maxX
                     && point.y >= frame.minY - verticalTolerance
                     && point.y < frame.maxY + verticalTolerance
+            })
+            .min(by: { abs(point.y - $0.value.midY) < abs(point.y - $1.value.midY) })?
+            .key {
+            return strict
+        }
+
+        let footprintMinX = tileFrames.values.map(\.minX).min() ?? 0
+        let footprintMaxX = tileFrames.values.map(\.maxX).max() ?? 0
+        guard point.x >= footprintMinX && point.x < footprintMaxX else { return nil }
+
+        return tileFrames
+            .filter { _, frame in
+                point.y >= frame.minY - verticalTolerance && point.y < frame.maxY + verticalTolerance
             }
-            .min { abs(point.y - $0.value.midY) < abs(point.y - $1.value.midY) }?
+            .min { abs(point.x - $0.value.midX) < abs(point.x - $1.value.midX) }?
             .key
     }
 

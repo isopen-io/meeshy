@@ -50,6 +50,22 @@ class ScrubHitResolverTest {
     }
 
     @Test
+    fun `a position in the gap between two tiles hovers the nearest tile`() {
+        assertThat(hovered(41f, 120f)).isEqualTo(0)
+        assertThat(hovered(43f, 120f)).isEqualTo(1)
+    }
+
+    @Test
+    fun `a position in a gap within the tolerance band still hovers`() {
+        assertThat(hovered(43f, 90f)).isEqualTo(1)
+    }
+
+    @Test
+    fun `a position right of the bar footprint hovers nothing`() {
+        assertThat(hovered(180f, 120f)).isNull()
+    }
+
+    @Test
     fun `an empty bounds map hovers nothing`() {
         assertThat(ScrubHitResolver.hoveredIndex(emptyMap(), Offset(60f, 120f), 16f)).isNull()
     }

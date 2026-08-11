@@ -1290,8 +1290,10 @@ struct StoryViewerView: View {
     @State var heartFrame: CGRect = .zero
     /// Scrub longpress→drag en cours sur le rail (pause le timer).
     @State var isScrubbingRail = false
-    /// Ticks on every reaction sent, through any path (quick strip or the
-    /// full-screen picker). Drives the heart-button bounce in the sidebar.
+    /// Ticks at the flight's ARRIVAL, not when the reaction is sent — the
+    /// impact is what bounces the heart, regardless of origin (quick strip,
+    /// scrub, or full-screen picker). Drives the heart-button bounce in the
+    /// sidebar.
     @State private var heartBouncePulse: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
