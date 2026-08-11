@@ -196,7 +196,7 @@ public struct DocumentFullSheet: View {
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
