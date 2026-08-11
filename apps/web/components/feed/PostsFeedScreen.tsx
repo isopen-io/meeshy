@@ -34,7 +34,7 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
 import type { MobileTranscription } from '@/services/posts.service';
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostVisibility } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { copyToClipboard } from '@/lib/clipboard';
 
@@ -492,20 +492,35 @@ export function PostsFeedScreen() {
   }, []);
 
   const handleAudioPublish = useCallback(
-    async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+    async (data: {
+      audioFile: File;
+      transcription: MobileTranscription | null;
+      content?: string;
+      visibility: PostVisibility;
+      visibilityUserIds?: string[];
+    }) => {
       try {
         const tusService = new TusUploadService();
         const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
-        const mediaId = results[0]?.id;
-        if (!mediaId) throw new Error('Upload failed');
+        const media = results[0];
+        if (!media?.id) throw new Error('Upload failed');
 
         createPostMutation.mutate(
           {
             content: data.content,
             type: 'POST',
-            visibility: 'PUBLIC',
-            mediaIds: [mediaId],
+            visibility: data.visibility,
+            visibilityUserIds: data.visibilityUserIds,
+            mediaIds: [media.id],
             mobileTranscription: data.transcription ?? undefined,
+            originalLanguage: data.transcription?.language,
+            optimisticMedia: [{
+              id: media.id,
+              mimeType: media.mimeType,
+              fileUrl: media.fileUrl,
+              thumbnailUrl: media.thumbnailUrl,
+              order: 0,
+            }],
           },
           {
             onSuccess: () => {
