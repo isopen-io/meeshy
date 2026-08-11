@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **a stale `feature-parity.md` checkbox was found and corrected** (slice
+> `feature-parity-stale-checkbox-audio-translate` — a broad-sweep RE-PROUVER pass after the
+> home-screen widget epic wrapped up at 4/4 widgets, per the orchestrator's standing "continue the
+> broad sweep" guidance rather than tunneling further into the same area). **RE-PROUVEN before
+> starting**: `git branch -r`/`gh pr list --state open --search "apps/android OR apps/ios"` found
+> no interrupted run (empty result). Investigated "Ad-hoc blocking text translation" (unchecked)
+> as a candidate slice: read iOS's `MessageLanguageDetailView.translateTo` in full — it calls
+> `TranslationService.shared.translate(messageId:)`, and its own doc comment explains that passing
+> `messageId` routes the gateway's `/translate-blocking` endpoint into a "retranslation" branch
+> that both persists AND broadcasts via `message:translation` (no separate socket call needed).
+> Before writing any Android code for this, grepped for an existing Android equivalent —
+> found `ChatViewModel.onExplorerRetranslate(messageId, code)` (wired from
+> `MessageDetailExplorer`'s per-language retranslate affordance, the exact same long-press →
+> "Explore languages" sheet root `CLAUDE.md` documents as the sole translation-exploration entry
+> point) already calling `MessageRepository.requestTranslation(messageId, targetLanguage)` — a
+> real, synchronous REST call that persists its result, matching iOS's "blocking" semantics
+> exactly. Confirmed fully tested, not a stub: 7 `MessageRepositoryTest` cases + ~10
+> `ChatViewModelTest` cases covering success/failure/idempotency/in-flight-guard/edge cases. **No
+> code change needed** — checked the box and documented the finding in `feature-parity.md` in
+> place, matching the `settings-two-factor-auth` slice's own precedent of fixing stale checkboxes
+> discovered while re-proving an item. **Also investigated and explicitly DEFERRED (not
+> attempted, too large for a single slice without decomposition)**: "Conversation lock" (master
+> PIN setup/change/remove + per-conversation 4-digit lock + unlock-all) — confirmed a genuine,
+> unshipped gap (zero Android hits for `ConversationLock`/`masterPin` outside an unrelated
+> `ConversationDraftStore` false-positive; iOS has 5+ files: `ConversationLockSheet.swift`,
+> `SecurityView.swift`, plus context-menu/row/overlay wiring) — a real security feature needing its
+> own scoping pass (PIN storage, biometric unlock, per-conversation vs master-PIN interaction),
+> not a mechanical port; "First-run onboarding carousel with live feature demo + animated step
+> backgrounds" — confirmed zero Android implementation (`onboarding`/`Onboarding` greps hit only
+> the registration wizard, an unrelated flow) but is heavily animation/visual-design-driven with
+> thin testable logic (likely just "which page index is active"), a poor fit for this routine's
+> TDD-evidence rhythm without a dedicated design pass first. **Gate**: `./apps/android/meeshy.sh
+> check` → **`BUILD SUCCESSFUL`** (970 tasks — no code touched, so trivially unchanged from the
+> prior run's count). Reviewer **PASS** (diff `apps/android` only — a single line in
+> `feature-parity.md`; no tests needed since no production logic changed; the box being checked is
+> itself evidence-backed by the 17 existing tests cited above, not a bare assertion). **Next slice
+> candidates (not attempted this run)**: mark-read widget action (still deprioritized — thin
+> glue, low test value); Google Assistant App Actions (`shortcuts.xml`) for the voice-triggered
+> half of the shortcuts epic — needs external Assistant indexing/review; a presence-cache
+> foundation for conversation participants; on-device transcription for the Feed audio composer;
+> Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location attachment; PiP
+> (calls + media); Conversation lock (needs its own scoping/decomposition pass, per this run's
+> finding above); the onboarding carousel (needs a design pass before a slice can TDD it
+> meaningfully) — per the orchestrator's guidance these all remain documented, real gaps warranting
+> planning/decomposition passes rather than bare re-grepping.
+
 > On 2026-08-11 **home-screen widgets' fourth sub-slice landed**: `QuickReplyWidget`
 > (slice `widget-quick-reply`, feature-parity §"Home-screen widgets" — the natural next step
 > after the prior slice laid the exact foundation this widget needed). **RE-PROUVEN before

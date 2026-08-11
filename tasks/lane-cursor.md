@@ -1,1 +1,1 @@
-lane=IOS ios_streak=1 last_run=delta-page-walk
+lane=ANDROID android_streak=3 last_run=feature-parity-stale-checkbox-audio-translate
