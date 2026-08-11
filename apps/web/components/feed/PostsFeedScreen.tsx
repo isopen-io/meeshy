@@ -333,6 +333,7 @@ export function PostsFeedScreen() {
           visibility: data.visibility,
           visibilityUserIds: data.visibilityUserIds,
           mediaIds: data.mediaIds,
+          optimisticMedia: data.optimisticMedia,
         },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),

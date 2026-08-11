@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
+import { formatDuration } from '@/utils/audio-formatters';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -27,7 +28,7 @@ export interface PostCardProps {
   isPinned?: boolean;
   reactionSummary?: Record<string, number>;
   userReaction?: string;
-  media?: readonly { id: string; mimeType: string; fileUrl: string; thumbnailUrl?: string | null; alt?: string | null }[];
+  media?: readonly { id: string; mimeType: string; fileUrl: string; thumbnailUrl?: string | null; alt?: string | null; duration?: number | null }[];
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -273,6 +274,21 @@ function PostCard({
                 )}
                 {m.mimeType.startsWith('video/') && (
                   <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} className="w-full h-full object-cover" muted />
+                )}
+                {m.mimeType.startsWith('audio/') && (
+                  <div
+                    data-testid="post-card-audio-tile"
+                    className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-[var(--gp-terracotta)]"
+                  >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {typeof m.duration === 'number' && (
+                      <span className="text-xs font-medium text-[var(--gp-text-secondary)]">
+                        {formatDuration(m.duration)}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
