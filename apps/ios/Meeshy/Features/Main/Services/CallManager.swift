@@ -4854,7 +4854,24 @@ final class CallManager: ObservableObject {
             Logger.calls.warning("call:end (rejected) deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
-        MessageSocketManager.shared.emitCallReject(callId: callId)
+        // ACK parity avec emitCallEndReliably (2026-08-11) : un socket vu
+        // "connecté" au moment du refus n'implique pas que l'emit atteint le
+        // gateway — un blip qui s'auto-répare avant que `connectionState` ne
+        // publie la coupure le laisse filer sans ACK ni réconciliation. Le
+        // déclinant a déjà fermé localement (endCallInternal a tourné avant
+        // cet appel), l'appelant sonne alors jusqu'au timeout (~45-60s) et le
+        // gateway résout `missed` au lieu de `rejected` — le même mislabel
+        // que l'arc reject 2026-07-12 fermait déjà sur les autres chemins,
+        // ici rouvert par la seule fenêtre "connecté mais jamais livré".
+        Task { [weak self] in
+            let acked = await MessageSocketManager.shared.emitCallRejectWithAck(callId: callId)
+            if !acked {
+                MessageSocketManager.shared.emitCallReject(callId: callId)
+                self?.pendingEndReconciliationCallId = callId
+                self?.pendingEndReconciliationReason = "rejected"
+                Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+            }
+        }
     }
 
     // MARK: - Duration Formatting
