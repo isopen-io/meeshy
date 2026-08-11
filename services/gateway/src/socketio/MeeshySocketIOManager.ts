@@ -93,6 +93,7 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
   if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
   if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
+  if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
@@ -1677,12 +1678,15 @@ export class MeeshySocketIOManager {
         logger.warn(`⚠️ [SocketIOManager] Cannot broadcast attachment-updated: attachment ${attachmentId} not found`);
         return;
       }
-      emitAttachmentUpdated(
-        this.io,
-        normalizedConversationId,
+      await emitAttachmentUpdated({
+        io: this.io,
+        prisma: this.prisma,
+        deliveryQueue: this.deliveryQueue,
+        connectedUsers: this.connectedUsers,
+        conversationId: normalizedConversationId,
         messageId,
-        fresh as Record<string, unknown>
-      );
+        attachment: fresh as Record<string, unknown>,
+      });
     } catch (err) {
       logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);
     }

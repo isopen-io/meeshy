@@ -574,14 +574,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
     /// évolution de la règle touche les DEUX plateformes.
     ///
-    /// DIVERGENCE CONNUE, non corrigée ici : `deltaSyncCore` demande
-    /// `limit=500`, mais `GET /conversations` plafonne à 100
-    /// (`Math.min(limit, 100)`, `routes/conversations/core.ts`) et trie par
-    /// `lastMessageAt` décroissant, PAS par `updatedAt`. Une fenêtre ayant
-    /// touché plus de 100 conversations rend donc une page tronquée dont les
-    /// lignes coupées ne sont pas « les plus anciennes » — et `lastSyncTimestamp`
-    /// avance quand même au max des `updatedAt` reçus, ce qui les enjambe
-    /// définitivement jusqu'au `fullSync` (24 h). Le web détecte ce cas
+    /// TRONCATURE : `deltaSyncCore` demande `limit=500`, mais
+    /// `GET /conversations` plafonne à 100 (`Math.min(limit, 100)`,
+    /// `routes/conversations/core.ts`). Une fenêtre ayant touché plus de 100
+    /// conversations rend donc une page tronquée.
+    ///
+    /// La route trie DÉSORMAIS une page delta par `updatedAt` croissant (elle
+    /// triait par `lastMessageAt` décroissant, sans rapport avec le filtre) :
+    /// les lignes coupées sont exactement celles d'`updatedAt` supérieur à la
+    /// dernière rendue, donc `lastSyncTimestamp` — avancé au max des `updatedAt`
+    /// reçus — pointe dessus au lieu de les enjamber. La troncature est une
+    /// pagination, plus une perte.
+    ///
+    /// RÉSIDU non couvert ici : plus de 100 conversations portant la MÊME
+    /// milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
+    /// la borne stricte `gt` ne peut pas reprendre. Le web détecte ce cas
     /// (`conversations.length >= DELTA_PAGE_LIMIT` ⇒ relecture complète) ;
     /// iOS ne le détecte pas encore.
     @discardableResult

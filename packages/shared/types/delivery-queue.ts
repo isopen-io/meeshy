@@ -35,7 +35,18 @@ export type QueuedMessagePayload = {
    * dedup is correct (one creation per message) and it carries no delivery
    * receipt — the share-link send path creates no read-status rows, so a
    * receipt on drain alone would claim a delivery the rest of the pipeline
-   * never tracked. */
+   * never tracked.
+   * 'attachment-updated' replays MESSAGE_ATTACHMENT_UPDATED so a peer who was
+   * offline when Whisper finished transcribing (or when NLLB+Chatterbox
+   * finished one language of translated audio) still gets the enrichment. The
+   * `message:new` that was queued at SEND time carries the attachment as it
+   * was then — no transcription, no translated audio, both landing a second or
+   * two later — so without this entry the replayed message is permanently the
+   * un-enriched one. It needs a dedupKey scoped to the ATTACHMENT id: two
+   * audio attachments on one message would otherwise collapse into a single
+   * entry, and the supersede-in-place rule (latest payload wins) is exactly
+   * right per attachment since the payload carries its FULL state. Never a
+   * delivery receipt. */
   readonly eventType?:
     | 'new'
     | 'edited'
@@ -46,7 +57,8 @@ export type QueuedMessagePayload = {
     | 'attachment-reaction-removed'
     | 'pinned'
     | 'unpinned'
-    | 'link-message';
+    | 'link-message'
+    | 'attachment-updated';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:

@@ -48,11 +48,16 @@ import {
  * Plafond serveur de `GET /conversations` (`Math.min(limit, 100)` dans
  * `routes/conversations/core.ts`) — demander plus ne rend pas plus.
  *
- * La troncature n'est pas récupérable en avançant le watermark : la route trie
- * par `lastMessageAt` décroissant, PAS par `updatedAt`, donc les lignes coupées
- * ne sont pas « les plus anciennes » et le prochain `updatedSince` — calculé sur
- * ce qui a été fusionné — passerait par-dessus. Une page PLEINE est donc traitée
- * comme une preuve d'incomplétude, et non comme un delta de confiance.
+ * La route trie désormais une page DELTA par `updatedAt` croissant (elle triait
+ * par `lastMessageAt` décroissant, sans rapport avec le filtre), donc les lignes
+ * coupées sont exactement celles d'`updatedAt` supérieur à la dernière rendue :
+ * le watermark pointe dessus et l'exécution suivante les rend.
+ *
+ * L'escalade reste, pour le seul cas que l'ordre ne rattrape pas : plus de 100
+ * conversations portant la MÊME milliseconde d'`updatedAt` (écriture en masse)
+ * débordent d'une page que la borne stricte `gt` ne peut pas reprendre. Une page
+ * PLEINE est donc toujours traitée comme une preuve d'incomplétude, et non comme
+ * un delta de confiance.
  */
 const DELTA_PAGE_LIMIT = 100;
 
@@ -135,7 +140,6 @@ export function useConversationsDeltaSync(enabled: boolean): void {
           const merge = mergeConversationDelta(existing, conversations, {
             hasMore,
             openConversationId,
-            hasMore,
           });
           removedIds = merge.removedIds;
           return rebuildInfiniteConversationPages(old, merge.merged);
