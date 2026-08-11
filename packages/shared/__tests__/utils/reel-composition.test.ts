@@ -1,20 +1,17 @@
 /**
- * @jest-environment node
+ * Règle de composition d'un RÉEL — prédicat PUR, source unique partagée
+ * (gateway + web, import direct de `@meeshy/shared/utils/reel-composition`).
+ * Miroir exact du SDK iOS `ReelComposition.qualifiesAsReel`
+ * (packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift).
  *
- * Règle de composition d'un RÉEL (directive user 2026-08-02, étendue par la
- * directive durée minimale) : video (>=3s) || audio (>=3s) || >= 2 images —
- * miroir exact du SDK (`ReelComposition.qualifiesAsReel`, FeedModels.swift,
- * suite `ReelCompositionTests`). Les cas ci-dessous répliquent la suite Swift.
- * Les images ne sont jamais soumises à la condition de durée.
- *
- * `qualifiesAsReel` vit désormais dans `@meeshy/shared/utils/reel-composition`
- * (source unique, testée aussi côté shared dans
- * `packages/shared/__tests__/utils/reel-composition.test.ts`) — ce fichier
- * reste une couverture de régression au point de consommation gateway.
+ * Règle : vidéo (>= MIN_QUALIFYING_DURATION_MS) || audio (>= même seuil) ||
+ * au moins deux images. Une durée absente/nulle sur vidéo/audio est TOUJOURS
+ * non-qualifiante (jamais un fallback permissif). Les images ne sont jamais
+ * soumises à la condition de durée.
  */
 
-import { describe, it, expect } from '@jest/globals';
-import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import { describe, it, expect } from 'vitest';
+import { qualifiesAsReel, MIN_QUALIFYING_DURATION_MS } from '../../utils/reel-composition';
 
 const LONG = 5000;
 
@@ -24,6 +21,12 @@ const media = (...entries: Array<string | null | [string | null, number | null |
       ? { mimeType: entry[0], duration: entry[1] }
       : { mimeType: entry, duration: LONG },
   );
+
+describe('MIN_QUALIFYING_DURATION_MS', () => {
+  it('is 3000ms', () => {
+    expect(MIN_QUALIFYING_DURATION_MS).toBe(3000);
+  });
+});
 
 describe('qualifiesAsReel', () => {
   it('qualifies a video, an audio, or at least two images (sufficient duration)', () => {
@@ -58,13 +61,13 @@ describe('qualifiesAsReel', () => {
     expect(qualifiesAsReel(media('IMAGE/JPEG'))).toBe(false);
   });
 
-  it('does NOT qualify a video or audio under 3 seconds', () => {
+  it('does NOT qualify a video or audio under 3 seconds (boundary: 2999ms)', () => {
     expect(qualifiesAsReel(media(['video/mp4', 2999]))).toBe(false);
     expect(qualifiesAsReel(media(['audio/mp4', 2999]))).toBe(false);
     expect(qualifiesAsReel(media(['video/mp4', 0]))).toBe(false);
   });
 
-  it('qualifies a video or audio at exactly 3 seconds', () => {
+  it('qualifies a video or audio at exactly 3000ms', () => {
     expect(qualifiesAsReel(media(['video/mp4', 3000]))).toBe(true);
     expect(qualifiesAsReel(media(['audio/mp4', 3000]))).toBe(true);
   });
@@ -81,5 +84,9 @@ describe('qualifiesAsReel', () => {
 
   it('a short video is rescued by a second qualifying image pair', () => {
     expect(qualifiesAsReel(media(['video/mp4', 500], 'image/jpeg', 'image/png'))).toBe(true);
+  });
+
+  it('one qualifying image is not enough even with a short video', () => {
+    expect(qualifiesAsReel(media(['video/mp4', 500], 'image/jpeg'))).toBe(false);
   });
 });

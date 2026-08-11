@@ -7,7 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
-import { qualifiesAsReel } from './posts/reelComposition';
+import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
