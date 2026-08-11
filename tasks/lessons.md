@@ -4614,7 +4614,8 @@ ce qui est de la plateforme.
    front `false → true` du socket, les notifications non (corrigé), la liste de conversations non
    plus (documentée en tête du cycle suivant). Sans ce balayage, le rapport aurait annoncé « le web
    n'a pas de rattrapage », ce qui est faux, au lieu de nommer la seule surface restante.
-## Leçon 112 — `args` passé à Workflow doit être vérifié en tête de script, jamais consommé les yeux fermés (2026-08-11, mini-chantier follow-ups audio immersif iOS)
+
+## Leçon 116 — `args` passé à Workflow doit être vérifié en tête de script, jamais consommé les yeux fermés (2026-08-11, mini-chantier follow-ups audio immersif iOS)
 
 Un script `Workflow` lancé avec `args: {"worktree": "/chemin/reel"}` et lisant `const WORKTREE = args.worktree` a vu CHAQUE prompt dispatché aux 14 sous-agents contenir littéralement `cd undefined` — `args` ne s'est pas propagé malgré un appel conforme à la doc de l'outil.
 
