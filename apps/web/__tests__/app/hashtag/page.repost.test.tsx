@@ -122,6 +122,34 @@ describe('HashtagPage — repost wiring', () => {
     expect(screen.getByText('Bob')).toBeInTheDocument();
   });
 
+  it("quote repost: outer bar keeps the quote's OWN counts (isQuote wired through)", async () => {
+    mockGetPostsByHashtag.mockResolvedValue({
+      success: true,
+      data: [
+        makePost({
+          content: 'My take on this',
+          isQuote: true,
+          likeCount: 3,
+          commentCount: 1,
+          repostOf: {
+            id: 'original-1',
+            author: { id: 'user-2', username: 'bob', displayName: 'Bob' },
+            content: 'Original content',
+            likeCount: 5,
+            commentCount: 2,
+          },
+        }),
+      ],
+      meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId('post-card-repost-block')).toBeInTheDocument());
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByTestId('repost-like-count')).toHaveTextContent('5');
+  });
+
   it('navigates to the original post detail page when the repost banner is tapped', async () => {
     mockGetPostsByHashtag.mockResolvedValue({
       success: true,

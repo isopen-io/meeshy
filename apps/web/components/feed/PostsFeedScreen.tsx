@@ -790,6 +790,7 @@ export function PostsFeedScreen() {
                     userReaction={userReaction}
                     media={post.media}
                     repostOf={post.repostOf}
+                    isQuote={post.isQuote}
                     onLike={() => handleLike(post.id, isLiked)}
                     onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
                     onComment={() => handleComment(post.id)}

@@ -226,6 +226,15 @@ function PostDetail({
   const repostTranslationItems = useMemo(() => postTranslationsToItems(repostOf?.translations), [repostOf?.translations]);
   const repostMedia = repostOf?.media;
   const hasRepostMedia = repostMedia && repostMedia.length > 0;
+  /**
+   * A SIMPLE repost has no engagement of its own worth surfacing — the outer
+   * stats bar shows the ORIGINAL's counts instead (product rule 2026-08-11).
+   * A QUOTE keeps its own outer counts; the nested row then carries the
+   * original's, so the same numbers never render twice on one card.
+   */
+  const displayLikeCount = repostOf && !post.isQuote ? repostOf.likeCount ?? post.likeCount : post.likeCount;
+  const displayCommentCount = repostOf && !post.isQuote ? repostOf.commentCount ?? post.commentCount : post.commentCount;
+  const displayViewCount = repostOf && !post.isQuote ? repostOf.viewCount ?? post.viewCount : post.viewCount;
 
   const handleLikeToggle = useCallback(() => {
     onLike?.();
@@ -407,7 +416,15 @@ function PostDetail({
                   // of `showContent`, which would double the text alongside
                   // PostContentText. `inline` is the same combination
                   // CommentItem/StatusBar/StoryViewer already use.
-                  <div className="mb-3">
+                  // The shield div stops the toggle's own clicks/keydowns
+                  // (chip, dropdown rows) from bubbling into the enclosing
+                  // repost block's navigation handler — same shape as the
+                  // media download button's own stopPropagation.
+                  <div
+                    className="mb-3"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <TranslationToggle
                       originalContent={repostOf.content}
                       originalLanguage={repostOf.originalLanguage ?? 'unknown'}
@@ -433,20 +450,30 @@ function PostDetail({
                     <RepostMediaTile
                       key={m.id}
                       media={m}
-                      downloadLabel="Download original media"
+                      downloadLabel={t('post.repostDownload', 'Download original media')}
                       onDownload={handleDownloadRepostMedia}
                     />
                   ))}
                 </div>
               )}
 
-              <div className="flex items-center gap-4 text-xs text-[var(--gp-text-muted)]">
-                <span data-testid="repost-like-count">{formatCount(repostOf.likeCount ?? 0)} likes</span>
-                <span data-testid="repost-comment-count">{formatCount(repostOf.commentCount ?? 0)} comments</span>
-                {typeof repostOf.viewCount === 'number' && (
-                  <span data-testid="repost-view-count">{formatCount(repostOf.viewCount)} views</span>
-                )}
-              </div>
+              {/*
+                A SIMPLE repost's counters now live in the outer stats bar
+                (displayLikeCount/displayCommentCount/displayViewCount
+                above) — repeating them here would render the same 42/7
+                twice on one card. A QUOTE's outer bar shows the quote's OWN
+                counts, so the nested row is the only place the original's
+                counters surface.
+              */}
+              {post.isQuote && (
+                <div className="flex items-center gap-4 text-xs text-[var(--gp-text-muted)]">
+                  <span data-testid="repost-like-count">{formatCount(repostOf.likeCount ?? 0)} likes</span>
+                  <span data-testid="repost-comment-count">{formatCount(repostOf.commentCount ?? 0)} comments</span>
+                  {typeof repostOf.viewCount === 'number' && (
+                    <span data-testid="repost-view-count">{formatCount(repostOf.viewCount)} views</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -473,10 +500,10 @@ function PostDetail({
 
           {/* Stats bar */}
           <div className="flex items-center gap-4 py-2 border-t border-b border-[var(--gp-border)] text-xs text-[var(--gp-text-muted)] mb-3">
-            {post.likeCount > 0 && <span>{formatCount(post.likeCount)} likes</span>}
-            {post.commentCount > 0 && <span>{formatCount(post.commentCount)} comments</span>}
+            {displayLikeCount > 0 && <span>{formatCount(displayLikeCount)} likes</span>}
+            {displayCommentCount > 0 && <span>{formatCount(displayCommentCount)} comments</span>}
             {post.repostCount > 0 && <span>{formatCount(post.repostCount)} reposts</span>}
-            {post.viewCount > 0 && <span>{formatCount(post.viewCount)} views</span>}
+            {displayViewCount > 0 && <span>{formatCount(displayViewCount)} views</span>}
           </div>
 
           {/* Action buttons */}

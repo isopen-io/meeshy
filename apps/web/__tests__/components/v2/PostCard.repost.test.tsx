@@ -38,8 +38,8 @@ const baseProps = {
   lang: 'fr',
   content: '',
   time: '2h',
-  likes: 0,
-  comments: 0,
+  likes: 3,
+  comments: 1,
 };
 
 const repostOf = {
@@ -99,7 +99,7 @@ describe('PostCard — repost rendering', () => {
   });
 
   it('shows the reposter comment above the nested card for a quote', () => {
-    render(<PostCard {...baseProps} content="My own take on this" repostOf={repostOf} />);
+    render(<PostCard {...baseProps} content="My own take on this" repostOf={repostOf} isQuote />);
     expect(screen.getByText('My own take on this')).toBeInTheDocument();
     expect(screen.getByText('Hello from the original')).toBeInTheDocument();
   });
@@ -119,22 +119,6 @@ describe('PostCard — repost rendering', () => {
     );
     expect(screen.getByAltText('A photo')).toBeInTheDocument();
     expect(screen.getByTestId('post-card-repost-audio-tile')).toBeInTheDocument();
-  });
-
-  it("shows the original's like/comment counters", () => {
-    render(<PostCard {...baseProps} repostOf={repostOf} />);
-    expect(screen.getByTestId('repost-like-count')).toHaveTextContent('42');
-    expect(screen.getByTestId('repost-comment-count')).toHaveTextContent('7');
-  });
-
-  it('hides the view counter when absent on repostOf', () => {
-    render(<PostCard {...baseProps} repostOf={repostOf} />);
-    expect(screen.queryByTestId('repost-view-count')).not.toBeInTheDocument();
-  });
-
-  it('shows the view counter when present on repostOf (post-Task-1 gateway field)', () => {
-    render(<PostCard {...baseProps} repostOf={{ ...repostOf, viewCount: 99 }} />);
-    expect(screen.getByTestId('repost-view-count')).toHaveTextContent('99');
   });
 
   it("downloads the original's media through onDownloadRepostMedia (not onDownloadMedia)", () => {
@@ -157,5 +141,73 @@ describe('PostCard — repost rendering', () => {
     expect(onDownloadRepostMedia).toHaveBeenCalledWith('m-1');
     expect(onDownloadMedia).not.toHaveBeenCalled();
     clickSpy.mockRestore();
+  });
+
+  describe('counters — simple repost vs quote (controller amendment)', () => {
+    it("simple repost: outer action bar shows the ORIGINAL's counts, nested counter row is absent", () => {
+      render(<PostCard {...baseProps} repostOf={repostOf} />);
+      expect(screen.getByText('42')).toBeInTheDocument();
+      expect(screen.getByText('7')).toBeInTheDocument();
+      expect(screen.queryByText('3')).not.toBeInTheDocument();
+      expect(screen.queryByText('1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('repost-like-count')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('repost-comment-count')).not.toBeInTheDocument();
+    });
+
+    it('simple repost without a repostOf count falls back to the outer prop', () => {
+      render(<PostCard {...baseProps} repostOf={{ ...repostOf, likeCount: undefined as unknown as number }} />);
+      expect(screen.getByText('3')).toBeInTheDocument();
+    });
+
+    it("quote: outer action bar keeps the quote's OWN counts, nested counter row shows the ORIGINAL's", () => {
+      render(<PostCard {...baseProps} repostOf={repostOf} isQuote />);
+      expect(screen.getByText('3')).toBeInTheDocument();
+      expect(screen.getByText('1')).toBeInTheDocument();
+      expect(screen.getByTestId('repost-like-count')).toHaveTextContent('42');
+      expect(screen.getByTestId('repost-comment-count')).toHaveTextContent('7');
+    });
+
+    it('quote: nested view counter shows when present on repostOf', () => {
+      render(<PostCard {...baseProps} repostOf={{ ...repostOf, viewCount: 99 }} isQuote />);
+      expect(screen.getByTestId('repost-view-count')).toHaveTextContent('99');
+    });
+
+    it('quote: nested view counter hidden when absent on repostOf', () => {
+      render(<PostCard {...baseProps} repostOf={repostOf} isQuote />);
+      expect(screen.queryByTestId('repost-view-count')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('nested translation chip does not navigate (critical #1)', () => {
+    const repostWithTranslations = {
+      ...repostOf,
+      translations: {
+        es: { text: 'Hola desde el original' },
+        fr: { text: 'Bonjour depuis l’original' },
+      },
+    };
+
+    it('clicking the language chip opens the menu and does not call onTapRepost', () => {
+      const onTapRepost = jest.fn();
+      render(
+        <PostCard {...baseProps} userLanguage="fr" repostOf={repostWithTranslations} onTapRepost={onTapRepost} />,
+      );
+
+      fireEvent.click(screen.getByText('FR'));
+
+      expect(onTapRepost).not.toHaveBeenCalled();
+      expect(screen.getByText('language.original')).toBeInTheDocument();
+    });
+
+    it('pressing a key on the language chip does not bubble into the repost navigation handler', () => {
+      const onTapRepost = jest.fn();
+      render(
+        <PostCard {...baseProps} userLanguage="fr" repostOf={repostWithTranslations} onTapRepost={onTapRepost} />,
+      );
+
+      fireEvent.keyDown(screen.getByText('FR'), { key: 'Enter' });
+
+      expect(onTapRepost).not.toHaveBeenCalled();
+    });
   });
 });

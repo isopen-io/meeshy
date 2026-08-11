@@ -26,6 +26,7 @@ jest.mock('@/hooks/use-i18n', () => ({
 
 type PostCardStubProps = {
   repostOf?: { id: string };
+  isQuote?: boolean;
   onTapRepost?: (repostId: string) => void;
   onDownloadRepostMedia?: (mediaId: string) => void;
 };
@@ -34,9 +35,10 @@ jest.mock('@/components/v2', () => ({
     <button onClick={onClick}>{children}</button>
   ),
   useToast: () => ({ addToast: jest.fn() }),
-  PostCard: ({ repostOf, onTapRepost, onDownloadRepostMedia }: PostCardStubProps) => (
+  PostCard: ({ repostOf, isQuote, onTapRepost, onDownloadRepostMedia }: PostCardStubProps) => (
     <div>
       {repostOf && <div data-testid="post-card-repost-of">{repostOf.id}</div>}
+      <div data-testid="post-card-is-quote">{String(!!isQuote)}</div>
       {onTapRepost && (
         <button data-testid="post-card-tap-repost" onClick={() => onTapRepost(repostOf!.id)}>
           Tap repost
@@ -93,6 +95,7 @@ const mockPost = {
   visibility: 'PUBLIC',
   content: '',
   repostOf: { id: 'original-1', author: { id: 'author-3', username: 'bob' }, content: 'Original', likeCount: 1, commentCount: 0 },
+  isQuote: true,
   likeCount: 0,
   commentCount: 0,
   repostCount: 0,
@@ -161,6 +164,11 @@ describe('PostsFeedScreen — repost wiring', () => {
   it("passes post.repostOf through to PostCard", () => {
     render(<PostsFeedScreen />);
     expect(screen.getByTestId('post-card-repost-of')).toHaveTextContent('original-1');
+  });
+
+  it('passes post.isQuote through to PostCard (drives counter placement)', () => {
+    render(<PostsFeedScreen />);
+    expect(screen.getByTestId('post-card-is-quote')).toHaveTextContent('true');
   });
 
   it('navigates to the original post detail page when the repost banner is tapped', () => {

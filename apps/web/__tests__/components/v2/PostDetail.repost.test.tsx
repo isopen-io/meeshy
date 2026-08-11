@@ -6,6 +6,7 @@
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PostDetail } from '@/components/v2/PostDetail';
+import { getLanguageName } from '@/components/v2/flags';
 import type { Post } from '@meeshy/shared/types/post';
 
 function makePost(overrides: Partial<Post> = {}): Post {
@@ -15,8 +16,8 @@ function makePost(overrides: Partial<Post> = {}): Post {
     type: 'POST',
     visibility: 'PUBLIC',
     content: '',
-    likeCount: 0,
-    commentCount: 0,
+    likeCount: 3,
+    commentCount: 1,
     repostCount: 0,
     viewCount: 0,
     bookmarkCount: 0,
@@ -112,22 +113,6 @@ describe('PostDetail — repost rendering', () => {
     expect(screen.getByTestId('post-detail-repost-audio-tile')).toBeInTheDocument();
   });
 
-  it("shows the original's like/comment counters", () => {
-    render(<PostDetail post={makePost({ repostOf })} comments={[]} />);
-    expect(screen.getByTestId('repost-like-count')).toHaveTextContent('42');
-    expect(screen.getByTestId('repost-comment-count')).toHaveTextContent('7');
-  });
-
-  it('hides the view counter when absent on repostOf', () => {
-    render(<PostDetail post={makePost({ repostOf })} comments={[]} />);
-    expect(screen.queryByTestId('repost-view-count')).not.toBeInTheDocument();
-  });
-
-  it('shows the view counter when present on repostOf (post-Task-1 gateway field)', () => {
-    render(<PostDetail post={makePost({ repostOf: { ...repostOf, viewCount: 99 } })} comments={[]} />);
-    expect(screen.getByTestId('repost-view-count')).toHaveTextContent('99');
-  });
-
   it("downloads the original's media through onDownloadRepostMedia (not onDownloadMedia)", () => {
     const onDownloadMedia = jest.fn();
     const onDownloadRepostMedia = jest.fn();
@@ -150,5 +135,93 @@ describe('PostDetail — repost rendering', () => {
     expect(onDownloadRepostMedia).toHaveBeenCalledWith('m-1');
     expect(onDownloadMedia).not.toHaveBeenCalled();
     clickSpy.mockRestore();
+  });
+
+  describe('counters — simple repost vs quote (controller amendment)', () => {
+    it("simple repost: outer stats bar shows the ORIGINAL's counts, nested counter row is absent", () => {
+      render(<PostDetail post={makePost({ repostOf })} comments={[]} />);
+      expect(screen.getByText('42 likes')).toBeInTheDocument();
+      expect(screen.getByText('7 comments')).toBeInTheDocument();
+      expect(screen.queryByText('3 likes')).not.toBeInTheDocument();
+      expect(screen.queryByText('1 comments')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('repost-like-count')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('repost-comment-count')).not.toBeInTheDocument();
+    });
+
+    it('simple repost: outer stats bar shows the ORIGINAL view count too, when present', () => {
+      render(<PostDetail post={makePost({ repostOf: { ...repostOf, viewCount: 99 } })} comments={[]} />);
+      expect(screen.getByText('99 views')).toBeInTheDocument();
+    });
+
+    it('simple repost without a repostOf count falls back to the outer prop', () => {
+      render(
+        <PostDetail
+          post={makePost({ repostOf: { ...repostOf, likeCount: undefined as unknown as number } })}
+          comments={[]}
+        />,
+      );
+      expect(screen.getByText('3 likes')).toBeInTheDocument();
+    });
+
+    it("quote: outer stats bar keeps the quote's OWN counts, nested counter row shows the ORIGINAL's", () => {
+      render(<PostDetail post={makePost({ repostOf, isQuote: true })} comments={[]} />);
+      expect(screen.getByText('3 likes')).toBeInTheDocument();
+      expect(screen.getByText('1 comments')).toBeInTheDocument();
+      expect(screen.getByTestId('repost-like-count')).toHaveTextContent('42');
+      expect(screen.getByTestId('repost-comment-count')).toHaveTextContent('7');
+    });
+
+    it('quote: nested view counter shows when present on repostOf', () => {
+      render(<PostDetail post={makePost({ repostOf: { ...repostOf, viewCount: 99 }, isQuote: true })} comments={[]} />);
+      expect(screen.getByTestId('repost-view-count')).toHaveTextContent('99');
+    });
+
+    it('quote: nested view counter hidden when absent on repostOf', () => {
+      render(<PostDetail post={makePost({ repostOf, isQuote: true })} comments={[]} />);
+      expect(screen.queryByTestId('repost-view-count')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('nested translation chip does not navigate (critical #1)', () => {
+    const repostWithTranslations = {
+      ...repostOf,
+      translations: {
+        es: { text: 'Hola desde el original' },
+        fr: { text: 'Bonjour depuis l’original' },
+      },
+    };
+
+    it('clicking the language chip opens the menu and does not call onTapRepost', () => {
+      const onTapRepost = jest.fn();
+      render(
+        <PostDetail
+          post={makePost({ repostOf: repostWithTranslations })}
+          comments={[]}
+          userLanguage="fr"
+          onTapRepost={onTapRepost}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('FR'));
+
+      expect(onTapRepost).not.toHaveBeenCalled();
+      expect(screen.getByText(getLanguageName('en'))).toBeInTheDocument();
+    });
+
+    it('pressing a key on the language chip does not bubble into the repost navigation handler', () => {
+      const onTapRepost = jest.fn();
+      render(
+        <PostDetail
+          post={makePost({ repostOf: repostWithTranslations })}
+          comments={[]}
+          userLanguage="fr"
+          onTapRepost={onTapRepost}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByText('FR'), { key: 'Enter' });
+
+      expect(onTapRepost).not.toHaveBeenCalled();
+    });
   });
 });

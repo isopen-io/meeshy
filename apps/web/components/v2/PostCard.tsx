@@ -41,6 +41,8 @@ export interface PostCardProps {
   media?: readonly PostCardMedia[];
   /** Original post being reposted — renders the "Reposted from @handle" banner + nested card. */
   repostOf?: Post['repostOf'];
+  /** True for a quote-repost (reposter added their own comment). Drives which counters show where. */
+  isQuote?: boolean;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -181,6 +183,7 @@ function PostCard({
   userReaction,
   media,
   repostOf,
+  isQuote = false,
   onLike,
   onComment,
   onShare,
@@ -271,6 +274,14 @@ function PostCard({
   const repostTranslations = useMemo(() => repostTranslationItems(repostOf?.translations), [repostOf?.translations]);
   const repostMedia = repostOf?.media;
   const hasRepostMedia = repostMedia && repostMedia.length > 0;
+  /**
+   * A SIMPLE repost has no engagement of its own worth surfacing — the outer
+   * action bar shows the ORIGINAL's counts instead (product rule 2026-08-11).
+   * A QUOTE keeps its own outer counts; the nested row then carries the
+   * original's, so the same numbers never render twice on one card.
+   */
+  const displayLikes = repostOf && !isQuote ? repostOf.likeCount ?? likes : likes;
+  const displayComments = repostOf && !isQuote ? repostOf.commentCount ?? comments : comments;
   const handleDownloadRepostMedia = onDownloadRepostMedia
     ? (m: PostCardMedia) => {
         triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
@@ -461,7 +472,15 @@ function PostCard({
                 // PostContentText below. `inline` respects `showContent` and
                 // is the same combination CommentItem/StatusBar/StoryViewer
                 // already use for single-render translated text.
-                <div className="mb-2">
+                // The shield div stops the toggle's own clicks/keydowns
+                // (chip, dropdown rows) from bubbling into the enclosing
+                // repost block's navigation handler — same shape as the
+                // media download button's own stopPropagation.
+                <div
+                  className="mb-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                   <TranslationToggle
                     originalContent={repostOf.content}
                     originalLanguage={repostOf.originalLanguage ?? 'unknown'}
@@ -488,7 +507,7 @@ function PostCard({
                     key={m.id}
                     media={m}
                     index={i}
-                    downloadLabel={t('post.repost.download', 'Download original media')}
+                    downloadLabel={t('post.repostDownload', 'Download original media')}
                     t={t}
                     testIdPrefix="post-card-repost"
                     onDownload={handleDownloadRepostMedia}
@@ -497,29 +516,38 @@ function PostCard({
               </div>
             )}
 
-            <div className="flex items-center gap-3 text-xs text-[var(--gp-text-muted)]">
-              <span className="inline-flex items-center gap-1" data-testid="repost-like-count">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                {repostOf.likeCount ?? 0}
-              </span>
-              <span className="inline-flex items-center gap-1" data-testid="repost-comment-count">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                {repostOf.commentCount ?? 0}
-              </span>
-              {typeof repostOf.viewCount === 'number' && (
-                <span className="inline-flex items-center gap-1" data-testid="repost-view-count">
+            {/*
+              A SIMPLE repost's counters now live in the outer action bar
+              (displayLikes/displayComments above) — repeating them here
+              would render the same 42/7 twice on one card. A QUOTE's outer
+              bar shows the quote's OWN counts, so the nested row is the
+              only place the original's counters surface.
+            */}
+            {isQuote && (
+              <div className="flex items-center gap-3 text-xs text-[var(--gp-text-muted)]">
+                <span className="inline-flex items-center gap-1" data-testid="repost-like-count">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
-                  {repostOf.viewCount}
+                  {repostOf.likeCount ?? 0}
                 </span>
-              )}
-            </div>
+                <span className="inline-flex items-center gap-1" data-testid="repost-comment-count">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  {repostOf.commentCount ?? 0}
+                </span>
+                {typeof repostOf.viewCount === 'number' && (
+                  <span className="inline-flex items-center gap-1" data-testid="repost-view-count">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {repostOf.viewCount}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -581,7 +609,7 @@ function PostCard({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </motion.svg>
               )}
-              {likes}
+              {displayLikes}
             </button>
 
             {showReactionPicker && (
@@ -609,7 +637,7 @@ function PostCard({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            {comments}
+            {displayComments}
           </button>
 
           {onRepost && (
