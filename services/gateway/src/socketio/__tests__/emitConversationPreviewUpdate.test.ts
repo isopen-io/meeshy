@@ -15,8 +15,13 @@ function makeIo(sink: Emitted[]) {
 }
 
 function makePrisma(
-  participants: Array<{ id?: string; userId: string | null }>,
-  latest: { id: string; content: string | null; senderId: string; createdAt: Date } | null,
+  participants: Array<{ id?: string; userId: string | null; user?: unknown }>,
+  latest:
+    | ({ id: string; content: string | null; senderId: string; createdAt: Date } & {
+        translations?: unknown;
+        originalLanguage?: string | null;
+      })
+    | null,
 ) {
   return {
     participant: { findMany: jest.fn(async () => participants) },
@@ -122,6 +127,96 @@ describe('emitConversationPreviewUpdate', () => {
     // Constat, pas une exigence : content vide reste vide, aucun texte de
     // repli fabriqué côté serveur — au client de décider du rendu.
     expect(emitted[0].payload.lastMessagePreview).toBe('');
+  });
+
+  // --- Prisme Linguistique de la ligne de liste (cycle 69) ---------------
+  //
+  // Le défaut que ces témoins ferment : `GET /conversations` hydrate la ligne
+  // avec `lastMessageTranslations` (la carte du prisme du lecteur), le client
+  // PRÉFÈRE cette traduction à `lastMessagePreview`, et une édition périme la
+  // colonne côté serveur (`translations: null`, routes/messages.ts) sans jamais
+  // le dire sur le fil. La ligne restait donc sur l'ANCIEN texte traduit,
+  // indéfiniment, jusqu'à un rechargement complet de la liste.
+  const FR_READER = {
+    id: 'p-fr',
+    userId: 'user-fr',
+    user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+  };
+  const ES_READER = {
+    id: 'p-es',
+    userId: 'user-es',
+    user: { systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+  };
+  const englishLatest = {
+    ...latest,
+    content: 'Hello',
+    originalLanguage: 'en',
+    translations: {
+      fr: { text: 'Bonjour', targetLanguage: 'fr' },
+      es: { text: 'Hola', targetLanguage: 'es' },
+    },
+  };
+
+  it('carries the reader-scoped preview translations and the original language', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([FR_READER], englishLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.lastMessageOriginalLanguage).toBe('en');
+    expect(emitted[0].payload.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+  });
+
+  it('gives each recipient ITS OWN prism, never one payload shared by the room', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([FR_READER, ES_READER], englishLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    const byRoom = new Map(emitted.map((e) => [e.room, e.payload]));
+    expect(byRoom.get('user:user-fr').lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+    expect(byRoom.get('user:user-es').lastMessageTranslations).toEqual({ es: 'Hola' });
+  });
+
+  // LE témoin du défaut. Une édition remet `Message.translations` à null dans la
+  // MÊME écriture ; l'événement doit transporter ce vide pour que le client
+  // périme sa carte. Un client ne peut pas le déduire : l'édition garde le même
+  // `lastMessageId`, donc « vider quand l'id change » laisse passer exactement
+  // ce cas — et vider inconditionnellement casserait le chemin d'envoi (cycle 65).
+  it('carries a null translations map after an edit, so the client can expire its stale one', async () => {
+    const emitted: Emitted[] = [];
+    const editedLatest = { ...latest, content: 'Hello (edited)', originalLanguage: 'en', translations: null };
+    const prisma = makePrisma([FR_READER], editedLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.lastMessagePreview).toBe('Hello (edited)');
+    expect(emitted[0].payload.lastMessageTranslations).toBeNull();
+    expect(emitted[0].payload.lastMessageOriginalLanguage).toBe('en');
+  });
+
+  it('selects the prism inputs it resolves from — the columns and the reader preferences', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([FR_READER], englishLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect((prisma.message.findFirst as jest.Mock).mock.calls[0][0]).toMatchObject({
+      select: { translations: true, originalLanguage: true },
+    });
+    expect((prisma.participant.findMany as jest.Mock).mock.calls[0][0]).toMatchObject({
+      select: { user: { select: { systemLanguage: true, deviceLocale: true } } },
+    });
+  });
+
+  it('serves a null map to an accountless participant rather than another reader prism', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([{ id: 'p-anon', userId: null, user: null }], englishLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].room).toBe('user:p-anon');
+    expect(emitted[0].payload.lastMessageTranslations).toBeNull();
   });
 
   it('is a no-op when the Socket.IO layer is unavailable', async () => {

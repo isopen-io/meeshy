@@ -33,6 +33,16 @@ private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
         me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.AuthSession>(success = false)
     override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
         ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
+    override suspend fun getTwoFactorStatus() =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorStatusInfo>(success = false)
+    override suspend fun beginTwoFactorSetup() =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorSetupInfo>(success = false)
+    override suspend fun enableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+    override suspend fun disableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorDisableRequest) =
+        me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+    override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
 }
 
 class SessionRepositoryTest {

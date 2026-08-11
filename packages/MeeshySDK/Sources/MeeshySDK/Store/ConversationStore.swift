@@ -419,12 +419,15 @@ public actor ConversationStore {
     /// metadata and/or the last-message fields used for bump-to-top list
     /// reordering. Only non-nil fields are applied (nil = "not provided by
     /// this payload variant"). `lastMessageAt`, `lastMessageId` and
-    /// `lastMessagePreview` are monotone as a group: an incoming
+    /// `lastMessagePreview` — plus the Prisme pair `lastMessageTranslations` /
+    /// `lastMessageOriginalLanguage` — are monotone as a group: an incoming
     /// `lastMessageAt` older than the current one means the whole payload
     /// describes a stale message, so the id/preview are skipped along with
     /// the timestamp (otherwise a delayed broadcast for an older message
     /// would leave the row showing the newest timestamp paired with the
-    /// older message's text). Fields unrelated to message ordering (e.g.
+    /// older message's text). An EQUAL timestamp is the same message, not a
+    /// stale one — that is an edit, and it applies. Fields unrelated to
+    /// message ordering (e.g.
     /// `title`) are still applied regardless. No-op for an unknown
     /// conversation (the next list refresh will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
@@ -432,11 +435,28 @@ public actor ConversationStore {
 
         var changed = false
 
-        let lastMessageIsCurrent = event.lastMessageAt.map { $0 > conv.lastMessageAt } ?? true
+        // `>=` et non `>` : la règle DOCUMENTÉE ci-dessus est « un `lastMessageAt`
+        // plus ANCIEN décrit un message périmé ». Un `>` strict rejetait aussi
+        // l'ÉGALITÉ — c'est-à-dire le même message, qui n'est pas périmé du tout.
+        // C'est exactement ce que produit une ÉDITION : le contenu change, le
+        // message (donc son `createdAt`) ne change pas. Tout le groupe d'aperçu
+        // était donc silencieusement jeté sur le seul chemin qui en avait besoin.
+        // Ré-appliquer les mêmes valeurs sur un doublon d'événement est idempotent.
+        let lastMessageIsCurrent = event.lastMessageAt.map { $0 >= conv.lastMessageAt } ?? true
         if lastMessageIsCurrent {
             if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
             if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
             if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+            // Le Prisme fait partie du MÊME groupe monotone : le résolveur
+            // préfère la traduction à l'aperçu brut, donc poser l'un sans
+            // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+            // `.replaced([:])` → `nil` : le résolveur doit distinguer « pas de
+            // carte » d'une carte vide (cf. `resolvedLastMessagePreview`).
+            if case .replaced(let map) = event.lastMessageTranslations {
+                conv.lastMessageTranslations = map.isEmpty ? nil : map
+                conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
+                changed = true
+            }
         }
         if let v = event.title { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }
@@ -762,6 +782,12 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let lastMessageAt: Date?
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Prisme de la ligne de liste. Tri-état — voir
+    /// `LastMessagePreviewTranslations` : `.unchanged` (clé absente) et
+    /// `.replaced([:])` (carte périmée par le serveur) ne sont PAS le même
+    /// ordre, et c'est la seule façon de rendre une édition applicable.
+    public let lastMessageTranslations: LastMessagePreviewTranslations
+    public let lastMessageOriginalLanguage: String?
     public let title: String?
     public let avatar: String?
     public let description: String?
@@ -776,6 +802,8 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
+        lastMessageOriginalLanguage: String? = nil,
         title: String? = nil,
         avatar: String? = nil,
         description: String? = nil,
@@ -789,6 +817,8 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageTranslations = lastMessageTranslations
+        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         self.title = title
         self.avatar = avatar
         self.description = description

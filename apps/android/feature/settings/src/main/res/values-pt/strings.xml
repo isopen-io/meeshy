@@ -80,6 +80,35 @@
     <string name="settings_privacy_policy">Política de Privacidade</string>
     <string name="settings_log_out">Sair</string>
     <string name="settings_delete_account">Excluir conta</string>
+    <!-- Two-factor authentication (§L) -->
+    <string name="twofactor_title">Autenticação de dois fatores</string>
+    <string name="twofactor_status_enabled">Ativada</string>
+    <string name="twofactor_status_disabled">Desativada</string>
+    <string name="twofactor_backup_codes_remaining">%1$d códigos de backup restantes</string>
+    <string name="twofactor_enable_button">Configurar a autenticação de dois fatores</string>
+    <string name="twofactor_disable_button">Desativar a autenticação de dois fatores</string>
+    <string name="twofactor_regenerate_button">Gerar novos códigos de backup</string>
+    <string name="twofactor_setup_title">Escaneie o código QR</string>
+    <string name="twofactor_setup_instructions">Escaneie este código QR com seu aplicativo autenticador, ou digite o código manualmente.</string>
+    <string name="twofactor_setup_secret_label">Código de entrada manual</string>
+    <string name="twofactor_setup_code_label">Código de 6 dígitos</string>
+    <string name="twofactor_setup_confirm">Ativar</string>
+    <string name="twofactor_backup_codes_title">Códigos de backup</string>
+    <string name="twofactor_backup_codes_warning">Guarde estes códigos em um local seguro. Cada código só pode ser usado uma vez.</string>
+    <string name="twofactor_backup_codes_done">Salvei meus códigos</string>
+    <string name="twofactor_disable_title">Desativar a autenticação de dois fatores</string>
+    <string name="twofactor_disable_password_label">Senha</string>
+    <string name="twofactor_disable_code_label">Código de verificação</string>
+    <string name="twofactor_disable_confirm">Desativar</string>
+    <string name="twofactor_regenerate_title">Gerar novos códigos de backup</string>
+    <string name="twofactor_regenerate_code_label">Código de 6 dígitos</string>
+    <string name="twofactor_regenerate_confirm">Gerar novos</string>
+    <string name="twofactor_cancel">Cancelar</string>
+    <string name="twofactor_error_status">Não foi possível carregar o status do 2FA</string>
+    <string name="twofactor_error_setup">Não foi possível iniciar a configuração do 2FA</string>
+    <string name="twofactor_error_invalid_code">Código inválido. Verifique e tente novamente.</string>
+    <string name="twofactor_error_disable">Não foi possível desativar o 2FA</string>
+    <string name="twofactor_error_backup_codes">Não foi possível gerar novos códigos de backup</string>
     <!-- Change password (§L) -->
     <string name="settings_change_password">Alterar senha</string>
     <string name="change_password_title">Senha</string>
