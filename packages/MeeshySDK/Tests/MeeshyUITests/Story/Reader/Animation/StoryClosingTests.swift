@@ -187,6 +187,75 @@ final class StoryClosingTests: XCTestCase {
         XCTAssertNil(layer.mask)
     }
 
+    // MARK: The entrance must not outlive the exit
+    //
+    // `applyOpening` installs its animations with `fillMode = .forwards` +
+    // `isRemovedOnCompletion = false`, and nothing else in MeeshyUI ever removes
+    // them — `rootLayer` is a stored `let` that `rebuildLayers()` never
+    // replaces. A finished opening therefore keeps holding its `toValue` OVER
+    // the model value for the whole life of the canvas, which silently swallows
+    // every value `applyClosing` writes on the same property.
+    //
+    // These witnesses assert on `animation(forKey:)` rather than on the rendered
+    // pixel because `presentationLayer()` needs a render server no unit test
+    // has. The attached fill IS the defect: as long as it is there, the model
+    // value below it is computed, stored, and never seen.
+
+    func test_applyClosing_fadeInsideWindow_dropsTheOpeningFadeFill() {
+        let layer = makeLayer()
+        StoryRenderer.applyOpening(.fade, rootLayer: layer, elapsed: 0)
+        StoryRenderer.applyClosing(.fade, rootLayer: layer,
+                                   elapsed: ClosingFixture.midClosing,
+                                   totalDuration: ClosingFixture.totalDuration)
+        XCTAssertNil(layer.animation(forKey: StoryRenderer.openingFadeAnimationKey),
+                     "A fill-forward entrance would hold opacity at 1 and hide the whole exit ramp")
+        XCTAssertEqual(layer.opacity, Float(1 - ClosingFixture.midProgress), accuracy: 0.001)
+    }
+
+    func test_applyClosing_slideInsideWindow_dropsTheOpeningZoomFill() {
+        // Different effects, SAME keyPath (`sublayerTransform`): a zoom entrance
+        // hides a slide exit just as thoroughly as its own kind would.
+        let layer = makeLayer()
+        StoryRenderer.applyOpening(.zoom, rootLayer: layer, elapsed: 0)
+        StoryRenderer.applyClosing(.slide, rootLayer: layer,
+                                   elapsed: ClosingFixture.midClosing,
+                                   totalDuration: ClosingFixture.totalDuration)
+        XCTAssertNil(layer.animation(forKey: StoryRenderer.openingZoomAnimationKey))
+    }
+
+    func test_applyClosing_beforeWindow_keepsTheOpeningFill() {
+        // A slide shorter than twice the transition window has both playing at
+        // once; the entrance owns the layer until the exit ramp actually starts.
+        let layer = makeLayer()
+        StoryRenderer.applyOpening(.fade, rootLayer: layer, elapsed: 0)
+        StoryRenderer.applyClosing(.fade, rootLayer: layer,
+                                   elapsed: ClosingFixture.closingStart,
+                                   totalDuration: ClosingFixture.totalDuration)
+        XCTAssertNotNil(layer.animation(forKey: StoryRenderer.openingFadeAnimationKey))
+    }
+
+    func test_applyClosing_revealInsideWindow_keepsTheUnrelatedOpeningFade() {
+        // Surgical, not scorched-earth: a closing reveal writes the mask, never
+        // opacity, so truncating a still-running fade entrance would be gratuitous.
+        let layer = makeLayer()
+        StoryRenderer.applyOpening(.fade, rootLayer: layer, elapsed: 0)
+        StoryRenderer.applyClosing(.reveal, rootLayer: layer,
+                                   elapsed: ClosingFixture.midClosing,
+                                   totalDuration: ClosingFixture.totalDuration)
+        XCTAssertNotNil(layer.animation(forKey: StoryRenderer.openingFadeAnimationKey))
+    }
+
+    func test_resetClosing_dropsEveryOpeningFillOnTheRootLayer() {
+        // `resetClosing` promises a NEUTRAL root layer — which assigning the
+        // model value alone cannot deliver while a fill still overrides it.
+        let layer = makeLayer()
+        StoryRenderer.applyOpening(.fade, rootLayer: layer, elapsed: 0)
+        StoryRenderer.applyOpening(.slide, rootLayer: layer, elapsed: 0)
+        StoryRenderer.resetClosing(rootLayer: layer)
+        XCTAssertNil(layer.animation(forKey: StoryRenderer.openingFadeAnimationKey))
+        XCTAssertNil(layer.animation(forKey: StoryRenderer.openingSlideAnimationKey))
+    }
+
     // MARK: Canvas trigger (playhead-driven, via the tick seam)
 
     private func makeClosingSlide(_ closing: StoryTransitionEffect,
