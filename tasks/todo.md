@@ -1,24 +1,101 @@
-# Tête instruite pour le cycle 75 — le SyncEngine `_seq` n'existe QUE sur iOS
+# Tête instruite pour le cycle 76 — la LISTE de conversations web n'a aucun rattrapage au reconnect socket
 
-*Trouvé en instruisant le cycle 74, vérifié, NON corrigé — c'est un chantier, pas un correctif.*
+*Trouvé en instruisant le cycle 75, vérifié, NON corrigé — même famille que le défaut fermé ce
+cycle, autre surface.*
 
-Le gateway tamponne un numéro de séquence monotone per-user (`_seq`) via `emitWithSeq`
-(`socketio/utils/emitWithSeq.ts`), iOS le suit (`SyncSeqState` / `SyncSeqTracker`, SDK) et
-déclenche une resync idempotente sur trou (`NotificationGapResyncCoordinator`, app). La chaîne est
-complète et testée de bout en bout.
+Le cycle 75 a fermé le trou côté notifications. En balayant les autres surfaces pour établir la
+portée, une seule est restée découverte :
 
-**Le web n'en décode rien** : `grep -rn "_seq" apps/web` ne rend aucune occurrence. Le client web
-n'a donc aucune détection de trou exacte et retombe entièrement sur le gap recovery temporel
-(watermarks `updatedSince`/`after`), qui rate les events à timestamp identique — le défaut même que
-le `_seq` existe pour fermer.
+| Surface web | Rattrapage au reconnect SOCKET |
+|---|---|
+| Messages d'une conversation | **oui** — `syncNewerMessages` sur le front `false → true` de `isSocketConnected` (`use-conversation-messages-rq.ts`, « Trigger 1 ») |
+| Notifications | **oui depuis ce cycle** — `onSyncDesync('reconnect')` |
+| **Liste de conversations** | **non** — `use-conversations-query.ts` n'a que `refetchOnMount: 'always'` |
 
-Deux bornes à connaître avant d'ouvrir le chantier :
-1. **`emitWithSeq` n'a qu'UN seul appelant** (`NotificationService` → `notification:new`). Le `_seq`
-   est donc aujourd'hui un compteur de notifications, pas un compteur d'events. Étendre la
-   couverture (A2.2) exige un fan-out per-user des broadcasts room, ce que
-   `participantUserRoomTargets` (cycle 73) rend enfin possible sans réécrire la règle `userId ?? id`.
-2. Le portage web doit rester un MIROIR de `SyncSeqState` (valeur pure, `detectGap` avant `record`,
-   `nil` = no-op) — pas une seconde interprétation de la règle.
+Ce qui la couvre partiellement, et pourquoi ça ne suffit pas : le QueryClient global pose
+`refetchOnReconnect: 'always'`, mais c'est le `onlineManager` de React Query — la transition
+RÉSEAU du navigateur. Une coupure purement socket (redémarrage gateway, drop du load balancer,
+échec d'upgrade de transport) ne bouge pas `navigator.onLine` et ne déclenche donc rien. Pendant
+cette fenêtre, la liste garde ses compteurs de non-lus, ses aperçus de dernier message et son
+effectif d'avant la coupure, et ne se corrige qu'au prochain focus de fenêtre ou remontage.
+
+Deux bornes avant d'ouvrir :
+1. **Le signal existe déjà** — `useConnectionStatus().isSocketConnected`, et le motif de front
+   `false → true` est écrit et testé dans `use-conversation-messages-rq.ts`. Le reproduire, pas en
+   inventer un second.
+2. **Un `refetch()` plein de la liste est destructeur au même titre que sur les messages** : il
+   REMPLACE les pages en cache et peut perdre ce que le socket y a écrit. Le pendant du
+   `syncNewerMessages` côté liste est un delta `updatedSince` (ce que fait `deltaSyncCore` sur iOS),
+   pas un refetch. Trancher entre les deux est le vrai contenu du chantier.
+
+---
+
+# Cycle 75 — Le web ne décodait pas `_seq` : une notification manquée l'était pour la session entière
+
+## Le défaut
+
+Le gateway tamponne un numéro de séquence monotone PER-USER (`_seq`) sur ses émissions Socket.IO
+user-scoped (`emitWithSeq`). iOS le suit depuis 2026-05 : `SyncSeqState` détecte le trou
+(`next > lastSeq + 1`), `NotificationGapResyncCoordinator` re-tire la liste, et le reconnect
+déclenche la même resync inconditionnellement (A5.4).
+
+`grep -rn "_seq" apps/web` ne rendait **aucune occurrence**. Le singleton de notifications
+reconstruit son objet champ par champ depuis le payload : le `_seq` tombait au sol sans être lu.
+
+Ce qui rend l'absence coûteuse sur cette plateforme précisément : le QueryClient global tourne en
+`staleTime: Infinity` — Socket.IO EST la source de vérité temps réel. Une notification qui n'arrive
+pas n'est donc rattrapée par rien tant que l'écran reste monté. Elle manque dans la cloche, dans le
+compteur et sur `/notifications`, **pour toute la session**.
+
+Deux fenêtres aveugles distinctes, aucune couverte :
+- **perte en vol** — des events arrivent, mais pas tous (le `_seq` saute) ;
+- **coupure socket** — aucun event n'arrive, donc aucun `_seq` ne peut révéler quoi que ce soit.
+  `refetchOnReconnect: 'always'` du QueryClient ne ferme PAS celle-là : il écoute le
+  `onlineManager` (réseau navigateur), pas la socket. Un redémarrage gateway ne bouge pas
+  `navigator.onLine`.
+
+## Le correctif
+
+`apps/web/lib/sync/sync-seq-state.ts` — miroir EXACT de `SyncSeqState.swift`, valeur pure :
+`detectSyncSeqGap` avant `recordSyncSeq`, jamais de trou au premier event, jamais de régression du
+curseur, `_seq` absent = no-op. Pas une seconde interprétation de la règle : les deux fichiers se
+nomment mutuellement, et `emitWithSeq.ts` nomme désormais ses DEUX observateurs.
+
+Le transport (`notification-socketio.singleton`) observe et expose `onSyncDesync(reason)` —
+`'gap'` ou `'reconnect'`. La décision « quoi refetch » vit chez le consommateur
+(`use-notifications-manager-rq`), débouncée 300 ms comme iOS. C'est le découpage SDK/app d'iOS,
+transposé transport/hook.
+
+Trois arbitrages qui portent le correctif :
+1. **Le curseur SURVIT à la reconnexion automatique de socket.io** — c'est précisément ce qui
+   permet au premier event d'après de révéler le trou. Il n'est purgé que sur `disconnect()`
+   explicite (changement de token, logout, `reset()`), parce que le `_seq` est alloué par user et
+   que le curseur d'un compte ne veut rien dire pour le suivant.
+2. **Le premier `connect` ne signale rien** ; seul un RE-connect prouve une fenêtre aveugle. Au
+   premier, les écrans montent déjà en `refetchOnMount: 'always'`.
+3. **Un event sans `_seq` est un no-op, pas un trou.** `emitWithSeq` émet délibérément sans `_seq`
+   quand l'allocation rejette ou dépasse son timeout : compter ce chemin dégradé comme un trou
+   déclencherait une resync à chaque hoquet Mongo.
+
+## Vérification
+
+- **19 témoins neufs** : 15 sur la valeur pure + le câblage transport, 4 sur le consommateur.
+- **ROUGE prouvé par mutation, pas par inspection** (5 mutations, toutes rouges, restauration verte) :
+  neutraliser le signal de trou → 2 rouges ; signaler `reconnect` dès le premier connect → 7 rouges ;
+  purger le curseur sur l'event `disconnect` de socket.io (la variante plausible-mais-fausse) →
+  1 rouge ; supprimer le débounce → 3 rouges ; abonner un no-op → 3 rouges.
+- **VERT exécuté** : suite web complète, `559/559` suites, `12043` tests (après
+  `packages/shared → bun run build`, prérequis que la CI fait automatiquement).
+- Typecheck : la ligne d'erreur touchant un fichier modifié
+  (`notification-socketio.singleton.test.ts:45`, spread argument) est **antérieure** — vérifiée
+  présente sur `main` stashé, parmi 1222 erreurs de base du projet.
+
+## Portée établie, pas supposée
+
+Le `_seq` n'a qu'UN émetteur (`NotificationService` → `notification:new`) : le lockstep
+émission/observation est donc intact après ce cycle, et c'est la seule raison pour laquelle porter
+l'observation d'un seul event est correct. Étendre `emitWithSeq` (A2.2) obligera à étendre
+l'observation des DEUX clients dans le même train — noté en tête du fichier gateway.
 
 ---
 

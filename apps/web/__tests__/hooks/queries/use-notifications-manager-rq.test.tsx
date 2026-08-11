@@ -32,6 +32,8 @@ let capturedReadHandler: ((notificationId: string) => void) | null = null;
 let capturedNotificationHandler: ((notification: unknown) => void) | null = null;
 let capturedDeletedHandler: ((notificationId: string) => void) | null = null;
 let capturedCountsHandler: ((counts: { unread?: number; total?: number }) => void) | null = null;
+let capturedDesyncHandler: ((reason: 'gap' | 'reconnect') => void) | null = null;
+const desyncUnsubscribe = jest.fn();
 
 jest.mock('@/services/notification-socketio.singleton', () => ({
   notificationSocketIO: {
@@ -51,6 +53,10 @@ jest.mock('@/services/notification-socketio.singleton', () => ({
     onCounts: jest.fn((cb: (counts: { unread?: number; total?: number }) => void) => {
       capturedCountsHandler = cb;
       return () => {};
+    }),
+    onSyncDesync: jest.fn((cb: (reason: 'gap' | 'reconnect') => void) => {
+      capturedDesyncHandler = cb;
+      return desyncUnsubscribe;
     }),
   },
 }));
@@ -365,5 +371,85 @@ describe('useNotificationsManagerRQ — notification pour la conversation active
     );
     expect(result.current.unreadCount).toBe(2);
     expect(NotificationService.markAsRead).toHaveBeenCalledWith('live-1');
+  });
+});
+
+/**
+ * SyncEngine — le transport signale que le client a perdu de vue l'état serveur
+ * (trou de `_seq`, ou reconnexion après coupure). Le client global tourne en
+ * `staleTime: Infinity` : sans ce rattrapage, une notification manquée ne
+ * réapparaît JAMAIS de la session.
+ */
+describe('useNotificationsManagerRQ — sync desync resync', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedDesyncHandler = null;
+  });
+
+  const mountAndSeed = async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+    const rendered = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+    await waitFor(() => expect(rendered.result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedDesyncHandler).not.toBeNull());
+    mockFetchNotifications.mockClear();
+    return rendered;
+  };
+
+  it('refetches the list from the server when a sequence gap is signalled', async () => {
+    await mountAndSeed();
+
+    act(() => {
+      capturedDesyncHandler!('gap');
+    });
+
+    await waitFor(() => expect(mockFetchNotifications).toHaveBeenCalled());
+  });
+
+  it('refetches after a reconnect — the outage window is blind to gap detection', async () => {
+    await mountAndSeed();
+
+    act(() => {
+      capturedDesyncHandler!('reconnect');
+    });
+
+    await waitFor(() => expect(mockFetchNotifications).toHaveBeenCalled());
+  });
+
+  it('coalesces a burst into a single resync', async () => {
+    await mountAndSeed();
+
+    act(() => {
+      capturedDesyncHandler!('gap');
+      capturedDesyncHandler!('gap');
+      capturedDesyncHandler!('reconnect');
+    });
+
+    await waitFor(() => expect(mockFetchNotifications).toHaveBeenCalled());
+    // Une seule liste est active (la query infinie du hook) : une rafale
+    // débouncée ne doit produire qu'UN aller-retour serveur.
+    expect(mockFetchNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refetch before the debounce window elapses', async () => {
+    await mountAndSeed();
+
+    act(() => {
+      capturedDesyncHandler!('gap');
+    });
+
+    expect(mockFetchNotifications).not.toHaveBeenCalled();
+  });
+
+  it('unsubscribes and cancels a pending resync on unmount', async () => {
+    const { unmount } = await mountAndSeed();
+
+    act(() => {
+      capturedDesyncHandler!('gap');
+    });
+    unmount();
+
+    expect(desyncUnsubscribe).toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mockFetchNotifications).not.toHaveBeenCalled();
   });
 });

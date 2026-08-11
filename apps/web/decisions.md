@@ -77,3 +77,25 @@
 **Decision**: `lib/config.ts` drive les URLs depuis `window.location.hostname` (gate.{domain}, ml.{domain})
 **Alternatives rejet**: URLs hardcodes (.env), variables d'environnement (ncessitent config par dev)
 **Cons**: Ne fonctionne pas en SSR (besoin `INTERNAL_*_URL`), pattern sous-domaine hardcod
+
+## 2026-08: SyncEngine — détection de trou `_seq` côté web (miroir du SDK iOS)
+**Statut**: Accept
+**Contexte**: Le gateway estampille les émissions Socket.IO user-scoped d'un numéro de séquence
+monotone per-user (`_seq`, `emitWithSeq`). iOS le suit depuis 2026-05 (`SyncSeqState` /
+`SyncSeqTracker` → `NotificationGapResyncCoordinator`). Le web n'en décodait RIEN : aucune
+détection de trou, et aucune resync au reconnect. Or le QueryClient global tourne en
+`staleTime: Infinity` — une notification manquée ne réapparaissait jamais de la session.
+**Decision**: `lib/sync/sync-seq-state.ts` (valeur pure : `detectSyncSeqGap` / `recordSyncSeq` /
+`observeSyncSeq`) est le miroir EXACT de `SyncSeqState.swift`. Le transport
+(`notification-socketio.singleton`) observe le `_seq` et expose `onSyncDesync(reason)` —
+`'gap'` (trou de séquence) ou `'reconnect'` (fenêtre aveugle après coupure). La décision « quoi
+refetch » vit côté consommateur (`use-notifications-manager-rq`), débouncée 300 ms comme iOS.
+**Alternatives rejetées**: réécrire la règle côté web (deux interprétations divergeraient) ;
+brancher l'invalidation dans le singleton (mélange transport et décision produit, contraire au
+découpage SDK/app d'iOS) ; réinitialiser le curseur à chaque `disconnect` socket (détruirait
+précisément la preuve du trou que la reconnexion doit révéler).
+**Cons**: le `_seq` n'est estampillé que sur `notification:new` (unique call-site `emitWithSeq`) —
+la couverture reste celle du pilote. Émission et observation doivent rester en LOCKSTEP : étendre
+`emitWithSeq` à d'autres events sans étendre l'observation des DEUX clients fabrique de faux trous.
+Le curseur n'est pas persisté (mémoire d'onglet), donc une fenêtre onglet-fermé reste couverte par
+le seul `refetchOnMount: 'always'`.
