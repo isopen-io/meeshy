@@ -79,4 +79,31 @@ final class SyncPillRotatorTests: XCTestCase {
         XCTAssertTrue([0, 1].contains(r.currentIndex))
         XCTAssertEqual(r.itemCount, 2)
     }
+
+    @MainActor
+    func test_setAutoRotation_false_stopsAdvancingOnTick() {
+        let rotator = SyncPillRotator()
+        rotator.setItemCount(3)
+        rotator.setAutoRotation(false)
+        let before = rotator.currentIndex
+        rotator.simulateTick()
+        XCTAssertEqual(rotator.currentIndex, before, "simulateTick ne doit rien faire d'observable pendant que l'auto-rotation est coupée — le timer réel est annulé par setAutoRotation(false), simulateTick documente juste que rien n'avance côté logique non plus")
+    }
+
+    @MainActor
+    func test_setAutoRotation_trueAfterFalse_resumesAdvancingOnTick() {
+        let rotator = SyncPillRotator()
+        rotator.setItemCount(3)
+        rotator.setAutoRotation(false)
+        rotator.setAutoRotation(true)
+        let before = rotator.currentIndex
+        rotator.simulateTick()
+        XCTAssertEqual(rotator.currentIndex, (before + 1) % 3)
+    }
+
+    @MainActor
+    func test_autoRotationEnabled_defaultsToTrue() {
+        let rotator = SyncPillRotator()
+        XCTAssertTrue(rotator.autoRotationEnabled)
+    }
 }

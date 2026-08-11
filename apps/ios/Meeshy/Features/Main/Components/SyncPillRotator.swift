@@ -57,7 +57,7 @@ final class SyncPillRotator: ObservableObject {
     }
 
     func simulateTick() {
-        guard itemCount > 1 else { return }
+        guard itemCount > 1, autoRotationEnabled else { return }
         if let until = userPauseUntil, clock() < until { return }
         userPauseUntil = nil
         currentIndex = (currentIndex + 1) % itemCount
