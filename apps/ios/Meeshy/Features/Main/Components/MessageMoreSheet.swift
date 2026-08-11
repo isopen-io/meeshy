@@ -97,7 +97,7 @@ struct MessageMoreSheet: View {
             isPresented: $showDeleteMediaConfirm,
             titleVisibility: .visible
         ) {
-            if message.attachments.contains(where: { $0.type != .location }) {
+            if message.attachments.filter({ $0.type != .location }).count == 1 {
                 Button(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)) {
                     onSaveMedia?()
                     dismiss()

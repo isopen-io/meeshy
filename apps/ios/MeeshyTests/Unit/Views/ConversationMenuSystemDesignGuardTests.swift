@@ -523,9 +523,14 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    /// Un message dont le SEUL attachment est une localisation n'est pas
-    /// enregistrable : le bouton Enregistrer doit être ABSENT, pas inerte.
-    func test_media_confirmDialog_hidesSaveButton_whenOnlyAttachmentIsLocation() throws {
+    /// Le bouton Enregistrer du sous-menu média suit la même règle SSOT que
+    /// l'action primaire `.saveMedia` (`MessageActionResolver.saveableAttachmentCount
+    /// == 1`, `MessageActionResolver.swift:69`) : EXACTEMENT UN attachment
+    /// enregistrable. Un message localisation-only (0) ou multi-attachments (>1)
+    /// doit masquer le bouton — jamais l'afficher pour n'en enregistrer qu'un
+    /// silencieusement (ConversationView.swift `onSaveMedia` ne prend que
+    /// `attachments.first(where:)`).
+    func test_media_confirmDialog_hidesSaveButton_whenSaveableAttachmentCountIsNotExactlyOne() throws {
         let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
         guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
               let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
@@ -537,8 +542,8 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         }
         let beforeSave = String(dialog[dialog.startIndex..<saveRange.lowerBound])
         XCTAssertTrue(
-            beforeSave.contains("message.attachments.contains(where: { $0.type != .location })"),
-            "Le bouton Enregistrer doit être conditionné à un attachment non-location — absent, pas inerte, pour un message localisation-only."
+            beforeSave.contains("message.attachments.filter({ $0.type != .location }).count == 1"),
+            "Le bouton Enregistrer doit être conditionné à EXACTEMENT UN attachment non-location (même règle que saveableAttachmentCount == 1) — absent, pas inerte, pour 0 ou plusieurs."
         )
     }
 
