@@ -454,7 +454,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // transition est donc couverte par un beginBackgroundTask court, terminé au
     // premier front isPlaying==true (ou à la fermeture/expiration).
 
-    var beginBackgroundTaskProvider: (@escaping () -> Void) -> UIBackgroundTaskIdentifier = { handler in
+    var beginBackgroundTaskProvider: (@escaping @Sendable () -> Void) -> UIBackgroundTaskIdentifier = { handler in
         UIApplication.shared.beginBackgroundTask(
             withName: "meeshy.audio.queue-advance", expirationHandler: handler
         )

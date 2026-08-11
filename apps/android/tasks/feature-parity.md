@@ -5298,6 +5298,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       quick reply, mark-read, tailles/kinds additionnels, push-refresh, badge de présence.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
+      **First sub-slice shipped (2026-08-11, slice `dynamic-launcher-shortcuts`)**: dynamic launcher
+      shortcuts (long-press the launcher icon) publishing up to the device's own reported max
+      (`ShortcutManagerCompat.getMaxShortcutCountPerActivity`) recent conversations, pinned-first
+      then most-recent (same ordering SSOT the home-screen widgets already apply), tapping one
+      deep-links straight into that conversation. This is the closest ALWAYS-local, fully-testable
+      Android equivalent to iOS's `OpenRecentConversationIntent` App Shortcut — confirmed by reading
+      `MeeshyAppIntents.swift` end to end that iOS's other 4 App Shortcuts (Send Message, Call
+      Contact, Translate, Check Notifications) are Siri/Assistant voice phrases requiring the
+      `AppIntents` framework's NL parameter resolution, with **no direct Android equivalent**:
+      Android's nearest analogue (Google Assistant "App Actions" via `shortcuts.xml` capability
+      bindings) needs external Assistant indexing/review and isn't reliably locally verifiable —
+      deliberately deferred as its own, larger follow-up rather than attempted here. Restent :
+      Assistant App Actions (send message/call/translate/check notifications voice phrases).
 - [ ] Crash / hang / ANR diagnostics with on-device persistence + remote report
 - [ ] Privacy-gated analytics (screen tracking); client telemetry headers; network reachability awareness
 - [ ] Adaptive iPad/tablet/foldable two-column layout (feed + conversation list/detail, resizable splitter)
