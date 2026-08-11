@@ -218,8 +218,11 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     const audioPlayerObjects = firstAudioMedia ? [{
       id: generateStoryObjectId(),
       postMediaId: firstAudioMedia.id,
+      placement: 'overlay',
       x: 0.5,
       y: 0.85,
+      volume: 1,
+      waveformSamples: [],
       isBackground: true,
       ...(typeof firstAudioMedia.duration === 'number' ? { duration: firstAudioMedia.duration / 1000 } : {}),
     }] : undefined;

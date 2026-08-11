@@ -47,6 +47,9 @@ type AudioObjectPayload = {
   x: number;
   y: number;
   isBackground: boolean;
+  placement: string;
+  volume: number;
+  waveformSamples: number[];
   duration?: number;
 };
 
@@ -146,6 +149,17 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
       isBackground: true,
       duration: 9,
     });
+  });
+
+  it('fills the iOS-required non-optional audio decoder fields (placement/volume/waveformSamples)', () => {
+    mockUploadedAttachments = [createAttachment({ id: 'media-audio', mimeType: 'audio/mpeg' })];
+    const { published } = renderComposer();
+    clickPublish();
+
+    const audioObjects = published().storyEffects.audioPlayerObjects as AudioObjectPayload[];
+    expect(audioObjects[0].placement).toBe('overlay');
+    expect(audioObjects[0].volume).toBe(1);
+    expect(audioObjects[0].waveformSamples).toEqual([]);
   });
 
   it('omits duration entirely when unknown, never as undefined', () => {
