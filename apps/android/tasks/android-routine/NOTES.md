@@ -1573,3 +1573,31 @@ Append-only log of gotchas and decisions that save time next run.
   fixture the session doesn't fully control (no known password, no dedicated disposable account),
   the safety-first move is to verify up to but not including that flip, not to "complete the loop"
   for its own sake.
+
+## Slice `settings-account-contact-change` (2026-08-11)
+- **`advanceUntilIdle()` fully drains a coroutine's `delay()` loop even when that loop is
+  scheduled to run for real minutes of virtual time — it does not stop at "nothing due right
+  now," it keeps advancing virtual time until the scheduler is genuinely empty.** A test that
+  called `submitEmailChange()` (which launches a 60-iteration `delay(1000)` tick loop for the
+  resend cooldown) then `advanceUntilIdle()` to inspect the just-started cooldown got
+  `remaining == 0, expired == true` instead of `remaining == 60` — the single `advanceUntilIdle()`
+  call ran the ENTIRE 60-second countdown to completion before returning, because from the test
+  dispatcher's point of view a 60 s virtual delay and a 1 ms one are equally "not idle yet."
+  `runCurrent()` (only run tasks already due at the CURRENT virtual instant, never advance time)
+  is the correct call to observe a freshly-started periodic coroutine's initial state; reserve
+  `advanceTimeBy(N) + runCurrent()` for when the test actually wants to fast-forward through N ms
+  of that loop. Every call site that chains "trigger a tick-loop-starting action" then immediately
+  inspects tick-loop state must use `runCurrent()`, not `advanceUntilIdle()` — this bit 4 of 27
+  tests on first run here (`MagicLinkViewModel`'s own identical `delay(1000)` tick loop from an
+  earlier slice has no test file yet, so this exact trap hadn't been hit in this codebase before).
+- **A fully generic pure countdown type is worth reusing across unrelated features even when its
+  name reads domain-specific.** `MagicLinkCountdown` (`:core:model/auth`, from the magic-link-login
+  slice) is a `remaining`/`expired`/`tick()`/`canResend()`/`start()` value type with nothing
+  magic-link-specific in its logic — reused verbatim here for the unrelated 60s email-resend
+  cooldown rather than duplicating an identical tick/expire mechanism or renaming the type
+  (renaming would touch an unrelated slice's call site for zero behavioural gain, out of scope for
+  a single-feature PR). Only the 2nd call site so far — this codebase's own established convention
+  (`ComposerLanguagePickerDialog` vs `RegionalLanguageDialog` vs the registration inline grid) is
+  to keep duplicating small UI glue until a 3rd call site forces a shared abstraction, but that
+  convention is about UI glue, not already-fully-generic pure logic; a pure type with zero
+  feature-specific fields is a SSOT from the first reuse, not the third.

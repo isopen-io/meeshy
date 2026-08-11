@@ -4625,7 +4625,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       profile's app bar (own profile shows Edit instead). +28 tests (ReportReason 6, ReportRequestBuilder 9,
       ReportRepository 5, ReportUserViewModel 8). EN/FR/ES/PT strings. Surpasses iOS (correct wire token +
       testable UDF + retryable error state).
-- [ ] Change email / phone (two-step verification)
+- [x] Change email / phone (two-step verification) — `settings-account-contact-change` (2026-08-11): `AccountContactViewModel`/`AccountContactScreen` (`:feature:settings`), reached via a new Settings row between Two-factor and Active sessions. Email confirms out-of-band (a link mailed to the new address — mirrors iOS `SecurityView`, which never wires `verifyEmailChange` into any UI either) with a 60s resend cooldown (`MagicLinkCountdown` reused verbatim); phone confirms in-app via a 6-digit SMS code (`changePhone` → `verifyPhoneChange`), refreshing the session on success. Both online-only (like `ChangePasswordViewModel`), never optimistic/offline-queued. Reuses `SignupFieldValidation.isEmailValidLocally`/`isPhoneValidLocally` for the local submit gates — no new validator duplicated. +31 tests. Mutation-proven: `canVerifyPhoneCode`'s length check and `toPhoneVerifyErrorKind`'s httpStatus==400 branch each fail exactly their pinning test.
 - [x] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable — `settings-two-factor-auth` (2026-08-11)
 - [x] Active device sessions: list, revoke one, revoke all others — shipped `761164959` (2026-08-10, `ActiveSessionsScreen`/`ActiveSessionsViewModel`), confirmed still live on-device 2026-08-11
 - [ ] Voice-cloning onboarding wizard (consent → 18+ age gate → record ≥3 samples → process)
