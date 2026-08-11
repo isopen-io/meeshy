@@ -1,13 +1,18 @@
 package me.meeshy.app.feed
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -33,6 +38,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
@@ -69,10 +75,14 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.formattedCoordinates
 import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
 import me.meeshy.sdk.model.waveform.VoiceRecordingFile
 import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
@@ -84,6 +94,7 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * The feed-post composer — the "texte seul" first sub-slice of feature-parity
@@ -153,6 +164,21 @@ import java.io.File
  * **Deliberate, documented scope cut vs. iOS**: no on-device transcription preview, no per-post
  * language override tied to the clip, no dedicated full-screen composer — each a
  * separately-scoped, heavier follow-up.
+ *
+ * **Location attachment** (`requestDeviceLocation`, [Icons.Filled.LocationOn] tile) mirrors iOS's
+ * `location.fill` button, scoped to the smallest genuinely-valuable first sub-slice rather than
+ * porting iOS's dedicated `LocationPickerView` (its own full-screen MapKit map, search, "my
+ * position" recentring and `CLGeocoder` reverse-geocoding into a name/address): tapping the tile
+ * requests `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`, then captures one fresh fix straight
+ * from [android.location.LocationManager] (GPS preferred, network fallback — no Play Services
+ * dependency added, matching this module's existing footprint) and attaches it as a bare
+ * [SharedPlace] (coordinates only, `name`/`address` left `null`). The attached place renders as
+ * its own removable chip (coordinates formatted via [me.meeshy.sdk.model.formattedCoordinates]),
+ * separate from [MediaAttachmentsRow] since a post carries at most one location, never a list
+ * (mirrors [FeedComposerDraft.withLocation] replacing rather than accumulating). **Deliberate,
+ * documented scope cut vs. iOS**: no map UI, no search, no reverse-geocoded name/address — each a
+ * separately-scoped, heavier follow-up (the map picker alone would need a Maps SDK dependency this
+ * slice deliberately avoids pulling in).
  *
  * Every text/visibility/media-id decision lives in the pure
  * [FeedComposerDraft]; this Composable holds one in `remember` (plus the
@@ -421,6 +447,54 @@ fun FeedComposerSheet(
         attachedMedia = attachedMedia.filterNot { it.id == id }
     }
 
+    // Location attachment: one fresh GPS/network fix via android.location.LocationManager, no
+    // Play Services dependency added (matches this module's existing footprint — see the class
+    // doc comment's documented scope cut). Independent of the media-upload-in-flight gate: it
+    // never touches MAX_MEDIA/attachedMedia, only guarded against a concurrent capture of its own.
+    var isCapturingLocation by remember { mutableStateOf(false) }
+    val locationUnavailableMessage = stringResource(R.string.feed_composer_location_unavailable)
+
+    fun captureDeviceLocation() {
+        if (isCapturingLocation) return
+        scope.launch {
+            isCapturingLocation = true
+            val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            val fix = manager?.awaitFreshFix()
+            isCapturingLocation = false
+            if (fix != null) {
+                draft = draft.withLocation(SharedPlace(latitude = fix.latitude, longitude = fix.longitude))
+            } else {
+                onMediaError(locationUnavailableMessage)
+            }
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { results ->
+        val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) captureDeviceLocation() else onMediaError(locationUnavailableMessage)
+    }
+
+    fun requestDeviceLocation() {
+        val fineGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (fineGranted || coarseGranted) {
+            captureDeviceLocation()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+            )
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -458,6 +532,13 @@ fun FeedComposerSheet(
                 minLines = 4,
             )
 
+            draft.location?.let { place ->
+                LocationAttachmentChip(
+                    place = place,
+                    onRemove = { draft = draft.withoutLocation() },
+                )
+            }
+
             // 100ms tick-and-meter loop, only alive while recording — identical shape to
             // ChatScreen's own LaunchedEffect(recording.isRecording) driving the same pill.
             LaunchedEffect(recording.isRecording) {
@@ -484,11 +565,13 @@ fun FeedComposerSheet(
                     media = attachedMedia,
                     isUploading = isUploadingMedia,
                     canAddMore = !draft.isMediaFull,
+                    isCapturingLocation = isCapturingLocation,
                     onAdd = ::launchMediaPicker,
                     onCamera = ::launchCamera,
                     onVideoCapture = ::launchVideoCapture,
                     onAttachFile = ::launchFilePicker,
                     onRecordVoice = ::requestVoiceRecording,
+                    onAddLocation = ::requestDeviceLocation,
                     onRemove = ::removeMedia,
                 )
             }
@@ -534,30 +617,117 @@ private fun Context.grantCaptureWritePermission(action: String, uri: Uri) {
 }
 
 /**
- * The attach-media/take-photo/take-video/attach-file/record-voice affordances plus
- * the picked-attachment strip — always shows the gallery, camera, video-capture,
- * file and mic tiles first (all disabled once [canAddMore] is false or while
- * [isUploading]), then each attached [media] item with a remove overlay, then an
- * in-flight spinner tile while a pick is uploading. The caller only renders this
- * Composable at all while no recording is in progress (see [FeedComposerSheet] —
- * [VoiceRecordingPill] takes its place during an active take), so [onRecordVoice]
- * only ever needs to start one, never stop/cancel it. Each attached item renders
- * either its real thumbnail ([UploadedMedia.hasThumbnailPreview]) or a generic
- * file-icon tile — the only rendering decision made here, and it delegates to
- * that already-tested pure extension rather than re-sniffing the MIME type.
- * Otherwise pure Compose glue: every id/list decision it renders came from the
- * already pure/tested [FeedComposerDraft]/upload result upstream.
+ * Requests a single fresh location fix from the best currently-enabled provider (GPS
+ * preferred, network fallback), or `null` when neither provider is enabled or no fix
+ * arrives within [timeoutMs]. The caller must already hold `ACCESS_FINE_LOCATION` or
+ * `ACCESS_COARSE_LOCATION` — checked by [FeedComposerSheet.requestDeviceLocation]
+ * before this is ever invoked, never by this function itself. Android-runtime glue,
+ * exempt from JVM coverage per `TDD-COVERAGE.md`: "which provider is enabled right
+ * now" is inherently a live system-state read with no further pure decision to
+ * extract, the same rationale [readMediaUploadItem] and [startVoiceRecording] already
+ * document for this composer's other runtime glue.
+ */
+@SuppressLint("MissingPermission")
+private suspend fun LocationManager.awaitFreshFix(timeoutMs: Long = 12_000): Location? {
+    val provider = when {
+        isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+        isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+        else -> return null
+    }
+    return withTimeoutOrNull(timeoutMs) {
+        suspendCancellableCoroutine { continuation ->
+            val listener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    removeUpdates(this)
+                    if (continuation.isActive) continuation.resume(location)
+                }
+                @Deprecated("Deprecated in Java")
+                override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) {}
+            }
+            continuation.invokeOnCancellation { removeUpdates(listener) }
+            requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+        }
+    }
+}
+
+/**
+ * The attached-location chip — shown between the text field and
+ * [MediaAttachmentsRow] whenever [FeedComposerDraft.location] is non-null. Same
+ * pill-with-close-affordance visual language as [ReelTypeToggle], displaying the
+ * raw coordinates (this sub-slice attaches no name/address — see
+ * [FeedComposerSheet]'s class doc comment) via the already-tested
+ * [me.meeshy.sdk.model.formattedCoordinates].
+ */
+@Composable
+private fun LocationAttachmentChip(
+    place: SharedPlace,
+    onRemove: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .background(MeeshyTheme.tokens.inputBackground)
+            .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.pill))
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.LocationOn,
+            contentDescription = null,
+            tint = MeeshyPalette.Indigo500,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = place.formattedCoordinates(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.size(20.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = stringResource(R.string.feed_composer_remove_location),
+                tint = MeeshyTheme.tokens.textMuted,
+                modifier = Modifier.size(12.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The attach-media/take-photo/take-video/attach-file/record-voice/add-location
+ * affordances plus the picked-attachment strip — always shows the gallery, camera,
+ * video-capture, file, mic and location tiles first (media tiles disabled once
+ * [canAddMore] is false or while [isUploading]; the location tile disabled only
+ * while [isCapturingLocation], independent of the media cap/upload state), then
+ * each attached [media] item with a remove overlay, then an in-flight spinner tile
+ * while a pick is uploading. The caller only renders this Composable at all while
+ * no recording is in progress (see [FeedComposerSheet] — [VoiceRecordingPill] takes
+ * its place during an active take), so [onRecordVoice] only ever needs to start
+ * one, never stop/cancel it. Each attached item renders either its real thumbnail
+ * ([UploadedMedia.hasThumbnailPreview]) or a generic file-icon tile — the only
+ * rendering decision made here, and it delegates to that already-tested pure
+ * extension rather than re-sniffing the MIME type. Otherwise pure Compose glue:
+ * every id/list decision it renders came from the already pure/tested
+ * [FeedComposerDraft]/upload result upstream.
  */
 @Composable
 private fun MediaAttachmentsRow(
     media: List<UploadedMedia>,
     isUploading: Boolean,
     canAddMore: Boolean,
+    isCapturingLocation: Boolean,
     onAdd: () -> Unit,
     onCamera: () -> Unit,
     onVideoCapture: () -> Unit,
     onAttachFile: () -> Unit,
     onRecordVoice: () -> Unit,
+    onAddLocation: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Row(
@@ -646,6 +816,29 @@ private fun MediaAttachmentsRow(
                 contentDescription = stringResource(R.string.feed_composer_record_voice),
                 tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
             )
+        }
+
+        // Independent of attachEnabled: the location tile is not subject to MAX_MEDIA/upload —
+        // only guarded against a concurrent capture in flight.
+        val locationTileEnabled = !isCapturingLocation
+        IconButton(
+            onClick = onAddLocation,
+            enabled = locationTileEnabled,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(MeeshyTheme.tokens.inputBackground)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.md)),
+        ) {
+            if (isCapturingLocation) {
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.LocationOn,
+                    contentDescription = stringResource(R.string.feed_composer_add_location),
+                    tint = MeeshyPalette.Indigo500,
+                )
+            }
         }
 
         media.forEach { item ->

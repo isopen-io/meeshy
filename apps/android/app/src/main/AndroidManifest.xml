@@ -13,6 +13,9 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- Feed post composer: "add my location" attachment (device fix, no map/geocoding yet). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Android 15+ : détection « l'écran de l'app est enregistré » pendant un
          appel → alerte privacy du pair (call:screen-capture-detected). Permission
          normale (aucun prompt), inerte sous l'API 35. -->

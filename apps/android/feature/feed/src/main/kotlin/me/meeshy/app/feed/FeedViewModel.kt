@@ -16,6 +16,7 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -341,11 +342,14 @@ class FeedViewModel @Inject constructor(
      * via [FeedRealtimeReducer.created] — visible at the top instantly, without raising
      * the "new posts" banner. [type] carries the reel-classification decision the pure
      * [FeedComposerDraft.postType] already resolved (`ReelComposition.defaultType`) —
-     * defaulted to [PostType.POST] so any other call site is unaffected. **Deliberate,
+     * defaulted to [PostType.POST] so any other call site is unaffected. [location]
+     * carries the optional device-captured [me.meeshy.sdk.model.SharedPlace] attachment
+     * the composer's location tile resolved — forwarded to the gateway verbatim,
+     * `null` when no location was attached (the common case, unaffected). **Deliberate,
      * documented scope cuts**: no durable-outbox queueing yet (unlike iOS's
      * `enqueueDurableTextPost`, U1 ST3) — a post typed while offline is lost rather than
      * durably queued; a tracked follow-up once Android's `OutboxKind` gains a
-     * `CREATE_POST` lane. Camera capture, file, location and audio attachments remain
+     * `CREATE_POST` lane. Camera capture, file and audio attachments remain
      * separately-scoped follow-ups to this photo/video sub-slice.
      */
     fun publishPost(
@@ -353,6 +357,7 @@ class FeedViewModel @Inject constructor(
         visibility: String,
         mediaIds: List<String> = emptyList(),
         type: String = PostType.POST.name,
+        location: SharedPlace? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -361,6 +366,7 @@ class FeedViewModel @Inject constructor(
                     type = type,
                     visibility = visibility,
                     mediaIds = mediaIds.ifEmpty { null },
+                    location = location,
                 )
                 when (result) {
                     is NetworkResult.Success ->

@@ -332,6 +332,7 @@ fun FeedScreen(
                     visibility = request.visibility,
                     mediaIds = request.mediaIds,
                     type = request.type,
+                    location = request.location,
                 )
                 composerDraft = null
             },

@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import org.junit.Test
 
@@ -357,5 +358,70 @@ class FeedComposerDraftTest {
     @Test
     fun `a blank mime type falls back to a generic file icon`() {
         assertThat(media("m1", mimeType = "").hasThumbnailPreview).isFalse()
+    }
+
+    // --- location attachment ------------------------------------------------
+
+    private fun place(latitude: Double = 48.8566, longitude: Double = 2.3522) =
+        SharedPlace(latitude = latitude, longitude = longitude)
+
+    @Test
+    fun `a fresh draft has no attached location`() {
+        assertThat(FeedComposerDraft().location).isNull()
+    }
+
+    @Test
+    fun `withLocation attaches the place`() {
+        val draft = FeedComposerDraft().withLocation(place())
+
+        assertThat(draft.location).isEqualTo(place())
+    }
+
+    @Test
+    fun `withLocation replaces a previously-attached place rather than accumulating`() {
+        val first = place(latitude = 1.0, longitude = 1.0)
+        val second = place(latitude = 2.0, longitude = 2.0)
+
+        val draft = FeedComposerDraft().withLocation(first).withLocation(second)
+
+        assertThat(draft.location).isEqualTo(second)
+    }
+
+    @Test
+    fun `withoutLocation clears an attached place`() {
+        val draft = FeedComposerDraft().withLocation(place()).withoutLocation()
+
+        assertThat(draft.location).isNull()
+    }
+
+    @Test
+    fun `withoutLocation on a draft with no location is inert`() {
+        val draft = FeedComposerDraft().withoutLocation()
+
+        assertThat(draft.location).isNull()
+    }
+
+    @Test
+    fun `an attached location alone does not unlock publishing — mirrors iOS pendingPlace`() {
+        val draft = FeedComposerDraft().withLocation(place())
+
+        assertThat(draft.canPublish).isFalse()
+        assertThat(draft.publishRequest()).isNull()
+    }
+
+    @Test
+    fun `a publish request carries the attached location alongside text`() {
+        val request = FeedComposerDraft().withText("hello").withLocation(place()).publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.location).isEqualTo(place())
+    }
+
+    @Test
+    fun `a publish request with no attached location carries a null location`() {
+        val request = FeedComposerDraft().withText("hello").publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.location).isNull()
     }
 }
