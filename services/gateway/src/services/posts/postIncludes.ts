@@ -188,6 +188,16 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     // n'a rien à hisser sur `repostOf` et un repost perd la position de
     // l'original (même porte que `commentsPreviewInclude.metadata`).
     metadata: true,
+    // Compteurs de portée de l'ORIGINAL (chantier reposts cohérents & watermark,
+    // tâche 1) — sans eux, un repost affiché ne peut jamais montrer combien de
+    // fois l'original a été vu, reposté, partagé ou mis en favori. `PostService`
+    // crédite désormais ces mêmes compteurs à travers la chaîne de reposts
+    // (voir `recordView` / routes d'impression), ce select les rend visibles.
+    viewCount: true,
+    repostCount: true,
+    shareCount: true,
+    bookmarkCount: true,
+    impressionCount: true,
   },
 });
 

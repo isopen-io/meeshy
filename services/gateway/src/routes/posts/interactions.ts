@@ -16,6 +16,7 @@ import { loadPostAcl, canUserInteractWithPost } from '../../services/posts/postV
 import { withMutationLog } from '../../utils/withMutationLog';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
+import { NOT_DELETED } from '../../services/posts/postIncludes';
 
 /**
  * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
@@ -406,10 +407,24 @@ export function registerInteractionRoutes(
         counters.postOpenCount = { increment: 1 };
       }
 
-      await prisma.post.update({
+      // Résout repostOfId/originalRepostOfId depuis le RETOUR de `update` —
+      // pas une lecture séparée : un repost doit créditer son original du
+      // même impressionCount en plus de son propre compteur (chantier
+      // reposts cohérents & watermark, tâche 1), sans ajouter de requête sur
+      // ce chemin chaud (chaque impression, majoritairement des non-reposts).
+      const target = await prisma.post.update({
         where: { id: postId },
-        data: counters
+        data: counters,
+        select: { repostOfId: true, originalRepostOfId: true },
       });
+
+      const rootId = target?.originalRepostOfId ?? target?.repostOfId;
+      if (rootId && rootId !== postId) {
+        await prisma.post.updateMany({
+          where: { id: rootId, deletedAt: NOT_DELETED },
+          data: { impressionCount: { increment: 1 } },
+        });
+      }
 
       return sendSuccess(reply, { recorded: true });
     } catch (error) {
@@ -471,14 +486,52 @@ export function registerInteractionRoutes(
         return acc;
       }, new Map());
 
-      await Promise.all(
-        [...idsByIncrement].map(([increment, ids]) =>
+      // Reposts du batch : résout repostOfId/originalRepostOfId de tous les
+      // posts DISTINCTS en UNE requête — jamais une par post — pour créditer
+      // la racine de chaque repost du même impressionCount (chantier reposts
+      // cohérents & watermark, tâche 1).
+      const repostSources = await prisma.post.findMany({
+        where: { id: { in: [...occurrences.keys()] }, repostOfId: { not: null } },
+        select: { id: true, repostOfId: true, originalRepostOfId: true },
+      });
+      const rootByPostId = new Map<string, string>(
+        repostSources
+          .map((p: { id: string; repostOfId: string | null; originalRepostOfId: string | null }) =>
+            [p.id, p.originalRepostOfId ?? p.repostOfId] as [string, string | null])
+          .filter((entry: [string, string | null]): entry is [string, string] =>
+            Boolean(entry[1]) && entry[1] !== entry[0]),
+      );
+
+      // Chaque OCCURRENCE d'un repost dans le batch crédite sa racine — deux
+      // reposts distincts (ou 2 occurrences du même repost) du même original
+      // doivent créditer l'original de +2, jamais +1. Même piège `in`
+      // dédupliqué que ci-dessus, appliqué ici au crédit de la racine.
+      const rootOccurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
+        const rootId = rootByPostId.get(postId);
+        if (!rootId) return acc;
+        acc.set(rootId, (acc.get(rootId) ?? 0) + 1);
+        return acc;
+      }, new Map());
+
+      const rootIdsByIncrement = [...rootOccurrences].reduce<Map<number, string[]>>((acc, [rootId, count]) => {
+        acc.set(count, [...(acc.get(count) ?? []), rootId]);
+        return acc;
+      }, new Map());
+
+      await Promise.all([
+        ...[...idsByIncrement].map(([increment, ids]) =>
           prisma.post.updateMany({
             where: { id: { in: ids } },
             data: { impressionCount: { increment } }
           })
-        )
-      );
+        ),
+        ...[...rootIdsByIncrement].map(([increment, ids]) =>
+          prisma.post.updateMany({
+            where: { id: { in: ids }, deletedAt: NOT_DELETED },
+            data: { impressionCount: { increment } }
+          })
+        ),
+      ]);
 
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {
