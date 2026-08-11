@@ -390,6 +390,139 @@ final class ConversationSyncEngineTests: XCTestCase {
             "without a due reconcile the delta must not touch rows it did not receive")
     }
 
+    // MARK: - Cycle 79 : une page delta qui laisse du reste ne prouve pas sa complétude
+
+    /// `deltaSyncCore` demandait `limit=500` à une route qui plafonne à 100 :
+    /// le `limit` annoncé dans la réponse était un mensonge, et le repli
+    /// heuristique `count >= limit` (quand la pagination manque) n'aurait jamais
+    /// pu déclencher. Demander le plafond réel ne change pas le nombre de lignes
+    /// rendues — il rend la coupure lisible.
+    func test_syncSinceLastCheckpoint_asksForTheServerPageCap() async {
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let limit = mockAPI.lastRequest?.queryItems?.first(where: { $0.name == "limit" })?.value
+        XCTAssertEqual(limit, "100",
+            "asking for more than the server cap makes a truncated page indistinguishable from a complete one")
+    }
+
+    /// Le résidu que l'ordre `updatedAt` croissant ne rattrape pas : plus de 100
+    /// conversations portant la MÊME milliseconde débordent d'une page que la
+    /// borne stricte `gt` ne peut pas reprendre. Une page dont le serveur annonce
+    /// du RESTE doit donc escalader vers la vérité serveur complète — même si la
+    /// réconciliation périodique vient de courir (elle n'a rien à voir avec
+    /// cette preuve-là).
+    func test_syncSinceLastCheckpoint_truncatedDeltaPage_escalatesToFullSync_evenWhenReconcileIsRecent() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let truncatedPage = (0..<ConversationSyncEngine.deltaPageLimit).map {
+            TestFactories.makeAPIConversation(id: "delta-\($0)")
+        }
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: truncatedPage,
+            pagination: OffsetPagination(total: truncatedPage.count + 40, hasMore: true, limit: 100, offset: 0),
+            error: nil
+        ))
+        mockConvService.listResult = .success(OffsetPaginatedAPIResponse(
+            success: true,
+            data: [TestFactories.makeAPIConversation(id: "server-truth")],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        XCTAssertGreaterThan(mockConvService.listCallCount, 0,
+            "a page the server says left rows behind proves nothing about coverage — it must escalate to the full truth")
+    }
+
+    /// L'ORDRE DES GESTES EST LE CORRECTIF : le curseur ne bouge pas AVANT
+    /// l'escalade, sinon une escalade échouée (offline, panne gateway) laisse un
+    /// watermark déjà passé par-dessus les lignes coupées — définitivement, le
+    /// delta suivant repartant d'après elles.
+    func test_syncSinceLastCheckpoint_truncatedDeltaPage_leavesCursorInPlace_whenEscalationFails() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+        let seededCursor = Date(timeIntervalSince1970: 1_700_000_000)
+        UserDefaults.standard.set(seededCursor, forKey: "me.meeshy.lastSyncTimestamp")
+
+        let pageUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let truncatedPage = (0..<ConversationSyncEngine.deltaPageLimit).map {
+            TestFactories.makeAPIConversation(id: "cut-\($0)", updatedAt: pageUpdatedAt)
+        }
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: truncatedPage,
+            pagination: OffsetPagination(total: truncatedPage.count + 40, hasMore: true, limit: 100, offset: 0),
+            error: nil
+        ))
+        // L'escalade échoue : c'est précisément le cas où un curseur déjà avancé
+        // aurait rendu la perte irréversible.
+        mockConvService.listResult = .failure(MeeshyError.network(.timeout))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cursor = UserDefaults.standard.object(forKey: "me.meeshy.lastSyncTimestamp") as? Date
+        XCTAssertEqual(cursor?.timeIntervalSince1970 ?? 0, seededCursor.timeIntervalSince1970, accuracy: 1,
+            "a truncated page must leave the window replayable — advancing the cursor here loses the cut rows for good")
+    }
+
+    /// Le pendant, pour que la garde ne devienne pas un « on ne converge
+    /// jamais » : une page sans reste a rendu toute la fenêtre. Le curseur
+    /// avance, et rien n'escalade.
+    func test_syncSinceLastCheckpoint_completeDeltaPage_advancesCursor_andSkipsEscalation() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+        let seededCursor = Date(timeIntervalSince1970: 1_700_000_000)
+        UserDefaults.standard.set(seededCursor, forKey: "me.meeshy.lastSyncTimestamp")
+
+        let serverMax = Date(timeIntervalSince1970: 1_800_000_000)
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(id: "delta-partial", updatedAt: serverMax)],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cursor = UserDefaults.standard.object(forKey: "me.meeshy.lastSyncTimestamp") as? Date
+        XCTAssertEqual(cursor?.timeIntervalSince1970 ?? 0, serverMax.timeIntervalSince1970, accuracy: 1,
+            "a page the server says is complete IS proof of coverage — the cursor must advance to the newest server updatedAt")
+        XCTAssertEqual(mockConvService.listCallCount, 0,
+            "a complete page needs no escalation — the delta stays the cheap nominal path")
+    }
+
+    /// `hasMore` est AUTORITAIRE sur une page delta (`offset=0` ⇒ le serveur
+    /// compte la MÊME clause `updatedAt > since`), et c'est pour ça qu'on ne se
+    /// contente pas de « la page est pleine » : une fenêtre de très exactement
+    /// `deltaPageLimit` conversations est COMPLÈTE. L'heuristique du compte
+    /// imposerait ici une relecture de toute la liste pour rien.
+    func test_syncSinceLastCheckpoint_exactlyFullButCompletePage_doesNotEscalate() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let exactPage = (0..<ConversationSyncEngine.deltaPageLimit).map {
+            TestFactories.makeAPIConversation(id: "exact-\($0)")
+        }
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: exactPage,
+            pagination: OffsetPagination(total: exactPage.count, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockConvService.listCallCount, 0,
+            "the server counted the same window and said it was complete — escalating would refetch everything for nothing")
+    }
+
     // MARK: - ensureMessages
 
     func test_ensureMessages_callsMessageServiceList() async {
@@ -1235,14 +1368,15 @@ private extension TestFactories {
     static func makeAPIConversation(
         id: String = "conv-1",
         lastMessageAt: Date? = nil,
-        unreadCount: Int = 0
+        unreadCount: Int = 0,
+        updatedAt: Date? = nil
     ) -> APIConversation {
         var json: [String: Any] = [
             "id": id,
             "identifier": "test-\(id)",
             "type": "DIRECT",
             "createdAt": ISO8601DateFormatter().string(from: Date()),
-            "updatedAt": ISO8601DateFormatter().string(from: Date()),
+            "updatedAt": ISO8601DateFormatter().string(from: updatedAt ?? Date()),
             "isActive": true,
             "unreadCount": unreadCount
         ]

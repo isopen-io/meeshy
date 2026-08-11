@@ -1,48 +1,134 @@
-# Tête instruite pour le cycle 79 — iOS avance son curseur delta par-dessus une page TRONQUÉE
+# Tête instruite pour le cycle 80 — le delta des stories ignore les deux signaux de troncature que le serveur lui tend
 
-*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur.*
+*Trouvé en instruisant le cycle 79, vérifié par lecture croisée client/serveur.*
 
-> **RÉDUITE PAR LE CYCLE 77 (D2).** La route trie désormais une page delta par `updatedAt`
-> croissant : les lignes coupées sont celles d'`updatedAt` supérieur à la dernière rendue,
-> donc le watermark pointe dessus au lieu de les enjamber. Ce qui suit reste vrai pour le
-> SEUL résidu que l'ordre ne rattrape pas — plus de 100 conversations portant la même
-> milliseconde d'`updatedAt` — et le point 2 (« ne pas avancer le curseur sur une page qu'on
-> sait tronquée ») garde toute sa valeur.
+Même famille que le cycle 79, sur l'autre delta du produit. `GET /posts/feed/stories?updatedSince=`
+(`services/gateway/src/routes/posts/feed.ts`) plafonne `limit` à **50** et rend
+`pagination: { limit, hasMore, nextCursor }`. Le client iOS
+(`StoryViewModel.fetchStoriesFromNetwork(deltaSince:)`,
+`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`) appelle
+`storyService.list(cursor: nil, limit: 50, updatedSince: deltaSince)` et **ne lit ni `hasMore` ni
+`nextCursor`**.
 
-`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
-`GET /conversations?updatedSince=`. La route plafonne à 100
-(`Math.min(parseInt(limit), 100)`, `services/gateway/src/routes/conversations/core.ts`)
-et trie par **`lastMessageAt` décroissant, pas par `updatedAt`**. Trois faits qui
-s'additionnent :
+Trois faits qui s'additionnent, tous vérifiés :
 
-1. une fenêtre aveugle ayant touché plus de 100 conversations rend une page tronquée ;
-2. les lignes coupées ne sont pas « les plus anciennes mises à jour » — l'ordre du tri
-   n'a aucun rapport avec le filtre ;
-3. `lastSyncTimestamp` avance quand même au max des `updatedAt` REÇUS
-   (`SyncWatermark.advanced`), ce qui enjambe définitivement les lignes coupées.
+1. une fenêtre delta ayant touché plus de 50 stories rend une page tronquée, et rien côté client
+   ne le remarque ;
+2. le curseur est DÉRIVÉ du tray après fusion (`StoryViewModel.deltaSince(for:)` =
+   `groups.flatMap(\.stories).compactMap(\.updatedAt).max()`), donc il monte au max de ce qu'on
+   vient de recevoir — c'est-à-dire **par-dessus les lignes coupées**, que la borne serveur
+   stricte (`gt`) ne rendra plus ;
+3. le repli existe mais n'est jamais emprunté : le full fetch ne court que si l'appel delta
+   **jette**. Une page tronquée est un succès.
 
-Elles ne reviennent qu'au `fullSync` périodique — borné à 1× par 24 h
-(`fullReconcileInterval`). Pendant ce temps la liste iOS affiche des compteurs de
-non-lus et des aperçus périmés, sans qu'aucun signal ne l'indique.
+**Et le second signal, lui, n'existe pas encore.** Les tombstones
+(`meta.deletedStoryIds`) sont plafonnés à `STORY_TOMBSTONE_LIMIT = 500`
+(`PostFeedService.getStories`) et la troncature est signalée par un `logger.warn` **côté serveur
+uniquement** — la charge utile ne porte aucun drapeau. Un client dont les tombstones ont été coupés
+garde ses stories fantômes sans qu'aucune ligne de code ne puisse s'en apercevoir. C'est un
+changement de CONTRAT (un booléen dans `meta`), pas une garde client, et il touche
+`packages/shared/types/api-responses.ts` dont le commentaire décrit déjà ce champ.
 
-Le web a fermé ce cas au cycle 76 : une page PLEINE (`conversations.length >=
-DELTA_PAGE_LIMIT`) est traitée comme une preuve d'incomplétude et escalade vers la
-relecture complète. Le geste iOS est le même, mais il ne suffit PAS de copier le test :
-`deltaSyncCore` ne pagine pas, et son curseur est persisté — il faut décider si
-l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fait déjà
-`syncSinceLastCheckpoint`) ou une boucle de pages. Deux bornes avant d'ouvrir :
+Trois bornes avant d'ouvrir :
 
-1. **`limit=500` est un mensonge silencieux depuis toujours** — le corriger à 100 ne
-   change rien au défaut, il le rend seulement lisible. La détection est le correctif ;
-   la constante n'est que de l'hygiène.
-2. **Le curseur ne doit pas avancer sur une page dont on sait qu'elle est tronquée**,
-   sinon l'escalade elle-même repart d'un watermark déjà trop haut. L'ordre des gestes
-   (ne pas avancer, PUIS escalader) est le contenu du correctif, pas un détail.
+1. **Le curseur des stories n'est PAS persisté** (contrairement à celui des conversations) : il se
+   recalcule depuis le tray à chaque passe. La leçon du cycle 79 — « ne pas avancer un curseur
+   persisté sur une page tronquée » — ne se transpose donc pas telle quelle ; ici le geste est
+   d'ESCALADER (full fetch) sur `hasMore`, ou de paginer sur `nextCursor`.
+2. **Paginer est peut-être le geste juste ici, contrairement aux conversations** : la route rend
+   un `nextCursor`, et le tray est borné par nature (24 h). Une boucle de pages bornée coûte moins
+   qu'un full fetch et ne perd rien. À trancher en mesurant, pas en recopiant le cycle 79.
+3. **Le tombstone tronqué et la page tronquée sont DEUX défauts** ; le premier ne se corrige pas
+   sans toucher le contrat partagé. Les livrer ensemble ou séparément est un choix, mais les
+   confondre ferait passer un correctif client pour une couverture complète.
 
-Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
-— la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
+Point d'entrée : `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+(`fetchStoriesFromNetwork`), miroir serveur `services/gateway/src/services/PostFeedService.ts`
+(`getStories`).
 
 ---
+
+# Cycle 79 — Un curseur persisté qui avance sur une page dont on ignore si elle est complète
+
+## Le défaut
+
+`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demandait `limit=500` à
+`GET /conversations?updatedSince=`, que la route plafonne à 100
+(`Math.min(parseInt(limit), 100)`). Puis il avançait `lastSyncTimestamp` au max des `updatedAt`
+REÇUS — **sans jamais regarder si la page avait été coupée**.
+
+Le tri par `updatedAt` croissant livré au cycle 77 fait pointer le curseur sur les lignes coupées
+dans le cas général : la troncature y est devenue une pagination. Le résidu que l'ordre ne rattrape
+pas est celui de plus de 100 conversations partageant la MÊME milliseconde d'`updatedAt` : la borne
+serveur est stricte (`gt`), donc le débordement était enjambé **définitivement**, jusqu'à la
+réconciliation complète bornée à 1× par 24 h. Entre les deux, la liste iOS affichait des compteurs
+de non-lus et des aperçus périmés sans qu'aucun signal ne l'indique.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Le serveur dit déjà la vérité, personne ne l'écoutait.** Une page delta part toujours
+d'`offset=0`, et la route ne compte alors PAS un total décoratif : elle exécute
+`prisma.conversation.count({ where: whereClause })` sur la **même clause `updatedAt > since`**
+(`routes/conversations/core.ts`, branche `totalCount > 0 && (includeCount || offset === 0)`).
+Son `pagination.hasMore` vaut donc exactement « la fenêtre contenait plus de lignes que cette page
+n'en rend ». La tête proposait de détecter la troncature par `count >= limit` — l'heuristique du
+web. Le signal autoritaire était disponible des deux côtés depuis toujours.
+
+**La différence n'est pas cosmétique** : `count >= limit` escalade sur une fenêtre de très
+exactement 100 conversations, qui est pourtant COMPLÈTE. Sur le web, cette escalade est une
+relecture de TOUTES les pages chargées — précisément ce que le cycle 77 avait retiré du chemin de
+focus. Le web a donc été corrigé dans le même lot : il lit `pagination.hasMore`, dont
+`getConversations` porte déjà le repli conservateur `length >= limit` quand la réponse omet son
+bloc pagination.
+
+## L'ordre des gestes, qui EST le correctif
+
+Ne pas avancer le curseur, PUIS escalader. Pas l'inverse, et pas seulement escalader :
+`fullSync()` peut échouer (offline, panne gateway), et un curseur persisté déjà avancé aurait
+survécu à cet échec — les lignes coupées auraient été perdues pour de bon, le delta suivant
+repartant d'après elles. Parce que le curseur est resté en arrière, une escalade échouée laisse la
+fenêtre **entière** rejouable au prochain delta. La fusion de la page reçue, elle, est conservée
+dans les deux cas : ce qu'on a reçu est vrai, c'est seulement la COUVERTURE qui n'est pas prouvée.
+
+## D1 — la divergence web/iOS sur le curseur est assumée, pas une dette
+
+Le web ne peut pas « ne pas avancer » : son curseur est RECALCULÉ depuis le cache à chaque passe,
+donc fusionner la page l'avance mécaniquement. iOS PERSISTE le sien. Deux natures, deux gestes —
+et c'est le curseur persisté qui exige la garde, puisque lui seul survit à l'échec de l'escalade.
+La note est écrite en tête de `syncSinceLastCheckpoint` pour que la prochaine passe de parité ne
+« corrige » pas l'un vers l'autre.
+
+## D2 — `limit=500` n'était pas qu'une coquette inexactitude
+
+Le corriger à 100 ne change rien au nombre de lignes rendues — la route plafonnait déjà. Mais le
+repli heuristique `data.count >= deltaPageLimit`, celui qui sert quand une réponse n'annonce pas sa
+pagination, **n'aurait jamais pu déclencher** sous `limit=500`. Un mensonge de constante avait
+désactivé silencieusement le filet de sécurité qu'on venait d'écrire.
+
+## Vérification
+
+- `apps/web` : suite `use-conversations-delta-sync` **28/28 verte**, dont le nouveau témoin
+  « page de très exactement 100 que le serveur dit complète ⇒ aucune escalade », **vérifié ROUGE**
+  contre l'ancienne règle `length >= DELTA_PAGE_LIMIT` avant d'être livré.
+- `apps/web` (large) : `__tests__/hooks` + `__tests__/lib/conversations` — 2 003 tests verts,
+  2 sautés. Les 6 suites qui ne démarrent pas (posts/commentaires/register/encryption) échouent sur
+  de la résolution de module dans ce conteneur, sans rapport avec le lot.
+- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+- SDK iOS : 4 témoins d'ingénierie (`ConversationSyncEngineTests`) + 3 témoins de règle pure
+  (`SyncWatermarkTests`) — pas de toolchain Swift dans ce conteneur, la validation passe par
+  `sdk-tests.yml` (macOS) sur la PR.
+
+## Reste ouvert après ce cycle
+
+- **Le résidu même-milliseconde n'est pas FERMÉ, il est rendu convergent.** Une fenêtre de plus de
+  100 conversations à la même milliseconde escalade désormais vers `fullSync` ; elle ne se rattrape
+  toujours pas par pagination delta. Fermer vraiment demanderait un curseur composite
+  `(updatedAt, id)` côté route — chantier de contrat.
+- **La troncature de tombstones du delta des stories est le même angle mort, un cran plus grave**
+  (le serveur la journalise sans la dire au client). Voir la tête du cycle 80 ci-dessus.
+- **`ConversationSyncEngine.deltaPageLimit` et `DELTA_PAGE_LIMIT` (web) restent deux constantes
+  jumelles tenues à la main**, comme `fullReconcileInterval` / `FULL_RECONCILE_INTERVAL_MS`. Rien
+  de mécanique ne les lie au `Math.min(limit, 100)` de la route.
 
 ---
 

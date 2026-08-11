@@ -182,9 +182,14 @@ effectif d'avant la coupure jusqu'au prochain focus de fenêtre ou remontage.
 `hooks/queries/use-conversations-delta-sync.ts` porte le déclenchement sur le front
 `false → true` de `isSocketConnected`, le MÊME motif que le « Trigger 1 » du fil de messages. La
 borne est DÉDUITE du cache à chaque passe — le cache React Query EST le curseur, aucun état
-persisté. Une page pleine (100, le plafond serveur) vaut preuve d'incomplétude et escalade vers une
-relecture complète, parce que la route trie par `lastMessageAt` et non par `updatedAt` : les lignes
-tronquées ne sont pas les plus anciennes, et avancer la borne les enjamberait.
+persisté. L'escalade vers une relecture complète est déclenchée par le `pagination.hasMore` du serveur
+(2026-08-12), et non par « la page est pleine » : une page delta part toujours d'`offset=0`, ce qui
+fait compter au serveur toutes les lignes de la MÊME clause `updatedAt > since` — `hasMore` y vaut
+donc exactement « la fenêtre contenait plus que cette page ». L'heuristique précédente
+(`length >= DELTA_PAGE_LIMIT`) relisait toutes les pages chargées sur une fenêtre de très exactement
+100 conversations, pourtant complète. `getConversations` porte déjà le repli conservateur
+`length >= limit` quand la réponse omet son bloc pagination. Jumeau iOS :
+`ConversationSyncEngine.deltaSyncCore`, qui lit le même signal et escalade vers `fullSync()`.
 **Alternatives rejetées**: `refetch()` de la liste (rejoue TOUTES les pages chargées d'une route
 lourde, et REMPLACE le cache — donc perd ce que le socket y a écrit) ; un second signal de reconnect
 propre à la liste (il en existe déjà un, écrit et testé) ; un curseur persisté à la iOS (le cache
