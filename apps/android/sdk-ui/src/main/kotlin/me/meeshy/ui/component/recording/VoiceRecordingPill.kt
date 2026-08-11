@@ -1,10 +1,6 @@
-package me.meeshy.app.chat
+package me.meeshy.ui.component.recording
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -46,9 +43,13 @@ import me.meeshy.ui.theme.MeeshyTheme
  * All state and gating live in the [session]; this composable only paints it. The
  * stop and send controls dim and disable below [VoiceRecordingSession.canSend],
  * exactly like the iOS pill, so an unusably short take can never be sent.
+ *
+ * Lives in `:sdk-ui` (moved here from `:feature:chat` — no visual/behaviour change —
+ * in `feed-composer-voice-capture`) so both the chat composer and the Feed post
+ * composer render the exact same pill instead of two drifting copies.
  */
 @Composable
-internal fun VoiceRecordingPill(
+public fun VoiceRecordingPill(
     session: VoiceRecordingSession,
     accentColor: Color,
     onCancel: () -> Unit,
@@ -87,6 +88,7 @@ internal fun VoiceRecordingPill(
             }
 
             RecordingWaveform(
+                levels = session.levels,
                 accentColor = accentColor,
                 modifier = Modifier
                     .weight(1f)
@@ -150,39 +152,30 @@ internal fun VoiceRecordingPill(
 }
 
 /**
- * A lively synthetic waveform strip painted while recording. Until live microphone
- * metering is wired ([VoiceRecordingSession.meter] is fed by an app-side recorder),
- * the bars breathe on staggered infinite transitions so the pill reads as "live",
- * mirroring the iOS `ComposerWaveformBar` fallback used when no external levels
- * are available.
+ * The live waveform strip, one bar per reading in [VoiceRecordingSession.levels] (the
+ * real app-side [VoiceRecordingSession.meter] feed, oldest reading first — a fixed
+ * [me.meeshy.sdk.model.waveform.WaveformLevelWindow.capacity]-sized list from the very
+ * first frame, so the bar count never shifts mid-recording). Each bar height eases
+ * toward its new level via [animateFloatAsState] rather than snapping, so a fast
+ * meter tick still reads as fluid.
  */
 @Composable
 private fun RecordingWaveform(
+    levels: List<Float>,
     accentColor: Color,
     modifier: Modifier = Modifier,
-    barCount: Int = 24,
 ) {
-    val transition = rememberInfiniteTransition(label = "waveform")
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        repeat(barCount) { index ->
-            val phase = 320 + (index % 6) * 90
-            val level by transition.animateFloat(
-                initialValue = 0.15f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = phase),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "bar$index",
-            )
+        levels.forEach { level ->
+            val animatedLevel by animateFloatAsState(targetValue = level, label = "waveformBar")
             Box(
                 modifier = Modifier
                     .width(2.5.dp)
-                    .height((3f + 22f * level).dp)
+                    .height((3f + 22f * animatedLevel).dp)
                     .clip(RoundedCornerShape(1.25.dp))
                     .background(accentColor.copy(alpha = 0.75f)),
             )

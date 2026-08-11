@@ -1,3 +1,818 @@
+# Cycle 68 — L'écho REST ne portait pas le `clientMessageId` que le client attendait
+
+## Contrainte d'environnement (identique aux cycles 61/63/64/65/66/67, revérifiée)
+
+Même conteneur Linux distant. Aucune chaîne Swift (`swift: command not found`), aucun SDK Android
+(`~/Android` absent → pas de `./apps/android/meeshy.sh check`, seul gate de cette lane).
+`tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane reste matériellement impossible ici :
+**le curseur n'a donc PAS été touché.** Lanes gatables : gateway, web, shared.
+
+Note d'environnement, nouvelle : `node_modules` était absent au démarrage. `bun install` échoue sur
+le postinstall de `grpc-tools` (`node-pre-gyp` → « Could not parse s3 bucket name from virtual host
+url », le proxy sortant). **`bun install --ignore-scripts` passe** et suffit à tous les gates de ce
+cycle. À réutiliser tel quel au prochain run plutôt que de rejouer le diagnostic.
+
+## Le défaut
+
+`MeeshySocketIOManager._broadcastNewMessage` — l'émetteur de `message:new` du chemin **REST/ZMQ** —
+ne mettait `clientMessageId` **dans aucun payload**, et n'émettait qu'une seule copie à la room de
+conversation.
+
+Le contrat que la clé sert est écrit noir sur blanc dans le dépôt
+(`socketio/utils/message-ack-shaping.ts`, invariants #1 et #2) et implémenté par les DEUX autres
+transports : le chemin socket (`MessageHandler.broadcastNewMessage`, `:1199-1265`) sépare un
+`senderPayload` cid-aware adressé à `ROOMS.user(sender.userId)` d'un `broadcastPayload` cid-strippé
+adressé à la room `.except()` cette room personnelle ; les deux routes de lien appellent
+`stripClientMessageId` (`routes/links/messages.ts:392`, `:676`). Le chemin REST/ZMQ n'avait ni l'une
+ni l'autre moitié.
+
+## Pourquoi ça compte, prouvé côté client et non supposé
+
+Ce n'est pas un chemin secondaire. `ConversationViewModel.sendMessage` (iOS) n'emprunte le
+socket-first que si `socketFirstEligible` — qui exige `!isEncrypted && (attachmentIds?.isEmpty ??
+true) && resolvedExpiresAt == nil && !resolvedIsViewOnce && resolvedBlur != true &&
+!pendingEffects.hasAnyEffect`. **Tout le reste part en REST** : chaque pièce jointe, chaque DM
+chiffré (l'E2EE est appliqué automatiquement dès `isDirect`), chaque vue-unique, chaque éphémère,
+chaque message à effets — plus tout raté du socket-first.
+
+Et le client avait écrit une garde POUR CETTE COURSE, qui ne pouvait pas se déclencher.
+`MessagePersistenceActor.upsert` (`:1710-1718`) place `clientMessageId` en **branche 0**, avant
+`PendingIdRecord` et avant l'id serveur, avec ce commentaire :
+
+> « catches an echo that races ahead of `applyEvent(.serverAck)` … Without it, an echo arriving
+> before the REST ACK falls through to the insert branch and produces a duplicate `cid` /
+> server-id pair (Sprint 2 RC2.3b). »
+
+« an echo arriving before the REST ACK » : la course nommée est exactement celle du chemin REST. Le
+gateway ne posait jamais la clé sur laquelle cette branche indexe — la défense était **inatteignable
+par construction**.
+
+Le pire cas n'est pas le doublon, c'est la bulle bloquée. La route saute délibérément le broadcast
+sur un renvoi idempotent (garde `!isDuplicate`, `routes/conversations/messages.ts:1843`). Quand la
+réponse HTTP du premier POST se perd (app mise en fond, cellulaire coupé, crash) et que l'outbox
+durable renvoie avec le même `clientMessageId`, le gateway déduplique et **n'émet rien**. Les deux
+seules voies de promotion étaient la réponse HTTP (perdue) et un `message:new` porteur du cid
+(jamais envoyé) : la ligne optimiste restait en `.sending` indéfiniment alors que le message était
+stocké et distribué à tout le monde. Seul un rechargement complet la réconciliait.
+
+## Le correctif
+
+Le split du chemin socket, à l'identique, en réutilisant les unités qui existaient déjà :
+
+- `clientMessageId` entre dans le payload (même accès que `MessageHandler._buildMessagePayload:1813`) ;
+- `stripClientMessageId(messagePayload)` produit la copie des pairs — **sans cast** en
+  `Record<string, unknown>`, le helper étant générique et préservant (cycle 7), donc l'emit typé
+  `message:new` reste vérifié par le compilateur ;
+- `io.to(room).except(ROOMS.user(senderUserId))` pour les pairs, `io.to(ROOMS.user(senderUserId))`
+  pour l'expéditeur — le `.except()` est ce qui empêche un appareil de l'expéditeur présent dans la
+  room de recevoir DEUX `message:new` ;
+- expéditeur sans compte (invité de lien) : une seule émission room-wide cid-strippée, comportement
+  strictement inchangé ;
+- `_emitMessageNewByLanguage` du manager reçoit l'option `excludeUserId` que son jumeau de
+  `MessageHandler` avait déjà, pour que `SOCKET_LANG_FILTER=true` ne réintroduise pas le doublon ;
+- le rejeu hors ligne (`deliveryQueue.enqueue`) stocke désormais le corps **destinataire** : même
+  règle que `enqueueOfflineLinkMessage`, dont le doc-comment la formule déjà (« a replay carrying
+  the author's `clientMessageId` would leak their local optimistic id into another user's id
+  space »).
+
+## Vérification
+
+- Gateway : **suite complète — 650 suites / 16 371 tests verts.** Base du cycle 67 : 650 / 16 366.
+  L'écart est exactement les 5 témoins ajoutés — aucune régression, aucun témoin perdu.
+- Gateway : RED observé avant implémentation sur 2 des 5 (`toSender` vide ; `excepted` vide). Les
+  3 autres passaient **à vide** avant le correctif — le cid n'étant nulle part, son absence chez les
+  pairs était trivialement vraie. Ils deviennent portants une fois la clé sur le fil : ils tombent
+  si un futur changement oublie le `strip`.
+- Gateway : `tsc --noEmit` — **0 erreur sur tout le service** (après `prisma generate --generator
+  client` + `bun run build` du shared, prérequis CI documentés dans `CLAUDE.md`).
+
+## Reste ouvert après ce cycle
+
+- **Le chemin REST/ZMQ n'emporte toujours pas l'enveloppe de chiffrement.** `_broadcastNewMessage`
+  omet `isEncrypted` / `encryptionMode` / `encryptedContent` / `encryptionMetadata` /
+  `encryptedPayload`, que `_buildMessagePayload` porte tous. Or `MessageProcessor.saveMessage:396`
+  stocke `content: ''` pour un message chiffré, et le web lit `encryptedContent` +
+  `encryptionMetadata` **sur le payload socket** pour déchiffrer
+  (`messaging.service.ts:229-247`) : un message chiffré posté en REST arriverait en bulle VIDE.
+  **Latent aujourd'hui** — le web ne chiffre que sur le chemin socket, et iOS met son cryptogramme
+  dans `content` sans jamais poster `encryptedContent`, si bien que le gateway le range en clair.
+  Ce dernier point mérite sa propre enquête : c'est un désaccord de contrat entre `SendMessageRequest`
+  (iOS) et `SendMessageBodySchema` (gateway), pas une omission de broadcast.
+- **`forwardedFromId` / `forwardedFromConversationId` / le snapshot `forwardedFrom` manquent aussi
+  au payload REST**, alors que la route les accepte (`messages.ts:1648`, `:1802`) et que le chemin
+  socket les construit (`MessageHandler:1121-1143`). Un message transféré via REST arriverait en
+  temps réel sans marqueur « Transféré ». Même famille que ce cycle, même fichier — traité à part
+  pour ne pas mélanger deux contrats dans un diff.
+- **`lastMessagePreview: message.content` (brut) dans `CONVERSATION_UPDATED` du même chemin** —
+  hors Prisme, et vide pour un message chiffré. **C'est exactement le jumeau que la tête instruite
+  ci-dessous (reportée au cycle 69) nomme** : `MeeshySocketIOManager.ts:2181` doit être traité avec
+  `emitConversationPreviewUpdate.ts:88`, sinon l'aperçu redevient dépendant du transport. La
+  question « payload PAR DESTINATAIRE » du cycle 60 y est tranchée — la boucle par participant
+  existe déjà.
+- **`serializeAttachmentForSocket` est un whitelist strictement plus étroit que `attachmentFullSelect`** :
+  il laisse tomber l'enveloppe de chiffrement, les compteurs de consommation, le couple de
+  transfert et l'état vue-unique/flou/effets, alors que son doc-comment promet la « parité avec le
+  payload REST `/messages` ». Le chemin socket sélectionne `attachmentMediaSelect`, qui ne les
+  charge pas non plus : élargir le sérialiseur seul ne changerait rien. Instruit, non écrit —
+  demande de trancher quelles pièces jointes ont besoin de quoi sur le fil.
+- Les points hérités restent inchangés : `eslint` ne peut pas tourner sur le gateway (pas
+  d'`eslint.config.js` depuis ESLint v9) ; `PinnedMessageBanner` n'affiche qu'UNE épingle ;
+  `ConversationPicker.tsx` (admin) rend `lastMessage.content` brut ; le « mensonge de type » de
+  `Message.translations` est instrumenté mais pas résolu ; `isDuplicate` n'est protégé par aucun
+  témoin au niveau du spread ; les deux scripts de réparation base attendent une exécution humaine ;
+  l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `getMentionsForMessage` / `getRecentMentionsForUser` n'ont toujours aucun écran.
+
+---
+
+# Tête instruite, NON CONSOMMÉE — reportée au cycle 69
+
+> **Note d'intégration (cycle 68).** Ce bloc a été écrit par une session parallèle et a atterri sur
+> `main` *pendant* que le cycle 68 ci-dessus était déjà en cours d'écriture sur une autre branche.
+> Il n'a donc pas été consommé — il n'est pas périmé pour autant : rien de ce que le cycle 68 a
+> touché ne recoupe `emitConversationPreviewUpdate` ni les résolveurs d'aperçu de liste. Il reste
+> le candidat le plus étayé du backlog et **le cycle 69 doit le prendre en tête**, sans refaire
+> l'enquête. Conservé mot pour mot ci-dessous.
+
+
+*Enquête menée pendant l'attente de la CI du cycle 67. Rien n'est supposé ci-dessous : chaque
+maillon a été lu dans le code. Aucune ligne de production n'a été écrite — la correction est
+cross-stack (gateway + SDK iOS + web) et méritait son propre cycle plutôt qu'une fin de course.*
+
+## Le défaut : après une édition, la ligne de liste affiche le texte D'AVANT
+
+Le symptôme n'est pas « la ligne n'est pas traduite ». C'est **la ligne affiche l'ANCIEN contenu**,
+indéfiniment, jusqu'à un rechargement complet de la liste.
+
+La chaîne, maillon par maillon :
+
+1. `GET /conversations` hydrate la ligne avec `lastMessagePreview` (l'original tronqué),
+   `lastMessageTranslations` (la carte du prisme du lecteur) et `lastMessageOriginalLanguage`
+   — cycles 61/64, `routes/conversations/core.ts:659-664`.
+2. Le client résout par `resolvedLastMessagePreview(preferredLanguages:)`
+   (`CoreModels.swift:238`) / `resolveLastMessagePreview` (web) : si une traduction sert le prisme,
+   **c'est elle qui s'affiche**, pas `lastMessagePreview`.
+3. Une édition arrive. Le gateway **périme la colonne dans la même écriture** —
+   `translations: null` (`routes/messages.ts:361`, et le commentaire adjacent explique que
+   c'est délibérément atomique).
+4. Le gateway émet `conversation:updated` avec, en tout et pour tout,
+   `lastMessagePreview: latest?.content` — le NOUVEAU texte, **sans traductions, sans
+   `lastMessageOriginalLanguage`** (`socketio/emitConversationPreviewUpdate.ts:88-90`).
+   Le chemin d'envoi fait pareil (`MeeshySocketIOManager.ts:2181-2183`).
+5. Les deux clients appliquent le patch **en n'écrasant que l'aperçu** :
+   - iOS : `applyConversationUpdated` pose `conv.lastMessagePreview` et ne touche jamais
+     `lastMessageTranslations` (`ConversationStore.swift:436`). Le type d'entrée
+     `ConversationUpdatedStoreEvent` (`:759-772`) **n'a même pas de champ traductions**.
+   - web : `{ ...c, ...patch }` avec un patch construit par `normalizeConversationPatch` à partir
+     des seules clés reçues (`use-socket-cache-sync.ts:1086-1089`).
+6. Résultat : `lastMessagePreview` = nouveau texte, `lastMessageTranslations` = **carte de
+   l'ANCIEN texte**. Le résolveur, qui préfère la traduction, rend l'ancien contenu.
+
+**Qui le voit :** tout lecteur dont la langue primaire diffère de la langue d'origine du message et
+pour qui une traduction existait — c'est-à-dire le cas NOMINAL du produit. Le serveur, lui, a bien
+fait son travail : il a périmé la colonne. C'est le fil qui ne le dit pas.
+
+## Pourquoi le correctif ÉVIDENT est faux — vérifié avant de l'écrire
+
+Réflexe naturel : « quand `conversation:updated` apporte un nouvel aperçu, vider la carte de
+traductions côté client ». **Ça casserait le cycle 65.**
+
+Le chemin d'ENVOI émet les deux événements. `message:new` installe `lastMessageTranslations` via
+`previewTranslations(from:viewerLanguages:)` — c'est précisément ce que le cycle 65 a construit —
+et le `conversation:updated` jumeau arriverait derrière pour l'effacer. Un vide inconditionnel
+échange un défaut contre un autre.
+
+Raffiner en « vider seulement si `lastMessageId` diffère » ne marche pas non plus : **une édition
+garde le MÊME message**, donc le même id. C'est exactement le cas à traiter, et le seul que ce
+raffinement laisse passer.
+
+**Conclusion : le client ne peut pas trancher seul.** Seul le serveur sait si la carte a été
+périmée. Le correctif appartient au fil.
+
+## Le correctif attendu — et la question du cycle 60, enfin tranchée
+
+`conversation:updated` doit porter `lastMessageTranslations` + `lastMessageOriginalLanguage`, à
+parité avec ce que `GET /conversations` sert déjà. Après une édition la carte fraîchement
+construite est **vide**, et c'est ce vide — reçu, pas déduit — qui périme proprement la carte du
+client. Les trois champs s'appliquent alors **en groupe monotone**, comme iOS le fait déjà pour
+`lastMessageAt` / `lastMessageId` / `lastMessagePreview`.
+
+Le backlog portait ce point depuis le cycle 60 sous l'étiquette « payload PAR DESTINATAIRE,
+question de conception non tranchée ». **Elle est tranchée, et par le code existant :**
+`emitConversationPreviewUpdate` **boucle déjà par participant**
+(`for (const room of participantUserRooms(participants))`, `:97`). Un payload par destinataire n'est
+pas une architecture à inventer — la boucle est là, elle envoie simplement le même objet à tout le
+monde. Il reste à résoudre le prisme de chaque participant et à appeler
+`buildLastMessagePreviewTranslations`, que `core.ts` utilise déjà pour la même donnée.
+
+## Périmètre, et pourquoi il n'a pas été écrit ici
+
+Trois étages, tous gatables :
+
+| Étage | Fichier | Gate |
+|---|---|---|
+| gateway | `emitConversationPreviewUpdate.ts` + le jumeau `MeeshySocketIOManager.ts:2181` | suite gateway, locale |
+| SDK iOS | `ConversationUpdatedStoreEvent`, `applyConversationUpdated`, `ConversationStoreSocketBridge` | `sdk-tests.yml` en CI (précédent : cycle 65) |
+| web | `normalizeConversationPatch` / `handleConversationUpdated` | suite web, locale |
+
+**Deux émetteurs, pas un** — la règle des « sources de vérité jumelles » impose de les traiter
+ensemble, sinon l'aperçu dépend à nouveau du transport (envoi vs édition).
+
+Écrire ça correctement demande un cycle entier ; le cycle 67 était déjà livré et mergé. Le bâcler
+en fin de course aurait produit exactement ce que la leçon 95 condamne : un correctif dont personne
+n'a vérifié la moitié. **Instruit ici pour que le cycle 68 commence par écrire des témoins, pas par
+enquêter.**
+
+---
+
+# Cycle 67 — Épingler un message rendait la route d'épingles inexploitable
+
+## Contrainte d'environnement (identique aux cycles 61/63/64/65/66, revérifiée)
+
+Même conteneur Linux distant. Aucune chaîne Swift (`swift: command not found`), aucun SDK Android
+(`~/Android` absent → pas de `./apps/android/meeshy.sh check`, seul gate de cette lane).
+`tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane reste matériellement impossible ici :
+**le curseur n'a donc PAS été touché.** Lanes gatables : gateway, web, shared.
+
+## Le candidat de backlog a été RE-PROUVÉ, et il a mené ailleurs
+
+Le cycle 66 nommait comme tête « le mensonge de type qui a rendu ce défaut possible » :
+`message-types.ts:211` annonce `translations?: readonly MessageTranslation[]` alors que la valeur
+qui sort de Prisma est une **carte Mongo** (`Message.translations Json?`). Il ajoutait, prudemment,
+« le chantier n'est pas mécanique ».
+
+Le balayage d'ouverture a cherché ce que ce mensonge PRODUIT plutôt que de démêler le type :
+tous les sites qui sélectionnent `Message.translations` puis servent le résultat à un client. Sur
+les dix routes de messages, huit passent par `transformTranslationsToArray`. **Deux ne le font
+pas**, et l'une d'elles ne dégrade pas — elle casse.
+
+## Le défaut, prouvé et non supposé
+
+`GET /conversations/:id/pinned-messages` déclare `data: { type: 'array', items: messageSchema }`,
+et `messageSchema.properties.translations` vaut `{ type: 'array' }`
+(`packages/shared/types/api-schemas.ts:834`). La route y versait `translations: message.translations`
+— la carte Mongo brute.
+
+`fast-json-stringify`, le sérialiseur de Fastify, **ne coerce pas** :
+
+```
+MAP   => THREW: The value of '#/properties/data/items/properties/translations'
+                does not match schema definition.
+NULL  => {"success":true,"data":[{…,"translations":[]}]}
+ARRAY => {"success":true,"data":[{…,"translations":[{"targetLanguage":"fr",…}]}]}
+```
+
+L'échec de sérialisation remonte en **500 sur la route entière**. Meeshy traduit automatiquement
+chaque message : la colonne est peuplée dès que le Prisme a tourné. **Épingler un message traduit
+rendait donc la liste d'épingles inaccessible** — pas une dégradation partielle, l'endpoint entier.
+
+## Pourquoi personne ne l'a vu
+
+Les quatre témoins du groupe 9 de `messages-routes.test.ts` posent tous `translations: null` — le
+SEUL cas qui ne déclenche pas le défaut. Le fixture de `threads.test.ts` posait `translations: []`,
+une forme que Prisma ne rend jamais. Les deux suites décrivaient donc fidèlement un monde où le
+défaut n'existe pas.
+
+## Le second défaut, au même endroit — la bannière ne s'était jamais affichée
+
+`apps/web/components/conversations/PinnedMessageBanner.tsx` lisait `data?.messages?.[0]` alors que
+l'enveloppe du dépôt est `{ success, data: [...] }` (`sendSuccess`). `data.messages` vaut toujours
+`undefined` : **la bannière rendait `null` même sur un 200 parfaitement valide**. Elle est pourtant
+montée en production (`ConversationView.tsx:319`) — et les deux suites qui montent
+`ConversationView` / `ConversationLayout` la remplacent par `() => null`. Aucun témoin n'avait
+jamais exercé son chemin de données.
+
+Les deux défauts se masquaient l'un l'autre : sur un compte sans message épinglé traduit, la route
+répondait 200 et la bannière restait vide « parce qu'il n'y a rien à épingler ». Sur un compte avec,
+la requête échouait en 500 et React Query gardait la bannière vide pareillement.
+
+## Le troisième — le Prisme
+
+La bannière rendait `pinnedMessage.content` brut : la ligne restait dans la langue de l'expéditeur
+pour tout le monde, sur une surface que `CLAUDE.md` couvre nommément (« le prisme s'applique à TOUT
+le contenu »). Une fois le premier défaut corrigé, les traductions sont réellement sur le fil ; les
+résoudre n'est pas un supplément, c'est la conséquence directe du correctif.
+
+La résolution délègue à `resolveLastMessagePreview` (`@meeshy/shared`) — jumelle de
+`MeeshyConversation.resolvedLastMessagePreview` côté iOS — et l'ordre du prisme vient de
+`getUserLanguagePreferences`, seul point d'entrée autorisé côté web (il injecte la `deviceLocale`
+en 4e priorité, ce qu'un appel direct au shared perdrait).
+
+**Une exclusion a été ajoutée dans le même geste, et elle appartient à ce cycle et pas à un autre :
+les traductions CHIFFRÉES sont écartées.** `transformTranslationsToArray` recopie `isEncrypted`, et
+c'est ce correctif-ci qui met ces entrées sur le fil de la bannière pour la première fois. Sans
+l'exclusion, corriger le Prisme aurait affiché du base64 dans la bannière des conversations
+chiffrées — le défaut exact que le cycle 65 venait de fermer sur la ligne de liste iOS. Sans
+traduction lisible, `resolveLastMessagePreview` rend l'original, ce que prescrit la règle #1 du
+Prisme.
+
+## La copie du même défaut, corrigée dans le même cycle
+
+`routes/conversations/threads.ts` sert le résultat Prisma verbatim, donc la même carte brute. Son
+schéma de réponse est `additionalProperties: true` : pas de 500, la carte part telle quelle sur le
+fil. `APIMessage.init(from:)` décode `translations` avec `try` et non `try?`
+(`MessageModels.swift:521`) — un message de fil serait **indécodable EN ENTIER**, pas seulement
+privé de ses traductions. Aucun consommateur client de cette route aujourd'hui (`grep` sur web,
+SDK, iOS, Android : rien) ; c'est précisément pourquoi il fallait la corriger maintenant, avant que
+le premier appelant hérite du défaut.
+
+## Le témoin qui nomme la cause plutôt que le symptôme
+
+`message-translations-response-contract.test.ts` fait passer les deux formes à travers le VRAI
+`messageSchema` compilé par `fast-json-stringify` : la carte jette, la sortie du transformateur se
+sérialise. Il ne dépend d'aucune route — il épingle l'invariant que le compilateur ne peut pas
+tenir, et il protégera toute route future déclarant `messageSchema`. C'est la réponse la plus utile
+au « mensonge de type » du cycle 66 : on ne peut pas le faire disparaître sans démêler deux formes
+qui circulent réellement sous le même nom, mais on peut le rendre **détectable**.
+
+## Vérification
+
+- Gateway : `tsc --noEmit` propre après `prisma generate --generator client` + `bun run build` du
+  shared (prérequis CI documentés dans `CLAUDE.md`).
+- Gateway : **suite complète — 650 suites / 16 366 tests verts.** Base du cycle 66 : 649 / 16 358.
+  L'écart est exactement ce que ce cycle ajoute (1 suite, 8 témoins : 3 de contrat, 2 sur
+  `pinned-messages`, 3 sur `threads`) — aucune régression, aucun témoin perdu.
+- Gateway : RED observé avant implémentation sur les 5 témoins de route. `pinned-messages` rendait
+  `{"fr": {…}}` là où le témoin attend le tableau API ; `threads` idem sur le parent ET les
+  réponses, plus `null` au lieu de `[]` sur colonne vide.
+- Web : `__tests__/components/conversations` — 32 suites / 607 tests verts (dont les 6 neufs).
+  RED observé : 4 des 5 premiers témoins échouaient sur un DOM vide (« Unable to find an element »),
+  la bannière ne rendant rien du tout.
+- Web : `tsc --noEmit` — zéro erreur sur le fichier modifié (le dépôt en porte 1 190 préexistantes).
+
+## Reste ouvert après ce cycle
+
+- **Le mensonge de type lui-même n'est pas résolu**, il est seulement instrumenté. Les deux formes
+  circulent toujours sous `Message.translations`. Le démêler demande de nommer la forme de stockage
+  (`MessageTranslationJSON`, déjà exportée par le transformateur) dans les types de retour Prisma
+  côté gateway — chantier de contrat, à instruire avant d'être écrit.
+- **`PinnedMessageBanner` n'affiche qu'UNE épingle** (`limit: 1`) sans compteur ni accès à la liste.
+  Signal produit, pas défaut : à trancher avec un humain.
+- **Piste voisine INSTRUITE puis ÉCARTÉE — `messageAttachmentSchema` va bien.** Cherché pendant ce
+  cycle une seconde source de 500 sur la même route, du côté des pièces jointes. Il n'y en a pas :
+  le schéma déclare `translations` en entier (`api-schemas.ts:467`), carte langue → traduction V2.
+  Noté ici parce que le mécanisme mérite d'être connu : la sous-entrée porte
+  `required: ['type', 'transcription', 'createdAt']`, et `fast-json-stringify` **fait respecter
+  `required` en jetant**, exactement comme pour le type de ce cycle. Une entrée à laquelle il
+  manquerait l'un des trois ferait donc tomber `GET /conversations/:id/messages` — la liste
+  principale. Les deux écrivains les posent tous les trois (`AudioTranslateService.ts:867-880`,
+  `AttachmentTranslateService.ts:378/435/484`) : **pas de défaut de code.** Le risque résiduel est
+  une ligne Mongo héritée d'avant la forme V2, donc une question de DONNÉES, à instruire par une
+  requête et non par une lecture de code.
+- **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** (cycle 64) — dernier rendu
+  d'aperçu web hors Prisme identifié.
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60) — **la question
+  de conception est TRANCHÉE et le défaut est PROUVÉ : voir la tête du cycle 68 en haut de ce
+  fichier.** Ce n'est pas une lacune de traduction, c'est l'ANCIEN contenu qui reste affiché après
+  une édition.
+- **`isDuplicate` n'est protégé par aucun témoin au niveau du spread** (cycle 66).
+- Les points hérités restent inchangés : `eslint` ne peut pas tourner sur le gateway (pas
+  d'`eslint.config.js` depuis ESLint v9) ; les deux scripts de réparation base attendent une
+  exécution humaine ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `getMentionsForMessage` / `getRecentMentionsForUser` n'ont toujours aucun écran.
+
+# Cycle 66 — Le chemin socket avait sa propre copie du sérialiseur de traductions
+
+## Contrainte d'environnement (identique aux cycles 61/63/64/65)
+
+Même conteneur Linux distant. Ni macOS ni Xcode : aucun Swift compilable ici (`swift: command not
+found`). `tasks/lane-cursor.md` dit toujours `lane=ANDROID`, et la lane Android reste
+matériellement impossible (`dl.google.com` refusé au CONNECT → pas de `sdkmanager`, donc pas de
+`./apps/android/meeshy.sh check`). **`tasks/lane-cursor.md` n'a donc PAS été touché.**
+
+Ce cycle a pris la tête de backlog nommée **explicitement par le cycle 65** — sur la lane gatable
+ici, gateway.
+
+## Reprise du cycle 65 avant toute chose
+
+La PR #2789 (cycle 65) était restée **ouverte** : la session précédente s'est terminée pendant
+l'attente de son gate `sdk-tests` (~50 min de build Swift sur macOS). Motif déjà documenté dans
+`tasks/android-parity-ios-debt-agent-prompt.md` — travail complet, finalisation en suspens. Reprise
+et menée au merge avant d'ouvrir ce cycle, conformément au protocole.
+
+## Le défaut
+
+`MessageHandler._parseTranslations` portait une **seconde copie** du sérialiseur de traductions,
+divergente de la seule référence : `transformTranslationsToArray`, qu'utilise le chemin REST/ZMQ
+(`MeeshySocketIOManager._broadcastNewMessage`, `:1990`, et `broadcastMessageEdited`, `:2334`).
+
+Là où la référence produit `id` / `messageId` / `translatedContent`, cette copie répandait l'entrée
+Mongo telle quelle :
+
+```ts
+Object.entries(translations).map(([lang, data]) => ({ targetLanguage: lang, ...data }))
+```
+
+Il en sortait `text`, jamais `translatedContent`, et **ni `id` ni `messageId`**. Les trois sont NON
+optionnels dans `APITextTranslation` (`packages/MeeshySDK/.../MessageModels.swift:300-308`), et
+`APIMessage.init(from:)` décode le tableau avec `try` et non `try?` (`:521`) : une seule entrée mal
+formée fait échouer le décodage du `message:new` **ENTIER**. Le message n'apparaîtrait pas du tout
+en temps réel sur iOS — il ne lui manquerait pas seulement ses traductions — alors que le même
+message rechargé par `GET /messages` s'affiche normalement.
+
+## La portée a été TRACÉE, pas supposée — et elle nuance le défaut
+
+Le cycle 65 annonçait ce point comme « latent aujourd'hui, non théorique ». Vérifié
+exhaustivement avant d'écrire une ligne, la formule exacte est plus précise, et plus intéressante :
+
+**Latent, à UNE garde près.**
+
+Les deux seuls appelants de production de `broadcastNewMessage` (`MessageHandler.ts:355` et `:580`)
+reçoivent un résultat `include` de Prisma dont `translations` vaut `null` sur une création fraîche
+(`MessageProcessor.saveMessage` `:393-478` ne pose jamais la clé `translations` dans `messageData`).
+La carte peuplée n'atteint donc PAS le sérialiseur aujourd'hui.
+
+Mais les deux objets du système qui portent une carte Mongo **peuplée** existent bien, et passent à
+une ligne de là :
+
+| Objet | Origine | Ce qui l'écarte |
+|---|---|---|
+| doublon séquentiel | `MessagingService.ts:137-183`, `findFirst` + `include` après que le traducteur a tourné | `isDuplicate = true` (`:170`) |
+| doublon concurrent P2002 | `MessageProcessor.ts:481-553`, idem | `isDuplicate = true` (`:547`) |
+
+Les deux gardes sont la même ligne, dupliquée : `!(response.data as {isDuplicate?}).isDuplicate`
+(`MessageHandler.ts:352` et `:577`). Le drapeau ne survit que parce que **deux `spread`** le
+transportent (`MessageProcessor.ts:616`, `MessagingService.ts:490`). Remplacer l'un des deux par une
+liste de champs explicite, ou sérialiser la réponse quelque part, suffirait à rendre le défaut
+vivant — sans que rien ne le signale, puisque le symptôme est un message **absent**, pas une erreur.
+
+**Rayon d'action : une ligne.** C'est ce qui justifie de fermer la divergence en supprimant la
+copie, plutôt que de s'en remettre à la garde.
+
+## Ce que le traçage a AUSSI écarté
+
+Quatre hypothèses de reachability, toutes testées et toutes fausses — notées pour qu'un cycle futur
+ne les repose pas :
+
+- **Le transfert ne recopie pas la carte.** `messageData` (`MessageProcessor.ts:393-418`) n'a pas de
+  clé `translations` ; un message transféré part de `null` et est retraduit. Seul
+  `MessageAttachment.translations` est recopié (`:697`) — autre colonne, autre modèle.
+- **Aucun chemin ZMQ ne re-broadcaste par ici.** La complétion de traduction écrit en base
+  (`MessageTranslationService.ts:728`) puis émet `MESSAGE_TRANSLATION` (`MeeshySocketIOManager.ts:1504`),
+  jamais un `message:new`.
+- **L'édition n'y passe pas non plus.** `handleMessageEdit` émet `MESSAGE_EDITED` avec un
+  `translations: []` en dur (`MessageHandler.ts:871`) ; son jumeau manager utilise le bon
+  transformateur (`:2334`).
+- **`MeeshySocketIOManager` ne délègue PAS à `MessageHandler.broadcastNewMessage`.** Le commentaire
+  `MessageHandler.ts:1547` (« qui délègue ici ») induit en erreur : la délégation réelle ne porte que
+  sur `autoDeliverToOnlineRecipients`.
+
+## Correctif
+
+`_parseTranslations` délègue à `transformTranslationsToArray` — **la seconde copie disparaît**,
+conformément au principe de source unique de vérité. Elle prend `messageId` en premier argument (les
+`id`/`messageId` synthétiques en dépendent), fourni par les deux sites de `_getMessageTranslations`.
+
+Deux invariants conservés délibérément :
+
+- **Un tableau déjà au format API passe intact.** C'est ce que promet le type partagé
+  `Message.translations` (`message-types.ts:211`, `readonly MessageTranslation[]`) ; le
+  re-transformer produirait `targetLanguage: "0"`, les clés d'un tableau étant ses index.
+- **Les entrées inexploitables de la carte sont ÉCARTÉES** (valeur nulle, primitive, `text` non
+  textuel — une colonne `Json` n'a pas de schéma pour l'interdire). Les émettre mutilées recréerait
+  exactement le défaut corrigé. Les filtrer ICI plutôt que de laisser `transformTranslationsToArray`
+  déréférencer `null` garde en plus les traductions VALIDES de la même carte : un `throw` remonterait
+  au `.catch(() => [])` de l'appelant (`MessageHandler.ts:1107`) et les perdrait **toutes**.
+
+## Tests
+
+**5 témoins neufs** (`MessageHandler.test.ts`), RED observé avant implémentation — le fil sortait
+bien `{ createdAt, targetLanguage: 'es', text: 'Hola', translationModel: 'premium' }`, sans `id`,
+`messageId` ni `translatedContent`. Ils verrouillent **la forme du fil, pas l'implémentation** : ils
+passent avec n'importe quel sérialiseur respectant le contrat REST. Couvrent la carte portée par le
+message, la carte relue en base, `isEncrypted` explicite à `false`, le tableau déjà transformé laissé
+intact, et les formes vides.
+
+**Deux témoins préexistants réécrits** (`MessageHandler.core.test.ts`) : ils verrouillaient la forme
+brute — ils *pinnaient donc précisément le défaut*, et c'est ce qui l'a laissé vivre aussi longtemps.
+Un test de couverture qui assert le comportement observé plutôt que le contrat voulu transforme un
+bug en spécification. Réécrits sur le contrat réel : l'un sur la forme API, l'autre sur le fait
+qu'une entrée inexploitable est écartée **sans emporter les entrées valides qui l'accompagnent**.
+
+**Vérification** : suite gateway complète — **649 suites / 16 358 tests verts**, couverture globale
+95,11 % instructions / 95,78 % lignes. `tsc --noEmit` propre. Sweep ciblé
+`MessageHandler|translation-transformer|MeeshySocketIOManager` : 11 suites / 846 tests verts.
+
+## Reste ouvert après ce cycle
+
+- **Le mensonge de type qui a rendu ce défaut possible.** `message-types.ts:211` déclare
+  `translations?: readonly MessageTranslation[]` — un tableau au format API — alors que la valeur
+  runtime venue de Prisma est une **carte Mongo**. C'est pourquoi une copie artisanale du
+  sérialiseur a pu vivre des années sans que le compilateur objecte, et pourquoi la branche
+  `Array.isArray` reste nécessaire. **Tête du prochain cycle si rien de plus grave n'apparaît** —
+  mais le chantier n'est pas mécanique : les deux formes circulent réellement sous ce nom, et les
+  démêler touche les deux transports.
+- **`isDuplicate` n'est protégé par aucun témoin de non-régression au niveau du spread.** Les deux
+  gardes tiennent parce que deux `spread` transportent le drapeau ; rien ne le verrouille. Un test
+  qui prouve que `createSuccessResponse` préserve `isDuplicate` fermerait le dernier fil de ce cycle.
+- Les points hérités des cycles précédents restent inchangés (voir cycles 64 et 26 pour la liste
+  complète) : `eslint` ne peut toujours pas tourner sur le gateway (pas d'`eslint.config.js` depuis
+  ESLint v9) ; les deux scripts de réparation base attendent une exécution humaine ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine ; `getMentionsForMessage` /
+  `getRecentMentionsForUser` n'ont toujours aucun écran.
+
+# Cycle 65 — L'aperçu de liste servi par socket pouvait afficher un cryptogramme
+
+## Contrainte d'environnement (identique aux cycles 61/63/64, revérifiée)
+
+Même conteneur Linux distant. `tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane
+Android reste matériellement impossible ici (`dl.google.com` refusé au CONNECT → pas de
+`sdkmanager`, donc pas de `./apps/android/meeshy.sh check`, le seul gate de cette lane). Aucune
+chaîne Swift non plus (`swift`/`swiftc` absents). **`tasks/lane-cursor.md` n'a donc PAS été
+touché.**
+
+Ce cycle prend la tête de backlog nommée explicitement par le cycle 64, et il la prend **parce
+qu'elle est gatable ici** : `sdk-tests.yml` se déclenche sur `pull_request` vers `main` pour
+`packages/MeeshySDK/**`. Le correctif est donc vérifié par la CI même sans Xcode local.
+
+## La question que le cycle 64 laissait ouverte, tranchée
+
+Le cycle 64 refusait d'écrire le correctif avant d'avoir établi la forme réelle du payload
+`message:new`, parce que deux lectures semblaient s'exclure : `buildLastMessagePreviewTranslations`
+(REST) lit `data.text`, `previewTranslations` (socket) lit `$0.translatedContent`.
+
+**Les deux sont vraies, et ce n'est pas une contradiction — ce sont deux objets différents.**
+
+| Étage | Forme | Champ texte |
+|---|---|---|
+| Colonne Mongo `Message.translations` | carte `{ "fr": { text, isEncrypted, … } }` | `text` |
+| Fil `message:new` (REST/ZMQ) | tableau, via `transformTranslationsToArray` | `translatedContent` |
+
+`transformTranslationsToArray` (`services/gateway/src/utils/translation-transformer.ts:56`) mappe
+`text` → `translatedContent` **et recopie `isEncrypted`**. Le helper REST lit la colonne brute, le
+SDK lit le fil. Aucun mappage de clés manquant.
+
+## Le défaut
+
+**`APITextTranslation` ne décode pas `isEncrypted`** (`MessageModels.swift:300`). Le drapeau est
+sur le fil depuis toujours ; le client ne le lit pas. `previewTranslations` posait donc
+`translatedContent` dans `lastMessageTranslations` **sans jamais regarder s'il s'agissait de texte
+ou d'un cryptogramme**, là où le helper REST l'exclut nommément (son exclusion #3 : « son `text`
+est un cryptogramme ; le poser dans un aperçu afficherait du base64 dans la liste ; la clé de
+déchiffrement ne transite pas par ce chemin »).
+
+Conséquence : une conversation chiffrée dont le dernier message arrive **par socket** affiche du
+base64 dans la ligne de liste, quand la MÊME conversation rechargée par `GET /conversations`
+affiche correctement l'original. **Le texte de la ligne dépendait du transport qui l'avait
+apportée** — exactement ce que la règle « sources de vérité jumelles » du Prisme interdit.
+
+## Les trois écarts mineurs, corrigés dans le même geste
+
+Le cycle 64 les avait listés sous condition (« à traiter dans le même geste s'ils survivent à
+l'enquête »). Ils survivent, et ce sont les trois autres exclusions du helper REST :
+
+1. **Hors prisme du lecteur** — la carte socket portait les N langues de la conversation ; le
+   résolveur n'en affiche qu'UNE. Le reste n'alourdit que le cache de la liste.
+2. **Langue d'origine** — elle EST déjà `lastMessagePreview` ; la republier double l'octet.
+3. **Plafond d'aperçu** — le REST tronque chaque traduction à 300 points de code, pas le socket.
+   Non corrigé, le poids d'une ligne aurait dépendu de la langue du lecteur — même famille que le
+   second défaut du cycle 64.
+
+Une quatrième exclusion (texte vide ou blanc) est reprise par symétrie.
+
+**L'exclusion #2 n'était sûre qu'après vérification, et elle a été vérifiée.** Retirer la clé de la
+langue d'origine serait une régression du cycle 62 (« la langue d'origine concourt à son RANG »)
+si la facette socket ne transportait pas `lastMessageOriginalLanguage` : le lecteur dont la langue
+primaire EST la langue d'origine sauterait son rang 1 et se verrait servir une traduction de rang
+inférieur. `LastMessageFacet.init(message:preview:…)` pose bien `originalLanguage:
+message.originalLanguage` (`LastMessageFacet.swift:99`) et `applyLastMessage` l'écrit sur la ligne
+(`:138`). Un témoin épingle ce point précis dans les deux ordres de prisme.
+
+## Le correctif
+
+- `APITextTranslation` gagne `isEncrypted: Bool?` — optionnel, donc un payload qui l'omet ne
+  suppose PAS le chiffrement et ne casse aucun décodage existant.
+- `previewTranslations(from:)` devient `previewTranslations(from:viewerLanguages:)` et applique
+  les quatre exclusions + le plafond, dans l'ordre du prisme.
+- `ConversationSyncEngine.currentPreferredLanguages()` lit
+  `MeeshyUser.preferredContentLanguages` — seule autorité iOS sur l'ordre du prisme, jamais
+  réimplémentée localement. Vide sans session : la carte vaut `nil` et la ligne rend l'original,
+  comportement identique au chemin REST pour un participant anonyme.
+
+Le rang « dernière entrée gagne » du `uniquingKeysWith` d'origine est conservé (`last(where:)`)
+pour un payload qui répéterait une langue.
+
+## Vérification
+
+14 témoins neufs dans `ConversationSocketPrismeTests` — un par exclusion, plus les invariants
+conservés (clés minuscules, `nil` jamais `[:]`, absence de traductions, doublon de langue) et le
+témoin de non-régression du rang de la langue d'origine dans les deux ordres.
+
+**Swift non exécuté localement** : aucune chaîne Swift sur ce conteneur (`swift: command not
+found`). C'est `sdk-tests.yml` qui gate — déclenché automatiquement par cette PR, puisqu'elle ne
+touche que `packages/MeeshySDK/**`.
+
+Aucun changement gateway ni web : le correctif est au bon étage. Un client ne doit jamais rendre un
+cryptogramme, quelle que soit la générosité du serveur.
+
+## Reste ouvert après ce cycle
+
+- **`MessageHandler._parseTranslations` produit une forme de traduction INDÉCODABLE par iOS — tête
+  du prochain cycle.** Trouvé en établissant la forme du fil, et c'est le seul point de cette
+  enquête qui reste ouvert. Le chemin WS `message:send`
+  (`services/gateway/src/socketio/handlers/MessageHandler.ts:1732`) **répand l'entrée Mongo telle
+  quelle** (`{ targetLanguage, ...data }`) au lieu de passer par
+  `transformTranslationsToArray` comme le fait le chemin REST/ZMQ
+  (`MeeshySocketIOManager._broadcastNewMessage:1990`). Il en sort
+  `{ targetLanguage, text, translationModel, … }` — sans `id`, sans `messageId`, sans
+  `translatedContent`, tous NON optionnels dans `APITextTranslation`. Or
+  `APIMessage.init(from:)` décode ce tableau avec `try` et non `try?`
+  (`MessageModels.swift:521`) : **le message:new ENTIER échouerait à décoder**, pas seulement ses
+  traductions. Le message n'apparaîtrait pas du tout en temps réel sur iOS.
+
+  **Latent aujourd'hui, non théorique** : sur ce chemin le message vient d'être créé, donc
+  `_getMessageTranslations` rend `[]` (colonne `null`, et le repli DB rend `null` aussi). La forme
+  fautive n'est jamais peuplée — pour l'instant. Le jour où un message part par WS avec des
+  traductions déjà en base (transfert qui recopierait la carte, re-broadcast, dédup qui
+  re-broadcasterait), le tableau se remplit et le défaut devient un message invisible.
+  **Correctif attendu : appeler `transformTranslationsToArray(message.id, …)` sur les deux
+  chemins** — gatable ici (gateway), petit, et il supprime la deuxième copie du transformateur.
+  Vérifier au passage qu'aucun client web ne lit `text` sur ce chemin (`grep` n'a rien trouvé).
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60). Question de
+  conception — payload PAR DESTINATAIRE — non tranchée.
+- **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** (cycle 64) — dernier rendu
+  web d'aperçu non prismé connu.
+- **`normalizeConversation` reste un constructeur manuel de `Conversation` sans aucun appelant**
+  (cycle 62) : trancher s'il vit ou meurt.
+- **Un participant ANONYME n'a pas de prisme** — vrai sur les deux chemins désormais, donc
+  cohérent, mais toujours non résolu sur le fond (cycle 60).
+- **Aucune traduction rétroactive de l'aperçu** (cycle 60, inchangé).
+- Hérités et non traités : `DELETE /sessions/:sessionId` ne coupe aucune socket (pont client
+  `sessionToken` au handshake) ; l'auth REST ne vérifie pas `UserSession.isValid` ; la suppression
+  de compte ne révoque aucune session ; `auth:session-revoked` n'est écouté ni par iOS ni par
+  Android ; `MaintenanceService.cleanupOrphanedAttachments` reste inerte ; les ~12 copies inline de
+  `unsetOrNull` ; `TrackingLink.messageId` est une colonne morte ; l'arbitrage `delete-for-me` du
+  cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le gateway (aucun
+  `eslint.config.js` depuis ESLint v9) ; `tsc` ne passe pas sur le web (1 190 erreurs
+  préexistantes, non gatées par la CI).
+
+---
+
+# Cycle 64 — La recherche de conversations était la dernière ligne hors Prisme
+
+## Contrainte d'environnement (identique aux cycles 61/63, revérifiée)
+
+Même conteneur Linux distant. `tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane
+Android reste **matériellement impossible** ici (`dl.google.com` refusé au CONNECT → pas de
+`sdkmanager`, donc pas de `./apps/android/meeshy.sh check`, le seul gate de cette lane). Ni macOS
+ni Xcode pour compiler du Swift. **`tasks/lane-cursor.md` n'a donc PAS été touché.**
+
+Ce cycle a pris la tête de backlog nommée par le cycle 62, sur la lane gatable ici — gateway. Il
+emporte AUSSI un correctif iOS, délibérément : voir §« Pourquoi du Swift dans un cycle sans Xcode ».
+
+## Le défaut
+
+**`GET /conversations/search` était la dernière route qui servait une ligne de conversation sans
+Prisme.** Le cycle 62 l'avait nommée « tête du prochain cycle » et annonçait un correctif
+« mécanique ». Il l'était — et le diagnostic tenait, vérifié point par point avant d'écrire une
+ligne :
+
+| Fait annoncé par le cycle 62 | Vérifié |
+|---|---|
+| `conversationMinimalSchema` DÉCLARE déjà les deux champs | oui (`api-schemas.ts:1294-1305`) |
+| la route construit son `lastMessage` à la main et ne les remplit jamais | oui (`search.ts:201`) |
+| même `include` Prisma, même helper, même `viewerLanguages` que `core.ts` | oui |
+
+Le point qui donne sa gravité au défaut : **la donnée était déjà payée**. Le `messages` de cette
+route utilise `include` (et non `select`), donc Prisma rapporte TOUS les scalaires du message —
+`translations` (colonne `Json?`) et `originalLanguage` compris. Le mapping manuel les jetait sans
+que rien ne le signale. Même famille que `metadata.location` avant le Lot 3, et le fichier
+documentait déjà cette leçon à trois lignes de l'endroit exact où elle se répétait.
+
+Conséquence utilisateur : un lecteur francophone qui cherche une conversation lit « Hello » dans le
+résultat, puis « Bonjour » sur la même conversation dans sa liste. Le serveur avait la traduction
+dans les deux cas.
+
+## Un second défaut, trouvé en le corrigeant
+
+`core.ts` tronque son aperçu (`truncateMessagePreview`, plafond 300 points de code) ; `search.ts`
+servait `msg.content` **brut**. Tant que la ligne n'avait pas de prisme, c'était une simple
+divergence de poids entre deux routes. Le correctif la rendait incohérente **à l'intérieur d'une
+même réponse** : `buildLastMessagePreviewTranslations` plafonne chaque aperçu traduit, donc un
+lecteur servi en français aurait reçu 300 caractères et un lecteur servi dans la langue d'origine
+le blob entier. Le poids de la ligne aurait dépendu de la langue du lecteur. Corrigé dans le même
+geste — ce n'est pas un élargissement de périmètre, c'est la conséquence directe du premier
+correctif.
+
+## Pourquoi du Swift dans un cycle sans Xcode
+
+La leçon du cycle 62 est qu'un champ posé sur le fil ne sert à rien tant que le client ne le lit
+pas — « quatre couches à câbler, pas une ». Vérifié ici avant de conclure quoi que ce soit :
+
+- **Web** : rien à faire. `searchConversations` (`crud.service.ts:159`) passe déjà ses résultats
+  par `transformConversationData`, que le cycle 62 a appris à propager les deux champs. Et
+  `SearchPageContent.tsx` ne rend aucun aperçu de dernier message (seulement `lastMessageAt`).
+- **iOS** : la chaîne s'arrêtait à un pas de l'arrivée. `APIConversation.toConversation` propage
+  bien les deux champs (`ConversationModels.swift:382-398`), mais `GlobalSearchViewModel` posait
+  `lastMessagePreview: conv.lastMessagePreview` — l'aperçu BRUT — sur ses **deux** chemins (cache
+  local et réseau), là où `ThemedConversationRow` résout via
+  `resolvedLastMessagePreview(preferredLanguages:)`. La ligne de résultat de recherche EST une
+  ligne de conversation ; elle affichait un autre texte que la liste pour la même conversation.
+
+Le correctif Swift est un remplacement d'appel, pas une conception : `resolvedLastMessagePreview`
+ne rend `nil` que si `lastMessagePreview` l'est déjà (relu ligne par ligne, `CoreModels.swift:234`),
+donc c'est un substitut exact. `MeeshyUser.preferredContentLanguages` fournit le prisme ordonné —
+seule autorité iOS sur cet ordre, jamais réimplémentée localement.
+
+**Ce Swift n'est pas gaté par la CI de PR** : `ios-tests.yml` ne tourne automatiquement que sur les
+push vers `dev` (décision du 2026-07-27, file d'attente macOS saturée), et `sdk-tests.yml` ne se
+déclenche que sur `packages/MeeshySDK/**`. Le gate a donc été demandé explicitement par
+`workflow_dispatch` sur la branche — voir §Vérification. Livrer le gateway seul aurait laissé la
+moitié client du cycle 62 se reproduire à l'identique une route plus loin.
+
+## Vérification
+
+**Rouge observé avant correctif** : 7 des 8 témoins gateway neufs rouges. Le 8e
+(« ne fait jamais fuiter le blob `translations` brut dans `lastMessage` ») passait déjà — c'est un
+garde-fou assumé, pas un témoin de défaut : il interdit qu'une future réécriture remplace le
+mapping manuel par un spread et renvoie le cryptogramme complet à chaque ligne de résultat.
+
+**Sondes de fidélité** — chaque défaut réintroduit, restauration par copie :
+
+| Défaut réintroduit | Témoins qui tombent |
+|---|---|
+| les deux champs ne sont jamais posés (le défaut d'origine) | 6 |
+| carte non restreinte au prisme (toutes les langues servies) | 3 |
+| aperçu original non tronqué (le second défaut) | 1 |
+| `deviceLocale` ignorée (prisme amputé de son 4e rang) | 1 |
+
+**Un témoin voisin est tombé, et c'est un fait à retenir** :
+`conversations-search-routes.test.ts` doublait `@meeshy/shared/utils/conversation-helpers` avec un
+mock qui n'exposait QUE `generateDefaultConversationTitle`. Ajouter un import à la route rendait
+`resolveUserLanguagesOrdered` `undefined` → 500 sur 4 témoins. Réparé comme
+`conversation-core.test.ts` le fait déjà : `...jest.requireActual(...)` puis surcharge du seul
+double voulu. Un mock d'objet-module qui énumère ses exports est un couplage caché à la liste des
+imports de la cible.
+
+**Gate gateway** : **649 suites / 16 353 tests**, 0 échec, couverture lignes **95,78 %** —
+strictement identique au relevé du cycle 62, donc inchangée. `routes/conversations/search.ts` :
+100 % lignes / 100 % fonctions, 95,23 % branches (la seule branche non couverte, ligne 246, est le
+`?? ''` de `senderPresenceVis.get` — préexistante, hors correctif). `tsc --noEmit` gateway :
+0 erreur.
+
+**Swift** : non exécuté localement (aucune chaîne Swift sur ce conteneur). 3 témoins ajoutés à
+`GlobalSearchViewModelTests` — langue primaire servie, refus de retomber sur une langue tierce
+(règle #1), langue d'origine au rang 2 qui ne rétrograde pas la primaire (règle #3, cycle 62).
+
+## Reste ouvert après ce cycle
+
+- **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** — trouvé en auditant les
+  consommateurs web de `searchConversations`. Surface d'outillage admin, faible valeur, et le
+  fichier traîne une dette de typage voisine (`(conv as unknown).lastMessage`). Non pris pour ne
+  pas mélanger deux sujets ; c'est le dernier rendu web d'aperçu non prismé connu.
+- **`ConversationSyncEngine.previewTranslations` (iOS, chemin socket) — audité ce cycle, et c'est
+  la TÊTE DU PROCHAIN CYCLE.** Le point hérité du cycle 62 demandait de le vérifier contre la règle
+  de rang. Sur ce plan il est sain : le résolveur ne consulte que les langues du prisme, donc des
+  clés supplémentaires ne changent pas le texte affiché. Mais l'audit en trouve un autre, plus
+  grave, et **gatable ici** (`sdk-tests.yml` se déclenche sur `pull_request` pour
+  `packages/MeeshySDK/**`) :
+
+  `buildLastMessagePreviewTranslations` (REST) écarte explicitement les traductions **chiffrées**
+  — son exclusion #3, « son `text` est un cryptogramme ; le poser dans un aperçu afficherait du
+  base64 dans la liste ». `previewTranslations` (socket) **n'a pas cette exclusion**, et ne peut
+  pas l'avoir : `APITextTranslation` (`MessageModels.swift:300`) **ne décode pas `isEncrypted`**.
+  Or `MessageHandler._parseTranslations` (`:1732`) **répand l'entrée stockée telle quelle**
+  (`...data`) dans le payload `message:new` — le drapeau est donc bien SUR LE FIL, seul le client
+  ne le lit pas. Une traduction chiffrée arrivée par socket peut ainsi atterrir dans
+  `lastMessageTranslations` et faire rendre un cryptogramme par `resolvedLastMessagePreview` dans
+  la ligne de liste, là où le même message servi par REST est correctement filtré.
+
+  **Question à trancher AVANT d'écrire le correctif** (non résolue par cet audit, ne pas la
+  supposer) : la forme exacte de l'entrée sur le fil. `buildLastMessagePreviewTranslations` lit
+  `data.text`, alors que `previewTranslations` lit `$0.translatedContent` — et
+  `APITextTranslation.translatedContent` est un `String` NON optionnel, donc un décodage de tout
+  l'`APIMessage` échouerait si la clé manquait. Les deux lectures ne peuvent pas être vraies du
+  même objet sans un mappage de clés quelque part. **Commencer par établir la forme réelle du
+  payload `message:new`** (relire `translation-transformer.ts` et les `CodingKeys` d'
+  `APITextTranslation`), puis décider si le correctif est côté client (décoder `isEncrypted` et
+  filtrer, jumeau de l'exclusion #3) ou côté gateway (ne jamais mettre de traduction chiffrée sur
+  le fil d'un aperçu).
+
+  Trois écarts mineurs constatés au passage, à traiter dans le même geste s'ils survivent à
+  l'enquête ci-dessus : la carte socket n'est **pas restreinte au prisme du lecteur** (le REST
+  l'est), **pas tronquée** (le REST plafonne à 300), et **n'exclut pas la langue d'origine**. Aucun
+  des trois ne change le texte affiché — le résolveur les absorbe — mais tous les trois alourdissent
+  le cache de la liste d'autant de langues que la conversation en compte.
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60). Question de
+  conception — payload PAR DESTINATAIRE — non tranchée.
+- **`normalizeConversation` reste un constructeur manuel de `Conversation` sans aucun appelant**
+  (cycle 62) : trancher s'il vit ou meurt.
+- **Un participant ANONYME n'a pas de prisme sur ce chemin** — vrai ici aussi :
+  `authContext.registeredUser` est `undefined` pour lui, donc `viewerLanguages` est vide et
+  `lastMessageTranslations` vaut `null`. Comportement identique à `GET /conversations`, donc
+  cohérent, mais toujours non résolu sur le fond (cycle 60, inchangé).
+- **Aucune traduction rétroactive de l'aperçu** (cycle 60, inchangé).
+- Hérités et non traités : `DELETE /sessions/:sessionId` ne coupe aucune socket (pont client
+  `sessionToken` au handshake) ; l'auth REST ne vérifie pas `UserSession.isValid` ; la suppression
+  de compte ne révoque aucune session ; `auth:session-revoked` n'est écouté ni par iOS ni par
+  Android ; `MaintenanceService.cleanupOrphanedAttachments` reste inerte ; les ~12 copies inline de
+  `unsetOrNull` ; `TrackingLink.messageId` est une colonne morte ; l'arbitrage `delete-for-me` du
+  cycle 12 attend une validation humaine ; `eslint` ne peut pas tourner sur le gateway (aucun
+  `eslint.config.js` depuis ESLint v9) ; `tsc` ne passe pas sur le web (1 190 erreurs
+  préexistantes, non gatées par la CI).
+
+---
+
 # Cycle 63 — « Toutes les sessions ont été déconnectées » était faux
 
 > **Collision de numérotation, résolue à la main — même patron que celle du relevé ci-dessous.**

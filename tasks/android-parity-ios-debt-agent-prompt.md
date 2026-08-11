@@ -65,6 +65,14 @@ Mission double, sur **deux lanes strictement séparées** :
    locaux passent depuis un moment) : **termine-la ou classe-la explicitement en bloqué** avant de
    démarrer un nouveau slice/item. Ne l'abandonne jamais en silence — chaque run doit se conclure
    par : mergé, fermé avec raison notée, ou marqué ⚠ bloqué dans le fichier de suivi de sa lane.
+   **Motif récurrent observé (itérations 25, 29, 37, 38)** : une session peut se terminer
+   anormalement PENDANT l'attente d'une CI qui finit par passer entièrement au vert — le travail
+   n'est jamais perdu (juste la session), mais le merge/la finalisation restent à faire. Si tu
+   trouves une PR de cette routine ouverte, CI entièrement verte, diff scopé correctement, aucune
+   activité récente : c'est probablement ce cas, pas un vrai blocage — merge-la (vérifie
+   `mergeable`/`mergeStateStatus` via `gh pr view --json mergeable,mergeStateStatus`), nettoie la
+   branche, puis termine la finalisation normale (`lane-cursor.md`, retour sur
+   `ops/android-ios-parity-routine`) avant de choisir un nouveau slice.
 
 ## Choix de la lane (règle d'alternance, à évaluer à chaque run)
 

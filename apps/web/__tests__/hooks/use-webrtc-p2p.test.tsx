@@ -670,6 +670,93 @@ describe('useWebRTCP2P', () => {
       await expect(result.current.enableVideo()).rejects.toThrow();
       expect(getUserMedia).not.toHaveBeenCalled();
     });
+
+    // Vague 97: enableVideo() used to snapshot the connected peers BEFORE
+    // awaiting getUserMedia (the camera permission prompt), then distribute
+    // the acquired track over that stale snapshot. A peer joining the group
+    // call DURING that window (an ordinary sequence — camera permission can
+    // take human-scale time) was silently excluded forever: its video
+    // transceiver stays recvonly, with no later event ever re-triggering
+    // enableVideoSend for it.
+    it('also enables sending on a peer that joins the group call while getUserMedia is still pending', async () => {
+      const camTrack = { kind: 'video', id: 'cam', clone: jest.fn(() => ({ kind: 'video', id: 'clone' })) };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      let resolveGetUserMedia: (value: unknown) => void = () => {};
+      const pendingGetUserMedia = new Promise((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockReturnValue(pendingGetUserMedia),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      let enableVideoPromise!: Promise<void>;
+      act(() => {
+        enableVideoPromise = result.current.enableVideo();
+      });
+
+      // A second peer joins the group call while the camera prompt is still
+      // pending — an ordinary group-call sequence, no adversarial timing.
+      await act(async () => {
+        await result.current.createOffer(`${mockTargetUserId}-2`);
+      });
+
+      await act(async () => {
+        resolveGetUserMedia(camStream);
+        await enableVideoPromise;
+      });
+
+      expect(mockEnableVideoSend).toHaveBeenCalledTimes(2);
+      expect(mockEnableVideoSend).toHaveBeenCalledWith(camTrack);
+      expect(mockEnableVideoSend).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'clone' })
+      );
+    });
+
+    // Same window, opposite edge: every peer leaves before getUserMedia
+    // resolves. Resolving silently would leave a live, unattached camera
+    // capture running — release it and fail loudly instead (mirrors the
+    // zero-peer guard above, and the leak-avoidance pattern of every other
+    // track-acquiring path in this file).
+    it('releases the acquired camera and rejects when every peer leaves before getUserMedia resolves', async () => {
+      const stoppedTracks: string[] = [];
+      const camTrack = { kind: 'video', id: 'cam', stop: () => stoppedTracks.push('cam') };
+      const camStream = { getVideoTracks: () => [camTrack], getTracks: () => [camTrack] };
+      let resolveGetUserMedia: (value: unknown) => void = () => {};
+      const pendingGetUserMedia = new Promise((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockReturnValue(pendingGetUserMedia),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      let enableVideoPromise!: Promise<void>;
+      act(() => {
+        enableVideoPromise = result.current.enableVideo();
+      });
+
+      await act(async () => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+
+      resolveGetUserMedia(camStream);
+      await expect(enableVideoPromise).rejects.toThrow();
+      expect(stoppedTracks).toEqual(['cam']);
+      expect(mockEnableVideoSend).not.toHaveBeenCalled();
+    });
   });
 
   describe('switchCamera (Vague 95 — front/back camera flip)', () => {
@@ -734,6 +821,48 @@ describe('useWebRTCP2P', () => {
 
       await expect(result.current.switchCamera('environment')).rejects.toThrow();
       expect(getUserMedia).not.toHaveBeenCalled();
+    });
+
+    // Vague 97: same stale-snapshot-before-await defect as enableVideo — a
+    // peer joining while the camera prompt for the flip is still pending was
+    // silently excluded from switchVideoSendTrack.
+    it('also swaps the track on a peer that joins the group call while getUserMedia is still pending', async () => {
+      const camTrack = { kind: 'video', id: 'cam-back', clone: jest.fn(() => ({ kind: 'video', id: 'clone' })) };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      let resolveGetUserMedia: (value: unknown) => void = () => {};
+      const pendingGetUserMedia = new Promise((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockReturnValue(pendingGetUserMedia),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      let switchCameraPromise!: Promise<void>;
+      act(() => {
+        switchCameraPromise = result.current.switchCamera('environment');
+      });
+
+      await act(async () => {
+        await result.current.createOffer(`${mockTargetUserId}-2`);
+      });
+
+      await act(async () => {
+        resolveGetUserMedia(camStream);
+        await switchCameraPromise;
+      });
+
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledTimes(2);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(camTrack);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'clone' })
+      );
     });
   });
 
@@ -866,6 +995,7 @@ describe('useWebRTCP2P', () => {
       act(() => {
         for (const state of states) lastCallOptions.onIceConnectionStateChange(state);
       });
+      return result;
     };
 
     it('émet call:reconnecting une seule fois par stall mid-call', async () => {
@@ -899,6 +1029,25 @@ describe('useWebRTCP2P', () => {
           event === CLIENT_EVENTS.CALL_RECONNECTING || event === CLIENT_EVENTS.CALL_RECONNECTED
       );
       expect(reconnectEvents).toHaveLength(0);
+    });
+
+    // Vague 98: `isReconnecting` is the real stall signal exposed to callers
+    // (e.g. call:analytics' reconnectionCount) — the connectionState value
+    // it replaces never actually carries the string 'reconnecting'.
+    it('expose isReconnecting=true pendant un stall mid-call, false une fois reconnecté', async () => {
+      const result = await driveIce(['connected', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(true);
+
+      act(() => {
+        const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+        lastCallOptions.onIceConnectionStateChange('connected');
+      });
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
+    it('isReconnecting reste false pour un flottement ICE pré-connexion', async () => {
+      const result = await driveIce(['checking', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(false);
     });
 
     it('chaque cycle de stall porte une tentative incrémentée', async () => {

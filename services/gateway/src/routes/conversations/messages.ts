@@ -148,7 +148,7 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.encryptedContent),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
 );
-import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
 
@@ -2440,7 +2440,17 @@ export function registerMessagesRoutes(
           isBlurred: message.isBlurred,
           expiresAt: message.expiresAt,
           effectFlags: message.effectFlags,
-          translations: message.translations,
+          // `Message.translations` est une CARTE Mongo, jamais un tableau — et
+          // le schéma de cette réponse déclare `translations: { type: 'array' }`
+          // (`messageSchema`). `fast-json-stringify` ne coerce pas : la carte
+          // faisait échouer la sérialisation, donc répondre 500 sur la route
+          // ENTIÈRE dès qu'une épingle portait une traduction, c'est-à-dire dès
+          // que le Prisme avait tourné. Même sérialiseur que toutes les autres
+          // routes de messages — source unique de vérité.
+          translations: transformTranslationsToArray(
+            message.id,
+            message.translations as Record<string, MessageTranslationJSON> | null
+          ),
           createdAt: message.createdAt,
           updatedAt: message.updatedAt,
           sender: sender ? {

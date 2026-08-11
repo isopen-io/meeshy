@@ -1,11 +1,10 @@
-package me.meeshy.app.chat
+package me.meeshy.sdk.model.waveform
 
-import me.meeshy.sdk.model.waveform.AudioLevelNormalizer
-import me.meeshy.sdk.model.waveform.WaveformLevelWindow
 import kotlin.math.floor
 
 /**
- * The two phases of the composer's voice-recording pill.
+ * The two phases of a composer's voice-recording pill (chat and Feed post
+ * composers both drive one of these).
  *
  * [Idle] is the text-composer state (no pill). [Recording] is the iMessage-style
  * pill: a live timer, a blinking record dot, a rolling waveform strip, and the
@@ -41,7 +40,7 @@ data class VoiceRecordingStop(
 )
 
 /**
- * Pure, immutable state machine for the composer's iMessage-style voice-recording
+ * Pure, immutable state machine for a composer's iMessage-style voice-recording
  * pill — the single source of truth for "how long has this been recording, can it
  * be sent yet, and what happens on cancel / stop / send". A faithful port of the
  * recording logic scattered across iOS `UniversalComposerBar+Recording.swift`
@@ -55,6 +54,12 @@ data class VoiceRecordingStop(
  * non-positive tick deltas), and (3) reusing the shared `:core:model` waveform
  * building blocks ([AudioLevelNormalizer], [WaveformLevelWindow]) instead of a
  * bespoke level buffer — one metering law across the whole app.
+ *
+ * Lives in `:core:model` (not `:feature:chat`) so both the chat composer's voice
+ * pill and the Feed post composer's audio-attachment pill share the exact same
+ * timing/gating rules instead of drifting via two copies (moved here — no
+ * behaviour change — when the Feed composer needed the identical state machine,
+ * `feed-composer-voice-capture`).
  *
  * The rolling waveform [levels] are the *recent* window (oldest first), not the whole
  * take, matching iOS's fixed-size `levelHistory`. The actual microphone capture is

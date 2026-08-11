@@ -412,6 +412,43 @@ participant sans compte n'est jamais sonne. La raison est ecrite dans le fichier
 
 ---
 
+## `message:new` — le split `clientMessageId` (Phase 4 §6.2)
+
+**Tout emetteur de `message:new` doit envoyer DEUX payloads**, jamais un seul :
+
+| Destinataire | Payload | Pourquoi |
+|---|---|---|
+| `ROOMS.user(sender.userId)` — tous les appareils de l'expediteur | **avec** `clientMessageId` | c'est la cle primaire de la ligne optimiste. Sans elle, seule la reponse du transport peut la promouvoir a `.sent`. |
+| `ROOMS.conversation(id)` `.except(ROOMS.user(sender.userId))` | **sans** (`stripClientMessageId`) | un pair n'a pas a apprendre l'espace d'ids optimistes de l'expediteur. |
+
+Le `.except(...)` n'est pas cosmetique : sans lui un appareil de l'expediteur
+present dans la room recoit **deux** `message:new`.
+
+L'expediteur sans compte (invite de lien) n'a aucune `ROOMS.user(User.id)` a
+adresser : une seule emission room-wide, cid-strippee. Meme regle pour le rejeu
+hors ligne (`deliveryQueue.enqueue`) et pour tout enqueue de mutation — le corps
+stocke est le corps DESTINATAIRE, identique a l'emission live.
+
+Ne pas reecrire le retrait a la main : `stripClientMessageId(payload)`
+(`socketio/utils/message-ack-shaping.ts`) est generique et **preservant**, donc
+il ne re-elargit pas le type du payload — un `Record<string, unknown>` casse
+l'emit type de `link:message:new`.
+
+**Le piege est de croire que le contrat ne concerne que le transport socket.**
+Il concerne les trois : `message:send` (`MessageHandler.broadcastNewMessage`),
+les deux routes de lien (`routes/links/messages.ts`) et le chemin REST/ZMQ
+(`MeeshySocketIOManager._broadcastNewMessage`). Ce dernier n'avait ni moitie du
+contrat jusqu'au cycle 68 : le cid n'etait pas dans le payload **du tout**.
+C'est pourtant le chemin de tout envoi non eligible au socket-first cote iOS —
+piece jointe, DM chiffre, vue-unique, ephemere, message a effets
+(`socketFirstEligible`, `ConversationViewModel.swift`). La garde que le client
+avait ecrite exactement pour cette course (`MessagePersistenceActor`, branche
+`0. clientMessageId` : « catches an echo that races ahead of
+`applyEvent(.serverAck)` ») etait donc inatteignable — l'echo REST ne portait
+jamais la cle sur laquelle elle indexe.
+
+---
+
 ## Revocation de session — couper la socket, pas seulement la ligne en base
 
 `disconnectRevokedSessions.ts` ferme **toutes** les sockets d'un utilisateur

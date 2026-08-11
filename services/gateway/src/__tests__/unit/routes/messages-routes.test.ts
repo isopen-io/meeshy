@@ -1607,6 +1607,79 @@ describe('GET /conversations/:id/pinned-messages', () => {
     expect(mockSendInternalError).toHaveBeenCalled();
   });
 
+  /**
+   * Cycle 67 — la colonne `Message.translations` est une CARTE Mongo
+   * (`{ "fr": { text, … } }`), jamais un tableau. Les quatre témoins ci-dessus
+   * la posent tous à `null`, le seul cas qui ne déclenche pas le défaut : la
+   * route versait la carte telle quelle dans une réponse dont le schéma déclare
+   * `translations: { type: 'array' }`, et `fast-json-stringify` JETTE plutôt que
+   * de coercer — 500 sur la route entière dès qu'une épingle porte une
+   * traduction, c'est-à-dire dès que le Prisme a tourné.
+   *
+   * Le vrai sérialiseur est branché ici (le harness le double par défaut) : le
+   * témoin porte sur la FORME émise, pas sur l'appel au transformateur.
+   */
+  const realTransformTranslationsToArray = jest.requireActual<
+    typeof import('../../../utils/translation-transformer')
+  >('../../../utils/translation-transformer').transformTranslationsToArray;
+
+  const pinnedWithTranslations = (translations: unknown) => ({
+    id: MSG_ID,
+    conversationId: CONV_ID,
+    senderId: PART_ID,
+    content: 'Hello',
+    originalLanguage: 'en',
+    messageType: 'text',
+    editedAt: null,
+    deletedAt: null,
+    replyToId: null,
+    forwardedFromId: null,
+    forwardedFromConversationId: null,
+    pinnedAt: new Date(),
+    pinnedBy: USER_ID,
+    isViewOnce: false,
+    isBlurred: false,
+    expiresAt: null,
+    effectFlags: 0,
+    translations,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    sender: null,
+    attachments: [],
+    _count: { reactions: 0, replies: 0 },
+  });
+
+  it('sérialise les traductions au format API, jamais la carte Mongo brute', async () => {
+    mockTransformTranslationsToArray.mockImplementation(realTransformTranslationsToArray);
+    prisma.message.findMany.mockResolvedValue([
+      pinnedWithTranslations({
+        fr: { text: 'Bonjour', translationModel: 'medium', createdAt: new Date('2026-08-11T00:00:00Z') },
+      }),
+    ]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+
+    expect(reply._body.data[0].translations).toEqual([
+      expect.objectContaining({
+        id: `${MSG_ID}-fr`,
+        messageId: MSG_ID,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour',
+      }),
+    ]);
+  });
+
+  it('rend un tableau vide quand la colonne est nulle (jamais null ni la carte)', async () => {
+    mockTransformTranslationsToArray.mockImplementation(realTransformTranslationsToArray);
+    prisma.message.findMany.mockResolvedValue([pinnedWithTranslations(null)]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+
+    expect(reply._body.data[0].translations).toEqual([]);
+  });
+
   it('restitue `location` sur un message épinglé géolocalisé', async () => {
     // Lot 1 : un message épinglé est une bulle complète — sans le hoist,
     // l'épingle affiche tout SAUF la position qu'elle était censée fixer.

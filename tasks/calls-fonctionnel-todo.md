@@ -6184,3 +6184,220 @@ relecture ligne à ligne directe de tous les fichiers cités.
   régression) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; delta de comptage
   `tsc --noEmit` (1190 vs. 1657 legacy) à investiguer si un futur cycle a besoin d'un chiffre de référence
   fiable.
+
+## Vague 96 — `addLocalMedia` attached every new peer's outbound video directly from the shared stream, aliasing sender.track objects across independent peer connections (2026-08-10)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine — la Vague 95 (#2784) était déjà mergée
+sur `main`. `HEAD == origin/main` au démarrage. Toolchains iOS (`xcodebuild`/`swift`) et Android (gradle
+présent, aucun SDK) toujours hors d'atteinte. Audit dédié (agent Explore, lecture seule, périmètre
+web+gateway, mandaté avec la liste complète des Vagues 57-95 pour éviter toute redite) a remonté un
+candidat unique, vérifié ensuite ligne à ligne directement dans le code courant plutôt que pris tel quel.
+
+- **Root cause confirmée par lecture directe** : `addLocalMedia()` (`webrtc-service.ts`) — appelée une
+  fois par NOUVELLE connexion pair (`createOffer`/`handleOffer`, `use-webrtc-p2p.ts`) — attachait
+  directement `stream.getVideoTracks()[0]` au transceiver vidéo du pair, sans jamais cloner. `stream` est
+  la MÊME `MediaStream` partagée par TOUTES les instances `WebRTCService` d'un appel de groupe (documenté
+  explicitement dans `removeParticipant()` : « it's the same MediaStream reference every other still-
+  connected participant's service is sending »). Dès qu'un appel de groupe a déjà de la vidéo active sur
+  au moins un pair, `getVideoTracks()[0]` sur ce flux partagé N'EST PAS un master neutre : c'est déjà
+  l'objet `sender.track` **vivant** d'un pair déjà connecté — `enableVideo()`/`switchCamera()`
+  (`use-webrtc-p2p.ts`, Vague 95) donnent cet objet littéral au pair « index 0 » de leur instantané courant.
+  Un NOUVEAU pair rejoignant pendant cette fenêtre (`addLocalMedia` appelé pour lui) hérite donc du même
+  objet `MediaStreamTrack`, sans le savoir — deux `RTCRtpSender` indépendants pointant sur UN SEUL objet.
+  N'importe quel événement ordinaire qui arrête ensuite ce track côté pair « index 0 » —
+  `switchVideoSendTrack()` (flip caméra) ou `disableVideoSend()` (couper la caméra), toutes deux lisent
+  `sender.track` en vérité-terrain et l'arrêtent sans condition — gèle silencieusement la vidéo sortante du
+  nouveau pair aussi, sans aucun chemin de réparation avant le PROCHAIN `switchCamera()`/`enableVideo()` où
+  ce pair est enfin inclus dans l'instantané (s'il l'est un jour). Second défaut, indépendant de toute
+  fenêtre de course, découvert en traçant le premier : `addLocalMedia` ne renseignait JAMAIS
+  `exclusiveVideoTrack` (champ dont le commentaire affirmait déjà, à tort, que le track initial de
+  `addLocalMedia` « CAN be the same literal object across every peer's sender » — un compromis assumé mais
+  jamais bouclé). Résultat : le track vidéo qu'UN SEUL pair possède réellement (cas courant : pas de course,
+  jamais partagé avec personne) n'était jamais libéré par `close({ stopLocalTracks: false })` quand ce pair
+  quittait seul un appel de groupe encore actif — `else if (this.exclusiveVideoTrack)` restait `null`, fuite
+  déterministe d'une capture caméra vivante à chaque départ scoped d'un pair dont la vidéo avait démarré via
+  `addLocalMedia` (tout appel qui démarre directement en vidéo, pas seulement les upgrades audio→vidéo).
+- **Fix** : `addLocalMedia` clone désormais TOUJOURS `stream.getVideoTracks()[0]` avant de l'attacher
+  (`sourceVideoTrack.clone()`), l'ajoute au `localStream` partagé (`this.localStream.addTrack`, même
+  bookkeeping que `enableVideoSend`/`switchVideoSendTrack`), et l'enregistre comme `exclusiveVideoTrack` —
+  étendant à ce site le seul et même invariant que tous les autres points d'attache respectent déjà : chaque
+  instance `WebRTCService` possède un objet track exclusif, jamais partagé, toujours correctement libéré par
+  son propre `close()`/`disableVideoSend()`/`switchVideoSendTrack()`. Élimine la classe de bug entièrement
+  (aucun sender ne référence plus jamais l'objet littéral d'un autre) plutôt que de rétrécir la fenêtre de
+  course. Un seul fichier de production modifié : `webrtc-service.ts` (+31/-8, dont commentaires).
+- **Tests** (TDD, RED confirmé par `git stash` du seul diff source avant implémentation — les 3 tests neufs
+  échouaient précisément comme attendu, aucune régression annexe) : nouveau describe
+  `addLocalMedia — outgoing video track ownership (Vague 96)` (`webrtc-service.test.ts`) — (1) clone le
+  track source au lieu de l'attacher directement (`.clone()` appelé une fois, le track attaché au
+  transceiver EST le résultat du clone, ajouté au `localStream`) ; (2) `close({ stopLocalTracks: false })`
+  libère le clone de CETTE instance, jamais le track source partagé ; (3) deux instances `WebRTCService`
+  attachées au MÊME flux partagé reçoivent des objets track indépendants — l'une quittant l'appel de groupe
+  n'arrête jamais la vidéo de l'autre. Les deux fabriques de mocks `makeTrack` (`webrtc-service.test.ts` et
+  `webrtc-service.coverage.test.ts`, dupliquées, aucune préexistante n'exposait `.clone()`) gagnent un `id`
+  unique et un `clone: jest.fn(() => makeTrack(kind))` — chaque appel produit un objet frais et distinct,
+  fidèle à la sémantique réelle de `MediaStreamTrack.clone()`.
+- **Vérification** : `webrtc-service.test.ts` + `webrtc-service.coverage.test.ts` — **183/183 verts**
+  (180 préexistants + 3 neufs). Sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|
+  adaptive-degradation|audio-effect|webrtc-service` — **51 suites / 742 tests verts**, aucune régression.
+  Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`
+  (racine + `apps/web`), puis `packages/shared && npx prisma generate --generator client && bun run build`
+  sans erreur. `npx tsc --noEmit` sur `apps/web` : **1657 erreurs avant et après le diff** (`git stash`/
+  `stash pop`, diff ligne à ligne des deux sorties complètes) — décalages de NUMÉRO DE LIGNE uniquement
+  (mes lignes ajoutées poussent les erreurs préexistantes plus bas dans le même fichier de test), aucun
+  message d'erreur nouveau, zéro sur `webrtc-service.ts` lui-même. Diff strictement scopé à 3 fichiers web
+  (aucun fichier gateway touché) — suite gateway non rejouée ce cycle, hors du diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié ce cycle) :
+  dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+  `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ;
+  `removeParticipant()` ne nettoie pas `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-
+  régression) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; delta de comptage
+  `tsc --noEmit` (1190 vs. 1657 legacy, Vague 95) toujours non investigué.
+
+## Vague 97 — `enableVideo()`/`switchCamera()` snapshotted the connected-peer list BEFORE awaiting `getUserMedia()`, silently excluding any peer that joined during the camera-permission prompt (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine — la Vague 96 (#2790,
+`addLocalMedia` clone ownership) était déjà mergée sur `main`. Un premier `git status` a montré la
+branche locale en retard d'un commit sur `origin/main` (le fetch initial du sandbox précédait le merge
+de la Vague 96 de quelques minutes) — `git fetch origin main` + `git reset --hard origin/main` avant tout
+travail, aucun commit local antérieur perdu. Aucune section « Vague 96 » n'existait encore dans ce
+fichier au moment du premier `grep` (juste avant le fetch) : fausse alerte, le fetch l'a fait apparaître.
+Toolchains iOS (`xcodebuild`/`swift`) et Android (gradle présent, aucun SDK) toujours hors d'atteinte.
+Audit dédié (lecture directe de `webrtc-service.ts`, `use-webrtc-p2p.ts`, `call-store.ts`, mandaté avec
+la liste complète des Vagues 57-96 pour éviter toute redite) a remonté un candidat unique.
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/use-webrtc-p2p.ts`) : `enableVideo()`
+  (audio→vidéo mid-call) et `switchCamera()` (flip caméra, Vague 95) partagent le même schéma —
+  `const services = Array.from(webrtcServicesRef.current.values())` capturé **AVANT**
+  `await navigator.mediaDevices.getUserMedia(...)`, puis réutilisé APRÈS pour distribuer la piste
+  (`Promise.all(services.map(...))`). `getUserMedia()` déclenche l'invite de permission caméra du
+  navigateur — un délai à échelle humaine, potentiellement plusieurs secondes, pas un timing adverse.
+  Un pair rejoignant l'appel de groupe PENDANT cette fenêtre (`createOffer`/`handleOffer`, qui alimente
+  `webrtcServicesRef.current` de façon quasi synchrone) n'apparaît jamais dans le tableau `services` déjà
+  figé : `enableVideoSend`/`switchVideoSendTrack` ne sont jamais appelés pour lui. Pour `enableVideo()`,
+  la conséquence est totale et permanente — le transceiver vidéo de ce pair reste `recvonly` pour le
+  reste de l'appel, aucun évènement ultérieur ne re-déclenchant l'envoi, alors que
+  `controls.videoEnabled` (UI) et les AUTRES pairs voient bien la vidéo active : désync silencieux entre
+  ce que l'utilisateur croit envoyer et ce que ce pair reçoit réellement. Séquence atteignable sans
+  timing adverse : appel de groupe déjà actif (audio), l'utilisateur local active sa caméra (invite de
+  permission affichée) pendant qu'un troisième participant rejoint la conversation — un enchaînement
+  ordinaire sur une conversation de groupe active. `switchCamera()` partage le même défaut structurel
+  (impact moindre : le pair exclu continue de recevoir l'ANCIENNE caméra plutôt qu'aucune vidéo, mais
+  reste corrigé pour cohérence — même schéma dupliqué ligne pour ligne, précédent direct de la Vague 92
+  qui avait déjà unifié deux handlers partageant un seul défaut).
+- **Fix** : dans les deux fonctions, le tableau `services` est désormais lu à DEUX reprises — une
+  première fois (juste `.size === 0`, sans matérialiser le tableau) AVANT `getUserMedia()` pour échouer
+  vite sans déclencher l'invite caméra quand personne n'est encore connecté (comportement Vague 86
+  préservé, testé), puis une seconde fois juste APRÈS que `getUserMedia()` se résout, immédiatement avant
+  la distribution de la piste — capturant ainsi tout pair arrivé entre-temps. Edge case symétrique
+  couvert : si le second relevé revient vide (tous les pairs sont partis pendant l'attente), la caméra
+  tout juste acquise est libérée (`cam.getTracks().forEach(t => t.stop())`) avant de rejeter avec
+  `NO_PEER_CONNECTION` — plutôt que de laisser une capture caméra vivante et non rattachée fuir en
+  silence, même philosophie anti-fuite que les Vagues 85/93/94/95/96. Un seul fichier de production
+  modifié (`use-webrtc-p2p.ts`, +33/-4 lignes dont commentaires).
+- **Tests** (TDD, RED confirmé par exécution avant fix) : 3 nouveaux tests dans `use-webrtc-p2p.test.tsx`
+  — (1) `enableVideo` : un second pair rejoint (`createOffer`) pendant qu'une promesse `getUserMedia`
+  contrôlée manuellement reste en attente ; une fois résolue, `enableVideoSend` est appelé pour les DEUX
+  pairs (le premier avec la piste littérale, le second avec un `.clone()`) ; (2) `enableVideo` : tous les
+  pairs partent (`removeParticipant`) pendant la même attente ; une fois résolue, la piste caméra acquise
+  voit `stop()` appelé et la promesse rejette, `enableVideoSend` jamais appelé ; (3) `switchCamera` :
+  même scénario que (1) transposé à `switchVideoSendTrack`. Les 3 RED confirmés par exécution
+  (`bunx jest` — 2 échouaient sur le compte d'appels attendu, 1 sur une promesse résolue au lieu de
+  rejetée) avant le fix, GREEN après (49/49 tests du fichier, +3 net).
+- **Vérification** : `use-webrtc-p2p.test.tsx` (49 tests, +3 net) vert. Sweep complet
+  `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-degradation|audio-effect|webrtc-service`
+  — **51 suites / 745 tests verts** (+3 net vs. la Vague 96), aucune régression. Prérequis CLAUDE.md
+  rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts` (racine), bun
+  1.3.11 local vs. 1.3.14 attendu par CI (écart déjà documenté, non résolu ce cycle). `npx tsc --noEmit`
+  sur `apps/web` : **1190 erreurs avant et après le diff** (`git stash`/`stash pop`, comparaison
+  directe — seul le bruit npm notice différait entre les deux sorties), zéro nouvelle erreur, zéro sur
+  `use-webrtc-p2p.ts`. Diff strictement scopé à 2 fichiers web (aucun fichier gateway touché) — suite
+  gateway non rejouée ce cycle, hors du diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié en dehors
+  de celui traité ce cycle) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+  (Vague 84, nécessite confirmation on-device) ; `removeParticipant()` ne nettoie pas
+  `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-régression) ; toolchains iOS/Android
+  toujours hors d'atteinte dans ce sandbox ; delta de comptage `tsc --noEmit` (1190 vs. 1657 legacy,
+  Vague 95) toujours non investigué.
+
+## Vague 98 — `useCallAnalyticsReporter`'s reconnection counter could never increment: it compared a real `RTCPeerConnectionState` against the unreachable literal `'reconnecting'` (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` a remonté une PR ouverte de cette routine (#2796, Vague 97 — snapshot des pairs
+avant `getUserMedia()`), CI 15/15 verte contre un `main` vieux de plusieurs commits ; rebasée localement
+sur `origin/main` (merge sans conflit), sweep complet + `tsc --noEmit` rejoués (51 suites/745 tests,
+1657 erreurs pré-existantes identiques avant/après), poussée, CI verte à nouveau (15/15), mergée. Audit
+dédié (agent Explore, lecture seule, périmètre web+gateway, mandaté avec la liste complète des Vagues
+9-97 pour éviter toute redite) a remonté un candidat unique, vérifié ensuite ligne à ligne directement
+dans le code courant plutôt que pris tel quel.
+
+- **Root cause confirmée par lecture directe** : `useCallAnalyticsReporter` (`use-call-analytics-reporter.ts`)
+  détectait un stall mid-call avec `connectionState === 'reconnecting' && prevStateRef.current !== 'reconnecting'`.
+  Son unique appelant (`VideoCallInterface.tsx`) lui passe le `connectionState` renvoyé par `useWebRTCP2P()`
+  (`use-webrtc-p2p.ts`), typé `RTCPeerConnectionState` et alimenté EXCLUSIVEMENT par
+  `RTCPeerConnection.connectionState` natif (`webrtc-service.ts`, `onconnectionstatechange`). Le type
+  `RTCPeerConnectionState` du spec W3C vaut `'closed' | 'connected' | 'connecting' | 'disconnected' |
+  'failed' | 'new'` — **`'reconnecting'` n'en fait pas partie**, et un grep complet du dépôt confirme
+  qu'aucun code n'assigne jamais ce littéral à cette variable précise. `markReconnecting` était donc du
+  code mort : sur un blip réseau ordinaire (WiFi↔cellulaire, micro-coupure) — exactement le cas que le
+  grace timer ICE et `restartIce()` de `webrtc-service.ts` existent pour absorber, et que
+  `use-webrtc-p2p.ts` suit déjà en interne via `stalledPeersRef` pour émettre `call:reconnecting`/
+  `call:reconnected` au serveur — le check `=== 'reconnecting'` ne matchait jamais. Le payload
+  `call:analytics` envoyé à la fin de CHAQUE appel web rapportait `reconnectionCount: 0`, y compris pour
+  des appels ayant réellement stall/récupéré, aveuglant silencieusement le dashboard de fiabilité sur
+  l'un de ses deux indicateurs phares (l'autre étant la distribution de qualité). Effet de bord découvert
+  en traçant le signal réel : le test existant du fichier (`use-call-analytics-reporter.test.tsx`)
+  ré-armait artificiellement `connectionState: 'reconnecting'` — une forme que la production ne produit
+  JAMAIS — même défaut de fixture que la Leçon 95 (`lessons.md`) : la suite était verte et décrivait
+  fidèlement un monde où le défaut n'existe pas.
+- **Fix** : `use-webrtc-p2p.ts` expose désormais un état réel `isReconnecting` (nouveau `useState`),
+  dérivé du même `stalledPeersRef` qui pilote déjà `call:reconnecting`/`call:reconnected` — `true` posé au
+  moment où un pair rejoint `stalledPeersRef` (stall mid-call détecté), `false` reposé quand
+  `stalledPeersRef` redevient vide (tous les pairs stallés ont récupéré) ou à `cleanup()`. Aucune
+  renégociation ni changement de la logique d'émission socket existante — uniquement l'ajout du miroir
+  d'état React manquant sur un signal déjà calculé. `VideoCallInterface.tsx` relaie `isReconnecting` à
+  `useCallAnalyticsReporter`, qui compare désormais `isReconnecting` (transition false→true) au lieu de
+  `connectionState === 'reconnecting'` pour appeler `markReconnecting` — `connectionState === 'connected'`
+  reste inchangé pour `markConnected` (cette valeur-là EST un `RTCPeerConnectionState` réel). Trois
+  fichiers de production modifiés : `use-webrtc-p2p.ts` (+20/-8), `use-call-analytics-reporter.ts`
+  (+14/-6), `VideoCallInterface.tsx` (+2/-2, fils de props uniquement).
+- **Tests** (TDD, RED confirmé avant fix — les 2 assertions `isReconnecting` échouaient avec `undefined`
+  reçu, aucune régression annexe) :
+  - `use-webrtc-p2p.test.tsx` — 2 nouveaux tests dans le describe `TURN credential refresh` existant
+    (`isReconnecting` bascule à `true` pendant un stall mid-call puis `false` à la reconnexion ; reste
+    `false` pour un flottement ICE pré-connexion, même garde que les tests `call:reconnecting` voisins).
+    `driveIce` (helper partagé) retourne désormais `result` pour permettre ces assertions d'état sans
+    dupliquer le montage.
+  - `use-call-analytics-reporter.test.tsx` — fixture `baseProps` porte désormais `isReconnecting: false`
+    par défaut ; le test « accumulates a reconnection » réécrit pour piloter `isReconnecting` (transitions
+    booléennes réelles) au lieu du littéral `connectionState: 'reconnecting'` inatteignable en production
+    (corrige le défaut de fixture de type Leçon 95 découvert au passage) ; nouveau test couvrant la
+    non-double-comptabilisation quand `isReconnecting` reste `true` sur plusieurs re-renders consécutifs.
+  GREEN après implémentation.
+- **Vérification** : `use-webrtc-p2p.test.tsx` + `use-call-analytics-reporter.test.tsx` — **58/58 verts**
+  (55 préexistants + 3 neufs). Sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|
+  adaptive-degradation|audio-effect|webrtc-service` — **51 suites / 748 tests verts** (+3 net vs. Vague
+  97), aucune régression. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun
+  install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client && bun run
+  build` sans erreur. `npx tsc --noEmit` sur `apps/web` : **1657 erreurs avant et après le diff** (`git
+  stash`/`stash pop`, comparaison ligne à ligne des deux sorties complètes sur les 3 fichiers touchés) —
+  décalages de NUMÉRO DE LIGNE uniquement sur `use-call-analytics-reporter.ts`/`VideoCallInterface.tsx`
+  (erreurs préexistantes sans rapport : `CALL_ANALYTICS` absent du type `CLIENT_EVENTS` généré dans ce
+  sandbox, `TS2571`/`TS18046` sur des sites `unknown` non liés à ce diff), zéro nouvelle erreur, zéro sur
+  `use-webrtc-p2p.ts` lui-même. Diff strictement scopé à `apps/web` (aucun fichier gateway touché) — suite
+  gateway non rejouée ce cycle, hors du diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié ce cycle
+  hors celui traité) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague
+  84, nécessite confirmation on-device) ; `removeParticipant()` ne nettoie pas
+  `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-régression) ; `call-store.ts`'s
+  `setReconnecting(attempt)`/`isReconnecting` reste un signal mort, jamais invoqué par le flux d'appel
+  (constaté pendant cet audit, hors périmètre — surface store distincte de celle corrigée ici) ;
+  toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; `CALL_ANALYTICS` absent du type
+  généré `CLIENT_EVENTS` dans ce sandbox (préexistant, cause probable : génération de types partagés
+  obsolète localement, non investigué).

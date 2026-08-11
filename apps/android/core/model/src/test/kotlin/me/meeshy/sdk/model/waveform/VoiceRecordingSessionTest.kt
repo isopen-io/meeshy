@@ -1,7 +1,6 @@
-package me.meeshy.app.chat
+package me.meeshy.sdk.model.waveform
 
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.waveform.WaveformLevelWindow
 import org.junit.Test
 
 class VoiceRecordingSessionTest {

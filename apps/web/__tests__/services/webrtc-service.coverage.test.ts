@@ -107,12 +107,26 @@ class FakeRTCPeerConnection {
 // Track / stream factories
 // ---------------------------------------------------------------------------
 
-const makeTrack = (kind: 'audio' | 'video') => ({
-  kind,
-  enabled: true,
-  contentHint: '',
-  stop: jest.fn(),
-});
+let trackIdCounter = 0;
+
+const makeTrack = (kind: 'audio' | 'video'): {
+  kind: 'audio' | 'video';
+  id: string;
+  enabled: boolean;
+  contentHint: string;
+  stop: jest.Mock;
+  clone: jest.Mock;
+} => {
+  const track = {
+    kind,
+    id: `track-${++trackIdCounter}`,
+    enabled: true,
+    contentHint: '',
+    stop: jest.fn(),
+    clone: jest.fn((): ReturnType<typeof makeTrack> => makeTrack(kind)),
+  };
+  return track;
+};
 
 const makeStream = (opts: { audio?: boolean; video?: boolean }) => {
   const tracks: ReturnType<typeof makeTrack>[] = [];
