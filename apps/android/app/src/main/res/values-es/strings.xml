@@ -78,4 +78,12 @@
     <string name="widget_favorite_contacts_title">Favoritos</string>
     <string name="widget_favorite_contacts_description">Acceso rápido a tus contactos favoritos</string>
     <string name="widget_favorite_contacts_empty">Fija una conversación directa para añadir un favorito</string>
+
+    <!-- Widget de pantalla de inicio: respuesta rápida -->
+    <string name="widget_quick_reply_title">Respuesta rápida</string>
+    <string name="widget_quick_reply_description">Responde rápidamente a los mensajes recientes</string>
+    <string name="widget_quick_reply_empty">Abre Meeshy para empezar</string>
+    <string name="widget_quick_reply_ok">OK</string>
+    <string name="widget_quick_reply_thanks">¡Gracias!</string>
+    <string name="widget_quick_reply_call_me">Llámame</string>
 </resources>

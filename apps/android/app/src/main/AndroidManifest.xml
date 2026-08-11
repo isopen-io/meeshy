@@ -141,6 +141,22 @@
                 android:resource="@xml/favorite_contacts_widget_info" />
         </receiver>
 
+        <!-- Home-screen widget: quick reply (feature-parity.md "Home-screen
+             widgets" — fourth sub-slice, after unread-count, recent-conversations
+             and favorite-contacts). Parity target: iOS
+             MeeshyWidgets.QuickReplyWidget. -->
+        <receiver
+            android:name=".widget.QuickReplyWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_quick_reply_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_reply_widget_info" />
+        </receiver>
+
         <!-- WorkManager initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"

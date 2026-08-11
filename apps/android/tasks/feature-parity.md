@@ -5299,8 +5299,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Fondation posée (2026-08-11, slice `chat-composer-prefill-draft`)** : le deep-link
       `meeshy://conversation/{id}?draft={texte}` pré-remplit désormais le composer via
       `ChatViewModel.initialDraft` — débloque un futur Quick Reply RÉELLEMENT fonctionnel (celui
-      d'iOS s'est avéré mort en production, cf. slice `dynamic-launcher-shortcuts`). Reste à
-      livrer : le widget Quick Reply lui-même (Glance, boutons de réponses pré-écrites).
+      d'iOS s'est avéré mort en production, cf. slice `dynamic-launcher-shortcuts`).
+      **Quatrième sous-tranche livrée (2026-08-11, slice `widget-quick-reply`)** :
+      `QuickReplyWidget`, parité avec iOS `MeeshyWidgets.QuickReplyWidget` — même règle de
+      sélection (`premier non-lu, sinon premier`, sur le même ordre pinned-first-then-recency),
+      4 chips de réponse pré-écrite (👍/OK/Merci !/Rappelle-moi, exactement le jeu d'iOS),
+      chaque tap ouvrant la conversation avec la réponse déjà pré-remplie via le deep-link
+      `?draft=` — **réellement fonctionnel, contrairement à son homologue iOS** (confirmé mort en
+      production lors du slice `dynamic-launcher-shortcuts`). Restent : mark-read, tailles/kinds
+      additionnels, push-refresh, badge de présence.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
       **First sub-slice shipped (2026-08-11, slice `dynamic-launcher-shortcuts`)**: dynamic launcher
