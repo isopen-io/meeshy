@@ -116,7 +116,10 @@ extension ConversationAudioCoordinator {
             conversationArtworkURL: context.conversationArtworkURL
         ) ?? ""
         if _nowPlayingArtworkKey == artworkKey, let composed = _nowPlayingArtwork {
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: composed.size) { _ in composed }
+            // `NowPlayingArtwork.makeArtwork` — jamais construire un
+            // `MPMediaItemArtwork` inline ici : son `requestHandler` doit
+            // rester SANS isolation d'acteur (cf. doc au site de définition).
+            info[MPMediaItemPropertyArtwork] = NowPlayingArtwork.makeArtwork(image: composed)
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
             return
         }
@@ -146,7 +149,9 @@ extension ConversationAudioCoordinator {
                 guard self.activeContext?.attachmentId == pinnedAttachmentId,
                       var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo
                 else { return }
-                let artwork = MPMediaItemArtwork(boundsSize: composed.size) { _ in composed }
+                // Idem : passer par la fabrique nonisolated, pas un closure
+                // littéral ici (ce bloc tourne dans `await MainActor.run`).
+                let artwork = NowPlayingArtwork.makeArtwork(image: composed)
                 currentInfo[MPMediaItemPropertyArtwork] = artwork
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
             }

@@ -26502,6 +26502,53 @@
         }
       }
     },
+    "action.media": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الوسائط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medium"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Média"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mídia"
+          }
+        }
+      }
+    },
     "action.more": {
       "extractionState": "manual",
       "localizations": {
@@ -100507,96 +100554,49 @@
         }
       }
     },
-    "message-more.delete_media.confirm.message": {
+    "message-more.media.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن التراجع عن هذا الإجراء."
+            "value": "هذه الوسائط"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Aktion kann nicht rückgängig gemacht werden."
+            "value": "Dieses Medium"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This action cannot be undone."
+            "value": "This media"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta acción es irreversible."
+            "value": "Este archivo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette action est irréversible."
+            "value": "Ce média"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa azione è irreversibile."
+            "value": "Questo media"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta ação é irreversível."
-          }
-        }
-      }
-    },
-    "message-more.delete_media.confirm.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حذف هذه الوسائط؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses Medium löschen?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete this media?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Eliminar este archivo?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer ce média ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eliminare questo media?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Excluir esta mídia?"
+            "value": "Esta mídia"
           }
         }
       }

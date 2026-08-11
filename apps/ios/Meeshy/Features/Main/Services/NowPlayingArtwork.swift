@@ -1,4 +1,5 @@
 import UIKit
+import MediaPlayer
 
 /// Artwork de la carte Now Playing (lock screen / Control Center) pour l'audio
 /// de conversation. Règle produit :
@@ -69,6 +70,28 @@ nonisolated enum NowPlayingArtwork {
             appIcon.draw(in: badgeRect)
             context.cgContext.restoreGState()
         }
+    }
+
+    /// Construit un `MPMediaItemArtwork` dont le `requestHandler` NE PORTE
+    /// AUCUNE isolation d'acteur — crash réel (build 1746, 14/14 crash logs
+    /// locaux identiques) : MediaPlayer.framework invoque ce handler de façon
+    /// paresseuse et asynchrone, depuis SA PROPRE queue série privée (observée
+    /// comme thread `*/accessQueue`, jamais le main thread, jamais via Swift
+    /// Concurrency) — typiquement ~400-900ms après la publication de
+    /// `MPNowPlayingInfoCenter.nowPlayingInfo`, quand il sérialise l'artwork en
+    /// JPEG pour Control Center / lock screen / CarPlay / AirPlay.
+    /// Un closure littéral écrit DIRECTEMENT dans `pushNowPlayingInfo()`
+    /// (méthode d'une classe `@MainActor`, cible compilée avec
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`) hérite de l'isolation
+    /// `@MainActor` par inférence. Swift insère alors un contrôle d'executor
+    /// au runtime (`swift_task_isCurrentExecutorImpl`) qui ÉCHOUE quand
+    /// MediaPlayer l'invoque hors main, et trappe fatalement
+    /// (`dispatch_assert_queue` → EXC_BREAKPOINT/SIGTRAP).
+    /// Construire l'artwork ICI — dans ce `nonisolated enum` — retire toute
+    /// isolation du closure littéral, quel que soit l'appelant : c'est le SEUL
+    /// point de construction autorisé pour un `MPMediaItemArtwork` côté audio.
+    static func makeArtwork(image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }
 
     private static func drawAspectFill(

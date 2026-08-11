@@ -59,7 +59,7 @@ Aucun fichier créé ou modifié en dehors de ces deux répertoires.
 - Consumes: `ControlSet.pip` (rawValue `1 << 12`) et `ControlSet.airplay` (rawValue `1 << 11`) — existent déjà dans l'`OptionSet` (`MeeshyVideoPlayer.swift:50-51`), déjà utilisés par `fullscreenDefault`.
 - Produces: `ControlSet.inlineDefault` contenant désormais `.pip` et `.airplay` — consommé par les Tâches 2 et 5 (tests utilisant `.inlineDefault` comme fixture), et par les 6 call sites app-side (non modifiés, héritage automatique).
 
-- [ ] **Step 1: Écrire les tests RED**
+- [x] **Step 1: Écrire les tests RED**
 
 Dans `packages/MeeshySDK/Tests/MeeshyUITests/Media/MeeshyVideoPlayerControlSetTests.swift`, ajouter après `test_inlineDefault_includesExpand` (ligne 12) :
 
@@ -73,7 +73,7 @@ Dans `packages/MeeshySDK/Tests/MeeshyUITests/Media/MeeshyVideoPlayerControlSetTe
     }
 ```
 
-- [ ] **Step 2: Lancer les tests, vérifier l'échec RED**
+- [x] **Step 2: Lancer les tests, vérifier l'échec RED**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -82,7 +82,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : `test_inlineDefault_includesPip` et `test_inlineDefault_includesAirplay` échouent (FALSE au lieu de TRUE) ; les 4 tests existants restent verts.
 
-- [ ] **Step 3: Implémentation minimale**
+- [x] **Step 3: Implémentation minimale**
 
 Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer.swift`, ligne 55 :
 
@@ -90,11 +90,11 @@ Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer.swift`, ligne 
         public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .pip, .airplay, .speed]
 ```
 
-- [ ] **Step 4: Relancer les tests, vérifier GREEN**
+- [x] **Step 4: Relancer les tests, vérifier GREEN**
 
 Même commande que Step 2. Attendu : 6/6 tests verts.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git status --porcelain apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
@@ -118,7 +118,7 @@ git commit -m "feat(sdk): étendre inlineDefault avec PiP et AirPlay"
 - Consumes: `MeeshyVideoPlayer.ControlSet.inlineDefault` (Task 1, contient `.pip`).
 - Produces: `_InlineOverlayControls.showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool` — appelé par la Tâche 5 (top bar) avec `isPipSupported: AVPictureInPictureController.isPictureInPictureSupported()`.
 
-- [ ] **Step 1: Écrire le test RED**
+- [x] **Step 1: Écrire le test RED**
 
 Créer `packages/MeeshySDK/Tests/MeeshyUITests/Media/MeeshyVideoPlayerInlinePipButtonTests.swift` :
 
@@ -152,7 +152,7 @@ final class MeeshyVideoPlayerInlinePipButtonTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec RED**
+- [x] **Step 2: Lancer le test, vérifier l'échec RED**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -161,7 +161,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : échec de COMPILATION (`showsPipButton` n'existe pas encore sur `_InlineOverlayControls`) — c'est le signal RED attendu pour une fonction pas encore écrite.
 
-- [ ] **Step 3: Implémentation minimale**
+- [x] **Step 3: Implémentation minimale**
 
 Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift`, insérer entre la ligne 31 (`private var progress: Double { ... }`, fin) et la ligne 33 (`var body: some View {`) :
 
@@ -178,11 +178,11 @@ Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift
     }
 ```
 
-- [ ] **Step 4: Relancer le test, vérifier GREEN**
+- [x] **Step 4: Relancer le test, vérifier GREEN**
 
 Même commande que Step 2. Attendu : 3/3 tests verts.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git status --porcelain apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
@@ -205,7 +205,7 @@ git commit -m "feat(sdk): extraire showsPipButton en décision pure testable"
 - Consumes: `MeeshyVideoPlayer.ControlSet.inlineDefault` (Task 1), `MeeshyVideoPlayer.ControlSet.miniDefault` (existant, `[.duration]`, ne contient pas `.pip`).
 - Produces: `_InlineRenderer.surfaceEnablesPip(controls: MeeshyVideoPlayer.ControlSet) -> Bool` — consommé par la Tâche 4 au call site de `MeeshyVideoSurface`.
 
-- [ ] **Step 1: Écrire le test RED**
+- [x] **Step 1: Écrire le test RED**
 
 Créer `packages/MeeshySDK/Tests/MeeshyUITests/Media/MeeshyVideoPlayerSurfaceEnablesPipTests.swift` :
 
@@ -230,7 +230,7 @@ final class MeeshyVideoPlayerSurfaceEnablesPipTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec RED**
+- [x] **Step 2: Lancer le test, vérifier l'échec RED**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -239,7 +239,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : échec de compilation (`surfaceEnablesPip` n'existe pas encore sur `_InlineRenderer`).
 
-- [ ] **Step 3: Implémentation minimale**
+- [x] **Step 3: Implémentation minimale**
 
 Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift`, insérer entre la ligne 365 (fin de `shouldAutoplayOnAppear`) et la ligne 367 (`private func autoplayIfNeeded()`) :
 
@@ -256,11 +256,11 @@ Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swif
     }
 ```
 
-- [ ] **Step 4: Relancer le test, vérifier GREEN**
+- [x] **Step 4: Relancer le test, vérifier GREEN**
 
 Même commande que Step 2. Attendu : 2/2 tests verts.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git status --porcelain apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
@@ -286,7 +286,7 @@ C'est la tâche qui rend le bouton PiP (Tâche 5) réellement fonctionnel — sa
 - Consumes: `_InlineRenderer.surfaceEnablesPip(controls:)` (Task 3), `SharedAVPlayerManager.shared.configurePip(playerLayer: AVPlayerLayer)` (API publique existante, `SharedAVPlayerManager.swift:324`, idempotente via garde d'identité de layer).
 - Produces: `MeeshyVideoSurface.enablesPip: Bool` (défaut `false`) — champ public au sein du module, consommé uniquement par le call site inline modifié ici. `_FlatRenderer` (`MeeshyVideoPlayer+Renderers.swift:21`) et `_FullscreenRenderer` (`:505`) continuent d'appeler `MeeshyVideoSurface(player:gravity:isMuted:)` sans le nouveau paramètre — ils compilent inchangés grâce au défaut, et restent hors PiP (non-régression).
 
-- [ ] **Step 1: Écrire les tests RED (garde de source)**
+- [x] **Step 1: Écrire les tests RED (garde de source)**
 
 Créer `packages/MeeshySDK/Tests/MeeshyUITests/Media/MeeshyVideoSurfaceConfigurePipSourceGuardTests.swift` :
 
@@ -384,7 +384,7 @@ final class MeeshyVideoSurfaceConfigurePipSourceGuardTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer les tests, vérifier l'échec RED**
+- [x] **Step 2: Lancer les tests, vérifier l'échec RED**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -393,7 +393,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : `test_configurePip_hasExactlyTwoCallSites` échoue (0 occurrence actuellement, pas 2) et `test_enablesPip_defaultsToFalse` échoue (le champ n'existe pas). `test_configurePip_onlyCalledUnderEnablesPipGuard` passe trivialement (aucun appel à `configurePip(` dans le fichier actuel, donc aucun offender) — c'est attendu, ce n'est pas ce test qui porte le signal RED ici. Les deux tests de contrôle (`test_guardDetects…`/`test_guardAccepts…`) passent déjà : ils valident le MÉCANISME de la garde, indépendamment de l'état de l'implémentation.
 
-- [ ] **Step 3: Implémentation minimale — `MeeshyVideoSurface.swift`**
+- [x] **Step 3: Implémentation minimale — `MeeshyVideoSurface.swift`**
 
 Remplacer les lignes 13-37 de `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoSurface.swift` :
 
@@ -445,11 +445,11 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
 
 (Le reste du fichier — `sizeThatFits`, `_SurfaceUIView` — reste inchangé.)
 
-- [ ] **Step 4: Relancer les tests, vérifier GREEN**
+- [x] **Step 4: Relancer les tests, vérifier GREEN**
 
 Même commande que Step 2. Attendu : 5/5 tests verts.
 
-- [ ] **Step 5: Câbler le call site inline**
+- [x] **Step 5: Câbler le call site inline**
 
 Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift`, ligne 119, remplacer :
 
@@ -470,7 +470,7 @@ par :
 
 Ce bloc est dans `_InlineRenderer.body` (à l'intérieur du `if isThisActive, let p = manager.player { ... }`), donc `Self.surfaceEnablesPip` résout vers la fonction statique ajoutée en Tâche 3 sur `_InlineRenderer` — source de vérité unique, pas de duplication de la condition `controls.contains(.pip)`.
 
-- [ ] **Step 6: Vérifier la non-régression par build + tests existants**
+- [x] **Step 6: Vérifier la non-régression par build + tests existants**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -481,7 +481,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : tous verts — confirme que `_FlatRenderer`/`_FullscreenRenderer` (qui n'ont pas été modifiés et n'appellent pas `enablesPip`) compilent toujours grâce au défaut, et que `_InlineRenderer` compile avec le nouveau paramètre.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git status --porcelain apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
@@ -506,7 +506,7 @@ git commit -m "feat(sdk): câbler le PiP sur MeeshyVideoSurface via enablesPip"
 
 Pas de nouveau test unitaire dans cette tâche : la logique de branchement (`showsPipButton`) est déjà couverte par la Tâche 2, et le repo ne dispose d'aucune infrastructure de snapshot pour ce lecteur (`§ Tests point 1` de la spec : aucun `__Snapshots__/Media/` n'existe). La vérification de ce rendu SwiftUI se fait par compilation + vérification visuelle manuelle (Tâche 7). C'est le pattern déjà suivi par `§ D` de la spec elle-même (items 4-5 de son plan de tests sont build/visuel, pas des tests unitaires supplémentaires).
 
-- [ ] **Step 1: Remplacer `topBar`**
+- [x] **Step 1: Remplacer `topBar`**
 
 Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift`, remplacer les lignes 74-111 (le bloc de commentaire `// MARK: - Top Bar` + la propriété `topBar`) par :
 
@@ -585,7 +585,7 @@ Notes de fidélité à la spec :
 - Vitesse : `.adaptiveGlass(in: Capsule())` sans `tint`/`interactive` — remplace `Capsule().fill(accent)`, comportement (`cycleSpeed()`, label) inchangé (§ B point 4).
 - Icônes PiP (`pip.enter`/`pip.exit`) et libellés localisés réutilisent EXACTEMENT les clés déjà utilisées par `VideoTransportControls.moreMenu` (`VideoTransportControls.swift:188-193`) — pas de nouvelle chaîne à localiser.
 
-- [ ] **Step 2: Build pour vérifier la compilation**
+- [x] **Step 2: Build pour vérifier la compilation**
 
 ```bash
 xcodebuild build -scheme MeeshySDK-Package \
@@ -593,7 +593,7 @@ xcodebuild build -scheme MeeshySDK-Package \
 ```
 Attendu : build vert, aucune erreur de type/signature.
 
-- [ ] **Step 3: Relancer la suite Media complète pour non-régression**
+- [x] **Step 3: Relancer la suite Media complète pour non-régression**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -604,7 +604,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : tous verts.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git status --porcelain apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
@@ -627,7 +627,7 @@ git commit -m "feat(sdk): refondre la top bar inline en AdaptiveGlassContainer 4
 
 Comme la Tâche 5, aucun nouveau test unitaire : changement de styling pur, vérifié par build + vérification visuelle (Tâche 7).
 
-- [ ] **Step 1: Remplacer le bloc centre**
+- [x] **Step 1: Remplacer le bloc centre**
 
 Dans `packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift`, remplacer les lignes 113-164 (commentaire `// MARK: - Center Controls` + `centerControls` + `skipButton` + `playPauseButton`, JUSQU'À la ligne juste avant `playPauseIcon`) par :
 
@@ -701,7 +701,7 @@ Notes de fidélité à la spec :
 - Play/pause : `.adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))` — opacité `0.85` reprise de `VideoTransportControls.swift:106`, PAS `accent` nu (§ C point 2). Le `.shadow` manuel disparaît : `adaptiveGlassProminentFallback` porte déjà `shadow(radius: 8, y: 4)` (`AdaptiveGlass.swift:98`).
 - Tailles 36/54 INCHANGÉES (§ C, en-tête).
 
-- [ ] **Step 2: Build pour vérifier la compilation**
+- [x] **Step 2: Build pour vérifier la compilation**
 
 ```bash
 xcodebuild build -scheme MeeshySDK-Package \
@@ -709,7 +709,7 @@ xcodebuild build -scheme MeeshySDK-Package \
 ```
 Attendu : build vert.
 
-- [ ] **Step 3: Relancer la suite Media complète pour non-régression**
+- [x] **Step 3: Relancer la suite Media complète pour non-régression**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package \
@@ -724,7 +724,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 ```
 Attendu : tous verts — c'est la passe de régression complète sur tout ce que ce chantier touche ou frôle.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git status --porcelain apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
@@ -740,30 +740,53 @@ git commit -m "feat(sdk): migrer les contrôles centraux inline vers adaptiveGla
 
 Aucun code ne change dans cette tâche : c'est une vérification manuelle documentée, requise avant le gate final. **Rappel : le bouton PiP n'apparaîtra jamais en simulateur** (`AVPictureInPictureController.isPictureInPictureSupported()` y est toujours `false`) — 3 boutons visibles (plein écran, AirPlay, vitesse) est le résultat CORRECT sur les deux appareils, pas un échec.
 
-- [ ] **Step 1: Localiser le simulateur iPhone SE**
+- [x] **Step 1: Localiser le simulateur iPhone SE**
 
 ```bash
 xcrun simctl list devices available | grep -i "iPhone SE"
 ```
 Relever l'UDID retourné (nom attendu : « iPhone SE (3rd generation) » ou équivalent selon les runtimes installés).
 
-- [ ] **Step 2: Vérification sur iPhone 16 Pro (UDID `30BFD3A6-C80B-489D-825E-5D14D6FCCAB5`)**
+- [x] **Step 2: Vérification sur iPhone 16 Pro (UDID `30BFD3A6-C80B-489D-825E-5D14D6FCCAB5`)**
 
 ```bash
-xcrun simctl shutdown all 2>/dev/null || true
+# Shutdown CIBLÉ sur le seul autre simulateur de ce plan (l'iPhone SE).
+# Ne JAMAIS `xcrun simctl shutdown all` : d'autres sessions/worktrees font
+# tourner leurs propres simulateurs sur la même machine (p. ex.
+# `meeshy-scrollmorph-16pro`, `meeshy-scrollmorph-se`) et `all` les casse.
+xcrun simctl shutdown <SE_UDID_relevé_Step_1> 2>/dev/null || true
 xcrun simctl boot 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5
 open -a Simulator
 ./apps/ios/meeshy.sh build
 ./apps/ios/meeshy.sh run
 ```
+`detect_simulator` (meeshy.sh) prend le PREMIER simulateur booté dont le nom
+contient « iPhone » : shutdown ciblé de l'iPhone SE = garantie que `run` vise
+bien le 16 Pro, sans toucher aux simulateurs des autres sessions (leurs noms
+`meeshy-*` ne matchent pas « iPhone »).
+
 Dans l'app : ouvrir une conversation (ou le feed) contenant une bulle vidéo, taper pour lancer la lecture, laisser les contrôles visibles (dans les 3s après lancement).
+
+**Positionner la bulle AVANT de capturer.** Une bulle vidéo portrait 9:16 fait
+~534pt de haut : ouverte au bas d'une conversation, son BORD SUPÉRIEUR est
+au-dessus du viewport (mesuré : `y = -178pt` sur SE, `y = -40pt` sur 16 Pro) et
+la top bar est donc hors champ. Faire défiler vers le HAUT (swipe lent vers le
+bas, `idb ui swipe --duration 2.5 <x> 150 <x> 450`) jusqu'à ce que le haut de la
+vidéo passe SOUS l'en-tête flottant (viser `y ≈ 110-150pt`), vérifiable sans
+capture via :
+
+```bash
+idb ui describe-all --udid <UDID> | python3 -c "import json,sys;[print(e['AXLabel'],e['frame']) for e in json.load(sys.stdin) if 'vidéo' in str(e.get('AXLabel'))]"
+```
+Le contenu EST défilable — si un swipe ne bouge pas la frame, c'est le geste
+qui a échoué (vitesse/coordonnées), pas un défaut d'ancrage de la vue.
 
 ```bash
 xcrun simctl io 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5 screenshot /tmp/inline-video-16pro.png
 ```
 Vérifier sur la capture : top bar avec 3 boutons circulaires 28×28 (plein écran, AirPlay, capsule vitesse) sans troncature ni chevauchement ; centre skip/play/skip avec effet verre visible (fond `.ultraThinMaterial` translucide sur iOS < 26, ou `glassEffect` réel sur iOS 26+) ; pas de bouton PiP.
 
-- [ ] **Step 3: Vérification sur iPhone SE**
+- [x] **Step 3: Vérification sur iPhone SE**
 
 ```bash
 ./apps/ios/meeshy.sh stop
@@ -779,13 +802,75 @@ xcrun simctl io <SE_UDID> screenshot /tmp/inline-video-se.png
 ```
 Vérifier sur la capture (375pt de large — le plus étroit du parc) : les 4 boutons potentiels (budget calculé 142pt, § B) tiennent toujours sans troncature sur la largeur de la bulle vidéo, même avec seulement 3 visibles ici. Si un écart apparaît, la piste de correction par défaut documentée dans la spec (§ Non-régression) est de RÉDUIRE l'espacement entre boutons (actuellement 10) — jamais de retirer un item sans le rendre accessible ailleurs.
 
-- [ ] **Step 4: Arrêter les simulateurs**
+- [x] **Step 4: Arrêter les simulateurs**
 
 ```bash
 ./apps/ios/meeshy.sh stop
 ```
 
-Aucun commit pour cette tâche (aucun fichier modifié).
+Aucun commit de CODE pour cette tâche (aucun fichier source modifié) — seul ce
+plan est mis à jour (cases cochées + journal ci-dessous).
+
+### Journal de vérification (exécuté le 2026-08-11, 23:19 → 23:40)
+
+**Piège rencontré — RÉINSTALLER avant de conclure.** Une première passe a
+conclu « seulement 2 boutons, pas d'AirPlay » sur iPhone SE : le binaire
+installé sur ce simulateur datait d'AVANT la Tâche 1 (`inlineDefault` sans
+`.airplay`). Après `./apps/ios/meeshy.sh run` (build + install + launch) sur le
+SE, AirPlay apparaît. **Toujours réinstaller le build courant sur CHAQUE
+simulateur avant d'interpréter une absence de bouton** — un simulateur déjà
+« ouvert sur la bonne conversation » est très probablement porteur d'un binaire
+périmé.
+
+**Step 2 — iPhone 16 Pro (`30BFD3A6-…`, iOS 18.2, 402×874pt).** Conversation
+Belva Tano, bulle vidéo portrait 300×534pt remontée à `y = 150pt` par swipe
+lent, tap sur play. Constaté sur capture : top bar de **3 contrôles** —
+plein écran (cercle verre 28×28, `x ≈ 188,3 → 214`), AirPlay (glyphe nu, sans
+chrome verre, cadre `x ≈ 224,5 → 252,5`), capsule vitesse `1×`
+(`x ≈ 263,7 → 292,7`) — **aucun bouton PiP**, écarts mesurés 10,5pt et 11,2pt
+(= `spacing: 10` + antialiasing), cluster de **104,4pt** centré à `x = 240,5`
+sur une vidéo de 300pt centrée à `239,8`. **Ni troncature ni chevauchement.**
+Centre skip/play/skip en verre translucide, bottom bar seek + `0:01 / 0:06`
+intacte.
+
+**Step 3 — iPhone SE 3 (`F8D4F456-…`, iOS 18.2, 375×667pt — le plus étroit).**
+Même conversation, bulle 300×534pt remontée à `y = 112pt`. Constaté : mêmes
+**3 contrôles**, plein écran `x ≈ 160,8 → 188,3`, AirPlay `x ≈ 202,5 → 222,5`
+(cadre `198,3 → 226,3`), capsule `x ≈ 235,8 → 266,7` ; cluster **105,9pt**
+centré à `213,75` sur une vidéo centrée à `213`. Le budget § B (142pt avec les
+4 boutons, PiP compris) tient donc largement dans les 300pt de la bulle, y
+compris sur 375pt de large. **Ni troncature ni chevauchement, pas de PiP.**
+
+**Bonus — chemin iOS 26 réellement exercé** (hors périmètre du plan, gratuit) :
+simulateur `Meeshy-iOS26` (`C295B364-…`, iPhone 16 Pro sous **iOS 26.1**),
+build courant installé, post vidéo du feed (`FeedPostCard+Media.swift:427`,
+même `.inlineDefault`). Les 3 mêmes contrôles s'affichent avec le VRAI Liquid
+Glass (`GlassEffectContainer` + `glassEffect`, liseré spéculaire et réfraction
+visibles, très distinct du repli `.ultraThinMaterial` d'iOS 18.2), play/pause
+en `adaptiveGlassProminent` teinté accent. Sans cette passe, `AdaptiveGlassContainer`
+n'aurait jamais rendu autre chose qu'un pass-through (`AdaptiveGlass.swift:126-129`).
+
+**Réfutation d'une cause racine erronée.** Une note antérieure affirmait que le
+défaut de visibilité de la top bar venait d'un ancrage/clipping et qu'« aucun
+défilement supplémentaire vers le haut n'est possible ». C'est faux : un swipe
+lent déplace la frame de la bulle de `y = -178pt` à `y = +454pt` sur SE. Le
+contenu est plus haut que le viewport, donc défilable par construction ; les
+premiers swipes avaient simplement échoué (vitesse/coordonnées). **Aucun
+problème produit d'accessibilité de la top bar n'est ouvert.**
+
+**Bandeaux « Message not sent / Reaction not sent » visibles sur les captures.**
+Ce sont des RÉSIDUS DE FIXTURES XCTest, pas des écritures de cette session :
+`meeshy_messages.sqlite` (App Group du simulateur 16 Pro) contient 18 lignes
+`outbox`, **toutes en `status = exhausted`** (donc jamais rejouées), sur des
+`conversationId` de test — `000000000000000000000001`, `_global`, `non-existent`,
+`offline-replay`, `pin-expired`, `pin-wiring`, `rich`, `story-0`, `view-me`.
+Aucune ne vise une conversation réelle. Purger avec
+`xcrun simctl erase <UDID>` si le bandeau gêne une capture.
+
+**Point de méthode** : cette vérification a tourné sur des données de
+PRODUCTION avec un compte réel (aucun compte de démo disponible —
+`apps/ios/fastlane/.env` est absent du worktree). Pour toute navigation
+automatisée à taps approximatifs, préférer un compte de démo/staging.
 
 ---
 

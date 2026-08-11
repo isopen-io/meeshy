@@ -9,7 +9,7 @@ enum PrimaryAction: String, Equatable {
 /// `.language` n'apparaît jamais dans `moreSections` — il sert uniquement
 /// d'ancre de navigation directe (action primaire « Traduire »).
 enum MoreItem: String, Equatable {
-    case reply, forward, thread, deleteMedia
+    case reply, forward, thread, media
     /// Actions sorties du menu compact (`primaryActions`) et routées vers
     /// « Plus… » : épingler/favori (toggles) + suppression du message.
     case pin, unpin, star, unstar, delete
@@ -89,7 +89,7 @@ enum MessageActionResolver {
         actions.append(.share)
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
-        if ctx.canDelete && ctx.hasMedia { actions.append(.deleteMedia) }
+        if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
 
