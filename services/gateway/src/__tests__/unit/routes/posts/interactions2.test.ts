@@ -122,6 +122,11 @@ function makePrisma() {
       findFirst: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
       }),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine des
+      // impressions (chantier reposts cohérents, tâche 1) — par défaut aucun
+      // repost dans le batch/unitaire.
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   } as any;
 }

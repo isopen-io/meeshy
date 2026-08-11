@@ -41,6 +41,10 @@ const POST_ID = '507f1f77bcf86cd799439011';
 
 const impressionCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({});
 const postUpdate = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({});
+// Résolution repostOfId/originalRepostOfId pour le crédit de racine (chantier
+// reposts cohérents, tâche 1) — `null` par défaut : aucun de ces tests ne
+// porte sur un repost, comportement inchangé.
+const postFindUnique = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(null);
 
 const buildAuthMiddleware = (userId?: string) =>
   (req: any, _reply: unknown, done: () => void) => {
@@ -54,7 +58,7 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     postImpression: { create: impressionCreate },
-    post: { update: postUpdate },
+    post: { update: postUpdate, findUnique: postFindUnique },
   } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
