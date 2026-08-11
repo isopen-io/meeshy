@@ -1,5 +1,67 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **chat-composer prefill-draft mechanism landed** (slice
+> `chat-composer-prefill-draft`, feature-parity §"Home-screen widgets" — picked from the prior
+> slice's own explicit "Next slice candidates" list: unlocking a genuinely working Quick Reply
+> widget, since iOS's own is confirmed dead — a real opportunity to EXCEED iOS parity, not just
+> match it). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open --search
+> "apps/android OR apps/ios"` found no interrupted run of this routine — the sole open PR
+> (`#2851`) is an unrelated concurrent `apps/web` session. Also considered `LanguagePickerDialog`
+> consolidation (3 near-identical pickers) as a candidate this run, but discarded it after reading
+> both existing dialogs (`RegionalLanguageDialog`/`ComposerLanguagePickerDialog`) in full: each is
+> backed by a DIFFERENT pure filter source (`RegionalLanguageSelection`/`LanguageStepSelection`),
+> so a shared extraction would only unify the `@Composable` shell — pure UI glue, exempt from
+> `TDD-COVERAGE.md`, meaning the slice would ship with genuinely zero new unit tests (the same
+> disqualifying reason `mark-read` was deprioritized two runs ago). **Shipped (production, all
+> `apps/android`)**: `ChatViewModel` gains an optional `DRAFT_ARG` (`"draft"`) nav argument —
+> `initialDraft` reads it from `SavedStateHandle`, decodes it (`java.net.URLDecoder`, NOT
+> `android.net.Uri.decode` — see `NOTES.md` for why), and seeds the composer's INITIAL `_state`
+> value directly. **Zero new precedence logic needed**: the already-existing, already-tested
+> `DraftAutosave.restore(stored, currentDraft, isEditing)` guard (`currentDraft.isNotBlank() ->
+> null`, i.e. "never clobber a non-empty composer") already refuses to overwrite a seeded value —
+> a nav-arg-provided draft naturally wins over a stale persisted one with no new decision branch,
+> reusing the existing SSOT exactly as designed rather than adding a parallel precedence rule.
+> New deep-link pattern `Routes.CONVERSATION_DRAFT_DEEP_LINK`
+> (`meeshy://conversation/{id}?draft={draft}`) added alongside (not replacing) the 4 existing
+> conversation deep links — a genuinely new shape for this codebase (first `?query={arg}` deep
+> link pattern; the `navArgument(... nullable = true; defaultValue = null)` optional-arg mechanism
+> itself is an established precedent, e.g. `CallRoute`'s own optional args). **+6 new tests**
+> (`ChatViewModelTest`: seeds the composer immediately from the nav arg; a nav-arg draft takes
+> priority over a stale persisted draft; a blank/absent nav arg never blocks the persisted-draft
+> restore, matches the existing `a_stored_reply_draft_re_arms_the_reply_when_the_conversation_
+> opens` regression baseline unchanged; a percent-encoded arg decodes correctly; a malformed
+> percent sequence — e.g. a literal `%` with no following hex digits — falls back to the raw text
+> instead of crashing, a real robustness concern since this text ultimately originates from an
+> external, not-fully-trusted URI). **Mutation-proven**, two axes: neutralizing the seed
+> (`draft = initialDraft.orEmpty()` → `draft = ""`) fails **exactly** the 3 seeding-focused tests
+> (8 others green); neutralizing the decode call (`URLDecoder.decode(...)` → the raw undecoded
+> string) fails **exactly** the percent-encoding test (10 others green). Both applied via a
+> scratch `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the
+> backup afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970
+> tasks, matching every prior slice — no build-graph regression; zero test failures across every
+> module's XML reports). Reviewer **PASS** (diff `apps/android` only, confirmed via `git status
+> --short` — `MeeshyApp.kt` + `ChatViewModel.kt` + its test, 3 files; SDK purity — N/A here, this
+> is app-side navigation/ViewModel wiring, correctly in `:app`/`:feature:chat`, no SDK boundary
+> crossed; SSOT — reuses `DraftAutosave.restore`'s existing idle guard verbatim, zero
+> re-implementation of precedence logic; no coverage floor lowered; no tautological tests). **Not
+> attempted this run** (compile+test-only per the local JVM gate; the new `?draft=` deep-link
+> QUERY PARAM pattern itself — as opposed to the ViewModel-level wiring, which IS unit tested — has
+> no local precedent in this codebase and was not on-device verified; a future run should
+> install-and-verify that tapping a real `meeshy://conversation/{id}?draft=...` URI actually seeds
+> the composer, not just that the ViewModel behaves correctly given a populated `SavedStateHandle`).
+> **Next slice candidates (not attempted this run)**: the Quick Reply widget itself (Glance, canned
+> reply chips — 👍/OK/Thanks!/Call me, mirroring iOS's OWN button set even though iOS's wiring is
+> dead — deep-linking via the now-real `CONVERSATION_DRAFT_DEEP_LINK`, prefilling but NOT
+> auto-sending, matching the "opens the conversation with the reply ready to confirm" posture
+> rather than a blind background send from a cold widget process); Google Assistant App Actions
+> (`shortcuts.xml`) for the voice-triggered half of the shortcuts epic — needs external Assistant
+> indexing/review, still a larger, non-locally-verifiable follow-up; the mark-read widget action
+> (still deprioritized — thin glue, low test value); a presence-cache foundation for conversation
+> participants; on-device transcription for the Feed audio composer; Voice-cloning onboarding
+> wizard; map/search/reverse-geocoding for the location attachment; PiP (calls + media) — per the
+> orchestrator's guidance this remains a documented, real, multi-slice-epic gap warranting a
+> planning/decomposition pass rather than a bare re-grep.
+
 > On 2026-08-11 **dynamic launcher shortcuts landed** (slice `dynamic-launcher-shortcuts`,
 > feature-parity §"App Actions / dynamic shortcuts" — the prior widget slice's own "Quick reply
 > widget" candidate was investigated first and DISQUALIFIED this run, see below; this slice was

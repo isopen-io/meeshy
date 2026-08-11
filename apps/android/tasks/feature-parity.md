@@ -5296,6 +5296,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ne porte aucun champ `isOnline`/`lastActiveAt` côté Android (contrairement à
       `MeeshyConversation.lastSeenText` sur iOS) — un vrai gap documenté, pas un oubli. Restent :
       quick reply, mark-read, tailles/kinds additionnels, push-refresh, badge de présence.
+      **Fondation posée (2026-08-11, slice `chat-composer-prefill-draft`)** : le deep-link
+      `meeshy://conversation/{id}?draft={texte}` pré-remplit désormais le composer via
+      `ChatViewModel.initialDraft` — débloque un futur Quick Reply RÉELLEMENT fonctionnel (celui
+      d'iOS s'est avéré mort en production, cf. slice `dynamic-launcher-shortcuts`). Reste à
+      livrer : le widget Quick Reply lui-même (Glance, boutons de réponses pré-écrites).
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
       **First sub-slice shipped (2026-08-11, slice `dynamic-launcher-shortcuts`)**: dynamic launcher
