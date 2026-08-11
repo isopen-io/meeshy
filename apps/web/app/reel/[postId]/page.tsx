@@ -225,12 +225,9 @@ export default function ReelPage() {
     [current, repostMutation, toastCtx, t],
   );
 
-  const onDownload = useCallback(
-    (mediaId: string) => {
-      if (current) postsService.recordMediaDownloads(current.id, [mediaId], 'reel');
-    },
-    [current],
-  );
+  const onDownload = useCallback((mediaId: string, owningPostId: string) => {
+    postsService.recordMediaDownloads(owningPostId, [mediaId], 'reel');
+  }, []);
 
   if (current) {
     return (

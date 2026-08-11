@@ -6,7 +6,7 @@
  * `post.repostOf` for media, caption and displayed counters, mirroring the
  * iOS `primaryReelDisplayMedia` fallback (ReelFeedCard.swift:118-145).
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import type { Post } from '@meeshy/shared/types/post';
 
@@ -180,5 +180,60 @@ describe('ReelPlayer — reposted reel', () => {
     expect(screen.getByLabelText('Like')).toHaveTextContent('5');
     expect(screen.getByLabelText('Comment')).toHaveTextContent('2');
     expect(container.querySelector('video')).toHaveAttribute('src', 'https://example.com/own.mp4');
+  });
+});
+
+describe('ReelPlayer — repost-aware download telemetry', () => {
+  function renderWithDownload(reel: Post, onDownload: (mediaId: string, owningPostId: string) => void) {
+    return render(
+      <ReelPlayer
+        reel={reel}
+        index={0}
+        total={1}
+        hasPrev={false}
+        hasNext={false}
+        isLiked={false}
+        isBookmarked={false}
+        onPrev={noop}
+        onNext={noop}
+        onClose={noop}
+        onLike={noop}
+        onComment={noop}
+        onShare={noop}
+        onBookmark={noop}
+        onDownload={onDownload}
+      />
+    );
+  }
+
+  it('credits the download to the original post when the reel is a repost', () => {
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const reel = makePost({
+      repostOf: makeRepostOf({
+        id: 'original-1',
+        media: [{ id: 'orig-media-1', mimeType: 'video/mp4', fileUrl: 'https://example.com/original.mp4', order: 0 }],
+      }),
+    });
+    const onDownload = jest.fn();
+    renderWithDownload(reel, onDownload);
+
+    fireEvent.click(screen.getByLabelText('Download'));
+
+    expect(onDownload).toHaveBeenCalledWith('orig-media-1', 'original-1');
+    clickSpy.mockRestore();
+  });
+
+  it('credits the download to the reel itself for a normal (non-reposted) reel', () => {
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const reel = makePost({
+      media: [{ id: 'own-media', mimeType: 'video/mp4', fileUrl: 'https://example.com/own.mp4', order: 0 }],
+    });
+    const onDownload = jest.fn();
+    renderWithDownload(reel, onDownload);
+
+    fireEvent.click(screen.getByLabelText('Download'));
+
+    expect(onDownload).toHaveBeenCalledWith('own-media', 'repost-1');
+    clickSpy.mockRestore();
   });
 });

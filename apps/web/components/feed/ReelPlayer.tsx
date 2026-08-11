@@ -77,17 +77,21 @@ function resolveDisplayCaption(post: Post, userLanguage?: string): string {
  * ephemeral types (STORY/STATUS) into `repostOf`, a REEL repost stays a bare
  * pointer. Falls back to the original's media, mirroring iOS
  * `primaryReelDisplayMedia` (ReelFeedCard.swift:118-145).
+ *
+ * `ownerId` is the id of whichever post the returned media rows actually
+ * belong to server-side (`PostMedia.postId`) — the gateway's download
+ * endpoint filters `postMedia.findMany({ id in [...], postId })`, so any
+ * caller crediting a download MUST use this id, never the displayed reel's
+ * id, or the original's media rows never match and the ping silently
+ * records zero. Media and owner are resolved together so they can never
+ * diverge.
  */
-function reelDisplayMedia(post: Post): readonly PostMedia[] {
-  if (post.media && post.media.length > 0) return post.media;
-  return post.repostOf?.media ?? [];
-}
-
-function firstVideo(post: Post) {
-  return reelDisplayMedia(post).find((m) => m.mimeType.startsWith('video/'));
-}
-function firstImage(post: Post) {
-  return reelDisplayMedia(post).find((m) => m.mimeType.startsWith('image/'));
+function resolveReelMedia(post: Post): { media: readonly PostMedia[]; ownerId: string } {
+  if (post.media && post.media.length > 0) return { media: post.media, ownerId: post.id };
+  if (post.repostOf?.media && post.repostOf.media.length > 0) {
+    return { media: post.repostOf.media, ownerId: post.repostOf.id ?? post.id };
+  }
+  return { media: post.media ?? [], ownerId: post.id };
 }
 
 /** Displayed counters mirror the original's when it's a repost (Task 2 parity). */
@@ -159,7 +163,10 @@ export interface ReelPlayerProps {
   onBookmark: () => void;
   onReport?: () => void;
   onRepost?: () => void;
-  onDownload?: (mediaId: string) => void;
+  /** `owningPostId` is the post the downloaded media actually belongs to
+   *  server-side — the displayed reel's id for its own media, the
+   *  original's id when the media was resolved from `repostOf`. */
+  onDownload?: (mediaId: string, owningPostId: string) => void;
 }
 
 /**
@@ -195,8 +202,9 @@ export function ReelPlayer({
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
 
-  const video = firstVideo(reel);
-  const image = firstImage(reel);
+  const { media: reelMedia, ownerId: reelMediaOwnerId } = resolveReelMedia(reel);
+  const video = reelMedia.find((m) => m.mimeType.startsWith('video/'));
+  const image = reelMedia.find((m) => m.mimeType.startsWith('image/'));
   const downloadTarget = video ?? image;
   const name = authorName(reel);
   const caption = resolveDisplayCaption(reel, userLanguage);
@@ -389,7 +397,7 @@ export function ReelPlayer({
               onClick={(e) => {
                 e.stopPropagation();
                 triggerMediaDownload(downloadTarget.fileUrl, downloadFileName(downloadTarget));
-                onDownload(downloadTarget.id);
+                onDownload(downloadTarget.id, reelMediaOwnerId);
               }}
             >
               <Download className="h-6 w-6" />
