@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=contacts-mood-emoji-presence
+lane=ANDROID android_streak=2 last_run=widget-unread-count-scaffold
