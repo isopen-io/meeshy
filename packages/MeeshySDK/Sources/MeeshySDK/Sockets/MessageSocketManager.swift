@@ -601,14 +601,16 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         // tous deux en `nil`, et ce sont précisément les deux états que le
         // correctif doit séparer — un `null` reçu périme la carte, une clé
         // absente ne doit rien toucher.
-        let carriesPrisme = container.contains(.lastMessageTranslations)
-            || container.contains(.lastMessageOriginalLanguage)
-        lastMessagePrisme = carriesPrisme
-            ? LastMessagePrisme(
-                translations: try container.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations),
-                originalLanguage: try container.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
+        if container.contains(.lastMessageTranslations) || container.contains(.lastMessageOriginalLanguage) {
+            let previewTranslations = try container.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
+            let previewOriginalLanguage = try container.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
+            lastMessagePrisme = LastMessagePrisme(
+                translations: previewTranslations,
+                originalLanguage: previewOriginalLanguage
             )
-            : nil
+        } else {
+            lastMessagePrisme = nil
+        }
     }
 
     public init(
