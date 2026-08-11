@@ -1,3 +1,143 @@
+# Cycle 66 — Le chemin socket avait sa propre copie du sérialiseur de traductions
+
+## Contrainte d'environnement (identique aux cycles 61/63/64/65)
+
+Même conteneur Linux distant. Ni macOS ni Xcode : aucun Swift compilable ici (`swift: command not
+found`). `tasks/lane-cursor.md` dit toujours `lane=ANDROID`, et la lane Android reste
+matériellement impossible (`dl.google.com` refusé au CONNECT → pas de `sdkmanager`, donc pas de
+`./apps/android/meeshy.sh check`). **`tasks/lane-cursor.md` n'a donc PAS été touché.**
+
+Ce cycle a pris la tête de backlog nommée **explicitement par le cycle 65** — sur la lane gatable
+ici, gateway.
+
+## Reprise du cycle 65 avant toute chose
+
+La PR #2789 (cycle 65) était restée **ouverte** : la session précédente s'est terminée pendant
+l'attente de son gate `sdk-tests` (~50 min de build Swift sur macOS). Motif déjà documenté dans
+`tasks/android-parity-ios-debt-agent-prompt.md` — travail complet, finalisation en suspens. Reprise
+et menée au merge avant d'ouvrir ce cycle, conformément au protocole.
+
+## Le défaut
+
+`MessageHandler._parseTranslations` portait une **seconde copie** du sérialiseur de traductions,
+divergente de la seule référence : `transformTranslationsToArray`, qu'utilise le chemin REST/ZMQ
+(`MeeshySocketIOManager._broadcastNewMessage`, `:1990`, et `broadcastMessageEdited`, `:2334`).
+
+Là où la référence produit `id` / `messageId` / `translatedContent`, cette copie répandait l'entrée
+Mongo telle quelle :
+
+```ts
+Object.entries(translations).map(([lang, data]) => ({ targetLanguage: lang, ...data }))
+```
+
+Il en sortait `text`, jamais `translatedContent`, et **ni `id` ni `messageId`**. Les trois sont NON
+optionnels dans `APITextTranslation` (`packages/MeeshySDK/.../MessageModels.swift:300-308`), et
+`APIMessage.init(from:)` décode le tableau avec `try` et non `try?` (`:521`) : une seule entrée mal
+formée fait échouer le décodage du `message:new` **ENTIER**. Le message n'apparaîtrait pas du tout
+en temps réel sur iOS — il ne lui manquerait pas seulement ses traductions — alors que le même
+message rechargé par `GET /messages` s'affiche normalement.
+
+## La portée a été TRACÉE, pas supposée — et elle nuance le défaut
+
+Le cycle 65 annonçait ce point comme « latent aujourd'hui, non théorique ». Vérifié
+exhaustivement avant d'écrire une ligne, la formule exacte est plus précise, et plus intéressante :
+
+**Latent, à UNE garde près.**
+
+Les deux seuls appelants de production de `broadcastNewMessage` (`MessageHandler.ts:355` et `:580`)
+reçoivent un résultat `include` de Prisma dont `translations` vaut `null` sur une création fraîche
+(`MessageProcessor.saveMessage` `:393-478` ne pose jamais la clé `translations` dans `messageData`).
+La carte peuplée n'atteint donc PAS le sérialiseur aujourd'hui.
+
+Mais les deux objets du système qui portent une carte Mongo **peuplée** existent bien, et passent à
+une ligne de là :
+
+| Objet | Origine | Ce qui l'écarte |
+|---|---|---|
+| doublon séquentiel | `MessagingService.ts:137-183`, `findFirst` + `include` après que le traducteur a tourné | `isDuplicate = true` (`:170`) |
+| doublon concurrent P2002 | `MessageProcessor.ts:481-553`, idem | `isDuplicate = true` (`:547`) |
+
+Les deux gardes sont la même ligne, dupliquée : `!(response.data as {isDuplicate?}).isDuplicate`
+(`MessageHandler.ts:352` et `:577`). Le drapeau ne survit que parce que **deux `spread`** le
+transportent (`MessageProcessor.ts:616`, `MessagingService.ts:490`). Remplacer l'un des deux par une
+liste de champs explicite, ou sérialiser la réponse quelque part, suffirait à rendre le défaut
+vivant — sans que rien ne le signale, puisque le symptôme est un message **absent**, pas une erreur.
+
+**Rayon d'action : une ligne.** C'est ce qui justifie de fermer la divergence en supprimant la
+copie, plutôt que de s'en remettre à la garde.
+
+## Ce que le traçage a AUSSI écarté
+
+Quatre hypothèses de reachability, toutes testées et toutes fausses — notées pour qu'un cycle futur
+ne les repose pas :
+
+- **Le transfert ne recopie pas la carte.** `messageData` (`MessageProcessor.ts:393-418`) n'a pas de
+  clé `translations` ; un message transféré part de `null` et est retraduit. Seul
+  `MessageAttachment.translations` est recopié (`:697`) — autre colonne, autre modèle.
+- **Aucun chemin ZMQ ne re-broadcaste par ici.** La complétion de traduction écrit en base
+  (`MessageTranslationService.ts:728`) puis émet `MESSAGE_TRANSLATION` (`MeeshySocketIOManager.ts:1504`),
+  jamais un `message:new`.
+- **L'édition n'y passe pas non plus.** `handleMessageEdit` émet `MESSAGE_EDITED` avec un
+  `translations: []` en dur (`MessageHandler.ts:871`) ; son jumeau manager utilise le bon
+  transformateur (`:2334`).
+- **`MeeshySocketIOManager` ne délègue PAS à `MessageHandler.broadcastNewMessage`.** Le commentaire
+  `MessageHandler.ts:1547` (« qui délègue ici ») induit en erreur : la délégation réelle ne porte que
+  sur `autoDeliverToOnlineRecipients`.
+
+## Correctif
+
+`_parseTranslations` délègue à `transformTranslationsToArray` — **la seconde copie disparaît**,
+conformément au principe de source unique de vérité. Elle prend `messageId` en premier argument (les
+`id`/`messageId` synthétiques en dépendent), fourni par les deux sites de `_getMessageTranslations`.
+
+Deux invariants conservés délibérément :
+
+- **Un tableau déjà au format API passe intact.** C'est ce que promet le type partagé
+  `Message.translations` (`message-types.ts:211`, `readonly MessageTranslation[]`) ; le
+  re-transformer produirait `targetLanguage: "0"`, les clés d'un tableau étant ses index.
+- **Les entrées inexploitables de la carte sont ÉCARTÉES** (valeur nulle, primitive, `text` non
+  textuel — une colonne `Json` n'a pas de schéma pour l'interdire). Les émettre mutilées recréerait
+  exactement le défaut corrigé. Les filtrer ICI plutôt que de laisser `transformTranslationsToArray`
+  déréférencer `null` garde en plus les traductions VALIDES de la même carte : un `throw` remonterait
+  au `.catch(() => [])` de l'appelant (`MessageHandler.ts:1107`) et les perdrait **toutes**.
+
+## Tests
+
+**5 témoins neufs** (`MessageHandler.test.ts`), RED observé avant implémentation — le fil sortait
+bien `{ createdAt, targetLanguage: 'es', text: 'Hola', translationModel: 'premium' }`, sans `id`,
+`messageId` ni `translatedContent`. Ils verrouillent **la forme du fil, pas l'implémentation** : ils
+passent avec n'importe quel sérialiseur respectant le contrat REST. Couvrent la carte portée par le
+message, la carte relue en base, `isEncrypted` explicite à `false`, le tableau déjà transformé laissé
+intact, et les formes vides.
+
+**Deux témoins préexistants réécrits** (`MessageHandler.core.test.ts`) : ils verrouillaient la forme
+brute — ils *pinnaient donc précisément le défaut*, et c'est ce qui l'a laissé vivre aussi longtemps.
+Un test de couverture qui assert le comportement observé plutôt que le contrat voulu transforme un
+bug en spécification. Réécrits sur le contrat réel : l'un sur la forme API, l'autre sur le fait
+qu'une entrée inexploitable est écartée **sans emporter les entrées valides qui l'accompagnent**.
+
+**Vérification** : suite gateway complète — **649 suites / 16 358 tests verts**, couverture globale
+95,11 % instructions / 95,78 % lignes. `tsc --noEmit` propre. Sweep ciblé
+`MessageHandler|translation-transformer|MeeshySocketIOManager` : 11 suites / 846 tests verts.
+
+## Reste ouvert après ce cycle
+
+- **Le mensonge de type qui a rendu ce défaut possible.** `message-types.ts:211` déclare
+  `translations?: readonly MessageTranslation[]` — un tableau au format API — alors que la valeur
+  runtime venue de Prisma est une **carte Mongo**. C'est pourquoi une copie artisanale du
+  sérialiseur a pu vivre des années sans que le compilateur objecte, et pourquoi la branche
+  `Array.isArray` reste nécessaire. **Tête du prochain cycle si rien de plus grave n'apparaît** —
+  mais le chantier n'est pas mécanique : les deux formes circulent réellement sous ce nom, et les
+  démêler touche les deux transports.
+- **`isDuplicate` n'est protégé par aucun témoin de non-régression au niveau du spread.** Les deux
+  gardes tiennent parce que deux `spread` transportent le drapeau ; rien ne le verrouille. Un test
+  qui prouve que `createSuccessResponse` préserve `isDuplicate` fermerait le dernier fil de ce cycle.
+- Les points hérités des cycles précédents restent inchangés (voir cycles 64 et 26 pour la liste
+  complète) : `eslint` ne peut toujours pas tourner sur le gateway (pas d'`eslint.config.js` depuis
+  ESLint v9) ; les deux scripts de réparation base attendent une exécution humaine ; l'arbitrage
+  `delete-for-me` du cycle 12 attend une validation humaine ; `getMentionsForMessage` /
+  `getRecentMentionsForUser` n'ont toujours aucun écran.
+
 # Cycle 65 — L'aperçu de liste servi par socket pouvait afficher un cryptogramme
 
 ## Contrainte d'environnement (identique aux cycles 61/63/64, revérifiée)
