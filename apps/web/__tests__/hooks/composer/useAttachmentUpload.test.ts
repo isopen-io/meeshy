@@ -343,6 +343,97 @@ describe('useAttachmentUpload', () => {
     });
   });
 
+  describe('Upload error exposure (Task 7, point 4)', () => {
+    it('exposes the failure message via uploadError while still emitting the existing toast', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValue(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBe('Network error');
+      expect(mockToastFns.error).toHaveBeenCalledWith('Upload failed: Network error');
+    });
+
+    it('calls the additive onUploadError callback with the failure message', async () => {
+      const onUploadError = jest.fn();
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValue(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token', onUploadError }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(onUploadError).toHaveBeenCalledWith('Network error');
+    });
+
+    it('does not populate uploadError and never calls onUploadError on a successful upload', async () => {
+      const onUploadError = jest.fn();
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'photo.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token', onUploadError }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBeNull();
+      expect(onUploadError).not.toHaveBeenCalled();
+    });
+
+    it('clears a stale uploadError once a new selection succeeds', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBe('Network error');
+
+      mockServiceFns.uploadFiles.mockResolvedValueOnce({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'photo2.jpg', 'image/jpeg', 1024)],
+      });
+
+      await act(async () => {
+        await result.current.handleFilesSelected([createMockFile('photo2.jpg', 1024, 'image/jpeg', 2)]);
+      });
+
+      expect(result.current.uploadError).toBeNull();
+    });
+
+    it('clears uploadError on clearAttachments', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBe('Network error');
+
+      act(() => {
+        result.current.clearAttachments();
+      });
+
+      expect(result.current.uploadError).toBeNull();
+    });
+  });
+
   describe('Media Duration Extraction (Task 7, point 1)', () => {
     const realCreateElement = document.createElement.bind(document);
 

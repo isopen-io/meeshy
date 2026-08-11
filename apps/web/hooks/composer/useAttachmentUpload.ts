@@ -36,6 +36,12 @@ interface UseAttachmentUploadOptions {
   t?: (key: string, options?: any) => string;
   /** Taille des batches pour upload multiple */
   batchSize?: number;
+  /**
+   * Callback appelé quand un upload échoue en cours de traitement (réseau,
+   * timeout...). Additif — le toast interne existant reste émis pour les
+   * appelants qui ne consomment pas cette API.
+   */
+  onUploadError?: (message: string) => void;
 }
 
 interface UseAttachmentUploadReturn {
@@ -59,6 +65,8 @@ interface UseAttachmentUploadReturn {
   showAttachmentLimitModal: boolean;
   /** Nombre de fichiers tentés */
   attemptedCount: number;
+  /** Dernier message d'erreur d'upload (mid-upload), `null` si aucun/résolu */
+  uploadError: string | null;
   /** Ajouter des fichiers */
   handleFilesSelected: (files: File[], metadata?: any[]) => Promise<void>;
   /** Supprimer un fichier */
@@ -196,6 +204,7 @@ export function useAttachmentUpload({
   onAttachmentsChange,
   t = (key: string) => key,
   batchSize = 10,
+  onUploadError,
 }: UseAttachmentUploadOptions = {}): UseAttachmentUploadReturn {
   // États
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -212,6 +221,7 @@ export function useAttachmentUpload({
     totalBatches: 0,
   });
   const [showAttachmentLimitModal, setShowAttachmentLimitModal] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [attemptedCount, setAttemptedCount] = useState(0);
 
   // Refs
@@ -288,6 +298,9 @@ export function useAttachmentUpload({
         }
       } catch (error) {
         console.error(`❌ Batch ${i + 1} upload error:`, error);
+        const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+        setUploadError(message);
+        onUploadError?.(message);
         setSelectedFiles(prev => prev.filter((f) => !batch.includes(f)));
       }
 
@@ -310,11 +323,13 @@ export function useAttachmentUpload({
       currentBatch: 0,
       totalBatches: 0,
     });
-  }, [batchSize, token]);
+  }, [batchSize, token, onUploadError]);
 
   // Ajouter des fichiers
   const handleFilesSelected = useCallback(async (files: File[], additionalMetadata?: any) => {
     if (files.length === 0) return;
+
+    setUploadError(null);
 
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
     console.log(`📎 Traitement de ${files.length} fichier(s) (${(totalSize / (1024 * 1024)).toFixed(1)}MB)`);
@@ -457,11 +472,14 @@ export function useAttachmentUpload({
       }
     } catch (error) {
       console.error('❌ Upload error:', error);
+      const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
       if (error instanceof Error) {
         toast.error(`Upload failed: ${error.message}`);
       } else {
         toast.error('Upload failed. Please try again.');
       }
+      setUploadError(message);
+      onUploadError?.(message);
       // Symétrie avec handleCreateTextAttachment: purger les fichiers de CETTE
       // sélection de selectedFiles pour que le compteur (source de vérité
       // unique — voir plus haut) ne dérive pas après un échec réseau.
@@ -469,7 +487,7 @@ export function useAttachmentUpload({
     } finally {
       setIsUploading(false);
     }
-  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches]);
+  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches, onUploadError]);
 
   // Créer un attachment texte
   const handleCreateTextAttachment = useCallback(async (text: string) => {
@@ -517,6 +535,7 @@ export function useAttachmentUpload({
     setSelectedFiles([]);
     setUploadedAttachments([]);
     setUploadProgress({});
+    setUploadError(null);
   }, []);
 
   // Handlers drag & drop
@@ -587,6 +606,7 @@ export function useAttachmentUpload({
     batchProgress,
     showAttachmentLimitModal,
     attemptedCount,
+    uploadError,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,
