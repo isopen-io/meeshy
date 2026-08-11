@@ -11,7 +11,7 @@
  */
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import type { ReactionAggregation, ReactionUpdateEvent } from '@meeshy/shared/types/reaction';
@@ -1034,6 +1034,100 @@ describe('useReactionsQuery', () => {
 
       const res = await result.current.removeReaction('👍');
       expect(res).toBe(false);
+    });
+  });
+
+  describe('Socket handlers - conversation list is not a reaction surface', () => {
+    /**
+     * Une reaction ne change RIEN de ce que porte une ligne de liste : ni
+     * l'apercu du dernier message, ni le compteur de non-lus, ni l'horodatage.
+     * Le seul cache concerne est celui du message, mis a jour juste a cote par
+     * `updateReactionSummaryInMessageCache`.
+     *
+     * L'invalidation retiree visait `conversations.lists()` (['conversations',
+     * 'list']) alors que la sidebar lit `conversations.infinite()`
+     * (['conversations','infinite']) : prefixes DISJOINTS, donc l'intention
+     * ecrite en commentaire n'etait jamais executee. La rediriger vers
+     * `infinite()` aurait relu TOUTES les pages chargees a chaque reaction —
+     * exactement le refetch que le cycle 77 a retire du chemin de focus.
+     *
+     * Le temoin arme les DEUX formes de cle et exige zero refetch sur chacune :
+     * il echoue aussi bien sur l'invalidation morte que sur sa « correction »
+     * couteuse.
+     */
+    /**
+     * Les deux listes sont montees avec de VRAIS observateurs : une
+     * `invalidateQueries` ne refetch que les requetes ACTIVES, donc un cache
+     * pose a la main (`setQueryData`/`fetchQuery`) resterait muet et le temoin
+     * passerait au vert sans rien prouver.
+     */
+    const renderWithConversationLists = (queryClient: QueryClient, wrapper: React.ComponentType<{ children: React.ReactNode }>) => {
+      const flatFetch = jest.fn().mockResolvedValue([]);
+      const infiniteFetch = jest.fn().mockResolvedValue({ conversations: [] });
+
+      const rendered = renderHook(
+        () => ({
+          reactions: useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+          flat: useQuery({ queryKey: ['conversations', 'list'], queryFn: flatFetch, staleTime: Infinity }),
+          infinite: useQuery({ queryKey: ['conversations', 'infinite'], queryFn: infiniteFetch, staleTime: Infinity }),
+        }),
+        { wrapper }
+      );
+
+      return { flatFetch, infiniteFetch, rendered, queryClient };
+    };
+
+    it('handleReactionAdded: refetches no conversation list', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
+      const { flatFetch, infiniteFetch } = renderWithConversationLists(queryClient, wrapper);
+
+      await waitFor(() => expect(flatFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(infiniteFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true },
+          participantId: 'user-1',
+          userId: 'user-1',
+          action: 'add',
+        });
+      });
+
+      expect(flatFetch).toHaveBeenCalledTimes(1);
+      expect(infiniteFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('handleReactionRemoved: refetches no conversation list', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
+        userReactions: ['❤️'],
+      });
+      const { flatFetch, infiniteFetch } = renderWithConversationLists(queryClient, wrapper);
+
+      await waitFor(() => expect(flatFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(infiniteFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockOnReactionRemoved).toHaveBeenCalled());
+      const capturedRemoved = mockOnReactionRemoved.mock.calls[mockOnReactionRemoved.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedRemoved({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          participantId: 'user-1',
+          userId: 'user-1',
+          action: 'remove',
+        });
+      });
+
+      expect(flatFetch).toHaveBeenCalledTimes(1);
+      expect(infiniteFetch).toHaveBeenCalledTimes(1);
     });
   });
 
