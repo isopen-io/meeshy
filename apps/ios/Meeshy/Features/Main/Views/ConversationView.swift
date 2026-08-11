@@ -1815,7 +1815,8 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                 },
                 onShowMore: {
-                    overlayState.moreSheetInitialItem = nil
+                    overlayState.moreSheetInitialItem =
+                        UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                     overlayState.detailSheetMessage = msg
                 },
                 onExpandFullPicker: {
