@@ -100,6 +100,41 @@ la couverture reste celle du pilote. Émission et observation doivent rester en 
 Le curseur n'est pas persisté (mémoire d'onglet), donc une fenêtre onglet-fermé reste couverte par
 le seul `refetchOnMount: 'always'`.
 
+## 2026-08-11: Liste de conversations — le focus de fenêtre tire un DELTA, plus un refetch de toutes les pages
+**Statut**: Accepté
+**Contexte**: `useInfiniteConversationsQuery` héritait du `refetchOnWindowFocus: 'always'` global.
+Sur une `useInfiniteQuery`, ce réglage rejoue TOUTES les pages chargées et REMPLACE le cache. Trois
+coûts : dix pages de scroll = dix requêtes sur une route lourde (participants, dernier message avec
+ses traductions et sa pièce jointe, compteurs par curseur) à CHAQUE retour d'onglet ; les écritures
+socket qui atterrissent pendant la séquence sont écrasées ; et comme la route pagine par OFFSET sur
+un tri `lastMessageAt` décroissant (`orderBy: { lastMessageAt: 'desc' }`,
+`routes/conversations/core.ts`), un message arrivé entre la page k et la page k+1 promeut sa
+conversation en tête et décale toutes les pages suivantes d'un cran — une ligne dupliquée à la
+frontière, une autre disparue. C'est exactement le réglage que `use-conversation-messages-rq.ts`
+avait déjà désactivé pour le fil de messages.
+**Decision**: `refetchOnWindowFocus: false` sur la liste, et le focus devient le « Trigger 2 » de
+`useConversationsDeltaSync` — même delta borné que le reconnect socket, débouncé 1 s (même valeur
+que `FOCUS_CATCH_UP_DEBOUNCE_MS` du fil de messages), partageant le même garde anti-rafale de 5 s.
+La seule chose que le refetch de focus faisait et que le delta upsert-only ne peut pas faire — purger
+une ligne FANTÔME hard-supprimée côté serveur — est reprise par une réconciliation complète
+(`invalidateQueries` sur la clé infinie) chaînée APRÈS un delta RÉUSSI et bornée à 1× par 24 h.
+C'est le pendant exact de `fullReconcileInterval` / `syncSinceLastCheckpoint` sur iOS ; l'horodatage
+vit dans `localStorage` (`meeshy_conversations_last_full_reconcile_at`, pendant de la clé
+`UserDefaults` `me.meeshy.lastFullReconcileAt`), avec repli mémoire par QueryClient si le stockage
+jette (navigation privée, quota) — la borne dégrade alors en « 1× par session », jamais en « à
+chaque focus ».
+**Alternatives rejetées**: basculer simplement à `false` (supprimerait le seul chemin web qui purge
+une ligne fantôme) ; réconcilier depuis la seule page 0 (l'absence d'une ligne en page 0 ne prouve
+rien pour les lignes plus profondes) ; ne réconcilier que sur delta NON VIDE (une conversation
+hard-supprimée ne produit AUCUNE ligne de delta — la purge serait inatteignable sur un compte calme,
+précisément celui qui garde son fantôme) ; un `resetQueries` (perdrait la profondeur de scroll).
+**Cons**: la réconciliation complète relit elle aussi les pages une par une et porte donc la même
+instabilité d'offset — mais 1× par 24 h au lieu d'à chaque focus, et c'est le comportement que
+`fullSync()` a déjà sur iOS. Un delta ÉCHOUÉ ne réconcilie pas et ne consomme pas la fenêtre
+(local-first) : offline, le cache reste intact. La fenêtre de 24 h démarre au PREMIER delta d'un
+navigateur neuf plutôt qu'à l'époque zéro, pour ne pas doubler la lecture que
+`refetchOnMount: 'always'` vient de faire au montage.
+
 ## 2026-08: Liste de conversations — rattrapage DELTA au reconnect socket (miroir `deltaSyncCore`)
 **Statut**: Accepté
 **Contexte**: Trois surfaces web tiennent un état temps réel ; deux rattrapaient une coupure
@@ -124,8 +159,8 @@ lourde, et REMPLACE le cache — donc perd ce que le socket y a écrit) ; un sec
 propre à la liste (il en existe déjà un, écrit et testé) ; un curseur persisté à la iOS (le cache
 est déjà la source ; un second curseur pourrait diverger de lui).
 **Cons**: le delta est upsert-only — une conversation HARD-supprimée côté serveur n'y apparaît
-jamais (iOS compense par une réconciliation complète 24 h ; le web s'appuie sur `refetchOnMount` et
-`refetchOnWindowFocus`). Une inconnue plus ancienne que la fenêtre chargée est écartée tant qu'il
+jamais. Couvert depuis 2026-08-11 par la réconciliation complète bornée ci-dessous, qui reprend la
+borne 24 h d'iOS. Une inconnue plus ancienne que la fenêtre chargée est écartée tant qu'il
 reste des pages (`hasMore`), sinon elle se dupliquerait au prochain `fetchNextPage`. Le non-lu est
 forcé à zéro pour la seule conversation OUVERTE ; celui d'une conversation FERMÉE dont l'accusé de
 lecture traîne encore n'est PAS réconcilié, faute de frontière de lecture (`lastReadAt`) dans la
