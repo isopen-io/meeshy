@@ -303,7 +303,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -324,7 +324,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -360,7 +360,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }

@@ -237,6 +237,7 @@ struct ConversationView: View {
     @Environment(\.colorScheme) var colorScheme
     /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
+    @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
     var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
@@ -1364,7 +1365,7 @@ struct ConversationView: View {
             // Connection status banner
             VStack {
                 Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                ConnectionBanner(activeConversationId: { viewModel.conversationId })
+                ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
                 Spacer()
             }
             .zIndex(98)

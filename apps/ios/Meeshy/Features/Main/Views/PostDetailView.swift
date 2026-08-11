@@ -620,7 +620,7 @@ struct PostDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Connection status banner (banner manages its own socket observation)
-            ConnectionBanner()
+            ConnectionBanner(conversationListViewModel: nil, isStoryViewerPresenting: false)
 
             if let post = displayPost {
                 ZStack(alignment: .top) {
