@@ -1857,6 +1857,13 @@ struct StoryCardView: View {
                     onArrived: { heartBouncePulse += 1 },
                     onFinished: { reactionFlight = nil }
                 )
+                // Identité PAR VOL : sans elle, une deuxième réaction envoyée
+                // dans les 750ms de la première ne fait que muter la vue déjà
+                // montée (structural identity) — `@State progress` reste à 1,
+                // `onAppear` ne re-tique jamais (aucun mouvement, aucun
+                // rebond), et l'`asyncAfter` du premier vol efface l'overlay
+                // en avance (revue fix round 1, 2026-08-11).
+                .id(flight.id)
                 // Même garde que les autres calques flottants (header, rail,
                 // composer, pickers plein écran) : le canvas gonfle le ZStack
                 // parent au-delà du viewport, un calque non borné s'y étale
@@ -2040,11 +2047,6 @@ struct StoryCardView: View {
             // le rail, À GAUCHE du bouton « Abc » (comme le strip de réactions) —
             // voir `StoryViewerView+Sidebar`. Plus d'overlay bas-de-composer ici.
         }
-        // Espace de coordonnées commun du système scrub (cœur + tuiles des
-        // barres réaction/langues) — aligne cadres publiés, position du doigt
-        // et rendu du vol (spec scrub 2026-08-11, StoryScrubSelectionResolver).
-        .coordinateSpace(name: StoryScrubSpace.name)
-        .onPreferenceChange(StoryHeartFrameKey.self) { heartFrame = $0 }
         // Lock the entire story canvas (background + reader + overlays +
         // sidebar + composer) to EXACTLY the viewport size we were handed
         // in `geometry`. Without this, any child with an intrinsic size
@@ -2056,6 +2058,17 @@ struct StoryCardView: View {
         // anything that still tries to draw past the bounds rather than
         // letting it leak into adjacent UI.
         .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+        // Espace de coordonnées commun du système scrub (cœur + tuiles des
+        // barres réaction/langues), posé APRÈS le pin de taille ci-dessus —
+        // pas avant : le ZStack racine peut gonfler à ~480pt (canvas
+        // UIViewRepresentable) avant d'être ramené aux 402pt du viewport, et
+        // un `.coordinateSpace` posé sur le ZStack non-pinné aurait une
+        // origine décalée d'environ (480-402)/2 ≈ 44pt vers la gauche par
+        // rapport à Layer 9 (rendu, lui, à l'intérieur du `.frame` pinné) —
+        // tuiles, position du doigt et cible du vol partageraient alors des
+        // repères désalignés (revue fix round 1, 2026-08-11).
+        .coordinateSpace(name: StoryScrubSpace.name)
+        .onPreferenceChange(StoryHeartFrameKey.self) { heartFrame = $0 }
         .clipped()
         // Délai de grâce du spinner+% : on n'arme `showProgressOverlay` qu'au
         // bout de 200 ms si la slide est sous 20 % de progression. La backdrop
