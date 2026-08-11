@@ -704,6 +704,43 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         )
     }
 
+    /// Vague 100 — `startCall`'s `callController.request` completion already
+    /// captures `[weak self]` (the outer closure), but the nested
+    /// `Task { @MainActor in ... }` it spawns on CallKit failure did NOT repeat
+    /// the weak capture: an unstructured `Task` closure captures whatever it
+    /// references independently of its enclosing closure's capture list, so
+    /// omitting `[weak self]` there re-strongly-captures `self` for the task's
+    /// lifetime — the exact convention `apps/ios/CLAUDE.md`'s "Common Retain
+    /// Cycle Traps" section calls out for `DispatchQueue`/`Task` closures.
+    func test_startCall_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func startCall(conversationId: String", in: source) else {
+            XCTFail("startCall not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
+            "startCall's CXStartCallAction failure Task must capture [weak self], not just the outer " +
+            "callController.request closure — an unstructured Task does not inherit its enclosing " +
+            "closure's capture list."
+        )
+    }
+
+    /// Mirrors `test_startCall_callKitFailureTask_capturesSelfWeakly` for the
+    /// incoming-call `reportNewIncomingCall` failure Task in
+    /// `handleIncomingCallNotification` — same bug, same fix.
+    func test_handleIncomingCallNotification_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.failCall(\"CallKit error\") }"),
+            "handleIncomingCallNotification's reportNewIncomingCall failure Task must capture [weak self]."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {

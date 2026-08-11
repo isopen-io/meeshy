@@ -1,22 +1,22 @@
 /**
- * Règle de composition d'un RÉEL — prédicat PUR.
+ * Règle de composition d'un RÉEL — prédicat PUR, SOURCE UNIQUE partagée.
  *
  * Règle produit (directive user 2026-08-02) : un post n'est un RÉEL que si sa
  * composition porte UNE VIDÉO, UN AUDIO, ou AU MOINS DEUX IMAGES. Une image
  * seule, un document ou un lieu restent un post de base (POST).
  *
  * Directive durée minimale : une vidéo ou un audio ne qualifie QUE si sa
- * durée est CONNUE et >= `MIN_QUALIFYING_DURATION_MS` (3s). Une durée
- * absente/nulle est traitée comme non-qualifiante (jamais un fallback
- * permissif). Les images ne sont jamais soumises à cette condition.
+ * durée est CONNUE (en millisecondes) et >= `MIN_QUALIFYING_DURATION_MS`
+ * (3s). Une durée absente/nulle est traitée comme non-qualifiante (jamais un
+ * fallback permissif). Les images ne sont jamais soumises à cette condition.
  *
  * Miroir EXACT du SDK iOS : `ReelComposition.qualifiesAsReel`
  * (packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift). Toute
  * évolution de la règle touche les deux sites — c'est la seule doctrine.
  *
- * Consommateurs : `PostService.createPost` (dégradation silencieuse en POST),
- * `PostService.updatePost` (422 sur la liste FINALE des médias), et le
- * backfill `scripts/migrations/reclassify-nonqualifying-reels-to-post.ts`.
+ * Consommateurs : `PostService.createPost`/`updatePost` (gateway, import
+ * direct), `PostComposer` (web, classification client avant publication) et
+ * le backfill `scripts/migrations/reclassify-nonqualifying-reels-to-post.ts`.
  */
 
 export const MIN_QUALIFYING_DURATION_MS = 3000;

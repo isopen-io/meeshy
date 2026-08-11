@@ -6476,3 +6476,119 @@ deux fois pour des signaux voisins (`offer`, `call:end`) mais jamais étendue au
   nettoie pas `connectedPeersRef`/`stalledPeersRef` web (Vague 91, réévaluée non-régression) ;
   `call-store.ts`'s `setReconnecting(attempt)` reste un signal mort web (Vague 98) ; toolchains
   iOS/Android toujours hors d'atteinte dans ce sandbox.
+
+## Vague 100 — les 3 `Task { @MainActor in }` imbriqués sans `[weak self]` reconduits par la Vague 99 comme « candidat trivial en piggyback » (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling, cible iOS explicite
+cette fois — CallKit/PushKit/WebRTC), nouvelle session. Aucune PR ouverte sur cette branche
+(`claude/upbeat-dirac-3kjztn`, vierge). Base explicite sur le développement précédent de cette routine :
+la Vague 99 (mergée sur `main` en `9477dd74f` avant le début de cette session) reconduisait ces 3 sites
+nommément comme le candidat le plus mûr pour le prochain cycle. Un audit fraîchement mandaté (agent
+Explore, lecture seule, web + gateway — hors périmètre déjà couvert par la liste de reconduits de la
+Vague 99) tourne en parallèle pour ne pas se limiter au seul piggyback si un défaut plus substantiel
+émerge ce cycle ; ce commit couvre le piggyback pendant que l'audit se termine.
+
+- **Root cause confirmée par lecture directe** : les 3 sites (`ThermalStateMonitor.swift:32`,
+  `CallManager.swift:1114`, `CallManager.swift:1659`) suivent tous le même patron — une closure
+  externe capture déjà `[weak self]` (respectivement l'observateur `NotificationCenter`, la completion
+  `callController.request`, la completion `reportNewIncomingCall`), mais le `Task { @MainActor in ... }`
+  imbriqué qu'elle spawn en cas d'échec/notification ne répète PAS `[weak self]`. Un `Task` non structuré
+  capture ce qu'il référence indépendamment de la liste de capture de sa closure englobante — omettre
+  `[weak self]` y recapture donc `self` FORTEMENT pour la durée du Task, exactement le piège que
+  `apps/ios/CLAUDE.md` § « Common Retain Cycle Traps » documente pour les closures `DispatchQueue`/`Task`,
+  et que `P2PWebRTCClientConcurrencySourceTests`/`CallManagerAudioSessionTests` gardent déjà ailleurs dans
+  ce même fichier pour des Tasks non structurés analogues. Impact pratique confirmé inerte par la Vague 99
+  (les 3 objets sont des singletons/services à durée de vie app, et les Tasks sont courts et one-shot) —
+  corrigé ici pour la cohérence de convention et pour fermer l'écart avant qu'un futur site structurellement
+  similaire (copié-collé) ne le reproduise dans un contexte où il ne serait plus inerte (ex. un futur objet
+  à durée de vie plus courte que la fenêtre du Task).
+- **Fix** : `[weak self]` ajouté aux 3 `Task { @MainActor in ... }` imbriqués. Aucun changement de
+  comportement runtime attendu (les 3 chemins restent joignables/fonctionnels via `self?.` déjà présent) —
+  strictement une correction de convention de capture.
+- **Tests** (TDD, RED confirmé par lecture — les 3 assertions `body.contains(...)`/`source.contains(...)`
+  cherchent la sous-chaîne exacte `Task { @MainActor [weak self] in ... }`, absente avant le fix) :
+  - `CallManagerTests.swift` — `test_startCall_callKitFailureTask_capturesSelfWeakly` (source-inspection,
+    même idiome `sourceText()`/`body(of:in:)` que les tests `reportNewIncomingCall` voisins) et
+    `test_handleIncomingCallNotification_callKitFailureTask_capturesSelfWeakly` (miroir pour l'autre site).
+  - `ThermalStateMonitorTests.swift` — `test_startMonitoring_notificationTask_capturesSelfWeakly`, nouveau
+    guard source-level (le fichier n'avait pas encore de lecture de source ; ajouté sur le même modèle que
+    `P2PWebRTCClientConcurrencySourceTests`, avec la même justification « non comportementalement
+    exerçable sans driver une vraie notification thermique sur une queue de fond »).
+  GREEN après implémentation (relecture ligne à ligne).
+- **Vérification** : build/tests iOS **non exécutables dans ce sandbox** (conteneur Linux, aucun Xcode —
+  cf. `apps/ios/CLAUDE.md`). Diff relu ligne à ligne (3 lignes modifiées, changement `[weak self]` seul) ;
+  comptage d'accolades avant/après sur les 4 fichiers touchés (2 fichiers prod + 2 fichiers de test) pour
+  exclure toute erreur de syntaxe grossière — delta identique avant/après sur chaque fichier (les tests
+  ajoutés sont eux-mêmes équilibrés). Vérification réelle déléguée à la CI GitHub Actions (macOS) au
+  push — PR ouverte et suivie jusqu'au vert avant merge, comme la Vague 99.
+- **Reste ouvert** : dead code / god-object `CallManager.swift` (~5880 lignes, inchangé) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+  (Vague 84, nécessite confirmation on-device) ; `removeParticipant()` web (Vague 91, non-régression) ;
+  toolchains iOS/Android toujours hors d'atteinte dans ce sandbox. `call-store.ts`'s
+  `setReconnecting(attempt)` (Vague 98) : **confirmé mort et traité en Vague 101 ci-dessous**, retiré de
+  cette liste.
+
+## Vague 101 — `handleCallEnded` dismissait une bannière d'appel entrant SANS RAPPORT quand `currentCall` n'était pas encore posé (2026-08-11)
+
+Point d'entrée : audit dédié (agent Explore, lecture seule, `apps/web` calling + `services/gateway`
+`CallEventsHandler.ts`/`CallService.ts`/`CallCleanupService.ts`/`TURNCredentialService.ts`) mandaté en
+parallèle de la Vague 100 pour ne pas se limiter au seul piggyback iOS si ce cycle offrait un défaut plus
+substantiel — exclusion explicite de toute la liste des trouvailles déjà closes des Vagues 1-99. Deux
+livrables : un bug réel neuf et la confirmation d'une piste de dead-code déjà suspectée (Vague 98).
+
+- **Root cause confirmée par lecture directe** (`CallManager.tsx`, `handleCallEnded`, ~ligne 464-547) :
+  le garde anti-callId-obsolète (Vague ~ audit 2026-08-04, `CallManager.callEndedStaleGuard.test.tsx`)
+  ne compare `event.callId` qu'à `currentCall` (le store — l'appel ACCEPTÉ/actif). Avant que l'utilisateur
+  n'ait répondu à quoi que ce soit, `currentCall` vaut `null` — le garde `trackedCall && trackedCall.id
+  !== event.callId` court-circuite alors à `false` et la fonction tombe dans le `reset()` +
+  `setIncomingCall(null)` INCONDITIONNELS, sans jamais comparer à `incomingCall` (état local séparé, la
+  bannière encore SONNANTE, pas encore acceptée). Scénario concret : l'utilisateur A voit sonner un appel
+  entrant de Bob (`incomingCall` = appel X, `currentCall` toujours `null` car A n'a pas encore tapé
+  Accepter). Un AUTRE appel dont A est simple membre de conversation (jamais participant) se termine
+  ailleurs — le fan-out `call:ended` du gateway diffuse délibérément à TOUS les membres de la conversation,
+  pas seulement aux participants de l'appel (`callEndedFanout.ts`'s `resolveCallEndedRooms` — c'est ce qui
+  permet à un callee encore sonnant, jamais entré dans aucune room, d'apprendre qu'un appel s'est terminé).
+  Ce broadcast atteint le socket de A pour l'appel Y bien que A n'ait jamais été proche de Y.
+  `handleCallEnded(eventPourY)` tourne, `trackedCall` est `null` (A n'a rien accepté), le garde est
+  sauté, et `setIncomingCall(null)` fait taire silencieusement l'appel X de Bob, TOUJOURS activement
+  sonnant — aucun toast, aucune trace visible, l'appel de Bob s'arrête simplement de s'afficher et sonne
+  dans le vide jusqu'à résolution `missed`, sans que A ne l'ait jamais vu ni refusé.
+- **Fix** : garde étendu au cas pré-acceptation, miroir de `handleAnsweredElsewhere` qui se scope déjà à
+  `incomingCall?.callId === event.callId` — `if (!trackedCall && incomingCall && incomingCall.callId !==
+  event.callId) { return; }`, posé juste après le garde `trackedCall` existant. `incomingCall` ajouté au
+  tableau de dépendances du `useCallback`.
+- **Tests** (TDD, RED confirmé en exécutant réellement la suite AVANT le fix — `TestingLibraryElementError:
+  Unable to find an element by: [data-testid="incoming-call-card"]`, la bannière disparaissait bien) :
+  nouveau test dans `CallManager.callEndedStaleGuard.test.tsx` — appel entrant sonnant (`currentCall`
+  encore `null`) + `call:ended` pour un callId DIFFÉRENT non accepté → la bannière doit survivre. Le mock
+  `CallNotification` du fichier (`() => null`) a dû être enrichi d'un `data-testid="incoming-call-card"`
+  (aligné sur le mock de `CallManager.answeredElsewhere.test.tsx`, qui teste exactement la même classe de
+  bug pour `call:already-answered`) pour pouvoir observer la présence/absence de la bannière — les 4 tests
+  existants du fichier (assertions sur le store, pas le DOM) restent inchangés et verts.
+- **Vérification** (sandbox Linux, suite web réellement exécutable ici — contrairement à iOS) :
+  `bun install --ignore-scripts` + `packages/shared && npx prisma generate --generator client && bun run
+  build` (prérequis CLAUDE.md, `node_modules` absent au démarrage de cette session) ; suite ciblée
+  **5/5 verts** (RED confirmé avant fix, GREEN après) ; sweep complet
+  `video-call|video-calls|use-webrtc|use-call|call-store|call-infrastructure` — **39 suites / 360 tests
+  verts**, 0 régression (362 avant retrait des 2 tests `setReconnecting` obsolètes, voir dead-code
+  ci-dessous). `npx tsc --noEmit` sur `apps/web` : **1653 erreurs avant et après le diff** (comparaison
+  ligne à ligne complète), zéro nouvelle erreur — les seuls deltas sont des décalages de numéro de ligne
+  sur `CallManager.tsx` (+14 lignes ajoutées) et 3 erreurs préexistantes d'ordre d'union non-déterministe
+  sans rapport (`BubbleMessage.tsx`, `ConversationMessages.tsx`, `ConversationSettingsModal.tsx` — le
+  même union type imprimé dans un ordre différent d'une exécution à l'autre, pas causé par ce diff).
+- **Dead code confirmé et retiré** (Vague 98 tranchée) : `call-store.ts`'s `reconnectAttempt`/
+  `isReconnecting`/`setReconnecting` — grep de tous les call sites de `apps/web` : aucun composant, hook
+  ou handler n'appelle jamais `setReconnecting(...)` ni ne lit `isReconnecting`/`reconnectAttempt` du
+  store en dehors de ses propres tests. Le SEUL `isReconnecting` réellement consommé (`VideoCallInterface`
+  → `useCallAnalyticsReporter`) est un `useState` LOCAL distinct posé dans `use-webrtc-p2p.ts` par la
+  Vague 98 — signal câblé différent, jamais lié au store. Retiré : interface `CallStoreState` (3 champs),
+  defaults, l'action elle-même, les 2 lignes de `reset()`, et les tests dédiés
+  (`describe('setReconnecting', ...)`, 2 tests + 2 assertions dans le test de reset). Ne change AUCUN
+  comportement observable (rien ne l'observait).
+- **Reste ouvert** (reconduit, rien de plus trouvé côté web/gateway ce cycle au-delà de ce qui précède) :
+  dead code / god-object `CallManager.swift` iOS (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la
+  Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+  `removeParticipant()` web (Vague 91, non-régression) ; toolchains iOS/Android hors d'atteinte dans ce
+  sandbox.

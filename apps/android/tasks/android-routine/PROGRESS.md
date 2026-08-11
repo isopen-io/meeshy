@@ -1,5 +1,177 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **the hard-press conversation preview popover landed** (slice
+> `conversation-hardpress-preview`, feature-parity §B — a genuine gap RE-PROUVEN, not just
+> re-copied from the note, via a broad sweep of `feature-parity.md`'s ~136 unchecked boxes per the
+> orchestrator's explicit "continue the broad sweep" guidance). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (only two
+> unrelated open web PRs, `#2810`/`#2811`, both `apps/web` and already merged into `origin/main` by
+> the time this run finished — origin/main advanced under this run purely from other concurrent
+> sessions, confirmed via `git status --short` showing only `apps/android` files touched, never via
+> the noisier `git diff origin/main` two-dot form which conflates "your branch is behind" with
+> "your branch changed something"; `git diff origin/main...HEAD` or plain `git status` is the
+> correct check in this multi-worktree repo where `refs/remotes/origin/main` is shared across every
+> worktree and can move mid-run from an unrelated session's fetch). Read iOS's
+> `ConversationPreviewView` (`ConversationListHelpers.swift`) closely before coding: a header
+> (avatar/title/member-count/pin+mute badges/action buttons) plus a scroll of the last 5 cached
+> messages rendered as real, non-interactive `ThemedMessageBubble`s, shown via native
+> `.contextMenu(menuItems:preview:)` ABOVE the action menu on long-press; messages are loaded once
+> per row into `ConversationListViewModel.previewMessages[id]` (cache-first via
+> `CacheCoordinator.shared.messages.load`, `Array(data.suffix(5))`, background-refresh on
+> stale/empty). **Shipped (production, all `apps/android`)**: new `MessageDao.recentForConversation`
+> (`ORDER BY createdAt DESC LIMIT :limit`, a genuinely new bounded query — the existing
+> `listForConversation` loads a conversation's ENTIRE history unbounded, wasteful for a "last 5"
+> peek on an actively-used thread) → `MessageRepository.recentMessages(conversationId, limit=5)`, a
+> cache-ONLY read (no `messagesStream`/SWR machinery, no background revalidate — deliberately
+> narrower than iOS's own background-refresh half: a peek the user might dismiss in under a second
+> should never spawn unbounded background sync work). Shared the entity→domain decode step
+> (`MessageEntity.toLocalMessage()`, `:sdk-core`) between this new method and the existing
+> `MessageCacheSource.observe()`, removing the prior duplication rather than adding a third copy.
+> `ConversationListViewModel` gains `previewMessages: Map<String, List<LocalMessage>>` state +
+> `loadPreviewMessages(id)` (double-load guard via a `containsKey` + in-flight `Set` check, mirrors
+> iOS's `previewMessages[id] == nil && !previewLoadingInFlight.contains`) + `currentUser: MeeshyUser?`
+> alongside the existing `currentUserId` (so the preview card can resolve the Prisme Linguistique —
+> `MeeshyUser` already implements `ContentLanguagePreferences` — without a second session read at
+> render time). New pure `previewLines()` (`:feature:conversations`) reuses `lastMessagePreview`
+> (the row's own last-message formatter) verbatim per message via a small `ApiMessage →
+> ApiConversationLastMessage` adapter feeding `message.displayContent(prefs)` — the SAME Prisme
+> resolution the row's own preview line already gets, never `translations.first()`, per root
+> `CLAUDE.md`'s explicit "le prisme s'applique... aux previews" rule. `combinedClickable`'s
+> `onLongClick` now fires `onLoadPreview()` before opening the menu; `ConversationContextMenu`'s
+> `DropdownMenu` gained a new `ConversationPreviewCard` (title + pin/mute badges + up to 5 message
+> lines, or a loading/empty label) as its FIRST child, `HorizontalDivider()`, then the pre-existing
+> action items — mirrors iOS's preview-above-menu shape without needing a custom `Popup` (Compose's
+> `DropdownMenu` content lambda already accepts arbitrary composables, not just
+> `DropdownMenuItem`s). +19 new tests (3 `MessageDaoTest`: newest-first ordering scoped to the
+> conversation, limit respected, unknown-conversation empty; 4 `MessageRepositoryTest`: chronological
+> order, zero network calls, cold-cache empty, local send-state passthrough; 8
+> `ConversationPreviewMessagesTest`: empty list, ordering, sender prefix, "vous" label, media-type
+> fallback, Prisme-preferred-translation-wins, no-match-shows-original, null-prefs-still-resolves-
+> Prisme; 4 `ConversationListViewModelTest`: populates on load, never re-queries the same
+> conversation twice, doesn't re-query while already in flight, independent per-conversation state).
+> **Mutation-proven**, two axes: neutralizing `loadPreviewMessages`'s already-loaded guard (`if
+> (_state.value.previewMessages.containsKey(id)) return` → `if (false) return`) fails **exactly**
+> `load_preview_messages_never_queries_the_repository_twice_for_the_same_conversation` (41 others
+> green); neutralizing `previewLines`'s Prisme call (`message.displayContent(resolved)` →
+> `message.content`) fails **exactly** the "Prisme preferred translation wins" + "null preferences
+> still resolves Prisme" tests (6 others green) — both applied via a scratch `cp`-backed edit
+> (never `git checkout --`), restored via `cp`, diffed clean against the backup afterward. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice —
+> no build-graph regression). Reviewer **PASS** (diff `apps/android` only, confirmed via
+> `git status --short`; SDK purity — the entity decode + bounded query + cache-only repository read
+> live in `:sdk-core`/`:core:database` as stateless building blocks, all orchestration [double-load
+> guard, state map] and Compose UI glue stay app-side in `:feature:conversations`; SSOT — reuses
+> `lastMessagePreview`/`LanguageResolver`/`ApiMessage.displayContent`, zero re-implementation; no
+> coverage floor lowered; no tautological tests). **Full on-device verification against the live
+> gateway** (`meeshy_pixel8`, real `atabeth` account): hit a genuine, HOST-CONTENTION-caused
+> `ActivityManager` ANR mid-verification (load average ~7-8, three concurrent Claude Code sessions
+> plus an active Xcode `xctest` run sharing the host with this emulator) — diagnosed via `adb
+> logcat`'s `InputDispatcher: … spent Nms processing MotionEvent` lines (proves the SYSTEM was slow
+> to *deliver* the touch, not that the app failed to *handle* one already delivered) before
+> concluding it was unrelated to the diff; recovered via "Close app" + relaunch once host load
+> visibly dropped, zero code changes needed (see `NOTES.md` for the full diagnostic writeup — a
+> reusable playbook for the next host-contention false-positive). Once recovered: long-pressed the
+> real `Belva Tano` thread (`uiautomator dump` + a grepped `content-desc="Belva Tano"` bounds
+> attribute, center-tapped via `input touchscreen swipe x y x y 700`) — the preview card rendered
+> the real title plus 5 real cached messages in chronological order (Portuguese content, proving the
+> Prisme/decode pipeline round-trips real gateway data, not a fixture), divider, then the unchanged
+> Pin/Mute/Mark-as-read/Archive/category-search menu below. Tapped outside to dismiss (clean, no
+> crash, returned to the list) then re-opened the SAME row: the card rendered instantly with
+> identical content (proves the already-loaded cache-hit guard skips the redundant Room query on a
+> real device, not just in the mocked unit test). `adb logcat` checked across the whole session for
+> `FATAL EXCEPTION`/`AndroidRuntime` app crashes — none (the one `D AndroidRuntime: Shutting down VM`
+> line was normal noise from an earlier `am force-stop`, not a crash). Emulator left idle on the
+> conversation list afterward. **Deliberate, documented scope cut**: no member-count line, no
+> call/search/info quick-action buttons in the card (iOS's `ConversationPreviewView` has both) —
+> the core value (a peek at recent activity before deciding an action) is delivered; the extra chrome
+> would need new callback wiring this slice didn't need to touch. **Also inherited, not introduced,
+> a pre-existing `lastMessagePreview` quirk**: a mid-list message with blank content and no
+> recognized media type falls back to the same "No messages yet" label the row uses for a WHOLE
+> empty conversation — seen live on-device on the real `Belva Tano` thread, documented in `NOTES.md`
+> rather than fixed here (out of scope: this slice reuses the formatter, not rewrites its fallback
+> semantics). **Housekeeping flagged, not actioned this run**: `NOTES.md` is now ~1630 lines, over
+> the ~1500-line hygiene threshold — needs its own dedicated archive commit (never bundled with a
+> slice) on a future run. **Next slice candidates (not attempted this run)**: on-device transcription
+> for the Feed audio composer (still the standing candidate — confirmed via `grep`/websearch this run
+> that Android's `RecognizerIntent.EXTRA_AUDIO_SOURCE` genuinely supports feeding a custom PCM audio
+> source to `SpeechRecognizer` for on-device recognition, unlike the framework's live-mic-only
+> reputation — but the composer currently records `MediaRecorder` MPEG_4/AAC, not raw PCM, so a real
+> implementation needs either a parallel `AudioRecord` PCM capture during recording or a post-hoc
+> `MediaCodec` AAC→PCM decode step first; right-sized as its own foundation slice, not attempted
+> here); a shared `:sdk-ui` `LanguagePickerDialog` (3 near-identical picker UIs still exist); Voice-
+> cloning onboarding wizard / voice-profile management (§K, both still unshipped); map/search/
+> reverse-geocoding for the location attachment; widgets/PiP — per the orchestrator's standing
+> guidance this remains a documented, real gap needing a planning pass, not re-grepped again this
+> run (already re-confirmed zero-hit at iteration 44/45).
+
+> On 2026-08-11 **"Change email / phone" landed** (slice `settings-account-contact-change`,
+> feature-parity §K — found via the orchestrator's explicit "broad sweep of `feature-parity.md`"
+> guidance rather than staying scoped to the Feed composer). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (the one open
+> PR, `#2807`, is an unrelated concurrent session on `apps/ios` calls, headRef doesn't match this
+> routine's naming). Confirmed the gap for real, not just from the note: `grep`ping
+> `changeEmail|verifyEmailChange|changePhone|verifyPhoneChange` across `apps/android` found the
+> wire-level plumbing already complete (`UserApi`/`UserRepository`, `UserRequests.kt` DTOs, all
+> pre-existing) but **zero** call sites under `feature/` or `app/` — the same "wired but unconsumed"
+> shape as the note claimed, now independently confirmed. Read iOS's `SecurityView.swift` (1053
+> lines) end to end before coding: email confirms out-of-band (a link mailed to the new address —
+> `submitEmailChange()`/`resendEmailVerification()` only; iOS never calls `verifyEmailChange`
+> anywhere in production code either, confirmed via grep — only its test mocks reference it, so
+> skipping that wire-up on Android is TRUE parity, not a scope cut) with a 60s resend cooldown
+> Timer; phone confirms in-app via a 6-digit SMS code (`submitPhoneChange()` → `verifyPhoneCode()`).
+> Both sections also expose a "Verify" quick action for an already-set-but-unverified value that
+> resubmits without opening the editor first. **Shipped (production, all `apps/android`)**: new
+> `AccountContactViewModel`/`AccountContactScreen` (`:feature:settings`), reached via a new
+> "Email & phone" Settings row between Two-factor and Active sessions. Reuses
+> `SignupFieldValidation.isEmailValidLocally`/`isPhoneValidLocally` (`:core:model`, already the
+> registration wizard's SSOT) for the local submit gates — no new validator duplicated. Reuses
+> `MagicLinkCountdown` (`:core:model`, previously magic-link-login-only) verbatim for the 60s email
+> resend cooldown — same `start`/`tick`/`canResend`/`expired` shape the magic-link flow already
+> uses, just a second call site; deliberately did NOT rename/generalize the type for this (only the
+> 2nd occurrence — this codebase's established convention is to duplicate small glue until a 3rd
+> call site forces a shared abstraction, and `MagicLinkCountdown`'s shape was already fully generic,
+> so reusing beat both renaming and reimplementing). Phone code entry filters non-digits +
+> truncates to 6 as typed (mirrors iOS's `.adaptiveOnChange` filter), so `canVerifyPhoneCode` is a
+> plain length check. Error mapping follows the `TwoFactorErrorKind`/`ChangePasswordError`
+> precedent — a fixed per-action `AccountContactErrorKind` the screen localizes (en/fr/es/pt),
+> never the gateway's raw English message (`contact-change.ts`'s `sendBadRequest` calls are
+> free-text, not structured codes). Verify-phone-code 400 maps to a dedicated "incorrect or expired
+> code" message (mirrors iOS's own targeted P1 fix for this exact case), other failures generic.
+> On success, `verifyPhoneCode()` calls `SessionRepository.refresh()` so the displayed number
+> updates immediately (mirrors iOS's `authManager.checkExistingSession()`). Both flows are
+> inherently *online* (the gateway must reach a real inbox/handset) — online-only like
+> `ChangePasswordViewModel`, never optimistic/offline-queued like `ProfileViewModel`. +31 tests
+> (`AccountContactViewModelTest`: buffer editing, both submit gates, success/failure transitions,
+> the cooldown tick/expire/resend-unlock cycle via `advanceTimeBy`, the double-tap in-flight guard
+> on both submit paths and phone-verify, the two "Verify current value" quick actions, and
+> field-scoped error clearing — editing email never clears a phone error and vice versa).
+> **Mutation-proven**: neutralizing `canVerifyPhoneCode`'s length check (`== PHONE_CODE_LENGTH` →
+> `true`) fails **exactly** `canVerifyPhoneCode_falseUntilExactlySixDigits` +
+> `verifyPhoneCode_whenInvalid_doesNothing` (29 others green); neutralizing
+> `toPhoneVerifyErrorKind`'s `httpStatus == 400` branch fails **exactly**
+> `verifyPhoneCode_http400_mapsToInvalidCode` (30 others green). Both applied via a scratch
+> `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the backup
+> afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression). Reviewer **PASS** (diff `apps/android`
+> only; SDK purity — the two reused pure SSOTs live in `:core:model`, all orchestration/network/
+> session-refresh glue stays app-side in `:feature:settings`; SSOT — no re-implementation of
+> email/phone format validation or countdown ticking; no coverage floor lowered; no tautological
+> tests). **Not attempted this run** (no simulator/emulator session for on-device verification —
+> this run was compile+test-only per the local JVM gate; a future run should install-and-verify
+> against the live gateway with the shared `atabeth` account, following the same
+> `uiautomator dump` + real `bounds=` discipline as every prior on-device pass in this file).
+> **Next slice candidates (not attempted this run)**: on-device transcription for the Feed audio
+> attachment (still the standing candidate, needs its own foundation); a shared `:sdk-ui`
+> `LanguagePickerDialog` (3 near-identical picker UIs now exist — registration inline grid,
+> Settings' `RegionalLanguageDialog`, the Feed composer's `ComposerLanguagePickerDialog`); Voice-
+> cloning onboarding wizard / voice-profile management (§K, both still unchecked, both genuinely
+> unshipped — no `VoiceProfile`/`VoiceCloning` surface exists anywhere in `apps/android`); map/
+> search/reverse-geocoding for the location attachment (needs a Maps SDK dependency + API key);
+> widgets/PiP categorical re-check — per the orchestrator's standing guidance, NOT re-grepped this
+> run (already re-confirmed zero-hit at iteration 44/45, already has checklist lines from the
+> iteration-19 audit-gap fix — this remains a documented, real, multi-slice-epic gap needing a
+> concrete sub-slice decomposition pass, not another bare re-grep).
+
 > On 2026-08-11 **two-factor authentication was restored** (slice `settings-two-factor-auth`,
 > feature-parity §L — a RE-PROUVER find during a broad re-sweep of `feature-parity.md`'s ~140
 > unchecked boxes, per the orchestrator's explicit "the Feed composer is quasi-bouclé, re-balaie

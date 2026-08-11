@@ -741,8 +741,25 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       }
     };
 
-    // Handler for participant joined — update memberCount in conversation lists
+    // `conversation:joined` n'est PAS une adhésion : le gateway l'émet aussi —
+    // même nom, même payload — comme l'ack self-only d'un socket qui REJOINT LA
+    // ROOM (`ConversationHandler`), c'est-à-dire à CHAQUE ouverture de fil.
+    // L'incrémentation qui vivait ici gonflait donc l'effectif de la ligne de
+    // liste d'une unité par ouverture, indéfiniment. L'adhésion réelle passe
+    // par `conversation:participant-joined` ci-dessous ; il ne reste ici que
+    // l'invalidation, légitime dans les deux lectures.
     const handleConversationJoined = (data: { conversationId: string; userId: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for participant joined — the symmetric counterpart of
+    // `handleConversationParticipantLeft`, and the only unambiguous carrier of
+    // an actual membership gain. The gateway leaves the new member OUT of this
+    // fan-out: their own list gets the conversation from `conversation:new`,
+    // whose member count already includes them.
+    const handleConversationParticipantJoined = (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => {
       const joinUpdater = (convs: Conversation[]) =>
         convs.map((conv) =>
           conv.id === data.conversationId
@@ -759,19 +776,19 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // Handler for participant left — update memberCount in conversation lists
+    // Le pendant EXACT de `conversation:joined` ci-dessus, et le même piège :
+    // `conversation:left` n'a qu'un seul émetteur, `socket.emit` après
+    // `socket.leave(room)` (`ConversationHandler.handleConversationLeave`). Il
+    // dit « ce socket a quitté la ROOM » — ce que produit la fermeture d'un
+    // fil — jamais « quelqu'un a quitté la conversation ». La décrémentation
+    // qui vivait ici retirait donc un membre à chaque fermeture de fil.
+    //
+    // Les deux erreurs se compensaient EN PARTIE, ce qui les cachait, mais
+    // jamais exactement : une reconnexion socket rejoint la room sans avoir
+    // émis de `leave`, et l'appli fermée ne l'émet pas non plus, tandis que la
+    // soustraction était bornée à 0 et l'addition ne l'était pas. Le départ
+    // réel passe par `conversation:participant-left`.
     const handleConversationLeft = (data: { conversationId: string; userId: string }) => {
-      const leftUpdater = (convs: Conversation[]) =>
-        convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
-            : conv
-        );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? leftUpdater(old) : old
-      );
-      updateInfiniteConversationCache(queryClient, leftUpdater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(data.conversationId),
       });
@@ -1179,6 +1196,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
     const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
     const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
+    const unsubscribeParticipantJoined = meeshySocketIOService.onConversationParticipantJoined(handleConversationParticipantJoined);
     const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
     const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
     const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
@@ -1208,6 +1226,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationNew?.();
       unsubscribeConversationDeleted?.();
       unsubscribeConversationUpdated?.();
+      unsubscribeParticipantJoined?.();
       unsubscribeParticipantLeft?.();
       unsubscribeParticipantBanned?.();
       unsubscribeParticipantUnbanned?.();

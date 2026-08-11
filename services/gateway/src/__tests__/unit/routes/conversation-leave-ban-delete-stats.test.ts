@@ -126,7 +126,7 @@ function createMockPrisma() {
     },
     participant: {
       findFirst: jest.fn<any>(),
-      findMany: jest.fn<any>(),
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       count: jest.fn<any>().mockResolvedValue(0),
     },

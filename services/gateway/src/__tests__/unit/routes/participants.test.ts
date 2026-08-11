@@ -12,6 +12,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
     CONVERSATION_JOINED: 'conversation:joined',
+    CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   },
   ROOMS: {

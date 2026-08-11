@@ -7,7 +7,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
 import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
 import type { StoryVisibility } from '@/components/v2';
-import { PostComposer } from '@/components/v2/PostComposer';
+import { PostComposer, type PostPublishPayload } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
 import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
@@ -33,8 +33,9 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
+import { reportService } from '@/services/report.service';
 import type { MobileTranscription } from '@/services/posts.service';
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostVisibility } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { copyToClipboard } from '@/lib/clipboard';
 
@@ -324,9 +325,15 @@ export function PostsFeedScreen() {
   // ─── Post handlers ────────────────────────────────────────────────────
 
   const handlePublish = useCallback(
-    (data: { content: string; type: 'POST' | 'STORY' | 'STATUS'; visibility: string }) => {
+    (data: PostPublishPayload) => {
       createPostMutation.mutate(
-        { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        {
+          content: data.content || undefined,
+          type: data.type,
+          visibility: data.visibility,
+          visibilityUserIds: data.visibilityUserIds,
+          mediaIds: data.mediaIds,
+        },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
           onError: () => showToast(t('toast.error', 'Error'), 'error', t('toast.postPublishError', "Couldn't publish the post.")),
@@ -414,6 +421,28 @@ export function PostsFeedScreen() {
     [deletePostMutation, showToast, t],
   );
 
+  const handleReportPost = useCallback(
+    (postId: string) => {
+      if (!window.confirm(t('post.reportConfirm', 'Report this post?'))) return;
+      reportService
+        .reportPost(postId, 'inappropriate', '')
+        .then(() => showToast(t('toast.postReported', 'Post reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the post.")));
+    },
+    [showToast, t],
+  );
+
+  const handleReportStory = useCallback(
+    (storyId: string) => {
+      if (!window.confirm(t('story.reportConfirm', 'Report this story?'))) return;
+      reportService
+        .reportStory(storyId, 'inappropriate', '')
+        .then(() => showToast(t('toast.storyReported', 'Story reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the story.")));
+    },
+    [showToast, t],
+  );
+
   const handlePinPost = useCallback(
     (postId: string, isPinned: boolean) => pinPostMutation.mutate({ postId, pin: !isPinned }),
     [pinPostMutation],
@@ -492,20 +521,35 @@ export function PostsFeedScreen() {
   }, []);
 
   const handleAudioPublish = useCallback(
-    async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+    async (data: {
+      audioFile: File;
+      transcription: MobileTranscription | null;
+      content?: string;
+      visibility: PostVisibility;
+      visibilityUserIds?: string[];
+    }) => {
       try {
         const tusService = new TusUploadService();
         const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
-        const mediaId = results[0]?.id;
-        if (!mediaId) throw new Error('Upload failed');
+        const media = results[0];
+        if (!media?.id) throw new Error('Upload failed');
 
         createPostMutation.mutate(
           {
             content: data.content,
             type: 'POST',
-            visibility: 'PUBLIC',
-            mediaIds: [mediaId],
+            visibility: data.visibility,
+            visibilityUserIds: data.visibilityUserIds,
+            mediaIds: [media.id],
             mobileTranscription: data.transcription ?? undefined,
+            originalLanguage: data.transcription?.language,
+            optimisticMedia: [{
+              id: media.id,
+              mimeType: media.mimeType,
+              fileUrl: media.fileUrl,
+              thumbnailUrl: media.thumbnailUrl,
+              order: 0,
+            }],
           },
           {
             onSuccess: () => {
@@ -698,6 +742,7 @@ export function PostsFeedScreen() {
                     onEdit={() => handleEditPost(post.id)}
                     onDelete={() => handleDeletePost(post.id)}
                     onPin={() => handlePinPost(post.id, post.isPinned)}
+                    onReport={() => handleReportPost(post.id)}
                     onClick={() => {
                       if (post.type === 'REEL') {
                         router.push(`/reel/${post.id}`);
@@ -738,6 +783,7 @@ export function PostsFeedScreen() {
           onView={handleStoryView}
           onReply={handleStoryReply}
           onDelete={handleStoryDelete}
+          onReport={handleReportStory}
         />
       )}
 

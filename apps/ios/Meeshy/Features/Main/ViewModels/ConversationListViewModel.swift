@@ -706,6 +706,23 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Real-time Socket Subscriptions
 
+    /// Le Prisme de la ligne porté par `conversation:updated`, quand le serveur
+    /// en parle. `nil` = `.unchanged` = « cet événement ne parle pas d'aperçu »
+    /// (renommage, avatar) : la carte du cache survit. Une carte VIDE, elle,
+    /// est un fait — le serveur DIT que la traduction est périmée.
+    ///
+    /// La paire voyage ensemble et jamais séparément : le résolveur de la ligne
+    /// (`resolvedLastMessagePreview`) PRÉFÈRE la traduction à `lastMessagePreview`,
+    /// donc poser l'un sans l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+    /// Règle recopiée de `ConversationStore.merging` (SDK), seule formulation de
+    /// référence — les deux doivent bouger ensemble.
+    private static func replacedPrism(
+        from event: ConversationUpdatedEvent
+    ) -> (map: [String: String], originalLanguage: String?)? {
+        guard case .replaced(let map) = event.lastMessageTranslations else { return nil }
+        return (map, event.lastMessageOriginalLanguage)
+    }
+
     private func subscribeToSocketEvents() {
         // Typing indicator — affiche "<Auteur> écrit..." dans le row
         messageSocket.typingStarted
@@ -815,6 +832,10 @@ class ConversationListViewModel: ObservableObject {
                 // effacer par la remise à neutre du bump une ligne plus bas :
                 // la ligne restait muette jusqu'à la synchro suivante alors même
                 // que le gateway venait d'envoyer le texte.
+                //
+                // Le Prisme voyage avec l'aperçu. Extrait UNE fois : les deux
+                // branches ci-dessous en ont besoin, chacune à sa façon.
+                let replacedPrism = Self.replacedPrism(from: event)
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
@@ -841,6 +862,11 @@ class ConversationListViewModel: ObservableObject {
                             preview: event.lastMessagePreview,
                             senderName: resolvedSenderName,
                             at: newLastAt,
+                            // La facette décrit UN message : la carte du message
+                            // PRÉCÉDENT n'est pas la sienne, donc `.unchanged`
+                            // vaut `nil` ici (neutre) et non « conserver ».
+                            translations: replacedPrism?.map,
+                            originalLanguage: replacedPrism?.originalLanguage,
                             location: event.location
                         )
                     )
@@ -854,6 +880,19 @@ class ConversationListViewModel: ObservableObject {
                     }
                     if let preview = event.lastMessagePreview {
                         self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
+                    }
+                    // Appliquée AU MÊME TITRE que l'aperçu, et au même endroit :
+                    // la paire doit rester cohérente, sinon on recrée le mélange
+                    // exact que le tri-état sert à empêcher — texte neuf, carte
+                    // de l'ancien, et le résolveur qui préfère la carte. C'est
+                    // le cas de l'ÉDITION : même `lastMessageId`, horodatage
+                    // ÉGAL, contenu changé, `translations: null` reçu.
+                    // `.replaced([:])` → `nil` : le résolveur distingue « pas de
+                    // carte » d'une carte vide.
+                    if let prism = replacedPrism {
+                        self.conversations[index].lastMessageTranslations =
+                            prism.map.isEmpty ? nil : prism.map
+                        self.conversations[index].lastMessageOriginalLanguage = prism.originalLanguage
                     }
                     // Metadata-only mutation (rename, avatar swap, broadcast
                     // toggle) still needs to land in L2 so a cold restart
@@ -908,6 +947,30 @@ class ConversationListViewModel: ObservableObject {
                 default:
                     break
                 }
+            }
+            .store(in: &cancellables)
+
+        // Le pendant montant de `participantSelfLeft`, et il a longtemps manqué :
+        // l'effectif ne connaissait que des soustractions (départ, retrait,
+        // bannissement) et dérivait durablement vers le bas — `schedulePersist`
+        // écrivant chaque valeur fausse dans le cache disque.
+        //
+        // Il ne pouvait PAS s'écouter sur `conversationJoined` : cet événement
+        // porte aussi l'ack self-only du socket qui REJOINT LA ROOM, que produit
+        // chaque ouverture de fil, avec le même payload. `participantJoined`
+        // (`conversation:participant-joined`) ne porte que l'adhésion.
+        //
+        // Le nouvel arrivant s'écarte lui-même : le serveur l'omet de l'éventail,
+        // mais l'auto-join de room côté serveur est asynchrone et pourrait le
+        // faire entrer dans la room de conversation avant l'emit. Son effectif
+        // lui vient de `conversation:new`, qui le compte déjà.
+        messageSocket.participantJoined
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, event.userId != self.currentUserId else { return }
+                guard let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount += 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 

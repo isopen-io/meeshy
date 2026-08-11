@@ -1573,3 +1573,76 @@ Append-only log of gotchas and decisions that save time next run.
   fixture the session doesn't fully control (no known password, no dedicated disposable account),
   the safety-first move is to verify up to but not including that flip, not to "complete the loop"
   for its own sake.
+
+## Slice `settings-account-contact-change` (2026-08-11)
+- **`advanceUntilIdle()` fully drains a coroutine's `delay()` loop even when that loop is
+  scheduled to run for real minutes of virtual time — it does not stop at "nothing due right
+  now," it keeps advancing virtual time until the scheduler is genuinely empty.** A test that
+  called `submitEmailChange()` (which launches a 60-iteration `delay(1000)` tick loop for the
+  resend cooldown) then `advanceUntilIdle()` to inspect the just-started cooldown got
+  `remaining == 0, expired == true` instead of `remaining == 60` — the single `advanceUntilIdle()`
+  call ran the ENTIRE 60-second countdown to completion before returning, because from the test
+  dispatcher's point of view a 60 s virtual delay and a 1 ms one are equally "not idle yet."
+  `runCurrent()` (only run tasks already due at the CURRENT virtual instant, never advance time)
+  is the correct call to observe a freshly-started periodic coroutine's initial state; reserve
+  `advanceTimeBy(N) + runCurrent()` for when the test actually wants to fast-forward through N ms
+  of that loop. Every call site that chains "trigger a tick-loop-starting action" then immediately
+  inspects tick-loop state must use `runCurrent()`, not `advanceUntilIdle()` — this bit 4 of 27
+  tests on first run here (`MagicLinkViewModel`'s own identical `delay(1000)` tick loop from an
+  earlier slice has no test file yet, so this exact trap hadn't been hit in this codebase before).
+- **A fully generic pure countdown type is worth reusing across unrelated features even when its
+  name reads domain-specific.** `MagicLinkCountdown` (`:core:model/auth`, from the magic-link-login
+  slice) is a `remaining`/`expired`/`tick()`/`canResend()`/`start()` value type with nothing
+  magic-link-specific in its logic — reused verbatim here for the unrelated 60s email-resend
+  cooldown rather than duplicating an identical tick/expire mechanism or renaming the type
+  (renaming would touch an unrelated slice's call site for zero behavioural gain, out of scope for
+  a single-feature PR). Only the 2nd call site so far — this codebase's own established convention
+  (`ComposerLanguagePickerDialog` vs `RegionalLanguageDialog` vs the registration inline grid) is
+  to keep duplicating small UI glue until a 3rd call site forces a shared abstraction, but that
+  convention is about UI glue, not already-fully-generic pure logic; a pure type with zero
+  feature-specific fields is a SSOT from the first reuse, not the third.
+
+## Slice `conversation-hardpress-preview` (2026-08-11)
+- **A high-load host can trigger a genuine, single, real `ActivityManager` ANR on the emulator
+  that has NOTHING to do with the diff under test — distinguish it from an app hang via the
+  `InputDispatcher` log lines, not the dialog alone.** Mid on-device verification, `dumpsys
+  window` reported an "Application Not Responding" dialog after a long-press gesture. Before
+  assuming the new `combinedClickable`/`loadPreviewMessages` code deadlocked something, `adb
+  logcat` showed the actual ANR reason: `Input dispatching timed out … Waited 5008ms for
+  MotionEvent … spent 8323ms processing MotionEvent` — that phrasing means the SYSTEM took
+  8+ seconds just to *deliver* the touch event to the app, not that the app failed to *handle*
+  an already-delivered one. `uptime` confirmed a load average of ~7-8 and `ps aux` showed three
+  concurrent `claude --dangerously-skip-permissions` processes plus an active Xcode `xctest` run
+  alongside the one `meeshy_pixel8` emulator — host-wide contention (the routine's own documented
+  "concurrent sessions" gotcha), not a code-level deadlock. Only ONE `ANR in me.meeshy.app.debug`
+  line was ever logged despite the dialog appearing to "come back" across several dismiss-and-
+  retap attempts — those were the same stuck dialog being slowly re-rendered under load, not
+  repeat crashes. Tapping "Close app" (not "Wait") plus a background wait-loop for `mCurrentFocus`
+  to clear, then relaunching, recovered cleanly with zero code changes.
+- **`dumpsys window`'s `mCurrentFocus` does not reliably report a Compose `DropdownMenu`'s
+  `Popup` the same way it reports a system dialog or a `PopupWindow`.** After a successful
+  long-press, `mCurrentFocus` read `Window{… Pop-Up Window}` once, but on a second identical
+  gesture on a different row it stayed on `MainActivity` even though (per a direct screenshot
+  check) nothing had actually opened — the earlier "long-press" had registered as a plain tap
+  and NAVIGATED into the conversation instead. `mCurrentFocus` alone is not a trustworthy signal
+  for "did a Compose Popup open" — always cross-check with an actual screenshot (or a fresh
+  `uiautomator dump` grepped for the menu's own content) rather than inferring solely from the
+  focus window name, especially the first time a given gesture is attempted on a fresh row.
+- **`input touchscreen swipe x y x y <ms>` reliably triggers a Compose `combinedClickable`'s
+  `onLongClick` at ~700-900ms under a QUIET system, but under host contention the SAME command
+  can be perceived as a short tap** (the framework's long-press timer apparently measures from
+  event delivery, not command issuance, so delivery lag eats into the hold window). No amount of
+  increasing the duration fixes this reliably when the host itself is the bottleneck — the fix is
+  to retry once system load has visibly dropped (`uptime`), not to keep escalating the duration.
+- **A hard-press preview card reusing an existing single-message preview formatter for a LIST of
+  messages resurfaces that formatter's existing "no content, no type" fallback as a
+  mid-list line, not just a whole-row fallback.** `lastMessagePreview`'s `labels.none` ("No
+  messages yet") is designed for "this conversation has no last message at all"; reused verbatim
+  for a mid-list message whose own content happens to be blank with no recognized media type, the
+  same label reads confusingly out of context ("No messages yet" appearing between two real
+  messages in the preview card, seen live on-device against the `atabeth` account's real
+  `Belva Tano` thread). Left as-is rather than special-cased this slice: it is the SAME string the
+  row's own single-line preview would already show if that message were the conversation's most
+  recent one, so this is an inherited pre-existing quirk of the reused formatter, not a new
+  regression — refactoring `lastMessagePreview`'s fallback semantics is out of scope for a slice
+  whose job was reusing it, not rewriting it.

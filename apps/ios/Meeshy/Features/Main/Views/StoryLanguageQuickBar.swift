@@ -33,6 +33,13 @@ struct StoryLanguageQuickBar: View {
     let onSelect: (String) -> Void
     let onOpenFullPicker: () -> Void
 
+    /// Index de la pastille survolée par le scrub (« + » = languages.count).
+    var highlightedIndex: Int? = nil
+    /// CoordinateSpace nommé dans lequel publier les cadres des pastilles.
+    var scrubFrameSpace: String? = nil
+    /// Reçoit les cadres publiés (hit-testing du scrub côté sidebar).
+    var onTileFrames: (([Int: CGRect]) -> Void)? = nil
+
     /// Au-delà de ce nombre, la rangée défile (avec « + » épinglé) au lieu de
     /// s'étaler ; en-deçà, elle épouse son contenu comme la barre de réaction.
     private let inlineCap = 5
@@ -47,6 +54,9 @@ struct StoryLanguageQuickBar: View {
             } else {
                 inlineRow
             }
+        }
+        .onPreferenceChange(ScrubTileFramesKey.self) { frames in
+            onTileFrames?(frames)
         }
         // Pilule IDENTIQUE à la barre de réaction (Liquid Glass iOS 26 / voile de
         // matière avant) — un seul point de vérité, partagé depuis le SDK.
@@ -124,6 +134,9 @@ struct StoryLanguageQuickBar: View {
                         .opacity(isActive ? 1 : 0)
                         .offset(y: 3)
                 }
+                .scaleEffect(highlightedIndex == index(of: language) ? 1.35 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
+                .background(tileFrameReader(index: index(of: language)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(language.name))
@@ -145,6 +158,9 @@ struct StoryLanguageQuickBar: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
             }
+            .scaleEffect(highlightedIndex == languages.count ? 1.35 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
+            .background(tileFrameReader(index: languages.count))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(String(localized: "story.viewer.language.more",
@@ -163,5 +179,21 @@ struct StoryLanguageQuickBar: View {
         let lhsBase = lhs.split(separator: "-").first.map(String.init)
         let rhsBase = rhs.split(separator: "-").first.map(String.init)
         return lhsBase != nil && lhsBase == rhsBase
+    }
+
+    private func index(of language: TranslationLanguage) -> Int {
+        languages.firstIndex(where: { $0.id == language.id }) ?? -1
+    }
+
+    @ViewBuilder
+    private func tileFrameReader(index: Int) -> some View {
+        if let scrubFrameSpace {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ScrubTileFramesKey.self,
+                    value: [index: proxy.frame(in: .named(scrubFrameSpace))]
+                )
+            }
+        }
     }
 }

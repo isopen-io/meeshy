@@ -66,11 +66,26 @@ function makePreValidationAuth(authenticated: boolean) {
   };
 }
 
+// `resolveConversationId` est doublé : la route travaille sur l'id RÉSOLU,
+// et c'est lui qui nomme la room comme il remplit le payload.
+const RESOLVED_CONV_ID = 'conv-resolved-id';
+const REMAINING_USER_ID = '507f1f77bcf86cd799439044';
+const REMAINING_ANON_PARTICIPANT_ID = '507f1f77bcf86cd799439055';
+
+/** Les membres encore actifs APRÈS le départ — sans le partant, donc. */
+const remainingParticipants = [
+  { id: 'p-remaining', userId: REMAINING_USER_ID },
+  // Participant sans compte (entré par lien de partage) : sa room personnelle
+  // est nommée d'après son `Participant.id`, cf. `emitToConversationParticipants`.
+  { id: REMAINING_ANON_PARTICIPANT_ID, userId: null },
+];
+
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(mockParticipant),
       count: jest.fn<any>().mockResolvedValue(0),
+      findMany: jest.fn<any>().mockResolvedValue(remainingParticipants),
       update: jest.fn<any>().mockResolvedValue({ ...mockParticipant, isActive: false }),
     },
     conversation: {
@@ -80,23 +95,45 @@ function makePrisma(overrides: Record<string, any> = {}) {
   };
 }
 
+type EmittedEvent = { rooms: string[]; event: string; payload: any };
+
+/**
+ * Double du `BroadcastOperator` de Socket.IO qui enregistre la CHAÎNE de rooms
+ * ayant porté chaque emit, et non un ensemble plat : la propriété testée est
+ * « au plus une copie par socket », que seul le chaînage garantit. Un double
+ * qui n'enregistrerait que les rooms ne distinguerait pas un
+ * `io.to(a).to(b).emit()` de deux `emit` séparés — soit précisément le défaut
+ * que le chaînage évite.
+ */
+function makeRecordingIO(emitted: EmittedEvent[]) {
+  const chain = (rooms: string[]) => ({
+    to(room: string) {
+      return chain([...rooms, room]);
+    },
+    emit(event: string, payload: any) {
+      emitted.push({ rooms, event, payload });
+    },
+  });
+  return {
+    to: (room: string) => chain([room]),
+    in: jest.fn().mockReturnThis(),
+    fetchSockets: jest.fn<any>().mockResolvedValue([]),
+  };
+}
+
 async function buildApp(opts: {
   authenticated?: boolean;
   prisma?: any;
   withSocket?: boolean;
+  emitted?: EmittedEvent[];
 } = {}): Promise<FastifyInstance> {
-  const { authenticated = true, prisma = makePrisma(), withSocket = false } = opts;
+  const { authenticated = true, prisma = makePrisma(), withSocket = false, emitted = [] } = opts;
 
   const app = Fastify({ logger: false });
   const requiredAuth = makePreValidationAuth(authenticated);
 
   if (withSocket) {
-    const mockIO = {
-      to: jest.fn().mockReturnThis(),
-      emit: jest.fn(),
-      in: jest.fn().mockReturnThis(),
-      fetchSockets: jest.fn<any>().mockResolvedValue([]),
-    };
+    const mockIO = makeRecordingIO(emitted);
     app.decorate('socketIOHandler', {
       getManager: jest.fn(() => ({
         getIO: jest.fn(() => mockIO),
@@ -174,11 +211,41 @@ describe('POST /conversations/:id/leave — creator alone in conversation', () =
   });
 });
 
-describe('POST /conversations/:id/leave — success with socket events', () => {
-  it('returns 200 and emits socket events', async () => {
-    const app = await buildApp({ withSocket: true });
+describe('POST /conversations/:id/leave — audience du départ', () => {
+  it('atteint les rooms PERSONNELLES des membres restants, pas seulement le fil', async () => {
+    // L'effectif de la conversation est rendu sur l'écran de LISTE, dont les
+    // lecteurs ont quitté la room de conversation. Adressé à la seule room, le
+    // départ ne les atteignait pas : leur compteur restait faux jusqu'à un
+    // rechargement complet, et le cache disque en gardait la trace.
+    const emitted: EmittedEvent[] = [];
+    const app = await buildApp({ withSocket: true, emitted });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
     expect(res.statusCode).toBe(200);
+
+    const left = emitted.filter(e => e.event === 'conversation:participant-left');
+    expect(left).toHaveLength(1);
+    expect(left[0].rooms).toEqual([
+      // La room de conversation reste en TÊTE de chaîne : elle porte le partant
+      // lui-même, encore dedans à cet instant, dont l'acquittement ne change pas.
+      `conversation:${RESOLVED_CONV_ID}`,
+      `user:${REMAINING_USER_ID}`,
+      // Le participant sans compte est nommé par son `Participant.id` : l'omettre
+      // sauterait une room qui EXISTE, pas une qui n'existe pas.
+      `user:${REMAINING_ANON_PARTICIPANT_ID}`,
+    ]);
+    expect(left[0].payload).toMatchObject({ conversationId: RESOLVED_CONV_ID, userId: USER_ID, displayName: 'Alice' });
+    await app.close();
+  });
+
+  it('n\'adresse que les membres ACTIFS restants', async () => {
+    const emitted: EmittedEvent[] = [];
+    const prisma = makePrisma();
+    const app = await buildApp({ withSocket: true, emitted, prisma });
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(prisma.participant.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ isActive: true }) })
+    );
     await app.close();
   });
 });

@@ -6,10 +6,15 @@
  * miroir exact du SDK (`ReelComposition.qualifiesAsReel`, FeedModels.swift,
  * suite `ReelCompositionTests`). Les cas ci-dessous répliquent la suite Swift.
  * Les images ne sont jamais soumises à la condition de durée.
+ *
+ * `qualifiesAsReel` vit désormais dans `@meeshy/shared/utils/reel-composition`
+ * (source unique, testée aussi côté shared dans
+ * `packages/shared/__tests__/utils/reel-composition.test.ts`) — ce fichier
+ * reste une couverture de régression au point de consommation gateway.
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { qualifiesAsReel } from '../reelComposition';
+import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 
 const LONG = 5000;
 
