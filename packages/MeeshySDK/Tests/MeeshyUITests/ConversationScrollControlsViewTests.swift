@@ -62,6 +62,28 @@ final class ConversationScrollControlsViewTests: XCTestCase {
             ConversationScrollControlsView.shouldShowAttachmentPreview(unreadCount: 3, hasAttachmentPreview: false))
     }
 
+    // MARK: - isCompactShape (circle at rest, capsule for rich content)
+
+    func test_isCompactShape_restState_isFalse() {
+        XCTAssertFalse(
+            ConversationScrollControlsView.isCompactShape(hasUnreadContent: false, isOffline: false, isSearchingQuotedMessage: false))
+    }
+
+    func test_isCompactShape_hasUnreadContent_isTrue() {
+        XCTAssertTrue(
+            ConversationScrollControlsView.isCompactShape(hasUnreadContent: true, isOffline: false, isSearchingQuotedMessage: false))
+    }
+
+    func test_isCompactShape_offline_isTrue() {
+        XCTAssertTrue(
+            ConversationScrollControlsView.isCompactShape(hasUnreadContent: false, isOffline: true, isSearchingQuotedMessage: false))
+    }
+
+    func test_isCompactShape_searchingQuotedMessage_isTrue() {
+        XCTAssertTrue(
+            ConversationScrollControlsView.isCompactShape(hasUnreadContent: false, isOffline: false, isSearchingQuotedMessage: true))
+    }
+
     // MARK: - typingDotTimer property wrapper (audit backlog 2026-07-20,
     // lane "Perf divers", P2)
     //

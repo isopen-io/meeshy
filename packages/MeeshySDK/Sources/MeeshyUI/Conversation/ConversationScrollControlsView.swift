@@ -122,7 +122,31 @@ public struct ConversationScrollControlsView: View {
         isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
     }
 
+    /// Repos = cercle parfait ; contenu riche/hors-ligne/recherche = capsule
+    /// ovale. Extrait en fonction pure testable (même pattern que
+    /// `shouldShowAttachmentPreview` plus bas) car XCTest ne peut pas
+    /// introspecter la `Shape` passée à un modificateur SwiftUI — seule la
+    /// DÉCISION est vérifiable, pas le rendu.
+    nonisolated static func isCompactShape(hasUnreadContent: Bool, isOffline: Bool, isSearchingQuotedMessage: Bool) -> Bool {
+        hasUnreadContent || isOffline || isSearchingQuotedMessage
+    }
+
     public var body: some View {
+        if Self.isCompactShape(hasUnreadContent: hasUnreadContent, isOffline: isOffline, isSearchingQuotedMessage: isSearchingQuotedMessage) {
+            pill(shape: Capsule())
+        } else {
+            pill(shape: Circle())
+        }
+    }
+
+    /// `Circle()` et `Capsule()` sont deux `Shape` distincts : `adaptiveGlass(in:)`
+    /// est générique sur `S: Shape`, donc `isCompact ? Circle() : Capsule()` ne
+    /// compile pas (branches de types incompatibles). Le branchement vit donc
+    /// au niveau de `body` (deux appels concrets à cette même fonction
+    /// générique) plutôt qu'un ternaire ici — c'est un cross-fade à l'identité
+    /// de vue au changement d'état, pas un morph de rayon animé (AnyShape
+    /// exclu : plancher iOS 16 ; décision spec).
+    private func pill<S: Shape>(shape: S) -> some View {
         Button {
             onScrollToBottom()
         } label: {
@@ -145,18 +169,22 @@ public struct ConversationScrollControlsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                 } else {
-                    // Simple chevron-only pill
+                    // Chevron-only pill au repos : frame CARRÉE explicite avant
+                    // .adaptiveGlass(in: Circle()) — sans elle le disque peint
+                    // (inscrit dans les bounds ~37×32 laissées par padding(12))
+                    // est plus étroit que le glyphe et déborde horizontalement.
+                    // 44×44 atteint au passage la cible tactile HIG.
                     Image(systemName: "chevron.down")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(contentColor)
-                        .padding(12)
+                        .frame(width: 44, height: 44)
                 }
             }
             // Liquid Glass iOS 26 (fallback material teinté < 26). Teinte accent
             // FORTE pour préserver le contraste du contenu blanc (badge non-lus,
             // aperçu pièce jointe) — toutes les infos restent visibles.
             .adaptiveGlass(
-                in: RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20, style: .continuous),
+                in: shape,
                 tint: isOffline ? MeeshyColors.neutral500.opacity(0.9) : Color(hex: accentColor).opacity(0.85)
             )
         }
