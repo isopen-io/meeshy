@@ -25,6 +25,7 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
@@ -1720,22 +1721,60 @@ export class MessageHandler {
    */
   private async _getMessageTranslations(message: Message): Promise<unknown[]> {
     if (message.translations !== undefined) {
-      return this._parseTranslations(message.translations);
+      return this._parseTranslations(message.id, message.translations);
     }
     const msg = await this.prisma.message.findUnique({
       where: { id: message.id },
       select: { translations: true }
     });
-    return this._parseTranslations(msg?.translations);
+    return this._parseTranslations(message.id, msg?.translations);
   }
 
-  private _parseTranslations(translations: unknown): unknown[] {
+  /**
+   * Sérialise les traductions d'un message pour le fil `message:new`.
+   *
+   * Deux formes entrent ici, et une seule sort :
+   * - une **carte Mongo** (`{ "en": { text, translationModel, ... } }`), telle
+   *   que la colonne `Message.translations` la stocke — c'est ce que rend le
+   *   `findUnique` ci-dessus, et ce que porte un message re-broadcasté après
+   *   traduction ;
+   * - un **tableau déjà au format API**, ce que le type partagé
+   *   `Message.translations` promet (`readonly MessageTranslation[]`) — laissé
+   *   intact, le re-transformer produirait `targetLanguage: "0"` (les clés
+   *   d'un tableau sont ses index).
+   *
+   * La carte passe par `transformTranslationsToArray`, le MÊME sérialiseur que
+   * le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`). Ce
+   * handler en portait une seconde copie qui répandait l'entrée Mongo telle
+   * quelle (`{ targetLanguage, ...data }`) : il en sortait `text`, jamais
+   * `translatedContent`, et ni `id` ni `messageId`. Ces trois champs sont NON
+   * optionnels dans `APITextTranslation` (SDK iOS), et `APIMessage.init(from:)`
+   * décode le tableau avec `try` et non `try?` — une seule entrée mal formée
+   * fait échouer le décodage du `message:new` ENTIER : le message n'apparaît
+   * pas du tout en temps réel, il ne lui manque pas seulement ses traductions.
+   * Le même message rechargé par `GET /messages` s'affichait normalement ; la
+   * visibilité dépendait donc du transport qui l'avait apporté.
+   *
+   * Les entrées inexploitables de la carte (valeur nulle, primitive, `text`
+   * non textuel — une colonne `Json` n'a pas de schéma pour l'interdire) sont
+   * ÉCARTÉES avant transformation, jamais émises mutilées : une entrée sans
+   * `translatedContent` utilisable ferait échouer le décodage du message
+   * entier, exactement le défaut que ce sérialiseur corrige. Les écarter ici
+   * plutôt que de laisser `transformTranslationsToArray` déréférencer `null`
+   * garde aussi les traductions VALIDES de la même carte — un seul `throw`
+   * remonterait au `.catch(() => [])` de l'appelant et les perdrait toutes.
+   */
+  private _parseTranslations(messageId: string, translations: unknown): unknown[] {
     if (!translations || typeof translations !== 'object') return [];
     if (Array.isArray(translations)) return translations;
-    return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({
-      targetLanguage: lang,
-      ...(typeof data === 'object' && data !== null ? data : {})
-    }));
+
+    const usableEntries = Object.entries(translations as Record<string, unknown>)
+      .filter(([, data]) => typeof (data as { text?: unknown })?.text === 'string');
+
+    return transformTranslationsToArray(
+      messageId,
+      Object.fromEntries(usableEntries) as Record<string, MessageTranslationJSON>
+    );
   }
 
   /**

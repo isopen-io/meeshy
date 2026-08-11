@@ -1778,7 +1778,13 @@ describe('MessageHandler._parseTranslations', () => {
     expect(payload.translations).toEqual(trans);
   });
 
-  it('converts object to [{targetLanguage, ...data}] array', async () => {
+  // Ce témoin verrouillait auparavant la forme brute `{ targetLanguage,
+  // ...data }` — celle qui répandait la carte Mongo telle quelle et laissait
+  // partir `text` sans `translatedContent`, `id` ni `messageId`. Il pinnait
+  // donc précisément le défaut. Il verrouille désormais le contrat de fil réel,
+  // celui du chemin REST/ZMQ (`transformTranslationsToArray`), le seul que le
+  // décodeur `APITextTranslation` du SDK iOS accepte.
+  it('sérialise la carte Mongo au format API — `id`/`messageId`/`translatedContent`, jamais `text` brut', async () => {
     const io = makeMockIo();
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
@@ -1787,17 +1793,27 @@ describe('MessageHandler._parseTranslations', () => {
     const connectedUsers = new Map<string, SocketUser>();
     const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any });
 
-    const transObj = { en: { content: 'hello' }, de: { content: 'hallo' } };
+    const transObj = {
+      en: { text: 'hello', translationModel: 'basic' },
+      de: { text: 'hallo', translationModel: 'basic' },
+    };
     const msg = msgWithTranslations(transObj);
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
     const emitCalls = io._emit.mock.calls.filter((c: any[]) => c[0] === 'message:new');
     const payload = emitCalls[0]?.[1] ?? {};
     expect(payload.translations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ targetLanguage: 'en', content: 'hello' }),
-      expect.objectContaining({ targetLanguage: 'de', content: 'hallo' }),
+      expect.objectContaining({
+        id: 'msg-1-en', messageId: 'msg-1', targetLanguage: 'en', translatedContent: 'hello',
+      }),
+      expect.objectContaining({
+        id: 'msg-1-de', messageId: 'msg-1', targetLanguage: 'de', translatedContent: 'hallo',
+      }),
     ]));
     expect(payload.translations).toHaveLength(2);
+    for (const t of payload.translations) {
+      expect(t).not.toHaveProperty('text');
+    }
   });
 
   it('returns [] when translations is null', async () => {
@@ -3190,8 +3206,13 @@ describe('MessageHandler — branch coverage boosters', () => {
     expect(emitCalls[0]?.[1]?.translations).toEqual([]);
   });
 
-  // Cover branch 101 (line 890): _parseTranslations when data is not an object (primitive)
-  it('broadcastNewMessage: translations object with primitive values → spread {} fallback', async () => {
+  // `Message.translations` est une colonne `Json` : aucun schéma n'empêche une
+  // entrée nulle ou primitive d'y être écrite. Ce témoin verrouillait
+  // auparavant leur émission SOUS forme d'entrées `{ targetLanguage }` nues —
+  // or une entrée sans `translatedContent` fait échouer le décodage du
+  // `message:new` entier côté iOS. Elles doivent être écartées, et surtout
+  // sans emporter les entrées VALIDES de la même carte.
+  it("écarte les entrées inexploitables de la carte sans perdre les entrées valides qui l'accompagnent", async () => {
     const io = makeMockIo();
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
@@ -3200,19 +3221,24 @@ describe('MessageHandler — branch coverage boosters', () => {
     const connectedUsers = new Map<string, SocketUser>();
     const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any });
 
-    // translations is an object where value is a string (not an object)
     const msg = {
       id: 'msg-1', conversationId: 'conv-abc', senderId: 'p1', content: 'hi',
       createdAt: new Date(), sender: null, attachments: [],
-      translations: { en: 'hello string', fr: null },
+      translations: {
+        en: 'hello string',
+        fr: null,
+        it: { translationModel: 'basic' },
+        es: { text: 'hola', translationModel: 'basic' },
+      },
     } as any;
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
     const emitCalls = io._emit.mock.calls.filter((c: any[]) => c[0] === 'message:new');
-    expect(emitCalls[0]?.[1]?.translations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ targetLanguage: 'en' }),
-      expect.objectContaining({ targetLanguage: 'fr' }),
-    ]));
+    expect(emitCalls[0]?.[1]?.translations).toEqual([
+      expect.objectContaining({
+        id: 'msg-1-es', messageId: 'msg-1', targetLanguage: 'es', translatedContent: 'hola',
+      }),
+    ]);
   });
 
   // Cover branch 146 (line 1152): createdAt undefined → no createdAt in response
