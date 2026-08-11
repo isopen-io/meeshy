@@ -790,6 +790,8 @@ export function PostsFeedScreen() {
                     reactionSummary={post.reactionSummary ?? undefined}
                     userReaction={userReaction}
                     media={post.media}
+                    repostOf={post.repostOf}
+                    isQuote={post.isQuote}
                     onLike={() => handleLike(post.id, isLiked)}
                     onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
                     onComment={() => handleComment(post.id)}
@@ -802,6 +804,8 @@ export function PostsFeedScreen() {
                     onPin={() => handlePinPost(post.id, post.isPinned)}
                     onReport={() => handleReportPost(post.id)}
                     onDownloadMedia={(mediaId) => handleDownloadMedia(post.id, mediaId)}
+                    onDownloadRepostMedia={(mediaId) => post.repostOf?.id && handleDownloadMedia(post.repostOf.id, mediaId)}
+                    onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
                     onClick={() => {
                       if (post.type === 'REEL') {
                         router.push(`/reel/${post.id}`);

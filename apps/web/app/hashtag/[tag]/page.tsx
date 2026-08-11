@@ -115,7 +115,10 @@ export default function HashtagPage() {
               likes={post.likeCount}
               comments={post.commentCount}
               isAuthor={post.authorId === currentUserId}
+              repostOf={post.repostOf}
+              isQuote={post.isQuote}
               onReport={() => handleReportPost(post.id)}
+              onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
               onClick={() => router.push(`/feeds/post/${post.id}`)}
             />
           ))}

@@ -267,6 +267,10 @@ export default function PostDetailPage() {
             onReport={isAuthor ? undefined : handleReportPost}
             onTranslate={() => translateMutation.mutate({ postId: post.id, targetLanguage: userLanguage })}
             onDownloadMedia={(mediaId) => postsService.recordMediaDownloads(post.id, [mediaId], 'detail')}
+            onDownloadRepostMedia={(mediaId) => {
+              if (post.repostOf?.id) postsService.recordMediaDownloads(post.repostOf.id, [mediaId], 'detail');
+            }}
+            onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
             onSubmitComment={(content, parentId) =>
               createCommentMutation.mutate({ postId: post.id, content, parentId })
             }
