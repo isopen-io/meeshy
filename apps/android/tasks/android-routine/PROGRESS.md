@@ -1,5 +1,91 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **dynamic launcher shortcuts landed** (slice `dynamic-launcher-shortcuts`,
+> feature-parity §"App Actions / dynamic shortcuts" — the prior widget slice's own "Quick reply
+> widget" candidate was investigated first and DISQUALIFIED this run, see below; this slice was
+> picked instead after that investigation surfaced it). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open --search "apps/android OR apps/ios"` found no
+> interrupted run (3 open PRs, `#2846`/`#2848`/`#2849`, all unrelated concurrent sessions —
+> `apps/web`/`apps/ios calls`/`apps/web`, none matching this routine's branch naming). **A real
+> finding that changed this run's plan**: investigated "Quick reply widget" (the top "next slice"
+> candidate from the prior entry) by reading iOS's `MeeshyWidgets.swift` `QuickReplyWidgetView`/
+> `QuickReplyButton` in full — its 4 canned-reply buttons deep-link via
+> `meeshy://quickreply/{id}?text=...`, but `grep`ping the ENTIRE iOS app
+> (`DeepLinkRouter.swift`'s full `switch` over recognized hosts) found **no `quickreply` case
+> anywhere** — iOS's own Quick Reply widget is dead/decorative in production today: tapping any of
+> the 4 buttons opens the app via an unhandled URL host with no defined fallback behavior. The
+> SAME grep also confirmed the `meeshy://contact/{id}` host `FavoriteContactsWidget` uses on iOS is
+> equally unhandled — retroactively validating this routine's own earlier choice (prior slice) to
+> reuse `meeshy://conversation/{id}` on Android instead of inventing a matching `contact` host.
+> Porting Quick Reply faithfully would have replicated iOS's bug rather than shipped real value;
+> building a genuinely working version needs a new prefill-draft mechanism in the chat composer
+> (no `initialDraft`/`prefillText` nav-arg exists anywhere in `:feature:chat` today, confirmed by
+> grep) — real, moderate scope, explicitly NOT attempted this run; logged as its own right-sized
+> future slice rather than either faking it or quietly skipping the finding. Pivoted instead to
+> "App Actions / dynamic shortcuts" from the same candidate list, and further narrowed IT after
+> reading iOS's `MeeshyAppIntents.swift` (431 lines) in full: iOS's `MeeshyAppShortcuts` bundles 5
+> Siri/`AppIntents` phrases (Send Message, Call Contact, Translate, Open Recent Conversation, Check
+> Notifications) — 4 of which need Siri's own natural-language contact/parameter resolution with no
+> direct Android equivalent, while Android's own nearest analogue for VOICE triggering (Google
+> Assistant "App Actions" via `shortcuts.xml` capability bindings) needs external Assistant
+> indexing/review and isn't reliably locally verifiable in this environment. Scoped this run to
+> just the always-local, fully-testable slice of the epic: dynamic launcher shortcuts (long-press
+> the launcher icon), Android's closest equivalent to iOS's simplest intent,
+> `OpenRecentConversationIntent`. **Shipped (production, all `apps/android`)**: new
+> `DynamicShortcutsPresentation` (`:app/shortcuts`, pure) sorts cached conversations pinned-first
+> then by `ConversationRowTime.epochMillis` descending (the exact ordering SSOT the two prior
+> widget slices already established and validated), caps at a caller-supplied `maxCount` (clamped
+> to ≥0 — a negative value, defensive against any future caller misuse, never crashes), and maps
+> each row via the existing `ApiConversation.displayTitle()` SSOT — zero re-implementation, third
+> reuse of the exact pattern (`*Presentation.from()`) this app's home-screen widgets already
+> established twice. `DynamicShortcutsPublisher` (`:app/shortcuts`, thin Android glue) reads the
+> device's own real max via `ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)` (never
+> a hardcoded guess — OEM launchers vary), builds one `ShortcutInfoCompat` per row (app-icon
+> `IconCompat`, `meeshy://conversation/{id}` intent — reuses the identical deep-link construction
+> pattern both widgets already use, matched by the same pre-existing `navDeepLink`), and calls
+> `ShortcutManagerCompat.setDynamicShortcuts(...)` (a full-replace call, not an add — so a stale
+> shortcut for a since-deleted/renamed conversation self-corrects on the very next publish with no
+> dedicated cleanup logic needed). `MainActivity` gains two `@Inject` fields
+> (`ConversationRepository`, `SessionRepository` — both already `@Singleton`-scoped, no new DI
+> wiring) and a new `onResume()` override that launches a `lifecycleScope` coroutine to publish —
+> a plain, cheap, idempotent one-shot Room read (no network, no polling loop, matches the "Instant
+> App" cache-first principle) rather than a dedicated live-update hook into the conversation list's
+> own sync pipeline (deliberately narrower than a "live" system, exactly mirroring both widgets'
+> own "static/OS-or-lifecycle-triggered refresh only" precedent). **+9 new tests**
+> (`DynamicShortcutsPresentationTest`: empty list, direct-conversation other-participant name,
+> group-conversation own title, pinned-before-recent ordering, recency ordering among unpinned, cap
+> respected, a zero max count (rate-limited device) yields no shortcuts, a negative max count is
+> clamped rather than crashing, shortcut id matches conversation id). **Mutation-proven**, two axes:
+> neutralizing the recency sort key (`ConversationRowTime.epochMillis(it) ?: Long.MIN_VALUE` →
+> `0L`) fails **exactly** `among unpinned conversations, the most recently active sorts first` (8
+> others green); neutralizing the cap clamp (`maxCount.coerceAtLeast(0)` → `Int.MAX_VALUE`) fails
+> **exactly** the 3 cap-focused tests (`the presentation caps at the device-reported max count`,
+> `a max count of zero...resolves to no shortcuts`, `a negative max count is treated as zero...`; 6
+> others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`), restored via
+> `cp`, diffed clean against the backup afterward. **Gate**: `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice — no build-graph regression; zero
+> test failures across every module's XML reports). Reviewer **PASS** (diff `apps/android` only,
+> confirmed via `git status --short` — `MainActivity.kt` + 2 new files under `:app/shortcuts` +
+> their test; SDK purity — the pure ordering/cap/map decision lives in `:app/shortcuts` (correctly,
+> per the grain test: a product decision, not a reusable atom — mirrors both sibling widgets'
+> precedent exactly), the `ShortcutManagerCompat` glue is exempt framework code; SSOT — reuses
+> `displayTitle`/`ConversationRowTime`/`ConversationRepository.cachedConversations`/
+> `SessionRepository.currentUserId`, zero re-implementation; no coverage floor lowered; no
+> tautological tests). **Not attempted this run** (compile+test-only per the local JVM gate; no
+> simulator/emulator session for on-device verification — a future run should install-and-verify
+> that a real long-press on the launcher icon shows the shortcuts, correctly ordered, and that
+> tapping one opens the right conversation). **Next slice candidates (not attempted this run)**: a
+> chat-composer prefill-draft mechanism (would unlock a GENUINELY working Quick Reply widget, since
+> iOS's own is confirmed dead — a real opportunity to exceed iOS parity, not just match it); Google
+> Assistant App Actions (`shortcuts.xml` capability bindings) for the voice-triggered half of this
+> same epic — needs external Assistant indexing/review, flagged as its own larger follow-up rather
+> than a right-sized single slice; the mark-read widget action (still deprioritized — thin glue,
+> low test value, see two runs ago); a presence-cache foundation for conversation participants; on-
+> device transcription for the Feed audio composer; a shared `:sdk-ui` `LanguagePickerDialog`;
+> Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location attachment; PiP
+> (calls + media) — per the orchestrator's guidance this remains a documented, real, multi-slice-
+> epic gap warranting a planning/decomposition pass rather than a bare re-grep.
+
 > On 2026-08-11 **home-screen widgets' third sub-slice landed**: `FavoriteContactsWidget`
 > (slice `widget-favorite-contacts`, feature-parity §"Home-screen widgets" — picked from the
 > prior slice's own explicit "Next slice candidates" list, per the orchestrator's standing

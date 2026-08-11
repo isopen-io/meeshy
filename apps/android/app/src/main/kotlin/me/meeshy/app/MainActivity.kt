@@ -18,15 +18,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.push.MeeshyFcmService
+import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.resolveDarkMode
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
 import javax.inject.Inject
@@ -47,6 +53,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var sessionExpiry: SessionExpiryNotifier
 
+    /** Source des raccourcis dynamiques du lanceur (voir [onResume]). */
+    @Inject
+    lateinit var conversationRepository: ConversationRepository
+
+    @Inject
+    lateinit var sessionRepository: SessionRepository
 
     private var launchRoute by mutableStateOf<String?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
@@ -81,6 +93,24 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+    }
+
+    /**
+     * Republishes the launcher's dynamic shortcuts (long-press the launcher icon)
+     * from whatever is currently Room-cached — cheap, idempotent (`setDynamicShortcuts`
+     * fully replaces the set), so a stale entry from a since-deleted/renamed
+     * conversation self-corrects on the very next resume rather than needing a
+     * dedicated live-update hook.
+     */
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch {
+            DynamicShortcutsPublisher.publish(
+                context = this@MainActivity,
+                conversations = conversationRepository.cachedConversations().first(),
+                currentUserId = sessionRepository.currentUserId,
+            )
+        }
     }
 }
 
