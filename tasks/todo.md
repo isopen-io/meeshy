@@ -1,3 +1,141 @@
+# Tête instruite pour le cycle 73 — la fenêtre de transition dépasse la moitié du slide le plus court
+
+*Trouvé en corrigeant le cycle 72, mesuré, NON corrigé : contrairement aux deux défauts de ce
+cycle-là, celui-ci demande un arbitrage produit, pas un correctif mécanique. L'arithmétique est
+faite ; la décision ne l'est pas.*
+
+## Le fait
+
+`StoryComposerViewModel+Slides.currentSlideDuration` borne la durée d'un slide à
+`max(2, min(600, …))` — **2 secondes minimum**. `StoryRenderer.slideTransitionDuration` vaut
+désormais **1,2 s**, partagée par l'ouverture ET la fermeture.
+
+Sur un slide de 2 s :
+- l'ouverture court de `0` à `1,2` ;
+- la fermeture ouvre à `2,0 − 1,2 = 0,8`.
+
+**Les deux fenêtres se chevauchent sur 0,4 s**, et le slide n'a aucun instant où il est simplement
+lui-même. Le seuil est `2 × 1,2 = 2,4 s` : tout slide plus court chevauche. À 0,5 s le seuil valait
+1 s, sous le plancher de 2 s — le chevauchement était donc *impossible* avant `fcd002ee`. C'est une
+conséquence non instruite du passage à 1,2 s, pas une dette ancienne.
+
+## Ce que le cycle 72 a fait, et pourquoi il s'est arrêté là
+
+Le correctif du chevauchement des *animations* (`clearOpeningFill`) ne retire l'entrée qu'à partir
+de `progress > 0`, donc à `0,8 s` sur un slide de 2 s — au milieu d'une ouverture qui en est aux
+deux tiers. Le saut est réel : opacité ~0,67 → ~1,0 d'une frame à l'autre. Il est **moins grave que
+le défaut qu'il remplace** (une fermeture jamais jouée), et c'est le seul arbitrage que le cycle 72
+s'est autorisé sans instruction.
+
+## Les trois options, et ce qu'elles coûtent
+
+1. **Relever le plancher de durée à `2 × slideTransitionDuration`** (2,4 s). Une ligne, dérivée de
+   la SSOT, aucune régression de rendu. Coût : refuse une durée que des slides existants portent
+   déjà en base — il faut décider ce qu'on fait des projets déjà enregistrés à 2 s.
+2. **Comprimer la fenêtre de sortie dans ce qui reste** :
+   `start = max(slideTransitionDuration, totalDuration − slideTransitionDuration)` et normaliser la
+   rampe sur `totalDuration − start`. Aucun slide refusé, mais **`closingProgress` change de
+   contrat** — et `StoryAVCompositor` doit suivre au même instant, sinon l'export re-diverge de
+   l'aperçu, exactement le défaut n°2 du cycle 72 sous une autre forme.
+3. **Ne rien faire et l'assumer** : un slide de 2 s avec entrée ET sortie est un cas que l'auteur
+   a construit à la main ; le saut est visible mais borné.
+
+**Ne pas trancher ça sans l'avis produit.** Les options 1 et 2 sont toutes deux défendables et
+n'ont pas le même effet sur les stories déjà publiées.
+
+## Ce qui reste vrai de la contrainte d'environnement
+
+`ios-tests.yml` reste hors de portée de cette routine (`403 Resource not accessible by
+integration` — pas de `actions: write`). **`sdk-tests.yml` tourne sur les PR** et a gaté les deux
+correctifs du cycle 72, y compris le Swift de production : c'est le seul gate Swift disponible, et
+il suffit dès que le code vit dans `packages/MeeshySDK`. Seule la couche `apps/ios` reste aveugle.
+
+---
+
+# Cycle 72 — Deux défauts sur la même surface : `main` redevient vert, et l'aperçu cesse de mentir sur l'export
+
+## Le fil instruit, tenu jusqu'au bout
+
+Le cycle 71 laissait une tête entièrement instruite : `sdk-tests` rouge sur `main`, cause prouvée
+par l'arithmétique, correctif décrit, « mécanique pour qui dispose d'un Mac ». Elle avait raison sur
+tout **sauf sur la contrainte** : le cycle 71 s'était interdit d'écrire ce Swift faute de pouvoir le
+compiler. Or `sdk-tests.yml` tourne **sur les PR**. Le gate existait ; il n'avait pas été reconnu
+comme tel pour du code de production.
+
+C'est la leçon dominante du cycle, et elle vaut au-delà de ce correctif : **la question n'est pas
+« puis-je compiler ici ? » mais « existe-t-il un gate qui compile ceci ? »**. Les deux réponses ont
+divergé pendant cinq cycles.
+
+## Défaut n°1 — huit témoins figés sur une durée qui a bougé
+
+`fcd002ee` fait passer `StoryRenderer.slideTransitionDuration` de 0,5 à 1,2 s. Il a relevé la borne
+de `StoryOpeningParityTests` mais laissé, dans deux autres fichiers, des instants d'échantillonnage
+choisis pour la fenêtre précédente. Aucun comportement n'avait changé : la rampe est toujours nulle
+avant la fenêtre, linéaire dedans, plafonnée après. **Seuls les témoins mentaient.**
+
+Recaler les littéraux sur 1,2 s aurait « marché » et re-cassé au prochain ajustement — c'est la
+deuxième fois que cette constante bouge, et la deuxième fois qu'elle laisse des témoins rouges
+décrivant un comportement inchangé. Les instants s'expriment donc en fonction de la SSOT
+(`totalDuration − window`, `− window / 2`), et les valeurs dérivées aussi (`zoomTransitionScale`,
+`slideTransitionTravelFraction`).
+
+Contrepartie assumée : `test_badgeWidth_matchesSlideTransitionDuration` devient **tautologique** une
+fois lié à la SSOT — l'implémentation est littéralement l'expression attendue. Deux témoins lui
+rendent sa portée, tous deux indépendants de la durée : la largeur reste celle de la FENÊTRE et non
+celle du slide (la régression que le commentaire de la lane documente), et elle respire avec le zoom.
+
+## Défaut n°2 — celui que le premier a fait apparaître
+
+En relisant `StoryRenderer` pour dériver les instants, une asymétrie s'est vue : `applyOpening` pose
+des `CABasicAnimation` (`fillMode = .forwards`, `isRemovedOnCompletion = false`) là où `applyClosing`
+écrit des valeurs **modèle**. Un remplissage `.forwards` non retiré recouvre la valeur modèle — donc
+la fermeture est calculée, stockée, et jamais vue.
+
+Vérifié, pas déduit : **zéro `removeAnimation` dans tout `MeeshyUI`**, et `rootLayer` est un `let`
+stocké que `rebuildLayers()` ne remplace pas. Le remplissage vit aussi longtemps que le canvas.
+
+Le balayage des trois chemins de rendu a donné la portée exacte — et c'est elle qui rend le défaut
+coûteux :
+
+| Chemin | Touché | Pourquoi |
+|---|---|---|
+| **Aperçu du composer** | **oui** | seul chemin qui traverse `applyOpening` (transition `edit → play`) |
+| Lecteur | non | canvas né en `.play` ; `self.mode = mode` dans l'`init` ne déclenche pas les observateurs — fait déjà consigné par `StoryOpeningParityTests` |
+| Export MP4 | non | `applyStaticOpening` n'écrit que des valeurs modèle, `layer.render(in:)` n'exécutant pas le moteur d'animation |
+
+**La surface où l'auteur vérifie ses transitions est la seule qui les avale.** L'aperçu mentait sur
+l'export.
+
+Le conflit se joue par **keyPath**, pas par effet : `.zoom` et `.slide` écrivent tous deux
+`sublayerTransform`, donc une entrée `.zoom` masque une sortie `.slide` aussi sûrement que la sienne.
+Le retrait est en conséquence chirurgical (une entrée `.fade` sous une sortie `.zoom` est laissée
+en place) et ne se déclenche qu'à `progress > 0`, pour ne pas tronquer une entrée encore en vol.
+
+## Vérification
+
+- **7 témoins neufs**, dont **3 rouges avant** le correctif n°2 (`dropsTheOpeningFadeFill`,
+  `dropsTheOpeningZoomFill`, `dropsEveryOpeningFillOnTheRootLayer`) ; les 2 autres verrouillent ce
+  qui ne doit PAS être retiré (`keepsTheOpeningFill` avant la fenêtre, `keepsTheUnrelatedOpeningFade`).
+- Les témoins portent sur `animation(forKey:)` et non sur le pixel : `presentationLayer()` exige un
+  render server qu'aucun test unitaire n'a, et le remplissage attaché **est** le défaut.
+- Gate : `sdk-tests.yml` sur la PR #2826 — compile et exécute `MeeshyUITests`, code de production
+  compris.
+
+## Reste ouvert après ce cycle
+
+- **La fenêtre de transition dépasse la moitié du slide le plus court** — tête instruite du cycle 73
+  ci-dessus. Arbitrage produit, pas correctif mécanique.
+- **`ios-tests.yml` reste hors de portée** (`403`, pas de `actions: write`). Inchangé depuis le
+  cycle 68 — mais la portée réelle de cette dette s'est réduite : tout ce qui vit dans
+  `packages/MeeshySDK` est gatable par PR. Seule la couche `apps/ios` reste aveugle.
+- **`eslint` ne peut toujours pas tourner sur le gateway** (aucun `eslint.config.js` depuis ESLint
+  v9). Condition préexistante, non couverte par la CI.
+- Les points hérités des cycles précédents restent tels quels : `@Display Name` inextractible dans
+  le domaine social, `createStoryCommentNotificationsBatch` et son `visibility?` optionnel, les deux
+  scripts de réparation base en attente d'exécution humaine, l'arbitrage `delete-for-me` du cycle 12.
+
+---
+
 # Tête instruite pour le cycle 72 — `sdk-tests` est ROUGE sur `main`, cause trouvée et prouvée
 
 *Découvert en gatant le cycle 71, diagnostiqué mais NON corrigé : le correctif est du Swift que ce
