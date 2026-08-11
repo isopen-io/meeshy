@@ -488,6 +488,20 @@ export function CallManager() {
         return;
       }
 
+      // Same guard, pre-accept: before the user has answered anything,
+      // `trackedCall` is still null, so the guard above short-circuits and
+      // falls through — even though a DIFFERENT call is ringing
+      // (`incomingCall`, local state, distinct from the store). The gateway's
+      // call:ended fan-out reaches every conversation member's user room, not
+      // just call participants (so a still-ringing callee can learn a call it
+      // was never near ended — `callEndedFanout.ts`'s `resolveCallEndedRooms`),
+      // so this is a realistic delivery, not a contrived one. Mirrors how
+      // `handleAnsweredElsewhere` already scopes itself to
+      // `incomingCall?.callId === event.callId`.
+      if (!trackedCall && incomingCall && incomingCall.callId !== event.callId) {
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
 
@@ -543,7 +557,7 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall]
+    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall, incomingCall]
   );
 
   /**

@@ -55,9 +55,7 @@ export type PendingCallRetryMap = Record<string, PendingCallRetry>;
 
 interface CallStoreState extends CallState {
   // Extended state
-  reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
-  isReconnecting: boolean;
   joinRequest: JoinCallRequest | null;
   /** Retry affordances owed after transient call failures, keyed by conversationId (see PendingCallRetryMap). */
   pendingRetry: PendingCallRetryMap;
@@ -102,9 +100,6 @@ interface CallStoreState extends CallState {
   // Actions: Heartbeat
   startHeartbeat: (callId: string) => void;
   stopHeartbeat: () => void;
-
-  // Actions: Reconnection
-  setReconnecting: (attempt: number) => void;
 
   // Actions: Connection quality
   setConnectionQuality: (quality: ConnectionQualityLevel) => void;
@@ -175,9 +170,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
 
   // Extended state defaults
-  reconnectAttempt: 0,
   connectionQuality: null,
-  isReconnecting: false,
   iceServers: null,
   joinRequest: null,
   pendingRetry: {},
@@ -483,15 +476,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  // ===== RECONNECTION =====
-
-  setReconnecting: (attempt) => {
-    set({
-      isReconnecting: attempt > 0,
-      reconnectAttempt: attempt,
-    });
-  },
-
   // ===== CONNECTION QUALITY =====
 
   setConnectionQuality: (quality) => {
@@ -566,9 +550,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
-      reconnectAttempt: 0,
       connectionQuality: null,
-      isReconnecting: false,
       iceServers: null,
       joinRequest: null,
       pendingRetry: survivingRetry,
