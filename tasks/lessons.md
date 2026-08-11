@@ -4301,7 +4301,7 @@ heure, une route qui répond 500 en production.
    celles qui n'existent pas encore. Corriger deux routes ferme deux défauts ; épingler l'invariant
    ferme la classe.
 
-## Leçon 96 — un champ dénormalisé que personne n'écrit ne « dérive » pas : il MENT dès la première lecture (2026-08-11, routine messaging, cycle 71)
+## Leçon 110 — un champ dénormalisé que personne n'écrit ne « dérive » pas : il MENT dès la première lecture (2026-08-11, routine messaging, cycle 71b)
 
 Le cycle 70 laissait une question d'audience : *faut-il élargir la diffusion de trois événements
 de membres ?* La réponse honnête imposait de vérifier d'abord ce que la ligne de liste rend. Cette
@@ -4328,7 +4328,11 @@ vérification a trouvé un défaut plus grave, ailleurs, et l'audience n'en éta
    (`memberCount || _count || participants.length`) achevait de masquer : il rendait `5`, une
    valeur plausible, parce que la liste n'envoie que 5 participants.
 4. **Le nom d'événement surchargé — voir la leçon 109, écrite le même jour par la session
-   parallèle, qui l'a instruit plus loin (le jumeau `conversation:left`).** Un point à ajouter
+   parallèle, qui l'a instruit plus loin (le jumeau `conversation:left`).** *(Numérotée 110 et non
+   96 : ce fichier porte DEUX séries de numéros qui se recouvrent depuis longtemps — une vingtaine
+   de doublons entre ~54 et ~96. La série haute, seule à jour, va jusqu'à 109 ; s'y rattacher plutôt
+   qu'ajouter une collision de plus. Le tri du reste est un chantier à lui seul, pas un effet de
+   bord de cycle.)* Un point à ajouter
    depuis ce côté-ci : entre « un champ qui discrimine » et « un nom distinct », **prendre le
    nom**. Cette session proposait de séparer les deux sens par la PRÉSENCE de `memberCount` dans
    le payload ; ça fonctionne, mais ça fait porter la sémantique à une option, et ça élargit
