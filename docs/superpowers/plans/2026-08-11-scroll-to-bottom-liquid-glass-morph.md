@@ -959,31 +959,108 @@ pbxproj régénéré). Vérifié ici : après régénération, 9/9 verts.
 
 **Files:** none.
 
-- [ ] **Step 1: Clean any build-artifact churn before the gate**
+- [x] **Step 1: Clean the churn, PUIS régénérer le projet (ordre critique)**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy
-git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
-git status --short   # should show a clean tree relative to Task 1–3's 3 commits
+cd "$(git rev-parse --show-toplevel)"
+git checkout -- apps/ios/Meeshy.xcodeproj   # d'ABORD
+git status --short                          # clean relative to Task 1–3's 3 commits
+cd apps/ios && xcodegen generate && cd -    # ENSUITE
+grep -c ConversationScrollControlsCallIndicatorTests apps/ios/Meeshy.xcodeproj/project.pbxproj  # doit être > 0
 ```
 
-- [ ] **Step 2: Run the full build**
+Deux pièges, tous deux vérifiés le 2026-08-11 :
+
+1. **L'ordre.** `git checkout` APRÈS `xcodegen generate` annule la régénération
+   et renvoie le gate à l'aveugle. Le prérequis noté en fin de Task 4
+   (`ConversationScrollControlsCallIndicatorTests.swift` absent du pbxproj
+   committé) n'est levé que si la régénération vient en dernier.
+2. **Le pathspec.** `apps/ios/Package.resolved` N'EXISTE PAS ; le fichier suivi
+   est `apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`,
+   déjà couvert par le premier pathspec. La forme à deux pathspecs sort en
+   erreur (`error: pathspec 'apps/ios/Package.resolved' did not match any
+   file(s) known to git`) et, git abandonnant TOUT le checkout sur un pathspec
+   invalide, ne restaure RIEN — un `git checkout` qu'on croit protecteur et qui
+   est un no-op.
+
+- [x] **Step 2: Run the full build**
 
 ```bash
 ./apps/ios/meeshy.sh build
 ```
 Expected: build succeeds (this also exercises the SDK's local-path Swift Package dependency, so Task 1/2's SDK changes compile as consumed by the app, not just standalone).
 
-- [ ] **Step 3: Run the full test gate**
+- [x] **Step 3: Run the full test gate**
 
 ```bash
 ./apps/ios/meeshy.sh test
 ```
 Expected: green across all phases — Phase 0 (`MeeshySDKTests`/`MeeshyUITests` via `MeeshySDK-Package`, includes this plan's `ConversationScrollControlsViewTests` additions), Phase 1–3 (app suites, includes `ConversationScrollControlsCallIndicatorTests`). Do not pass `--skip-sdk` — per spec §Tests point 5, the SDK suite is part of this gate's verdict, not optional.
 
-- [ ] **Step 4: Final cleanup**
+**Une sortie verte du script ne prouve RIEN sur une classe donnée** : le
+formateur n'énumère pas les classes, et `-only-testing` sur une classe absente
+du bundle imprime `Executed 0 tests` puis `** TEST EXECUTE SUCCEEDED **`. Le
+gate n'est tenu pour rempli qu'avec une preuve NOMINATIVE :
 
 ```bash
-git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
+nm -gU apps/ios/Build/Products/Debug-iphonesimulator/Meeshy.app/PlugIns/MeeshyTests.xctest/MeeshyTests \
+  | grep -c ConversationScrollControlsCallIndicatorTests   # > 0
+xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" \
+  -only-testing:MeeshyTests/ConversationScrollControlsCallIndicatorTests \
+  -derivedDataPath apps/ios/Build                          # « Executed 9 tests »
+```
+
+- [x] **Step 4: Final cleanup**
+
+```bash
+git checkout -- apps/ios/Meeshy.xcodeproj   # pathspec unique, cf. Step 1 piège 2
 git status --short   # confirm still clean beyond the 3 feature commits
 ```
+
+Le pbxproj régénéré n'est PAS committé : `.github/workflows/ios-tests.yml`
+lance son propre `xcodegen generate`, donc la CI compile les 9 tests à partir
+de `project.yml`. La régénération est un geste LOCAL, à refaire à chaque gate.
+
+- [x] **Step 5: Verdict du gate**
+
+Gate rejoué le 2026-08-11 23:47→23:57 (worktree `v2_meeshy-scroll-morph`,
+iPhone 16 Pro, sortie du script `exit=0`).
+
+**RED d'abord** — avec le pbxproj committé (0 occurrence du fichier de test),
+la commande ciblée sort :
+
+```
+Test Suite 'MeeshyTests.xctest' passed
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 seconds
+** TEST EXECUTE SUCCEEDED **
+```
+
+`nm -gU` sur le bundle du gate précédent : 0 symbole pour
+`ConversationScrollControlsCallIndicatorTests`, contre 2 pour la classe témoin
+`CallDetailRoutingTests`. Le gate sortait donc vert **sans jamais compiler ni
+exécuter** les 9 tests app de la Task 3.
+
+**GREEN après `xcodegen generate`** (4 références au fichier dans le pbxproj) :
+
+| Phase | Suites | Résultat |
+|---|---|---|
+| 0 — package MeeshySDK (2 bundles) | `MeeshySDKTests` puis `MeeshyUITests` | `Executed 3441 tests, 22 skipped, 0 failures` + `Executed 2971 tests, 13 skipped, 0 failures` |
+| 1 — isolées | app, hors pattern phase 2 | `Executed 1943 tests, 1 skipped, 0 failures` |
+| 2 — connexion & contenu (326 suites) | contient `ConversationScrollControlsCallIndicatorTests` (match `Conversation`) | `Executed 3512 tests, 0 failures` |
+| 3 — état connecté | `ZZEndStateConnectedSessionTests` | `Executed 1 test, with 1 test skipped` (XCTSkip : `DEMO_USER`/`DEMO_PASSWORD` absents de `fastlane/.env`) |
+
+La phase 3 imprime `Executed 1 test` au SINGULIER — un motif
+`Executed [0-9]+ tests` ne la capture pas, d'où le mauvais mapping du premier
+rapport (qui lui attribuait le compteur d'une phase antérieure).
+
+**Preuve nominative des 9 tests** (le cœur du gate, sans quoi tout ce qui
+précède reste un « vert » anonyme) :
+- Phase 2 passe de **3503 à 3512 tests, soit exactement +9**, la seule
+  différence entre les deux runs étant la régénération du projet.
+- `nm -gU` sur le bundle produit par ce run (mtime 23:54, dans la fenêtre du
+  gate) : **2** symboles pour la classe, à parité avec la classe témoin.
+- Run ciblé : les 9 `test_*` nommés un par un, tous `passed`, puis
+  `Executed 9 tests, with 0 failures (0 unexpected)`.
+
+Arbre final propre : `git status --short` ne renvoie rien.
