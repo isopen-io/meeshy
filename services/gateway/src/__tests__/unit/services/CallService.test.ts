@@ -2571,6 +2571,57 @@ describe('CallService - updateCallStatus', () => {
     );
   });
 
+  it('anchors duration on answeredAt (talk time), not startedAt (ring+talk time), for a terminal transition', async () => {
+    // Regression guard — mirrors the sibling fix already applied to the other
+    // 7 terminal writers in CallService (endCall/leaveCall/
+    // forceEndOrphanedCallSession/the idempotent leaveCall branch/
+    // CallCleanupService's phantom-cleanup and zombie sweeps/
+    // markCallAsMissed — Vague 25/27/30). This writer computed
+    // `now - startedAt` unconditionally, inflating duration by the ring time
+    // whenever a call rang before being answered.
+    const answeredAt = new Date(Date.now() - 30_000); // answered 30s ago
+    const startedAt = new Date(Date.now() - 5 * 60_000); // rang for 4.5min first
+    const reconnectingCall = createMockCallSession({
+      status: CallStatus.reconnecting,
+      startedAt,
+      answeredAt,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const endedCall = { ...reconnectingCall, status: CallStatus.ended, endedAt: new Date(), duration: 30 };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(reconnectingCall)
+      .mockResolvedValueOnce(endedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await callService.updateCallStatus('call-123', CallStatus.ended, CallEndReason.completed);
+
+    const updateCall = mockPrisma.callSession.updateMany.mock.calls[0] as any;
+    expect(updateCall[0].data.duration).toBe(30); // talk time, not ~270s of ring+talk time
+  });
+
+  it('anchors duration on 0 (never answered), not startedAt (ring time), for a terminal transition', async () => {
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      startedAt: new Date(Date.now() - 5 * 60_000),
+      answeredAt: null,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const rejectedCall = { ...ringingCall, status: CallStatus.rejected, endedAt: new Date(), duration: 0 };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(rejectedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await callService.updateCallStatus('call-123', CallStatus.rejected, CallEndReason.rejected);
+
+    const updateCall = mockPrisma.callSession.updateMany.mock.calls[0] as any;
+    expect(updateCall[0].data.duration).toBe(0);
+  });
+
   it('sets endedAt without endReason when no reason provided for terminal status', async () => {
     const activeCall = createMockCallSession({
       status: CallStatus.active,
