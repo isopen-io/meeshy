@@ -76,7 +76,7 @@ fun ContactsListTab(
             state.errorMessage != null -> ErrorState(onRetry = viewModel::load)
             state.isEmpty -> EmptyMessage(stringResource(R.string.contacts_list_empty))
             state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
-            else -> FriendList(state.visibleFriends)
+            else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor)
         }
     }
 }
@@ -106,17 +106,17 @@ private fun FilterRow(
 }
 
 @Composable
-private fun FriendList(friends: List<FriendRequestUser>) {
+private fun FriendList(friends: List<FriendRequestUser>, moodEmojiFor: (String) -> String?) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
-        items(friends, key = { it.id }) { friend -> FriendRow(friend) }
+        items(friends, key = { it.id }) { friend -> FriendRow(friend, moodEmoji = moodEmojiFor(friend.id)) }
     }
 }
 
 @Composable
-private fun FriendRow(friend: FriendRequestUser) {
+private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
     val name = friend.resolvedName.ifBlank { friend.username.ifBlank { "?" } }
     Row(
         modifier = Modifier
@@ -128,6 +128,7 @@ private fun FriendRow(friend: FriendRequestUser) {
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(friend.id.ifBlank { name })),
+            moodEmoji = moodEmoji,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
