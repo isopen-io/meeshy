@@ -288,6 +288,7 @@ export function useAttachmentUpload({
         }
       } catch (error) {
         console.error(`❌ Batch ${i + 1} upload error:`, error);
+        setSelectedFiles(prev => prev.filter((f) => !batch.includes(f)));
       }
 
       uploadedCount += batch.length;
@@ -461,6 +462,10 @@ export function useAttachmentUpload({
       } else {
         toast.error('Upload failed. Please try again.');
       }
+      // Symétrie avec handleCreateTextAttachment: purger les fichiers de CETTE
+      // sélection de selectedFiles pour que le compteur (source de vérité
+      // unique — voir plus haut) ne dérive pas après un échec réseau.
+      setSelectedFiles(prev => prev.filter((f) => !uniqueFiles.includes(f)));
     } finally {
       setIsUploading(false);
     }
