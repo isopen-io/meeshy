@@ -1284,8 +1284,12 @@ struct StoryViewerView: View {
     }
 
     @State var showEmojiStrip = false // internal for cross-file extension access
-    @State private var bigReactionEmoji: String?
-    @State private var bigReactionPhase: Int = 0
+    /// Réaction en vol vers le cœur (remplace la big reaction 100 pt).
+    @State var reactionFlight: StoryReactionFlight?
+    /// Cadre du bouton cœur dans StoryScrubSpace (cible du vol).
+    @State var heartFrame: CGRect = .zero
+    /// Scrub longpress→drag en cours sur le rail (pause le timer).
+    @State var isScrubbingRail = false
     /// Ticks on every reaction sent, through any path (quick strip or the
     /// full-screen picker). Drives the heart-button bounce in the sidebar.
     @State private var heartBouncePulse: Int = 0
@@ -1368,9 +1372,9 @@ struct StoryViewerView: View {
             openingScale: openingScale,
             openingSlideFraction: openingSlideFraction,
             isRevealActive: isRevealActive,
-            bigReactionEmoji: bigReactionEmoji,
-            bigReactionPhase: bigReactionPhase,
-            heartBouncePulse: heartBouncePulse,
+            reactionFlight: $reactionFlight,
+            heartFrame: $heartFrame,
+            heartBouncePulse: $heartBouncePulse,
             storyReactionCount: storyReactionCount,
             storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
             storyCommentCount: storyCommentCount,
@@ -1433,7 +1437,10 @@ struct StoryViewerView: View {
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             keyboard: keyboard,
-            triggerStoryReaction: { triggerStoryReaction($0) },
+            triggerStoryReaction: { emoji, frame in
+                triggerStoryReaction(emoji, from: frame)
+            },
+            onScrubStateChanged: { isScrubbingRail = $0 },
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
             onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
@@ -1556,65 +1563,37 @@ struct StoryViewerView: View {
 
     // MARK: - Story Reactions
 
-    private func triggerStoryReaction(_ emoji: String) {
+    /// `heartBouncePulse` n'est PLUS tiqué ici — il tique à l'ARRIVÉE du vol
+    /// (`StoryReactionFlightView.onArrived`, +Canvas.swift Layer 9), c'est
+    /// l'impact qui fait rebondir le cœur (spec scrub 2026-08-11).
+    private func triggerStoryReaction(_ emoji: String, from originFrame: CGRect? = nil) {
         HapticFeedback.medium()
 
-        // Full picker covers ENTIRE screen → must dismiss immediately so the
-        // big-reaction animation (`bigReactionEmoji`) is visible. Strip is a
-        // partial overlay → keep its 0.5s dismissal delay below (deliberate
-        // visual echo of the chosen emoji before the strip disappears).
         if showFullEmojiPicker {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 showFullEmojiPicker = false
             }
         }
-
-        // Big floating emoji — dramatic 3-phase animation
-        bigReactionEmoji = emoji
-        bigReactionPhase = 0
-        // Phase 1: burst in with overshoot
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) {
-            bigReactionPhase = 1
-        }
-        // Phase 1.5: subtle pulse at peak (secondary haptic)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            HapticFeedback.light()
-        }
-        // Phase 2: float up and dissolve
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            withAnimation(.easeOut(duration: 0.6)) { bigReactionPhase = 2 }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            bigReactionEmoji = nil
-            bigReactionPhase = 0
+        // La barre disparaît VITE (~120 ms) pour laisser la scène au vol
+        // (spec scrub 2026-08-11) — l'ancien écho de 0.5 s est supprimé.
+        withAnimation(.easeOut(duration: 0.12)) {
+            showEmojiStrip = false
         }
 
-        // Collapse strip after reaction (timer auto-resumes when showEmojiStrip=false)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                showEmojiStrip = false
-            }
-        }
+        // Vol tuile → cœur ; un tap direct (originFrame nil) part du cœur
+        // lui-même : le vol dégénère en pop sur place, même chemin de code.
+        let origin = originFrame ?? heartFrame
+        reactionFlight = StoryReactionFlight(emoji: emoji, from: origin)
 
-        // Snapshot captured BEFORE the optimistic mutation below — the sole
-        // rollback target if the network call fails (most notably the
-        // gateway's 409 REACTION_LIMIT_REACHED conflict when the user's
-        // emoji actually differs from an existing server-side reaction).
-        // Without this the optimistic emoji/counter bump was never undone:
-        // the UI kept the refused emoji and an inflated count forever.
+        // Snapshot capturé AVANT la mutation optimiste — cible du rollback si
+        // le réseau échoue (409 REACTION_LIMIT_REACHED notamment).
         let priorReactions = storyCurrentUserReactions
         let priorCount = storyReactionCount
 
-        // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
-        // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
-        // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
-        // `+= 1` inconditionnel gonflait le compteur visible à chaque tap
-        // (incohérent jusqu'au refresh serveur). Bug 2026-06-01.
         if !storyCurrentUserReactions.contains(emoji) {
             storyCurrentUserReactions.append(emoji)
             storyReactionCount += 1
         }
-        heartBouncePulse += 1
         sendReaction(emoji: emoji, priorReactions: priorReactions, priorCount: priorCount)
     }
 

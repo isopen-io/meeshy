@@ -993,9 +993,16 @@ struct StoryCardView: View {
     /// `StoryRenderer.slideTransitionTravelFraction`.
     let openingSlideFraction: CGFloat
     let isRevealActive: Bool
-    let bigReactionEmoji: String?
-    let bigReactionPhase: Int
-    let heartBouncePulse: Int
+    /// Réaction en vol tuile → cœur (remplace la big reaction 100 pt) — écrit
+    /// par cette vue (Layer 9 : arrivée, fin de vol) et lu (préférence du
+    /// cœur → `heartFrame`), d'où le `@Binding`.
+    @Binding var reactionFlight: StoryReactionFlight?
+    /// Cadre du bouton cœur dans `StoryScrubSpace`, publié par le Sidebar via
+    /// `StoryHeartFrameKey` et capté ici (`.onPreferenceChange`) — cible du vol.
+    @Binding var heartFrame: CGRect
+    /// Tique à l'arrivée du vol (Layer 9 `onArrived`) — d'où le `@Binding`
+    /// (avant : simple `let`, jamais muté depuis cette vue).
+    @Binding var heartBouncePulse: Int
 
     // Sidebar inputs
     let storyReactionCount: Int
@@ -1139,7 +1146,12 @@ struct StoryCardView: View {
     @State private var stallIndicatorGraceTask: Task<Void, Never>?
 
     // Closures — actions on the parent view
-    let triggerStoryReaction: (String) -> Void
+    /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
+    /// tuile d'origine du vol — nil = pop sur place depuis le cœur (tap direct).
+    let triggerStoryReaction: (String, CGRect?) -> Void
+    /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
+    /// neutralise la navigation du canvas).
+    let onScrubStateChanged: (Bool) -> Void
     let pauseTimer: () -> Void
     let resumeTimer: () -> Void
     /// Unified-timeline gate : the canvas reports whether its PRIMARY video is
@@ -1735,7 +1747,7 @@ struct StoryCardView: View {
             .environment(\.colorScheme, readerChromeScheme)
 
             // === Layer 7.5: Floating comments overlay (Instagram-style) ===
-            // Rendered BEFORE the sidebar / composer / bigReaction blocks so
+            // Rendered BEFORE the sidebar / composer / reaction flight blocks so
             // SwiftUI ZStack z-orders it BENEATH the story controls — user
             // can still tap React / Reply / mute / settings while comments
             // are visible. Background story stays interactable (tap to pause,
@@ -1800,6 +1812,7 @@ struct StoryCardView: View {
                     sharedContentWrapper: $sharedContentWrapper,
                     isPresented: $isPresented,
                     triggerStoryReaction: triggerStoryReaction,
+                    onScrubStateChanged: onScrubStateChanged,
                     pauseTimer: pauseTimer,
                     loadStoryComments: loadStoryComments
                 )
@@ -1836,19 +1849,21 @@ struct StoryCardView: View {
             .allowsHitTesting(chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
 
-            // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
-            if let emoji = bigReactionEmoji {
-                Text(emoji)
-                    // Doctrine 84i : emoji de réaction hero décoratif (100pt) animé en burst
-                    // (scaleEffect/offset) → taille figée ; déjà accessibilityHidden ci-dessous.
-                    .font(.system(size: 100))
-                    .scaleEffect(bigReactionPhase == 1 ? 1.5 : (bigReactionPhase == 2 ? 0.5 : 0.05))
-                    .opacity(bigReactionPhase == 2 ? 0 : (bigReactionPhase == 1 ? 1 : 0))
-                    .offset(y: bigReactionPhase == 2 ? -280 : 0)
-                    .rotationEffect(.degrees(bigReactionPhase == 1 ? -6 : (bigReactionPhase == 2 ? 12 : 0)))
-                    .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+            // === Layer 9: Reaction flight (tuile agrandie → cœur, ≤ 1 s) ===
+            if let flight = reactionFlight {
+                StoryReactionFlightView(
+                    flight: flight,
+                    target: heartFrame,
+                    onArrived: { heartBouncePulse += 1 },
+                    onFinished: { reactionFlight = nil }
+                )
+                // Même garde que les autres calques flottants (header, rail,
+                // composer, pickers plein écran) : le canvas gonfle le ZStack
+                // parent au-delà du viewport, un calque non borné s'y étale
+                // avant de se faire rogner par le `.clipped()` final
+                // (StoryOverlayWidthPinGuardTests).
+                .frame(maxWidth: geometry.size.width)
+                .zIndex(50)
             }
 
             // NOTE: Live comments overlay (Instagram-style) is rendered by
@@ -1963,7 +1978,7 @@ struct StoryCardView: View {
                 EmojiFullPickerSheet(
                     style: .dark,
                     onReact: { emoji in
-                        triggerStoryReaction(emoji)
+                        triggerStoryReaction(emoji, nil)
                     },
                     onDismiss: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -2025,12 +2040,17 @@ struct StoryCardView: View {
             // le rail, À GAUCHE du bouton « Abc » (comme le strip de réactions) —
             // voir `StoryViewerView+Sidebar`. Plus d'overlay bas-de-composer ici.
         }
+        // Espace de coordonnées commun du système scrub (cœur + tuiles des
+        // barres réaction/langues) — aligne cadres publiés, position du doigt
+        // et rendu du vol (spec scrub 2026-08-11, StoryScrubSelectionResolver).
+        .coordinateSpace(name: StoryScrubSpace.name)
+        .onPreferenceChange(StoryHeartFrameKey.self) { heartFrame = $0 }
         // Lock the entire story canvas (background + reader + overlays +
         // sidebar + composer) to EXACTLY the viewport size we were handed
         // in `geometry`. Without this, any child with an intrinsic size
         // bigger than the proposed size — a long translated text line, a
-        // foreground media at natural pixel size, a 100pt big-reaction
-        // emoji during animation — silently grows the enclosing ZStack
+        // foreground media at natural pixel size, a reaction flight emoji
+        // during its tuile→cœur animation — silently grows the enclosing ZStack
         // and pushes the right-side action sidebar (and bottom composer)
         // off-screen, making them untappable. `.clipped()` discards
         // anything that still tries to draw past the bounds rather than

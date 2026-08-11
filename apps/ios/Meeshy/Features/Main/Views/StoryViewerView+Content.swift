@@ -752,6 +752,10 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
+        // de l'animation (spec scrub 2026-08-11).
+        || isScrubbingRail
+        || reactionFlight != nil
         // L'overlay commentaires ouvert met la story en pause : lire / répondre à
         // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
         // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
