@@ -248,12 +248,18 @@ public struct UserUpdatedEvent: Decodable, Sendable {
         self.lastName = try changes.decodeIfPresent(String.self, forKey: .lastName)
         self.username = try changes.decodeIfPresent(String.self, forKey: .username)
         self.hasNameGroup = changes.contains(.username)
-        self.avatar = changes.contains(.avatar)
-            ? .replaced(try changes.decodeIfPresent(String.self, forKey: .avatar))
-            : .unchanged
-        self.banner = changes.contains(.banner)
-            ? .replaced(try changes.decodeIfPresent(String.self, forKey: .banner))
-            : .unchanged
+        // `if` plutôt qu'un ternaire : Swift refuse un `try` à droite d'un
+        // opérateur non-affectation.
+        if changes.contains(.avatar) {
+            self.avatar = .replaced(try changes.decodeIfPresent(String.self, forKey: .avatar))
+        } else {
+            self.avatar = .unchanged
+        }
+        if changes.contains(.banner) {
+            self.banner = .replaced(try changes.decodeIfPresent(String.self, forKey: .banner))
+        } else {
+            self.banner = .unchanged
+        }
     }
 }
 
