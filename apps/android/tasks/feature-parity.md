@@ -5135,11 +5135,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tus.io protocol), only the last chunk still goes through `uploadData` (the only PATCH whose
       response actually carries the `onUploadFinish` JSON body). A body no larger than one chunk
       (the common case today — compressed images) still makes exactly one PATCH, byte-identical to
-      before. **Still NOT done:** persistent checkpoint (survive app kill mid-upload — needs a Room
-      table + reading the source file lazily instead of `MediaUploadItem.bytes` already fully
-      resident in memory), 409 HEAD-recovery, dedicated `WorkManager` foreground chain. Those are
-      the next sub-slices, not attempted this run. Message-retention cleanup / DB maintenance still
-      not started.
+      before. **Room-backed checkpoint, resume-within-retries done** (slice
+      `tus-upload-checkpoint-resume`, 2026-08-11): new `tus_upload_checkpoint` table
+      (`:core:database`, `TusUploadCheckpointEntity`/`Dao`) + pure `TusCheckpointKey`/
+      `TusResumePlanner` (`:core:model`) decide, on every `upload()` call, whether to resume an
+      existing session (skip `createUpload` entirely, PATCH only the chunks past the last
+      *confirmed* offset) or start fresh — deliberately conservative: a checkpoint with zero
+      confirmed progress (no intermediate chunk ever acknowledged) always starts fresh rather than
+      trust an unconfirmed/possibly-stale session, so only genuinely large multi-chunk uploads that
+      failed partway through ever benefit. The row is written after every acknowledged
+      intermediate chunk and defensively cleared on completion (harmless no-op when absent). **Does
+      NOT yet survive an app kill**: `MediaUploadItem.bytes` is still fully resident in memory for
+      the call's lifetime, so a killed process loses the source bytes regardless of the persisted
+      offset — that needs the lazy file-source read + a boot-time recovery scan (the existing
+      "Crash-safe boot recovery for in-flight queue items" bullet above), still NOT done, along
+      with 409 HEAD-recovery and a dedicated `WorkManager` foreground chain. Those remain the next
+      sub-slices. Message-retention cleanup / DB maintenance still not started.
 - [ ] Background conversation sync + message prefetch (backoff + jitter)
 - [ ] Encrypted local storage (AES-GCM Room / EncryptedSharedPreferences) + per-user namespacing + logout wipe
 - [ ] E2EE message encryption/decryption (libsignal, batched, fail-closed)

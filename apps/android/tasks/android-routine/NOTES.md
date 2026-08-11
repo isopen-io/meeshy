@@ -1409,3 +1409,39 @@ Append-only log of gotchas and decisions that save time next run.
   rather than investigated further, since gateway code is out of this lane's diff-purity bounds
   — but the `curl` reproduction step is what turns "my fix might be broken" into "found a live,
   unrelated production bug" with confidence, in under a minute.
+
+## Slice `tus-upload-checkpoint-resume` (2026-08-11)
+- **`adb shell run-as <pkg> sqlite3 …` round-trips are too slow and jittery to catch a
+  sub-2-second transient DB row live via a polling loop.** Tried twice to observe the
+  intermediate `tus_upload_checkpoint` row that exists only between the first chunk's PATCH
+  success and the final chunk's PATCH success (a ~2.3 s window for a 17.9 MB two-chunk upload).
+  Each `adb shell "run-as … sqlite3 …"` invocation spawns a fresh `run-as` + `sqlite3` process
+  pair, and the actual per-call latency was inconsistent enough (sometimes ~50 ms, sometimes
+  much more once a background `logcat` stream was also running) that a 20-40-iteration polling
+  loop's *effective* wall-clock coverage was hard to predict in advance — both attempts either
+  finished measuring before the write happened or only started after it was already gone. Do
+  not treat "polled N times, saw nothing" as proof the write never happened when the window is
+  this narrow relative to per-call overhead — either give the polling loop a much wider,
+  deliberately-overlapping window (start before the earliest plausible write time, run well past
+  the latest plausible one) or drop the live-polling approach entirely.
+- **Pre/post DB state + a full logcat request/response trace + mutation-proven unit tests
+  together substitute for a live transient-state capture, and are cheaper to obtain reliably.**
+  For this slice, confirming (a) the checkpoint table is empty *after* a successful multi-chunk
+  upload (proves the delete-on-completion path executed against the real on-device Room DB, not
+  a mock), (b) the exact `POST 201 → PATCH 204 → PATCH 200` sequence in `adb logcat` (proves the
+  real chunk-then-finish shape reached the live gateway unchanged), and (c) a mutation test that
+  fails exactly the "resume" branch's own unit tests when the decision is hardcoded to `Fresh`
+  (proves the decision logic itself), together closes the same loop that watching the live write
+  would have — without needing to win a timing race against `adb`'s own overhead.
+- **A noise-source (`geq=random(1)*255:…`) `ffmpeg` clip is a cheap, reliable way to synthesize a
+  real, playable, large (multi-chunk-triggering) test video on demand.** A `testsrc`/`nullsrc`
+  pattern compresses far too well under h264 (a 20 s clip landed at ~1 MB) to reliably exceed a
+  10 MB chunk boundary; feeding `geq` per-pixel randomness into the video filter graph produces
+  genuinely incompressible frames, so a ~1.6 s clip at 960×540/`crf 18` reliably lands at ~18 MB
+  — enough for a real two-chunk TUS PATCH sequence without waiting on a multi-minute encode.
+- **The system Android photo/media picker's "Add (N)" button lives in a different package
+  (`com.google.android.providers.media.module`) with its own `uiautomator` node tree** — grep the
+  dump for the visible button text (`text="Add"`) rather than assuming the composer's own
+  attach-tile bounds convention (content-desc-first) carries over; the clickable node is a
+  sibling `android.widget.Button` with a `resource-id` in that package's namespace, not the
+  app's.

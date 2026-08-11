@@ -7,6 +7,8 @@ import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import me.meeshy.core.database.dao.TusUploadCheckpointDao
+import me.meeshy.core.database.entity.TusUploadCheckpointEntity
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MediaAttachmentWire
 import me.meeshy.sdk.model.media.TusUploadContext
@@ -24,8 +26,11 @@ import java.io.IOException
 class TusUploadRepositoryTest {
 
     private val api: TusApi = mockk(relaxed = true)
+    private val checkpoints: TusUploadCheckpointDao = mockk(relaxed = true)
 
-    private fun repository() = TusUploadRepository(api)
+    // checkpoints.find(...) is relaxed-mocked to null unless a test stubs it explicitly
+    // (with the specific matching key) before calling repository() — see the resume tests below.
+    private fun repository() = TusUploadRepository(api, checkpoints)
 
     private fun item(name: String = "story.jpg", mime: String = "image/jpeg") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
@@ -268,5 +273,145 @@ class TusUploadRepositoryTest {
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).error.httpStatus).isEqualTo(409)
         coVerify(exactly = 0) { api.uploadData(any(), any(), any(), any()) }
+    }
+
+    // --- checkpointed retries: a Room-backed checkpoint lets a retried upload skip
+    // already-acknowledged chunks instead of restarting from byte zero ---
+
+    private fun bigItem(bytes: Int = 25) =
+        MediaUploadItem(bytes = ByteArray(bytes) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+
+    @Test
+    fun `a single-chunk upload never persists intermediate progress via upsert`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(item(), TusUploadContext.STORY)
+
+        coVerify(exactly = 0) { checkpoints.upsert(any()) }
+    }
+
+    @Test
+    fun `a successful upload defensively clears any checkpoint for its key even with a single chunk`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(item(), TusUploadContext.STORY)
+
+        coVerify(exactly = 1) { checkpoints.delete(any()) }
+    }
+
+    @Test
+    fun `a successful intermediate chunk persists a checkpoint at the new offset`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/abc")
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+        val saved = slot<TusUploadCheckpointEntity>()
+        coEvery { checkpoints.upsert(capture(saved)) } returns Unit
+
+        // 15 bytes over a 10-byte chunk size makes exactly one intermediate chunk ([0,10))
+        // followed by one final chunk ([10,15)), so the single captured upsert is unambiguous.
+        repository().upload(bigItem(bytes = 15), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(saved.captured.location).isEqualTo("https://gate/uploads/abc")
+        assertThat(saved.captured.uploadedBytes).isEqualTo(10L)
+        assertThat(saved.captured.totalBytes).isEqualTo(15L)
+    }
+
+    @Test
+    fun `every intermediate chunk of a multi-chunk upload persists its own growing offset`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+        val savedOffsets = mutableListOf<Long>()
+        coEvery { checkpoints.upsert(any()) } coAnswers { savedOffsets += (it.invocation.args[0] as TusUploadCheckpointEntity).uploadedBytes }
+
+        // 25 bytes over a 10-byte chunk size makes two intermediate chunks ([0,10), [10,20)).
+        repository().upload(bigItem(bytes = 25), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(savedOffsets).containsExactly(10L, 20L).inOrder()
+    }
+
+    @Test
+    fun `a successful final chunk deletes the checkpoint`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns
+            finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
+        val key = slot<String>()
+        coEvery { checkpoints.delete(capture(key)) } returns Unit
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(key.captured).isEqualTo(
+            me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L),
+        )
+    }
+
+    @Test
+    fun `a failed intermediate chunk never writes a checkpoint for that failed chunk`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns
+            Response.error(409, "offset mismatch".toResponseBody("text/plain".toMediaTypeOrNull()))
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        coVerify(exactly = 0) { checkpoints.upsert(any()) }
+    }
+
+    @Test
+    fun `a failed final chunk leaves any existing checkpoint untouched`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns
+            ApiResponse(success = false, error = "too large")
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        coVerify(exactly = 0) { checkpoints.delete(any()) }
+    }
+
+    @Test
+    fun `an existing checkpoint with confirmed progress resumes without creating a new session`() = runTest {
+        val key = me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L)
+        coEvery { checkpoints.find(key) } returns TusUploadCheckpointEntity(
+            checkpointKey = key,
+            location = "https://gate/uploads/resume-me",
+            uploadedBytes = 10L,
+            totalBytes = 25L,
+            updatedAt = 0L,
+        )
+        val chunkLocation = slot<String>()
+        val chunkOffset = slot<Long>()
+        coEvery { api.uploadChunk(capture(chunkLocation), capture(chunkOffset), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns
+            finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify(exactly = 0) { api.createUpload(any(), any(), any()) }
+        assertThat(chunkLocation.captured).isEqualTo("https://gate/uploads/resume-me")
+        assertThat(chunkOffset.captured).isEqualTo(10L)
+    }
+
+    @Test
+    fun `an existing checkpoint with zero confirmed progress still starts a fresh session`() = runTest {
+        val key = me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L)
+        coEvery { checkpoints.find(key) } returns TusUploadCheckpointEntity(
+            checkpointKey = key,
+            location = "https://gate/uploads/unconfirmed",
+            uploadedBytes = 0L,
+            totalBytes = 25L,
+            updatedAt = 0L,
+        )
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/fresh")
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        coVerify(exactly = 1) { api.createUpload(any(), any(), any()) }
     }
 }
