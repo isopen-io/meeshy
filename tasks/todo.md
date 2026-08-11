@@ -1,32 +1,120 @@
-# Tête instruite pour le cycle 76 — la LISTE de conversations web n'a aucun rattrapage au reconnect socket
+# Tête instruite pour le cycle 77 — iOS avance son curseur delta par-dessus une page TRONQUÉE
 
-*Trouvé en instruisant le cycle 75, vérifié, NON corrigé — même famille que le défaut fermé ce
-cycle, autre surface.*
+*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur, NON corrigé.*
 
-Le cycle 75 a fermé le trou côté notifications. En balayant les autres surfaces pour établir la
-portée, une seule est restée découverte :
+`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
+`GET /conversations?updatedSince=`. La route plafonne à 100
+(`Math.min(parseInt(limit), 100)`, `services/gateway/src/routes/conversations/core.ts`)
+et trie par **`lastMessageAt` décroissant, pas par `updatedAt`**. Trois faits qui
+s'additionnent :
+
+1. une fenêtre aveugle ayant touché plus de 100 conversations rend une page tronquée ;
+2. les lignes coupées ne sont pas « les plus anciennes mises à jour » — l'ordre du tri
+   n'a aucun rapport avec le filtre ;
+3. `lastSyncTimestamp` avance quand même au max des `updatedAt` REÇUS
+   (`SyncWatermark.advanced`), ce qui enjambe définitivement les lignes coupées.
+
+Elles ne reviennent qu'au `fullSync` périodique — borné à 1× par 24 h
+(`fullReconcileInterval`). Pendant ce temps la liste iOS affiche des compteurs de
+non-lus et des aperçus périmés, sans qu'aucun signal ne l'indique.
+
+Le web a fermé ce cas au cycle 76 : une page PLEINE (`conversations.length >=
+DELTA_PAGE_LIMIT`) est traitée comme une preuve d'incomplétude et escalade vers la
+relecture complète. Le geste iOS est le même, mais il ne suffit PAS de copier le test :
+`deltaSyncCore` ne pagine pas, et son curseur est persisté — il faut décider si
+l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fait déjà
+`syncSinceLastCheckpoint`) ou une boucle de pages. Deux bornes avant d'ouvrir :
+
+1. **`limit=500` est un mensonge silencieux depuis toujours** — le corriger à 100 ne
+   change rien au défaut, il le rend seulement lisible. La détection est le correctif ;
+   la constante n'est que de l'hygiène.
+2. **Le curseur ne doit pas avancer sur une page dont on sait qu'elle est tronquée**,
+   sinon l'escalade elle-même repart d'un watermark déjà trop haut. L'ordre des gestes
+   (ne pas avancer, PUIS escalader) est le contenu du correctif, pas un détail.
+
+Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
+— la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
+
+---
+
+# Cycle 76 — La liste de conversations web restait figée après une coupure SOCKET
+
+## Le défaut
+
+Le QueryClient web tourne en `staleTime: Infinity` — Socket.IO EST la source de vérité
+temps réel. Ce qui n'arrive pas par socket n'est rattrapé par rien tant que l'écran
+reste monté.
+
+Trois surfaces web pouvaient porter ce trou ; le cycle 75 avait établi le relevé :
 
 | Surface web | Rattrapage au reconnect SOCKET |
 |---|---|
-| Messages d'une conversation | **oui** — `syncNewerMessages` sur le front `false → true` de `isSocketConnected` (`use-conversation-messages-rq.ts`, « Trigger 1 ») |
-| Notifications | **oui depuis ce cycle** — `onSyncDesync('reconnect')` |
-| **Liste de conversations** | **non** — `use-conversations-query.ts` n'a que `refetchOnMount: 'always'` |
+| Messages d'une conversation | oui — `syncNewerMessages` sur le front `false → true` (« Trigger 1 ») |
+| Notifications | oui depuis le cycle 75 — `onSyncDesync('reconnect')` |
+| **Liste de conversations** | **non** — corrigé ici |
 
-Ce qui la couvre partiellement, et pourquoi ça ne suffit pas : le QueryClient global pose
-`refetchOnReconnect: 'always'`, mais c'est le `onlineManager` de React Query — la transition
-RÉSEAU du navigateur. Une coupure purement socket (redémarrage gateway, drop du load balancer,
-échec d'upgrade de transport) ne bouge pas `navigator.onLine` et ne déclenche donc rien. Pendant
-cette fenêtre, la liste garde ses compteurs de non-lus, ses aperçus de dernier message et son
-effectif d'avant la coupure, et ne se corrige qu'au prochain focus de fenêtre ou remontage.
+Ce qui semblait la couvrir : le QueryClient global pose `refetchOnReconnect: 'always'`.
+Il écoute le `onlineManager` de React Query — la transition réseau du **navigateur**.
+Un redémarrage gateway, un drop de load balancer ou un échec d'upgrade de transport
+tuent la socket **sans bouger `navigator.onLine`** : rien ne se déclenche. Pendant cette
+fenêtre, la sidebar garde ses compteurs de non-lus, ses aperçus de dernier message et
+son effectif d'avant la coupure, et ne se corrige qu'au prochain focus ou remontage.
 
-Deux bornes avant d'ouvrir :
-1. **Le signal existe déjà** — `useConnectionStatus().isSocketConnected`, et le motif de front
-   `false → true` est écrit et testé dans `use-conversation-messages-rq.ts`. Le reproduire, pas en
-   inventer un second.
-2. **Un `refetch()` plein de la liste est destructeur au même titre que sur les messages** : il
-   REMPLACE les pages en cache et peut perdre ce que le socket y a écrit. Le pendant du
-   `syncNewerMessages` côté liste est un delta `updatedSince` (ce que fait `deltaSyncCore` sur iOS),
-   pas un refetch. Trancher entre les deux est le vrai contenu du chantier.
+## Le correctif
+
+`useConversationsDeltaSync` (`apps/web/hooks/queries/use-conversations-delta-sync.ts`),
+monté DANS `useInfiniteConversationsQuery` — sur le propriétaire du cache
+`conversations.infinite()`, pour qu'aucun consommateur ne puisse l'oublier.
+
+Quatre arbitrages qui portent le correctif :
+
+1. **Delta, pas `refetch()`.** `refetch()` rejoue TOUTES les pages chargées d'une route
+   lourde (participants, dernier message avec traductions et pièce jointe, compteurs de
+   non-lus par curseur). Le rattrapage est UNE requête bornée par ce qui a bougé —
+   `GET /conversations?updatedSince=`, l'endpoint que le SDK iOS utilise déjà, avec son
+   index dédié côté schema (`@@index([isActive, updatedAt])`). La capacité serveur
+   existait ; seul le web ne s'en servait pas.
+2. **Le watermark se DÉDUIT du cache, il ne se stocke pas.** Soit `T` le max des
+   `updatedAt` en cache et `F` l'instant de la lecture serveur qui les a produits :
+   `T <= F`, et tout changement postérieur à cette lecture porte un `updatedAt > F >= T`.
+   `updatedSince=T` ne peut donc rien rater ; au pire il re-livre `]T, F]`, que l'upsert
+   rend idempotent. Aucun curseur à persister, aucune horloge locale — et le repli sur
+   `new Date()` quand rien n'est lisible est explicitement refusé (règle R15b d'iOS : un
+   client en avance sur le serveur enjamberait des mises à jour réelles).
+3. **Le cache est relu DANS `setQueryData`, pas avant l'`await`.** Un event socket
+   arrivé pendant la requête doit survivre à la fusion — c'est la fusion atomique
+   d'iOS (`cache.messages.mergeUpdate`), transposée.
+4. **Une page PLEINE est une preuve d'incomplétude.** La route plafonne à 100 et trie
+   par `lastMessageAt`, pas par `updatedAt` : les lignes coupées ne sont pas « les plus
+   anciennes », et avancer le watermark par-dessus les perdrait. Le hook garde la fusion
+   (correction immédiate de ce qu'il tient) et escalade vers l'invalidation complète.
+
+Effet de bord assumé et utile : `rebuildInfiniteConversationPages` est sorti de
+`use-socket-cache-sync.ts` vers `lib/conversations/infinite-cache.ts`. Les deux écrivains
+du cache infinite partagent désormais UNE règle de repagination au lieu de deux, et le
+`pagination: any` du passage est remplacé par la forme réelle (`GetConversationsResponse`).
+
+## Vérification
+
+- **27 témoins neufs** : 14 sur les valeurs pures (watermark, fusion), 13 sur le hook.
+- **ROUGE prouvé par mutation, pas par inspection** — 9 mutations, toutes rouges,
+  restauration verte à chaque fois :
+  déclencher au PREMIER connect → 1 rouge ; capturer le cache avant l'`await` (la
+  variante plausible-mais-fausse) → 1 rouge ; supprimer le throttle → 1 rouge ; replier
+  le watermark sur l'horloge locale → 3 rouges ; upserter un delta `isActive: false` →
+  3 rouges ; prendre le PREMIER `updatedAt` au lieu du plus récent → 3 rouges ; fusionner
+  toutes les pages en une (le bug historique de repagination) → 1 rouge ; faire confiance
+  à une page pleine → 1 rouge ; escalader sur CHAQUE delta → 1 rouge.
+- **VERT exécuté** : suite web complète, `562/562` suites, `12070` tests (après
+  `packages/shared → bun run build`, prérequis que la CI fait automatiquement).
+- **Typecheck** : `1222` erreurs, exactement la ligne de base du projet, et **aucune** ne
+  touche un fichier modifié par ce cycle.
+
+## Portée établie, pas supposée
+
+Le relevé des trois surfaces web est désormais complet — plus aucune n'est découverte au
+reconnect socket. La liste PLATE (`useConversationsQuery`) n'est pas traitée : `grep` sur
+tout `apps/web` ne rend **aucun consommateur** hors du module de hooks lui-même.
 
 ---
 

@@ -8,6 +8,10 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
+import {
+  rebuildInfiniteConversationPages,
+  type InfiniteConversationData,
+} from '@/lib/conversations/infinite-cache';
 import { extractPreviewTranslations } from '@/services/conversations/transformers.service';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
@@ -96,11 +100,6 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
   return patch as Partial<Conversation>;
 }
 
-type InfiniteConversationData = {
-  pages: { conversations: Conversation[]; pagination: any }[];
-  pageParams: number[];
-};
-
 function updateInfiniteConversationCache(
   queryClient: ReturnType<typeof useQueryClient>,
   updater: (conversations: Conversation[]) => Conversation[]
@@ -112,54 +111,7 @@ function updateInfiniteConversationCache(
       const allConversations = old.pages.flatMap(page => page.conversations);
       const updated = updater(allConversations);
       if (updated === allConversations) return old;
-
-      // PRESERVE PAGE STRUCTURE. Previously this code collapsed every
-      // existing page into a single synthetic page with `pageParams: [0]`
-      // and `pagination.offset: 0` — meaning the next `fetchNextPage`
-      // call recomputed `getNextPageParam` against that single fused
-      // page and either re-fetched offset=0 (re-loading already-loaded
-      // conversations as duplicates) or stalled if the synthetic
-      // `hasMore` didn't propagate. By rebuilding the original page
-      // boundaries from the updated array, `pageParams` stay intact and
-      // infinite scroll keeps advancing past the last real page.
-      const rebuiltPages: typeof old.pages = [];
-      let cursor = 0;
-      for (let i = 0; i < old.pages.length; i++) {
-        const originalPage = old.pages[i];
-        const originalLength = originalPage.conversations.length;
-        const slice = updated.slice(cursor, cursor + originalLength);
-        rebuiltPages.push({
-          conversations: slice,
-          pagination: {
-            // Keep the original pagination metadata so `getNextPageParam`
-            // continues to see correct offsets/limits.
-            ...originalPage.pagination,
-            // `total` is the only field worth refreshing — the global
-            // count grows when a brand-new conversation is prepended.
-            total: i === old.pages.length - 1 ? updated.length : originalPage.pagination.total,
-          },
-        });
-        cursor += originalLength;
-      }
-      // Tail: any items the updater added beyond the original total
-      // length (e.g. a brand-new conversation prepended via fetch
-      // fallback). Append them as an extra page so they're not lost.
-      if (cursor < updated.length) {
-        const last = old.pages[old.pages.length - 1];
-        rebuiltPages.push({
-          conversations: updated.slice(cursor),
-          pagination: {
-            ...last.pagination,
-            offset: cursor,
-            total: updated.length,
-          },
-        });
-      }
-
-      return {
-        pages: rebuiltPages,
-        pageParams: old.pageParams,
-      };
+      return rebuildInfiniteConversationPages(old, updated);
     }
   );
 }
