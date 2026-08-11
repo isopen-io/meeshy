@@ -1,22 +1,27 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
+import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
+import { useAuthStore } from '@/stores/auth-store';
+import { AttachmentService } from '@/services/attachmentService';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+
+export interface PostPublishPayload {
+  content: string;
+  type: PostType;
+  visibility: PostVisibility;
+  visibilityUserIds?: string[];
+  mediaIds?: string[];
+}
 
 export interface PostComposerProps {
   currentUser?: { username: string; avatar?: string | null } | null;
-  onPublish: (data: {
-    content: string;
-    type: PostType;
-    visibility: PostVisibility;
-    visibilityUserIds?: string[];
-    mediaIds?: string[];
-  }) => void;
+  onPublish: (data: PostPublishPayload) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -28,6 +33,20 @@ const VISIBILITY_OPTIONS: { value: PostVisibility; labelKey: string; icon: strin
   { value: 'ONLY', labelKey: 'postComposer.visibility.only', icon: '🎯' },
   { value: 'PRIVATE', labelKey: 'postComposer.visibility.private', icon: '🔒' },
 ];
+
+// W6 media — cap client aligné sur la limite serveur `mediaIds` (≤ 10,
+// `CreatePostSchema`). Un seul pool combiné photos+vidéos, contrairement à
+// StoryComposer qui répartit sur 3 catégories.
+const MEDIA_LIMIT = 10;
+
+const MEDIA_ACCEPT = {
+  image: 'image/*',
+  video: 'video/*',
+} as const;
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
+}
 
 function PostComposer({
   currentUser,
@@ -43,11 +62,107 @@ function PostComposer({
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const authToken = useAuthStore((s) => s.authToken);
+
+  const {
+    selectedFiles,
+    uploadedAttachments,
+    isUploading,
+    uploadProgress,
+    handleFilesSelected,
+    handleRemoveFile,
+    clearAttachments,
+  } = useAttachmentUpload({
+    token: authToken ?? undefined,
+    // useAttachmentUpload counts `selectedFiles.length + uploadedAttachments.length`
+    // against maxAttachments (useAttachmentUpload.ts:280-281), but selectedFiles is
+    // never trimmed after a successful upload while uploadedAttachments grows
+    // alongside it (:332, :359) — after N successful uploads both arrays hold N,
+    // so the hook counts 2N. Double the ceiling here for headroom; MEDIA_LIMIT
+    // stays the single client-facing cap via `mediaLimitReached` below.
+    maxAttachments: MEDIA_LIMIT * 2,
+  });
+
+  const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
+  const uploadPercentage = uploadProgress[0] ?? 0;
+
+  // Blob URLs for image previews, memoized per File identity so retyping the
+  // caption (re-render on every keystroke) never mints a new object URL —
+  // only revoked (in the effect below) once a file actually drops out of
+  // selectedFiles, on clear/publish, or on unmount.
+  const objectUrlCacheRef = useRef<Map<File, string>>(new Map());
+
+  const getPreviewUrl = (file: File): string => {
+    const cache = objectUrlCacheRef.current;
+    const existing = cache.get(file);
+    if (existing) return existing;
+    const url = URL.createObjectURL(file);
+    cache.set(file, url);
+    return url;
+  };
+
+  useEffect(() => {
+    const cache = objectUrlCacheRef.current;
+    const stillSelected = new Set(selectedFiles);
+    cache.forEach((url, file) => {
+      if (!stillSelected.has(file)) {
+        URL.revokeObjectURL(url);
+        cache.delete(file);
+      }
+    });
+  }, [selectedFiles]);
+
+  useEffect(() => {
+    const cache = objectUrlCacheRef.current;
+    return () => {
+      cache.forEach((url) => URL.revokeObjectURL(url));
+      cache.clear();
+    };
+  }, []);
+
+  const handleMediaSelect = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const available = MEDIA_LIMIT - selectedFiles.length;
+    if (available <= 0) {
+      setMediaError(`You can attach up to ${MEDIA_LIMIT} media files.`);
+      return;
+    }
+
+    const requested = Array.from(files);
+    const filesToAdd = requested.slice(0, available);
+    // Pré-validation avec le même service que le hook (taille/type), pour
+    // afficher le message spécifique DANS le composer plutôt que de laisser
+    // le hook émettre un toast générique.
+    const validation = AttachmentService.validateFiles(filesToAdd);
+    if (!validation.valid) {
+      setMediaError(validation.errors.join(' '));
+      return;
+    }
+
+    setMediaError(
+      filesToAdd.length < requested.length
+        ? `You can attach up to ${MEDIA_LIMIT} media files. Only ${filesToAdd.length} added.`
+        : null,
+    );
+    handleFilesSelected(filesToAdd);
+  }, [selectedFiles.length, handleFilesSelected]);
+
+  const handleRemoveMedia = useCallback((index: number) => {
+    handleRemoveFile(index);
+    setMediaError(null);
+  }, [handleRemoveFile]);
 
   const handlePublish = useCallback(() => {
     const trimmed = content.trim();
-    if (!trimmed || disabled) return;
+    const mediaIds = uploadedAttachments.map((att) => att.id);
+    const hasMedia = mediaIds.length > 0;
+    if ((!trimmed && !hasMedia) || disabled || isUploading) return;
 
     if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
 
@@ -58,12 +173,15 @@ function PostComposer({
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
         ? visibilityUserIds
         : undefined,
+      mediaIds: hasMedia ? mediaIds : undefined,
     });
 
     setContent('');
     setVisibilityUserIds([]);
     setIsExpanded(false);
-  }, [content, disabled, onPublish, visibility, visibilityUserIds]);
+    setMediaError(null);
+    clearAttachments();
+  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -75,7 +193,9 @@ function PostComposer({
     [handlePublish],
   );
 
-  const isValid = content.trim().length > 0 && content.trim().length <= 5000;
+  const trimmedContent = content.trim();
+  const hasMedia = uploadedAttachments.length > 0;
+  const isValid = (trimmedContent.length > 0 || hasMedia) && trimmedContent.length <= 5000;
   const charCount = content.length;
   const selectedVisibility = VISIBILITY_OPTIONS.find((v) => v.value === visibility) ?? VISIBILITY_OPTIONS[0];
 
@@ -114,14 +234,81 @@ function PostComposer({
               aria-label={t('postComposer.contentLabel')}
             />
 
+            {isExpanded && selectedFiles.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2" data-testid="post-composer-media-preview">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    className="group relative rounded-lg overflow-hidden bg-[var(--gp-hover)]"
+                  >
+                    {isImageFile(file) ? (
+                      <img
+                        src={getPreviewUrl(file)}
+                        alt={file.name}
+                        className="h-16 w-16 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center text-[var(--gp-text-secondary)]">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="23 7 16 12 23 17 23 7" />
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                        </svg>
+                      </div>
+                    )}
+                    {isUploading && (
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
+                        {uploadPercentage}%
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMedia(index)}
+                      className={cn(
+                        'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full',
+                        'bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100',
+                        'transition-opacity duration-200',
+                      )}
+                      aria-label={t('delete')}
+                    >
+                      x
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isExpanded && mediaError && (
+              <p className="mt-2 text-xs text-red-500" role="alert" data-testid="post-composer-media-error">
+                {mediaError}
+              </p>
+            )}
+
             {isExpanded && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--gp-border)]">
                 <div className="flex items-center gap-2">
                   {/* Media buttons */}
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label={t('postComposer.addPhoto')}>
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={mediaLimitReached}
+                    className={cn(
+                      'p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors',
+                      mediaLimitReached && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                    )}
+                    aria-label={t('postComposer.addPhoto')}
+                  >
                     📷
                   </button>
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label={t('postComposer.addVideo')}>
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={mediaLimitReached}
+                    className={cn(
+                      'p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors',
+                      mediaLimitReached && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                    )}
+                    aria-label={t('postComposer.addVideo')}
+                  >
                     🎥
                   </button>
 
@@ -176,9 +363,9 @@ function PostComposer({
                   variant="primary"
                   size="sm"
                   onClick={handlePublish}
-                  disabled={!isValid || disabled || isAudienceIncomplete(visibility, visibilityUserIds.length)}
+                  disabled={!isValid || disabled || isUploading || isAudienceIncomplete(visibility, visibilityUserIds.length)}
                 >
-                  {t('publish')}
+                  {isUploading ? t('uploading') : t('publish')}
                 </Button>
               </div>
             )}
@@ -196,6 +383,30 @@ function PostComposer({
           </div>
         </div>
       </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept={MEDIA_ACCEPT.image}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleMediaSelect(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept={MEDIA_ACCEPT.video}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleMediaSelect(e.target.files);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }

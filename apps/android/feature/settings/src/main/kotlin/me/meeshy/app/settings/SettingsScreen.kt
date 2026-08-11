@@ -100,6 +100,7 @@ fun SettingsScreen(
     onOpenShareLinks: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
     onOpenTwoFactor: () -> Unit = {},
+    onOpenAccountContact: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
     onOpenMediaCache: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
@@ -304,6 +305,16 @@ fun SettingsScreen(
                     label = stringResource(R.string.settings_two_factor),
                     detail = null,
                     onClick = onOpenTwoFactor,
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                // Change email / phone (§K) — the gateway's change-email/change-phone routes
+                // (services/gateway/src/routes/users/contact-change.ts) had no UI consumer
+                // anywhere in apps/android until this row; iOS ships the reference flow inline
+                // in SecurityView.
+                SettingsRow(
+                    label = stringResource(R.string.settings_account_contact),
+                    detail = null,
+                    onClick = onOpenAccountContact,
                 )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(
