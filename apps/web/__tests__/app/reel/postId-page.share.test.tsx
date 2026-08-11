@@ -133,4 +133,20 @@ describe('ReelPage — enriched share', () => {
     );
     expect(clipboardWriteText).not.toHaveBeenCalled();
   });
+
+  it('does not claim "Link copied!" when the user dismisses the native share sheet', async () => {
+    const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    const mockNavigatorShare = jest.fn().mockRejectedValue(abortError);
+    Object.defineProperty(navigator, 'share', { value: mockNavigatorShare, configurable: true });
+
+    render(<ReelPage />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('reel-share'));
+    });
+
+    await waitFor(() => expect(mockNavigatorShare).toHaveBeenCalled());
+    expect(clipboardWriteText).not.toHaveBeenCalled();
+    expect(mockAddToast).not.toHaveBeenCalledWith('Link copied!', 'success');
+    expect(mockAddToast).not.toHaveBeenCalledWith('Shared!', 'success');
+  });
 });

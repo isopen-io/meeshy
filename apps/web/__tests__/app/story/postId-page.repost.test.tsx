@@ -13,7 +13,7 @@ const mockStoryPost = {
   id: 'story-1',
   authorId: 'author-2',
   type: 'STORY',
-  visibility: 'FRIENDS',
+  visibility: 'PUBLIC',
   content: 'A story',
   likeCount: 0,
   commentCount: 0,
@@ -103,6 +103,7 @@ import StoryPage from '@/app/story/[postId]/page';
 describe('StoryPage — minimal repost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStoryPost.visibility = 'PUBLIC';
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
@@ -119,5 +120,23 @@ describe('StoryPage — minimal repost', () => {
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       ),
     );
+  });
+
+  it('withholds onRepost when the story is not PUBLIC (gateway 403s non-PUBLIC originals)', () => {
+    mockStoryPost.visibility = 'FRIENDS';
+    render(<StoryPage />);
+
+    expect(screen.queryByTestId('story-repost')).not.toBeInTheDocument();
+  });
+
+  it('shows a failure toast if the repost 403s despite the gate', async () => {
+    mockRepostMutate.mockImplementation((_vars, opts) => opts?.onError?.());
+    render(<StoryPage />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-repost'));
+    });
+
+    await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith("Couldn't repost", 'error'));
   });
 });

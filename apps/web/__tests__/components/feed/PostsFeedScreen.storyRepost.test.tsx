@@ -63,33 +63,38 @@ jest.mock('@/services/report.service', () => ({
   reportService: { reportPost: jest.fn(), reportStory: jest.fn() },
 }));
 
-jest.mock('@/hooks/social/use-stories', () => {
-  const actualStoryPost = {
-    id: 'story-1',
-    authorId: 'author-2',
-    type: 'STORY',
-    visibility: 'FRIENDS',
-    content: 'A story',
-    likeCount: 0,
-    commentCount: 0,
-    repostCount: 0,
-    viewCount: 0,
-    bookmarkCount: 0,
-    shareCount: 0,
-    isPinned: false,
-    isEdited: false,
-    expiresAt: new Date(Date.now() + 86400000).toISOString(),
-    createdAt: '2026-08-01T00:00:00.000Z',
-    updatedAt: '2026-08-01T00:00:00.000Z',
-    author: { id: 'author-2', username: 'bob' },
-  };
-  return {
-    useStoriesFeedQuery: () => ({ data: [actualStoryPost], isLoading: false }),
-    useCreateStoryMutation: () => ({ mutate: jest.fn() }),
-    useDeleteStoryMutation: () => ({ mutate: jest.fn() }),
-    useRecordStoryViewMutation: () => ({ recordView: jest.fn() }),
-  };
-});
+// Mutable so tests can flip the active story's visibility — the gateway
+// (`PostService.repostPost`) 403s on any non-PUBLIC original, and the web
+// default story visibility is FRIENDS (`user-preferences-store.ts`), so the
+// "onRepost withheld" branch below covers the actual common case.
+const mockStoryVisibility = { current: 'PUBLIC' as 'PUBLIC' | 'FRIENDS' };
+jest.mock('@/hooks/social/use-stories', () => ({
+  useStoriesFeedQuery: () => ({
+    data: [{
+      id: 'story-1',
+      authorId: 'author-2',
+      type: 'STORY',
+      visibility: mockStoryVisibility.current,
+      content: 'A story',
+      likeCount: 0,
+      commentCount: 0,
+      repostCount: 0,
+      viewCount: 0,
+      bookmarkCount: 0,
+      shareCount: 0,
+      isPinned: false,
+      isEdited: false,
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      author: { id: 'author-2', username: 'bob' },
+    }],
+    isLoading: false,
+  }),
+  useCreateStoryMutation: () => ({ mutate: jest.fn() }),
+  useDeleteStoryMutation: () => ({ mutate: jest.fn() }),
+  useRecordStoryViewMutation: () => ({ recordView: jest.fn() }),
+}));
 
 jest.mock('@/hooks/social/use-stories-realtime', () => ({ useStoriesRealtime: jest.fn() }));
 jest.mock('@/stores/user-preferences-store', () => ({
@@ -153,6 +158,7 @@ import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
 describe('PostsFeedScreen — minimal story repost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStoryVisibility.current = 'PUBLIC';
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
@@ -170,5 +176,25 @@ describe('PostsFeedScreen — minimal story repost', () => {
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       ),
     );
+  });
+
+  it('withholds onRepost when the active story is not PUBLIC (gateway 403s non-PUBLIC originals)', () => {
+    mockStoryVisibility.current = 'FRIENDS';
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('story-tray-open'));
+
+    expect(screen.queryByTestId('story-viewer-repost')).not.toBeInTheDocument();
+  });
+
+  it('shows a failure toast if the repost 403s despite the gate', async () => {
+    mockRepostMutate.mockImplementation((_vars, opts) => opts?.onError?.());
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('story-tray-open'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-viewer-repost'));
+    });
+
+    await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith('Error', 'error'));
   });
 });

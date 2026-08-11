@@ -146,10 +146,16 @@ export default function PostDetailPage() {
   const handleShare = async () => {
     const localUrl = `${window.location.origin}/feeds/post/${post.id}`;
     const title = post.author?.displayName ?? post.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
     try {
       const { shortUrl } = await postsService.sharePost(post.id, { generateLink: true });
       const shared = await shareLink(shortUrl ?? localUrl, title, post.content ?? '');
-      showToast(shared ? 'Shared!' : 'Link copied!', 'success');
+      if (shared) {
+        showToast('Shared!', 'success');
+      } else if (!hasNativeShare) {
+        showToast('Link copied!', 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
     } catch {
       showToast("Couldn't share the post.", 'error');
     }

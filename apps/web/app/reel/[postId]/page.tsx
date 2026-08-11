@@ -142,10 +142,16 @@ export default function ReelPage() {
     if (!current) return;
     const localUrl = `${window.location.origin}/reel/${current.id}`;
     const title = current.author?.displayName ?? current.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
     try {
       const { shortUrl } = await postsService.sharePost(current.id, { generateLink: true });
       const shared = await shareLink(shortUrl ?? localUrl, title, current.content ?? '');
-      toastCtx.addToast(shared ? t('shared', 'Shared!') : t('linkCopied', 'Link copied!'), 'success');
+      if (shared) {
+        toastCtx.addToast(t('shared', 'Shared!'), 'success');
+      } else if (!hasNativeShare) {
+        toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
     } catch {
       toastCtx.addToast(t('linkCopyError', "Couldn't share the reel"), 'error');
     }

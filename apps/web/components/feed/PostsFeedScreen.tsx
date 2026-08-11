@@ -245,6 +245,16 @@ export function PostsFeedScreen() {
     return group ? group.map(postToStoryData) : [];
   }, [activeStoryAuthorId, storyGroups]);
 
+  // PostService.repostPost (gateway) 403s on any non-PUBLIC original, and the
+  // web default story visibility is FRIENDS (user-preferences-store.ts) — the
+  // "Republier" entry is withheld unless every story in the open session is
+  // PUBLIC, or it fails into "Couldn't repost" in the common case.
+  const activeStoryGroupIsRepostable = useMemo(() => {
+    if (!activeStoryAuthorId) return false;
+    const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
+    return !!group && group.every((p) => p.visibility === 'PUBLIC');
+  }, [activeStoryAuthorId, storyGroups]);
+
   const handleStoryPress = useCallback(
     (groupId: string) => {
       const group = storyGroups.find((g) => g[0]?.authorId === groupId);
@@ -307,10 +317,16 @@ export function PostsFeedScreen() {
       const story = activeStoryData.find((s) => s.id === storyId);
       const localUrl = `${window.location.origin}/story/${storyId}`;
       const title = story?.author.name ?? 'Meeshy';
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
       try {
         const { shortUrl } = await postsService.sharePost(storyId, { generateLink: true });
         const shared = await shareLink(shortUrl ?? localUrl, title, story?.content ?? '');
-        showToast(shared ? t('toast.shared', 'Shared!') : t('toast.linkCopied', 'Link copied!'), 'success');
+        if (shared) {
+          showToast(t('toast.shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
       } catch {
         showToast(t('toast.error', 'Error'), 'error', t('toast.shareError', "Couldn't share the story."));
       }
@@ -416,10 +432,16 @@ export function PostsFeedScreen() {
           : `${window.location.origin}/feeds/post/${postId}`;
       const title = post?.author?.displayName ?? post?.author?.username ?? 'Meeshy';
 
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
       try {
         const { shortUrl } = await postsService.sharePost(postId, { generateLink: true });
         const shared = await shareLink(shortUrl ?? localUrl, title, post?.content ?? '');
-        showToast(shared ? t('toast.shared', 'Shared!') : t('toast.linkCopied', 'Link copied!'), 'success');
+        if (shared) {
+          showToast(t('toast.shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
       } catch {
         showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't share the post."));
       }
@@ -821,7 +843,7 @@ export function PostsFeedScreen() {
           onDelete={handleStoryDelete}
           onReport={handleReportStory}
           onShare={handleShareStory}
-          onRepost={handleRepostStory}
+          onRepost={activeStoryGroupIsRepostable ? handleRepostStory : undefined}
         />
       )}
 

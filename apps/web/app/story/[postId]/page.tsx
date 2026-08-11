@@ -96,10 +96,16 @@ export default function StoryPage() {
       const story = stories.find((s) => s.id === storyId);
       const localUrl = `${window.location.origin}/story/${storyId}`;
       const title = story?.author.name ?? 'Meeshy';
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
       try {
         const { shortUrl } = await postsService.sharePost(storyId, { generateLink: true });
         const shared = await shareLink(shortUrl ?? localUrl, title, story?.content ?? '');
-        toastCtx.addToast(shared ? t('shared', 'Shared!') : t('linkCopied', 'Link copied!'), 'success');
+        if (shared) {
+          toastCtx.addToast(t('shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
       } catch {
         toastCtx.addToast(t('shareError', "Couldn't share the story"), 'error');
       }
@@ -133,7 +139,7 @@ export default function StoryPage() {
         onDelete={handleDelete}
         onReport={handleReport}
         onShare={handleShare}
-        onRepost={handleRepost}
+        onRepost={post?.visibility === 'PUBLIC' ? handleRepost : undefined}
         targetCommentId={targetCommentId}
         targetParentCommentId={targetParentCommentId}
       />

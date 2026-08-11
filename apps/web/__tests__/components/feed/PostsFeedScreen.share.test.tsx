@@ -232,4 +232,44 @@ describe('PostsFeedScreen — enriched share', () => {
     await waitFor(() => expect(mockSharePost).toHaveBeenCalledWith('story-1', { generateLink: true }));
     await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith('https://meeshy.me/l/story123'));
   });
+
+  it('does not claim "Link copied!" when the user dismisses the native share sheet (post)', async () => {
+    const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    const mockNavigatorShare = jest.fn().mockRejectedValue(abortError);
+    Object.defineProperty(navigator, 'share', { value: mockNavigatorShare, configurable: true });
+
+    render(<PostsFeedScreen />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('post-card-share'));
+    });
+
+    await waitFor(() => expect(mockNavigatorShare).toHaveBeenCalled());
+    expect(clipboardWriteText).not.toHaveBeenCalled();
+    expect(mockAddToast).not.toHaveBeenCalledWith('Link copied!', 'success');
+    expect(mockAddToast).not.toHaveBeenCalledWith('Shared!', 'success');
+
+    // @ts-expect-error test-only cleanup
+    delete navigator.share;
+  });
+
+  it('does not claim "Link copied!" when the user dismisses the native share sheet (story)', async () => {
+    const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    const mockNavigatorShare = jest.fn().mockRejectedValue(abortError);
+    Object.defineProperty(navigator, 'share', { value: mockNavigatorShare, configurable: true });
+    mockSharePost.mockResolvedValue({ shared: true, shareCount: 1, shortUrl: 'https://meeshy.me/l/story123', token: 'story123' });
+
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('story-tray-open'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-viewer-share'));
+    });
+
+    await waitFor(() => expect(mockNavigatorShare).toHaveBeenCalled());
+    expect(clipboardWriteText).not.toHaveBeenCalled();
+    expect(mockAddToast).not.toHaveBeenCalledWith('Link copied!', 'success');
+    expect(mockAddToast).not.toHaveBeenCalledWith('Shared!', 'success');
+
+    // @ts-expect-error test-only cleanup
+    delete navigator.share;
+  });
 });
