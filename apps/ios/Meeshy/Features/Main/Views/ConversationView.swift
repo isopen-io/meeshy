@@ -780,6 +780,25 @@ struct ConversationView: View {
                             if success { HapticFeedback.success() }
                             else { HapticFeedback.error() }
                         }
+                    },
+                    translatingTextLanguages: viewModel.translatingTextLanguages[msg.id] ?? [],
+                    translatingAudioLanguages: viewModel.translatingAudioLanguages[msg.id] ?? [],
+                    translationRequestFailedPublisher: viewModel.translationRequestFailed.eraseToAnyPublisher(),
+                    onRequestTextTranslation: { targetLang, sourceLang in
+                        Task {
+                            await viewModel.requestTextTranslation(
+                                messageId: msg.id, content: msg.content,
+                                sourceLanguage: sourceLang, targetLanguage: targetLang
+                            )
+                        }
+                    },
+                    onRequestAudioTranslation: { targetLang, attachmentId in
+                        Task {
+                            await viewModel.requestAudioTranslation(
+                                messageId: msg.id, attachmentId: attachmentId,
+                                sourceLanguage: msg.originalLanguage, targetLanguage: targetLang
+                            )
+                        }
                     }
                 )
             }
