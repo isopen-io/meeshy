@@ -25,6 +25,13 @@ import type { SequenceService } from '../../services/SequenceService';
  * dans le chemin temps réel » prime, et le client retombe sur le gap recovery
  * temporel.
  *
+ * LOCKSTEP avec les clients : le `_seq` est per-user GLOBAL, pas per-event. Un
+ * client qui n'observe qu'un SOUS-ENSEMBLE des events estampillés voit un trou
+ * à chaque event non observé. Étendre la liste des appelants ci-dessous oblige
+ * donc à étendre l'observation dans le MÊME train de release, sur les DEUX
+ * clients qui la portent : iOS (`SyncSeqTracker.observe`, MessageSocketManager)
+ * et web (`observeSyncSeq`, `notification-socketio.singleton`).
+ *
  * Ordering (SyncEngine A2, fix ordering) : `nextSeq` renvoie des valeurs
  * distinctes et strictement croissantes DANS L'ORDRE D'APPEL, mais deux appels
  * concurrents pour le même user s'exécutent sur des connexions Mongo poolées
