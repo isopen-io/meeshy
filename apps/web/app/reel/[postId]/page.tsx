@@ -15,7 +15,6 @@ import {
   useUnlikePostMutation,
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
-  useSharePostMutation,
   useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
@@ -24,8 +23,9 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
-import { copyToClipboard } from '@/lib/clipboard';
+import { shareLink } from '@/lib/share-utils';
 import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
 
 const LIKE_EMOJI = '❤️';
 
@@ -60,7 +60,6 @@ export default function ReelPage() {
   const unlikeMutation = useUnlikePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
-  const shareMutation = useSharePostMutation();
   const repostMutation = useRepostMutation();
   const [repostModalOpen, setRepostModalOpen] = useState(false);
 
@@ -141,14 +140,16 @@ export default function ReelPage() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
-    const { success } = await copyToClipboard(`${window.location.origin}/reel/${current.id}`);
-    if (success) {
-      shareMutation.mutate({ postId: current.id });
-      toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
-    } else {
-      toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
+    const localUrl = `${window.location.origin}/reel/${current.id}`;
+    const title = current.author?.displayName ?? current.author?.username ?? 'Meeshy';
+    try {
+      const { shortUrl } = await postsService.sharePost(current.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, current.content ?? '');
+      toastCtx.addToast(shared ? t('shared', 'Shared!') : t('linkCopied', 'Link copied!'), 'success');
+    } catch {
+      toastCtx.addToast(t('linkCopyError', "Couldn't share the reel"), 'error');
     }
-  }, [current, shareMutation, toastCtx, t]);
+  }, [current, toastCtx, t]);
 
   // Reel comment notifications link to `/reel/:id#comment-:cid`. The reel player
   // surfaces comments via the post-detail thread, so forward to it preserving the

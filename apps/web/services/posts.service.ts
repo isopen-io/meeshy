@@ -57,6 +57,24 @@ export interface RepostRequest {
   readonly isQuote?: boolean;
 }
 
+export interface SharePostOptions {
+  readonly platform?: string;
+  /**
+   * Mints a per-caller tracking link (`meeshy.me/l/<token>`) the gateway can
+   * attribute clicks back to, mirroring iOS `POST /posts/:id/share
+   * {generateLink:true}`. Reusing an existing link does NOT re-increment
+   * `shareCount` — the counter tracks unique sharers, not repeated taps.
+   */
+  readonly generateLink?: boolean;
+}
+
+export interface SharePostResponse {
+  readonly shared: boolean;
+  readonly shareCount: number;
+  readonly shortUrl?: string;
+  readonly token?: string;
+}
+
 /**
  * Surface a post impression originates from. Mirrors the gateway's accepted
  * `source` enum (`/posts/:postId/impression` + `/posts/impressions/batch`) and
@@ -253,10 +271,19 @@ export const postsService = {
     return unwrap(response);
   },
 
-  async sharePost(postId: string, platform?: string): Promise<{ shared: boolean; shareCount: number }> {
-    const response = await apiService.post<{ shared: boolean; shareCount: number }>(
+  /**
+   * `platform` accepts either the legacy bare string (backward-compatible
+   * with `useSharePostMutation`) or a {@link SharePostOptions} object to also
+   * request a tracking link (`generateLink: true`) — see {@link SharePostResponse}.
+   */
+  async sharePost(postId: string, platform?: string | SharePostOptions): Promise<SharePostResponse> {
+    const options: SharePostOptions = typeof platform === 'string' ? { platform } : (platform ?? {});
+    const body: Record<string, unknown> = {};
+    if (options.platform) body.platform = options.platform;
+    if (options.generateLink) body.generateLink = true;
+    const response = await apiService.post<SharePostResponse>(
       `/posts/${postId}/share`,
-      platform ? { platform } : undefined,
+      Object.keys(body).length > 0 ? body : undefined,
     );
     return unwrap(response);
   },

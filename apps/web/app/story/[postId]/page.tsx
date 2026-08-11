@@ -13,6 +13,8 @@ import { useCommentTarget } from '@/hooks/use-comment-target';
 import { useAuthStore } from '@/stores/auth-store';
 import { useI18n } from '@/hooks/useI18n';
 import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
+import { shareLink } from '@/lib/share-utils';
 
 /**
  * Immersive single-story viewer (`/story/:id`).
@@ -87,6 +89,22 @@ export default function StoryPage() {
     [toastCtx, t]
   );
 
+  const handleShare = useCallback(
+    async (storyId: string) => {
+      const story = stories.find((s) => s.id === storyId);
+      const localUrl = `${window.location.origin}/story/${storyId}`;
+      const title = story?.author.name ?? 'Meeshy';
+      try {
+        const { shortUrl } = await postsService.sharePost(storyId, { generateLink: true });
+        const shared = await shareLink(shortUrl ?? localUrl, title, story?.content ?? '');
+        toastCtx.addToast(shared ? t('shared', 'Shared!') : t('linkCopied', 'Link copied!'), 'success');
+      } catch {
+        toastCtx.addToast(t('shareError', "Couldn't share the story"), 'error');
+      }
+    },
+    [stories, toastCtx, t]
+  );
+
   if (stories.length > 0) {
     return (
       <StoryViewer
@@ -99,6 +117,7 @@ export default function StoryPage() {
         onReply={handleReply}
         onDelete={handleDelete}
         onReport={handleReport}
+        onShare={handleShare}
         targetCommentId={targetCommentId}
         targetParentCommentId={targetParentCommentId}
       />

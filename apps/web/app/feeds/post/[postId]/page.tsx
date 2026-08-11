@@ -12,7 +12,6 @@ import {
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
   useDeletePostMutation,
-  useSharePostMutation,
   useUpdatePostMutation,
   useRepostMutation,
   useTranslatePostMutation,
@@ -38,7 +37,7 @@ import { postsService, recordAnonymousView } from '@/services/posts.service';
 import { reportService } from '@/services/report.service';
 import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
 import { isHeartLikedByMe } from '@/lib/reactions';
-import { copyToClipboard } from '@/lib/clipboard';
+import { shareLink } from '@/lib/share-utils';
 
 /**
  * Post detail page (v1 canonical path).
@@ -85,7 +84,6 @@ export default function PostDetailPage() {
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const deleteMutation = useDeletePostMutation();
-  const shareMutation = useSharePostMutation();
   const updateMutation = useUpdatePostMutation();
   const repostMutation = useRepostMutation();
   const translateMutation = useTranslatePostMutation();
@@ -146,12 +144,15 @@ export default function PostDetailPage() {
   const isAuthor = post.authorId === currentUser?.id;
 
   const handleShare = async () => {
-    const { success } = await copyToClipboard(`${window.location.origin}/feeds/post/${post.id}`);
-    if (success) {
-      shareMutation.mutate({ postId: post.id });
-      showToast('Link copied!', 'success');
+    const localUrl = `${window.location.origin}/feeds/post/${post.id}`;
+    const title = post.author?.displayName ?? post.author?.username ?? 'Meeshy';
+    try {
+      const { shortUrl } = await postsService.sharePost(post.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, post.content ?? '');
+      showToast(shared ? 'Shared!' : 'Link copied!', 'success');
+    } catch {
+      showToast("Couldn't share the post.", 'error');
     }
-    /* else: clipboard denied / unavailable — silent */
   };
 
   const handleDeletePost = () => {

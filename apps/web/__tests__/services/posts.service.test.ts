@@ -178,6 +178,22 @@ describe('postsService', () => {
       await postsService.sharePost('post-1', 'twitter');
       expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { platform: 'twitter' });
     });
+
+    it('calls POST /posts/:postId/share with generateLink:true and returns the tracked link', async () => {
+      mockApi.post.mockResolvedValue({
+        success: true,
+        data: { shared: true, shareCount: 3, shortUrl: 'https://meeshy.me/l/abc123', token: 'abc123' },
+      });
+      const result = await postsService.sharePost('post-1', { generateLink: true });
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { generateLink: true });
+      expect(result).toEqual({ shared: true, shareCount: 3, shortUrl: 'https://meeshy.me/l/abc123', token: 'abc123' });
+    });
+
+    it('combines platform and generateLink in the options form', async () => {
+      mockApi.post.mockResolvedValue({ success: true });
+      await postsService.sharePost('post-1', { platform: 'twitter', generateLink: true });
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { platform: 'twitter', generateLink: true });
+    });
   });
 
   describe('pinPost', () => {
