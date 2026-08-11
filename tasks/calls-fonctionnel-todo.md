@@ -6935,3 +6935,67 @@ trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHo
 (Vague 84, on-device requis) ; `removeParticipant()` web (Vague 91, non-régression) ;
 `call:force-leave`/`call:check-active` en string literals hors du type-map partagé (cosmétique) ;
 toolchains iOS/Android hors d'atteinte dans ce sandbox.
+
+## Vague 107 — `VideoFilterPipeline.process` (+ ses deux miroirs UI) no-opait le flou d'arrière-plan/lissage peau sans preset colorimétrique (iOS) (2026-08-11)
+
+Point d'entrée : même session que la Vague 106 ci-dessus, PR pas encore mergée. Un audit dédié (agent
+Explore, lecture readonly) mandaté avec la liste condensée des items déjà triés (god-object
+`CallManager.swift`, ADR `actor CallEventQueue`, busy-path `reportNewIncomingCall`, `CXSetHeldCallAction`,
+`removeParticipant()` web, string literals `call:force-leave`/`call:check-active`, la synchronisation
+`MediaSessionCoordinator` déjà fixée Vague 104) pour proposer un candidat frais côté iOS. Root cause
+vérifiée par lecture directe (pas seulement acceptée du rapport agent) avant tout fix.
+
+- **Root cause confirmée** : `VideoFilterPipeline.process(_:averageBrightness:)`
+  (`Services/VideoFilterPipeline.swift:194`) gate TOUT le pipeline (colorimétrie ET flou
+  d'arrière-plan ET lissage peau) derrière `guard cfg.isEnabled else { return pixelBuffer }`. Or
+  `isEnabled` n'est mis à `true` que par le choix d'un des 5 presets colorimétriques
+  (`VideoFilterPreset.config` force `c.isEnabled = true` inconditionnellement avant le `switch`).
+  Les deux toggles avancés du panneau (`VideoFiltersPanel`, cases « Flou d'arrière-plan » / « Lissage
+  peau ») ne touchent jamais `isEnabled` — ils ne modifient que leur propre champ. Un utilisateur qui
+  active l'un des deux SANS jamais choisir un preset laisse `isEnabled` à `false` (sa valeur par
+  défaut) : chaque frame capturée tombe dans le early-return et ressort strictement identique — le
+  correspondant ne voit jamais le flou/lissage. Rien ne le révèle : le toggle reste visuellement actif,
+  le glyphe toolbar « Filtres » (`hasActiveEffects` dans `CallView.swift`, `isActive` dans
+  `CallEffectsOverlay.swift`) ne s'allume pas non plus (même lecture de `isEnabled` seul), aucune
+  bannière de dégradation n'apparaît (le pipeline ne tourne même pas), aucun log. Silencieux et
+  100% reproductible — pas une race, pas dépendant du device. Le type portait déjà l'outil pour
+  détecter ce cas — `hasAdvancedFilters` (`backgroundBlurEnabled || skinSmoothingEnabled`, testé
+  isolément par `VideoFilterConfigTests`) — mais n'était consulté par AUCUN des trois call-sites.
+- **Fix** (3 sites, même patron `|| cfg.hasAdvancedFilters` partout) :
+  - `VideoFilterPipeline.process` : `guard cfg.isEnabled || cfg.hasAdvancedFilters else { return
+    pixelBuffer }`.
+  - `CallView.hasActiveEffects` (glyphe toolbar bas d'écran) : idem.
+  - `CallEffectsOverlay`'s « Filtres » toolbar chip `isActive` : idem.
+- **Tests** (ajoutés, pas exécutables dans ce sandbox Linux — cf. Vérification) :
+  - `VideoFilterPipelineTests` : 3 nouveaux cas exploitant `lastFrameProcessingTime` (déjà nil par
+    défaut, signal observable existant que le pipeline a tourné) — flou seul/lissage seul avec
+    `isEnabled=false` doivent quand même traiter la frame (`lastFrameProcessingTime != nil`) ; ni
+    l'un ni l'autre ni `isEnabled` doit toujours early-return (non-régression, `nil`).
+  - `CallViewAccessibilityTests` + `CallEffectsOverlayTests` : gardes source-scan (patron déjà en
+    place dans ces fichiers pour des Views non instanciables hors hosting controller) vérifiant que
+    `hasAdvancedFilters` apparaît bien dans le voisinage de chaque déclaration corrigée.
+- **Vérification** : build/tests iOS **non exécutables dans ce sandbox** (conteneur Linux, aucun
+  Xcode). Relecture ligne à ligne des 3 sites de prod + comptage d'accolades avant/après (équilibré,
+  cf. session) ; les 3 fichiers de test suivent exactement l'idiome déjà établi dans leurs fichiers
+  respectifs (repris de tests voisins existants, pas inventé). Vérification réelle déléguée à la CI
+  GitHub Actions (macOS, job « iOS Tests ») au push — PR suivie jusqu'au vert avant merge.
+- **Portée volontairement non étendue** : le second candidat de l'audit (`VideoFiltersPanel.activePreset`
+  ne se restaure pas depuis la config persistée à la réouverture du panneau — cosmétique, l'indicateur
+  de sélection affiche « Natural » alors que le preset réellement appliqué à la vidéo live est correct)
+  n'est PAS traité ce cycle (portée limitée à un candidat par audit pour garder chaque commit revuable
+  indépendamment) — **candidat pour la Vague 108**.
+
+### Reste ouvert
+
+- **`VideoFiltersPanel.activePreset` ne se restaure pas depuis `filterConfig` à la réouverture du
+  panneau** (`@State private var activePreset: VideoFilterPreset? = .natural`, jamais re-dérivé dans
+  `.onAppear` contrairement à `filterConfig` qui l'est) — cosmétique/trompeur, pas une perte de
+  fonction (le filtre réellement appliqué reste correct). **Candidat sérieux pour la Vague 108.**
+
+Reconduit tel quel (rien de plus trouvé côté iOS au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
+ce sandbox.

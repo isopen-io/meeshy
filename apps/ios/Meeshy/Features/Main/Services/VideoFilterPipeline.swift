@@ -191,7 +191,12 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // struct copy, so a slider drag landing mid-frame can only ever apply
         // fully-before or fully-after this frame — never a torn mix of fields.
         let cfg = config
-        guard cfg.isEnabled else { return pixelBuffer }
+        // `isEnabled` is only ever set true by picking a colorimetry preset
+        // (VideoFilterPreset.config, above). Background blur / skin smoothing
+        // are independent opt-in toggles (§14.1) that never touch `isEnabled`
+        // — gating the whole pipeline on it alone silently no-op'd both
+        // whenever a user enabled one without ever picking a preset.
+        guard cfg.isEnabled || cfg.hasAdvancedFilters else { return pixelBuffer }
 
         let start = CACurrentMediaTime()
 
