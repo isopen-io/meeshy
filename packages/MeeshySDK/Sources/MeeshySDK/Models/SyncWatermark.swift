@@ -48,6 +48,25 @@ public enum SyncWatermark {
         Swift.max(previous, receivedUpdatedAt.max() ?? previous)
     }
 
+    /// Next cursor for a delta page known to be FULL — i.e. cut at the server
+    /// cap, with an unknown number of rows left behind.
+    ///
+    /// The route orders a delta page by (`updatedAt` asc, `id` asc), so the cut
+    /// can fall INSIDE a group of rows sharing one `updatedAt`. `advanced` would
+    /// push the cursor to the page max, and the next page's strict `gt` bound
+    /// would skip that group's survivors for good. Resuming just BELOW the top
+    /// group re-reads it whole on the next page: rows already applied are
+    /// upserted again (idempotent), none is skipped.
+    ///
+    /// `nil` means "no cursor can make progress here": the page carries a SINGLE
+    /// distinct `updatedAt` (mass write past the cap), so there is nothing below
+    /// the top group to resume from. The caller must escalate to a full
+    /// reconcile rather than advance — this is the residue the server ordering
+    /// alone cannot rescue.
+    static func resumeAfterFullPage(receivedUpdatedAt: [Date]) -> Date? {
+        Set(receivedUpdatedAt).sorted().dropLast().last
+    }
+
     /// AUTHORITATIVE watermark after a full sync. A full fetch is the ground
     /// truth for every conversation, so the cursor is SET to the newest server
     /// `updatedAt` returned — deliberately ignoring `previous` so a stale

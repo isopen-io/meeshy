@@ -574,26 +574,32 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
     /// évolution de la règle touche les DEUX plateformes.
     ///
-    /// TRONCATURE : `deltaSyncCore` demande `limit=500`, mais
-    /// `GET /conversations` plafonne à 100 (`Math.min(limit, 100)`,
-    /// `routes/conversations/core.ts`). Une fenêtre ayant touché plus de 100
-    /// conversations rend donc une page tronquée.
+    /// TRONCATURE : `GET /conversations` plafonne à 100 (`Math.min(limit, 100)`,
+    /// `routes/conversations/core.ts`) et trie une page delta par `updatedAt`
+    /// croissant. `deltaSyncCore` demande donc exactement 100 — demander 500
+    /// rendait la coupure INDÉTECTABLE — et MARCHE les pages : une page PLEINE
+    /// n'est jamais une preuve de fin de fenêtre, seule une page COURTE l'est.
     ///
-    /// La route trie DÉSORMAIS une page delta par `updatedAt` croissant (elle
-    /// triait par `lastMessageAt` décroissant, sans rapport avec le filtre) :
-    /// les lignes coupées sont exactement celles d'`updatedAt` supérieur à la
-    /// dernière rendue, donc `lastSyncTimestamp` — avancé au max des `updatedAt`
-    /// reçus — pointe dessus au lieu de les enjamber. La troncature est une
-    /// pagination, plus une perte.
+    /// Trois règles, dans cet ordre :
+    /// 1. page courte ⇒ fin de fenêtre, curseur au max des `updatedAt` reçus ;
+    /// 2. page pleine ⇒ curseur JUSTE SOUS son groupe d'`updatedAt` le plus
+    ///    haut (`SyncWatermark.resumeAfterFullPage`), parce que la coupure peut
+    ///    tomber au milieu d'un groupe partageant une même milliseconde — le
+    ///    groupe est relu entier au tour suivant (upsert idempotent) plutôt
+    ///    qu'enjambé par la borne stricte `gt` ;
+    /// 3. le seul résidu que l'ordre ne rattrape pas — une page pleine dont
+    ///    TOUTES les lignes portent la même milliseconde (écriture en masse) —
+    ///    n'a aucun curseur qui progresse sans sauter une ligne : le curseur
+    ///    reste où il est et la boucle escalade vers `fullSync`, hors de la
+    ///    borne des 24 h. Idem au-delà de `maxDeltaPages`.
     ///
-    /// RÉSIDU non couvert ici : plus de 100 conversations portant la MÊME
-    /// milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
-    /// la borne stricte `gt` ne peut pas reprendre. Le web détecte ce cas
-    /// (`conversations.length >= DELTA_PAGE_LIMIT` ⇒ relecture complète) ;
-    /// iOS ne le détecte pas encore.
+    /// Le web porte la même escalade sous une forme plus grossière (page pleine
+    /// ⇒ relecture complète immédiate, `DELTA_PAGE_LIMIT`,
+    /// `use-conversations-delta-sync.ts`) : iOS pagine d'abord et n'escalade
+    /// que sur le résidu.
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
-        let ok = await deltaSyncCore()
+        let outcome = await deltaSyncCore()
         // P7-10 — réconciliation complète périodique, chaînée APRÈS le delta
         // (hors du garde `isSyncing` que le corps tient) : fullSync remplace
         // la liste par la vérité serveur → purge les fantômes hard-supprimés
@@ -601,10 +607,40 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // `fullReconcileInterval` (24 h) — le delta reste le chemin nominal
         // bon marché. Seulement sur delta RÉUSSI : offline/panne, on garde
         // le cache intact (local-first) et on retentera au prochain delta.
-        if ok && isFullReconcileDue {
+        //
+        // `needsFullReconcile` IGNORE cette borne de 24 h, et c'est le point :
+        // elle borne un entretien PÉRIODIQUE, pas une réparation. Le delta
+        // vient de dire qu'il ne peut pas prouver avoir atteint le bout de sa
+        // fenêtre ; attendre 24 h laisserait la liste sciemment trouée.
+        if outcome.ok && (outcome.needsFullReconcile || isFullReconcileDue) {
             await fullSync()
         }
-        return ok
+        return outcome.ok
+    }
+
+    /// Server cap on `GET /conversations` (`Math.min(limit, 100)`,
+    /// `routes/conversations/core.ts`). Asking for 500 was a silent lie: the
+    /// page came back at 100 and NOTHING told the walk it had been cut.
+    /// Requesting exactly the cap turns "the page came back full" into the
+    /// signal it has to be — a SHORT page is the only proof the window is
+    /// exhausted.
+    static let deltaPageLimit = 100
+
+    /// Bound on the delta walk. A window needing more pages than this is no
+    /// longer a cheap delta: the full reconcile is both cheaper per row and
+    /// provably complete, so we stop walking and escalate.
+    static let maxDeltaPages = 5
+
+    /// Outcome of a delta walk. `needsFullReconcile` is NOT an error — the
+    /// pages that were fetched are applied and the cursor is honest; it means
+    /// the walk could not prove it had reached the end of the window, so the
+    /// caller must fall back to server truth.
+    struct DeltaSyncOutcome {
+        let ok: Bool
+        let needsFullReconcile: Bool
+
+        static let succeeded = DeltaSyncOutcome(ok: true, needsFullReconcile: false)
+        static let failed = DeltaSyncOutcome(ok: false, needsFullReconcile: false)
     }
 
     /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
@@ -621,8 +657,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// « marquer comme non lu » cross-device définitivement invisible sur le
     /// web. Fermer l'écart demande de faire voyager la frontière de lecture
     /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
-    private func deltaSyncCore() async -> Bool {
-        guard !isSyncing else { return true }
+    private func deltaSyncCore() async -> DeltaSyncOutcome {
+        guard !isSyncing else { return .succeeded }
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
         // same window, only the first one hits the network. Returning
@@ -630,55 +666,91 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // delta is "fresh enough" since a recent one just landed.
         let now = Date()
         if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
-            return true
+            return .succeeded
         }
         lastDeltaSyncAt = now
         isSyncing = true
         defer { isSyncing = false }
 
+        var pagesFetched = 0
+
         do {
-            let since = lastSyncTimestamp
-            let sinceStr = ISO8601DateFormatter().string(from: since)
-            let queryItems = [
-                URLQueryItem(name: "limit", value: "500"),
-                URLQueryItem(name: "offset", value: "0"),
-                URLQueryItem(name: "updatedSince", value: sinceStr)
-            ]
+            while true {
+                // Read the cursor from storage each turn: the previous turn
+                // committed its own advance, so a failure mid-walk leaves the
+                // pages already applied behind an honest watermark.
+                let since = lastSyncTimestamp
+                let sinceStr = ISO8601DateFormatter().string(from: since)
+                let queryItems = [
+                    URLQueryItem(name: "limit", value: String(Self.deltaPageLimit)),
+                    URLQueryItem(name: "offset", value: "0"),
+                    URLQueryItem(name: "updatedSince", value: sinceStr)
+                ]
 
-            let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.request(
-                endpoint: "/conversations",
-                method: "GET",
-                body: nil,
-                queryItems: queryItems
-            )
+                let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.request(
+                    endpoint: "/conversations",
+                    method: "GET",
+                    body: nil,
+                    queryItems: queryItems
+                )
+                pagesFetched += 1
 
-            let userId = await currentUserId()
-            let deltaConversations = (await Self.mapConversationsOffMain(response.data, userId: userId))
+                let userId = await currentUserId()
+                let deltaConversations = (await Self.mapConversationsOffMain(response.data, userId: userId))
 
-            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
+                let existing = await cache.conversations.load(for: "list").snapshot() ?? []
 
-            // O(existing + deltas) merge by id, instead of an O(deltas × convs)
-            // firstIndex / removeAll scan per delta — measurable on a foreground
-            // reconnect with hundreds of conversations. The merge order is
-            // irrelevant: `saveSorted` below re-sorts the result deterministically.
-            let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: deltaConversations)
-            for removedId in removedIds {
-                await cache.messages.invalidate(for: removedId)
+                // O(existing + deltas) merge by id, instead of an O(deltas × convs)
+                // firstIndex / removeAll scan per delta — measurable on a foreground
+                // reconnect with hundreds of conversations. The merge order is
+                // irrelevant: `saveSorted` below re-sorts the result deterministically.
+                let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: deltaConversations)
+                for removedId in removedIds {
+                    await cache.messages.invalidate(for: removedId)
+                }
+
+                await saveSorted(merged, to: "list", baseline: existing)
+                await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
+                _conversationsDidChange.send()
+
+                let receivedUpdatedAt = deltaConversations.map(\.updatedAt)
+
+                // A SHORT page is the end of the window — and the only proof of
+                // it. Advance to the newest SERVER `updatedAt` seen, not the
+                // device clock (R15b): a device ahead of the server used to push
+                // `updatedSince` past real updates in `[serverNow, deviceNow]`
+                // and drop them. Never regresses; an empty page keeps the cursor.
+                guard response.data.count >= Self.deltaPageLimit else {
+                    lastSyncTimestamp = SyncWatermark.advanced(previous: since, receivedUpdatedAt: receivedUpdatedAt)
+                    return .succeeded
+                }
+
+                // The page was cut at the cap. Resume BELOW its top `updatedAt`
+                // group so the rows that shared the cut instant are re-read
+                // whole instead of being stepped over by the strict `gt` bound.
+                guard let resume = SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: receivedUpdatedAt),
+                      resume > since else {
+                    // Nothing below the top group (a mass write stamped with one
+                    // `updatedAt` past the cap): no cursor both keeps the group
+                    // and moves forward. Leave the watermark WHERE IT IS — an
+                    // escalation that started from an over-advanced cursor would
+                    // inherit the very hole it exists to close — and hand over
+                    // to the full reconcile.
+                    Self.logger.notice("[SyncEngine] delta page full with a single updatedAt — escalating to full reconcile")
+                    return DeltaSyncOutcome(ok: true, needsFullReconcile: true)
+                }
+                lastSyncTimestamp = resume
+
+                guard pagesFetched < Self.maxDeltaPages else {
+                    Self.logger.notice("[SyncEngine] delta walk hit \(Self.maxDeltaPages) pages — escalating to full reconcile")
+                    return DeltaSyncOutcome(ok: true, needsFullReconcile: true)
+                }
             }
-
-            await saveSorted(merged, to: "list", baseline: existing)
-            await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
-            _conversationsDidChange.send()
-
-            // Advance the delta cursor to the newest SERVER `updatedAt` seen, not
-            // the device clock (R15b) — a device ahead of the server used to push
-            // `updatedSince` past real updates in `[serverNow, deviceNow]` and drop
-            // them. Never regresses; an empty delta keeps the prior cursor.
-            lastSyncTimestamp = SyncWatermark.advanced(previous: lastSyncTimestamp, receivedUpdatedAt: deltaConversations.map(\.updatedAt))
-            return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
-            return false
+            // Pages already applied keep their committed cursor; only the
+            // unread remainder is retried by the next delta.
+            return .failed
         }
     }
 

@@ -106,4 +106,39 @@ final class SyncWatermarkTests: XCTestCase {
         let fallback = past.addingTimeInterval(7)
         XCTAssertEqual(SyncWatermark.fromFullSync(receivedUpdatedAt: [], fallback: fallback), fallback)
     }
+
+    // MARK: - Resuming a FULL (therefore possibly truncated) delta page
+
+    /// A full page proves nothing about where the window ends: the server cut it
+    /// at the cap, and the cut can fall INSIDE a group of rows sharing one
+    /// `updatedAt` (ordered by `updatedAt` asc, `id` asc). Advancing to the page
+    /// max would put the strict `gt` bound past that group's survivors, dropping
+    /// them until the 24h reconcile. Resuming BELOW the top group re-reads it
+    /// whole — the only cursor that can't skip a sibling.
+    func test_resumeAfterFullPage_dropsTheTopGroup_soItsSiblingsAreReRead() {
+        let t1 = past.addingTimeInterval(10)
+        let t2 = past.addingTimeInterval(20)
+        let received = [t1, t2, t2, t2] // the t2 group may continue past the cut
+        XCTAssertEqual(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: received), t1)
+    }
+
+    func test_resumeAfterFullPage_isOrderIndependent() {
+        let t1 = past.addingTimeInterval(10)
+        let t2 = past.addingTimeInterval(20)
+        XCTAssertEqual(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: [t2, t1, t2]), t1)
+    }
+
+    /// The residue the ordering cannot rescue: a full page whose rows ALL carry
+    /// the same `updatedAt` (mass write). There is no value below the top group
+    /// to resume from, so no `gt` cursor can both keep the group and make
+    /// progress — the caller must escalate to a full reconcile instead of
+    /// walking pages.
+    func test_resumeAfterFullPage_singleTimestampPage_hasNoResumePoint() {
+        let t = past.addingTimeInterval(10)
+        XCTAssertNil(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: [t, t, t]))
+    }
+
+    func test_resumeAfterFullPage_emptyPage_hasNoResumePoint() {
+        XCTAssertNil(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: []))
+    }
 }
