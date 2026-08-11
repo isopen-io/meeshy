@@ -116,7 +116,12 @@ internal struct _InlineRenderer: View {
             Color.black
 
             if isThisActive, let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: manager.isMuted)
+                MeeshyVideoSurface(
+                    player: p,
+                    gravity: .resizeAspect,
+                    isMuted: manager.isMuted,
+                    enablesPip: Self.surfaceEnablesPip(controls: player.controls)
+                )
                     .onTapGesture { toggleControls() }
                 if isLoadingAsset {
                     loadingIndicator
