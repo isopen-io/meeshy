@@ -244,7 +244,7 @@ public struct CodeFullSheet: View {
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if let code = codeContent {
                     fullCodeView(code)
