@@ -2455,6 +2455,31 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:end", ["callId": callId, "reason": "rejected"])
     }
 
+    /// Variante avec ACK du refus (parité `emitCallEndWithAck`, 2026-08-11) :
+    /// émet `call:end {reason:"rejected"}` et attend confirmation du gateway
+    /// (max 3s). Sans elle, un socket vu « connecté » au moment du refus
+    /// pouvait perdre l'emit en vol — un blip qui s'auto-répare avant que
+    /// `connectionState` n'observe la coupure — laissant l'appelant sonner
+    /// jusqu'au timeout serveur pendant que le gateway résout `missed` au
+    /// lieu de `rejected` (le mislabel que l'arc reject 2026-07-12 fermait
+    /// déjà sur tous les autres chemins de refus).
+    public func emitCallRejectWithAck(callId: String) async -> Bool {
+        guard let socket else { return false }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:end", ["callId": callId, "reason": "rejected"]).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool {
+                    continuation.resume(returning: success)
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }
+        }
+    }
+
     /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
     /// (max 3s). Le gateway accepte et broadcast `call:ended` à tous les
     /// participants. Sans ACK le client ne sait pas si le peer a été notifié

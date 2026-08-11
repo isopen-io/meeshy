@@ -6401,3 +6401,78 @@ dans le code courant plutôt que pris tel quel.
   toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; `CALL_ANALYTICS` absent du type
   généré `CLIENT_EVENTS` dans ce sandbox (préexistant, cause probable : génération de types partagés
   obsolète localement, non investigué).
+
+## Vague 99 — `emitCallReject` avait un fire-and-forget sans ACK/reconciliation là où `emitCallEnd` a les deux, laissant un refus perdu en vol résoudre `missed` au lieu de `rejected` (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling, cible iOS explicite
+cette fois — CallKit/PushKit/WebRTC), nouvelle session. Aucune PR ouverte sur cette branche, aucun
+doublon avec le backlog `iOS/Android` déjà listé en fin de Vague 98. Audit dédié (agent Explore, lecture
+seule, périmètre `apps/ios` calling stack complet — `CallManager.swift` 5865 lignes, PiP, CallKit, PushKit,
+AVAudioSession interruption/route-change, toutes les Views d'appel) mandaté pour ne pas redire les
+défauts déjà fermés (263 commits `fix(ios/calls)` antérieurs). Verdict de l'audit : codebase inhabituellement
+mature et déjà auto-auditée — quasiment tous les motifs classiques (retain cycles, races CallKit/PushKit,
+interruption/route-change) portent déjà un fix daté et un test de garde. Le seul écart net trouvé est une
+**asymétrie de fiabilité de signalisation** reproduisant, sur `call:reject`, une classe de bug déjà fermée
+deux fois pour des signaux voisins (`offer`, `call:end`) mais jamais étendue au refus.
+
+- **Root cause confirmée par lecture directe** : `emitCallEndReliably` (le raccroché normal) a DEUX
+  paliers de protection contre la perte de `call:end` — bâtis spécifiquement parce qu'un hang-up perdu
+  laisse le PAIR zombie (« Chaos-test prod 2026-07-02, EXIGENCE №1 ») : `emitCallEndWithAck` (ACK 3s) +
+  fallback fire-and-forget si l'ACK échoue, **et** armement de `pendingEndReconciliationCallId` rejoué au
+  prochain `connectionState == .connected`. `emitCallReject` (le refus, même risque « décliné pendant un
+  réseau instable ») n'implémentait QUE la moitié socket-DÉCONNECTÉ de cette même protection
+  (`guard MessageSocketManager.shared.isConnected`) : si le socket paraissait connecté à l'instant du
+  refus mais que le seul `socket?.emit("call:end", [...])` sous-jacent (`MessageSocketManager.emitCallReject`,
+  fire-and-forget, aucun ACK) se perdait en vol — un blip qui s'auto-répare avant que `connectionState`
+  n'observe la coupure — rien ne le rattrapait. Le déclinant avait déjà fermé localement
+  (`endCallInternal(reason: .rejected)`), l'appelant sonnait alors jusqu'au timeout
+  (`outgoingRingTimeoutSeconds` 45s ou le reaper gateway ~60s), et l'appel se résolvait **`missed`, pas
+  `declined`** — exactement le mislabel que l'arc reject 2026-07-12 (`d371f3505`, `f67c39ac0`) fermait déjà
+  sur tous les AUTRES chemins de refus. Le propre test de la codebase pour le signal jumeau (`offer`,
+  `test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget`) rend la sévérité explicite dans son
+  commentaire : « the offer is the single most critical signal ». Aucun `emitCallRejectWithAck` n'existait
+  nulle part dans le SDK (seuls `emitCallSignalWithAck`/`emitCallEndWithAck` existent).
+- **Fix** : `MessageSocketManager.emitCallRejectWithAck(callId:) async -> Bool` ajouté au SDK, réplique
+  exacte de `emitCallEndWithAck` avec `reason: "rejected"` dans le payload (ACK 3s, même event
+  `call:end` — le handler gateway est déjà générique sur ce champ, c'est ce que `emitCallReject` fire-
+  and-forget prouve depuis l'arc 2026-07-12). `CallManager.emitCallReject` (le helper privé) réplique
+  exactement la forme de `emitCallEndReliably` : `Task { [weak self] in }` attend l'ACK, et sur échec
+  ré-émet le fallback fire-and-forget **et** arme `pendingEndReconciliationCallId`/`Reason = "rejected"`
+  — la plomberie de réconciliation existait déjà et gère déjà le rejeu d'un refus différé (le guard
+  socket-down partage le même state). Seule la fenêtre « connecté mais jamais livré » restait ouverte.
+  Non ajouté au protocole `MessageSocketProviding` ni aux deux Mocks — `emitCallReject` lui-même n'y
+  est pas non plus (CallManager appelle systématiquement le singleton concret `MessageSocketManager.shared`,
+  jamais une dépendance typée protocole, pour toute cette famille de refus/fin d'appel).
+- **Tests** (TDD, RED confirmé avant fix — les 4 assertions échouaient : pas de `emitCallRejectWithAck`
+  dans le corps, pas de `if !acked`, et le compte de `pendingEndReconciliationReason = "rejected"` valait
+  1 au lieu de 2) :
+  - `CallManagerTests.swift` — nouveau `test_emitCallReject_usesAtLeastOnceWithAck_notFireAndForget` dans
+    `RejectDeferredReconciliationTests`, même idiome source-inspection que
+    `test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget` (le fichier n'a pas de mock socket
+    injectable pour `CallManager` — toute la suite reject/end utilise ce patron). Vérifie : présence de
+    `emitCallRejectWithAck`, branche `if !acked`, fallback fire-and-forget conservé, et **double**
+    armement de `pendingEndReconciliationReason = "rejected"` (guard socket-down + fallback ACK-échoué).
+  - Tests existants relus pour non-régression : `test_emitCallReject_defersWhenSocketDown` (le guard
+    socket-down est inchangé, littéralement la même sous-chaîne) et `test_reconnectReplay_preservesRejectedReason`
+    (rejeu inchangé) — toujours verts par lecture, aucune modification requise.
+  - Pas de test SDK dédié pour `emitCallRejectWithAck` — même précédent que `emitCallEndWithAck`/
+    `emitCallSignalWithAck`, ni l'un ni l'autre n'a de test unitaire direct (wiring `emitWithAck` trop
+    fin pour être testé sans un vrai client Socket.IO ; couvert indirectement via les tests source-
+    inspection côté `CallManager`).
+- **Vérification** : build/tests iOS **non exécutables dans ce sandbox** (conteneur Linux, aucun Xcode/
+  xcodebuild/simulateur — cf. `apps/ios/CLAUDE.md`, la CI « iOS Tests » tourne sur runner macOS). Diff
+  relu ligne à ligne contre les deux réplicas existants (`emitCallEndWithAck`/`emitCallEndReliably`) pour
+  garantir une forme structurellement identique ; comptage d'accolades avant/après sur les 3 fichiers
+  touchés pour exclure toute erreur de syntaxe grossière. Vérification réelle déléguée à la CI GitHub
+  Actions (macOS) au push — PR ouverte et suivie jusqu'au vert avant merge.
+- **Reste ouvert** (reconduit, rien de plus grave trouvé ce cycle côté iOS) : dead code / god-object
+  `CallManager.swift` (~5880 lignes après ce fix) ; 3 `Task { @MainActor in }` imbriqués sans `[weak self]`
+  interne (`ThermalStateMonitor.swift:31-33`, `CallManager.swift:1114`, `CallManager.swift:1659`) — écart
+  de convention réel (cf. `apps/ios/CLAUDE.md` § Common Retain Cycle Traps) mais inerte en pratique
+  (singletons app-lifetime) ; candidat trivial en piggyback d'un prochain cycle iOS, pas assez pour un
+  cycle dédié seul. ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only
+  (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs.
+  `supportsHolding = false` (Vague 84, nécessite confirmation on-device) ; `removeParticipant()` ne
+  nettoie pas `connectedPeersRef`/`stalledPeersRef` web (Vague 91, réévaluée non-régression) ;
+  `call-store.ts`'s `setReconnecting(attempt)` reste un signal mort web (Vague 98) ; toolchains
+  iOS/Android toujours hors d'atteinte dans ce sandbox.
