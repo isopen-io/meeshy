@@ -19,6 +19,7 @@ struct MessageMoreSheet: View {
     var onReply: (() -> Void)? = nil
     var onForward: (() -> Void)? = nil
     var onThread: (() -> Void)? = nil
+    var onSaveMedia: (() -> Void)? = nil
     var onDeleteMedia: (() -> Void)? = nil
     var onPin: (() -> Void)? = nil
     var onToggleStar: (() -> Void)? = nil
@@ -92,17 +93,25 @@ struct MessageMoreSheet: View {
             }
         }
         .confirmationDialog(
-            String(localized: "message-more.delete_media.confirm.title", defaultValue: "Supprimer ce média ?", bundle: .main),
+            String(localized: "message-more.media.title", defaultValue: "Ce média", bundle: .main),
             isPresented: $showDeleteMediaConfirm,
             titleVisibility: .visible
         ) {
+            if message.attachments.contains(where: { $0.type != .location }) {
+                Button(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)) {
+                    onSaveMedia?()
+                    dismiss()
+                }
+            }
+            Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
+                onForward?()
+                dismiss()
+            }
             Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
                 onDeleteMedia?()
                 dismiss()
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
-        } message: {
-            Text(String(localized: "message-more.delete_media.confirm.message", defaultValue: "Cette action est irréversible.", bundle: .main))
         }
     }
 
@@ -235,7 +244,8 @@ struct MessageMoreSheet: View {
                 selectedItem = (selectedItem == item) ? nil : item
             }
         } else if item == .media {
-            // Destructif → confirmation obligatoire (jamais de suppression directe).
+            // Ouvre le sous-menu média (enregistrer / transférer / supprimer) —
+            // jamais de suppression directe (feedback device 2026-07-14).
             HapticFeedback.medium()
             showDeleteMediaConfirm = true
         } else {

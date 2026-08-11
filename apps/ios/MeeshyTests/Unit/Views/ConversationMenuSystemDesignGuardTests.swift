@@ -495,6 +495,53 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
+    /// Sous-menu média (§B design 2026-08-11) : Enregistrer / Transférer /
+    /// Supprimer — Supprimer seul destructif, et EN DERNIER (convention HIG).
+    func test_media_confirmDialog_offersSaveForwardDelete_deleteIsLastAndOnlyDestructive() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
+              let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
+            return XCTFail("confirmationDialog du sous-menu média introuvable.")
+        }
+        let dialog = String(src[dialogStart.upperBound..<dialogEnd.lowerBound])
+
+        XCTAssertTrue(dialog.contains("onSaveMedia?()"), "Le bouton Enregistrer doit appeler onSaveMedia?().")
+        XCTAssertTrue(dialog.contains("onForward?()"), "Le bouton Transférer doit appeler onForward?() (réutilisé, pas de nouveau paramètre).")
+        XCTAssertTrue(dialog.contains("onDeleteMedia?()"), "Le bouton Supprimer doit appeler onDeleteMedia?().")
+        XCTAssertEqual(
+            dialog.components(separatedBy: "role: .destructive").count - 1, 1,
+            "Un seul bouton (Supprimer) doit porter role: .destructive."
+        )
+
+        guard let lastButtonRange = dialog.range(of: "Button(", options: .backwards) else {
+            return XCTFail("Aucun bouton trouvé dans le dialog.")
+        }
+        let lastButton = String(dialog[lastButtonRange.lowerBound...])
+        XCTAssertTrue(
+            lastButton.contains("role: .destructive") && lastButton.contains("onDeleteMedia?()"),
+            "Supprimer doit être le DERNIER bouton du dialog et le seul destructif (convention HIG)."
+        )
+    }
+
+    /// Un message dont le SEUL attachment est une localisation n'est pas
+    /// enregistrable : le bouton Enregistrer doit être ABSENT, pas inerte.
+    func test_media_confirmDialog_hidesSaveButton_whenOnlyAttachmentIsLocation() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
+              let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
+            return XCTFail("confirmationDialog du sous-menu média introuvable.")
+        }
+        let dialog = String(src[dialogStart.upperBound..<dialogEnd.lowerBound])
+        guard let saveRange = dialog.range(of: "onSaveMedia?()") else {
+            return XCTFail("Bouton Enregistrer introuvable.")
+        }
+        let beforeSave = String(dialog[dialog.startIndex..<saveRange.lowerBound])
+        XCTAssertTrue(
+            beforeSave.contains("message.attachments.contains(where: { $0.type != .location })"),
+            "Le bouton Enregistrer doit être conditionné à un attachment non-location — absent, pas inerte, pour un message localisation-only."
+        )
+    }
+
     /// Signalement d'un message : modale de validation avant l'envoi ;
     /// `onReport` n'est appelé QUE depuis le bouton destructif de la modale.
     func test_report_requestsConfirmation_beforeSubmit() throws {
