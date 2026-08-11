@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -61,7 +62,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -125,7 +128,9 @@ fun StoryViewerScreen(
     var languageButtonBounds by remember { mutableStateOf<Rect?>(null) }
     var showFullEmojiPicker by remember { mutableStateOf(false) }
     var reactionFlight by remember { mutableStateOf<ReactionFlight?>(null) }
+    var flightSerial by remember { mutableIntStateOf(0) }
     var heartBouncePulse by remember { mutableIntStateOf(0) }
+    var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
 
     fun closeRailBars() {
@@ -140,7 +145,8 @@ fun StoryViewerScreen(
         closeRailBars()
         val target = heartBounds
         if (from != null && target != null) {
-            reactionFlight = ReactionFlight(emoji = emoji, from = from)
+            flightSerial++
+            reactionFlight = ReactionFlight(emoji = emoji, from = from, serial = flightSerial)
         } else {
             heartBouncePulse++
         }
@@ -152,8 +158,14 @@ fun StoryViewerScreen(
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 scrubKind = event.kind
                 when (event.kind) {
-                    StoryScrubKind.Reactions -> reactionBarVisible = true
-                    StoryScrubKind.Languages -> languageBarVisible = true
+                    StoryScrubKind.Reactions -> {
+                        reactionBarVisible = true
+                        languageBarVisible = false
+                    }
+                    StoryScrubKind.Languages -> {
+                        languageBarVisible = true
+                        reactionBarVisible = false
+                    }
                 }
                 hoveredIndex = null
             }
@@ -303,6 +315,7 @@ fun StoryViewerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(hexColor(accent))
+            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() }
             .pointerInput(state.groupIndex, state.index, state.slides.size) {
                 detectTapGestures { offset ->
                     if (overlayActiveState.value) {
@@ -481,7 +494,11 @@ fun StoryViewerScreen(
                 languageBadgeCode = languageBadge,
                 heartBouncePulse = heartBouncePulse,
                 onTapHeart = { sendReaction("❤️", from = heartBounds) },
-                onTapLanguage = { languageBarVisible = !languageBarVisible },
+                onTapLanguage = {
+                    reactionBarVisible = false
+                    hoveredIndex = null
+                    languageBarVisible = !languageBarVisible
+                },
                 onScrubEvent = ::handleScrub,
                 onHeartBounds = { heartBounds = it },
                 onLanguageBounds = { languageButtonBounds = it },
@@ -493,7 +510,7 @@ fun StoryViewerScreen(
 
         RailAnchoredBar(
             visible = reactionBarVisible || scrubKind == StoryScrubKind.Reactions,
-            anchor = heartBounds,
+            anchor = heartBounds?.translate(-boxOriginInRoot),
         ) {
             EmojiQuickStrip(
                 emojis = state.quickReactions,
@@ -515,7 +532,7 @@ fun StoryViewerScreen(
 
         RailAnchoredBar(
             visible = languageBarVisible || scrubKind == StoryScrubKind.Languages,
-            anchor = languageButtonBounds,
+            anchor = languageButtonBounds?.translate(-boxOriginInRoot),
         ) {
             LanguageQuickStrip(
                 options = state.availableLanguages.map {
@@ -535,8 +552,8 @@ fun StoryViewerScreen(
         val flightTarget = heartBounds
         if (flight != null && flightTarget != null) {
             ReactionFlightOverlay(
-                flight = flight,
-                target = flightTarget,
+                flight = flight.copy(from = flight.from.translate(-boxOriginInRoot)),
+                target = flightTarget.translate(-boxOriginInRoot),
                 onArrived = { heartBouncePulse++ },
                 onFinished = { reactionFlight = null },
             )
@@ -628,8 +645,13 @@ private fun TranslatedBadge() {
     }
 }
 
-/** A reaction emoji flying from its (scaled) bar tile to the heart button. */
-private data class ReactionFlight(val emoji: String, val from: Rect)
+/**
+ * A reaction emoji flying from its (scaled) bar tile to the heart button.
+ * [serial] is a monotonic tie-breaker so reacting again with the same emoji
+ * from the same tile within the flight window is still a distinct value
+ * (structural equality would otherwise make the state write a no-op).
+ */
+private data class ReactionFlight(val emoji: String, val from: Rect, val serial: Int)
 
 /**
  * Positions a scrubbable bar to the LEFT of its rail button, vertically
