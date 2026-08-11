@@ -121,13 +121,17 @@ qui circulent réellement sous le même nom, mais on peut le rendre **détectabl
   côté gateway — chantier de contrat, à instruire avant d'être écrit.
 - **`PinnedMessageBanner` n'affiche qu'UNE épingle** (`limit: 1`) sans compteur ni accès à la liste.
   Signal produit, pas défaut : à trancher avec un humain.
-- **`messageAttachmentSchema` ne déclare PAS `translations`** — vérifié pendant ce cycle en
-  cherchant une seconde source de 500 sur la même route. Il n'y en a pas : faute de clé déclarée,
-  `fast-json-stringify` STRIPPE la carte au lieu de jeter. Le Prisme AUDIO d'une pièce jointe est
-  donc silencieusement perdu partout où `messageAttachmentSchema` sert (`pinned-messages` inclus),
-  là où le chemin socket la transporte (`serializeAttachmentForSocket`). Même famille que le défaut
-  de ce cycle, symptôme opposé — perte muette au lieu d'échec bruyant. À instruire : la carte
-  audio est-elle attendue sur les chemins REST, ou seulement sur le socket ?
+- **Piste voisine INSTRUITE puis ÉCARTÉE — `messageAttachmentSchema` va bien.** Cherché pendant ce
+  cycle une seconde source de 500 sur la même route, du côté des pièces jointes. Il n'y en a pas :
+  le schéma déclare `translations` en entier (`api-schemas.ts:467`), carte langue → traduction V2.
+  Noté ici parce que le mécanisme mérite d'être connu : la sous-entrée porte
+  `required: ['type', 'transcription', 'createdAt']`, et `fast-json-stringify` **fait respecter
+  `required` en jetant**, exactement comme pour le type de ce cycle. Une entrée à laquelle il
+  manquerait l'un des trois ferait donc tomber `GET /conversations/:id/messages` — la liste
+  principale. Les deux écrivains les posent tous les trois (`AudioTranslateService.ts:867-880`,
+  `AttachmentTranslateService.ts:378/435/484`) : **pas de défaut de code.** Le risque résiduel est
+  une ligne Mongo héritée d'avant la forme V2, donc une question de DONNÉES, à instruire par une
+  requête et non par une lecture de code.
 - **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** (cycle 64) — dernier rendu
   d'aperçu web hors Prisme identifié.
 - **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60) : payload PAR
