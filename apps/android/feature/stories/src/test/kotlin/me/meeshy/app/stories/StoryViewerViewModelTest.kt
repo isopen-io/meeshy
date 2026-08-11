@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
@@ -61,6 +62,7 @@ class StoryViewerViewModelTest {
         authorId: String,
         hoursAgo: Long,
         reactionSummary: Map<String, Int>? = null,
+        translations: Map<String, ApiPostTranslationEntry>? = null,
     ) = ApiPost(
         id = id,
         type = "STORY",
@@ -69,6 +71,7 @@ class StoryViewerViewModelTest {
         author = ApiAuthor(id = authorId, username = "name-$authorId"),
         isViewedByMe = false,
         reactionSummary = reactionSummary,
+        translations = translations,
     )
 
     private fun viewModel(
@@ -464,5 +467,76 @@ class StoryViewerViewModelTest {
 
         assertThat(vm.state.value.current?.id).isEqualTo("a1")
         assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
+
+    @Test
+    fun `available languages list the slide translations with flags`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf(
+                        "fr" to ApiPostTranslationEntry(text = "bonjour"),
+                        "es" to ApiPostTranslationEntry(text = "hola"),
+                    ),
+                ),
+            ),
+        )
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).containsExactly("fr", "es")
+        assertThat(languages.first { it.code == "fr" }.flag).isNotEmpty()
+    }
+
+    @Test
+    fun `toggling a language override re-resolves the current slide text`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+        assertThat(vm.state.value.languageOverride).isEqualTo("es")
+    }
+
+    @Test
+    fun `re-toggling the same language clears the override`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.toggleLanguageOverride("es")
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.languageOverride).isNull()
+    }
+
+    @Test
+    fun `advancing to another slide resets the override`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 2,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+                storyPost(id = "s2", authorId = "a1", hoursAgo = 1),
+            ),
+        )
+        vm.toggleLanguageOverride("es")
+        vm.advance()
+        assertThat(vm.state.value.languageOverride).isNull()
+        vm.back()
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
     }
 }

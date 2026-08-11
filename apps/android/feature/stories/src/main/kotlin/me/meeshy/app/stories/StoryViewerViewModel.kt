@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.net.MeeshyConfig
@@ -35,6 +36,15 @@ data class StorySlideView(
     val imageUrl: String?,
     val accentHex: String,
     val reactionCount: Int = 0,
+    val languageCode: String? = null,
+)
+
+/** One language chip of the story language bar. Pure data. */
+@Immutable
+data class StoryLanguageOption(
+    val code: String,
+    val flag: String,
+    val label: String,
 )
 
 /**
@@ -57,6 +67,8 @@ data class StoryViewerUiState(
     val currentStoryId: String? = null,
     val prefetchUrls: List<String> = emptyList(),
     val canAutoAdvance: Boolean = false,
+    val availableLanguages: List<StoryLanguageOption> = emptyList(),
+    val languageOverride: String? = null,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -79,6 +91,12 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
     private val reactionStates = mutableMapOf<String, StoryReactionState>()
+
+    /** Raw items by slide id — needed to re-resolve text when the language override changes. */
+    private val rawItems = mutableMapOf<String, StoryItem>()
+
+    /** Ephemeral "Exploration" override, keyed to the slide it was chosen on. */
+    private var languageOverride: Pair<String, String>? = null
 
     /**
      * Image URLs whose load has resolved (succeeded or failed) on screen. Feeds
@@ -189,6 +207,17 @@ class StoryViewerViewModel @Inject constructor(
         if (playback.currentSlide?.imageUrl == url) emit()
     }
 
+    /**
+     * Prisme « Exploration » : bascule la langue AFFICHÉE du slide courant.
+     * Re-tap sur la langue active = retour à la résolution automatique.
+     * L'override est éphémère — il meurt au changement de slide.
+     */
+    fun toggleLanguageOverride(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        languageOverride = if (languageOverride == storyId to code) null else storyId to code
+        emit()
+    }
+
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {
@@ -231,10 +260,24 @@ class StoryViewerViewModel @Inject constructor(
         reactionStates[slide.id] ?: StoryReactionState(count = slide.reactionCount)
 
     private fun emit() {
+        val currentId = playback.currentSlide?.id
+        if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
+        val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
+        val slides = if (override == null) playback.slides else playback.slides.map { slideView ->
+            if (slideView.id != currentId) return@map slideView
+            val item = rawItems[slideView.id] ?: return@map slideView
+            val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
+            val resolved = StoryContentResolver.resolve(item, prefs, override)
+            slideView.copy(
+                text = resolved.content,
+                isTranslated = resolved.isTranslated,
+                languageCode = resolved.languageCode,
+            )
+        }
         _state.value = StoryViewerUiState(
             authorName = playback.authorName,
-            slides = playback.slides,
+            slides = slides,
             index = playback.slideIndex,
             groupIndex = playback.groupIndex,
             isLoading = false,
@@ -242,10 +285,27 @@ class StoryViewerViewModel @Inject constructor(
             reactionCount = reaction.count,
             myReactions = reaction.mine,
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
-            currentStoryId = playback.currentSlide?.id,
+            currentStoryId = currentId,
             prefetchUrls = StoryPrefetchPlanner.plan(playback),
             canAutoAdvance = StoryAutoAdvanceGate.shouldCountdown(playback.currentSlide, resolvedImageUrls),
+            availableLanguages = availableLanguagesFor(currentId),
+            languageOverride = override,
         )
+    }
+
+    private fun availableLanguagesFor(storyId: String?): List<StoryLanguageOption> {
+        val item = storyId?.let { rawItems[it] } ?: return emptyList()
+        return item.translations.orEmpty()
+            .filter { it.language.isNotBlank() && it.content.isNotBlank() }
+            .distinctBy { it.language.lowercase() }
+            .map { translation ->
+                val info = LanguageData.info(translation.language)
+                StoryLanguageOption(
+                    code = translation.language,
+                    flag = info?.flag ?: "🌐",
+                    label = info?.nativeName ?: translation.language,
+                )
+            }
     }
 
     private fun StoryGroup.toGroupSlides(): StoryGroupSlides {
@@ -261,6 +321,7 @@ class StoryViewerViewModel @Inject constructor(
         accentHex: String,
         prefs: LanguageResolver.ContentLanguagePreferences,
     ): StorySlideView {
+        rawItems[id] = this
         val resolved = StoryContentResolver.resolve(this, prefs)
         val image = media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
             ?: media.firstOrNull { it.thumbnailUrl != null }
@@ -273,6 +334,7 @@ class StoryViewerViewModel @Inject constructor(
             imageUrl = imageUrl,
             accentHex = accentHex,
             reactionCount = reactionCount,
+            languageCode = resolved.languageCode,
         )
     }
 
