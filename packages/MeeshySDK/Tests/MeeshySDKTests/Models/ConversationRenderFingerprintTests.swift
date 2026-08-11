@@ -10,9 +10,22 @@ import XCTest
 ///
 /// Ces témoins verrouillent la contravariance exacte du portillon : le hash doit
 /// bouger dès que ce que la ligne AFFICHE bouge, et rester stable sinon.
+///
+/// **Toutes les variantes dérivent d'UNE SEULE instance de base, par mutation du
+/// seul champ testé.** Ce n'est pas du confort d'écriture, c'est ce qui rend les
+/// témoins `_changes` discriminants : `MeeshyConversation.init` défaute
+/// `lastMessageAt` à `Date()`, qui EST replié dans le hash — deux instances
+/// construites séparément diffèrent donc toujours, et un `XCTAssertNotEqual`
+/// entre elles passerait sans rien prouver. Première rédaction de ce fichier :
+/// six témoins verts, dont trois pour cette seule raison. C'est le témoin de
+/// stabilité ci-dessous qui l'a révélé — sa raison d'être exacte.
 final class ConversationRenderFingerprintTests: XCTestCase {
 
     // MARK: - Factory
+
+    /// Date FIXE : `init` défaute `lastMessageAt` à `Date()`, replié dans le
+    /// hash. Sans épinglage, aucune comparaison entre deux instances ne dit rien.
+    private static let pinnedDate = Date(timeIntervalSince1970: 1_700_000_000)
 
     private func makeConversation(
         lastMessagePreview: String? = "Hello",
@@ -24,6 +37,7 @@ final class ConversationRenderFingerprintTests: XCTestCase {
             id: "conv1",
             identifier: "conv1",
             type: .direct,
+            lastMessageAt: Self.pinnedDate,
             lastMessagePreview: lastMessagePreview
         )
         c.lastMessageOriginalLanguage = lastMessageOriginalLanguage
@@ -36,7 +50,9 @@ final class ConversationRenderFingerprintTests: XCTestCase {
 
     /// Non-discriminant seul, et c'est sa seule fonction : verrouiller que le
     /// hash ne devient pas « toujours différent ». Un fingerprint instable
-    /// annulerait le gain de `.equatable()` sans qu'aucun autre témoin ne rougisse.
+    /// annulerait le gain de `.equatable()` sans qu'aucun autre témoin ne
+    /// rougisse — pire, il rendrait tous les témoins `_changes` vacuoirement
+    /// verts. C'est exactement ce qu'il a attrapé à la première rédaction.
     func test_renderFingerprint_identicalConversations_areEqual() {
         let a = makeConversation(lastMessageTranslations: ["fr": "Bonjour"])
         let b = makeConversation(lastMessageTranslations: ["fr": "Bonjour"])

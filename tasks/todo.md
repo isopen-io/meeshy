@@ -78,6 +78,21 @@ raterait.
   `lastMessageLocation` n'apparaissait pas une seule fois dans l'ancienne fonction. GREEN est exécuté
   par `sdk-tests.yml` en CI (macOS), seul chemin d'exécution disponible.
 
+### Le témoin de stabilité a fait EXACTEMENT son travail — première passe CI rouge
+
+La première rédaction de ce fichier partait vert à six témoins sur huit, et c'était faux.
+`MeeshyConversation.init` défaute `lastMessageAt` à `Date()`, champ **replié dans le hash** : deux
+instances construites séparément diffèrent donc TOUJOURS. Les trois témoins `_changes` passaient
+sans rien prouver — ils auraient passé sur le code d'AVANT le correctif.
+
+Seuls les deux témoins d'égalité (stabilité du hash, ordre d'insertion) pouvaient voir le problème,
+et ils l'ont vu. C'est la démonstration littérale de pourquoi un lot de témoins « non-discriminants
+seuls » n'est pas du remplissage : sans eux, ce fichier serait entré vert en verrouillant zéro
+comportement.
+
+Correctif du fichier de test : `lastMessageAt` épinglé à une date fixe, et toutes les variantes
+dérivées d'une seule fabrique paramétrée — seul le champ testé varie, par construction.
+
 ## L'audit instruit par le cycle 73 est CLOS — aucun défaut
 
 Le cycle 73 laissait ouvert : « `emitConversationPreviewUpdate` et les autres émetteurs par room
