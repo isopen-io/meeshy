@@ -1,32 +1,121 @@
-# Tête instruite pour le cycle 76 — la LISTE de conversations web n'a aucun rattrapage au reconnect socket
+# Tête instruite pour le cycle 77 — le focus de fenêtre relit la liste de conversations DE FORCE, page par page
 
-*Trouvé en instruisant le cycle 75, vérifié, NON corrigé — même famille que le défaut fermé ce
-cycle, autre surface.*
+*Trouvé en instruisant le cycle 76, vérifié, NON corrigé.*
 
-Le cycle 75 a fermé le trou côté notifications. En balayant les autres surfaces pour établir la
-portée, une seule est restée découverte :
+Le cycle 76 a fermé la fenêtre du reconnect SOCKET avec un delta non destructeur. Il reste, sur la
+même surface, un chemin destructeur en place — hérité, pas introduit :
 
-| Surface web | Rattrapage au reconnect SOCKET |
+| Surface | Au focus de fenêtre |
 |---|---|
-| Messages d'une conversation | **oui** — `syncNewerMessages` sur le front `false → true` de `isSocketConnected` (`use-conversation-messages-rq.ts`, « Trigger 1 ») |
-| Notifications | **oui depuis ce cycle** — `onSyncDesync('reconnect')` |
-| **Liste de conversations** | **non** — `use-conversations-query.ts` n'a que `refetchOnMount: 'always'` |
+| Messages d'une conversation | `refetchOnWindowFocus: **false**` + `syncNewerMessages` débouncé (« Trigger 2 ») |
+| **Liste de conversations** | `refetchOnWindowFocus: **'always'**` hérité du QueryClient global — aucune dérogation |
 
-Ce qui la couvre partiellement, et pourquoi ça ne suffit pas : le QueryClient global pose
-`refetchOnReconnect: 'always'`, mais c'est le `onlineManager` de React Query — la transition
-RÉSEAU du navigateur. Une coupure purement socket (redémarrage gateway, drop du load balancer,
-échec d'upgrade de transport) ne bouge pas `navigator.onLine` et ne déclenche donc rien. Pendant
-cette fenêtre, la liste garde ses compteurs de non-lus, ses aperçus de dernier message et son
-effectif d'avant la coupure, et ne se corrige qu'au prochain focus de fenêtre ou remontage.
+C'est exactement le réglage que `use-conversation-messages-rq.ts` a désactivé, avec le motif écrit
+au-dessus de la ligne : *« Focus / reconnexion restent servis par le catch-up incrémental, moins
+coûteux qu'un refetch complet des pages »*. La liste, elle, prend le refetch complet : sur une
+`useInfiniteQuery`, `'always'` relit TOUTES les pages chargées, une par une, et REMPLACE le cache
+par le résultat — donc peut perdre ce que le socket y a écrit entre-temps.
 
 Deux bornes avant d'ouvrir :
-1. **Le signal existe déjà** — `useConnectionStatus().isSocketConnected`, et le motif de front
-   `false → true` est écrit et testé dans `use-conversation-messages-rq.ts`. Le reproduire, pas en
-   inventer un second.
-2. **Un `refetch()` plein de la liste est destructeur au même titre que sur les messages** : il
-   REMPLACE les pages en cache et peut perdre ce que le socket y a écrit. Le pendant du
-   `syncNewerMessages` côté liste est un delta `updatedSince` (ce que fait `deltaSyncCore` sur iOS),
-   pas un refetch. Trancher entre les deux est le vrai contenu du chantier.
+1. **Ne pas simplement basculer à `false`.** Le refetch de focus est aujourd'hui le SEUL chemin web
+   qui purge une ligne fantôme : le delta est upsert-only et une conversation HARD-supprimée côté
+   serveur n'y apparaît jamais. iOS a rencontré exactement ce cas (E2E 2026-07-02, « Test Conv »
+   épinglée et absente du serveur) et l'a réglé par une réconciliation complète bornée à 1× par
+   24 h (`fullReconcileInterval`), chaînée APRÈS le delta. Le vrai contenu du chantier est le
+   pendant web de cette borne, pas la désactivation.
+2. **Le coût croît avec la profondeur de scroll**, pas seulement avec la fréquence de focus : dix
+   pages chargées = dix requêtes à chaque retour d'onglet. C'est une question de charge autant que
+   de correction.
+
+---
+
+# Cycle 76 — La liste de conversations web n'avait aucun rattrapage au reconnect socket
+
+## Le défaut
+
+Trois surfaces web tiennent un état temps réel alimenté par Socket.IO. Deux savaient rattraper une
+coupure SOCKET ; la troisième non :
+
+| Surface | Rattrapage au reconnect SOCKET (avant ce cycle) |
+|---|---|
+| Messages d'une conversation | oui — `syncNewerMessages` sur le front `false → true` de `isSocketConnected` |
+| Notifications | oui — `onSyncDesync('reconnect')` (cycle 75) |
+| **Liste de conversations** | **non** — `use-conversations-query.ts` n'avait que `refetchOnMount: 'always'` |
+
+Ce qui la couvrait partiellement, et pourquoi ça ne suffisait pas : le QueryClient global pose
+`refetchOnReconnect: 'always'`, mais c'est le `onlineManager` de React Query — la transition RÉSEAU
+du navigateur. Une coupure purement socket (redémarrage gateway, drop du load balancer, échec
+d'upgrade de transport) ne bouge pas `navigator.onLine` et ne déclenche donc rien. Pendant cette
+fenêtre, la liste garde ses compteurs de non-lus, ses aperçus de dernier message et son effectif
+d'avant la coupure, et ne se corrige qu'au prochain focus de fenêtre ou remontage.
+
+## Le correctif
+
+**Un delta `GET /conversations?updatedSince=`, jamais un `refetch()`.** L'endpoint existait déjà et
+n'avait qu'un seul client (iOS `deltaSyncCore`) ; côté web, `GetConversationsOptions` ne connaissait
+même pas le paramètre.
+
+`apps/web/lib/sync/conversation-list-delta.ts` — valeur pure, miroir des trois règles iOS
+(`deltaSyncCore`, `mergeDeltaConversations`, `reconcileUnread`) :
+
+- `conversationDeltaWatermark` — la borne est le `updatedAt` le plus récent DU CACHE, donc une
+  lecture d'horloge SERVEUR et jamais `Date.now()` (R15b iOS : un device en avance pousserait la
+  borne au-delà de mises à jour réelles tombant dans `[serverNow, deviceNow]` et les perdrait). Elle
+  est recalculée à chaque passe : le résultat du delta est fusionné dans le cache, donc la borne ne
+  peut que progresser — **le cache React Query EST le curseur**, rien n'est persisté à côté.
+- `mergeConversationDeltas` — upsert par id, retrait des `isActive: false`, puis retour à l'ordre
+  serveur (`lastMessageAt` décroissant).
+
+`apps/web/hooks/queries/use-conversation-list-delta-sync.ts` porte le déclenchement, appelé depuis
+`useInfiniteConversationsQuery` — donc les DEUX surfaces de liste (layout v1, sidebar v2) en
+héritent par la même porte.
+
+Quatre arbitrages portent le correctif :
+
+1. **Delta, pas refetch.** Un `refetch()` REMPLACE les pages en cache et peut perdre ce que le
+   socket y a écrit — c'est la raison même de l'existence de `syncNewerMessages` côté messages. Le
+   delta ne touche que les lignes que le serveur déclare modifiées.
+2. **Le non-lu local n'est jamais rallumé par un instantané serveur en retard.** Un `unreadCount`
+   local à 0 vaut « lu jusqu'à `lastMessageAt` » ; si le delta ne rapporte aucun message plus récent
+   que cette frontière, son compteur non nul est un accusé de lecture qui n'a pas encore atterri, pas
+   un vrai non-lu. Dès qu'un message PLUS RÉCENT existe, la vérité serveur reprend la main — c'est
+   précisément ce que le rattrapage doit faire remonter. C'est `reconcileUnread` d'iOS exprimé avec
+   les données dont dispose le web (qui ne cache pas de `lastReadAt` par conversation).
+3. **Une inconnue plus ancienne que la fenêtre chargée est ÉCARTÉE tant que `hasMore`.** Elle vit
+   dans une page non encore chargée : l'insérer la dupliquerait au prochain `fetchNextPage`. Liste
+   entièrement chargée, il n'y a pas de page suivante pour la porter — on l'insère.
+4. **Le tri appliqué après fusion est celui du serveur**, pas un ordre inventé : `orderBy:
+   lastMessageAt desc` est ce que rend `GET /conversations`. Sans lui, une conversation qui a reçu
+   des messages pendant la coupure afficherait le bon aperçu à la mauvaise place. L'épinglage n'en
+   souffre pas — il est appliqué en partition côté vue (`filteredPinned` / `filteredUnpinned`).
+
+Le premier `connect` ne déclenche rien (seul un RE-connect prouve une fenêtre aveugle ; au montage
+la liste relit déjà tout), et une fenêtre de refroidissement de 3 s — le `deltaSyncCooldown` d'iOS —
+absorbe les fronts d'une socket qui bat de l'aile. Ce garde-fou vit DANS le QueryClient et non dans
+un module : il doit être partagé par toutes les surfaces qui montent la liste tout en repartant à
+zéro avec chaque client.
+
+En chemin, `updateInfiniteConversationCache` — l'écriture non destructive qui reconstruit les
+frontières de pages — est sortie de `use-socket-cache-sync.ts` vers
+`lib/conversations/infinite-cache.ts`, à côté de `unread-cache.ts` : deux appelants désormais, une
+seule implémentation.
+
+## Vérification
+
+- `apps/web` : **562 suites, 12 069 tests verts** (24 nouveaux : 16 sur la valeur pure, 8 sur le
+  déclenchement). Prérequis CI reproduit localement (`packages/shared` construit avant la passe).
+- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+
+## Ce qui reste ouvert
+
+- **Le delta est upsert-only.** Une conversation HARD-supprimée côté serveur pendant la coupure n'y
+  apparaît jamais. iOS compense par une réconciliation complète bornée à 24 h ; le web s'appuie
+  aujourd'hui sur `refetchOnWindowFocus` — ce qui est exactement le sujet de la tête instruite
+  ci-dessus.
+- **Le plafond du delta est le `limit` de la liste** (30 par défaut côté serveur, 100 au maximum).
+  Une coupure très longue sur un compte très actif peut en dépasser ; le reste est rattrapé au
+  reconnect suivant, la borne n'ayant avancé que jusqu'au plus récent `updatedAt` réellement
+  fusionné. Aucune pagination du delta n'a été ajoutée — elle ne se justifiera que mesurée.
 
 ---
 

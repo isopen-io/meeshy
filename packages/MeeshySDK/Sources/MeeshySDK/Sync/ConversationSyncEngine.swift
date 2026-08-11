@@ -583,6 +583,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         return ok
     }
 
+    /// Jumeau WEB depuis 2026-08 : `apps/web/lib/sync/conversation-list-delta.ts`
+    /// (borne + fusion, valeur pure) et `apps/web/hooks/queries/
+    /// use-conversation-list-delta-sync.ts` (déclenchement au reconnect socket).
+    /// Les deux plateformes appliquent la MÊME règle — upsert-only, retrait des
+    /// `isActive: false`, non-lu local jamais rallumé par un instantané serveur en
+    /// retard, ordre serveur `lastMessageAt` décroissant : toute évolution de la
+    /// règle touche les deux.
     private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,

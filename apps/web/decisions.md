@@ -99,3 +99,31 @@ la couverture reste celle du pilote. Émission et observation doivent rester en 
 `emitWithSeq` à d'autres events sans étendre l'observation des DEUX clients fabrique de faux trous.
 Le curseur n'est pas persisté (mémoire d'onglet), donc une fenêtre onglet-fermé reste couverte par
 le seul `refetchOnMount: 'always'`.
+
+## 2026-08: Liste de conversations — rattrapage DELTA au reconnect socket (miroir `deltaSyncCore`)
+**Statut**: Accepté
+**Contexte**: Trois surfaces web tiennent un état temps réel ; deux rattrapaient une coupure
+SOCKET (messages d'une conversation via `syncNewerMessages`, notifications via `onSyncDesync`
+depuis le cycle 75), la liste de conversations non — `use-conversations-query.ts` n'avait que
+`refetchOnMount: 'always'`. Le `refetchOnReconnect: 'always'` du QueryClient global ne la couvre
+pas : il écoute le `onlineManager` de React Query, c'est-à-dire la connectivité RÉSEAU du
+navigateur, que ne bougent ni un redémarrage gateway, ni un drop du load balancer, ni un échec
+d'upgrade de transport. Pendant cette fenêtre, la liste garde compteurs de non-lus, aperçus et
+effectif d'avant la coupure jusqu'au prochain focus de fenêtre ou remontage.
+**Decision**: un DELTA `GET /conversations?updatedSince=`, jamais un `refetch()`.
+`lib/sync/conversation-list-delta.ts` (valeur pure : `conversationDeltaWatermark` /
+`mergeConversationDeltas`) est le miroir de `deltaSyncCore` + `mergeDeltaConversations` +
+`reconcileUnread` du SDK iOS. Le déclencheur est le front `false → true` de `isSocketConnected`
+(`use-conversation-list-delta-sync`), le MÊME motif que le « Trigger 1 » du fil de messages. La
+borne est relue du cache à chaque passe — le cache React Query EST le curseur, aucun état
+persisté.
+**Alternatives rejetées**: `refetch()` de la liste (REMPLACE les pages en cache et perd ce que le
+socket y a écrit — même raison qui a fait naître `syncNewerMessages`) ; un second signal de
+reconnect propre à la liste (il en existe déjà un, testé) ; un curseur persisté à la iOS (le
+cache est déjà la source, un second curseur pourrait diverger de lui).
+**Cons**: le delta est upsert-only — une conversation HARD-supprimée côté serveur pendant la
+coupure n'y apparaît jamais (iOS compense par une réconciliation complète 24 h ; le web s'appuie
+sur `refetchOnWindowFocus`). Une inconnue plus ancienne que la fenêtre chargée est écartée tant
+qu'il reste des pages, sinon elle se dupliquerait au prochain `fetchNextPage`. Le tri appliqué
+après fusion est celui du serveur (`lastMessageAt` décroissant) : il ne s'applique qu'au chemin
+delta, les patchs socket continuent de laisser la ligne à sa place.

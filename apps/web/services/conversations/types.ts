@@ -35,6 +35,12 @@ export interface GetConversationsOptions {
   type?: ConversationType;
   withUserId?: string;
   before?: string;
+  /**
+   * Borne ISO8601 du rattrapage delta : le serveur ne rend que les conversations
+   * dont `updatedAt` est postérieur (`GET /conversations?updatedSince=`). Chemin
+   * upsert-only du rattrapage au reconnect socket — jamais une pagination.
+   */
+  updatedSince?: string;
 }
 
 /**
