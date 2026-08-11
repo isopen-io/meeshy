@@ -82,9 +82,11 @@ import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.AboutScreen
+import me.meeshy.app.settings.AccountContactScreen
 import me.meeshy.app.settings.ActiveSessionsScreen
 import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
+import me.meeshy.app.settings.TwoFactorScreen
 import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.LegalDocumentScreen
@@ -152,6 +154,8 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
     const val CHANGE_PASSWORD = "settings/change-password"
+    const val TWO_FACTOR = "settings/two-factor"
+    const val ACCOUNT_CONTACT = "settings/account-contact"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
@@ -649,6 +653,8 @@ fun MeeshyApp(
                     onOpenStarred = { navController.navigate(Routes.STARRED) },
                     onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
+                    onOpenTwoFactor = { navController.navigate(Routes.TWO_FACTOR) },
+                    onOpenAccountContact = { navController.navigate(Routes.ACCOUNT_CONTACT) },
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
@@ -670,6 +676,12 @@ fun MeeshyApp(
             }
             composable(Routes.CHANGE_PASSWORD) {
                 ChangePasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.TWO_FACTOR) {
+                TwoFactorScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACCOUNT_CONTACT) {
+                AccountContactScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.DELETE_ACCOUNT) {
                 AccountDeletionScreen(onBack = { navController.popBackStack() })

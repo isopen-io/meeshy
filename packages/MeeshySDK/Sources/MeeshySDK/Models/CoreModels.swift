@@ -130,8 +130,12 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     ///   chemin du démarrage à froid, celui où la ligne n'avait AUCUNE
     ///   traduction disponible et retombait toujours sur le texte de
     ///   l'expéditeur.
-    /// - Socket — `ConversationSyncEngine.previewTranslations(from:)` dérive la
-    ///   même carte du `message:new` reçu, via `LastMessageFacet`.
+    /// - Socket — `ConversationSyncEngine.previewTranslations(from:viewerLanguages:)`
+    ///   dérive la même carte du `message:new` reçu, via `LastMessageFacet`, en
+    ///   appliquant les MÊMES quatre exclusions que le gateway (hors prisme,
+    ///   langue d'origine, traduction chiffrée, texte inexploitable) et le même
+    ///   plafond d'aperçu. Sans cette parité, le texte de la ligne dépendrait du
+    ///   transport qui l'a apportée.
     ///
     /// `nil` reste un état normal (aucune traduction vers une langue du prisme,
     /// ou message déjà dans cette langue) : la liste affiche alors
@@ -210,15 +214,18 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     /// B1 — applies the Prisme Linguistique to `lastMessagePreview`.
     ///
-    /// Resolution mirrors `resolveUserLanguage` in
-    /// `packages/shared/utils/conversation-helpers.ts`:
+    /// Twin of `resolveLastMessagePreview` in
+    /// `packages/shared/utils/conversation-helpers.ts` — both platforms render
+    /// the same row from the same REST payload, so any divergence here would
+    /// show one account two different texts depending on the client.
     ///
-    /// 1. Walk the viewer's preferred languages in order.
-    /// 2. Return the first matching translation found in
+    /// 1. Walk the viewer's preferred languages IN ORDER.
+    /// 2. The original language competes at its own RANK: reaching it returns
+    ///    the raw preview (the message already IS in that language).
+    /// 3. Otherwise, return the first matching translation found in
     ///    `lastMessageTranslations`.
-    /// 3. If no preferred language matches, return the original
-    ///    `lastMessagePreview` (which is the message in its source
-    ///    language).
+    /// 4. If no preferred language is served, return the original
+    ///    `lastMessagePreview` (the message in its source language).
     ///
     /// **Critical Prisme rule**: never fall back to `translations.first`.
     /// The absence of a preferred-language translation means the content
@@ -233,13 +240,26 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             return lastMessagePreview
         }
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        // If the message is already in one of the preferred languages, the
-        // raw preview is canonical — no translation needed.
-        if let original = lastMessageOriginalLanguage?.lowercased(),
-           preferred.contains(original) {
-            return lastMessagePreview
-        }
+        let original = lastMessageOriginalLanguage?.lowercased()
+        // The prism is ORDERED, and the original language competes at its own
+        // RANK — never as a global short-circuit. Walking the reader's
+        // languages in order, the first one that is served wins, whether by a
+        // translation or because the message is already written in it.
+        //
+        // This used to read "if the original language appears anywhere in the
+        // preferred list, the raw preview is canonical", which silently demoted
+        // the reader's PRIMARY language whenever the original language sat
+        // lower in their prism. `CLAUDE.md` states the opposite outright: "a
+        // French-speaking user with an English iPhone ALWAYS sees their
+        // messages in French (priority 1); the English locale only kicks in
+        // when no French translation is available". With prism ["fr", "en"], an
+        // English message and a French translation available, the old rule
+        // returned the English original. Device locale enters at rank 4 — it
+        // never supersedes an in-app preference.
         for lang in preferred {
+            if let original, lang == original {
+                return lastMessagePreview
+            }
             if let translated = translations[lang] {
                 return translated
             }

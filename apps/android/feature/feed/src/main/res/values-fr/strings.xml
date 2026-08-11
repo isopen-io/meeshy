@@ -97,12 +97,21 @@
     <string name="feed_composer_visibility_private">Privé</string>
     <string name="feed_composer_attach_media">Ajouter une photo ou une vidéo</string>
     <string name="feed_composer_take_photo">Prendre une photo</string>
+    <string name="feed_composer_take_video">Filmer une vidéo</string>
+    <string name="feed_composer_attach_file">Joindre un fichier</string>
+    <string name="feed_composer_record_voice">Enregistrer un audio</string>
     <string name="feed_composer_remove_media">Supprimer le média</string>
+    <string name="feed_composer_add_location">Ajouter ma position</string>
+    <string name="feed_composer_remove_location">Supprimer la position</string>
+    <string name="feed_composer_location_unavailable">Position indisponible — vérifiez vos paramètres de localisation et réessayez</string>
     <string name="feed_composer_media_limit">Vous pouvez joindre jusqu\'à %1$d éléments</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
     <string name="feed_composer_type_reel">Réel</string>
     <string name="feed_composer_type_post">Publier</string>
     <string name="feed_composer_type_hint">Bascule entre réel et post</string>
+    <string name="feed_composer_language_button">Langue du post : %1$s</string>
+    <string name="feed_composer_language_title">Langue du post</string>
+    <string name="feed_composer_language_search">Rechercher une langue</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Options du post</string>

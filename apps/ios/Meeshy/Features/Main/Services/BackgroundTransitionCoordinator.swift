@@ -257,12 +257,12 @@ final class MediaLifecycleBridge {
 
     func prepareForBackground() async {
         if ConversationAudioCoordinator.sharedForTesting.isPlaying
+            || ConversationAudioCoordinator.sharedForTesting.activeContext != nil
             || PlaybackCoordinator.shared.isAnyPlaying {
-            // Audio Meeshy en cours -> on ne coupe rien. UIBackgroundModes "audio"
-            // autorise l'OS a continuer la lecture en background. On considere
-            // TOUTE lecture active (coordinator conversation OU lecteur plein
-            // ecran via son propre AudioPlaybackManager, OU video), pas seulement
-            // celle pilotee par le coordinator de conversation.
+            // Lecture OU file en pause -> on ne coupe rien. UIBackgroundModes
+            // "audio" couvre la lecture ; une file en PAUSE garde sa session
+            // active pour rester l'app Now Playing : la carte lock screen
+            // survit et son bouton play réveille l'app (parité WhatsApp).
             return
         }
         #if DEBUG

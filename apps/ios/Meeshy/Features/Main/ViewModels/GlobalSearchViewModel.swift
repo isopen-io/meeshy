@@ -286,6 +286,14 @@ final class GlobalSearchViewModel: ObservableObject {
         return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
     }
 
+    /// Prisme Linguistique du lecteur, dans l'ordre — systemLanguage,
+    /// regionalLanguage, customDestinationLanguage, puis la locale appareil en
+    /// 4e rang. `MeeshyUser.preferredContentLanguages` est la seule autorité
+    /// iOS sur cet ordre : ne jamais le réimplémenter ici.
+    private var preferredContentLanguages: [String] {
+        authManager.currentUser?.preferredContentLanguages ?? []
+    }
+
     private func searchLocalConversations(query: String) async -> [GlobalSearchConversationResult] {
         let ids = (try? await SearchIndex.shared.searchConversations(query: query, limit: 50)) ?? []
         guard !ids.isEmpty else { return [] }
@@ -304,6 +312,7 @@ final class GlobalSearchViewModel: ObservableObject {
             cached = []
         }
         let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+        let preferred = preferredContentLanguages
 
         return ids.compactMap { id -> GlobalSearchConversationResult? in
             guard let conv = byId[id] else { return nil }
@@ -313,7 +322,11 @@ final class GlobalSearchViewModel: ObservableObject {
                 avatar: conv.avatar ?? conv.participantAvatarURL,
                 type: conv.type,
                 memberCount: conv.memberCount,
-                lastMessagePreview: conv.lastMessagePreview,
+                // Même résolution que `ThemedConversationRow` — la ligne de
+                // résultat de recherche est une ligne de conversation, elle doit
+                // rendre le MÊME texte que la liste. Rend l'aperçu original
+                // quand aucune langue du prisme n'est servie (règle #1).
+                lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
                 lastMessageAt: conv.lastMessageAt,
                 unreadCount: conv.userState.unreadCount,
                 conversation: conv
@@ -328,6 +341,7 @@ final class GlobalSearchViewModel: ObservableObject {
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
             let userId = authManager.currentUser?.id ?? ""
+            let preferred = preferredContentLanguages
             return response.data.map { apiConv in
                 let conv = apiConv.toConversation(currentUserId: userId)
                 return GlobalSearchConversationResult(
@@ -336,7 +350,12 @@ final class GlobalSearchViewModel: ObservableObject {
                     avatar: conv.avatar ?? conv.participantAvatarURL,
                     type: conv.type,
                     memberCount: conv.memberCount,
-                    lastMessagePreview: conv.lastMessagePreview,
+                    // `GET /conversations/search` sert désormais
+                    // `lastMessageTranslations`/`lastMessageOriginalLanguage`
+                    // (jumeau de `GET /conversations`) : les rendre bruts ici
+                    // laisserait la recherche dans la langue de l'expéditeur
+                    // alors que la liste, elle, traduit.
+                    lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
                     lastMessageAt: conv.lastMessageAt,
                     unreadCount: conv.userState.unreadCount,
                     conversation: conv

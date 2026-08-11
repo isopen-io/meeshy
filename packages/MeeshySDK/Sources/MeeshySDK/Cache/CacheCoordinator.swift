@@ -730,7 +730,7 @@ public actor CacheCoordinator {
             // ne doit pas empêcher le chargement.
             do {
                 try db.write { db in
-                    try TranslationCacheRecord
+                    _ = try TranslationCacheRecord
                         .filter(Column("cachedAt") <= cutoff)
                         .deleteAll(db)
                 }

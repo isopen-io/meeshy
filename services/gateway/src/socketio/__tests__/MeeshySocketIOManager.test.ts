@@ -510,15 +510,20 @@ describe('MeeshySocketIOManager', () => {
    * afterwards so no later test inherits the override.
    */
   function recordEmitChains(state: ReturnType<typeof getIoState>) {
-    const sent: Array<{ rooms: string[]; event: string }> = [];
+    const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
     const chain = (rooms: string[]): any => ({
       to: (room: string) => chain([...rooms, room]),
       except: () => chain(rooms),
-      emit: (event: string) => { sent.push({ rooms, event }); },
+      emit: (event: string, payload: unknown) => { sent.push({ rooms, event, payload }); },
     });
     state.to.mockImplementation(((room: string) => chain([room])) as never);
     return {
       roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+      // Le payload est capturé PAR room : `conversation:updated` en construit un
+      // par destinataire (Prisme du lecteur), donc l'assertion doit pouvoir les
+      // distinguer plutôt que de constater qu'« un » emit a eu lieu.
+      payloadFor: (event: string, room: string) =>
+        sent.find((s) => s.event === event && s.rooms.includes(room))?.payload,
       restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
     };
   }
@@ -1941,6 +1946,86 @@ describe('MeeshySocketIOManager', () => {
       expect(sent.roomsFor(SERVER_EVENTS.CONVERSATION_UPDATED)).toContain(ROOMS.user('part-anonymous'));
     });
 
+    // Jumeau du chemin édition/suppression (`emitConversationPreviewUpdate`) :
+    // l'aperçu de ligne de liste ne doit PAS dépendre du transport. Si seul le
+    // chemin d'édition portait le Prisme, la ligne serait traduite après une
+    // édition et brute après un envoi.
+    it('carries each recipient OWN preview prism in CONVERSATION_UPDATED (twin of the edit path)', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+      });
+      (msg as any).originalLanguage = 'en';
+      (msg as any).translations = {
+        fr: { text: 'Bonjour', targetLanguage: 'fr' },
+        es: { text: 'Hola', targetLanguage: 'es' },
+      };
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'part-fr',
+          userId: 'user-fr',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+        {
+          id: 'part-es',
+          userId: 'user-es',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
+      const es = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-es'));
+      expect(fr.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+      expect(es.lastMessageTranslations).toEqual({ es: 'Hola' });
+      expect(fr.lastMessageOriginalLanguage).toBe('en');
+    });
+
+    // Garde anti-régression du cycle 65 : le `conversation:updated` jumeau ne
+    // doit pas arriver derrière `message:new` pour EFFACER la carte que ce
+    // dernier vient d'installer. Il est construit depuis le MÊME message, donc
+    // un message sans traduction produit une carte nulle des deux côtés — jamais
+    // un vide qui contredirait `message:new`.
+    it('does not contradict message:new when the fresh message has no translations yet', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+      });
+      (msg as any).originalLanguage = 'en';
+      (msg as any).translations = null;
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'part-fr',
+          userId: 'user-fr',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
+      expect(fr.lastMessageTranslations).toBeNull();
+      expect(fr.lastMessagePreview).toBe('Hello');
+    });
+
     it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {
       const msg = makeMessage({ conversationId: 'conv-123456789012', senderId: 'part-sender' });
       prisma.conversation.findUnique.mockResolvedValue(null);
@@ -2128,11 +2213,14 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_UNPINNED, { messageId: 'msg-pin' });
     });
 
-    // A share-link message is a CREATION, but it is not `message:new`: the two
-    // are different wire events with different payload shapes, and a link
-    // message replayed as `message:new` would hand the client a `{ message }`
-    // envelope where it expects the message object itself.
-    it('routes link-message entries to LINK_MESSAGE_NEW, not MESSAGE_NEW', async () => {
+    // A share-link message is a CREATION replayed under BOTH wire events, each
+    // in the shape that event carries: `link:message:new` keeps its `{ message }`
+    // envelope (the web reads it), `message:new` gets the message object itself
+    // (iOS and Android only ever listen to that one — replaying the envelope
+    // under it would hand them a payload with no `conversationId` to route on).
+    // Replaying only `link:message:new`, as this did, left a mobile recipient
+    // who was offline at send time with nothing to converge on at reconnect.
+    it('replays link-message entries under BOTH events, each in its own shape', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
           { payload: { message: { id: 'msg-link', conversationId: 'conv-link' } }, eventType: 'link-message' },
@@ -2142,6 +2230,26 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages('user-drain-link', false);
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
         message: { id: 'msg-link', conversationId: 'conv-link' },
+      });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-link',
+        conversationId: 'conv-link',
+      });
+    });
+
+    // The envelope is what every writer of this eventType produces, but a drain
+    // must never blast `message:new` with `undefined` if one ever drifts: the
+    // recipient would take a message it cannot route for a real one.
+    it('replays a shapeless link-message entry under LINK_MESSAGE_NEW alone', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { messageId: 'msg-shapeless' }, eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-shapeless', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
+        messageId: 'msg-shapeless',
       });
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
@@ -5179,6 +5287,142 @@ describe('MeeshySocketIOManager', () => {
       // do NOT add 'stale-sock-gone' to ioState.sockets.sockets
 
       await expect(manager.joinUserToConversationRoom('user-stale', 'conv-new-1234')).resolves.toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // _broadcastNewMessage — contrat `clientMessageId` (Phase 4 §6.2)
+  // -------------------------------------------------------------------------
+
+  /**
+   * `recordEmitChains` ne retient que (rooms, event) : il ne peut pas dire ce
+   * qu'un emit TRANSPORTE, ni quelles rooms une chaîne a exclues. Les deux sont
+   * précisément l'objet de ce groupe — la moitié « cid porté » et la moitié
+   * « cid retiré » du contrat vivent dans le payload, et la garde anti-doublon
+   * vit dans le `.except()`.
+   */
+  function recordEmitPayloads(state: ReturnType<typeof getIoState>) {
+    const sent: Array<{ rooms: string[]; excepted: string[]; event: string; payload: any }> = [];
+    const chain = (rooms: string[], excepted: string[]): any => ({
+      to: (room: string) => chain([...rooms, room], excepted),
+      except: (arg: string | string[]) =>
+        chain(rooms, [...excepted, ...(Array.isArray(arg) ? arg : [arg])]),
+      emit: (event: string, payload: any) => { sent.push({ rooms, excepted, event, payload }); },
+    });
+    state.to.mockImplementation(((room: string) => chain([room], [])) as never);
+    return {
+      forEvent: (event: string) => sent.filter((s) => s.event === event),
+      restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
+    };
+  }
+
+  describe('_broadcastNewMessage — clientMessageId reconciliation contract', () => {
+    const CONV = 'conv-123456789012';
+    const SENDER = {
+      id: 'part-sender',
+      userId: 'user-sender',
+      displayName: 'Alice',
+      nickname: null,
+      avatar: null,
+      type: 'registered',
+      user: null,
+    };
+
+    function makeCidMessage(overrides: Record<string, unknown> = {}) {
+      return makeMessage({
+        conversationId: CONV,
+        senderId: 'part-sender',
+        sender: SENDER,
+        clientMessageId: 'cid_abc123',
+        ...overrides,
+      });
+    }
+
+    async function broadcast(msg: any) {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      const sent = recordEmitPayloads(ioState);
+      try {
+        await manager.broadcastMessage(msg, CONV);
+      } finally {
+        sent.restore();
+      }
+      return sent;
+    }
+
+    it("carries clientMessageId to the sender's own user room so an optimistic row can promote by cid", async () => {
+      // Le chemin REST est celui que prend iOS pour TOUT envoi non éligible au
+      // socket-first (pièce jointe, E2EE, vue-unique, éphémère, effets) — cf.
+      // `socketFirstEligible`, ConversationViewModel. Sans cid sur le fil, la
+      // seule promotion possible reste la réponse HTTP ; perdue (app en fond,
+      // réseau coupé), le renvoi de l'outbox est dédupliqué par la route
+      // (`!isDuplicate`) qui ne rebroadcaste PAS — la bulle optimiste reste
+      // bloquée en `.sending` jusqu'à un rechargement complet.
+      const sent = await broadcast(makeCidMessage());
+
+      const toSender = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.user('user-sender')));
+
+      expect(toSender).toHaveLength(1);
+      expect(toSender[0].payload).toEqual(expect.objectContaining({ clientMessageId: 'cid_abc123' }));
+    });
+
+    it('strips clientMessageId from the copy every peer receives', async () => {
+      // Invariant #2 de `message-ack-shaping` : un pair ne doit jamais apprendre
+      // l'espace d'ids optimistes de l'expéditeur.
+      const sent = await broadcast(makeCidMessage());
+
+      const toRoom = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.conversation(CONV)));
+
+      expect(toRoom).toHaveLength(1);
+      expect(toRoom[0].payload).not.toHaveProperty('clientMessageId');
+    });
+
+    it("excepts the sender's user room from the conversation-room emit so their devices get exactly one copy", async () => {
+      const sent = await broadcast(makeCidMessage());
+
+      const toRoom = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.conversation(CONV)));
+
+      expect(toRoom[0].excepted).toContain(ROOMS.user('user-sender'));
+    });
+
+    it('falls back to a single cid-stripped room-wide emit when the sender has no account', async () => {
+      // Invité de lien partagé : aucune `ROOMS.user(User.id)` à adresser. Le
+      // chemin doit rester exactement celui d'avant — une seule émission, sans
+      // cid — plutôt que d'adresser `user:undefined`.
+      const sent = await broadcast(makeCidMessage({ sender: { ...SENDER, userId: null } }));
+
+      const news = sent.forEvent(SERVER_EVENTS.MESSAGE_NEW);
+      expect(news).toHaveLength(1);
+      expect(news[0].rooms).toEqual([ROOMS.conversation(CONV)]);
+      expect(news[0].excepted).toEqual([]);
+      expect(news[0].payload).not.toHaveProperty('clientMessageId');
+    });
+
+    it('enqueues the cid-stripped payload for an offline recipient', async () => {
+      // Même règle que `enqueueOfflineLinkMessage` : « payload must be the
+      // peer-facing (cid-stripped) body, identical to the live emit ».
+      const fakeQueue = { enqueue: jest.fn().mockResolvedValue(undefined), drain: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-offline', userId: 'user-offline', joinedAt: new Date() },
+      ]);
+
+      await manager.broadcastMessage(makeCidMessage(), CONV);
+
+      expect(fakeQueue.enqueue).toHaveBeenCalledWith(
+        'user-offline',
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+      const [, entry] = fakeQueue.enqueue.mock.calls[0];
+      expect(entry.payload).not.toHaveProperty('clientMessageId');
     });
   });
 });

@@ -84,6 +84,32 @@ suspend fun <T> headerCall(headerName: String, block: suspend () -> Response<T>)
     }
 
 /**
+ * Run a raw `retrofit2.Response<Unit>` call whose only signal is HTTP success/
+ * failure — no body to decode, no header the caller needs (unlike [headerCall]). An
+ * intermediate TUS chunk PATCH (204 No Content per the tus.io protocol) is the first
+ * user: every chunk but the last only needs to know whether the PATCH landed.
+ */
+suspend fun chunkCall(block: suspend () -> Response<Unit>): NetworkResult<Unit> =
+    try {
+        val response = block()
+        if (response.isSuccessful) {
+            NetworkResult.Success(Unit)
+        } else {
+            NetworkResult.Failure(
+                ApiError(message = "Request failed", code = "HTTP_${response.code()}", httpStatus = response.code()),
+            )
+        }
+    } catch (e: HttpException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
+        )
+    } catch (e: IOException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+        )
+    }
+
+/**
  * Run an API call whose response does NOT use the standard [ApiResponse] envelope
  * (e.g. `{ success, count }`). [block] extracts the value directly; transport/HTTP
  * exceptions are folded into [NetworkResult.Failure].

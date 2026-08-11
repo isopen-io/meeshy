@@ -62,11 +62,17 @@ class ConversationListViewModel: ObservableObject {
     /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
     /// changed re-evaluates its body. The full list does NOT re-render.
     @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName (derived view of `typers`)
-    /// Per-user source of truth: conversationId → (userId → displayName). The
+    /// conversationId → PSEUDO du frappeur retenu pour cette conversation.
+    /// Dérivé du même choix que `typingUsernames`, donc désignant toujours la
+    /// même personne : la ligne de liste affiche son nom, la pastille de
+    /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
+    /// comme deux personnes en train d'écrire.
+    @Published private(set) var typingUsers: [String: String] = [:]
+    /// Per-user source of truth: conversationId → (userId → frappeur). The
     /// public `typingUsernames` is derived from this so a `typing:stop` from ONE
     /// member of a group no longer wipes the whole row's indicator while OTHER
     /// members are still typing (displayed "personne n'écrit" ≠ real "B écrit").
-    private var typers: [String: [String: String]] = [:]
+    private var typers: [String: [String: TypingUser]] = [:]
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
@@ -617,25 +623,61 @@ class ConversationListViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Graft the store's `userState` onto the matching rows. Metadata and
-    /// ordering are untouched. Guarded so an echo of an unchanged snapshot
-    /// (e.g. the publish that follows our own hydration) doesn't churn the
-    /// grouping pipeline.
+    /// Ids présents dans la dernière émission du store. Une conversation qui
+    /// DISPARAÎT d'une émission à la suivante a été supprimée (`conversation:deleted`
+    /// → `applyConversationDeleted`) : c'est le seul signal de suppression que
+    /// le store publie. Comparer à l'absence pure serait faux — le store peut
+    /// être moins hydraté que la liste, et toutes les lignes s'évaporeraient.
+    private var lastStoreSnapshotIds: Set<String> = []
+
+    /// Graft the store's `userState` onto the matching rows, then drop the
+    /// rows the store just deleted. Ordering is untouched. Guarded so an echo
+    /// of an unchanged snapshot (e.g. the publish that follows our own
+    /// hydration) doesn't churn the grouping pipeline.
+    ///
+    /// Les métadonnées (titre/avatar/…) ne sont JAMAIS greffées depuis le
+    /// store : elles ont déjà deux écrivains (le sink `conversationUpdated`
+    /// direct et le rechargement du cache disque écrit par le sync engine).
+    /// Le store s'hydrate en asynchrone — un snapshot en retard greffait le
+    /// titre périmé PAR-DESSUS un rename fraîchement appliqué par le sink.
     private func mergeUserStateFromStore(_ snapshot: [MeeshyConversation]) {
+        let ids = Set(snapshot.map(\.id))
+        // Un instantané VIDE est un teardown de session (`ConversationStore.reset`
+        // au logout republie `[]`), jamais N suppressions simultanées : le
+        // traiter comme telles viderait la liste ET persisterait ce vide.
+        let disappeared = ids.isEmpty ? [] : lastStoreSnapshotIds.subtracting(ids)
+        lastStoreSnapshotIds = ids
         guard !conversations.isEmpty else { return }
-        var stateById = [String: ConversationUserState](minimumCapacity: snapshot.count)
-        for conv in snapshot { stateById[conv.id] = conv.userState }
-        var updated = conversations
-        var changed = false
+        guard let merged = Self.reconciling(
+            rows: conversations, with: snapshot, removing: disappeared
+        ) else { return }
+        conversations = merged
+        schedulePersist()
+    }
+
+    /// Réconciliation pure — `nil` quand rien ne bouge.
+    ///
+    /// Les champs `lastMessage*` ne sont VOLONTAIREMENT pas greffés : ils sont
+    /// la propriété du cache disque (écrit par `ConversationSyncEngine`), que
+    /// `reloadFromCache` reverse déjà dans la liste. Les greffer depuis le
+    /// store ferait régresser l'aperçu dès que le store est en retard d'un
+    /// `message:new`.
+    nonisolated static func reconciling(
+        rows: [Conversation],
+        with snapshot: [MeeshyConversation],
+        removing disappeared: Set<String>
+    ) -> [Conversation]? {
+        let byId = Dictionary(snapshot.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var updated = rows.filter { !disappeared.contains($0.id) }
+        var changed = updated.count != rows.count
         for i in updated.indices {
-            guard let newState = stateById[updated[i].id], updated[i].userState != newState else { continue }
-            updated[i].userState = newState
-            changed = true
+            guard let incoming = byId[updated[i].id] else { continue }
+            if updated[i].userState != incoming.userState {
+                updated[i].userState = incoming.userState
+                changed = true
+            }
         }
-        if changed {
-            conversations = updated
-            schedulePersist()
-        }
+        return changed ? updated : nil
     }
 
     private func reloadFromCache() async {
@@ -664,6 +706,23 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Real-time Socket Subscriptions
 
+    /// Le Prisme de la ligne porté par `conversation:updated`, quand le serveur
+    /// en parle. `nil` = `.unchanged` = « cet événement ne parle pas d'aperçu »
+    /// (renommage, avatar) : la carte du cache survit. Une carte VIDE, elle,
+    /// est un fait — le serveur DIT que la traduction est périmée.
+    ///
+    /// La paire voyage ensemble et jamais séparément : le résolveur de la ligne
+    /// (`resolvedLastMessagePreview`) PRÉFÈRE la traduction à `lastMessagePreview`,
+    /// donc poser l'un sans l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+    /// Règle recopiée de `ConversationStore.merging` (SDK), seule formulation de
+    /// référence — les deux doivent bouger ensemble.
+    private static func replacedPrism(
+        from event: ConversationUpdatedEvent
+    ) -> (map: [String: String], originalLanguage: String?)? {
+        guard case .replaced(let map) = event.lastMessageTranslations else { return nil }
+        return (map, event.lastMessageOriginalLanguage)
+    }
+
     private func subscribeToSocketEvents() {
         // Typing indicator — affiche "<Auteur> écrit..." dans le row
         messageSocket.typingStarted
@@ -675,8 +734,11 @@ class ConversationListViewModel: ObservableObject {
                 // "<You> écrit…" on your own conversation row. Mirror the per-conversation
                 // guard in ConversationSocketHandler.
                 guard event.userId != currentUserId else { return }
-                typers[event.conversationId, default: [:]][event.userId] = event.preferredDisplayName
-                typingUsernames[event.conversationId] = Self.typingDisplayName(for: typers[event.conversationId])
+                typers[event.conversationId, default: [:]][event.userId] = TypingUser(
+                    username: event.username,
+                    displayName: event.preferredDisplayName
+                )
+                refreshTypingDerivations(for: event.conversationId)
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -770,6 +832,10 @@ class ConversationListViewModel: ObservableObject {
                 // effacer par la remise à neutre du bump une ligne plus bas :
                 // la ligne restait muette jusqu'à la synchro suivante alors même
                 // que le gateway venait d'envoyer le texte.
+                //
+                // Le Prisme voyage avec l'aperçu. Extrait UNE fois : les deux
+                // branches ci-dessous en ont besoin, chacune à sa façon.
+                let replacedPrism = Self.replacedPrism(from: event)
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
@@ -796,6 +862,11 @@ class ConversationListViewModel: ObservableObject {
                             preview: event.lastMessagePreview,
                             senderName: resolvedSenderName,
                             at: newLastAt,
+                            // La facette décrit UN message : la carte du message
+                            // PRÉCÉDENT n'est pas la sienne, donc `.unchanged`
+                            // vaut `nil` ici (neutre) et non « conserver ».
+                            translations: replacedPrism?.map,
+                            originalLanguage: replacedPrism?.originalLanguage,
                             location: event.location
                         )
                     )
@@ -809,6 +880,19 @@ class ConversationListViewModel: ObservableObject {
                     }
                     if let preview = event.lastMessagePreview {
                         self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
+                    }
+                    // Appliquée AU MÊME TITRE que l'aperçu, et au même endroit :
+                    // la paire doit rester cohérente, sinon on recrée le mélange
+                    // exact que le tri-état sert à empêcher — texte neuf, carte
+                    // de l'ancien, et le résolveur qui préfère la carte. C'est
+                    // le cas de l'ÉDITION : même `lastMessageId`, horodatage
+                    // ÉGAL, contenu changé, `translations: null` reçu.
+                    // `.replaced([:])` → `nil` : le résolveur distingue « pas de
+                    // carte » d'une carte vide.
+                    if let prism = replacedPrism {
+                        self.conversations[index].lastMessageTranslations =
+                            prism.map.isEmpty ? nil : prism.map
+                        self.conversations[index].lastMessageOriginalLanguage = prism.originalLanguage
                     }
                     // Metadata-only mutation (rename, avatar swap, broadcast
                     // toggle) still needs to land in L2 so a cold restart
@@ -863,6 +947,30 @@ class ConversationListViewModel: ObservableObject {
                 default:
                     break
                 }
+            }
+            .store(in: &cancellables)
+
+        // Le pendant montant de `participantSelfLeft`, et il a longtemps manqué :
+        // l'effectif ne connaissait que des soustractions (départ, retrait,
+        // bannissement) et dérivait durablement vers le bas — `schedulePersist`
+        // écrivant chaque valeur fausse dans le cache disque.
+        //
+        // Il ne pouvait PAS s'écouter sur `conversationJoined` : cet événement
+        // porte aussi l'ack self-only du socket qui REJOINT LA ROOM, que produit
+        // chaque ouverture de fil, avec le même payload. `participantJoined`
+        // (`conversation:participant-joined`) ne porte que l'adhésion.
+        //
+        // Le nouvel arrivant s'écarte lui-même : le serveur l'omet de l'éventail,
+        // mais l'auto-join de room côté serveur est asynchrone et pourrait le
+        // faire entrer dans la room de conversation avant l'emit. Son effectif
+        // lui vient de `conversation:new`, qui le compte déjà.
+        messageSocket.participantJoined
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, event.userId != self.currentUserId else { return }
+                guard let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount += 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
@@ -1010,22 +1118,39 @@ class ConversationListViewModel: ObservableObject {
             return
         }
         typers[conversationId] = convTypers
-        typingUsernames[conversationId] = Self.typingDisplayName(for: convTypers)
+        refreshTypingDerivations(for: conversationId)
     }
 
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
         typingUsernames.removeValue(forKey: conversationId)
+        typingUsers.removeValue(forKey: conversationId)
         typers.removeValue(forKey: conversationId)
     }
 
-    /// Picks the single name surfaced on the row from the set of current typers.
-    /// The row API is single-name; sorting keeps the choice deterministic (and
-    /// stable across re-renders) when several members type at once.
-    nonisolated static func typingDisplayName(for typers: [String: String]?) -> String? {
+    /// Réaligne les deux vues publiques sur le frappeur retenu. Une seule
+    /// sélection les alimente : la ligne et la pastille désignent donc toujours
+    /// la même personne.
+    private func refreshTypingDerivations(for conversationId: String) {
+        let selection = Self.typingSelection(for: typers[conversationId])
+        typingUsernames[conversationId] = selection?.displayName
+        typingUsers[conversationId] = selection?.username
+    }
+
+    /// Un frappeur : son handle (`@pseudo`) et son nom d'affichage. Le gateway
+    /// transmet les deux ; les deux surfaces n'en montrent pas le même.
+    struct TypingUser: Equatable, Sendable {
+        let username: String
+        let displayName: String
+    }
+
+    /// Picks the single typer surfaced for a conversation. The row API is
+    /// single-name; sorting keeps the choice deterministic (and stable across
+    /// re-renders) when several members type at once.
+    static func typingSelection(for typers: [String: TypingUser]?) -> TypingUser? {
         guard let typers, !typers.isEmpty else { return nil }
-        return typers.values.sorted().first
+        return typers.values.sorted { ($0.displayName, $0.username) < ($1.displayName, $1.username) }.first
     }
 
     // MARK: - Badge Sync
@@ -1570,6 +1695,13 @@ class ConversationListViewModel: ObservableObject {
         guard convIndex(for: conversationId) != nil else { return }
         // Local-first read sync (cache + cross-VM `.conversationMarkedRead`).
         await syncEngine.markConversationReadLocally(conversationId)
+        guard Self.shouldDispatchListMarkAsRead(
+            conversationId: conversationId,
+            activeConversationId: messageSocket.activeConversationId
+        ) else {
+            clearUnreadLocally(conversationId)
+            return
+        }
         // Server mark-read via the store: optimistic unreadCount=0 + outbox
         // offline replay. The gateway gates the read-RECEIPT broadcast to the
         // sender by the user's `showReadReceipts` preference (see
@@ -1578,6 +1710,34 @@ class ConversationListViewModel: ObservableObject {
         // Dropping it also fixes cross-device unread sync when receipts are off
         // (the server now records the read position regardless).
         try? await store.apply(.markAsRead, for: conversationId)
+    }
+
+    /// La conversation OUVERTE possède déjà son chemin de marquage, qui NOMME
+    /// au gateway les messages réellement affichés. Celui de la liste poste un
+    /// mark-read sans corps : le gateway y retombe sur son repli par fenêtre
+    /// temporelle, qui déclare lus des messages jamais montrés — un mensonge
+    /// aux expéditeurs. En split-view iPad les deux surfaces sont visibles en
+    /// même temps ; laisser la grossière doubler la précise annulerait
+    /// exactement ce que la seconde garantit.
+    nonisolated static func shouldDispatchListMarkAsRead(
+        conversationId: String,
+        activeConversationId: String?
+    ) -> Bool {
+        conversationId != activeConversationId
+    }
+
+    /// Efface la pastille de la ligne dans l'état publié courant. Le cache est
+    /// déjà à jour, mais son signal est débouncé : sans cette pose immédiate,
+    /// le geste resterait sans effet visible pendant deux dixièmes de seconde.
+    private func clearUnreadLocally(_ conversationId: String) {
+        guard let idx = convIndex(for: conversationId) else { return }
+        conversations[idx].userState.unreadCount = 0
+        for i in 0..<groupedConversations.count {
+            if let rowIdx = groupedConversations[i].conversations.firstIndex(where: { $0.id == conversationId }) {
+                groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
+                break
+            }
+        }
     }
 
     // MARK: - Mark as Unread
@@ -1867,15 +2027,7 @@ class ConversationListViewModel: ObservableObject {
         ) { [weak self] notification in
             guard let cid = notification.object as? String else { return }
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard let idx = self.convIndex(for: cid) else { return }
-                self.conversations[idx].userState.unreadCount = 0
-                for i in 0..<self.groupedConversations.count {
-                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
-                        self.groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
-                        break
-                    }
-                }
+                self?.clearUnreadLocally(cid)
             }
         }
     }

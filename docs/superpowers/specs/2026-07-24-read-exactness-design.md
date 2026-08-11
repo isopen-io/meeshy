@@ -271,7 +271,12 @@ au passage l'abandon d'`upToMessageId`, dont le payload est produit, coalescé
 (`OfflineQueue.swift:1155`) et couvert par trois fichiers de tests SDK avant
 d'être jeté au dernier saut HTTP.
 
-`ReadReceiptGate.shouldEmitAutoRead` (SDK) reste en amont : inchangé.
+**2026-08-10 — suite :** `upToMessageId` a été RETIRÉ de `MarkAsReadPayload` plutôt
+que branché ; `messageIds` + `caughtUpToMessageId` disent déjà, et exactement, ce
+que le serveur doit savoir. Les rows persistées qui le portent encore se décodent
+sans changement (clé inconnue ignorée). `ReadReceiptGate` a été supprimé au même
+moment : plus aucun appelant depuis que l'accusé naît de l'observateur de
+visibilité et non de l'arrivée d'un message.
 
 ### Web
 

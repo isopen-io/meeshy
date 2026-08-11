@@ -5,13 +5,16 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.PostApi
 import org.junit.Test
 import java.io.IOException
@@ -317,5 +320,38 @@ class PostRepositoryTest {
         val data = (repo.getUserPostsPage("u1") as NetworkResult.Success).data
         assertThat(data.hasMore).isFalse()
         assertThat(data.nextCursor).isNull()
+    }
+
+    // --- create: location attachment ---------------------------------------
+
+    private fun okPost(post: ApiPost) = ApiResponse(success = true, data = post)
+
+    @Test
+    fun create_withNoLocation_forwardsANullLocationField() = runTest {
+        val slot = slot<CreatePostRequest>()
+        coEvery { api.create(capture(slot)) } returns okPost(ApiPost(id = "new", content = "hi"))
+        val repo = PostRepository(api)
+
+        repo.create(content = "hi")
+
+        assertThat(slot.captured.location).isNull()
+    }
+
+    @Test
+    fun create_withALocation_forwardsItVerbatimOnTheWireRequest() = runTest {
+        val place = SharedPlace(
+            latitude = 48.8566,
+            longitude = 2.3522,
+            name = null,
+            address = null,
+            category = null,
+        )
+        val slot = slot<CreatePostRequest>()
+        coEvery { api.create(capture(slot)) } returns okPost(ApiPost(id = "new", content = "hi"))
+        val repo = PostRepository(api)
+
+        repo.create(content = "hi", location = place)
+
+        assertThat(slot.captured.location).isEqualTo(place)
     }
 }

@@ -241,11 +241,13 @@ async function listeningRegularRecipients(
  * `runMessagePostSaveEffects`, `emitUnreadCountsToRecipients`) : un point
  * d'appel public que tout écrivain peut atteindre.
  *
- * `validatedMentionUserIds` est OPTIONNEL et vaut `[]` par défaut, parce que
- * les routes de lien n'extraient pas encore les mentions (`Message.validatedMentions`
- * n'est écrit que par `MessageProcessor.processMentionsInDB`). Un lot de
- * mentions vide n'empêche ni la notification de réponse ni celle de message
- * régulier : c'est exactement la dégradation gracieuse voulue.
+ * `validatedMentionUserIds` est OPTIONNEL et vaut `[]` par défaut, pour tout
+ * écrivain qui n'a pas de mentions à déclarer. Les deux routes de lien, elles,
+ * le remplissent : elles appellent `resolveMessageMentions` avant cet éventail
+ * (cette phrase disait l'inverse et ne le dit plus — le trou a été bouché, la
+ * note ne l'avait pas suivi). Un lot de mentions vide n'empêche ni la
+ * notification de réponse ni celle de message régulier : c'est exactement la
+ * dégradation gracieuse voulue.
  *
  * Best-effort de bout en bout — ne lève jamais. Le message est committé quand
  * cette fonction tourne ; une panne de notification ne doit pas transformer un

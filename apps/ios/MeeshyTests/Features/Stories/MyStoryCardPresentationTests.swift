@@ -140,6 +140,27 @@ final class MyStoryCardPresentationTests: XCTestCase {
                 .contains(.schedule))
     }
 
+    // MARK: - Anneau d'export en cours vers la photothèque
+
+    func test_showsSaveProgressRing_noJobInFlight_isFalse() {
+        XCTAssertFalse(
+            MyStoryCardPresentation.showsSaveProgressRing(saveProgress: nil),
+            "Sans job en vol, la carte n'affiche aucun anneau")
+    }
+
+    func test_showsSaveProgressRing_jobInFlight_isTrue() {
+        XCTAssertTrue(
+            MyStoryCardPresentation.showsSaveProgressRing(saveProgress: 0.42))
+    }
+
+    /// Bornes incluses : un job qui vient de démarrer (0) ou sur le point de
+    /// finir (1) reste un job EN VOL — l'anneau doit rester affiché aux deux
+    /// extrémités, pas seulement au milieu de la plage.
+    func test_showsSaveProgressRing_atBounds_stillTrue() {
+        XCTAssertTrue(MyStoryCardPresentation.showsSaveProgressRing(saveProgress: 0))
+        XCTAssertTrue(MyStoryCardPresentation.showsSaveProgressRing(saveProgress: 1))
+    }
+
     // MARK: - Indicateur de sélection (suppression en masse)
 
     func test_selectionIndicator_outsideSelectionMode_isHidden() {

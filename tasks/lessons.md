@@ -1,5 +1,61 @@
 # Lessons
 
+## Leçon 109 — Un même nom d'événement pour deux faits produit DEUX défauts opposés, et aucun ne se lit dans le code qui l'émet (2026-08-11, routine messaging, cycle 71)
+
+`conversation:joined` était émis à deux endroits avec **le même payload** : l'ack self-only d'un
+socket qui rejoint la room (à chaque ouverture de fil, aucune appartenance changée) et la diffusion
+d'une adhésion réelle. Aucun client ne pouvait les distinguer. Les deux s'en sont sortis
+différemment, et les deux se sont trompés :
+
+- **web** a compté l'ack comme une adhésion → l'effectif du groupe grossissait d'une unité à chaque
+  ouverture du fil, indéfiniment ;
+- **iOS** n'a rien compté du tout → l'effectif ne connaissait que des soustractions et dérivait vers
+  le bas, persistée dans le cache disque.
+
+Symptômes opposés, racine unique. Ce qu'il faut en retenir :
+
+1. **L'absence d'un handler est une donnée, pas un vide.** Le `+1` manquant côté iOS n'était pas un
+   oubli : c'était la seule réaction correcte face à un événement ambigu. Chercher pourquoi un
+   client N'ÉCOUTE PAS est aussi instruit que lire ce qu'il fait.
+2. **Le défaut ne se voit dans aucun des deux émetteurs.** Chacun, lu seul, est parfaitement correct.
+   Il n'apparaît qu'en cherchant TOUS les émetteurs d'un même `SERVER_EVENTS.X` — ce que fait
+   `grep SERVER_EVENTS.X` en une seconde, et qu'aucune lecture de route ne fera jamais.
+3. **Le critère mécanique se réutilise** : un événement émis à la fois par `socket.emit` (self-only)
+   et par `io.to(...).emit` (diffusion) porte deux faits. Le vérifier avant d'écrire un handler
+   qui compte quoi que ce soit.
+4. **Séparer plutôt que désambiguïser.** Ajouter un champ discriminant à `conversation:joined`
+   aurait cassé tous les clients déployés qui ne le lisent pas. Un événement neuf, laissant
+   l'ancien strictement intact, ne régresse personne — et un témoin fige l'ancien pour le prouver.
+
+## Leçon 108 — Un gate qu'on n'a pas le DROIT de déclencher n'est pas un gate : le vérifier fait partie de l'instruction (2026-08-11, routine messaging, cycle 70)
+
+Le cycle 69 a refusé d'écrire du Swift invérifiable et a laissé une tête instruite très précise, en
+nommant son gate : « `ios-tests.yml` ne se déclenche pas sur les PR — lancer le workflow à la main
+sur la branche (Actions → Run workflow) avant de merger, sinon la vérification n'existe pas ».
+Instruction juste, et impossible à exécuter : l'intégration GitHub de la routine n'a pas
+`actions: write`. `POST /actions/workflows/ios-tests.yml/dispatches` répond `403 Resource not
+accessible by integration`. Le cycle 70 ne l'a découvert **qu'après avoir écrit le correctif et les
+témoins**.
+
+Le coût n'est pas d'avoir perdu du travail — le correctif est bon et le prochain cycle le fera
+tourner. Le coût est que le cycle 69 a **cru** avoir sécurisé la suite en nommant un gate, et que
+le cycle 70 a **cru** hériter d'un plan exécutable. Deux cycles ont raisonné sur une vérification
+qui n'a jamais existé.
+
+**Règle** : instruire un gate, c'est aussi prouver qu'on peut le déclencher. Un cycle qui reporte
+du travail « avec son gate » doit avoir TENTÉ le déclenchement (ou l'avoir tenté à vide sur un
+commit sans effet) avant de l'écrire dans la tête instruite. Le résultat de cette tentative se note
+au même titre que le défaut : « gate vérifié, dispatch OK » ou « gate INACCESSIBLE, il faut
+`actions: write` ».
+
+Corollaire, qui est celui de la leçon 103 appliqué à l'outillage : quand le gate manque et que le
+correctif est déjà écrit, le choix n'est pas entre « livrer » et « jeter » mais entre « livrer en
+ÉCRIVANT que ce n'est pas gaté » et « livrer en le taisant ». Ce cycle a livré, a retiré du Swift
+toute inférence de type évitable, a relu chaque API dans son fichier source — et a écrit en tête du
+relevé que rien de tout cela ne remplace une compilation. C'est la forme honnête. Elle ne devient
+acceptable que parce que la dette est datée, nommée, et posée en PREMIER geste du cycle suivant.
+
+
 ## Leçon 107 — Une capacité client complète, testée et jamais alimentée est un défaut serveur, pas une feature en attente (2026-08-10, routine messaging, cycle 60)
 
 Le SDK iOS portait `resolvedLastMessagePreview` — la résolution du Prisme pour la ligne de liste —
@@ -4108,3 +4164,139 @@ les seuls à porter un `null` explicite. Et comme seul un contexte d'auth anonym
    commande de ce conteneur ne peut inspecter. Le corriger « pour la cohérence du lot » aurait été le
    geste le plus coûteux du cycle. Documenter le défaut, dire pourquoi on ne le touche pas, et nommer
    le préalable (un essai à blanc contre la base) est un livrable complet — pas un aveu.
+
+## Leçon 93 — écrire le JUMEAU d'une implémentation existante n'est pas la recopier : c'est la première occasion de la juger (2026-08-10, routine messaging, cycle 62)
+
+Le cycle devait porter sur le web une règle qu'iOS appliquait depuis longtemps
+(`resolvedLastMessagePreview`). Le jumeau TypeScript a été écrit en miroir strict, ses 17 témoins
+traduits un par un du fichier Swift, et tout est passé du premier coup. **Le miroir était fidèle et
+la règle était fausse.**
+
+Elle disait : « si la langue d'origine appartient au prisme du lecteur, afficher l'original ». Or
+un prisme est une préférence **ORDONNÉE**. Cette formulation par appartenance bat la langue
+PRIMAIRE dès que la langue d'origine occupe un rang inférieur — ce que produit mécaniquement la
+locale appareil, entrée en 4e priorité. Prisme `['fr','en']`, message anglais, traduction française
+disponible : elle rendait « Hello ». `CLAUDE.md` disait déjà l'inverse mot pour mot, et le chemin
+du CORPS des messages appliquait déjà la bonne règle en ne comparant qu'à la langue de TÊTE.
+
+**Leçons :**
+
+1. **Un miroir de tests hérités ne peut pas voir un défaut hérité.** Les 17 témoins traduits du
+   Swift verdissaient parce qu'ils encodaient la même règle que le code — j'en avais même écrit un,
+   « rend l'aperçu brut même si la langue d'origine n'est pas la PREMIÈRE du prisme », qui
+   *affirmait* le défaut. Traduire une suite de tests, c'est importer sa couverture ET ses angles
+   morts. Le seul témoin qui pouvait trancher était un témoin **neuf**, écrit depuis la règle
+   PRODUIT et non depuis le code source.
+2. **Un court-circuit par APPARTENANCE dans une préférence ORDONNÉE est un bug de rang, toujours.**
+   `preferred.contains(x)` jeté avant la boucle qui parcourt `preferred` annule l'ordre pour le cas
+   `x`. La forme est greppable et le diagnostic mécanique : *cet élément a-t-il un rang ? alors il
+   doit concourir à son rang, pas avant la boucle.* La bonne écriture est de le tester À
+   L'INTÉRIEUR de la boucle.
+3. **Quand deux chemins implémentent la même règle, celui qui est le plus vieux et le plus vu est
+   l'arbitre — pas celui qu'on est en train de porter.** Le corps des messages comparait à la SEULE
+   langue de tête ; la ligne de liste comparait à la liste entière. Il ne s'agissait pas de choisir
+   entre deux conventions défendables : le premier était d'accord avec `CLAUDE.md`, le second non.
+   **Avant de porter une règle, chercher son autre implémentation dans le dépôt et les faire
+   s'expliquer.**
+4. **Le témoin qui a vu le défaut est celui qui n'a PAS neutralisé son environnement.** C'est le
+   test de composant, dans jsdom, qui a refusé de verdir — parce que `navigator.language` y vaut
+   `'en-US'` et injecte donc une 4e langue dans le prisme, reproduisant exactement la condition
+   réelle (locale appareil ≠ langue in-app). Un test qui aurait figé `navigator.language` « pour
+   isoler l'unité » n'aurait rien vu, et la sonde de fidélité le confirme : le défaut de règle fait
+   tomber 2 témoins shared **et 2 témoins web**, ces derniers uniquement grâce à cet environnement
+   non neutralisé. Neutraliser l'environnement rend le test déterministe ; ça peut aussi le rendre
+   aveugle au seul cas qui compte.
+5. **Un défaut de RÈGLE se répare sur toutes ses copies, dans le même cycle.** Corriger le seul
+   jumeau TypeScript aurait fait afficher deux textes différents pour un même compte selon le
+   client — précisément la dérive que le jumeau existait pour empêcher. iOS a été corrigé avec, et
+   la règle est montée d'un cran : elle vit maintenant dans `CLAUDE.md` § « Règles critiques du
+   Prisme », pas seulement dans deux commentaires de code.
+6. **« Le backlog sous-estimait le défaut » est un résultat de cycle, pas une digression.** L'entrée
+   annonçait « il manque le résolveur côté web ». Le balayage préalable a montré que la donnée
+   n'atteignait aucune couche où un résolveur aurait pu la lire (type absent, transformer qui jette,
+   rendu brut) — et c'est en câblant ces quatre couches qu'on a heurté le défaut de règle, invisible
+   tant qu'aucun appelant réel ne fournissait un prisme à plus d'une entrée. Re-prouver un candidat
+   de backlog contre le code réel n'est pas une formalité d'ouverture : c'est ce qui change ce que
+   le cycle trouve.
+
+## Leçon 94 — la donnée déjà PAYÉE et jetée est une classe de défaut, pas un accident (2026-08-10, routine messaging, cycle 64)
+
+Le cycle 62 avait nommé `routes/conversations/search.ts` « correctif mécanique » pour le cycle
+suivant. Il l'était. Mais la forme du défaut, elle, s'est révélée être une **récidive** — et le
+fichier portait déjà, à trois lignes de l'endroit exact, le commentaire d'un correctif antérieur
+décrivant la même faute (`metadata.location`, Lot 3 : « la donnée était payée puis perdue »).
+
+1. **Un `include` Prisma sans `select` rapporte TOUS les scalaires ; un mapping manuel n'en garde
+   que ce qu'on a tapé.** Les deux ensembles divergent en silence, et rien — ni le compilateur, ni
+   le schéma de réponse, ni un test — ne signale l'écart. La requête coûte le même prix qu'avant ;
+   seul le client est privé. **Chercher ce motif là où un objet est reconstruit à la main à partir
+   d'un résultat Prisma : la question n'est pas « que renvoie-t-on ? » mais « que rapporte la
+   requête qu'on ne renvoie pas ? ».**
+2. **Le premier correctif peut créer l'incohérence que le second doit fermer — dans le même
+   geste.** Poser la carte d'aperçu traduite (plafonnée à 300) à côté d'un aperçu original NON
+   tronqué faisait dépendre le poids de la ligne de la langue du lecteur. Ce n'est pas un
+   élargissement de périmètre : c'est la conséquence directe du correctif, et la refuser aurait
+   livré une réponse incohérente avec elle-même. **Après avoir posé un champ dérivé, relire ses
+   voisins immédiats : celui qui ne subit pas le même traitement devient une anomalie parce qu'on
+   vient d'en poser un qui le subit.**
+3. **Un mock d'objet-module qui ÉNUMÈRE ses exports est un couplage caché à la liste des imports de
+   la cible.** Ajouter un import à la route a rendu `resolveUserLanguagesOrdered` `undefined` dans
+   un test voisin, qui a répondu 500 sur 4 témoins — un échec dont le message ne nomme jamais la
+   cause. La forme robuste existait déjà dans le dépôt (`conversation-core.test.ts`) :
+   `...jest.requireActual(module)` puis surcharge du SEUL double voulu. **Ne jamais énumérer les
+   exports d'un module partagé dans un `jest.mock` : doubler ce qu'on veut contrôler, laisser
+   passer le reste.**
+4. **La moitié client se vérifie AVANT de conclure, même quand on ne peut pas la compiler.** Le web
+   n'avait rien à faire (le transformer du cycle 62 propageait déjà, et l'écran de recherche ne rend
+   aucun aperçu) ; iOS s'arrêtait à un pas de l'arrivée (`toConversation` propageait, mais le
+   ViewModel de recherche lisait l'aperçu brut). Les deux réponses sont sorties du même balayage —
+   et sans lui, le cycle aurait reproduit à l'identique, une route plus loin, le défaut que le cycle
+   62 venait de corriger. **« Non gatable ici » décide de la façon de PROUVER un changement, jamais
+   de la nécessité de le chercher.**
+
+## Leçon 95 — un schéma de réponse qui ment ne dégrade pas : il fait tomber la route entière (2026-08-11, routine messaging, cycle 67)
+
+Le cycle 66 laissait comme tête « le mensonge de type » : `Message.translations` est déclaré
+`readonly MessageTranslation[]` alors que Prisma en rend une carte Mongo. Chercher à démêler le
+type aurait été un chantier de contrat. Chercher **ce que le mensonge produit** a trouvé, en une
+heure, une route qui répond 500 en production.
+
+1. **Un mensonge de type se chasse par ses SITES, pas par sa définition.** La question utile n'est
+   pas « comment démêler les deux formes ? » mais « qui recopie le résultat Prisma tel quel dans
+   une réponse ? ». Elle est greppable (`translations: true` en `select`, puis remonter à ce que
+   la route renvoie), elle est finie — dix routes ici — et elle a séparé les huit qui appellent le
+   transformateur des deux qui ne l'appellent pas. Démêler le type reste à faire ; il n'aurait rien
+   trouvé de plus, et beaucoup plus tard.
+2. **`fast-json-stringify` JETTE, il ne coerce pas — donc un champ mal formé casse la RÉPONSE, pas
+   le champ.** C'est contre-intuitif : on s'attend à un `translations` vide ou tronqué, on obtient
+   un 500 sur l'endpoint entier. Ça change le diagnostic (« la liste d'épingles ne marche plus »
+   ne ressemble pas à un problème de traductions) et ça change la gravité. **Avant de conclure
+   qu'un champ mal typé « dégrade », faire tourner le vrai schéma de réponse sur la vraie valeur :
+   trois lignes de node, et la réponse n'est pas devinable.**
+3. **Un fixture de test qui n'existe pas en production est pire qu'une absence de test.** Les
+   quatre témoins de la route posaient `translations: null` — le seul cas qui ne casse pas ; le
+   fixture du fil posait `translations: []` — une forme que Prisma ne rend JAMAIS. Les deux suites
+   étaient vertes et décrivaient fidèlement un monde où le défaut n'existe pas. **Quand un champ
+   vient d'une colonne, le fixture doit porter la forme de la COLONNE, pas une forme plausible.**
+4. **Deux défauts sur la même surface se masquent l'un l'autre, et le second n'a aucune chance
+   d'être trouvé par l'utilisateur.** La bannière web lisait `data.messages[0]` sur une enveloppe
+   `{success, data:[…]}` : elle ne s'affichait jamais. Sans épingle traduite, la route répondait
+   200 et la bannière restait vide « parce qu'il n'y a rien à épingler » ; avec, la requête
+   échouait en 500 et la bannière restait vide pareillement. **Un symptôme d'absence — un écran qui
+   ne montre rien — n'a pas de signature : ne jamais s'arrêter au premier défaut qui l'explique.**
+5. **Un composant que toutes les suites remplacent par `() => null` n'est pas testé : il est
+   caché.** `PinnedMessageBanner` était `jest.mock`é dans les deux seules suites qui le montent.
+   Le mock est légitime — ces suites testent autre chose — mais l'absence de suite PROPRE au
+   composant l'était moins. **La forme est greppable : un composant `jest.mock`é partout et testé
+   nulle part est un candidat de défaut, pas une commodité de test.**
+6. **Poser une donnée sur un fil, c'est hériter de ses exclusions.** Corriger le Prisme de la
+   bannière mettait pour la première fois `translations[].isEncrypted` sous ses yeux ; sans
+   l'exclusion du chiffré, le correctif aurait affiché du base64 dans les conversations chiffrées —
+   le défaut exact que le cycle 65 venait de fermer côté iOS. Ce n'est pas un élargissement de
+   périmètre : c'est la conséquence directe du geste. **Après avoir branché un champ sur un rendu,
+   chercher qui d'autre rend ce champ et RECOPIER ses exclusions, pas ses valeurs.**
+7. **Quand le vrai défaut est un mensonge que le compilateur ne peut pas tenir, le témoin le plus
+   durable ne porte sur aucune route.** Le contrat `translations` ↔ `messageSchema`, vérifié en
+   compilant le vrai schéma, protège toute route future déclarant `messageSchema` — y compris
+   celles qui n'existent pas encore. Corriger deux routes ferme deux défauts ; épingler l'invariant
+   ferme la classe.

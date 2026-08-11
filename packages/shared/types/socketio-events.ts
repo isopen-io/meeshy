@@ -221,6 +221,20 @@ export const SERVER_EVENTS = {
    * system notification, emitted in parallel.
    */
   FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
+  /**
+   * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
+   * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
+   * event that carries that fact unambiguously.
+   *
+   * `CONVERSATION_JOINED` cannot serve here: it carries the same
+   * `{ conversationId, userId }` shape for a completely different fact — the
+   * self-only ack a socket receives after JOINING THE ROOM
+   * (`ConversationHandler`), which every thread opening produces and which
+   * changes no membership. A client counting members off `conversation:joined`
+   * would inflate its count on every thread opening; that ambiguity is why no
+   * client ever incremented, and why the count could only ever drift DOWN.
+   */
+  CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   /**
@@ -715,6 +729,9 @@ export interface AttachmentStatusUpdatedEventData {
   readonly userId: string;
   readonly action: string;
   readonly updatedAt: Date;
+  readonly playPositionMs?: number;
+  readonly durationMs?: number;
+  readonly percentage?: number;
 }
 
 /**
@@ -1304,6 +1321,13 @@ export interface ConversationParticipantUnbannedEventData {
   readonly membershipRestored?: boolean;
 }
 
+export interface ConversationParticipantJoinedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly joinedAt: string;
+}
+
 export interface ConversationParticipantLeftEventData {
   readonly conversationId: string;
   readonly userId: string;
@@ -1315,6 +1339,21 @@ export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
+  /**
+   * Prisme Linguistique de la ligne de liste, résolu POUR CE destinataire —
+   * jumeaux des champs que `GET /conversations` pose déjà sur la conversation.
+   *
+   * Les trois champs d'aperçu (`lastMessagePreview` + ces deux-ci) s'appliquent
+   * EN GROUPE : le client préfère la traduction à l'aperçu brut, donc poser l'un
+   * sans les autres laisse la ligne rendre l'ANCIEN texte traduit après une
+   * édition. `null` est une VALEUR, pas une absence — une édition remet
+   * `Message.translations` à null dans la même écriture tout en gardant le même
+   * `lastMessageId`, et c'est ce `null` reçu qui périme la carte du client.
+   * Seul le serveur sait que la carte a été périmée ; le client ne peut pas le
+   * déduire.
+   */
+  readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
+  readonly lastMessageOriginalLanguage?: string | null;
   readonly [key: string]: unknown;
 }
 
@@ -1515,6 +1554,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;

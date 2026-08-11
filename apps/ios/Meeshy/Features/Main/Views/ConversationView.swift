@@ -71,6 +71,11 @@ struct ConversationScrollState {
     var isNearBottom: Bool = true
     var unreadBadgeCount: Int = 0
     var scrollToBottomTrigger: Int = 0
+    /// Incrémenté quand le lecteur déclare regarder le bas — ouverture, bouton
+    /// « dernier message », départ en arrière-plan. Le pont `MessageListView`
+    /// compare l'ancien et le nouveau pour vider l'accumulateur de lecture sans
+    /// attendre le seuil de présence.
+    var flushSeenTrigger: Int = 0
     var scrollToMessageId: String? = nil
     /// Counter incremented each time a scroll-to-message is requested via the
     /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
@@ -259,13 +264,13 @@ struct ConversationView: View {
     /// `composerText.text` — hors body, donc sans créer de dépendance.
     @State var composerText = ConversationComposerTextModel()
     @StateObject var audioRecorder = AudioRecorderManager()
-    @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
+    @State var scrollButtonAudioIsPlaying = false
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
     /// Composant unifié « Enregistrer » au niveau écran — sert l'action
     /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
     /// sheet de destinations se présente sans conflit).
     @StateObject var mediaSaveCoordinator = MediaSaveCoordinator()
-    
+
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
 
@@ -280,6 +285,15 @@ struct ConversationView: View {
     /// looks up the target message's frame here at gesture fire time and
     /// passes it to `MessageOverlayMenu` as the source frame.
     @State var frameTracker = MessageFrameTracker()
+
+    /// Publisher stable (référence identique à chaque body eval) : l'inline
+    /// dans scrollToBottomButton reconstruisait l'abonnement au coordinator à
+    /// chaque frappe. Le mapping vers le bool dérivé se fait dans la closure
+    /// onReceive (l'id d'attachment non-lu change avec les messages entrants).
+    let scrollButtonAudioStatePublisher = ConversationAudioCoordinator.sharedForTesting
+        .$activeContext
+        .combineLatest(ConversationAudioCoordinator.sharedForTesting.$isPlaying)
+        .eraseToAnyPublisher()
 
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
@@ -837,6 +851,11 @@ struct ConversationView: View {
                 viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
+                // Ouvrir une conversation, c'est en regarder le bas. Le signal
+                // near-bottom ne se déclenche pas ici (l'état naît déjà « au
+                // bas », donc sans transition) — d'où cette demande explicite,
+                // reprise au réveil suivant si les cellules n'ont pas encore paru.
+                scrollState.flushSeenTrigger += 1
                 MessageSocketManager.shared.connect()
 
                 await consumePendingHighlightMessage()
@@ -985,6 +1004,10 @@ struct ConversationView: View {
                 // par iOS) — miroir du D1 story. Rebuild complet : la vérité
                 // est l'état courant du tray.
                 if phase == .background {
+                    // Ce qui était à l'écran a bien été lu : le signaler AVANT
+                    // que l'app ne s'endorme, sinon l'accusé attend le retour
+                    // en avant-plan — ou le démontage de la vue.
+                    scrollState.flushSeenTrigger += 1
                     persistDraftAttachmentsForBackground()
                 }
             }
@@ -1024,11 +1047,10 @@ struct ConversationView: View {
                 // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
                 // possible pendant qu'elle est couverte.
                 composerText.onPersistNeeded = nil
-                // Arrêt déterministe des deux players locaux (scroll-button +
-                // preview d'audio en attente) : sans lui, l'audio continuait
-                // jusqu'au dealloc du @StateObject et la session restait
-                // acquise (refcount) le temps de la libération. Idempotent.
-                scrollButtonAudioPlayer.stop()
+                // Arrêt déterministe du player local (preview d'audio en attente) :
+                // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
+                // la session restait acquise (refcount) le temps de la libération.
+                // Idempotent.
                 pendingAudioPlayer.stop()
                 if audioRecorder.isRecording {
                     audioRecorder.cancelRecording()
@@ -1085,6 +1107,7 @@ struct ConversationView: View {
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
+                flushSeenTrigger: scrollState.flushSeenTrigger,
                 isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count
@@ -1312,7 +1335,7 @@ struct ConversationView: View {
             // Connection status banner
             VStack {
                 Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                ConnectionBanner()
+                ConnectionBanner(activeConversationId: { viewModel.conversationId })
                 Spacer()
             }
             .zIndex(98)

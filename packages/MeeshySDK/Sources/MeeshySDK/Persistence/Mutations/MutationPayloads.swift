@@ -34,7 +34,6 @@ public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
 public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let conversationId: String
-    public let upToMessageId: String
 
     /// Identifiants SERVEUR des messages réellement affichés.
     ///
@@ -78,7 +77,6 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public init(
         clientMutationId: String,
         conversationId: String,
-        upToMessageId: String,
         messageIds: [String]? = nil,
         language: String? = nil,
         messageLanguages: [String: String]? = nil,
@@ -86,7 +84,6 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
-        self.upToMessageId = upToMessageId
         self.messageIds = messageIds
         self.language = language
         self.messageLanguages = (messageLanguages?.isEmpty ?? true) ? nil : messageLanguages

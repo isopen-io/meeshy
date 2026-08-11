@@ -215,7 +215,13 @@ type Routes = Record<string, Record<string, Function>>;
 const createMockFastify = () => {
   const routes: Routes = {};
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
+  // Le double CHAÎNE, comme le vrai `BroadcastOperator` de Socket.IO :
+  // `io.to(a).to(b).emit(...)` est la forme qui garantit « au plus une copie
+  // par socket », et un `to()` qui ne rendait qu'un `{ emit }` la rendait
+  // intestable — pire, il faisait planter tout appelant qui chaîne.
+  const broadcast: Record<string, unknown> = { emit: mockEmit };
+  const mockTo = jest.fn(() => broadcast);
+  broadcast.to = mockTo;
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockJoinRoom = jest.fn().mockResolvedValue(undefined);
   const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, joinUserToConversationRoom: mockJoinRoom });
@@ -1821,7 +1827,9 @@ describe('registerCoreRoutes', () => {
 
     it('happy path: soft-deletes conversation and broadcasts CONVERSATION_CLOSED', async () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
-      prisma.conversation.update.mockResolvedValue({});
+      // La clôture ramène ses participants DANS son écriture : le fan-out
+      // nomme leurs rooms personnelles sans seconde requête.
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
 
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
@@ -2559,7 +2567,9 @@ describe('registerCoreRoutes', () => {
 
     it('socket io null in DELETE - no broadcast but delete succeeds', async () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
-      prisma.conversation.update.mockResolvedValue({});
+      // La clôture ramène ses participants DANS son écriture : le fan-out
+      // nomme leurs rooms personnelles sans seconde requête.
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
       fastify.socketIOHandler = { getManager: jest.fn().mockReturnValue(null) };
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();

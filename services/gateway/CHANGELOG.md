@@ -1,5 +1,133 @@
 # @meeshy/gateway
 
+## 1.23.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - après une édition, la ligne de liste affichait le texte d'avant (#2802)
+  - restore two-factor authentication (gateway route exists) (#2805)
+  - ravive la carte Now Playing après un vol de lecture transitoire + polis AirPlay
+  - traduit le bouton AirPlay du plein écran audio dans les 7 langues
+  - bouton AirPlay dans le plein écran audio
+  - per-post language override for the Feed post composer (#2804)
+  - useCallAnalyticsReporter's reconnection counter could never increment
+  - attach device location to a Feed post composer (#2801)
+  - migre 5 NavigationView vers NavigationStack (soft-dépréciée iOS 16+) (#2798)
+  - épingler un message traduit rendait la route d'épingles inexploitable
+  - enableVideo()/switchCamera() snapshot connected peers before getUserMedia, dropping late joiners
+  - addLocalMedia clones outgoing video track instead of sharing it across peers (#2790)
+  - TUS uploads resume from the last confirmed chunk on retry (feature-parity §Q) (#2795)
+  - OutboxFlushWorker never discovered per-conversation message lanes (#2794)
+  - l'aperçu de liste servi par socket pouvait afficher un cryptogramme (#2789)
+  - Feed post composer audio attachment (feature-parity §F) (#2791 follow-up) (#2792)
+  - real MediaRecorder capture for chat voice-recording pill (feature-parity §Q) (#2791)
+  - attribue l'audio d'un post cité au bon auteur sur la carte Now Playing
+  - feed, commentaires et posts audio passent par le coordinator Now Playing
+  - stabilise l'abonnement audio du bouton scroll-to-bottom
+  - le bouton scroll-to-audio démarre la file du coordinator
+  - playKeepingQueue préserve la file au swipe plein écran, playVariant survit à la reprise d'appel
+  - le plein écran audio fusionne dans le coordinator (carte + file + variantes)
+  - termine le background task d'avance de file bloquée par le garde CallKit
+  - fixture d'appel avec discriminant kind, mocks partagés du target, await GRDB async
+  - la greffe store se limite à userState+suppressions — un snapshot en retard réécrivait un rename frais
+  - l'avance de file audio est couverte par un background task
+  - résorbe les deux warnings d'intégration (await inutile, résultat de write ignoré)
+  - la file audio en pause garde sa carte Now Playing en background
+  - un instantane store VIDE est un teardown, pas N suppressions
+  - ne jamais confondre un avis d'appel avec une edition, armer aussi sur iPad
+  - patcher les traductions temps reel sous TOUTES les cles de cache
+  - persister les moods temps reel et abonner status:unreacted
+  - armer le pont de persistance app-wide et persister le media de commentaire
+  - route la tray vers la gestion pour les stories passées sans story active
+  - persister conversation:updated/deleted et les mutations de message hors conversation ouverte
+  - affiche la progression d'export en cours sur les cards « Mes stories »
+  - carte Now Playing avec date du vocal et position de file
+  - relance la lecture de la timeline après un export (fin/échec/annulation)
+  - allonge les interludes de lecture à 1,2 s et lie l'export à la SSOT
+  - corrige le flip vertical du fond dans StoryStaticSnapshot
+  - icone de telechargement media coherente avec la convention
+  - désarme la reprise d'interruption sur retrait AirPods et suspension d'appel
+  - seedMediaConsumption alimente les stores de reprise audio/video
+  - frappe hors conversation dans la pastille de synchronisation
+  - reprise de lecture video via VideoPlaybackPositionStore
+  - VideoPlaybackPositionStore, miroir strict d'AudioPlaybackPositionStore
+  - lecture instantanee a l ouverture, au bas atteint et au bouton
+  - pourcentage + barre de progression par participant dans mediaConsumptionCard
+  - promotion immediate de l accumulateur de lecture, retrait du code mort
+  - pause/reprise de l'audio de conversation sur interruption système
+  - decode position/pourcentage sur attachment-status:updated et alimente MediaConsumptionStore
+  - le moteur du coordinator audio devient Now Playing éligible (.content)
+  - profils de session audio avec pause/reprise et plomberie moteur
+  - l'écho REST de message:new ne portait pas le clientMessageId
+  - le chemin socket sérialisait les traductions dans une forme qu'iOS ne peut pas décoder (#2793)
+  - transporte position/durée/pourcentage sur attachment-status:updated
+
+## 1.22.24
+
+### Patch Changes
+
+- b3d6ebe: La recherche de conversations servait la dernière ligne de liste restée hors
+  Prisme Linguistique.
+
+  `GET /conversations/search` construit son `lastMessage` à la main. Son `include`
+  Prisma rapportait déjà `Message.translations` et `Message.originalLanguage` — ce
+  sont des colonnes du même document Mongo, aucun `select` restrictif ne les
+  excluait — mais le mapping manuel les jetait : la donnée était payée puis perdue,
+  exactement comme `metadata.location` avant le Lot 3. Un lecteur francophone
+  cherchant une conversation lisait « Hello » dans le résultat et « Bonjour » dans
+  sa liste, pour le même message.
+
+  La réponse porte désormais `lastMessageOriginalLanguage` et
+  `lastMessageTranslations`, construits par le même
+  `buildLastMessagePreviewTranslations` et le même `resolveUserLanguagesOrdered`
+  que `GET /conversations` — `conversationMinimalSchema` les déclarait déjà.
+  L'aperçu original est tronqué à la même borne : sans cela, le poids de la ligne
+  aurait dépendu de la langue du lecteur, la carte traduite étant plafonnée et
+  l'original non.
+
+  Côté iOS, la ligne de résultat de recherche résout enfin via
+  `resolvedLastMessagePreview` au lieu de rendre l'aperçu brut — même texte que
+  `ThemedConversationRow`, sur les deux chemins (cache local et réseau).
+
+## 1.22.23
+
+### Patch Changes
+
+- Updated dependencies [fcc82a6]
+  - @meeshy/shared@1.8.13
+
+## 1.22.22
+
+### Patch Changes
+
+- 6df3fac: Un message envoyé par lien de partage n'arrivait en temps réel sur aucun client mobile.
+
+  `link:message:new` n'a jamais eu qu'un seul auditeur : le web. iOS
+  (`MeeshySDK/Sockets/MessageSocketManager.swift`) et Android
+  (`sdk-core/socket/MessageSocketManager.kt`) n'enregistrent qu'un listener de création,
+  `message:new`. Or l'envoi par lien est le **seul** transport d'envoi dont dispose un participant
+  anonyme : un invité qui écrivait dans une conversation partagée n'apparaissait donc chez aucun
+  membre iOS ou Android — ni en direct par la room, ni au reconnect par la file hors ligne, qui
+  rejouait ce même event unique. Le message ne surgissait qu'au prochain refetch complet, que rien
+  ne déclenchait.
+
+  Les deux diffuseurs — la room live (`broadcastLinkMessage`) et le rejeu hors ligne
+  (`MeeshySocketIOManager._drainPendingMessages`) — passent désormais par un seul point d'appel
+  public, `linkMessageEmissions`, qui met les **deux** events sur le fil, chacun dans sa forme :
+  `link:message:new` garde son enveloppe `{ message }`, `message:new` transporte le message
+  lui-même. Rejouer l'enveloppe sous `message:new` aurait donné aux clients mobiles un payload sans
+  `conversationId` au premier niveau, donc non routable.
+
+  Additif, jamais substitutif : le web continue de recevoir l'event qu'il écoute déjà. Les deux
+  copies portent le même `id` et les deux gestionnaires web dédupent dessus, donc le second arrivé
+  est un no-op quel que soit l'ordre ; la pastille de non-lus ne se déduit d'aucun des deux (valeur
+  absolue de `conversation:unread-updated`), il n'y a rien à double-compter.
+
+- Updated dependencies [6df3fac]
+  - @meeshy/shared@1.8.12
+
 ## 1.22.21
 
 ### Patch Changes

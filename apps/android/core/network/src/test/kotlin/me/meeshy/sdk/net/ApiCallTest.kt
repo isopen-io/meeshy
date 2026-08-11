@@ -100,4 +100,33 @@ class ApiCallTest {
         val failure = result as NetworkResult.Failure
         assertThat(failure.error.code).isEqualTo("NETWORK")
     }
+
+    // --- chunkCall: raw retrofit2.Response<Unit> calls whose only signal is HTTP
+    // success/failure (an intermediate TUS chunk PATCH — 204 No Content, no body,
+    // no header payload the caller needs) ---
+
+    @Test
+    fun chunkCall_successfulResponse_isSuccess() = runTest {
+        val result = chunkCall { Response.success(Unit) }
+
+        assertThat(result).isEqualTo(NetworkResult.Success(Unit))
+    }
+
+    @Test
+    fun chunkCall_httpErrorResponse_isFailureCarryingTheStatus() = runTest {
+        val error = Response.error<Unit>(409, "offset mismatch".toResponseBody("text/plain".toMediaTypeOrNull()))
+
+        val result = chunkCall { error }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.httpStatus).isEqualTo(409)
+    }
+
+    @Test
+    fun chunkCall_ioException_isNetworkFailure() = runTest {
+        val result = chunkCall { throw IOException("offline") }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("NETWORK")
+    }
 }

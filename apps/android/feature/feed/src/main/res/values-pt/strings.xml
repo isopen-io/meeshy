@@ -97,12 +97,21 @@
     <string name="feed_composer_visibility_private">Privado</string>
     <string name="feed_composer_attach_media">Adicionar foto ou vídeo</string>
     <string name="feed_composer_take_photo">Tirar uma foto</string>
+    <string name="feed_composer_take_video">Gravar um vídeo</string>
+    <string name="feed_composer_attach_file">Anexar um arquivo</string>
+    <string name="feed_composer_record_voice">Gravar áudio</string>
     <string name="feed_composer_remove_media">Remover mídia</string>
+    <string name="feed_composer_add_location">Adicionar minha localização</string>
+    <string name="feed_composer_remove_location">Remover localização</string>
+    <string name="feed_composer_location_unavailable">Localização indisponível — verifique suas configurações de localização e tente novamente</string>
     <string name="feed_composer_media_limit">Você pode anexar até %1$d itens</string>
     <string name="feed_composer_media_unusable">Não foi possível anexar essa mídia</string>
     <string name="feed_composer_type_reel">Reel</string>
     <string name="feed_composer_type_post">Publicar</string>
     <string name="feed_composer_type_hint">Alternar entre reel e publicação</string>
+    <string name="feed_composer_language_button">Idioma da publicação: %1$s</string>
+    <string name="feed_composer_language_title">Idioma da publicação</string>
+    <string name="feed_composer_language_search">Pesquisar um idioma</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Opções da publicação</string>

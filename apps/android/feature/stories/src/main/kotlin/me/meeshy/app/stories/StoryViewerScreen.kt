@@ -16,17 +16,21 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -47,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -87,6 +92,8 @@ import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
+import me.meeshy.ui.component.audio.AudioTrackSurface
+import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -94,6 +101,9 @@ import me.meeshy.ui.theme.hexColor
 private const val SLIDE_DURATION_MS = 5000
 private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
 private val SWIPE_VERTICAL_THRESHOLD = 120.dp
+
+/** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
+private const val FOREGROUND_WIDTH_FRACTION = 0.45f
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -355,27 +365,51 @@ fun StoryViewerScreen(
                 )
             },
     ) {
-        if (slide?.imageUrl != null) {
-            val imageUrl = slide.imageUrl
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                // Resolved (loaded or failed) → the countdown gate may open.
-                onSuccess = { viewModel.onImageResolved(imageUrl) },
-                onError = { viewModel.onImageResolved(imageUrl) },
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else if (slide != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(hexColor(slide.accentHex), Color.Black),
+        when {
+            slide?.backgroundVideoUrl != null -> {
+                ReelVideoSurface(
+                    mediaUrl = slide.backgroundVideoUrl,
+                    isActive = true,
+                    muted = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            slide?.imageUrl != null -> {
+                val imageUrl = slide.imageUrl
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    // Resolved (loaded or failed) → the countdown gate may open.
+                    onSuccess = { viewModel.onImageResolved(imageUrl) },
+                    onError = { viewModel.onImageResolved(imageUrl) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            slide != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(hexColor(slide.accentHex), Color.Black),
+                            ),
                         ),
-                    ),
-            )
+                )
+            }
+        }
+
+        slide?.foregroundMedia?.forEach { foreground ->
+            key(foreground.url) {
+                StoryForegroundLayer(media = foreground)
+            }
+        }
+
+        slide?.backgroundAudioUrl?.let { url ->
+            key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = slide.backgroundLoop) }
+        }
+        slide?.foregroundAudioUrl?.let { url ->
+            key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = false) }
         }
 
         if (slide != null && slide.text.isNotBlank()) {
@@ -726,4 +760,36 @@ private fun ReactionFlightOverlay(
             }
             .wrapContentSize(Alignment.Center),
     )
+}
+
+/**
+ * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
+ * (canvas-normalised, 0..1) as its center anchor, sized to a fraction of the
+ * canvas width scaled by the object's own `scale`. Keyframe animation,
+ * rotation and inter-slide transitions are not applied in this projection —
+ * see [StoryForegroundMediaView].
+ */
+@Composable
+private fun StoryForegroundLayer(media: StoryForegroundMediaView, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val aspectRatio = media.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
+        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * media.scale.toFloat().coerceIn(0.2f, 3f)
+        val targetHeight = targetWidth / aspectRatio
+        val offsetX = maxWidth * media.x.toFloat() - targetWidth / 2
+        val offsetY = maxHeight * media.y.toFloat() - targetHeight / 2
+        val layerModifier = Modifier
+            .offset(x = offsetX, y = offsetY)
+            .width(targetWidth)
+            .aspectRatio(aspectRatio)
+        if (media.isVideo) {
+            ReelVideoSurface(mediaUrl = media.url, isActive = true, muted = false, modifier = layerModifier)
+        } else {
+            AsyncImage(
+                model = media.url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = layerModifier,
+            )
+        }
+    }
 }

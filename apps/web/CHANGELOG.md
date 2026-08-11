@@ -1,5 +1,112 @@
 # @meeshy/web
 
+## 1.23.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - après une édition, la ligne de liste affichait le texte d'avant (#2802)
+  - restore two-factor authentication (gateway route exists) (#2805)
+  - ravive la carte Now Playing après un vol de lecture transitoire + polis AirPlay
+  - traduit le bouton AirPlay du plein écran audio dans les 7 langues
+  - bouton AirPlay dans le plein écran audio
+  - per-post language override for the Feed post composer (#2804)
+  - useCallAnalyticsReporter's reconnection counter could never increment
+  - attach device location to a Feed post composer (#2801)
+  - migre 5 NavigationView vers NavigationStack (soft-dépréciée iOS 16+) (#2798)
+  - épingler un message traduit rendait la route d'épingles inexploitable
+  - enableVideo()/switchCamera() snapshot connected peers before getUserMedia, dropping late joiners
+  - addLocalMedia clones outgoing video track instead of sharing it across peers (#2790)
+  - TUS uploads resume from the last confirmed chunk on retry (feature-parity §Q) (#2795)
+  - OutboxFlushWorker never discovered per-conversation message lanes (#2794)
+  - l'aperçu de liste servi par socket pouvait afficher un cryptogramme (#2789)
+  - Feed post composer audio attachment (feature-parity §F) (#2791 follow-up) (#2792)
+  - real MediaRecorder capture for chat voice-recording pill (feature-parity §Q) (#2791)
+  - attribue l'audio d'un post cité au bon auteur sur la carte Now Playing
+  - feed, commentaires et posts audio passent par le coordinator Now Playing
+  - stabilise l'abonnement audio du bouton scroll-to-bottom
+  - le bouton scroll-to-audio démarre la file du coordinator
+  - playKeepingQueue préserve la file au swipe plein écran, playVariant survit à la reprise d'appel
+  - le plein écran audio fusionne dans le coordinator (carte + file + variantes)
+  - termine le background task d'avance de file bloquée par le garde CallKit
+  - fixture d'appel avec discriminant kind, mocks partagés du target, await GRDB async
+  - la greffe store se limite à userState+suppressions — un snapshot en retard réécrivait un rename frais
+  - l'avance de file audio est couverte par un background task
+  - résorbe les deux warnings d'intégration (await inutile, résultat de write ignoré)
+  - la file audio en pause garde sa carte Now Playing en background
+  - un instantane store VIDE est un teardown, pas N suppressions
+  - ne jamais confondre un avis d'appel avec une edition, armer aussi sur iPad
+  - patcher les traductions temps reel sous TOUTES les cles de cache
+  - persister les moods temps reel et abonner status:unreacted
+  - armer le pont de persistance app-wide et persister le media de commentaire
+  - route la tray vers la gestion pour les stories passées sans story active
+  - persister conversation:updated/deleted et les mutations de message hors conversation ouverte
+  - affiche la progression d'export en cours sur les cards « Mes stories »
+  - carte Now Playing avec date du vocal et position de file
+  - relance la lecture de la timeline après un export (fin/échec/annulation)
+  - allonge les interludes de lecture à 1,2 s et lie l'export à la SSOT
+  - corrige le flip vertical du fond dans StoryStaticSnapshot
+  - icone de telechargement media coherente avec la convention
+  - désarme la reprise d'interruption sur retrait AirPods et suspension d'appel
+  - seedMediaConsumption alimente les stores de reprise audio/video
+  - frappe hors conversation dans la pastille de synchronisation
+  - reprise de lecture video via VideoPlaybackPositionStore
+  - VideoPlaybackPositionStore, miroir strict d'AudioPlaybackPositionStore
+  - lecture instantanee a l ouverture, au bas atteint et au bouton
+  - pourcentage + barre de progression par participant dans mediaConsumptionCard
+  - promotion immediate de l accumulateur de lecture, retrait du code mort
+  - pause/reprise de l'audio de conversation sur interruption système
+  - decode position/pourcentage sur attachment-status:updated et alimente MediaConsumptionStore
+  - le moteur du coordinator audio devient Now Playing éligible (.content)
+  - profils de session audio avec pause/reprise et plomberie moteur
+  - l'écho REST de message:new ne portait pas le clientMessageId
+  - le chemin socket sérialisait les traductions dans une forme qu'iOS ne peut pas décoder (#2793)
+  - transporte position/durée/pourcentage sur attachment-status:updated
+
+## 1.22.10
+
+### Patch Changes
+
+- fcc82a6: Le web applique enfin le Prisme Linguistique à la ligne de liste, et la langue
+  d'origine cesse de rétrograder la langue primaire du lecteur.
+
+  Le cycle précédent a mis `lastMessageTranslations` et `lastMessageOriginalLanguage`
+  sur le fil de `GET /conversations`. Le web n'en voyait rien : le type `Conversation`
+  ne déclarait pas ces champs, `transformConversationData` — un objet construit à la
+  main — les jetait, et `formatLastMessage` rendait `lastMessage.content` brut. Quatre
+  couches, aucune donnée. Un lecteur francophone lisait « Hello » dans sa sidebar et
+  « Bonjour » une fois le fil ouvert, alors que la traduction était déjà arrivée.
+
+  `resolveLastMessagePreview` (`@meeshy/shared`) devient le jumeau TypeScript de
+  `MeeshyConversation.resolvedLastMessagePreview`, et la chaîne web est câblée de
+  bout en bout : type → transformer → résolveur → ligne.
+
+  **Correctif de règle, sur les deux plateformes.** Le résolveur iOS court-circuitait
+  dès que la langue d'origine apparaissait _quelque part_ dans le prisme du lecteur.
+  Cette formulation par appartenance rétrograde silencieusement la langue PRIMAIRE
+  dès que la langue d'origine occupe un rang inférieur — précisément ce que produit
+  la locale appareil, entrée en 4e priorité. Prisme `['fr', 'en']`, message anglais,
+  traduction française disponible : elle rendait « Hello ». `CLAUDE.md` dit l'inverse
+  noir sur blanc — « un utilisateur francophone avec un iPhone en anglais voit
+  TOUJOURS ses messages en français (priorité 1) » — et le chemin du CORPS des
+  messages appliquait déjà la bonne règle en ne comparant qu'à la langue de tête.
+
+  Le prisme est désormais parcouru par RANG : la langue d'origine y concourt à sa
+  place, et la première langue servie gagne — par traduction, ou parce que le message
+  est déjà écrit dedans. La règle #3 est inchangée : jamais de repli sur une
+  traduction quelconque.
+
+- Updated dependencies [fcc82a6]
+  - @meeshy/shared@1.8.13
+
+## 1.22.9
+
+### Patch Changes
+
+- Updated dependencies [6df3fac]
+  - @meeshy/shared@1.8.12
+
 ## 1.22.8
 
 ### Patch Changes

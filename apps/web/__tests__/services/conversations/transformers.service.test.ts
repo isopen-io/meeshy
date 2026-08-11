@@ -550,6 +550,49 @@ describe('TransformersService', () => {
       expect(conv.lastMessage).toBeUndefined();
     });
 
+    // Cycle 61 — Prisme Linguistique de la ligne de liste. `GET /conversations`
+    // expédie ces deux champs depuis le cycle 60 ; cette transformation les
+    // jetait, si bien qu'AUCUN code web ne pouvait les lire. Le résolveur en
+    // aval (`resolveLastMessagePreview`) est inerte sans eux.
+    it('propage lastMessageTranslations pour que le prisme atteigne la ligne', () => {
+      const raw = makeRawConversation({
+        lastMessage: makeRawMessage(),
+        lastMessageTranslations: { fr: 'Bonjour', es: 'Hola' },
+      });
+      const conv = svc.transformConversationData(raw);
+      expect(conv.lastMessageTranslations).toEqual({ fr: 'Bonjour', es: 'Hola' });
+    });
+
+    it("propage lastMessageOriginalLanguage, sans quoi « déjà dans ma langue » est indistinguable de « pas de traduction »", () => {
+      const raw = makeRawConversation({
+        lastMessage: makeRawMessage(),
+        lastMessageOriginalLanguage: 'en',
+      });
+      const conv = svc.transformConversationData(raw);
+      expect(conv.lastMessageOriginalLanguage).toBe('en');
+    });
+
+    it('laisse les deux champs du prisme undefined quand le serveur ne les envoie pas', () => {
+      // `null` est la valeur que le gateway pose quand aucune traduction n'est
+      // utile ; elle ne doit pas se matérialiser en objet vide côté client, ce
+      // qui ferait croire au résolveur qu'une carte existe.
+      const raw = makeRawConversation({
+        lastMessageTranslations: null,
+        lastMessageOriginalLanguage: null,
+      });
+      const conv = svc.transformConversationData(raw);
+      expect(conv.lastMessageTranslations).toBeUndefined();
+      expect(conv.lastMessageOriginalLanguage).toBeUndefined();
+    });
+
+    it('ignore une carte de traductions qui n\'est pas un objet de chaînes', () => {
+      const raw = makeRawConversation({
+        lastMessageTranslations: ['Bonjour'],
+      });
+      const conv = svc.transformConversationData(raw);
+      expect(conv.lastMessageTranslations).toBeUndefined();
+    });
+
     it('extracts first userPreference when array has items', () => {
       const pref = { id: 'pref-1', isMuted: true };
       const raw = makeRawConversation({ userPreferences: [pref] });

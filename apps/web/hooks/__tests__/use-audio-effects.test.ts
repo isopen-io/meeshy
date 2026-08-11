@@ -63,9 +63,9 @@ describe('useAudioEffects rebuildAudioGraph', () => {
     });
 
     const rawContext = (Tone.context as any).rawContext;
-    rawContext.createMediaStreamSource = jest.fn(() => ({ channelCount: 2, connect: jest.fn() }));
-    rawContext.createChannelSplitter = jest.fn(() => ({ connect: jest.fn() }));
-    rawContext.createChannelMerger = jest.fn(() => ({ connect: jest.fn() }));
+    rawContext.createMediaStreamSource = jest.fn(() => ({ channelCount: 2, connect: jest.fn(), disconnect: jest.fn() }));
+    rawContext.createChannelSplitter = jest.fn(() => ({ connect: jest.fn(), disconnect: jest.fn() }));
+    rawContext.createChannelMerger = jest.fn(() => ({ connect: jest.fn(), disconnect: jest.fn() }));
     rawContext.createMediaStreamDestination = jest.fn(() => ({ stream: {} as MediaStream }));
   });
 

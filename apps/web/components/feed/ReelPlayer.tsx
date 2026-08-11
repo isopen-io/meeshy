@@ -17,6 +17,7 @@ import {
   Volume2,
   VolumeX,
   Play,
+  Flag,
 } from 'lucide-react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -101,6 +102,7 @@ export interface ReelPlayerProps {
   onComment: () => void;
   onShare: () => void;
   onBookmark: () => void;
+  onReport?: () => void;
 }
 
 /**
@@ -127,6 +129,7 @@ export function ReelPlayer({
   onComment,
   onShare,
   onBookmark,
+  onReport,
 }: ReelPlayerProps) {
   const { t } = useI18n('reel');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -315,6 +318,11 @@ export function ReelPlayer({
           <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={(e) => { e.stopPropagation(); onBookmark(); }}>
             <Bookmark className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} />
           </RailButton>
+          {onReport && (
+            <RailButton label={t('player.report', 'Report')} onClick={(e) => { e.stopPropagation(); onReport(); }}>
+              <Flag className="h-6 w-6" />
+            </RailButton>
+          )}
         </div>
 
         {/* Author + caption */}

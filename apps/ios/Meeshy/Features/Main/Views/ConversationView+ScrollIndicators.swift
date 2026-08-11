@@ -38,7 +38,7 @@ extension ConversationView {
             unreadAttachmentIsAudio: unreadAttachment?.type == .audio,
             unreadAttachmentDetail: unreadAttachmentDetail,
             unreadAttachmentSymbol: unreadAttachmentSymbol,
-            isAudioPlaying: scrollButtonAudioPlayer.isPlaying,
+            isAudioPlaying: scrollButtonAudioIsPlaying,
             isOffline: isOffline,
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
             accentColor: accentColor,
@@ -46,19 +46,37 @@ extension ConversationView {
             onScrollToBottom: {
                 HapticFeedback.light()
                 scrollState.scrollToBottomTrigger += 1
+                // Demander le bas, c'est déclarer le regarder : l'accusé part
+                // avec le défilement, pas une seconde après.
+                scrollState.flushSeenTrigger += 1
                 scrollState.unreadBadgeCount = 0
                 viewModel.lastUnreadMessage = nil
             },
             onPlayAudio: {
                 HapticFeedback.light()
-                if scrollButtonAudioPlayer.isPlaying {
-                    scrollButtonAudioPlayer.stop()
-                } else if let fileUrl = unreadAttachment?.fileUrl {
-                    scrollButtonAudioPlayer.play(urlString: fileUrl)
+                guard let att = unreadAttachment, att.type == .audio else { return }
+                let coordinator = ConversationAudioCoordinator.sharedForTesting
+                if coordinator.isActive(attachmentId: att.id) {
+                    coordinator.togglePlayPause()
+                } else {
+                    viewModel.playAudio(attachmentId: att.id)
                 }
             }
         )
         .accessibilityLabel(scrollToBottomAccessibilityLabel)
+        .onReceive(scrollButtonAudioStatePublisher) { context, playing in
+            updateScrollButtonAudioIsPlaying(context: context, playing: playing)
+        }
+        .adaptiveOnChange(of: unreadAttachment?.id) { _, _ in
+            let coordinator = ConversationAudioCoordinator.sharedForTesting
+            updateScrollButtonAudioIsPlaying(context: coordinator.activeContext, playing: coordinator.isPlaying)
+        }
+    }
+
+    func updateScrollButtonAudioIsPlaying(context: ActiveAudioContext?, playing: Bool) {
+        let id = unreadAttachment?.id
+        let newValue = playing && id != nil && context?.attachmentId == id
+        if scrollButtonAudioIsPlaying != newValue { scrollButtonAudioIsPlaying = newValue }
     }
 
     private var scrollToBottomAccessibilityLabel: String {

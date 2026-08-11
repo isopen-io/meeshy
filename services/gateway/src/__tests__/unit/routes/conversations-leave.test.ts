@@ -59,6 +59,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
       findFirst: jest.fn<any>(),
+      // Les membres restants à qui adresser le départ : l'événement va
+      // désormais aussi vers leurs rooms PERSONNELLES, où se lit l'écran de
+      // liste qui rend l'effectif.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.participant ?? {}),

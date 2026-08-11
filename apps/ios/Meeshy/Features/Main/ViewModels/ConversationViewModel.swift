@@ -1411,9 +1411,21 @@ class ConversationViewModel: ObservableObject {
                 case .audio:
                     positionMs = consumption.lastPlayPositionMs
                     complete = consumption.listenedComplete
+                    if !complete, let seconds = Self.seedResumePositionSeconds(
+                        positionMs: positionMs,
+                        hasLocalPosition: AudioPlaybackPositionStore.shared.position(for: attachment.id) != nil
+                    ) {
+                        AudioPlaybackPositionStore.shared.save(seconds, for: attachment.id)
+                    }
                 case .video:
                     positionMs = consumption.lastWatchPositionMs
                     complete = consumption.watchedComplete
+                    if !complete, let seconds = Self.seedResumePositionSeconds(
+                        positionMs: positionMs,
+                        hasLocalPosition: VideoPlaybackPositionStore.shared.position(for: attachment.id) != nil
+                    ) {
+                        VideoPlaybackPositionStore.shared.save(seconds, for: attachment.id)
+                    }
                 default:
                     continue
                 }
@@ -1430,6 +1442,18 @@ class ConversationViewModel: ObservableObject {
                 MediaConsumptionStore.shared.record(fraction: fraction, complete: complete, for: attachment.id)
             }
         }
+    }
+
+    /// Pure decision: should the server-synced position seed the LOCAL resume
+    /// store for this attachment? Never overwrites an existing local position
+    /// — a further-along (or intentionally abandoned) local position always
+    /// wins over a server value that may simply be stale. Returns the seconds
+    /// value to seed, or `nil` when there is nothing to seed. The resumability
+    /// dead-zone (too close to either edge) is re-checked at PLAYBACK time by
+    /// the engine itself, so it is deliberately not duplicated here.
+    nonisolated static func seedResumePositionSeconds(positionMs: Int?, hasLocalPosition: Bool) -> Double? {
+        guard !hasLocalPosition, let positionMs, positionMs > 0 else { return nil }
+        return Double(positionMs) / 1000
     }
 
     func loadMessages() async {
@@ -1989,7 +2013,7 @@ class ConversationViewModel: ObservableObject {
     func playAudio(attachmentId: String) {
         guard let (message, attachment) = findAudioAttachment(id: attachmentId),
               attachment.type == .audio,
-              let currentUserId = authManager.currentUser?.id else { return }
+              authManager.currentUser?.id != nil else { return }
 
         let current = QueuedAudio(
             attachmentId: attachment.id,
@@ -2002,18 +2026,25 @@ class ConversationViewModel: ObservableObject {
             receivedAt: message.createdAt
         )
 
-        let tail = AudioQueueBuilder.build(
-            from: messages,
-            startingAfterAttachmentId: attachment.id,
-            currentUserId: currentUserId,
-            listenedAttachmentIds: listenedAttachmentIds
-        )
+        let tail = audioQueueTail(after: attachment.id)
 
         audioCoordinator.play(
             current: current,
             tail: tail,
             conversationName: currentConversationName,
             conversationArtworkURL: currentConversationArtworkURL
+        )
+    }
+
+    /// File des vocaux non écoutés strictement APRÈS `attachmentId` — partagée
+    /// entre `playAudio` et le plein écran (`AudioFullscreenSource.queueTailProvider`).
+    func audioQueueTail(after attachmentId: String) -> [QueuedAudio] {
+        guard let currentUserId = authManager.currentUser?.id else { return [] }
+        return AudioQueueBuilder.build(
+            from: messages,
+            startingAfterAttachmentId: attachmentId,
+            currentUserId: currentUserId,
+            listenedAttachmentIds: listenedAttachmentIds
         )
     }
 
@@ -3617,7 +3648,6 @@ class ConversationViewModel: ObservableObject {
         // tag it with a cmid for instrumentation parity with the other
         // outbox kinds. Fall back to the legacy `PendingStatusQueue` if
         // the outbox enqueue itself fails (e.g. pool not configured).
-        let lastMessageId = messages.last?.id ?? ""
         // Résolu ICI, pas au moment de l'envoi : la file d'attente peut partir
         // longtemps après, et une traduction arrivée entre-temps ne change pas
         // ce que le lecteur avait sous les yeux.
@@ -3627,7 +3657,6 @@ class ConversationViewModel: ObservableObject {
             let payload = MarkAsReadPayload(
                 clientMutationId: cmid,
                 conversationId: convId,
-                upToMessageId: lastMessageId,
                 messageIds: messageIds,
                 language: languages?.language,
                 messageLanguages: languages?.exceptions,

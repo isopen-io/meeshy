@@ -305,6 +305,14 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let translationModel: String
     public let confidenceScore: Double?
     public let sourceLanguage: String?
+    /// `true` quand `translatedContent` est un CRYPTOGRAMME et non du texte.
+    /// Le gateway pose le drapeau depuis `Message.translations[lang].isEncrypted`
+    /// (`transformTranslationsToArray`) ; il était sur le fil depuis toujours,
+    /// simplement jamais décodé — donc jamais respecté par les surfaces qui
+    /// rendent cette traduction sans clé de déchiffrement (l'aperçu de la ligne
+    /// de liste, cf. `ConversationSyncEngine.previewTranslations`).
+    /// `nil` sur un payload qui l'omet : on ne suppose alors PAS le chiffrement.
+    public let isEncrypted: Bool?
 }
 
 /// Métadonnées enrichies de la story citée — renvoyées par le gateway dans

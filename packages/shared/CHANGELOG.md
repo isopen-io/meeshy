@@ -1,5 +1,65 @@
 # @meeshy/shared
 
+## 1.8.13
+
+### Patch Changes
+
+- fcc82a6: Le web applique enfin le Prisme Linguistique à la ligne de liste, et la langue
+  d'origine cesse de rétrograder la langue primaire du lecteur.
+
+  Le cycle précédent a mis `lastMessageTranslations` et `lastMessageOriginalLanguage`
+  sur le fil de `GET /conversations`. Le web n'en voyait rien : le type `Conversation`
+  ne déclarait pas ces champs, `transformConversationData` — un objet construit à la
+  main — les jetait, et `formatLastMessage` rendait `lastMessage.content` brut. Quatre
+  couches, aucune donnée. Un lecteur francophone lisait « Hello » dans sa sidebar et
+  « Bonjour » une fois le fil ouvert, alors que la traduction était déjà arrivée.
+
+  `resolveLastMessagePreview` (`@meeshy/shared`) devient le jumeau TypeScript de
+  `MeeshyConversation.resolvedLastMessagePreview`, et la chaîne web est câblée de
+  bout en bout : type → transformer → résolveur → ligne.
+
+  **Correctif de règle, sur les deux plateformes.** Le résolveur iOS court-circuitait
+  dès que la langue d'origine apparaissait _quelque part_ dans le prisme du lecteur.
+  Cette formulation par appartenance rétrograde silencieusement la langue PRIMAIRE
+  dès que la langue d'origine occupe un rang inférieur — précisément ce que produit
+  la locale appareil, entrée en 4e priorité. Prisme `['fr', 'en']`, message anglais,
+  traduction française disponible : elle rendait « Hello ». `CLAUDE.md` dit l'inverse
+  noir sur blanc — « un utilisateur francophone avec un iPhone en anglais voit
+  TOUJOURS ses messages en français (priorité 1) » — et le chemin du CORPS des
+  messages appliquait déjà la bonne règle en ne comparant qu'à la langue de tête.
+
+  Le prisme est désormais parcouru par RANG : la langue d'origine y concourt à sa
+  place, et la première langue servie gagne — par traduction, ou parce que le message
+  est déjà écrit dedans. La règle #3 est inchangée : jamais de repli sur une
+  traduction quelconque.
+
+## 1.8.12
+
+### Patch Changes
+
+- 6df3fac: Un message envoyé par lien de partage n'arrivait en temps réel sur aucun client mobile.
+
+  `link:message:new` n'a jamais eu qu'un seul auditeur : le web. iOS
+  (`MeeshySDK/Sockets/MessageSocketManager.swift`) et Android
+  (`sdk-core/socket/MessageSocketManager.kt`) n'enregistrent qu'un listener de création,
+  `message:new`. Or l'envoi par lien est le **seul** transport d'envoi dont dispose un participant
+  anonyme : un invité qui écrivait dans une conversation partagée n'apparaissait donc chez aucun
+  membre iOS ou Android — ni en direct par la room, ni au reconnect par la file hors ligne, qui
+  rejouait ce même event unique. Le message ne surgissait qu'au prochain refetch complet, que rien
+  ne déclenchait.
+
+  Les deux diffuseurs — la room live (`broadcastLinkMessage`) et le rejeu hors ligne
+  (`MeeshySocketIOManager._drainPendingMessages`) — passent désormais par un seul point d'appel
+  public, `linkMessageEmissions`, qui met les **deux** events sur le fil, chacun dans sa forme :
+  `link:message:new` garde son enveloppe `{ message }`, `message:new` transporte le message
+  lui-même. Rejouer l'enveloppe sous `message:new` aurait donné aux clients mobiles un payload sans
+  `conversationId` au premier niveau, donc non routable.
+
+  Additif, jamais substitutif : le web continue de recevoir l'event qu'il écoute déjà. Les deux
+  copies portent le même `id` et les deux gestionnaires web dédupent dessus, donc le second arrivé
+  est un no-op quel que soit l'ordre ; la pastille de non-lus ne se déduit d'aucun des deux (valeur
+  absolue de `conversation:unread-updated`), il n'y a rien à double-compter.
+
 ## 1.8.11
 
 ### Patch Changes
