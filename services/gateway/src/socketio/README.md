@@ -420,13 +420,14 @@ de conversations. Il porte un groupe indissociable — `lastMessagePreview`,
 destinataire**, parce que la carte de traductions est filtree au prisme du
 lecteur (`resolveLastMessagePreviewPrism`).
 
-Quatre emetteurs, et leur difference n'est pas le transport mais l'INSTANT :
+Quatre FAMILLES d'emetteurs, et leur difference n'est pas le transport mais
+l'INSTANT :
 
-| Emetteur | Declencheur | Portee |
+| Famille | Declencheur | Portee |
 |---|---|---|
 | `MessageHandler` (WS `message:send`) | envoi | tous les participants |
 | `MeeshySocketIOManager._broadcastNewMessage` (REST/ZMQ) | envoi | tous les participants |
-| `emitConversationPreviewUpdate` (edition, suppression, epinglage) | mutation | tous les participants |
+| `emitConversationPreviewUpdate` — edition, suppression, epinglage, resume d'appel | mutation | tous les participants |
 | `MeeshySocketIOManager._handleTextTranslationReady` | **traduction NLLB qui atterrit** | `PreviewUpdateScope` |
 
 Le quatrieme existe parce que les trois premiers ne suffisent pas : l'apercu est
