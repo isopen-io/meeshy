@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=0 last_run=ios-adaptive-onchange-sweep
+lane=ANDROID android_streak=1 last_run=contacts-mood-emoji-presence
