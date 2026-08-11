@@ -473,20 +473,25 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
 
     /// Suppression d'un attachement via « Plus… » : modale de validation
     /// obligatoire, jamais de suppression directe (feedback device 2026-07-14).
-    func test_deleteMedia_requestsConfirmation_neverDeletesDirectly() throws {
+    func test_media_requestsConfirmation_neverDeletesDirectly() throws {
         let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
         XCTAssertTrue(
             src.contains("showDeleteMediaConfirm = true"),
-            "Le pellet .deleteMedia doit armer la confirmation (showDeleteMediaConfirm)."
+            "Le pellet .media doit armer la confirmation (showDeleteMediaConfirm)."
         )
         XCTAssertTrue(
             src.contains(".confirmationDialog(") &&
             src.contains("isPresented: $showDeleteMediaConfirm"),
-            "MessageMoreSheet doit présenter une modale de confirmation de suppression média."
+            "MessageMoreSheet doit présenter une modale de confirmation avant toute action média."
         )
+        guard let branchStart = src.range(of: "else if item == .media {"),
+              let branchEnd = src.range(of: "} else {", range: branchStart.upperBound..<src.endIndex) else {
+            return XCTFail("Branche de tap .media introuvable dans handleMoreItemTap.")
+        }
+        let branch = String(src[branchStart.upperBound..<branchEnd.lowerBound])
         XCTAssertFalse(
-            src.contains("case .deleteMedia: onDeleteMedia?()"),
-            "La suppression directe (case .deleteMedia: onDeleteMedia?()) est bannie."
+            branch.contains("onDeleteMedia?()"),
+            "La suppression directe depuis la branche .media (sans confirmation) est bannie."
         )
     }
 
