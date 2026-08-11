@@ -269,6 +269,16 @@ verrouille le `select` lui-même, pas seulement l'emit.
   `tsc --noEmit` gateway : vert. Le Swift est gaté par `sdk-tests` (pas de
   toolchain Swift sur cette machine).
 
+## Suite du cycle — `main` est passé au ROUGE, puis au vert
+
+Le merge a cassé la compilation Swift : `ConversationSyncEngine` ne détient pas un
+`MessageSocketManager` mais un `MessageSocketProviding`, et le publisher n'était pas sur le
+protocole. Corrigé par `5fcd634c` (publisher ajouté au protocole + aux deux `MockMessageSocket`).
+
+**`sdk-tests` vert sur `main` (5fcd634c), `CI` vert.** Les 12 témoins Swift n'avaient RIEN prouvé
+à la première passe : une erreur de compilation tue le build avant que la moindre cible de test
+compile. Leçon 113.
+
 ## Reste ouvert après ce cycle
 
 - **Le web a la même famille de défaut sur la LIGNE DE LISTE.** Son
