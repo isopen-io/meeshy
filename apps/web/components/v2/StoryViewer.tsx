@@ -135,6 +135,7 @@ interface StoryViewerProps {
   onDelete?: (storyId: string) => void;
   onReport?: (storyId: string) => void;
   onShare?: (storyId: string) => void;
+  onRepost?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
   /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
@@ -395,6 +396,19 @@ function ShareIcon() {
   );
 }
 
+function RepostIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+  );
+}
+
 // ============================================================================
 // StoryViewer
 // ============================================================================
@@ -410,6 +424,7 @@ function StoryViewer({
   onDelete,
   onReport,
   onShare,
+  onRepost,
   enableComments = true,
   targetCommentId,
   targetParentCommentId,
@@ -1017,6 +1032,18 @@ function StoryViewer({
                 aria-label={t('share', 'Share')}
               >
                 <ShareIcon />
+              </button>
+            )}
+            {onRepost && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRepost(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('repost', 'Repost')}
+              >
+                <RepostIcon />
               </button>
             )}
             {onReport && currentUserId && story.authorId && story.authorId !== currentUserId && (

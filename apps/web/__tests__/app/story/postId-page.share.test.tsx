@@ -37,6 +37,10 @@ jest.mock('@/hooks/social/use-stories', () => ({
   useRecordStoryViewMutation: () => ({ recordView: jest.fn() }),
 }));
 
+jest.mock('@/hooks/queries/use-post-mutations', () => ({
+  useRepostMutation: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+
 jest.mock('@/hooks/social/use-post-room', () => ({ usePostRoom: jest.fn() }));
 jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
   usePostSocketCacheSync: jest.fn(),

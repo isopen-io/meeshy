@@ -318,6 +318,19 @@ export function PostsFeedScreen() {
     [activeStoryData, showToast, t],
   );
 
+  const handleRepostStory = useCallback(
+    (storyId: string) => {
+      repostMutation.mutate(
+        { postId: storyId, data: { isQuote: false } },
+        {
+          onSuccess: () => showToast(t('toast.reposted', 'Reposted!'), 'success'),
+          onError: () => showToast(t('toast.error', 'Error'), 'error'),
+        },
+      );
+    },
+    [repostMutation, showToast, t],
+  );
+
   const handleStoryViewerClose = useCallback(() => {
     setStoryViewerOpen(false);
     setActiveStoryAuthorId(null);
@@ -808,6 +821,7 @@ export function PostsFeedScreen() {
           onDelete={handleStoryDelete}
           onReport={handleReportStory}
           onShare={handleShareStory}
+          onRepost={handleRepostStory}
         />
       )}
 

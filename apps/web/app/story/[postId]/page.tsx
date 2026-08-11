@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { StoryViewer, useToast } from '@/components/v2';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
+import { useRepostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
@@ -40,6 +41,7 @@ export default function StoryPage() {
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
+  const repostMutation = useRepostMutation();
 
   // Join the story room + consume its real-time events (reactions, comments)
   // broadcast to `ROOMS.post(postId)`. Mirrors the post detail page so a viewer
@@ -105,6 +107,19 @@ export default function StoryPage() {
     [stories, toastCtx, t]
   );
 
+  const handleRepost = useCallback(
+    (storyId: string) => {
+      repostMutation.mutate(
+        { postId: storyId, data: { isQuote: false } },
+        {
+          onSuccess: () => toastCtx.addToast(t('reposted', 'Reposted!'), 'success'),
+          onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [repostMutation, toastCtx, t]
+  );
+
   if (stories.length > 0) {
     return (
       <StoryViewer
@@ -118,6 +133,7 @@ export default function StoryPage() {
         onDelete={handleDelete}
         onReport={handleReport}
         onShare={handleShare}
+        onRepost={handleRepost}
         targetCommentId={targetCommentId}
         targetParentCommentId={targetParentCommentId}
       />

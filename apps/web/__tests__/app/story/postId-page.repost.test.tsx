@@ -1,8 +1,5 @@
 /**
- * Tests for the story deep-link page's Report wiring (Task 4, point 0).
- * StoryViewer exposes an `onReport` callback (Task 3) but this page passed
- * `onDelete` without ever wiring `onReport` — non-author viewers had no way
- * to report a story reached via `/story/:id`.
+ * Tests for the story deep-link page's minimal repost wiring (Task 4, point 4).
  */
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import React from 'react';
@@ -40,8 +37,9 @@ jest.mock('@/hooks/social/use-stories', () => ({
   useRecordStoryViewMutation: () => ({ recordView: jest.fn() }),
 }));
 
+const mockRepostMutate = jest.fn();
 jest.mock('@/hooks/queries/use-post-mutations', () => ({
-  useRepostMutation: () => ({ mutate: jest.fn(), isPending: false }),
+  useRepostMutation: () => ({ mutate: mockRepostMutate, isPending: false }),
 }));
 
 jest.mock('@/hooks/social/use-post-room', () => ({ usePostRoom: jest.fn() }));
@@ -75,63 +73,51 @@ jest.mock('@/stores/auth-store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: { id: 'viewer-1' } }),
 }));
 
-const mockAddToast = jest.fn();
 type StoryViewerStubProps = {
-  onReport?: (storyId: string) => void;
+  onRepost?: (storyId: string) => void;
   stories: Array<{ id: string }>;
 };
+const mockAddToast = jest.fn();
 jest.mock('@/components/v2', () => ({
   useToast: () => ({ addToast: mockAddToast }),
-  StoryViewer: ({ onReport, stories }: StoryViewerStubProps) => (
+  StoryViewer: ({ onRepost, stories }: StoryViewerStubProps) => (
     <div>
-      {onReport && (
-        <button data-testid="story-report" onClick={() => onReport(stories[0]?.id ?? '')}>
-          Report
+      {onRepost && (
+        <button data-testid="story-repost" onClick={() => onRepost(stories[0]?.id ?? '')}>
+          Repost
         </button>
       )}
     </div>
   ),
 }));
 
-const mockReportStory = jest.fn();
+jest.mock('@/services/posts.service', () => ({
+  postsService: { sharePost: jest.fn() },
+}));
 jest.mock('@/services/report.service', () => ({
-  reportService: { reportStory: (...args: unknown[]) => mockReportStory(...args) },
+  reportService: { reportStory: jest.fn() },
 }));
 
 import StoryPage from '@/app/story/[postId]/page';
 
-describe('StoryPage — report wiring', () => {
-  let confirmSpy: jest.SpyInstance;
-
+describe('StoryPage — minimal repost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
-    mockReportStory.mockResolvedValue({});
+    mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
-  afterEach(() => {
-    confirmSpy.mockRestore();
-  });
-
-  it('calls reportService.reportStory with reportType inappropriate and no reason after confirm', async () => {
+  it('reposts a story directly (no modal) via POST /posts/:id/repost, isQuote:false', async () => {
     render(<StoryPage />);
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId('story-report'));
+      fireEvent.click(screen.getByTestId('story-repost'));
     });
 
-    expect(confirmSpy).toHaveBeenCalled();
-    await waitFor(() => expect(mockReportStory).toHaveBeenCalledWith('story-1', 'inappropriate', ''));
-  });
-
-  it('does not call reportService when the confirm is dismissed', async () => {
-    confirmSpy.mockReturnValue(false);
-    render(<StoryPage />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('story-report'));
-    });
-
-    expect(mockReportStory).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'story-1', data: { isQuote: false } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
   });
 });
