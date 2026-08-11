@@ -567,6 +567,30 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Delta Sync (foreground / reconnect)
 
+    /// Ce qu'une page delta prouve, au-delà d'avoir abouti.
+    private struct DeltaOutcome: Sendable {
+        let succeeded: Bool
+        /// La fenêtre `updatedSince` contenait plus de lignes que la page n'en
+        /// a rendues — donc ce delta ne prouve PAS qu'il a tout vu.
+        let mayHaveMore: Bool
+
+        /// Delta abouti sans reste — également l'issue des exécutions SAUTÉES
+        /// (sync en cours, anti-rafale) : rien n'a été lu, donc rien n'est
+        /// incomplet, et le curseur n'a pas bougé.
+        static let complete = DeltaOutcome(succeeded: true, mayHaveMore: false)
+        static let failed = DeltaOutcome(succeeded: false, mayHaveMore: false)
+    }
+
+    /// Plafond serveur de `GET /conversations` (`Math.min(limit, 100)` dans
+    /// `routes/conversations/core.ts`) — jumeau de `DELTA_PAGE_LIMIT`
+    /// (`apps/web/hooks/queries/use-conversations-delta-sync.ts`).
+    ///
+    /// Le demander explicitement plutôt que `500` ne change RIEN au nombre de
+    /// lignes rendues ; ça rend la troncature lisible, et ça rend utilisable le
+    /// repli `data.count >= deltaPageLimit` du jour où la réponse n'annonce pas
+    /// sa pagination — sous `limit=500`, ce repli n'aurait jamais pu déclencher.
+    static let deltaPageLimit = 100
+
     /// JUMEAU WEB — `apps/web/hooks/queries/use-conversations-delta-sync.ts` +
     /// `apps/web/lib/conversations/delta-sync.ts` portent la même règle sur le
     /// cache React Query : même endpoint (`GET /conversations?updatedSince=`),
@@ -574,10 +598,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
     /// évolution de la règle touche les DEUX plateformes.
     ///
-    /// TRONCATURE : `deltaSyncCore` demande `limit=500`, mais
-    /// `GET /conversations` plafonne à 100 (`Math.min(limit, 100)`,
-    /// `routes/conversations/core.ts`). Une fenêtre ayant touché plus de 100
-    /// conversations rend donc une page tronquée.
+    /// TRONCATURE : `GET /conversations` plafonne à 100
+    /// (`Math.min(limit, 100)`, `routes/conversations/core.ts`). Une fenêtre
+    /// ayant touché plus de 100 conversations rend donc une page tronquée.
     ///
     /// La route trie DÉSORMAIS une page delta par `updatedAt` croissant (elle
     /// triait par `lastMessageAt` décroissant, sans rapport avec le filtre) :
@@ -586,25 +609,42 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// reçus — pointe dessus au lieu de les enjamber. La troncature est une
     /// pagination, plus une perte.
     ///
-    /// RÉSIDU non couvert ici : plus de 100 conversations portant la MÊME
-    /// milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
-    /// la borne stricte `gt` ne peut pas reprendre. Le web détecte ce cas
-    /// (`conversations.length >= DELTA_PAGE_LIMIT` ⇒ relecture complète) ;
-    /// iOS ne le détecte pas encore.
+    /// RÉSIDU que l'ordre ne rattrape pas : plus de 100 conversations portant la
+    /// MÊME milliseconde d'`updatedAt` (écriture en masse) débordent d'une page
+    /// que la borne stricte `gt` ne peut pas reprendre. Une page dont le serveur
+    /// annonce du reste (`pagination.hasMore`, autoritaire sur une page delta —
+    /// voir `deltaSyncCore`) est donc traitée comme une preuve d'INCOMPLÉTUDE,
+    /// jamais comme un delta de confiance, et escalade vers `fullSync` —
+    /// exactement comme le web escalade vers la relecture complète.
+    ///
+    /// DIVERGENCE ASSUMÉE avec le web sur le curseur, parce que sa nature
+    /// diffère : le web le RECALCULE depuis son cache à chaque exécution, iOS le
+    /// PERSISTE. Un curseur persisté avancé sur une page tronquée survivrait à
+    /// une escalade échouée et enjamberait les lignes coupées à vie ; iOS ne
+    /// l'avance donc pas tant que la page ne prouve pas sa complétude
+    /// (`SyncWatermark.advancedAfterDeltaPage`).
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
-        let ok = await deltaSyncCore()
-        // P7-10 — réconciliation complète périodique, chaînée APRÈS le delta
-        // (hors du garde `isSyncing` que le corps tient) : fullSync remplace
-        // la liste par la vérité serveur → purge les fantômes hard-supprimés
-        // que le delta upsert-only ne peut pas voir. Bornée à 1× par
-        // `fullReconcileInterval` (24 h) — le delta reste le chemin nominal
-        // bon marché. Seulement sur delta RÉUSSI : offline/panne, on garde
-        // le cache intact (local-first) et on retentera au prochain delta.
-        if ok && isFullReconcileDue {
+        let outcome = await deltaSyncCore()
+        // Réconciliation complète, chaînée APRÈS le delta (hors du garde
+        // `isSyncing` que le corps tient). Deux raisons de la déclencher, une
+        // seule action — fullSync remplace la liste par la vérité serveur :
+        //
+        // - page laissant du RESTE ⇒ le delta ne PROUVE plus qu'il a tout vu, et
+        //   son curseur est resté en arrière pour que la fenêtre reste
+        //   rejouable. L'escalade est la seule voie pour combler le reste ET la
+        //   seule qui fera repartir le curseur (`SyncWatermark.fromFullSync`) ;
+        // - fenêtre de 24 h échue ⇒ purge des fantômes hard-supprimés, que le
+        //   delta upsert-only ne peut pas voir. Bornée à 1× par
+        //   `fullReconcileInterval` — le delta reste le chemin nominal bon
+        //   marché.
+        //
+        // Seulement sur delta RÉUSSI : offline/panne, on garde le cache intact
+        // (local-first) et on retentera au prochain delta.
+        if outcome.succeeded && (outcome.mayHaveMore || isFullReconcileDue) {
             await fullSync()
         }
-        return ok
+        return outcome.succeeded
     }
 
     /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
@@ -621,16 +661,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// « marquer comme non lu » cross-device définitivement invisible sur le
     /// web. Fermer l'écart demande de faire voyager la frontière de lecture
     /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
-    private func deltaSyncCore() async -> Bool {
-        guard !isSyncing else { return true }
+    private func deltaSyncCore() async -> DeltaOutcome {
+        guard !isSyncing else { return .complete }
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
         // same window, only the first one hits the network. Returning
-        // `true` is intentional — from the caller's perspective the
+        // `.complete` is intentional — from the caller's perspective the
         // delta is "fresh enough" since a recent one just landed.
         let now = Date()
         if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
-            return true
+            return .complete
         }
         lastDeltaSyncAt = now
         isSyncing = true
@@ -640,7 +680,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let since = lastSyncTimestamp
             let sinceStr = ISO8601DateFormatter().string(from: since)
             let queryItems = [
-                URLQueryItem(name: "limit", value: "500"),
+                URLQueryItem(name: "limit", value: String(Self.deltaPageLimit)),
                 URLQueryItem(name: "offset", value: "0"),
                 URLQueryItem(name: "updatedSince", value: sinceStr)
             ]
@@ -674,11 +714,33 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             // the device clock (R15b) — a device ahead of the server used to push
             // `updatedSince` past real updates in `[serverNow, deviceNow]` and drop
             // them. Never regresses; an empty delta keeps the prior cursor.
-            lastSyncTimestamp = SyncWatermark.advanced(previous: lastSyncTimestamp, receivedUpdatedAt: deltaConversations.map(\.updatedAt))
-            return true
+            //
+            // Et une page qui a laissé du RESTE ne le fait pas avancer du tout :
+            // elle n'a pas prouvé qu'elle rendait toute la fenêtre, qui reste
+            // donc ouverte pour l'escalade que `syncSinceLastCheckpoint`
+            // enchaîne — ou pour le prochain delta si cette escalade échoue. La
+            // fusion ci-dessus est conservée dans les deux cas : ce qu'on a reçu
+            // est vrai, c'est seulement la COUVERTURE qui n'est pas prouvée.
+            //
+            // `hasMore` est AUTORITAIRE ici, et pas l'heuristique « la page est
+            // pleine » : une page delta part toujours d'`offset=0`, ce qui fait
+            // compter au serveur toutes les lignes de la MÊME clause
+            // `updatedAt > since` (`prisma.conversation.count({ where:
+            // whereClause })`, `routes/conversations/core.ts`) — `hasMore` y vaut
+            // `N < total`. Une fenêtre de très exactement 100 conversations ne
+            // déclenche donc AUCUNE escalade, là où `count >= limit` en aurait
+            // imposé une pour rien. Repli sur l'heuristique si le bloc pagination
+            // manque : conservateur, on suppose qu'il en reste.
+            let mayHaveMore = response.pagination?.hasMore ?? (response.data.count >= Self.deltaPageLimit)
+            lastSyncTimestamp = SyncWatermark.advancedAfterDeltaPage(
+                previous: lastSyncTimestamp,
+                receivedUpdatedAt: deltaConversations.map(\.updatedAt),
+                pageMayHaveMore: mayHaveMore
+            )
+            return DeltaOutcome(succeeded: true, mayHaveMore: mayHaveMore)
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
-            return false
+            return .failed
         }
     }
 
