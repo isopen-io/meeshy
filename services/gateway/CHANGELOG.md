@@ -1,5 +1,16 @@
 # @meeshy/gateway
 
+## 1.25.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - une notification manquée l'était pour la session entière — le web ignorait `_seq` (#2844)
+  - deuxieme widget ecran d'accueil — conversations recentes (#2841)
+  - CallNotification no longer orphans the ringtone on fast unmount (#2843)
+  - déclare `userUpdated` sur `MessageSocketProviding` — main était rouge
+
 ## 1.24.1
 
 ### Patch Changes
