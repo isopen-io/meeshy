@@ -1869,6 +1869,75 @@ describe('usePostSocketCacheSync', () => {
 
       expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(6);
     });
+
+    it('does not double-apply the self-echo delta to feed-nested repostOf when the detail cache is stale (ordering independence)', () => {
+      const qc = createQueryClient();
+      // Feed: original + repost, ALREADY optimistically bumped by the acting
+      // user's own useLikePostMutation (both directions: original's own
+      // reactionSummary AND repost.repostOf.likeCount) — this mirrors what
+      // useLikePostMutation.onMutate does before the socket echo arrives.
+      const original = {
+        ...mockPost, id: 'original-1', likeCount: 6,
+        reactionSummary: { '😂': 3 } as Record<string, number>, currentUserReactions: ['😂'] as string[],
+      };
+      const repost: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 6, commentCount: 2 },
+      };
+      seedRepostOfFeed(qc, original, repost);
+      // Detail cache for the SAME original: STALE — the optimistic mutation
+      // never touches detail, so it still reflects the pre-reaction state.
+      const staleOriginalDetail = {
+        ...mockPost, id: 'original-1', likeCount: 5,
+        reactionSummary: { '😂': 2 } as Record<string, number>, currentUserReactions: [] as string[],
+      };
+      qc.setQueryData(['posts', 'detail', 'original-1'], { data: staleOriginalDetail });
+
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'original-1', userId: 'user-2', emoji: '😂', action: 'add',
+        aggregation: { emoji: '😂', count: 3 }, timestamp: new Date().toISOString(),
+      }));
+
+      // Feed's nested repostOf was already correct (6) from the optimistic
+      // patch — must NOT receive a second +1 from the detail cache's stale
+      // (unrelated) delta.
+      expect(getFeedEntry(qc, 'repost-1')?.repostOf?.likeCount).toBe(6);
+      // The stale detail cache's OWN top-level fields still get reconciled —
+      // unaffected by the nested-sweep fix.
+      const detail = qc.getQueryData<{ data: typeof staleOriginalDetail }>(['posts', 'detail', 'original-1']);
+      expect(detail?.data.likeCount).toBe(6);
+    });
+
+    it('reconciles a repost-of-the-original cached under its OWN detail page using the detail-local delta, independently of feed', () => {
+      const qc = createQueryClient();
+      // Feed: no entries at all for this scenario — only a detail cache for
+      // a DIFFERENT post (the repost), embedding the original as repostOf,
+      // stale relative to the incoming echo.
+      const staleRepostDetail: RepostOfEntry = {
+        ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+        repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+      };
+      qc.setQueryData(['posts', 'detail', 'repost-1'], { data: staleRepostDetail });
+      // Detail cache for the ORIGINAL itself carries the pre-reaction state,
+      // giving the detail-local delta something to compute from.
+      const originalDetail = {
+        ...mockPost, id: 'original-1', likeCount: 5,
+        reactionSummary: { '😂': 2 } as Record<string, number>, currentUserReactions: [] as string[],
+      };
+      qc.setQueryData(['posts', 'detail', 'original-1'], { data: originalDetail });
+
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'original-1', userId: 'user-99', emoji: '😂', action: 'add',
+        aggregation: { emoji: '😂', count: 3 }, timestamp: new Date().toISOString(),
+      }));
+
+      const repostDetail = qc.getQueryData<{ data: RepostOfEntry }>(['posts', 'detail', 'repost-1']);
+      expect(repostDetail?.data.repostOf?.likeCount).toBe(6);
+    });
   });
 
   describe('post:reaction-removed - nested repostOf.likeCount', () => {

@@ -250,7 +250,17 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     // ── Post reaction events (Phase 3B) ─────────────────────────────────
 
     function handlePostReactionAdded(data: PostReactionUpdateEventData) {
-      let capturedDelta = 0;
+      // `reactionDelta` needs the ORIGINAL's own PRE-patch `reactionSummary` —
+      // a snapshot `repostOf` never carries — so both nested deltas are read
+      // directly from cache BEFORE `patchPostInAllCaches` runs, independently
+      // per cache family. Feed and reels are always patched together by the
+      // SAME optimistic mutation (`useLikePostMutation`), so they share one
+      // delta; detail is NEVER touched by that optimistic mutation, so it is
+      // derived and applied completely independently — reading ahead like
+      // this means the result can never depend on patch ordering.
+      const feedOrReelsDelta = reactionDeltaForEntry(findPostInFeedOrReelsCache(queryClient, data.postId), data);
+      const detailDelta = reactionDeltaForEntry(findPostInDetailCache(queryClient, data.postId), data);
+
       patchPostInAllCaches(queryClient, data.postId, (p) => {
         // Derive the total-count change from the AUTHORITATIVE per-emoji delta
         // (`aggregation.count` minus the cached count for that emoji) rather than
@@ -261,7 +271,6 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         // emoji badges. The delta is 0 for an already-applied optimistic reaction
         // and idempotent against duplicate echoes.
         const delta = reactionDelta(p, data);
-        capturedDelta = delta;
         return {
           ...p,
           reactionCount: Math.max(0, (p.reactionCount ?? p.likeCount) + delta),
@@ -278,23 +287,29 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
               : p.currentUserReactions,
         };
       });
-      // `reactionDelta` needs the ORIGINAL's own `reactionSummary` — a snapshot
-      // `repostOf` never carries — so the nested sweep reuses the delta the
-      // top-level patch just derived instead of recomputing it against the
-      // (absent) nested state.
-      if (capturedDelta !== 0) {
-        patchRepostOfCounts(queryClient, data.postId, (original) => ({
+
+      if (feedOrReelsDelta !== 0) {
+        const bump = (original: NonNullable<Post['repostOf']>) => ({
           ...original,
-          likeCount: Math.max(0, (original.likeCount ?? 0) + capturedDelta),
+          likeCount: Math.max(0, (original.likeCount ?? 0) + feedOrReelsDelta),
+        });
+        patchRepostOfCountsInFeed(queryClient, data.postId, bump);
+        patchRepostOfCountsInReels(queryClient, data.postId, bump);
+      }
+      if (detailDelta !== 0) {
+        patchRepostOfCountsInDetail(queryClient, data.postId, (original) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + detailDelta),
         }));
       }
     }
 
     function handlePostReactionRemoved(data: PostReactionUpdateEventData) {
-      let capturedDelta = 0;
+      const feedOrReelsDelta = reactionDeltaForEntry(findPostInFeedOrReelsCache(queryClient, data.postId), data);
+      const detailDelta = reactionDeltaForEntry(findPostInDetailCache(queryClient, data.postId), data);
+
       patchPostInAllCaches(queryClient, data.postId, (p) => {
         const delta = reactionDelta(p, data);
-        capturedDelta = delta;
         const newSummary = { ...p.reactionSummary };
         if (data.aggregation.count === 0) {
           delete newSummary[data.emoji];
@@ -312,10 +327,19 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
               : p.currentUserReactions,
         };
       });
-      if (capturedDelta !== 0) {
-        patchRepostOfCounts(queryClient, data.postId, (original) => ({
+
+      if (feedOrReelsDelta !== 0) {
+        const bump = (original: NonNullable<Post['repostOf']>) => ({
           ...original,
-          likeCount: Math.max(0, (original.likeCount ?? 0) + capturedDelta),
+          likeCount: Math.max(0, (original.likeCount ?? 0) + feedOrReelsDelta),
+        });
+        patchRepostOfCountsInFeed(queryClient, data.postId, bump);
+        patchRepostOfCountsInReels(queryClient, data.postId, bump);
+      }
+      if (detailDelta !== 0) {
+        patchRepostOfCountsInDetail(queryClient, data.postId, (original) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + detailDelta),
         }));
       }
     }
@@ -560,6 +584,13 @@ function reactionDelta(
   return data.aggregation.count - previous;
 }
 
+function reactionDeltaForEntry(
+  entry: { readonly reactionSummary?: Record<string, number> | null } | undefined,
+  data: { readonly emoji: string; readonly aggregation: { readonly count: number } },
+): number {
+  return entry ? reactionDelta(entry, data) : 0;
+}
+
 // ---------------------------------------------------------------------------
 // Shared helper: patch a post in both feed and detail caches
 // ---------------------------------------------------------------------------
@@ -604,9 +635,19 @@ function patchPostInAllCaches(
 // sweep is length-filtered to the exact `['posts','detail',id]` shape —
 // `queryKeys.posts.details()` is also a PREFIX of the comments/replies cache
 // families, which carry a `{ pages }` shape, not `{ data: Post }`.
+//
+// Split into per-cache-family pieces (feed+reels vs detail) because the
+// optimistic mutations (`useLikePostMutation`/`useUnlikePostMutation`) only
+// ever touch feed+reels, never detail — so on a reaction event the CORRECT
+// reconciling delta for feed/reels can differ from the one for detail (the
+// former is often already 0, applied optimistically; the latter never is).
+// A single combined sweep using ONE delta for all three caches is only valid
+// when that delta is known to apply uniformly everywhere (Liked/Unliked/
+// CommentAdded/CommentDeleted, which carry an ABSOLUTE authoritative value —
+// setting the same absolute value twice is idempotent, no ordering risk).
 // ---------------------------------------------------------------------------
 
-function patchRepostOfCounts(
+function patchRepostOfCountsInFeed(
   queryClient: ReturnType<typeof useQueryClient>,
   originalId: string,
   patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
@@ -621,6 +662,15 @@ function patchRepostOfCounts(
       pages: old.pages.map((page) => ({ ...page, data: page.data.map(patchEntry) })),
     };
   });
+}
+
+function patchRepostOfCountsInReels(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  const patchEntry = (p: Post): Post =>
+    p.repostOf && p.repostOf.id === originalId ? { ...p, repostOf: patchOriginal(p.repostOf) } : p;
 
   queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
     { queryKey: [...queryKeys.posts.lists(), 'reels'] },
@@ -632,6 +682,15 @@ function patchRepostOfCounts(
       };
     },
   );
+}
+
+function patchRepostOfCountsInDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  const patchEntry = (p: Post): Post =>
+    p.repostOf && p.repostOf.id === originalId ? { ...p, repostOf: patchOriginal(p.repostOf) } : p;
 
   const detailKeyLength = queryKeys.posts.details().length + 1;
   for (const [key, value] of queryClient.getQueriesData<{ data?: Post }>({ queryKey: queryKeys.posts.details() })) {
@@ -639,6 +698,50 @@ function patchRepostOfCounts(
     if (!value?.data?.repostOf || value.data.repostOf.id !== originalId) continue;
     queryClient.setQueryData(key, { ...value, data: patchEntry(value.data) });
   }
+}
+
+function patchRepostOfCounts(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  patchRepostOfCountsInFeed(queryClient, originalId, patchOriginal);
+  patchRepostOfCountsInReels(queryClient, originalId, patchOriginal);
+  patchRepostOfCountsInDetail(queryClient, originalId, patchOriginal);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: read-only lookups of a post's CURRENT cached state, used to
+// derive a reaction delta BEFORE any cache is patched — reading ahead of the
+// patch (rather than capturing a value from inside a shared patcher callback
+// invoked once per cache) means the result can never depend on which cache
+// `patchPostInAllCaches` happens to patch first or last.
+// ---------------------------------------------------------------------------
+
+function findPostInFeedOrReelsCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+): Post | undefined {
+  const feed = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+  const fromFeed = feed?.pages.flatMap((page) => page.data).find((p) => p.id === postId);
+  if (fromFeed) return fromFeed;
+
+  const reelsEntries = queryClient.getQueriesData<{ pages?: Array<{ data?: Post[] }> }>({
+    queryKey: [...queryKeys.posts.lists(), 'reels'],
+  });
+  for (const [, value] of reelsEntries) {
+    const fromReels = value?.pages?.flatMap((page) => page.data ?? []).find((p) => p.id === postId);
+    if (fromReels) return fromReels;
+  }
+  return undefined;
+}
+
+function findPostInDetailCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+): Post | undefined {
+  const record = queryClient.getQueryData<{ data?: Post }>(queryKeys.posts.detail(postId));
+  return record?.data;
 }
 
 // ---------------------------------------------------------------------------
