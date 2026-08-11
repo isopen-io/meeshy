@@ -137,10 +137,12 @@ export function mergeConversationDelta(
   const byId = new Map(existing.map((conversation) => [conversation.id, conversation]));
   const removedIds: string[] = [];
 
-  const oldestLoaded = existing.reduce<number | null>((min, conversation) => {
-    const ms = timeOf(conversation.lastMessageAt);
-    if (ms === null) return min;
-    return min === null || ms < min ? ms : min;
+  // Bas de la fenêtre chargée, mesuré avec la MÊME clé que le tri final : la
+  // borne signifie « sous la dernière ligne visible », et la fenêtre est ordonnée
+  // par `orderKey`.
+  const windowFloor = existing.reduce<number | null>((min, conversation) => {
+    const key = orderKey(conversation);
+    return min === null || key < min ? key : min;
   }, null);
 
   for (const delta of deltas) {
@@ -149,9 +151,8 @@ export function mergeConversationDelta(
       continue;
     }
 
-    if (!byId.has(delta.id) && options.hasMore === true && oldestLoaded !== null) {
-      const deltaOrder = timeOf(delta.lastMessageAt);
-      if (deltaOrder !== null && deltaOrder < oldestLoaded) continue;
+    if (!byId.has(delta.id) && options.hasMore === true && windowFloor !== null) {
+      if (orderKey(delta) < windowFloor) continue;
     }
 
     byId.set(delta.id, delta);
