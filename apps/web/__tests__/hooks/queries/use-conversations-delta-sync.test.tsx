@@ -324,6 +324,34 @@ describe('useConversationsDeltaSync', () => {
     expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a']);
   });
 
+  it('n\u2019insère pas une inconnue hors fenêtre quand des pages restent à charger', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), {
+      pages: [
+        {
+          conversations: [conv('a'), conv('b', { lastMessageAt: new Date('2026-08-01T09:00:00.000Z') })],
+          pagination: { limit: 20, offset: 0, total: 40, hasMore: true },
+        },
+      ],
+      pageParams: [0],
+    });
+    getConversations.mockResolvedValue({
+      conversations: [
+        conv('vieille', {
+          lastMessageAt: new Date('2026-07-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-08-01T11:00:00.000Z'),
+        }),
+      ],
+      pagination: { limit: 100, offset: 0, total: 1, hasMore: false },
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+    expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a', 'b']);
+  });
+
   it('retries on the next reconnect after a failure — a failed delta must not burn the window', async () => {
     const queryClient = makeClient();
     queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));

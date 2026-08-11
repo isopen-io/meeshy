@@ -369,13 +369,22 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     await service.getStories('user-1');
 
+    const after = Date.now();
     const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
     const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
     const floor = authorBranch.AND.find((c: any) => c.expiresAt)?.expiresAt?.gt as Date;
 
     expect(floor).toBeInstanceOf(Date);
     expect(floor.getTime()).toBeLessThan(before);
-    expect(before - floor.getTime()).toBe(PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+    // Le plancher est `serviceNow - WINDOW`, et `serviceNow` est une lecture
+    // d'horloge PROPRE au service, prise APRÈS celle du test. Comparer
+    // `before - floor` à la fenêtre au millième près supposait les deux lectures
+    // égales : dès que l'horloge changeait de milliseconde entre les deux, le
+    // test tombait à `WINDOW - 1` (observé en CI, 604799999 contre 604800000).
+    // L'invariant réel est un encadrement : le plancher tombe dans la fenêtre
+    // ouverte par les deux lectures qui bornent l'appel.
+    expect(floor.getTime()).toBeGreaterThanOrEqual(before - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+    expect(floor.getTime()).toBeLessThanOrEqual(after - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
   });
 
   it('still hides OTHER authors expired stories', async () => {

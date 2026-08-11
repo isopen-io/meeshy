@@ -128,8 +128,14 @@ export function useConversationsDeltaSync(enabled: boolean): void {
           // Le cache est relu ICI, pas avant l'await : un event socket arrivé
           // pendant la requête doit survivre à la fusion.
           const existing = old.pages.flatMap((page) => page.conversations);
+          // `hasMore` de la DERNIÈRE page : tant qu'il en reste, une inconnue
+          // plus ancienne que la fenêtre chargée appartient à une page non lue
+          // et entrerait en double au `fetchNextPage` suivant.
+          const hasMore = Boolean(old.pages[old.pages.length - 1]?.pagination?.hasMore);
           const merge = mergeConversationDelta(existing, conversations, {
+            hasMore,
             openConversationId,
+            hasMore,
           });
           removedIds = merge.removedIds;
           return rebuildInfiniteConversationPages(old, merge.merged);

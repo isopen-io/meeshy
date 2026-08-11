@@ -99,3 +99,36 @@ la couverture reste celle du pilote. Émission et observation doivent rester en 
 `emitWithSeq` à d'autres events sans étendre l'observation des DEUX clients fabrique de faux trous.
 Le curseur n'est pas persisté (mémoire d'onglet), donc une fenêtre onglet-fermé reste couverte par
 le seul `refetchOnMount: 'always'`.
+
+## 2026-08: Liste de conversations — rattrapage DELTA au reconnect socket (miroir `deltaSyncCore`)
+**Statut**: Accepté
+**Contexte**: Trois surfaces web tiennent un état temps réel ; deux rattrapaient une coupure
+SOCKET (messages d'une conversation via `syncNewerMessages`, notifications via `onSyncDesync`
+depuis le cycle 75), la liste de conversations non — `use-conversations-query.ts` n'avait que
+`refetchOnMount: 'always'`. Le `refetchOnReconnect: 'always'` du QueryClient global ne la couvre
+pas : il écoute le `onlineManager` de React Query, c'est-à-dire la connectivité RÉSEAU du
+navigateur, que ne bougent ni un redémarrage gateway, ni un drop du load balancer, ni un échec
+d'upgrade de transport. Pendant cette fenêtre, la liste garde compteurs de non-lus, aperçus et
+effectif d'avant la coupure jusqu'au prochain focus de fenêtre ou remontage.
+**Decision**: un DELTA `GET /conversations?updatedSince=`, jamais un `refetch()`.
+`lib/conversations/delta-sync.ts` (valeurs pures : `conversationDeltaWatermark` /
+`mergeConversationDelta`) est le miroir de `deltaSyncCore` + `mergeDeltaConversations` du SDK iOS ;
+`hooks/queries/use-conversations-delta-sync.ts` porte le déclenchement sur le front
+`false → true` de `isSocketConnected`, le MÊME motif que le « Trigger 1 » du fil de messages. La
+borne est DÉDUITE du cache à chaque passe — le cache React Query EST le curseur, aucun état
+persisté. Une page pleine (100, le plafond serveur) vaut preuve d'incomplétude et escalade vers une
+relecture complète, parce que la route trie par `lastMessageAt` et non par `updatedAt` : les lignes
+tronquées ne sont pas les plus anciennes, et avancer la borne les enjamberait.
+**Alternatives rejetées**: `refetch()` de la liste (rejoue TOUTES les pages chargées d'une route
+lourde, et REMPLACE le cache — donc perd ce que le socket y a écrit) ; un second signal de reconnect
+propre à la liste (il en existe déjà un, écrit et testé) ; un curseur persisté à la iOS (le cache
+est déjà la source ; un second curseur pourrait diverger de lui).
+**Cons**: le delta est upsert-only — une conversation HARD-supprimée côté serveur n'y apparaît
+jamais (iOS compense par une réconciliation complète 24 h ; le web s'appuie sur `refetchOnMount` et
+`refetchOnWindowFocus`). Une inconnue plus ancienne que la fenêtre chargée est écartée tant qu'il
+reste des pages (`hasMore`), sinon elle se dupliquerait au prochain `fetchNextPage`. Le non-lu est
+forcé à zéro pour la seule conversation OUVERTE ; celui d'une conversation FERMÉE dont l'accusé de
+lecture traîne encore n'est PAS réconcilié, faute de frontière de lecture (`lastReadAt`) dans la
+charge utile de la liste — le substitut basé sur `unreadCount` rendrait un `mark-unread` fait sur un
+autre appareil définitivement invisible (cf. `tasks/todo.md`, cycle 76b : deux sessions y sont
+arrivées indépendamment).

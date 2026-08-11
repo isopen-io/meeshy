@@ -81,6 +81,14 @@ export type ConversationDeltaMerge = {
 
 export type ConversationDeltaMergeOptions = {
   /**
+   * `true` s'il reste des pages non chargées derrière la fenêtre courante
+   * (`hasMore` de la dernière page). Par défaut `false` : sans information, on
+   * insère — ne rien insérer perdrait une ligne, l'insérer au pire la duplique
+   * jusqu'au prochain montage.
+   */
+  readonly hasMore?: boolean;
+
+  /**
    * Conversation ouverte à l'écran, dont la pastille est forcée à zéro — la
    * SEULE exception à l'upsert intégral.
    *
@@ -111,8 +119,10 @@ export type ConversationDeltaMergeOptions = {
    * rallume une seconde après un reconnect se répare tout seul au
    * `conversation:unread-updated` qui suit ; un mark-as-unread perdu, non.
    *
-   * Fermer proprement le reste demande de faire voyager la frontière de lecture
-   * jusqu'au modèle web — chantier de contrat, pas garde de fusion.
+   * Pour toute conversation NON ouverte, le non-lu du delta écrase toujours le
+   * non-lu local sans réconciliation (voir la borne ci-dessus) — fermer
+   * proprement le reste demande de faire voyager la frontière de lecture
+   * jusqu'au modèle web, chantier de contrat, pas garde de fusion.
    */
   readonly openConversationId?: string | null;
 };
@@ -125,7 +135,13 @@ export type ConversationDeltaMergeOptions = {
  * c'est la vérité serveur) — à la seule exception du compteur de non-lus de la
  * conversation OUVERTE, voir `ConversationDeltaMergeOptions`. Un delta
  * `isActive: false` retire l'entrée et son id est rendu à l'appelant, qui purge
- * les caches dérivés.
+ * les caches dérivés ; un retrait n'est JAMAIS écarté, quelle que soit sa place.
+ *
+ * Une conversation INCONNUE du cache et plus ancienne que la fenêtre chargée est
+ * écartée tant qu'il reste des pages : elle vit dans une page non encore lue, et
+ * l'insérer ici la ferait apparaître DEUX FOIS au prochain `fetchNextPage`, qui
+ * la rapportera à sa place réelle. Une inconnue récente, elle, appartient bien à
+ * la fenêtre et entre normalement.
  *
  * Le résultat est re-trié par `lastMessageAt` décroissant — l'ordre du serveur,
  * pour que les frontières de pages reconstruites gardent un sens.
@@ -138,11 +154,24 @@ export function mergeConversationDelta(
   const byId = new Map(existing.map((conversation) => [conversation.id, conversation]));
   const removedIds: string[] = [];
 
+  // Bas de la fenêtre chargée, mesuré avec la MÊME clé que le tri final : la
+  // borne signifie « sous la dernière ligne visible », et la fenêtre est ordonnée
+  // par `orderKey`.
+  const windowFloor = existing.reduce<number | null>((min, conversation) => {
+    const key = orderKey(conversation);
+    return min === null || key < min ? key : min;
+  }, null);
+
   for (const delta of deltas) {
     if (delta.isActive === false) {
       if (byId.delete(delta.id)) removedIds.push(delta.id);
       continue;
     }
+
+    if (!byId.has(delta.id) && options.hasMore === true && windowFloor !== null) {
+      if (orderKey(delta) < windowFloor) continue;
+    }
+
     byId.set(
       delta.id,
       delta.id === options.openConversationId ? { ...delta, unreadCount: 0 } : delta
