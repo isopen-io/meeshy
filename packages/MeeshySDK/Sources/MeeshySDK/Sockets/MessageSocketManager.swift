@@ -189,6 +189,74 @@ public struct UserPreferencesReorderedSocketEvent: Decodable, Sendable {
     public let updates: [Update]
 }
 
+/// `user:updated` — un CONTACT (quelqu'un avec qui on partage au moins une
+/// conversation) a changé son profil public. Delta léger : seules les clés
+/// modifiées sont présentes.
+///
+/// **Les quatre composants du nom voyagent en GROUPE** (contrat gateway,
+/// `UserUpdatedEventData` dans `packages/shared/types/socketio-events.ts`) :
+/// dès que l'un change, les quatre sont émis. C'est nécessaire parce qu'un
+/// client ne stocke que le nom DÉJÀ composé — recomposer depuis un delta
+/// partiel est impossible. `hasNameGroup` matérialise ce contrat : `avatar` et
+/// `banner` changent seuls, le nom jamais, donc la présence de `username`
+/// suffit à reconnaître le groupe.
+///
+/// `avatar`/`banner` sont tri-états et c'est délibéré : clé absente = « pas
+/// concerné », clé à `null` = « photo RETIRÉE ». Les confondre laisserait
+/// l'ancienne image après une suppression.
+public struct UserUpdatedEvent: Decodable, Sendable {
+    public let userId: String
+    public let displayName: String?
+    public let firstName: String?
+    public let lastName: String?
+    public let username: String?
+    /// `true` quand le payload porte le groupe du nom (cf. ci-dessus).
+    public let hasNameGroup: Bool
+    public let avatar: OptionalMediaChange
+    public let banner: OptionalMediaChange
+
+    /// Clé absente vs clé à `null` — même distinction que
+    /// `LastMessagePreviewTranslations`, pour la même raison.
+    public enum OptionalMediaChange: Sendable, Hashable {
+        case unchanged
+        case replaced(String?)
+    }
+
+    /// Nom à afficher, recomposé avec la règle du chemin REST
+    /// (`APIConversationUser.name` : `displayName` puis `username`) pour que la
+    /// ligne de liste dise la même chose quel que soit le transport qui l'a
+    /// hydratée. `nil` quand le payload ne porte pas le groupe du nom.
+    public var resolvedDisplayName: String? {
+        guard hasNameGroup else { return nil }
+        return [displayName, username].compactMap { $0 }.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId, changes
+    }
+
+    private enum ChangeKeys: String, CodingKey {
+        case displayName, firstName, lastName, username, avatar, banner
+    }
+
+    public init(from decoder: Decoder) throws {
+        let root = try decoder.container(keyedBy: CodingKeys.self)
+        self.userId = try root.decode(String.self, forKey: .userId)
+        let changes = try root.nestedContainer(keyedBy: ChangeKeys.self, forKey: .changes)
+        self.displayName = try changes.decodeIfPresent(String.self, forKey: .displayName)
+        self.firstName = try changes.decodeIfPresent(String.self, forKey: .firstName)
+        self.lastName = try changes.decodeIfPresent(String.self, forKey: .lastName)
+        self.username = try changes.decodeIfPresent(String.self, forKey: .username)
+        self.hasNameGroup = changes.contains(.username)
+        self.avatar = changes.contains(.avatar)
+            ? .replaced(try changes.decodeIfPresent(String.self, forKey: .avatar))
+            : .unchanged
+        self.banner = changes.contains(.banner)
+            ? .replaced(try changes.decodeIfPresent(String.self, forKey: .banner))
+            : .unchanged
+    }
+}
+
 /// `category:created` / `category:updated` — full category snapshot. The
 /// nested `category` object decodes straight into `ConversationCategory`
 /// (extra gateway keys userId/createdAt/updatedAt are ignored).
@@ -1461,6 +1529,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     public let userPreferencesReordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
     public let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+
+    // Combine publishers — profil public d'un CONTACT
+    public let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
 
     // Combine publishers — user conversation categories
     public let categoryCreated = PassthroughSubject<CategorySocketEvent, Never>()
@@ -3081,6 +3152,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
                     self?.userPreferencesUpdated.send(event)
                 }
+            }
+        }
+
+        socket.on("user:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(UserUpdatedEvent.self, from: data) { [weak self] event in
+                self?.userUpdated.send(event)
             }
         }
 
