@@ -1,5 +1,72 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **home-screen widgets' fourth sub-slice landed**: `QuickReplyWidget`
+> (slice `widget-quick-reply`, feature-parity §"Home-screen widgets" — the natural next step
+> after the prior slice laid the exact foundation this widget needed). **RE-PROUVEN before
+> starting**: `git branch -r`/`gh pr list --state open --search "apps/android OR apps/ios"`
+> found no interrupted run of this routine (empty result — no open PRs at all at scan time).
+> Re-read iOS's `QuickReplyWidgetView` in full (not from memory) before coding: featured
+> conversation = `entry.conversations.first(where: isUnread) ?? entry.conversations.first` over
+> the SAME `ConversationProvider` the recent-conversations widget shares (confirming the
+> pinned-first-then-recency ordering reuse was correct, not assumed); 4 canned-reply buttons —
+> "👍", "OK", "Thanks!", "Call me" — deep-linking (on iOS) to a dead `meeshy://quickreply/{id}`
+> host (per the prior slice's own finding). **Shipped (production, all `apps/android`)**: new
+> `QuickReplyWidgetPresentation` (`:app/widget`, pure) reuses the exact pinned-first-then-recency
+> `sortedWith`/`ConversationRowTime` block already established by the two sibling widgets, then
+> applies `ordered.firstOrNull { it.unreadCount > 0 } ?: ordered.firstOrNull()` — the direct port
+> of iOS's own selection rule — mapping the featured conversation's `title`/`preview` via the
+> same `displayTitle()`/`lastMessagePreview()` SSOTs. New `QuickReplyDeepLink.uri(conversationId,
+> draftText)` (`:app/widget`, pure) builds `meeshy://conversation/{id}?draft={encoded}` via
+> `java.net.URLEncoder` — the matching JVM-testable counterpart to `ChatViewModel.initialDraft`'s
+> own `java.net.URLDecoder` (never `android.net.Uri.encode`/`.decode`, which silently no-op under
+> this module's plain JVM unit tests, per the prior slice's own `NOTES.md` entry). `QuickReplyWidget`
+> (Glance) shows the featured conversation's title/preview plus 4 chips — 👍 (no localization
+> needed) + 3 new localized strings (`widget_quick_reply_ok`/`_thanks`/`_call_me`, en/fr/es/pt) —
+> each chip's tap fires the now-real `CONVERSATION_DRAFT_DEEP_LINK` from the prior slice.
+> **Deliberately prefills rather than auto-sends**: a blind background send from a cold widget
+> process has no confirmation step; opening the conversation with the reply already typed (ready
+> to confirm with a tap) matches the "quick, not blind" posture better, and needed zero new
+> message-sending plumbing in the widget process itself. **+14 new tests**
+> (`QuickReplyWidgetPresentationTest`: empty→null, an unread conversation wins over a more-recent
+> read one, a pinned-but-read conversation is skipped in favor of an unread one, no-unread falls
+> back to most-recent, no-unread-and-no-recency-tie falls back to pinned, direct/group title
+> resolution, preview reuse, empty-message fallback; `QuickReplyDeepLinkTest`: plain text, space
+> encoding, literal `+` escaped so it never round-trips as a space, emoji encoding, conversation id
+> passthrough). **Mutation-proven**, two axes: neutralizing the unread-first selection
+> (`ordered.firstOrNull { it.unreadCount > 0 } ?: ...` → `ordered.firstOrNull()`) fails **exactly**
+> the 2 unread-selection tests (7 others green); neutralizing the URI encoding
+> (`URLEncoder.encode(draftText, "UTF-8")` → the raw `draftText`) fails **exactly** the 3
+> encoding-focused tests (2 others — plain ASCII and id-passthrough — stay green, since those
+> inputs need no encoding either way). Both applied via a scratch `cp`-backed edit (never `git
+> checkout --`), restored via `cp`, diffed clean against the backup afterward. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching every prior
+> slice — no build-graph regression; zero test failures across every module's XML reports).
+> Reviewer **PASS** (diff `apps/android` only, confirmed via `git status --short` — 11 files, all
+> under `apps/android`; SDK purity — the pure selection/URI-building decisions live in
+> `:app/widget` (correctly, per the grain test: product decisions, not reusable atoms — mirrors
+> every sibling widget's own precedent); SSOT — reuses `displayTitle`/`lastMessagePreview`/
+> `ConversationRowTime`/`WidgetEntryPoint`/`directConversationTypes`/the now-real
+> `CONVERSATION_DRAFT_DEEP_LINK`, zero re-implementation; no coverage floor lowered; no
+> tautological tests). **Not attempted this run** (compile+test-only per the local JVM gate; no
+> simulator/emulator session for on-device verification — a future run should install-and-verify
+> that a real tap on a Quick Reply chip actually opens the conversation with the reply text
+> pre-filled in the composer, closing the loop this slice and the prior one only proved
+> independently at the unit-test level). **Deliberate, documented scope cut**: matches the exact
+> canned-reply set iOS ships (👍/OK/Thanks!/Call me) rather than inventing a different or
+> user-configurable set — true visual parity, only the WIRING differs (and improves on iOS's own
+> dead one). **Next slice candidates (not attempted this run)**: mark-read widget action (still
+> deprioritized — thin glue, low test value); Google Assistant App Actions (`shortcuts.xml`) for
+> the voice-triggered half of the shortcuts epic — needs external Assistant indexing/review; a
+> presence-cache foundation for conversation participants; on-device transcription for the Feed
+> audio composer; Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location
+> attachment; PiP (calls + media) — per the orchestrator's guidance this remains a documented,
+> real, multi-slice-epic gap warranting a planning/decomposition pass rather than a bare re-grep.
+> With this slice, all 4 of iOS's `MeeshyWidgets` widgets (`UnreadCountWidget`,
+> `RecentConversationsWidget`, `FavoriteContactsWidget`, `QuickReplyWidget`) now have an Android
+> counterpart — the "Home-screen widgets" checklist item's remaining scope is refinement
+> (mark-read, additional sizes/kinds, push-refresh, presence badge) plus the separate Assistant
+> App Actions half, not missing widget kinds.
+
 > On 2026-08-11 **chat-composer prefill-draft mechanism landed** (slice
 > `chat-composer-prefill-draft`, feature-parity §"Home-screen widgets" — picked from the prior
 > slice's own explicit "Next slice candidates" list: unlocking a genuinely working Quick Reply
