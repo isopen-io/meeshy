@@ -72,10 +72,14 @@ final class ConversationListViewModelTests: XCTestCase {
     /// the global `.shared` singleton — prevents cross-test pollution.
     /// `prefError` makes the preference writer throw (e.g. a 4xx for a
     /// permanent-failure rollback test).
-    static func makeTestStore(prefError: Error? = nil, lifecycleError: Error? = nil) -> ConversationStore {
+    static func makeTestStore(
+        prefError: Error? = nil,
+        lifecycleError: Error? = nil,
+        lifecycleWriter: ConvListTestLifecycleWriter? = nil
+    ) -> ConversationStore {
         let writer = ConvListTestPreferenceWriter()
         writer.errorToThrow = prefError
-        let lifecycle = ConvListTestLifecycleWriter()
+        let lifecycle = lifecycleWriter ?? ConvListTestLifecycleWriter()
         lifecycle.errorToThrow = lifecycleError
         let outboxPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("convlist-vm-outbox-\(UUID().uuidString).db").path
@@ -397,6 +401,58 @@ final class ConversationListViewModelTests: XCTestCase {
         await drainMainQueue()
 
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0)
+    }
+
+    // MARK: - markAsRead: conversation ouverte (split-view iPad)
+
+    /// La conversation à l'écran possède son propre chemin de marquage, qui
+    /// NOMME les messages réellement affichés. Le chemin de la liste poste un
+    /// mark-read SANS corps : le gateway retombe alors sur son repli par
+    /// fenêtre temporelle et déclare lus des messages jamais montrés. En
+    /// split-view iPad les deux surfaces coexistent, donc le cas est réel.
+    func test_markAsRead_whenConversationIsOpen_skipsTheWindowFallbackDispatch() async throws {
+        let lifecycle = ConvListTestLifecycleWriter()
+        let socket = MockMessageSocket()
+        socket.activeConversationId = "conv1"
+        let store = Self.makeTestStore(lifecycleWriter: lifecycle)
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
+
+        await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
+
+        XCTAssertTrue(lifecycle.markReadCalls.isEmpty,
+                      "le repli par fenêtre ne doit pas doubler le marquage exact de la conversation ouverte")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+                       "la pastille tombe quand même : la mise à jour optimiste locale est conservée")
+    }
+
+    func test_markAsRead_whenAnotherConversationIsOpen_stillDispatches() async throws {
+        let lifecycle = ConvListTestLifecycleWriter()
+        let socket = MockMessageSocket()
+        socket.activeConversationId = "conv-other"
+        let store = Self.makeTestStore(lifecycleWriter: lifecycle)
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
+
+        await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
+
+        XCTAssertEqual(lifecycle.markReadCalls, ["conv1"])
+    }
+
+    func test_shouldDispatchListMarkAsRead_onlyWhenTheConversationIsNotTheOpenOne() {
+        XCTAssertFalse(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: "c1"
+        ))
+        XCTAssertTrue(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: "c2"
+        ))
+        XCTAssertTrue(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: nil
+        ))
     }
 
     // MARK: - markAsRead: Failure (rollback)
@@ -3156,12 +3212,88 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(sut.typingUsernames["g1"], "the row clears once the last typer stops")
     }
 
-    func test_typingDisplayName_pickIsDeterministicAndNilWhenEmpty() {
-        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: nil))
-        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: [:]))
-        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Alice"]), "Alice")
-        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Bob", "u2": "Alice"]), "Alice",
-                       "several typers → deterministic (sorted) single-name pick for the single-name row API")
+    func test_typingSelection_pickIsDeterministicAndNilWhenEmpty() {
+        XCTAssertNil(ConversationListViewModel.typingSelection(for: nil))
+        XCTAssertNil(ConversationListViewModel.typingSelection(for: [:]))
+        XCTAssertEqual(
+            ConversationListViewModel.typingSelection(for: ["u1": .init(username: "alice", displayName: "Alice")])?.displayName,
+            "Alice"
+        )
+        XCTAssertEqual(
+            ConversationListViewModel.typingSelection(for: [
+                "u1": .init(username: "bob", displayName: "Bob"),
+                "u2": .init(username: "alice", displayName: "Alice")
+            ])?.displayName,
+            "Alice",
+            "several typers → deterministic (sorted) single-name pick for the single-name row API"
+        )
+    }
+
+    // MARK: - Typing: pseudo brut pour la pastille de synchronisation
+
+    /// La ligne affiche le NOM ; la pastille affiche le PSEUDO. Les deux
+    /// désignent la même personne — un « Alice Martin écrit » en liste et un
+    /// « @bob » en pastille pour la même conversation serait incohérent.
+    func test_typingStarted_publishesTheHandleAlongsideTheDisplayName() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice_handle", displayName: "Alice Martin", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["conv1"], "Alice Martin")
+        XCTAssertEqual(sut.typingUsers["conv1"], "alice_handle")
+    }
+
+    /// Sans `displayName` transmis, le handle sert aux deux — la pastille ne
+    /// doit pas rester vide pour autant.
+    func test_typingStarted_withoutDisplayName_fallsBackToTheHandle() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "charlie", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsers["conv1"], "charlie")
+    }
+
+    func test_typingStopped_removesTheHandle() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        await drainMainQueue()
+        socket.typingStopped.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertNil(sut.typingUsers["conv1"])
+    }
+
+    /// Un membre qui s'arrête ne doit pas vider la pastille tant qu'un autre
+    /// écrit : les deux dérivations restent alignées sur le même frappeur.
+    func test_typingStopped_inGroup_keepsTheRemainingTyperOnBothDerivations() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        socket.typingStarted.send(TypingEvent(userId: "ub", username: "bob", displayName: "Bob", conversationId: "g1"))
+        await drainMainQueue()
+        socket.typingStopped.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["g1"], "Bob")
+        XCTAssertEqual(sut.typingUsers["g1"], "bob")
+    }
+
+    func test_typingUsers_tracksConversationsIndependently() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        socket.typingStarted.send(TypingEvent(userId: "u2", username: "bob", displayName: "Bob", conversationId: "conv2"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
 }
 
@@ -3228,7 +3360,11 @@ final class ConvListTestPreferenceWriter: ConversationPreferenceWriting, @unchec
 
 final class ConvListTestLifecycleWriter: ConversationLifecycleWriting, @unchecked Sendable {
     var errorToThrow: Error?
-    func markRead(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+    private(set) var markReadCalls: [String] = []
+    func markRead(conversationId: String) async throws {
+        markReadCalls.append(conversationId)
+        if let e = errorToThrow { throw e }
+    }
     func markUnread(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func deleteForMe(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func leave(conversationId: String) async throws { if let e = errorToThrow { throw e } }

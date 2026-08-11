@@ -431,8 +431,21 @@ public actor ConversationStore {
     /// `title`) are still applied regardless. No-op for an unknown
     /// conversation (the next list refresh will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
-        guard var conv = conversations[event.conversationId] else { return }
+        guard let conv = conversations[event.conversationId],
+              let merged = Self.merging(conv, with: event) else { return }
+        commit(merged)
+    }
 
+    /// Pure merge rule behind `applyConversationUpdated`, returning `nil` when
+    /// the payload changes nothing. Lifted out of the actor so the disk-cache
+    /// writer (`ConversationSyncEngine`) applies the SAME rule instead of
+    /// re-deriving it — the RAM store and the persisted list must never
+    /// disagree on what a `conversation:updated` means.
+    public nonisolated static func merging(
+        _ conversation: MeeshyConversation,
+        with event: ConversationUpdatedStoreEvent
+    ) -> MeeshyConversation? {
+        var conv = conversation
         var changed = false
 
         // `>=` et non `>` : la règle DOCUMENTÉE ci-dessus est « un `lastMessageAt`
@@ -467,7 +480,7 @@ public actor ConversationStore {
         if let v = event.slowModeSeconds { conv.slowModeSeconds = v; changed = true }
         if let v = event.autoTranslateEnabled { conv.autoTranslateEnabled = v; changed = true }
 
-        if changed { commit(conv) }
+        return changed ? conv : nil
     }
 
     // MARK: - Composite mutations

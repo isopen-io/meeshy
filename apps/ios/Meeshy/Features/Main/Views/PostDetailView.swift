@@ -1026,7 +1026,9 @@ struct PostDetailView: View {
                     displayPost?.primaryReelDisplayMedia != nil
                         ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                         : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                    systemImage: isPostBookmarked ? "bookmark.fill" : "bookmark"
+                    systemImage: displayPost?.primaryReelDisplayMedia != nil
+                        ? "arrow.down.to.line"
+                        : (isPostBookmarked ? "bookmark.fill" : "bookmark")
                 )
             }
             if displayPost?.authorId == AuthManager.shared.currentUser?.id {

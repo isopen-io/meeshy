@@ -715,6 +715,9 @@ export interface AttachmentStatusUpdatedEventData {
   readonly userId: string;
   readonly action: string;
   readonly updatedAt: Date;
+  readonly playPositionMs?: number;
+  readonly durationMs?: number;
+  readonly percentage?: number;
 }
 
 /**

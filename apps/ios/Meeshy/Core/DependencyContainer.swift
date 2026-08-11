@@ -31,6 +31,12 @@ final class DependencyContainer {
     let dbPool: DatabasePool
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
+    /// Pont de persistance GRDB du feed. Possédé par le container — donc par
+    /// l'app — et non plus par `FeedView` : armé au montage de l'écran et
+    /// désarmé à sa disparition, il ratait tout ce qui arrivait pendant que le
+    /// feed n'était pas affiché (post créé, commentaire, réaction, traduction).
+    /// La persistance disque ne doit dépendre d'aucune vue.
+    let feedSocketHandler: FeedSocketHandler
     let thumbnailPrefetcher: ThumbnailPrefetcher
 
     /// Q3 (P1 hotfix) — Combine subscriptions tenues par le container.
@@ -69,7 +75,9 @@ final class DependencyContainer {
         self.dbPool = pool
         let persistence = MessagePersistenceActor(dbWriter: pool)
         self.messagePersistence = persistence
-        self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
+        let feed = FeedPersistenceActor(dbWriter: pool)
+        self.feedPersistence = feed
+        self.feedSocketHandler = FeedSocketHandler(persistence: feed)
         self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
         self.initDiagnostics = diagnostics
 
@@ -96,6 +104,16 @@ final class DependencyContainer {
             await persistence?.bufferIncomingAPIMessages(messages)
         }
 
+        // Même raison pour les mutations qui ne portent PAS d'`APIMessage` :
+        // edit, suppression, réaction et vue unique consommée n'atteignaient que
+        // `cache.messages`, que la timeline ne lit pas. Hors-ligne, rouvrir la
+        // conversation affichait donc le texte d'avant l'édition, la bulle
+        // supprimée et la réaction manquante jusqu'au prochain refetch REST.
+        ConversationSyncEngine.shared.realtimeMessagePersistor = { [weak persistence] mutation in
+            guard let persistence else { return }
+            await Self.persist(mutation, into: persistence)
+        }
+
         // Skip the auto-vacuum tune when we're on the in-memory fallback —
         // there's no on-disk file to vacuum and the next launch will retry
         // against the real path anyway.
@@ -113,6 +131,47 @@ final class DependencyContainer {
                     UserDefaults.standard.set(true, forKey: autoVacuumKey)
                 }
             }
+        }
+    }
+
+    // MARK: - Realtime message mutations → table canonique
+
+    /// Route une mutation temps réel du SDK vers la table `messages`. Chaque
+    /// écriture est idempotente côté acteur (garde `alreadyExists` sur
+    /// `appendReaction`, garde d'ordre sur `markEdited`), donc le double
+    /// passage relais + `ConversationSocketHandler` sur la conversation
+    /// OUVERTE est sans effet de bord — c'est ce qui permet au relais de ne
+    /// pas dépendre d'un état « conversation ouverte » toujours en retard
+    /// d'un cycle de vie de vue.
+    nonisolated static func persist(
+        _ mutation: RealtimeMessageMutation,
+        into persistence: MessagePersistenceActor
+    ) async {
+        do {
+            switch mutation {
+            case let .edited(messageId, content, editedAt):
+                try await persistence.markEdited(localId: messageId, newContent: content, editedAt: editedAt)
+            case let .callNoticeUpdated(messageId, content, callSummaryJson, serverUpdatedAt):
+                try await persistence.applyCallNoticeUpdate(
+                    localId: messageId, content: content,
+                    callSummaryJson: callSummaryJson, serverUpdatedAt: serverUpdatedAt
+                )
+            case let .deleted(messageId, deletedAt):
+                try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt)
+            case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount):
+                try await persistence.appendReaction(
+                    localId: messageId, reactionId: reactionId, messageId: messageId,
+                    participantId: participantId, emoji: emoji, maxCount: maxCount
+                )
+            case let .reactionRemoved(messageId, emoji, participantId):
+                try await persistence.removeReaction(
+                    localId: messageId, emoji: emoji, participantId: participantId
+                )
+            case let .consumed(messageId, viewOnceCount):
+                try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)
+            }
+        } catch {
+            containerLogger.error("Realtime message persistence failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -185,7 +244,7 @@ final class DependencyContainer {
                     // rejouées dès l'init de chaque surface) et
                     // PendingStatusQueue. (pending_mark_read App Group est
                     // couvert par le wipe appgroup-01 — pas de doublon ici.)
-                    await ImpressionBatcher.purgeAllPendingImpressions()
+                    ImpressionBatcher.purgeAllPendingImpressions()
                     await PendingStatusQueue.shared.clearAll()
                 }
             }

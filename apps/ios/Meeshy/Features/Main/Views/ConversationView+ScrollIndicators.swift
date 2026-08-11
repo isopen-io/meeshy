@@ -46,6 +46,9 @@ extension ConversationView {
             onScrollToBottom: {
                 HapticFeedback.light()
                 scrollState.scrollToBottomTrigger += 1
+                // Demander le bas, c'est déclarer le regarder : l'accusé part
+                // avec le défilement, pas une seconde après.
+                scrollState.flushSeenTrigger += 1
                 scrollState.unreadBadgeCount = 0
                 viewModel.lastUnreadMessage = nil
             },

@@ -1088,8 +1088,11 @@ struct FeedView: View {
             if viewModel.feedStore == nil {
                 let deps = DependencyContainer.shared
                 let store = FeedStore(persistence: deps.feedPersistence)
-                let socketHandler = FeedSocketHandler(persistence: deps.feedPersistence)
-                viewModel.setupPersistence(store: store, socketHandler: socketHandler, persistence: deps.feedPersistence)
+                viewModel.setupPersistence(
+                    store: store,
+                    socketHandler: deps.feedSocketHandler,
+                    persistence: deps.feedPersistence
+                )
                 store.startObserving(dbPool: deps.dbPool)
                 await store.loadInitial()
             }

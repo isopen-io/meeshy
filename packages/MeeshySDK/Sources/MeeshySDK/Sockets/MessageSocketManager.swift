@@ -444,6 +444,9 @@ public struct AttachmentStatusUpdatedEvent: Decodable, Sendable {
     public let userId: String
     public let action: String
     public let updatedAt: Date?
+    public let playPositionMs: Int?
+    public let durationMs: Int?
+    public let percentage: Int?
 }
 
 // MARK: - Attachment Updated Event Data (`message:attachment-updated`)
@@ -1187,6 +1190,11 @@ public protocol MessageSocketProviding: Sendable {
     var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var conversationClosed: PassthroughSubject<ConversationClosedEvent, Never> { get }
+    /// `conversation:deleted` — the conversation is gone server-side. Exposed on
+    /// the protocol (not just the concrete manager) so the disk-cache writer can
+    /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
+    /// received while offline came back from the dead on the next cold start.
+    var conversationDeleted: PassthroughSubject<ConversationDeletedSocketEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     /// Conversation-scope variant of `user:preferences-updated` (versioned).
     /// Routed separately from `userPreferencesUpdated` (category scope) so the

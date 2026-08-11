@@ -1144,7 +1144,7 @@ final class ConversationSyncEngineTests: XCTestCase {
 
 // MARK: - Mock ConversationService
 
-private final class MockConversationService: ConversationServiceProviding, @unchecked Sendable {
+final class MockConversationService: ConversationServiceProviding, @unchecked Sendable {
     var listResult: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error> = .success(
         OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     )
@@ -1191,7 +1191,7 @@ private final class MockConversationService: ConversationServiceProviding, @unch
 
 // MARK: - Mock MessageService
 
-private final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
+final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     var listResult: Result<MessagesAPIResponse, Error> = .success(
         MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
     )

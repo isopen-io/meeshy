@@ -62,19 +62,30 @@ nonisolated enum StoryTrayActionResolver {
     /// directe (direction du 2026-07-31, elle-même une supersession du
     /// 2026-07-14). La lecture directe reste offerte par « Voir ma story »
     /// au menu contextuel.
-    static func avatarTap(hasMyStory: Bool) -> MyStoryAvatarAction {
-        hasMyStory ? .manageStories : .createStory
+    ///
+    /// Parité 2026-08-10 : un utilisateur SANS story active mais avec un
+    /// historique entièrement expiré (`hasAnyStory`) tapait droit sur le
+    /// composer — aucun chemin ne menait plus vers ses stories passées une
+    /// fois toutes expirées. `hasMyStory` (au moins une story ACTIVE) reste
+    /// prioritaire ; à défaut, `hasAnyStory` (au moins une story, active ou
+    /// non) route vers la même liste de gestion plutôt que de forcer la
+    /// création.
+    static func avatarTap(hasMyStory: Bool, hasAnyStory: Bool) -> MyStoryAvatarAction {
+        if hasMyStory { return .manageStories }
+        if hasAnyStory { return .manageStories }
+        return .createStory
     }
 
     /// Le libellé VoiceOver DÉCRIT la destination réelle. Il annonçait
     /// « Changer mon mood » alors que le tap ouvrait le composer : la même
-    /// fonction pure sert désormais au routage et à l'annonce, les deux ne
-    /// peuvent plus diverger.
-    static func avatarAccessibilityLabel(hasMyStory: Bool) -> String {
-        switch avatarTap(hasMyStory: hasMyStory) {
-        case .manageStories: return StoryTrayCopy.manageStories
-        case .createStory:   return StoryTrayCopy.createStory
-        }
+    /// règle sert désormais au routage et à l'annonce, les deux ne peuvent
+    /// plus diverger. Trois branches explicites (miroir d'`avatarTap`) plutôt
+    /// qu'un switch sur son résultat à deux cas : les deux premières
+    /// pourront un jour porter un libellé distinct sans réordonner la logique.
+    static func avatarAccessibilityLabel(hasMyStory: Bool, hasAnyStory: Bool) -> String {
+        if hasMyStory { return StoryTrayCopy.manageStories }
+        if hasAnyStory { return StoryTrayCopy.manageStories }
+        return StoryTrayCopy.createStory
     }
 }
 
