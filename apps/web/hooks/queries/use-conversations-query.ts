@@ -1,7 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conversationsService } from '@/services/conversations.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
-import { useConversationListDeltaSync } from './use-conversation-list-delta-sync';
+import { useConversationsDeltaSync } from './use-conversations-delta-sync';
 import type { Conversation, CreateConversationRequest } from '@meeshy/shared/types';
 
 interface ConversationsFilters {
@@ -57,11 +57,12 @@ interface UseInfiniteConversationsOptions {
 export function useInfiniteConversationsQuery(options: UseInfiniteConversationsOptions = {}) {
   const { limit = 20, filters, enabled = true } = options;
 
-  // Rattrapage au reconnect SOCKET — pendant qu'une socket est coupée sans que
-  // le réseau navigateur bouge, aucun des filets du QueryClient ne se déclenche
-  // et la liste reste figée sur son instantané d'avant la coupure. Delta
-  // `?updatedSince=`, jamais un refetch : cf. `use-conversation-list-delta-sync`.
-  useConversationListDeltaSync({ enabled, limit });
+  // Rattrapage après une coupure SOCKET — que `refetchOnMount` (montage) et
+  // `refetchOnReconnect` (réseau navigateur) laissent tous deux découverte.
+  // Monté ICI, sur le propriétaire du cache `conversations.infinite()`, pour
+  // qu'aucun consommateur ne puisse l'oublier ; le garde par QueryClient fait
+  // que plusieurs consommateurs montés ensemble ne tirent qu'une fois.
+  useConversationsDeltaSync(enabled);
 
   return useInfiniteQuery({
     queryKey: queryKeys.conversations.infinite(),

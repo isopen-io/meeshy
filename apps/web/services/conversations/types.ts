@@ -36,9 +36,10 @@ export interface GetConversationsOptions {
   withUserId?: string;
   before?: string;
   /**
-   * Borne ISO8601 du rattrapage delta : le serveur ne rend que les conversations
-   * dont `updatedAt` est postérieur (`GET /conversations?updatedSince=`). Chemin
-   * upsert-only du rattrapage au reconnect socket — jamais une pagination.
+   * Delta-sync : ISO8601. Ne renvoie que les conversations dont `updatedAt` est
+   * postérieur — y compris celles passées `isActive: false` (à retirer côté
+   * client). Aucun tombstone pour les suppressions dures : voir
+   * `lib/conversations/delta-sync.ts`.
    */
   updatedSince?: string;
 }

@@ -567,6 +567,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Delta Sync (foreground / reconnect)
 
+    /// JUMEAU WEB — `apps/web/hooks/queries/use-conversations-delta-sync.ts` +
+    /// `apps/web/lib/conversations/delta-sync.ts` portent la même règle sur le
+    /// cache React Query : même endpoint (`GET /conversations?updatedSince=`),
+    /// même upsert par id, même retrait sur `isActive == false`, même repli sur
+    /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
+    /// évolution de la règle touche les DEUX plateformes.
+    ///
+    /// DIVERGENCE CONNUE, non corrigée ici : `deltaSyncCore` demande
+    /// `limit=500`, mais `GET /conversations` plafonne à 100
+    /// (`Math.min(limit, 100)`, `routes/conversations/core.ts`) et trie par
+    /// `lastMessageAt` décroissant, PAS par `updatedAt`. Une fenêtre ayant
+    /// touché plus de 100 conversations rend donc une page tronquée dont les
+    /// lignes coupées ne sont pas « les plus anciennes » — et `lastSyncTimestamp`
+    /// avance quand même au max des `updatedAt` reçus, ce qui les enjambe
+    /// définitivement jusqu'au `fullSync` (24 h). Le web détecte ce cas
+    /// (`conversations.length >= DELTA_PAGE_LIMIT` ⇒ relecture complète) ;
+    /// iOS ne le détecte pas encore.
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
         let ok = await deltaSyncCore()
@@ -583,13 +600,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         return ok
     }
 
-    /// Jumeau WEB depuis 2026-08 : `apps/web/lib/sync/conversation-list-delta.ts`
-    /// (borne + fusion, valeur pure) et `apps/web/hooks/queries/
-    /// use-conversation-list-delta-sync.ts` (déclenchement au reconnect socket).
-    /// Les deux plateformes appliquent la MÊME règle — upsert-only, retrait des
-    /// `isActive: false`, non-lu local jamais rallumé par un instantané serveur en
-    /// retard, ordre serveur `lastMessageAt` décroissant : toute évolution de la
-    /// règle touche les deux.
     private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,

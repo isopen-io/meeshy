@@ -4,9 +4,6 @@
 
 Le cycle 76 a fermé la fenêtre du reconnect SOCKET avec un delta non destructeur. Il reste, sur la
 même surface, un chemin destructeur en place — hérité, pas introduit :
-
-| Surface | Au focus de fenêtre |
-|---|---|
 | Messages d'une conversation | `refetchOnWindowFocus: **false**` + `syncNewerMessages` débouncé (« Trigger 2 ») |
 | **Liste de conversations** | `refetchOnWindowFocus: **'always'**` hérité du QueryClient global — aucune dérogation |
 
@@ -29,93 +26,171 @@ Deux bornes avant d'ouvrir :
 
 ---
 
-# Cycle 76 — La liste de conversations web n'avait aucun rattrapage au reconnect socket
+# Tête instruite pour le cycle 77 — iOS avance son curseur delta par-dessus une page TRONQUÉE
+
+*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur, NON corrigé.*
+
+`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
+`GET /conversations?updatedSince=`. La route plafonne à 100
+(`Math.min(parseInt(limit), 100)`, `services/gateway/src/routes/conversations/core.ts`)
+et trie par **`lastMessageAt` décroissant, pas par `updatedAt`**. Trois faits qui
+s'additionnent :
+
+1. une fenêtre aveugle ayant touché plus de 100 conversations rend une page tronquée ;
+2. les lignes coupées ne sont pas « les plus anciennes mises à jour » — l'ordre du tri
+   n'a aucun rapport avec le filtre ;
+3. `lastSyncTimestamp` avance quand même au max des `updatedAt` REÇUS
+   (`SyncWatermark.advanced`), ce qui enjambe définitivement les lignes coupées.
+
+Elles ne reviennent qu'au `fullSync` périodique — borné à 1× par 24 h
+(`fullReconcileInterval`). Pendant ce temps la liste iOS affiche des compteurs de
+non-lus et des aperçus périmés, sans qu'aucun signal ne l'indique.
+
+Le web a fermé ce cas au cycle 76 : une page PLEINE (`conversations.length >=
+DELTA_PAGE_LIMIT`) est traitée comme une preuve d'incomplétude et escalade vers la
+relecture complète. Le geste iOS est le même, mais il ne suffit PAS de copier le test :
+`deltaSyncCore` ne pagine pas, et son curseur est persisté — il faut décider si
+l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fait déjà
+`syncSinceLastCheckpoint`) ou une boucle de pages. Deux bornes avant d'ouvrir :
+
+1. **`limit=500` est un mensonge silencieux depuis toujours** — le corriger à 100 ne
+   change rien au défaut, il le rend seulement lisible. La détection est le correctif ;
+   la constante n'est que de l'hygiène.
+2. **Le curseur ne doit pas avancer sur une page dont on sait qu'elle est tronquée**,
+   sinon l'escalade elle-même repart d'un watermark déjà trop haut. L'ordre des gestes
+   (ne pas avancer, PUIS escalader) est le contenu du correctif, pas un détail.
+
+Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
+— la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
+
+---
+
+# Cycle 76 — La liste de conversations web restait figée après une coupure SOCKET
 
 ## Le défaut
 
-Trois surfaces web tiennent un état temps réel alimenté par Socket.IO. Deux savaient rattraper une
-coupure SOCKET ; la troisième non :
+Le QueryClient web tourne en `staleTime: Infinity` — Socket.IO EST la source de vérité
+temps réel. Ce qui n'arrive pas par socket n'est rattrapé par rien tant que l'écran
+reste monté.
 
-| Surface | Rattrapage au reconnect SOCKET (avant ce cycle) |
-|---|---|
-| Messages d'une conversation | oui — `syncNewerMessages` sur le front `false → true` de `isSocketConnected` |
-| Notifications | oui — `onSyncDesync('reconnect')` (cycle 75) |
-| **Liste de conversations** | **non** — `use-conversations-query.ts` n'avait que `refetchOnMount: 'always'` |
+Trois surfaces web pouvaient porter ce trou ; le cycle 75 avait établi le relevé :
 
-Ce qui la couvrait partiellement, et pourquoi ça ne suffisait pas : le QueryClient global pose
-`refetchOnReconnect: 'always'`, mais c'est le `onlineManager` de React Query — la transition RÉSEAU
-du navigateur. Une coupure purement socket (redémarrage gateway, drop du load balancer, échec
-d'upgrade de transport) ne bouge pas `navigator.onLine` et ne déclenche donc rien. Pendant cette
-fenêtre, la liste garde ses compteurs de non-lus, ses aperçus de dernier message et son effectif
-d'avant la coupure, et ne se corrige qu'au prochain focus de fenêtre ou remontage.
+| Messages d'une conversation | oui — `syncNewerMessages` sur le front `false → true` (« Trigger 1 ») |
+| Notifications | oui depuis le cycle 75 — `onSyncDesync('reconnect')` |
+| **Liste de conversations** | **non** — corrigé ici |
+
+Ce qui semblait la couvrir : le QueryClient global pose `refetchOnReconnect: 'always'`.
+Il écoute le `onlineManager` de React Query — la transition réseau du **navigateur**.
+Un redémarrage gateway, un drop de load balancer ou un échec d'upgrade de transport
+tuent la socket **sans bouger `navigator.onLine`** : rien ne se déclenche. Pendant cette
+fenêtre, la sidebar garde ses compteurs de non-lus, ses aperçus de dernier message et
+son effectif d'avant la coupure, et ne se corrige qu'au prochain focus ou remontage.
 
 ## Le correctif
 
-**Un delta `GET /conversations?updatedSince=`, jamais un `refetch()`.** L'endpoint existait déjà et
-n'avait qu'un seul client (iOS `deltaSyncCore`) ; côté web, `GetConversationsOptions` ne connaissait
-même pas le paramètre.
+`useConversationsDeltaSync` (`apps/web/hooks/queries/use-conversations-delta-sync.ts`),
+monté DANS `useInfiniteConversationsQuery` — sur le propriétaire du cache
+`conversations.infinite()`, pour qu'aucun consommateur ne puisse l'oublier.
 
-`apps/web/lib/sync/conversation-list-delta.ts` — valeur pure, miroir des trois règles iOS
-(`deltaSyncCore`, `mergeDeltaConversations`, `reconcileUnread`) :
+Quatre arbitrages qui portent le correctif :
 
-- `conversationDeltaWatermark` — la borne est le `updatedAt` le plus récent DU CACHE, donc une
-  lecture d'horloge SERVEUR et jamais `Date.now()` (R15b iOS : un device en avance pousserait la
-  borne au-delà de mises à jour réelles tombant dans `[serverNow, deviceNow]` et les perdrait). Elle
-  est recalculée à chaque passe : le résultat du delta est fusionné dans le cache, donc la borne ne
-  peut que progresser — **le cache React Query EST le curseur**, rien n'est persisté à côté.
-- `mergeConversationDeltas` — upsert par id, retrait des `isActive: false`, puis retour à l'ordre
-  serveur (`lastMessageAt` décroissant).
+1. **Delta, pas `refetch()`.** `refetch()` rejoue TOUTES les pages chargées d'une route
+   lourde (participants, dernier message avec traductions et pièce jointe, compteurs de
+   non-lus par curseur). Le rattrapage est UNE requête bornée par ce qui a bougé —
+   `GET /conversations?updatedSince=`, l'endpoint que le SDK iOS utilise déjà, avec son
+   index dédié côté schema (`@@index([isActive, updatedAt])`). La capacité serveur
+   existait ; seul le web ne s'en servait pas.
+2. **Le watermark se DÉDUIT du cache, il ne se stocke pas.** Soit `T` le max des
+   `updatedAt` en cache et `F` l'instant de la lecture serveur qui les a produits :
+   `T <= F`, et tout changement postérieur à cette lecture porte un `updatedAt > F >= T`.
+   `updatedSince=T` ne peut donc rien rater ; au pire il re-livre `]T, F]`, que l'upsert
+   rend idempotent. Aucun curseur à persister, aucune horloge locale — et le repli sur
+   `new Date()` quand rien n'est lisible est explicitement refusé (règle R15b d'iOS : un
+   client en avance sur le serveur enjamberait des mises à jour réelles).
+3. **Le cache est relu DANS `setQueryData`, pas avant l'`await`.** Un event socket
+   arrivé pendant la requête doit survivre à la fusion — c'est la fusion atomique
+   d'iOS (`cache.messages.mergeUpdate`), transposée.
+4. **Une page PLEINE est une preuve d'incomplétude.** La route plafonne à 100 et trie
+   par `lastMessageAt`, pas par `updatedAt` : les lignes coupées ne sont pas « les plus
+   anciennes », et avancer le watermark par-dessus les perdrait. Le hook garde la fusion
+   (correction immédiate de ce qu'il tient) et escalade vers l'invalidation complète.
 
-`apps/web/hooks/queries/use-conversation-list-delta-sync.ts` porte le déclenchement, appelé depuis
-`useInfiniteConversationsQuery` — donc les DEUX surfaces de liste (layout v1, sidebar v2) en
-héritent par la même porte.
-
-Quatre arbitrages portent le correctif :
-
-1. **Delta, pas refetch.** Un `refetch()` REMPLACE les pages en cache et peut perdre ce que le
-   socket y a écrit — c'est la raison même de l'existence de `syncNewerMessages` côté messages. Le
-   delta ne touche que les lignes que le serveur déclare modifiées.
-2. **Le non-lu local n'est jamais rallumé par un instantané serveur en retard.** Un `unreadCount`
-   local à 0 vaut « lu jusqu'à `lastMessageAt` » ; si le delta ne rapporte aucun message plus récent
-   que cette frontière, son compteur non nul est un accusé de lecture qui n'a pas encore atterri, pas
-   un vrai non-lu. Dès qu'un message PLUS RÉCENT existe, la vérité serveur reprend la main — c'est
-   précisément ce que le rattrapage doit faire remonter. C'est `reconcileUnread` d'iOS exprimé avec
-   les données dont dispose le web (qui ne cache pas de `lastReadAt` par conversation).
-3. **Une inconnue plus ancienne que la fenêtre chargée est ÉCARTÉE tant que `hasMore`.** Elle vit
-   dans une page non encore chargée : l'insérer la dupliquerait au prochain `fetchNextPage`. Liste
-   entièrement chargée, il n'y a pas de page suivante pour la porter — on l'insère.
-4. **Le tri appliqué après fusion est celui du serveur**, pas un ordre inventé : `orderBy:
-   lastMessageAt desc` est ce que rend `GET /conversations`. Sans lui, une conversation qui a reçu
-   des messages pendant la coupure afficherait le bon aperçu à la mauvaise place. L'épinglage n'en
-   souffre pas — il est appliqué en partition côté vue (`filteredPinned` / `filteredUnpinned`).
-
-Le premier `connect` ne déclenche rien (seul un RE-connect prouve une fenêtre aveugle ; au montage
-la liste relit déjà tout), et une fenêtre de refroidissement de 3 s — le `deltaSyncCooldown` d'iOS —
-absorbe les fronts d'une socket qui bat de l'aile. Ce garde-fou vit DANS le QueryClient et non dans
-un module : il doit être partagé par toutes les surfaces qui montent la liste tout en repartant à
-zéro avec chaque client.
-
-En chemin, `updateInfiniteConversationCache` — l'écriture non destructive qui reconstruit les
-frontières de pages — est sortie de `use-socket-cache-sync.ts` vers
-`lib/conversations/infinite-cache.ts`, à côté de `unread-cache.ts` : deux appelants désormais, une
-seule implémentation.
+Effet de bord assumé et utile : `rebuildInfiniteConversationPages` est sorti de
+`use-socket-cache-sync.ts` vers `lib/conversations/infinite-cache.ts`. Les deux écrivains
+du cache infinite partagent désormais UNE règle de repagination au lieu de deux, et le
+`pagination: any` du passage est remplacé par la forme réelle (`GetConversationsResponse`).
 
 ## Vérification
 
-- `apps/web` : **562 suites, 12 069 tests verts** (24 nouveaux : 16 sur la valeur pure, 8 sur le
-  déclenchement). Prérequis CI reproduit localement (`packages/shared` construit avant la passe).
-- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+- **27 témoins neufs** : 14 sur les valeurs pures (watermark, fusion), 13 sur le hook.
+- **ROUGE prouvé par mutation, pas par inspection** — 9 mutations, toutes rouges,
+  restauration verte à chaque fois :
+  déclencher au PREMIER connect → 1 rouge ; capturer le cache avant l'`await` (la
+  variante plausible-mais-fausse) → 1 rouge ; supprimer le throttle → 1 rouge ; replier
+  le watermark sur l'horloge locale → 3 rouges ; upserter un delta `isActive: false` →
+  3 rouges ; prendre le PREMIER `updatedAt` au lieu du plus récent → 3 rouges ; fusionner
+  toutes les pages en une (le bug historique de repagination) → 1 rouge ; faire confiance
+  à une page pleine → 1 rouge ; escalader sur CHAQUE delta → 1 rouge.
+- **VERT exécuté** : suite web complète, `562/562` suites, `12070` tests (après
+  `packages/shared → bun run build`, prérequis que la CI fait automatiquement).
+- **Typecheck** : `1222` erreurs, exactement la ligne de base du projet, et **aucune** ne
+  touche un fichier modifié par ce cycle.
 
-## Ce qui reste ouvert
+## Portée établie, pas supposée
 
-- **Le delta est upsert-only.** Une conversation HARD-supprimée côté serveur pendant la coupure n'y
-  apparaît jamais. iOS compense par une réconciliation complète bornée à 24 h ; le web s'appuie
-  aujourd'hui sur `refetchOnWindowFocus` — ce qui est exactement le sujet de la tête instruite
-  ci-dessus.
-- **Le plafond du delta est le `limit` de la liste** (30 par défaut côté serveur, 100 au maximum).
-  Une coupure très longue sur un compte très actif peut en dépasser ; le reste est rattrapé au
-  reconnect suivant, la borne n'ayant avancé que jusqu'au plus récent `updatedAt` réellement
-  fusionné. Aucune pagination du delta n'a été ajoutée — elle ne se justifiera que mesurée.
+Le relevé des trois surfaces web est désormais complet — plus aucune n'est découverte au
+reconnect socket. La liste PLATE (`useConversationsQuery`) n'est pas traitée : `grep` sur
+tout `apps/web` ne rend **aucun consommateur** hors du module de hooks lui-même.
+
+---
+
+# Cycle 76b — Addendum d'une session parallèle
+
+Deux sessions ont livré le cycle 76 **en même temps, sans se voir** : même défaut, même endpoint,
+même miroir iOS, jusqu'aux noms de fichiers à un mot près. La session `upbeat-dirac-ozao52` a mergé
+la première ; c'est sa version qui vit dans l'arbre, et la seconde s'y aligne — appliqué
+par-dessus, jamais à la place (précédent du cycle 25b, leçon d'intégration du cycle 23 : comparer
+défaut par défaut, jamais « qui est arrivé en premier »).
+
+**Ce que la version mergée fait strictement mieux**, et qui aurait manqué autrement :
+1. **Le plafond serveur est traité comme une preuve d'incomplétude.** Elle demande
+   `limit = 100` (le plafond réel de `Math.min(limit, 100)`) et, sur page PLEINE, escalade vers une
+   relecture complète. La seconde session demandait le `limit` de la liste et prétendait, dans sa
+   documentation, que « le reste est rattrapé au reconnect suivant » — **c'est faux**, pour la
+   raison que la première a su nommer : la route trie par `lastMessageAt` décroissant et NON par
+   `updatedAt`, donc les lignes tronquées ne sont pas les plus anciennes, et le watermark calculé
+   sur ce qui a été fusionné passe définitivement par-dessus.
+2. **Les caches dérivés sont purgés** : `mergeConversationDelta` rend les `removedIds`, et le hook
+   retire le `conversations.detail(id)` correspondant. La seconde version retirait la ligne de la
+   liste et laissait le détail en cache.
+
+**Ce que cette session ajoute par-dessus** — la borne de la fenêtre chargée. Une conversation
+INCONNUE du cache et plus ancienne que la dernière ligne chargée était insérée par la fusion ; le
+`fetchNextPage` suivant la rapporte à sa place réelle, donc **la même conversation apparaissait
+deux fois**. `mergeConversationDelta` prend désormais `{ hasMore }` et l'écarte tant qu'il reste des
+pages ; une inconnue récente appartient bien à la fenêtre et entre normalement, et un retrait
+(`isActive: false`) n'est jamais écarté, quelle que soit sa place. Sans borne fournie, on insère —
+perdre une ligne serait pire que la dupliquer jusqu'au prochain montage.
+
+## Trouvé, NON corrigé — le non-lu du delta n'est pas réconcilié, et ne peut pas l'être aujourd'hui
+
+iOS réconcilie ce champ au chokepoint de TOUTE écriture de liste dérivée du serveur (`saveSorted` →
+`reconcileUnread`) pour une raison écrite dans son code : un instantané serveur en retard sur un
+`markAsRead` encore en vol fait « partir puis revenir » la pastille. Le delta EST une telle
+écriture ; la question se pose donc identiquement côté web.
+
+Elle n'est pas tranchable avec ce que le web tient. iOS s'appuie sur `userState.lastReadAt`, que
+`GET /conversations` **n'expose pas** — le web ne reçoit que `unreadCount`
+(`transformers.service.ts`). Le seul substitut disponible — « non-lu local à 0 et aucun message plus
+récent » — confond deux situations opposées : l'accusé de lecture en retard, et un `mark-unread`
+DÉLIBÉRÉ fait depuis un autre appareil (`POST /conversations/:id/mark-unread`, que iOS appelle),
+qui produit exactement la même forme. Suppresser le compteur masquerait une action volontaire de
+l'utilisateur.
+
+La règle a donc été écrite, testée, puis **retirée** : elle est documentée en creux dans
+`lib/conversations/delta-sync.ts`. Fermer proprement demande de faire circuler la frontière de
+lecture dans la charge utile de la liste — un changement de contrat gateway, pas un correctif de
+fusion.
 
 ---
 

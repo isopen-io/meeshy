@@ -111,19 +111,22 @@ navigateur, que ne bougent ni un redémarrage gateway, ni un drop du load balanc
 d'upgrade de transport. Pendant cette fenêtre, la liste garde compteurs de non-lus, aperçus et
 effectif d'avant la coupure jusqu'au prochain focus de fenêtre ou remontage.
 **Decision**: un DELTA `GET /conversations?updatedSince=`, jamais un `refetch()`.
-`lib/sync/conversation-list-delta.ts` (valeur pure : `conversationDeltaWatermark` /
-`mergeConversationDeltas`) est le miroir de `deltaSyncCore` + `mergeDeltaConversations` +
-`reconcileUnread` du SDK iOS. Le déclencheur est le front `false → true` de `isSocketConnected`
-(`use-conversation-list-delta-sync`), le MÊME motif que le « Trigger 1 » du fil de messages. La
-borne est relue du cache à chaque passe — le cache React Query EST le curseur, aucun état
-persisté.
-**Alternatives rejetées**: `refetch()` de la liste (REMPLACE les pages en cache et perd ce que le
-socket y a écrit — même raison qui a fait naître `syncNewerMessages`) ; un second signal de
-reconnect propre à la liste (il en existe déjà un, testé) ; un curseur persisté à la iOS (le
-cache est déjà la source, un second curseur pourrait diverger de lui).
-**Cons**: le delta est upsert-only — une conversation HARD-supprimée côté serveur pendant la
-coupure n'y apparaît jamais (iOS compense par une réconciliation complète 24 h ; le web s'appuie
-sur `refetchOnWindowFocus`). Une inconnue plus ancienne que la fenêtre chargée est écartée tant
-qu'il reste des pages, sinon elle se dupliquerait au prochain `fetchNextPage`. Le tri appliqué
-après fusion est celui du serveur (`lastMessageAt` décroissant) : il ne s'applique qu'au chemin
-delta, les patchs socket continuent de laisser la ligne à sa place.
+`lib/conversations/delta-sync.ts` (valeurs pures : `conversationDeltaWatermark` /
+`mergeConversationDelta`) est le miroir de `deltaSyncCore` + `mergeDeltaConversations` du SDK iOS ;
+`hooks/queries/use-conversations-delta-sync.ts` porte le déclenchement sur le front
+`false → true` de `isSocketConnected`, le MÊME motif que le « Trigger 1 » du fil de messages. La
+borne est DÉDUITE du cache à chaque passe — le cache React Query EST le curseur, aucun état
+persisté. Une page pleine (100, le plafond serveur) vaut preuve d'incomplétude et escalade vers une
+relecture complète, parce que la route trie par `lastMessageAt` et non par `updatedAt` : les lignes
+tronquées ne sont pas les plus anciennes, et avancer la borne les enjamberait.
+**Alternatives rejetées**: `refetch()` de la liste (rejoue TOUTES les pages chargées d'une route
+lourde, et REMPLACE le cache — donc perd ce que le socket y a écrit) ; un second signal de reconnect
+propre à la liste (il en existe déjà un, écrit et testé) ; un curseur persisté à la iOS (le cache
+est déjà la source ; un second curseur pourrait diverger de lui).
+**Cons**: le delta est upsert-only — une conversation HARD-supprimée côté serveur n'y apparaît
+jamais (iOS compense par une réconciliation complète 24 h ; le web s'appuie sur `refetchOnMount` et
+`refetchOnWindowFocus`). Une inconnue plus ancienne que la fenêtre chargée est écartée tant qu'il
+reste des pages, sinon elle se dupliquerait au prochain `fetchNextPage`. Le non-lu du delta n'est
+PAS réconcilié contre l'état local : la frontière de lecture (`lastReadAt`) ne circule pas dans la
+charge utile de la liste, et le seul substitut disponible confondrait un accusé de lecture en
+retard avec un `mark-unread` délibéré fait depuis un autre appareil (cf. `tasks/todo.md`, cycle 76b).

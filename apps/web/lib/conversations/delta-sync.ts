@@ -1,0 +1,162 @@
+/**
+ * Catch-up DELTA de la liste de conversations — valeurs pures.
+ *
+ * Miroir web de `ConversationSyncEngine.deltaSyncCore` / `mergeDeltaConversations`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`).
+ * Même endpoint (`GET /conversations?updatedSince=`), mêmes sémantiques d'upsert,
+ * même repli sur la vérité serveur. Ce n'est pas une seconde interprétation de la
+ * règle : toute évolution touche les deux fichiers.
+ *
+ * ## Pourquoi un delta et pas un `refetch()`
+ *
+ * `refetch()` sur une `useInfiniteQuery` rejoue TOUTES les pages chargées, et
+ * `GET /conversations` est une route lourde (participants, dernier message avec
+ * ses traductions et sa pièce jointe, compteurs de non-lus calculés par curseur).
+ * Payer N pages à chaque reconnexion de socket pour, la plupart du temps, zéro
+ * changement, est le mauvais échange. Le delta est UNE requête bornée par ce qui
+ * a réellement bougé — c'est exactement ce que fait iOS depuis toujours, et le
+ * gateway porte un index dédié (`@@index([isActive, updatedAt])`).
+ *
+ * ## Le watermark se DÉDUIT du cache, il ne se stocke pas
+ *
+ * iOS garde un curseur explicite parce que son cache disque et son curseur sont
+ * deux stockages distincts. Ici les deux sont le même objet : le plus récent
+ * `updatedAt` présent dans le cache EST le watermark, et il est correct sans
+ * horloge locale ni persistance.
+ *
+ * La preuve qu'il est conservateur : soit `T` le max des `updatedAt` en cache et
+ * `F` l'instant de la lecture serveur qui les a produits. Par construction
+ * `T <= F`, et tout changement survenu APRÈS cette lecture porte un `updatedAt`
+ * postérieur à `F`, donc strictement supérieur à `T`. Interroger `updatedSince=T`
+ * ne peut donc rien rater ; au pire, il re-livre ce qui a changé dans `]T, F]`,
+ * ce que l'upsert rend idempotent. Un event socket qui écrit dans le cache ne
+ * peut que faire AVANCER `T` (ou le laisser en place) — jamais le corrompre.
+ *
+ * ## Borne connue : upsert-only
+ *
+ * Le delta ne voit pas une conversation HARD-supprimée côté serveur (aucun
+ * tombstone) ; il ne voit que celles passées `isActive: false`. iOS couvre le
+ * reste par un `fullSync` périodique ; le web par `refetchOnMount: 'always'` sur
+ * la liste infinite, qui relit la vérité serveur à chaque montage de sidebar.
+ */
+
+import type { Conversation } from '@/types';
+
+/** Timestamp exploitable d'une valeur `Date | string | undefined`, ou `null`. */
+function timeOf(value: Conversation['updatedAt'] | undefined): number | null {
+  if (!value) return null;
+  const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Plus récent `updatedAt` de la liste, à passer en `updatedSince`.
+ *
+ * `null` quand aucune entrée ne porte de date exploitable — y compris sur un
+ * cache vide. Le repli n'est JAMAIS l'horloge de l'appareil : un client en
+ * avance sur le serveur pousserait le watermark au-delà de mises à jour réelles
+ * et les perdrait définitivement (règle R15b côté iOS).
+ */
+export function conversationDeltaWatermark(
+  conversations: readonly Conversation[]
+): Date | null {
+  let newest: number | null = null;
+  for (const conversation of conversations) {
+    const ms = timeOf(conversation.updatedAt);
+    if (ms === null) continue;
+    if (newest === null || ms > newest) newest = ms;
+  }
+  return newest === null ? null : new Date(newest);
+}
+
+/** Clé de tri : ordre serveur (`orderBy: { lastMessageAt: 'desc' }`). */
+function orderKey(conversation: Conversation): number {
+  return timeOf(conversation.lastMessageAt) ?? timeOf(conversation.updatedAt) ?? 0;
+}
+
+export type ConversationDeltaMerge = {
+  readonly merged: Conversation[];
+  readonly removedIds: string[];
+};
+
+export type MergeConversationDeltaOptions = {
+  /**
+   * `true` s'il reste des pages non chargées derrière la fenêtre courante
+   * (`hasMore` de la dernière page). Par défaut `false` : sans information, on
+   * insère — ne rien insérer perdrait une ligne, l'insérer au pire la duplique
+   * jusqu'au prochain montage.
+   */
+  readonly hasMore?: boolean;
+};
+
+/**
+ * NON RÉCONCILIÉ, DÉLIBÉRÉMENT — le non-lu du delta écrase le non-lu local.
+ *
+ * iOS réconcilie ce champ en chokepoint de toute écriture de liste dérivée du
+ * serveur (`saveSorted` → `reconcileUnread`) : un instantané serveur en retard
+ * sur un `markAsRead` encore en vol fait « partir puis revenir » la pastille. Le
+ * delta EST une telle écriture, donc la question se pose ici aussi.
+ *
+ * Elle n'est pas tranchable avec ce que le web tient. iOS s'appuie sur une
+ * frontière `userState.lastReadAt` que `GET /conversations` n'expose PAS (le web
+ * ne reçoit que `unreadCount`, cf. `transformers.service.ts`). Le seul substitut
+ * disponible — « non-lu local à 0 et aucun message plus récent » — confond deux
+ * situations opposées : l'accusé de lecture en retard, et un `mark-unread`
+ * délibéré fait depuis un AUTRE appareil (`POST /conversations/:id/mark-unread`,
+ * que iOS appelle), qui produit exactement la même forme. Le suppresser
+ * masquerait une action volontaire de l'utilisateur.
+ *
+ * Fermer proprement demande de faire circuler la frontière de lecture dans la
+ * charge utile de la liste — un changement de contrat, pas un correctif de
+ * fusion. Consigné en tête instruite dans `tasks/todo.md`.
+ */
+
+/**
+ * Fusionne un lot delta dans la liste en cache, par id.
+ *
+ * Un delta actif fait un UPSERT (remplacement intégral, jamais un patch champ à
+ * champ : il vient de la même route que la liste, avec la même projection, et
+ * c'est la vérité serveur). Un delta `isActive: false` retire l'entrée et son id
+ * est rendu à l'appelant, qui purge les caches dérivés ; un retrait n'est JAMAIS
+ * écarté, quelle que soit sa place.
+ *
+ * Une conversation INCONNUE du cache et plus ancienne que la fenêtre chargée est
+ * écartée tant qu'il reste des pages : elle vit dans une page non encore lue, et
+ * l'insérer ici la ferait apparaître DEUX FOIS au prochain `fetchNextPage`, qui
+ * la rapportera à sa place réelle. Une inconnue récente, elle, appartient bien à
+ * la fenêtre et entre normalement.
+ *
+ * Le résultat est re-trié par `lastMessageAt` décroissant — l'ordre du serveur,
+ * pour que les frontières de pages reconstruites gardent un sens.
+ */
+export function mergeConversationDelta(
+  existing: readonly Conversation[],
+  deltas: readonly Conversation[],
+  options: MergeConversationDeltaOptions = {}
+): ConversationDeltaMerge {
+  const byId = new Map(existing.map((conversation) => [conversation.id, conversation]));
+  const removedIds: string[] = [];
+
+  const oldestLoaded = existing.reduce<number | null>((min, conversation) => {
+    const ms = timeOf(conversation.lastMessageAt);
+    if (ms === null) return min;
+    return min === null || ms < min ? ms : min;
+  }, null);
+
+  for (const delta of deltas) {
+    if (delta.isActive === false) {
+      if (byId.delete(delta.id)) removedIds.push(delta.id);
+      continue;
+    }
+
+    if (!byId.has(delta.id) && options.hasMore === true && oldestLoaded !== null) {
+      const deltaOrder = timeOf(delta.lastMessageAt);
+      if (deltaOrder !== null && deltaOrder < oldestLoaded) continue;
+    }
+
+    byId.set(delta.id, delta);
+  }
+
+  const merged = Array.from(byId.values()).sort((a, b) => orderKey(b) - orderKey(a));
+  return { merged, removedIds };
+}
