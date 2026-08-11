@@ -8022,3 +8022,50 @@ contrat, pas correctif. Retiré du backlog comme défaut.
   règle « adresser par `userId ?? id` » vaut pour tout émetteur personnel, et rien ne garantit
   que les autres la respectent. À instruire par une recherche sur `ROOMS.user(` plutôt que par
   déduction.
+
+## Review — Follow-ups différés audio immersif iOS (2026-08-11, branche `fix/ios-audio-followups`)
+
+Traite les 4 follow-ups différés du chantier "audio immersif iOS" (merge `02c7f69b4`, mémoire
+`project_ios_immersive_audio_2026_08_11`). 3 commits + revue finale de branche (Opus) : APPROVE
+avec réserves, mergeable.
+
+**Livré (commits `1691b2b62`, `b15d67ca6`, `982b0e390`, `7b89f02f9`)** :
+- Warning Sendable sur `beginBackgroundTaskProvider` résolu (`@Sendable` sur le type du handler).
+- Cold-open du plein écran audio depuis une conversation (tap direct, aucune lecture en cours)
+  câble désormais `conversationName`/`queueTailProvider` — `AudioMediaView.fullscreenSource(for:)`,
+  threadé sur 5 niveaux de vues (`MessageListViewController` → `ThemedMessageBubble` →
+  `BubbleStandardLayout` → `AudioMediaView`/`AudioCarouselView`).
+- Convention d'id synthétique du plein écran standalone unifiée avec les 3 sites
+  `CoordinatedAudioPlayer` inline (feed/commentaire/post).
+- Vérification manuelle iPhone SE 375pt : rangée transport (reculer/play/avancer/AirPlay) OK,
+  aucun changement de code nécessaire.
+- Test ajouté verrouillant la capture PER-ITEM de `queueTailProvider` (trouvé par la revue finale :
+  le test original stubbait `{ _ in ... }` sans jamais vérifier l'id reçu — un provider recevant
+  l'id de la VUE au lieu de celui de l'ITEM aurait cassé l'avance de file en multi-audio pager sans
+  faire rougir un seul test).
+
+**Découverte non liée à ce mini-chantier, à traiter séparément** : `AudioFullscreenView` plante de
+façon déterministe sur simulateur iPhone SE (3e gen) / iOS 18.2 (~250-900ms après ouverture,
+assertion libdispatch main-queue ~400-500ms après le push `NowPlayingInfo`). Confirmé PRÉ-EXISTANT
+(`cd7504e5e`, ancêtre de `main`, plante aussi) — ces 3 commits ne l'aggravent pas. L'hypothèse
+"AirPlayRoutePicker" a été RÉFUTÉE par deux expériences contrôlées (délai de montage du picker,
+délai de `startPlayback()` — même signature de crash dans les deux cas). Racine encore inconnue,
+dans une assertion AVKit/MediaPlayer fermée. Périmètre (autre device/OS ?) non déterminé — à
+tester sur iPhone 16 Pro et/ou device réel avant de pouvoir clore. Note : la "dette pbxproj"
+initialement soupçonnée pour `CoordinatedAudioPlayer.swift` était un faux positif du worktree
+d'investigation (pas régénéré) — `main` a bien les 4 références attendues, aucune action requise.
+
+**Follow-ups non-bloquants restants (verdict de la revue finale)** :
+- Artwork Now Playing du cold-open reste celui de l'EXPÉDITEUR (`item.authorAvatarURL`,
+  `AudioFullscreenView.swift:575`) alors que le nom est désormais celui de la CONVERSATION
+  (`item.nowPlayingContextName`) — incohérent avec `ConversationViewModel.playAudio` qui passe la
+  paire `currentConversationName`/`currentConversationArtworkURL`. Fix : ajouter un
+  `nowPlayingContextArtworkURL` sur `AudioFullscreenSource`, même threading que
+  `nowPlayingContextName` (5 fichiers, même patron que le commit `b15d67ca6`).
+- `PostDetailView.swift:~1941-1952` (cold-open d'un repost cité) : `conversationId` pointe le
+  repost cité mais `author`/`caption`/`createdAt` viennent toujours du post extérieur — même classe
+  de bug que `7ddcb6f22` avait corrigée côté inline, ici seulement pour le chemin froid (le chemin
+  chaud `playKeepingQueue` est sain). Fix : petite conversion `DetailMediaAuthor` → `ProfileSheetUser`.
+- `AudioFullscreenSource.conversationId` porte 3 sens différents (vraie `Conversation.id` / id
+  d'entité porteuse / `nil`) documentés par de la prose plutôt qu'un renommage — `playbackSessionId`
+  éliminerait le besoin d'expliquer. Touche l'API publique du coordinator, hors scope d'un mini-fix.
