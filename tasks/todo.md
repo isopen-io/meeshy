@@ -1,3 +1,111 @@
+# Tête instruite pour le cycle 75 — le SyncEngine `_seq` n'existe QUE sur iOS
+
+*Trouvé en instruisant le cycle 74, vérifié, NON corrigé — c'est un chantier, pas un correctif.*
+
+Le gateway tamponne un numéro de séquence monotone per-user (`_seq`) via `emitWithSeq`
+(`socketio/utils/emitWithSeq.ts`), iOS le suit (`SyncSeqState` / `SyncSeqTracker`, SDK) et
+déclenche une resync idempotente sur trou (`NotificationGapResyncCoordinator`, app). La chaîne est
+complète et testée de bout en bout.
+
+**Le web n'en décode rien** : `grep -rn "_seq" apps/web` ne rend aucune occurrence. Le client web
+n'a donc aucune détection de trou exacte et retombe entièrement sur le gap recovery temporel
+(watermarks `updatedSince`/`after`), qui rate les events à timestamp identique — le défaut même que
+le `_seq` existe pour fermer.
+
+Deux bornes à connaître avant d'ouvrir le chantier :
+1. **`emitWithSeq` n'a qu'UN seul appelant** (`NotificationService` → `notification:new`). Le `_seq`
+   est donc aujourd'hui un compteur de notifications, pas un compteur d'events. Étendre la
+   couverture (A2.2) exige un fan-out per-user des broadcasts room, ce que
+   `participantUserRoomTargets` (cycle 73) rend enfin possible sans réécrire la règle `userId ?? id`.
+2. Le portage web doit rester un MIROIR de `SyncSeqState` (valeur pure, `detectGap` avant `record`,
+   `nil` = no-op) — pas une seconde interprétation de la règle.
+
+---
+
+# Cycle 74 — La ligne de liste gelait sur la traduction D'AVANT (portillon de mémoïsation iOS)
+
+## Le défaut
+
+Le cycle 73 a rendu `lastMessageTranslations` **vivant** : le gateway ré-émet désormais
+`conversation:updated` quand une traduction atterrit, et — c'est le point — il ne l'émet QU'aux
+lecteurs dont la carte d'aperçu porte cette langue (`PreviewUpdateScope.onlyIfPreviewCarriesLanguage`).
+Le payload est donc, par construction, un payload où **seule la valeur traduite a changé** : même
+`lastMessageId`, même `lastMessagePreview` (l'original ne bouge pas), même `lastMessageAt`.
+
+`MeeshyConversation.renderFingerprint` est le portillon de mémoïsation de la ligne de liste :
+`ThemedConversationRow.==` et `ConversationRowItem.==` ne comparent la conversation QUE par ce hash,
+derrière `.equatable()`. Il repliait `translations.keys.sorted().joined(separator: ",")` — **les
+clés, pas les valeurs**.
+
+Conséquence : une RETRADUCTION (`["fr": "Bonjour"] → ["fr": "Salut"]`) produit le hash identique.
+Le portillon renvoie `true`, SwiftUI n'appelle même pas `body`, et la ligne garde le texte d'avant
+**définitivement**. Le seul champ qui bougeait était le seul non replié.
+
+Le chemin produit qui le déclenche : `message:edit` lance `retranslateMessageAsync` (fire-and-forget,
+`MessageHandler:845`) puis fane l'aperçu (`:889`). Quand l'émission d'aperçu gagne la course contre
+la purge en base de `Message.translations`, elle porte la carte PÉRIMÉE sous la clé `fr` ; la
+retraduction atterrit 1–2 s plus tard sous la MÊME clé. Un lecteur francophone lit alors, dans sa
+liste, la traduction du texte d'AVANT l'édition.
+
+Hasher les clés suffisait tant que la carte n'arrivait qu'une fois par message, au fetch de liste.
+Le cycle 73 a levé cette hypothèse sans mettre le portillon à jour.
+
+## Le correctif
+
+Replier clé ET valeur, chacune combinée séparément (`Hasher.combine` par composant, pas une
+concaténation qui confondrait `["a": "bc"]` et `["ab": "c"]`), en itérant les clés TRIÉES —
+`Dictionary` n'a pas d'ordre d'itération stable, et un hash non déterministe ouvrirait le portillon
+au hasard, ce qui annulerait le gain de `.equatable()`.
+
+## Second trou du même contrat, fermé au passage
+
+`lastMessageLocation` n'était replié **nulle part** dans le fingerprint, alors que la ligne en compose
+son libellé — visuellement (`ThemedConversationRow`, branche `.standard`, quand un message
+position-seule a un `lastMessagePreview` vide par construction) comme dans son label VoiceOver. Le
+doc-comment du hash dit pourtant « mettre à jour ce hash quand un nouveau champ est affiché » : c'est
+une violation du contrat déclaré, pas une approximation. La PRÉSENCE est repliée en plus du nom — une
+position sans nom affiche quand même « Position », transition que `name` seul (nil des deux côtés)
+raterait.
+
+## Vérification
+
+- **8 témoins neufs** (`ConversationRenderFingerprintTests`), dont 3 volontairement non-discriminants
+  seuls (stabilité du hash, première traduction, langue ajoutée) : ils verrouillent ce qui ne doit
+  PAS changer, et c'est leur seule fonction.
+- **RED prouvé par inspection, pas par exécution** — aucune toolchain Swift dans ce conteneur Linux.
+  La preuve est déterministe et vérifiable à la lecture : `["fr":"Bonjour"]` et `["fr":"Salut"]`
+  rendent tous deux la chaîne `"fr"` par `keys.sorted().joined(separator: ",")`, et
+  `lastMessageLocation` n'apparaissait pas une seule fois dans l'ancienne fonction. GREEN est exécuté
+  par `sdk-tests.yml` en CI (macOS), seul chemin d'exécution disponible.
+
+## L'audit instruit par le cycle 73 est CLOS — aucun défaut
+
+Le cycle 73 laissait ouvert : « `emitConversationPreviewUpdate` et les autres émetteurs par room
+personnelle n'ont pas été audités contre la même clé `userId ?? id` ». Fait, par une recherche sur
+`ROOMS.user(` (≈40 sites). **Rien à corriger** :
+
+- Tous les fan-outs par participant passent par `participantUserRoomTargets` /
+  `emitToConversationParticipants` — `emitConversationPreviewUpdate` compris.
+- Les émetteurs qui adressent `ROOMS.user(userId)` en dur ciblent la room PROPRE de l'acteur
+  (reset de badge multi-device, accusés, requêtes d'amitié, `user:updated`), où `userId` vient de
+  `authContext.userId` — lequel vaut déjà `participant.id` pour un anonyme
+  (`middleware/auth.ts:444`), c'est-à-dire exactement la room que rejoint le socket anonyme.
+- `MessageReadStatusService._loadReadReceiptOptOuts` filtre sur `userId` seul à dessein : la
+  préférence est stockée sur `User`, un participant sans compte n'en a pas et reste visible.
+
+À ne PAS rouvrir sans fait neuf : la règle est portée par le type et par le helper, pas par la
+vigilance des call sites.
+
+## Reste ouvert après ce cycle
+
+- **Android ne décode pas le Prisme de la ligne de liste** — tête du cycle 74 conservée ci-dessous.
+  Toujours NON traité ici : le défaut vit entièrement dans `apps/android/`, lane d'une autre routine
+  (`tasks/lane-cursor.md`). Vérifié encore ce cycle : `grep -rn lastMessageTranslations apps/android`
+  ne rend toujours rien.
+- Le web n'a aucun `_seq` — tête instruite du cycle 75 ci-dessus.
+
+---
+
 # Tête instruite pour le cycle 74 — Android ne DÉCODE pas le Prisme de la ligne de liste
 
 *Trouvé en instruisant le cycle 73, vérifié, NON corrigé : le défaut est réel et user-visible, mais
