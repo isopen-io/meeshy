@@ -101,6 +101,7 @@ function makePeer() {
 function makePrisma(overrides: {
   callSessionFindMany?: jest.MockedFunction<any>;
   participantFindMany?: jest.MockedFunction<any>;
+  callParticipantFindMany?: jest.MockedFunction<any>;
 } = {}) {
   return {
     conversation: { findUnique: jest.fn<any>(), findFirst: jest.fn<any>() },
@@ -119,7 +120,7 @@ function makePrisma(overrides: {
     callParticipant: {
       create: jest.fn<any>(),
       findFirst: jest.fn<any>(),
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      findMany: overrides.callParticipantFindMany ?? jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>(),
       updateMany: jest.fn<any>(),
     },
@@ -180,14 +181,16 @@ describe('CallService.listHistory', () => {
       expect(result.items[0].direction).toBe('outgoing');
     });
 
-    it('derives direction=incoming when call was answered by another initiator', async () => {
+    it('derives direction=incoming when call was answered by another initiator AND I personally joined it', async () => {
       const row = makeRow({
+        id: 'call-1',
         initiatorId: 'other-user',
         answeredAt: new Date(),
       });
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
+        callParticipantFindMany: jest.fn<any>().mockResolvedValue([{ callSessionId: 'call-1' }]),
       });
       const svc = new CallService(prisma);
       const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
@@ -203,6 +206,57 @@ describe('CallService.listHistory', () => {
       const svc = new CallService(prisma);
       const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
       expect(result.items[0].direction).toBe('missed');
+    });
+
+    it('derives direction=missed — never incoming — when the call was answered by others but I never personally joined it (group bystander)', async () => {
+      // A P2P call in a group conversation is capped at 2 active participants.
+      // A 3rd conversation member whose auto-early-join lost that race has no
+      // CallParticipant row of their own, even though `answeredAt` is set
+      // (the other two DID answer). The call never reached this member.
+      const row = makeRow({
+        id: 'call-1',
+        conversationId: CONV_GROUP,
+        conversation: { type: 'group', title: 'Squad', avatar: null },
+        initiatorId: 'other-user',
+        answeredAt: new Date(),
+      });
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([]),
+        callParticipantFindMany: jest.fn<any>().mockResolvedValue([]), // no row for USER_ID
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      expect(result.items[0].direction).toBe('missed');
+    });
+
+    it('does NOT query callParticipant for calls the current user initiated', async () => {
+      const row = makeRow({ id: 'call-1', initiatorId: USER_ID });
+      const callParticipantFindMany = jest.fn<any>().mockResolvedValue([]);
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([]),
+        callParticipantFindMany,
+      });
+      const svc = new CallService(prisma);
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      expect(callParticipantFindMany).not.toHaveBeenCalled();
+    });
+
+    it('scopes the callParticipant participation lookup to the current user and the returned call ids', async () => {
+      const row = makeRow({ id: 'call-1', initiatorId: 'other-user', answeredAt: new Date() });
+      const callParticipantFindMany = jest.fn<any>().mockResolvedValue([{ callSessionId: 'call-1' }]);
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([]),
+        callParticipantFindMany,
+      });
+      const svc = new CallService(prisma);
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      expect(callParticipantFindMany).toHaveBeenCalledWith({
+        where: { callSessionId: { in: ['call-1'] }, participant: { userId: USER_ID } },
+        select: { callSessionId: true },
+      });
     });
   });
 

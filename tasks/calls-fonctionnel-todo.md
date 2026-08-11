@@ -6823,3 +6823,67 @@ Reconduit tel quel (rien de plus trouvé côté iOS au-delà du fix #2 ci-dessus
 `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
 `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en string
 literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce sandbox.
+
+## Vague 105 — `callHistory.deriveCallDirection` étiquetait « incoming » un membre de groupe jamais entré dans l'appel (gateway) (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche
+`claude/upbeat-dirac-j53lvn` recréée depuis `origin/main` (`cceb858c`, qui contient déjà la Vague 104 —
+PR #2848 mergée), 0 commit d'avance/retard au démarrage, aucune PR ouverte de cette routine. Candidat
+pris directement dans le « Reste ouvert » loggé par la Vague 104 plutôt que ré-auditer à froid — la
+routine y avait explicitement laissé deux trouvailles gateway MEDIUM pour la Vague 105 ; celle-ci
+traite la seconde (mislabeling fonctionnel visible utilisateur), l'autre (`updateCallStatus`'s
+`duration` anchor, confirmée morte aujourd'hui) reste reconduite ci-dessous.
+
+- **Root cause confirmée par lecture directe** : `deriveCallDirection` (`callHistory.ts`) dérivait
+  `incoming` vs `missed` uniquement à partir de `CallSession.answeredAt` — un timestamp **call-wide**,
+  posé une seule fois par quiconque des (jusqu'à 2) participants actifs a effectivement répondu. Le
+  filtre de `CallService.listHistory` inclut, lui, TOUT membre actif de la conversation
+  (`conversation: { participants: { some: { userId, isActive: true } } }`), sans aucune relation avec
+  `CallParticipant`. Dans une conversation de groupe, un appel reste `mode: p2p` (Phase 1A) et
+  `joinCallAttempt` rejette explicitement le 3e joiner (`MAX_PARTICIPANTS_REACHED`,
+  `CallService.ts:1330-1339`) — sans jamais créer sa ligne `CallParticipant`. Ce 3e membre n'a donc
+  strictement aucune trace de participation pour cet appel, mais `deriveCallDirection` le voyait quand
+  même « incoming » dès que les deux autres avaient décroché, lui affirmant à tort avoir reçu un appel
+  qui n'a jamais atteint son device. Vérifié que la distinction ne pouvait PAS se réduire à « une ligne
+  `CallParticipant` existe pour cet utilisateur » seule (sans le AND sur `answeredAt`) : l'auto-early-join
+  côté callee (`joinCallRoomReliably`, cf. Vague 104) crée cette ligne dès la sonnerie, AVANT toute
+  réponse réelle — un 1:1 jamais décroché a donc bien une ligne `CallParticipant` pour l'appelé, et doit
+  rester `missed`. D'où le nouveau prédicat : `answeredAt && userParticipated`, jamais l'un sans
+  l'autre.
+- **Fix** : `deriveCallDirection` et `buildCallHistoryItem` (`callHistory.ts`) prennent un 4e paramètre
+  `userParticipated: boolean`. `CallService.listHistory` le résout en une requête batchée
+  (`callParticipant.findMany({ where: { callSessionId: { in }, participant: { userId } } })`), scopée
+  aux seuls appels où `userId` n'est pas l'initiateur (l'initiateur retourne toujours `outgoing`, avant
+  même de lire ce champ — pas de requête gaspillée sur son propre historique).
+- **Tests** (TDD, RED confirmé par relecture des assertions AVANT le fix — la suite existante
+  `deriveCallDirection`/`buildCallHistoryItem` codifiait littéralement l'ancien contrat buggé, comme la
+  suite `CallEventsHandler-already-answered-scope` de la Vague 104 sur son propre bug) : `callHistory.test.ts`
+  et `CallService.listHistory.test.ts` mis à jour pour le nouveau paramètre + 3 nouveaux cas — group
+  bystander jamais joint ⇒ `missed` (jamais `incoming`), pas de requête `callParticipant.findMany`
+  quand l'utilisateur est l'initiateur, et la requête est bien scopée aux ids de la page courante + à
+  `userId`. **36/36 vert** sur `callHistory|CallService.listHistory` ; sweep complet
+  `--testPathPatterns="[Cc]all"` — **48 suites / 1120 tests verts**, 0 régression (1115 + 5 nouveaux).
+  `npx tsc --noEmit` : **0 erreur**. `bun run test:coverage` (249 suites) lancé pour confirmation
+  large-spectre, résultat documenté avant le merge de cette PR.
+- **Portée volontairement non étendue** au champ de retour de l'API (`CallHistoryItem.direction` reste
+  `'incoming' | 'outgoing' | 'missed'`, contrat REST inchangé, aucun changement iOS/web requis) — seule
+  la logique serveur qui peuple ce champ était fausse.
+
+### Reste ouvert
+
+Un seul candidat gateway restait de la Vague 104, PAS traité ce cycle (portée toujours limitée à un
+candidat par audit) — reconduit tel quel, candidat sérieux pour la Vague 106 :
+
+- **`CallService.updateCallStatus`'s terminal-status branch ancre `duration` sur `startedAt` au lieu de
+  `answeredAt`**, violant l'invariant que TOUS les 7 autres writers terminaux de ce fichier respectent
+  déjà (Vagues 25/27/30 — sinon un « Manqué · N:NN » fantôme apparaît dans l'historique). Confirmé mort
+  aujourd'hui (grep : `updateCallStatus` n'est jamais appelé avec un statut terminal actuellement) mais
+  une mine pour tout futur appelant/refactor.
+
+Reconduit tel quel (rien de plus trouvé côté gateway au-delà du fix ci-dessus ; iOS/Android hors
+d'atteinte dans ce sandbox) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+`actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+(Vague 84, on-device requis) ; `removeParticipant()` web (Vague 91, non-régression) ;
+`call:force-leave`/`call:check-active` en string literals hors du type-map partagé (cosmétique).
