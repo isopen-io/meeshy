@@ -177,8 +177,6 @@ jest.mock('@/lib/react-query/query-keys', () => ({
     },
     conversations: {
       all: ['conversations'],
-      lists: () => ['conversations', 'list'],
-      list: (filters?: Record<string, unknown>) => ['conversations', 'list', filters],
       infinite: () => ['conversations', 'infinite'],
       details: () => ['conversations', 'detail'],
       detail: (id: string) => ['conversations', 'detail', id],
@@ -546,7 +544,10 @@ describe('useSocketCacheSync', () => {
     it('should update conversation with latest message', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['conversations', 'list', undefined], [mockConversation]);
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
 
       renderHook(() => useSocketCacheSync(), { wrapper });
 
@@ -555,18 +556,19 @@ describe('useSocketCacheSync', () => {
         newMessageCallback?.(newMessage);
       });
 
-      const conversations = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+      const conversations = (queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      }).pages.flatMap((page) => page.conversations);
 
       expect(conversations[0].lastMessage?.id).toBe('msg-new');
     });
   });
 
   describe('List view — conversationId: null, enabled: true', () => {
-    it('still updates the conversation list caches (lastMessage + reorder) on message:new', () => {
+    it('still updates the conversation list cache (lastMessage + reorder) on message:new', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
       const otherConversation = { ...mockConversation, id: 'conv-2', title: 'Other' } as Conversation;
-      queryClient.setQueryData(['conversations', 'list', undefined], [otherConversation, mockConversation]);
       queryClient.setQueryData(['conversations', 'infinite'], {
         pages: [{ conversations: [otherConversation, mockConversation], pagination: { total: 2, offset: 0, limit: 20, hasMore: false } }],
         pageParams: [0],
@@ -578,10 +580,6 @@ describe('useSocketCacheSync', () => {
       act(() => {
         newMessageCallback?.(newMessage);
       });
-
-      const listCache = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
-      expect(listCache[0].id).toBe('conv-1');
-      expect(listCache[0].lastMessage?.id).toBe('msg-new');
 
       const infiniteCache = queryClient.getQueryData(['conversations', 'infinite']) as {
         pages: { conversations: Conversation[] }[];
@@ -1585,10 +1583,18 @@ describe('useSocketCacheSync', () => {
     it('removes the rejected conversation from the conversations list cache', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['conversations', 'list', undefined], [
-        { ...mockConversation, id: 'conv-1' },
-        { ...mockConversation, id: 'conv-2' },
-      ] as Conversation[]);
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [
+              { ...mockConversation, id: 'conv-1' },
+              { ...mockConversation, id: 'conv-2' },
+            ] as Conversation[],
+            pagination: { total: 2, offset: 0, limit: 20, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
 
       renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
 
@@ -1596,7 +1602,9 @@ describe('useSocketCacheSync', () => {
         conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason: 'banned', message: 'You are banned' });
       });
 
-      const convs = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+      const convs = (queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      }).pages.flatMap((page) => page.conversations);
       expect(convs.map((c) => c.id)).not.toContain('conv-1');
       expect(convs.map((c) => c.id)).toContain('conv-2');
     });

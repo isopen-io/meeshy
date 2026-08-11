@@ -128,6 +128,31 @@ function makeMessage(overrides: Partial<Message> & { id: string; conversationId:
   } as Message;
 }
 
+/**
+ * La sidebar lit `conversations.infinite()` — c'est le SEUL cache de liste que
+ * l'application observe. Ces témoins visaient auparavant la forme plate
+ * (`conversations.list()`), qui n'a aucun lecteur : ils passaient au vert sans
+ * rien prouver du chemin réel.
+ */
+function seedConversations(queryClient: QueryClient, conversations: Conversation[]): void {
+  queryClient.setQueryData(queryKeys.conversations.infinite(), {
+    pages: [
+      {
+        conversations,
+        pagination: { limit: 20, offset: 0, total: conversations.length, hasMore: false },
+      },
+    ],
+    pageParams: [0],
+  });
+}
+
+function cachedConversations(queryClient: QueryClient): Conversation[] {
+  const data = queryClient.getQueryData(queryKeys.conversations.infinite()) as
+    | { pages: { conversations: Conversation[] }[] }
+    | undefined;
+  return data?.pages.flatMap((page) => page.conversations) ?? [];
+}
+
 function createTestHarness(conversationId: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -140,7 +165,7 @@ function createTestHarness(conversationId: string) {
   });
 
   // Seed conversations list cache
-  queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+  seedConversations(queryClient, [
     { id: conversationId, lastMessage: null, lastMessageAt: null, updatedAt: new Date().toISOString() } as any,
   ]);
 
@@ -274,7 +299,7 @@ describe('useSocketCacheSync — B1 ID-only dedup', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
 
     // Add a second conversation
-    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+    seedConversations(queryClient, [
       { id: 'conv-2', lastMessage: null, updatedAt: new Date().toISOString() } as any,
       { id: 'conv-1', lastMessage: null, updatedAt: new Date().toISOString() } as any,
     ]);
@@ -284,9 +309,9 @@ describe('useSocketCacheSync — B1 ID-only dedup', () => {
     const msg = makeMessage({ id: 'server-1', conversationId: 'conv-1' });
     act(() => { capturedMessageListener!(msg); });
 
-    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
-    expect(convs![0].id).toBe('conv-1');
-    expect(convs![0].lastMessage).toBeDefined();
+    const convs = cachedConversations(queryClient);
+    expect(convs[0].id).toBe('conv-1');
+    expect(convs[0].lastMessage).toBeDefined();
   });
 });
 
@@ -315,7 +340,7 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
       pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
       pageParams: [1],
     });
-    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+    seedConversations(queryClient, [
       { id: 'conv-1', lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
     ]);
     return { older, newer };
@@ -333,9 +358,9 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
     const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
     expect(cached.pages[0].messages.map((m: Message) => m.id)).toEqual(['m-old']);
 
-    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
-    expect(convs![0].lastMessage?.id).toBe('m-old');
-    expect(convs![0].lastMessageAt).toBe(older.createdAt);
+    const convs = cachedConversations(queryClient);
+    expect(convs[0].lastMessage?.id).toBe('m-old');
+    expect(convs[0].lastMessageAt).toBe(older.createdAt);
   });
 
   it('removes a message deleted in a NON-active conversation', () => {
@@ -367,7 +392,7 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
       pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
       pageParams: [1],
     });
-    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+    seedConversations(queryClient, [
       { id: 'conv-other', lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
     ]);
 
@@ -375,8 +400,8 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
 
     act(() => { capturedDeleteListener!('m-bg-new'); });
 
-    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
-    expect(convs![0].lastMessage?.id).toBe('m-bg-old');
+    const convs = cachedConversations(queryClient);
+    expect(convs[0].lastMessage?.id).toBe('m-bg-old');
   });
 
   it('removes the message from EVERY cached list holding it, including an alias entry', () => {
@@ -413,7 +438,7 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
       pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
       pageParams: [1],
     });
-    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+    seedConversations(queryClient, [
       { id: objectId, lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
     ]);
 
@@ -421,8 +446,8 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
 
     act(() => { capturedDeleteListener!('m-alias-new'); });
 
-    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
-    expect(convs![0].lastMessage?.id).toBe('m-alias-old');
+    const convs = cachedConversations(queryClient);
+    expect(convs[0].lastMessage?.id).toBe('m-alias-old');
   });
 
   it('leaves the preview untouched when a non-latest message is deleted', () => {
@@ -433,8 +458,8 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
 
     act(() => { capturedDeleteListener!('m-old'); });
 
-    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
-    expect(convs![0].lastMessage?.id).toBe('m-new');
+    const convs = cachedConversations(queryClient);
+    expect(convs[0].lastMessage?.id).toBe('m-new');
   });
 
   it('does not blank the preview when no message remains in cache', () => {
@@ -444,7 +469,7 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
       pages: [{ messages: [only], hasMore: false, total: 1 }],
       pageParams: [1],
     });
-    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+    seedConversations(queryClient, [
       { id: 'conv-1', lastMessage: only, lastMessageAt: only.createdAt, updatedAt: only.createdAt } as any,
     ]);
 
@@ -457,8 +482,8 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
     expect(cached.pages[0].messages).toHaveLength(0);
     // …but the preview is left as-is rather than blanked (older messages may
     // exist server-side but not be loaded in cache).
-    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
-    expect(convs![0].lastMessage?.id).toBe('m-only');
+    const convs = cachedConversations(queryClient);
+    expect(convs[0].lastMessage?.id).toBe('m-only');
   });
 });
 

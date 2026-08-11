@@ -132,10 +132,6 @@ function advanceConversationPreviewOnDelete(
       ? { ...conv, lastMessage: replacement, lastMessageAt: replacement.createdAt }
       : conv;
 
-  queryClient.setQueriesData<Conversation[]>(
-    { queryKey: queryKeys.conversations.lists() },
-    (old) => (old ? old.map(replace) : old)
-  );
   updateInfiniteConversationCache(queryClient, (convs) => convs.map(replace));
 }
 
@@ -307,32 +303,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         });
       }
 
-      // Update ALL conversation list variants with latest message AND move to top
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-
-          let updated: Conversation | null = null;
-          const rest: Conversation[] = [];
-          for (const conv of old) {
-            if (conv.id === targetConversationId) {
-              updated = {
-                ...conv,
-                lastMessage: message,
-                lastMessageAt: message.createdAt,
-                updatedAt: message.createdAt,
-              };
-            } else {
-              rest.push(conv);
-            }
-          }
-
-          if (!updated) return old;
-          return [updated, ...rest];
-        }
-      );
-
       // Update infinite conversations query (paginated cache used by ConversationList)
       let conversationFoundInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
@@ -419,23 +389,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         queryClient.setQueryData(key, applyEdit);
       }
 
-      // Update lastMessage in ALL conversation list variants if this edited message is the last one
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-          return old.map((conv) => {
-            if (
-              conv.id === targetConversationId &&
-              conv.lastMessage?.id === message.id &&
-              !isStaleEdit(conv.lastMessage, message)
-            ) {
-              return { ...conv, lastMessage: message };
-            }
-            return conv;
-          });
-        }
-      );
       updateInfiniteConversationCache(queryClient, (convs) =>
         convs.map((conv) =>
           conv.id === targetConversationId &&
@@ -723,10 +676,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             ? { ...conv, memberCount: resolve(conv.memberCount ?? 0) }
             : conv
         );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? updater(old) : old
-      );
       updateInfiniteConversationCache(queryClient, updater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(conversationId),
@@ -957,17 +906,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const linkLastMessage = linkMsg as unknown as Message;
       const linkLastMessageAt = toDate(linkMsg.createdAt) ?? new Date();
 
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-          const idx = old.findIndex((c) => c.id === linkConvId);
-          if (idx === -1) return old;
-          const updated: Conversation = { ...old[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
-          return [updated, ...old.filter((_, i) => i !== idx)];
-        }
-      );
-
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
@@ -981,10 +919,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const { conversationId: rejectedId, reason } = data;
       if (!rejectedId) return;
       updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => (old ? old.filter((c) => c.id !== rejectedId) : old)
-      );
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
       queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
       if (typeof window !== 'undefined') {

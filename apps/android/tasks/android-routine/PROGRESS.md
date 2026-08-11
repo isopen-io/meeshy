@@ -1,5 +1,85 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **live contact presence sync landed, plus a real wire-contract bug fix**
+> (slice `presence-live-contacts-overlay`, feature-parity §"Contacts list" — the previously-
+> deferred "presence-cache foundation for conversation participants" candidate, investigated and
+> right-sized down to its first real, self-contained consumer rather than built as unconsumed
+> infrastructure). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open
+> --search "apps/android OR apps/ios"` found no interrupted run (2 unrelated `apps/ios`/`apps/web`
+> PRs at scan time). Investigated what a "presence-cache foundation" would actually need before
+> writing any code: grepped for `PresenceState`/`UserPresence` usage, found
+> `MessageSocketManager` already declares and `.attach()`-es listeners for `user:status` and
+> `presence:snapshot` — **but grepping every call site of both flows found zero consumers
+> anywhere in the app**, dead-but-wired infrastructure exactly like the earlier
+> `outbox-message-lane-discovery`/email-phone-change slices' own pattern. **A deeper bug found
+> before wiring a consumer**: `UserStatusEvent`/`PresenceSnapshotEvent` (`:core:model`) don't even
+> match the real gateway payload — checked `packages/shared/types/socketio-events.ts`'s
+> `UserStatusEvent`/`PresenceSnapshotEventData` (`{userId, username, isOnline, lastActiveAt}` /
+> `{users: [...]}`) against the Android DTOs (`status: String`/`lastSeenAt`/flat
+> `onlineUserIds: List<String>`) — zero matching field names. Confirmed the gateway genuinely
+> emits these events for real (`SERVER_EVENTS.USER_STATUS` in `MeeshySocketIOManager.ts`'s
+> `_broadcastUserStatus`, not a dead/unused constant) before concluding this was a real, fixable
+> bug rather than dead code on both ends. **Shipped (production, all `apps/android`)**: fixed both
+> DTOs' field names/types to match the real gateway contract (`PresenceSnapshotEvent` now reuses
+> `UserStatusEvent` per entry rather than duplicating an identical nested shape). Found the
+> concrete first consumer by checking where presence is ALREADY rendered from stale data:
+> `ContactsListTab.kt`'s `friend.presenceState(System.currentTimeMillis())` reads straight off the
+> roster's last full `/friends` REST fetch (`presence-away-indicator`, 2026-07-04) — never updated
+> live, frozen until the next reload. New pure `PresenceOverlay` (`:feature:contacts`, mirrors the
+> placement of the package's existing `ContactList`/`ContactFilterCounts` pure helpers)
+> `applyStatus`/`applySnapshot` merge a live event onto the roster by `userId`, leaving every other
+> row untouched. `ContactsListViewModel.observePresence()` (new, called from `init` alongside the
+> existing `observeFriendshipCache()`) collects both `MessageSocketManager` flows — **started
+> eagerly, not lazily**: `MessageSocketManager`'s own doc comment warns its flows are hot
+> `SharedFlow`s with no replay, so a late subscriber genuinely misses events, matching the
+> existing `observeFriendshipCache()` precedent's own eager `init`-time start. **+15 new tests**
+> (`UserStatusEventTest`, `:core:model`: decodes a real status broadcast, an offline frame with
+> privacy-hidden `lastActiveAt`, a snapshot's nested user list, an empty snapshot; `PresenceOverlayTest`:
+> matching-friend update, other-friends untouched, unknown-userId no-op, snapshot multi-update,
+> friend-absent-from-snapshot untouched, empty-snapshot no-op; `ContactsListViewModelTest`: a live
+> status event updates presence without a full reload — asserted via `coVerify(exactly = 1)` on
+> `receivedRequests` to prove no extra refetch fires, a snapshot updates matching friends
+> likewise, a status event for a userId not in the roster is a no-op). **Mutation-proven**, two
+> axes: neutralizing `PresenceOverlay.applyStatus`'s id match (`friend.id == event.userId` →
+> `true`) fails **exactly** the 2 tests asserting isolation (unknown-id no-op at both the pure and
+> VM level; 28 others green); neutralizing the DTO field mapping itself (renaming `isOnline` to a
+> non-matching `isOnlineFlag` backing property, reproducing the exact class of bug fixed) fails
+> **exactly** the 2 decode tests asserting a live `true`/populated value (2 others — the `false`/
+> empty-default cases — stay green, since they can't distinguish a correct decode from a silent
+> fallback-to-default). Both applied via a scratch `cp`-backed edit (never `git checkout --`),
+> restored via `cp`, diffed clean against the backup afterward. **Process note, stated honestly**:
+> the DTO field-rename and the `ContactsListViewModel.observePresence()` wiring were written
+> before their own tests (implementation-first for these two small, mechanical pieces), then
+> proven via the mutation pass above rather than a strict prior RED run — the core
+> `PresenceOverlay` merge logic itself WAS written test-first (RED confirmed: `PresenceOverlay`
+> didn't exist when `PresenceOverlayTest.kt` was written, compile failure until the object was
+> added). **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching
+> every prior slice — no build-graph regression; zero test failures across every module's XML
+> reports). Reviewer **PASS** (diff `apps/android` only — 6 files, confirmed via `git status
+> --short`; SDK purity — `PresenceOverlay`'s pure merge lives in `:feature:contacts` (a product
+> decision about how the Contacts screen paints presence, not yet a proven-reusable atom — single
+> consumer so far, correctly app-side per "duplicate until a 3rd call site" for this class of
+> glue), the DTO fix lives in `:core:model` (a pure data-shape correction, not orchestration);
+> SSOT — reuses `MessageSocketManager`'s existing (already-`.attach()`-ed) socket infrastructure
+> and the existing `UserPresence.state()`/`FriendRequestUser.presenceState()` rendering pipeline
+> unchanged, zero re-implementation; no coverage floor lowered; no tautological tests). **Not
+> attempted this run** (compile+test-only per the local JVM gate; no simulator/emulator session —
+> a future run should install-and-verify against the live gateway with the shared `atabeth`
+> account, confirming a second device/session toggling online/offline actually repaints the
+> Contacts row live without leaving/re-entering the screen). **Deliberate, documented scope cut**:
+> conversation-participant presence (the original "favorite-contacts status badge" gap noted in
+> the widget slice) is NOT wired this run — this slice fixed the shared wire-contract bug and
+> proved it out on the ALREADY-EXISTING Contacts consumer first (smaller, safer, immediately
+> useful blast radius); a future slice can now reuse the corrected `UserStatusEvent`/
+> `PresenceSnapshotEvent` DTOs directly for conversation participants without redoing this
+> investigation. **Next slice candidates (not attempted this run)**: conversation-participant
+> presence (foundation now unblocked by this slice); mark-read widget action (still
+> deprioritized); Google Assistant App Actions; on-device transcription for the Feed audio
+> composer; Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location
+> attachment; PiP (calls + media); Conversation lock (needs its own scoping pass); the onboarding
+> carousel (needs a design pass) — per the orchestrator's guidance these remain documented, real
+> gaps warranting planning/decomposition passes rather than bare re-grepping.
+
 > On 2026-08-11 **a stale `feature-parity.md` checkbox was found and corrected** (slice
 > `feature-parity-stale-checkbox-audio-translate` — a broad-sweep RE-PROUVER pass after the
 > home-screen widget epic wrapped up at 4/4 widgets, per the orchestrator's standing "continue the
