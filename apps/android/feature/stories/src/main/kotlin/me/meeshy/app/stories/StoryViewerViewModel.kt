@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -26,7 +27,32 @@ import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
 
-/** A single slide projected for the viewer. Pure data. */
+/**
+ * A foreground media layer on a slide — a non-background [StoryMediaObject]
+ * (video or image) composited on top of the background. Position/scale are
+ * normalised canvas fractions (0..1), matching the wire model; keyframe
+ * animation, rotation and transitions are not applied in this projection.
+ */
+@Immutable
+data class StoryForegroundMediaView(
+    val url: String,
+    val isVideo: Boolean,
+    val x: Double,
+    val y: Double,
+    val scale: Double,
+    val aspectRatio: Double,
+)
+
+/**
+ * A single slide projected for the viewer. Pure data.
+ *
+ * Background media is EITHER [imageUrl] (static) OR [backgroundVideoUrl]
+ * (looping video) — never both; a video background never populates [imageUrl]
+ * so the viewer's `AsyncImage` branch (Coil, image-only) is never handed a
+ * video URL it cannot decode. [foregroundMedia] layers extra video/image
+ * objects on top; [backgroundAudioUrl]/[foregroundAudioUrl] are the resolved
+ * playback URLs for the slide's background and foreground/voice audio tracks.
+ */
 @Immutable
 data class StorySlideView(
     val id: String,
@@ -35,6 +61,11 @@ data class StorySlideView(
     val imageUrl: String?,
     val accentHex: String,
     val reactionCount: Int = 0,
+    val backgroundVideoUrl: String? = null,
+    val backgroundLoop: Boolean = true,
+    val foregroundMedia: List<StoryForegroundMediaView> = emptyList(),
+    val backgroundAudioUrl: String? = null,
+    val foregroundAudioUrl: String? = null,
 )
 
 /**
@@ -262,18 +293,87 @@ class StoryViewerViewModel @Inject constructor(
         prefs: LanguageResolver.ContentLanguagePreferences,
     ): StorySlideView {
         val resolved = StoryContentResolver.resolve(this, prefs)
-        val image = media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
-            ?: media.firstOrNull { it.thumbnailUrl != null }
-        val imageUrl = (image?.url ?: image?.thumbnailUrl)
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
+        val background = resolveBackgroundMedia()
+        val foreground = storyEffects?.mediaObjects.orEmpty()
+            .filterNot { it.isBackground }
+            .mapNotNull { it.toForegroundMediaView() }
         return StorySlideView(
             id = id,
             text = resolved.content,
             isTranslated = resolved.isTranslated,
-            imageUrl = imageUrl,
+            imageUrl = background.imageUrl,
             accentHex = accentHex,
             reactionCount = reactionCount,
+            backgroundVideoUrl = background.videoUrl,
+            backgroundLoop = background.loop,
+            foregroundMedia = foreground,
+            backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
+            foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
         )
+    }
+
+    private data class BackgroundMedia(val imageUrl: String?, val videoUrl: String?, val loop: Boolean)
+
+    /**
+     * Resolves the slide's single background layer. `storyEffects.mediaObjects`
+     * (the modern, RAW-publish wire shape) is authoritative when present: the
+     * object flagged `isBackground` carries its own `mediaURL` + kind, so no
+     * cross-referencing against the flat `media[]` list is needed. Legacy
+     * stories without `storyEffects.mediaObjects` fall back to the flat list,
+     * preferring a VIDEO item over an IMAGE one — critically, a video's own
+     * `.url` is only ever assigned to [BackgroundMedia.videoUrl], never to
+     * [BackgroundMedia.imageUrl] (the historical bug: Coil can't decode a video
+     * file as an image, so the slide painted nothing and no video ever played).
+     */
+    private fun StoryItem.resolveBackgroundMedia(): BackgroundMedia {
+        val backgroundObject = storyEffects?.mediaObjects?.firstOrNull { it.isBackground }
+        val fallbackMedia = media.firstOrNull { it.type == FeedMediaType.VIDEO }
+            ?: media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
+
+        val isVideo = backgroundObject?.mediaType == "video" ||
+            (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
+        val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
+            ?.let { resolveMediaUrl(it, config.socketUrl) }
+
+        if (isVideo) {
+            return BackgroundMedia(imageUrl = null, videoUrl = resolvedUrl, loop = backgroundObject?.loop ?: true)
+        }
+        val imageUrl = resolvedUrl
+            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
+        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true)
+    }
+
+    private fun StoryMediaObject.toForegroundMediaView(): StoryForegroundMediaView? {
+        val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
+        return StoryForegroundMediaView(
+            url = url,
+            isVideo = mediaType == "video",
+            x = x,
+            y = y,
+            scale = scale,
+            aspectRatio = aspectRatio,
+        )
+    }
+
+    /**
+     * Resolves the URL of the slide's background (voice/library/effects track)
+     * or foreground (non-background) audio, per [preferBackground].
+     * `storyEffects.audioPlayerObjects` only carry a `postMediaId`, so the
+     * playable URL is cross-referenced from the flat `media[]` list by id. When
+     * no `audioPlayerObjects` exist at all, the background slot falls back to
+     * the story's direct `audioUrl` (voice attachment) then its library
+     * `backgroundAudio` entry — both already resolved URLs, no lookup needed.
+     */
+    private fun StoryItem.resolveAudioUrl(preferBackground: Boolean): String? {
+        val match = storyEffects?.audioPlayerObjects.orEmpty()
+            .firstOrNull { (it.isBackground == true) == preferBackground }
+        val fromObject = match?.postMediaId
+            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
+            ?.let { resolveMediaUrl(it, config.socketUrl) }
+        if (fromObject != null) return fromObject
+        if (!preferBackground) return null
+        return audioUrl?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.socketUrl) }
     }
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
