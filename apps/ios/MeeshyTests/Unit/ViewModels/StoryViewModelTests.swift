@@ -92,6 +92,38 @@ final class StoryViewModelTests: XCTestCase {
     private static func makeStoriesResponse(
         posts: [APIPost]
     ) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode("""
+        {"success":true,"data":\(storyPostsJSON(posts)),"pagination":null,"error":null}
+        """)
+    }
+
+    /// Expiry hors d'atteinte de l'horloge du runner : le chemin delta purge les
+    /// stories périmées, donc un fixture daté du passé disparaîtrait avant
+    /// l'assertion — et une date « aujourd'hui + n » ferait dépendre le témoin
+    /// de la date d'exécution.
+    private static let farFutureExpiry = "2099-01-01T00:00:00.000Z"
+
+    /// Page de tray complète : `pagination` + `meta`, les deux blocs que le
+    /// drain lit. `makeStoriesResponse` ci-dessus reste la forme sans pagination
+    /// (ce que rendait un serveur d'avant ces champs).
+    private static func makeStoriesPage(
+        posts: [APIPost] = [],
+        hasMore: Bool = false,
+        nextCursor: String? = nil,
+        deletedStoryIds: [String] = [],
+        deletedStoryIdsTruncated: Bool = false
+    ) -> PaginatedAPIResponse<[APIPost]> {
+        let cursorJSON = nextCursor.map { "\"\($0)\"" } ?? "null"
+        let deletedJSON = deletedStoryIds.map { "\"\($0)\"" }.joined(separator: ",")
+        return JSONStub.decode("""
+        {"success":true,"data":\(storyPostsJSON(posts)),\
+        "pagination":{"limit":50,"hasMore":\(hasMore),"nextCursor":\(cursorJSON)},\
+        "error":null,\
+        "meta":{"deletedStoryIds":[\(deletedJSON)],"deletedStoryIdsTruncated":\(deletedStoryIdsTruncated)}}
+        """)
+    }
+
+    private static func storyPostsJSON(_ posts: [APIPost]) -> String {
         let items = posts.map { p in
             let contentJSON = p.content.map { "\"\($0)\"" } ?? "null"
             let expiresAtJSON: String
@@ -109,10 +141,7 @@ final class StoryViewModelTests: XCTestCase {
             {"id":"\(p.id)","type":"STORY","content":\(contentJSON),"createdAt":"\(createdAtStr)","expiresAt":\(expiresAtJSON),"author":{"id":"\(p.author.id)","username":"\(p.author.username ?? "user")"}}
             """
         }
-        let postsJSON = "[\(items.joined(separator: ","))]"
-        return JSONStub.decode("""
-        {"success":true,"data":\(postsJSON),"pagination":null,"error":null}
-        """)
+        return "[\(items.joined(separator: ","))]"
     }
 
     private func makeStoryGroup(
@@ -289,6 +318,175 @@ final class StoryViewModelTests: XCTestCase {
         await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
 
         XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"])
+    }
+
+    // MARK: - Drain de pagination du tray
+    //
+    // `GET /posts/feed/stories` plafonne `limit` à 50 et annonce la suite par
+    // `pagination.hasMore`/`nextCursor`. Ces deux champs n'avaient AUCUN lecteur
+    // dans le dépôt : le tray était coupé à 50 stories pour tout le monde, sans
+    // qu'aucune ligne de code puisse s'en apercevoir.
+    //
+    // Paginer est le bon geste ICI (et pas escalader vers un fetch complet comme
+    // pour les conversations) pour deux raisons : la page est ordonnée par
+    // `(createdAt, id)` et son curseur porte sur ce même couple — le parcours
+    // est donc exact ; et le fetch complet emprunte la MÊME route plafonnée à
+    // 50, il ne rattraperait rien.
+
+    func test_fullFetch_followsNextCursorUntilTheServerStopsAnnouncingMore() async {
+        mockStoryService.listResults = [
+            .success(Self.makeStoriesPage(
+                posts: [Self.makeStoryAPIPost(id: "s1", authorId: "u1", authorUsername: "alice")],
+                hasMore: true,
+                nextCursor: "cursor-page-2"
+            )),
+            .success(Self.makeStoriesPage(
+                posts: [Self.makeStoryAPIPost(id: "s2", authorId: "u2", authorUsername: "bob")],
+                hasMore: false
+            ))
+        ]
+
+        await sut.loadStories(forceNetwork: true)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 2)
+        XCTAssertEqual(mockStoryService.listCursors, [nil, "cursor-page-2"])
+        XCTAssertEqual(sut.storyGroups.flatMap { $0.stories.map(\.id) }.sorted(), ["s1", "s2"])
+    }
+
+    func test_fullFetch_asksForTheServerSideMaximumPageSize() async {
+        // Annoncer plus que le plafond serveur ne rend pas une ligne de plus et
+        // désarme les gardes qui comparent au `limit` demandé (cycle 79).
+        mockStoryService.listResult = .success(Self.makeStoriesPage())
+
+        await sut.loadStories(forceNetwork: true)
+
+        XCTAssertEqual(mockStoryService.lastListLimit, 50)
+    }
+
+    func test_fullFetch_stopsAtThePageCapWhenTheServerNeverStops() async {
+        // Un serveur qui annonce `hasMore` sans fin ne doit pas faire boucler le
+        // client indéfiniment.
+        mockStoryService.listResult = .success(Self.makeStoriesPage(
+            posts: [Self.makeStoryAPIPost(id: "s1")],
+            hasMore: true,
+            nextCursor: "always-more"
+        ))
+
+        await sut.loadStories(forceNetwork: true)
+
+        XCTAssertEqual(mockStoryService.listCallCount, StoryViewModel.maxTrayPagesPerPass)
+    }
+
+    func test_fullFetch_stopsWhenHasMoreCarriesNoCursor() async {
+        // `hasMore: true` sans `nextCursor` est une page suivante qu'on ne sait
+        // pas demander : rejouer la même page en boucle serait pire que s'arrêter.
+        mockStoryService.listResult = .success(Self.makeStoriesPage(
+            posts: [Self.makeStoryAPIPost(id: "s1")],
+            hasMore: true,
+            nextCursor: nil
+        ))
+
+        await sut.loadStories(forceNetwork: true)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 1)
+    }
+
+    func test_deltaRefresh_followsNextCursorAcrossPages() async {
+        // Expiry au futur : le chemin delta passe par `purgeDeadStories`, qui
+        // retire les stories périmées — le défaut de `makeStoryAPIPost` est une
+        // date de 2026-01 et serait purgé avant l'assertion.
+        mockStoryService.listResults = [
+            .success(Self.makeStoriesPage(
+                posts: [Self.makeStoryAPIPost(
+                    id: "s1", authorId: "u1", authorUsername: "alice", expiresAt: Self.farFutureExpiry
+                )],
+                hasMore: true,
+                nextCursor: "cursor-page-2"
+            )),
+            .success(Self.makeStoriesPage(
+                posts: [Self.makeStoryAPIPost(
+                    id: "s2", authorId: "u2", authorUsername: "bob", expiresAt: Self.farFutureExpiry
+                )],
+                hasMore: false
+            ))
+        ]
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(mockStoryService.listCursors, [nil, "cursor-page-2"])
+        XCTAssertEqual(sut.storyGroups.flatMap { $0.stories.map(\.id) }.sorted(), ["s1", "s2"])
+    }
+
+    func test_deltaRefresh_unionsTombstonesAcrossPages() async {
+        // Les tombstones voyagent page par page : ne lire que la première en
+        // perdrait silencieusement une partie.
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [
+            makeStoryItem(id: "s1"), makeStoryItem(id: "ghost")
+        ])]
+        mockStoryService.listResults = [
+            .success(Self.makeStoriesPage(hasMore: true, nextCursor: "cursor-page-2")),
+            .success(Self.makeStoriesPage(deletedStoryIds: ["ghost"]))
+        ]
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"])
+    }
+
+    // MARK: - Troncature des tombstones ⇒ escalade
+    //
+    // Contrairement à la page, les tombstones n'ont AUCUN curseur de reprise :
+    // il n'existe pas de « page suivante » de disparitions à demander. Le seul
+    // geste qui purge les fantômes restants est le REMPLACEMENT du tray par un
+    // fetch complet — donc ici on escalade, là où la page se rattrapait en
+    // paginant. Deux signaux, deux gestes.
+
+    func test_deltaRefresh_whenTombstonesTruncated_escalatesToAFullFetch() async {
+        // Le fantôme n'est PAS dans les tombstones reçus (ils ont été coupés) :
+        // seul le remplacement du tray par le fetch complet le fait sortir.
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "ghost")])]
+        mockStoryService.listResults = [
+            .success(Self.makeStoriesPage(deletedStoryIds: [], deletedStoryIdsTruncated: true)),
+            .success(Self.makeStoriesPage(
+                posts: [Self.makeStoryAPIPost(
+                    id: "s1", authorId: "u1", authorUsername: "alice", expiresAt: Self.farFutureExpiry
+                )]
+            ))
+        ]
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(mockStoryService.listCallCount, 2)
+        // Le second appel est bien un fetch COMPLET, pas un autre delta.
+        XCTAssertNil(mockStoryService.lastListUpdatedSince)
+        XCTAssertEqual(sut.storyGroups.flatMap { $0.stories.map(\.id) }, ["s1"])
+    }
+
+    func test_deltaRefresh_completeTombstoneWindow_doesNotEscalate() async {
+        // Garde-fou : une fenêtre complète ne doit PAS déclencher de fetch
+        // complet, sinon chaque delta en paierait un.
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1")])]
+        mockStoryService.listResult = .success(Self.makeStoriesPage(
+            deletedStoryIds: [],
+            deletedStoryIdsTruncated: false
+        ))
+        let since = Date().addingTimeInterval(-300)
+
+        await sut.fetchStoriesFromNetwork(deltaSince: since)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 1)
+        XCTAssertNotNil(mockStoryService.lastListUpdatedSince)
+    }
+
+    func test_deltaRefresh_serverWithoutTheTruncationField_doesNotEscalate() async {
+        // Rétro-compatibilité : un gateway antérieur au champ omet `meta`. Son
+        // absence doit se lire « pas de troncature » — le comportement d'avant.
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1")])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse())
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(mockStoryService.listCallCount, 1)
     }
 
     // MARK: - storyRingState(forUserId:) Tests

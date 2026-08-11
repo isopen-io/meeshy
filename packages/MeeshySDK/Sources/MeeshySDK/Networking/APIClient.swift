@@ -130,8 +130,20 @@ public struct APIResponseMeta: Decodable, Sendable {
     /// ou hors-ligne, aucun replay) apprend qu'il doit purger son cache.
     public let deletedStoryIds: [String]?
 
-    public init(deletedStoryIds: [String]? = nil) {
+    /// `deletedStoryIds` a débordé son plafond serveur : des disparitions plus
+    /// anciennes n'ont PAS été rendues.
+    ///
+    /// Les tombstones n'ont aucun curseur de reprise — il n'y a donc pas de
+    /// « page suivante » de disparitions à demander. Le seul recours est un
+    /// fetch complet, dont le remplacement du tray purge les fantômes.
+    ///
+    /// Absent (`nil`) sur un gateway antérieur à ce champ : traité comme « pas
+    /// de troncature », c'est-à-dire exactement le comportement d'avant.
+    public let deletedStoryIdsTruncated: Bool?
+
+    public init(deletedStoryIds: [String]? = nil, deletedStoryIdsTruncated: Bool? = nil) {
         self.deletedStoryIds = deletedStoryIds
+        self.deletedStoryIdsTruncated = deletedStoryIdsTruncated
     }
 }
 

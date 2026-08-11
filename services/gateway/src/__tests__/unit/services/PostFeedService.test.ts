@@ -466,6 +466,68 @@ describe('PostFeedService.getStories', () => {
     expect(result.deletedIds).toEqual([]);
   });
 
+  // --- Troncature des tombstones ------------------------------------------
+  //
+  // Le plafond des tombstones n'a pas de curseur : rien ne permet de reprendre
+  // la suite. Un client dont les tombstones ont été coupés garde donc des
+  // stories fantômes, et il ne peut le découvrir que si la charge utile le lui
+  // DIT — le plafond était jusqu'ici journalisé côté serveur seulement.
+  //
+  // Le drapeau se prouve par une ligne SONDE (`take: LIMIT + 1`), comme
+  // `hasMore` : `length === LIMIT` ne distingue pas une page coupée d'une
+  // fenêtre de très exactement LIMIT suppressions, qui est COMPLÈTE.
+
+  const tombstoneRows = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({ id: `gone-${i}` }));
+
+  it('flags the tombstones as truncated when the cap overflows', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(tombstoneRows(501));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+    });
+
+    expect(result.deletedIdsTruncated).toBe(true);
+    expect(result.deletedIds).toHaveLength(500);
+  });
+
+  it('does not flag a window of exactly the cap, which is complete', async () => {
+    // La sonde est ce qui rend cette distinction possible : sans elle, cette
+    // fenêtre COMPLÈTE déclencherait un full fetch inutile à chaque delta.
+    mockPostFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(tombstoneRows(500));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+    });
+
+    expect(result.deletedIdsTruncated).toBe(false);
+    expect(result.deletedIds).toHaveLength(500);
+  });
+
+  it('asks for one probe row beyond the tombstone cap', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: new Date('2026-07-03T10:00:00Z') });
+
+    expect(mockPostFindMany.mock.calls[1][0].take).toBe(501);
+  });
+
+  it('reports no truncation on a full tray fetch, which queries no tombstone', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect(result.deletedIdsTruncated).toBe(false);
+  });
+
   it('skips the postReaction batch query when the stories list is empty', async () => {
     mockPostFindMany.mockResolvedValue([]);
 
