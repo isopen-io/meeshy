@@ -1,7 +1,11 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
-import { participantUserRooms } from './emitToConversationParticipants';
+import { participantUserRoomTargets } from './emitToConversationParticipants';
+import {
+  PREVIEW_PRISM_PARTICIPANT_SELECT,
+  resolveLastMessagePreviewPrism,
+} from './utils/lastMessagePreviewPrism';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -40,6 +44,15 @@ type PreviewPrisma = Pick<PrismaClient, 'participant' | 'message'>;
  * sitting on the conversation list therefore kept rendering the pre-edit text
  * of a message, or a deleted one, until a manual reopen.
  *
+ * Chaque destinataire reçoit SON payload : l'aperçu porte la carte de
+ * traductions filtrée à son propre Prisme (`resolveLastMessagePreviewPrism`).
+ * Sans ces deux champs, une édition laissait la ligne de liste afficher le
+ * texte D'AVANT — le client PRÉFÈRE la traduction hydratée par
+ * `GET /conversations` à `lastMessagePreview`, et le serveur périme
+ * `Message.translations` dans la même écriture que l'édition sans jamais le
+ * dire sur le fil. Le message garde le même id : le client ne peut pas
+ * l'inférer.
+ *
  * Best-effort side channel — never throws. A failure here must not fail the
  * edit/delete that already succeeded; the optional `onError` hook lets
  * callers log it against the originating request.
@@ -58,15 +71,25 @@ export async function emitConversationPreviewUpdate(
         where: { conversationId, isActive: true },
         // `id` is not decoration: it NAMES the personal room of a participant
         // with no `User` row. Selecting `userId` alone did not ignore the
-        // fallback identity, it never read it.
-        select: { id: true, userId: true },
+        // fallback identity, it never read it. `user` carries the reader's
+        // language preferences — without them there is no Prisme to resolve.
+        select: PREVIEW_PRISM_PARTICIPANT_SELECT,
       }),
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         // Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche
         // jamais sa position dans ce fanout temps réel de l'aperçu.
-        select: { id: true, content: true, senderId: true, createdAt: true, metadata: true },
+        // `translations` / `originalLanguage` : le Prisme de la ligne de liste.
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          createdAt: true,
+          metadata: true,
+          translations: true,
+          originalLanguage: true,
+        },
       }),
     ]);
 
@@ -76,7 +99,7 @@ export async function emitConversationPreviewUpdate(
     // seule présence de `location`), pas ce helper.
     const place = sharedPlaceFromMetadata((latest as { metadata?: unknown } | null)?.metadata);
 
-    const payload = {
+    const basePayload = {
       conversationId,
       // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the User.id of
       // whoever triggered this edit/delete. Distinct from `senderId` (the
@@ -93,8 +116,15 @@ export async function emitConversationPreviewUpdate(
       ...(place ? { location: place } : {}),
     };
 
-    for (const room of participantUserRooms(participants)) {
-      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, payload);
+    // Un payload PAR destinataire : la carte d'aperçu est filtrée au prisme du
+    // lecteur, donc deux participants de langues différentes n'ont pas la même.
+    // La boucle par participant existait déjà — elle envoyait le même objet à
+    // tout le monde.
+    for (const { room, participant } of participantUserRoomTargets(participants)) {
+      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        ...basePayload,
+        ...resolveLastMessagePreviewPrism(participant, latest),
+      });
     }
   } catch (error) {
     onError?.(error);

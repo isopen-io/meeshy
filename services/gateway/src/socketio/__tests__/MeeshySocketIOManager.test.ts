@@ -510,15 +510,20 @@ describe('MeeshySocketIOManager', () => {
    * afterwards so no later test inherits the override.
    */
   function recordEmitChains(state: ReturnType<typeof getIoState>) {
-    const sent: Array<{ rooms: string[]; event: string }> = [];
+    const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
     const chain = (rooms: string[]): any => ({
       to: (room: string) => chain([...rooms, room]),
       except: () => chain(rooms),
-      emit: (event: string) => { sent.push({ rooms, event }); },
+      emit: (event: string, payload: unknown) => { sent.push({ rooms, event, payload }); },
     });
     state.to.mockImplementation(((room: string) => chain([room])) as never);
     return {
       roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+      // Le payload est capturé PAR room : `conversation:updated` en construit un
+      // par destinataire (Prisme du lecteur), donc l'assertion doit pouvoir les
+      // distinguer plutôt que de constater qu'« un » emit a eu lieu.
+      payloadFor: (event: string, room: string) =>
+        sent.find((s) => s.event === event && s.rooms.includes(room))?.payload,
       restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
     };
   }
@@ -1939,6 +1944,86 @@ describe('MeeshySocketIOManager', () => {
       // Bound to the EVENT, not merely to `io.to`: `conversation:unread-updated`
       // already reaches this room with the right key, and would mask the defect.
       expect(sent.roomsFor(SERVER_EVENTS.CONVERSATION_UPDATED)).toContain(ROOMS.user('part-anonymous'));
+    });
+
+    // Jumeau du chemin édition/suppression (`emitConversationPreviewUpdate`) :
+    // l'aperçu de ligne de liste ne doit PAS dépendre du transport. Si seul le
+    // chemin d'édition portait le Prisme, la ligne serait traduite après une
+    // édition et brute après un envoi.
+    it('carries each recipient OWN preview prism in CONVERSATION_UPDATED (twin of the edit path)', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+      });
+      (msg as any).originalLanguage = 'en';
+      (msg as any).translations = {
+        fr: { text: 'Bonjour', targetLanguage: 'fr' },
+        es: { text: 'Hola', targetLanguage: 'es' },
+      };
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'part-fr',
+          userId: 'user-fr',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+        {
+          id: 'part-es',
+          userId: 'user-es',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
+      const es = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-es'));
+      expect(fr.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+      expect(es.lastMessageTranslations).toEqual({ es: 'Hola' });
+      expect(fr.lastMessageOriginalLanguage).toBe('en');
+    });
+
+    // Garde anti-régression du cycle 65 : le `conversation:updated` jumeau ne
+    // doit pas arriver derrière `message:new` pour EFFACER la carte que ce
+    // dernier vient d'installer. Il est construit depuis le MÊME message, donc
+    // un message sans traduction produit une carte nulle des deux côtés — jamais
+    // un vide qui contredirait `message:new`.
+    it('does not contradict message:new when the fresh message has no translations yet', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+      });
+      (msg as any).originalLanguage = 'en';
+      (msg as any).translations = null;
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'part-fr',
+          userId: 'user-fr',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
+      expect(fr.lastMessageTranslations).toBeNull();
+      expect(fr.lastMessagePreview).toBe('Hello');
     });
 
     it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {

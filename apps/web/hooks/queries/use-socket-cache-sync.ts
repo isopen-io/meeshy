@@ -8,6 +8,7 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
+import { extractPreviewTranslations } from '@/services/conversations/transformers.service';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
@@ -71,6 +72,20 @@ const CONVERSATION_DATE_FIELDS = new Set([
 export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
+    if (key === 'lastMessageTranslations') {
+      // `null` est une VALEUR ici, pas une absence : le serveur périme
+      // `Message.translations` dans la même écriture qu'une édition, et c'est ce
+      // null reçu qui doit périmer la carte du cache. La clé reste donc
+      // présente (le cache applique `{ ...conv, ...patch }` — une clé absente
+      // laisserait la carte de l'ANCIEN texte en place, et `formatLastMessage`
+      // la préfère à `lastMessagePreview`). Même forme que le chemin REST.
+      patch[key] = extractPreviewTranslations(value);
+      continue;
+    }
+    if (key === 'lastMessageOriginalLanguage') {
+      patch[key] = typeof value === 'string' ? value : undefined;
+      continue;
+    }
     if (!CONVERSATION_DATE_FIELDS.has(key)) {
       patch[key] = value;
       continue;
