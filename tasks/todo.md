@@ -1,3 +1,64 @@
+# Tête instruite pour le cycle 72 — `sdk-tests` est ROUGE sur `main`, cause trouvée et prouvée
+
+*Découvert en gatant le cycle 71, diagnostiqué mais NON corrigé : le correctif est du Swift que ce
+conteneur ne peut ni compiler ni exécuter, et la leçon 95 condamne précisément d'en poser sur `main`
+sans gate. Ce qui suit rend la correction mécanique pour qui dispose d'un Mac — l'arithmétique est
+déjà faite.*
+
+## Le fait
+
+`sdk-tests.yml` échoue sur `main` : **8 échecs / 7017 succès / 35 ignorés** — chiffres et valeurs
+**identiques** sur la PR #2817, donc totalement indépendants d'elle (c'est ce qui a autorisé son
+merge). Déterministe, pas un flake : les mêmes valeurs octet pour octet à deux runs distants de 2 h.
+
+Fenêtre de régression : run `b100ccfd1` (04:05) **vert** → run `9477dd74` (07:25) **rouge**.
+
+## La cause, prouvée
+
+`fcd002ee` — *« feat(story): allonge les interludes de lecture à 1,2 s »* — fait passer
+`StoryRenderer.slideTransitionDuration` de **0.5 à 1.2**. Ce commit a relevé la borne de
+`StoryOpeningParityTests` (1.0 → 1.5), mais **a oublié `StoryClosingTests` et
+`TransitionChromeLaneTests`**, qui codent en dur des valeurs dérivées de 0,5 s.
+
+L'arithmétique referme le dossier sans compilateur :
+
+- `test_badgeWidth_matchesSlideTransitionDuration` attend `25.0`, obtient `60.0`.
+  **60 / 25 = 2,4 = 1,2 / 0,5.** La largeur du badge est proportionnelle à la durée.
+- `test_closingProgress_beforeWindow_returnsZero` : `closingProgress(totalDuration: 6.0, at: 5.5)`.
+  Avec 0,5 s la fermeture commence à `6,0 − 0,5 = 5,5` ⇒ progress 0. Avec 1,2 s elle commence à
+  `4,8` ⇒ `(5,5 − 4,8) / 1,2 = 0,58333…` — **exactement la valeur observée** `0.5833333333333335`.
+- `test_closingProgress_midWindow_returnsLinearRamp` : `at: 5.75` ⇒ `(5,75 − 4,8) / 1,2 = 0,79166…`
+  — **exactement** `0.7916666666666669`.
+
+Les 5 autres (`applyClosing_fade/reveal/slide/zoom`, `simulateTickAt_fadeClosingInsideWindow`)
+échouent par le même mécanisme : un instant d'échantillonnage choisi pour une fenêtre de 0,5 s.
+
+## Le correctif à écrire
+
+**Lier les témoins à la SSOT plutôt que de recaler des littéraux** — exactement ce que l'auteur de
+`fcd002ee` a fait pour `StoryOpeningParityTests`. Les instants d'échantillonnage s'expriment en
+fonction de `StoryRenderer.slideTransitionDuration` :
+
+- « avant la fenêtre » ⇒ `at: totalDuration - StoryRenderer.slideTransitionDuration` (progress 0) ;
+- « mi-fenêtre » ⇒ `at: totalDuration - StoryRenderer.slideTransitionDuration / 2` (progress 0,5) ;
+- largeur de badge ⇒ dériver de la même constante.
+
+Recaler les littéraux sur 1,2 s « marcherait » et **re-casserait au prochain ajustement de durée** —
+c'est la troisième fois que cette constante bouge. Fichiers :
+`packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Animation/StoryClosingTests.swift` et
+`.../Timeline/Views/TransitionChromeLaneTests.swift`.
+
+## Ce que ce cycle n'a PAS pu faire, et ce qu'il faudrait
+
+`ios-tests.yml` reste hors de portée de cette routine (`403 Resource not accessible by integration`
+— pas de `actions: write`). **`sdk-tests.yml`, lui, tourne sur les PR** : c'est le seul gate Swift
+dont cette routine dispose, et il a bien servi au cycle 71 — les 7017 tests verts incluent les tests
+de cache du SDK qui consomment `MockMessageSocket`, donc la moitié SDK du cycle a bien été compilée
+et vérifiée. À garder en tête : **une PR suffit à gater le SDK ; seule la couche `apps/ios` reste
+aveugle.**
+
+---
+
 # Cycle 71 — L'effectif d'une conversation cesse de mentir : un événement pour l'adhésion, une audience pour les listes
 
 ## Contrainte d'environnement — inchangée depuis le cycle 68
