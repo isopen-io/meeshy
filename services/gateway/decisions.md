@@ -681,12 +681,13 @@ rechargement complet de la liste.
   timestamp ne peut pas exprimer. Par ailleurs le chemin d'envoi porte toujours
   `lastMessagePreview` NON tronqué, là où `GET /conversations` applique `truncateMessagePreview`.
 
-**Tests** : 15 neufs côté gateway/web — 5 sur `emitConversationPreviewUpdate` (prisme du lecteur,
+**Tests** : 12 neufs côté gateway/web — 5 sur `emitConversationPreviewUpdate` (prisme du lecteur,
 payload par destinataire, carte nulle après édition, colonnes sélectionnées, participant sans
 compte), 2 sur le jumeau d'envoi dont une garde anti-régression du cycle 65 (le
 `conversation:updated` d'envoi ne contredit jamais le `message:new` qui le précède, étant construit
-depuis le MÊME message), 5 sur `normalizeConversationPatch` (web), 3 restants sur la forme partagée.
-RED observé avant implémentation : 5 rouges côté gateway, 3 côté web. Gate complet : 650 suites /
-16 386 tests verts, `tsc --noEmit` 0 erreur. Côté SDK iOS, 8 témoins écrits (5 sur
-`applyConversationUpdated`, 3 sur le décodage tri-état) — non gatables dans ce conteneur (aucune
-chaîne Swift), gate = `sdk-tests.yml` en CI.
+depuis le MÊME message), 5 sur `normalizeConversationPatch` (web).
+RED observé avant implémentation : 5 rouges côté gateway, 3 côté web. Gate complet : **650 suites /
+16 378 tests verts** (base : 650 / 16 371 — l'écart est exactement les 7 témoins gateway, aucun
+perdu), `tsc --noEmit` 0 erreur ; web 30 suites / 750 tests verts. Côté SDK iOS, 8 témoins écrits
+(5 sur `applyConversationUpdated`, 3 sur le décodage tri-état) — non gatables dans ce conteneur
+(aucune chaîne Swift), gate = `sdk-tests.yml` en CI. Total 20 témoins.

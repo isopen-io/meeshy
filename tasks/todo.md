@@ -94,8 +94,10 @@ carte périmée en place).
 
 ## Vérification
 
-- Gateway : **suite complète — 650 suites / 16 386 tests verts** (base cycle 68 : 650 / 16 371 ;
-  l'écart est exactement les 15 témoins ajoutés, aucun perdu).
+- Gateway : **suite complète — 650 suites / 16 378 tests verts** (base cycle 68 : 650 / 16 371 ;
+  l'écart est exactement les 7 témoins gateway ajoutés — 5 sur l'émetteur d'édition, 2 sur le
+  jumeau d'envoi — aucun perdu). Les 13 autres témoins de ce cycle vivent hors de cette suite :
+  5 côté web, 8 côté SDK iOS. Total 20.
 - Gateway : RED observé avant implémentation — 5 témoins en échec sur
   `emitConversationPreviewUpdate.test.ts`, 7 préexistants verts.
 - Gateway : `tsc --noEmit` — **0 erreur** (après `prisma generate --generator client` +
