@@ -1682,6 +1682,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
       `ConversationRepository.create` → navigation vers le chat créé
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
+- [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
+      `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
+      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
+      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
+      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
+      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
+      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
+      `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
+      preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
+      the presence-lookup key. `ConversationListViewModel.observePresence()` (mirrors
+      `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
+      `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
+      `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
+      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
+      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
+      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
+      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
+      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
+      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
+      direct-type gate and the snapshot merge.
 - [ ] Story tray + per-conversation story rings
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
