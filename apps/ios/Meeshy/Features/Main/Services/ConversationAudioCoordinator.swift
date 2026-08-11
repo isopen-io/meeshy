@@ -218,6 +218,18 @@ public final class ConversationAudioCoordinator: ObservableObject {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
             return
         }
+        // Un lecteur transitoire (préversion composer, statut, réel) a pu
+        // stopper le moteur via PlaybackCoordinator.willStartPlaying pendant
+        // que la file restait affichée (activeContext non-nil) : le moteur n'a
+        // plus de player chargé et un toggle serait un no-op silencieux — le
+        // bouton play de la carte système et du mini-player serait mort.
+        // Recharger la tête re-acquiert aussi la session .content (le flag
+        // sessionRequested a été remis à zéro par stop()). Même piège documenté
+        // sur resumeAfterSystemCall().
+        if activeContext != nil, engine.currentUrl == nil {
+            startCurrentHead()
+            return
+        }
         engine.togglePlayPause()
     }
     public func playNext() {
@@ -250,6 +262,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
         guard !_isSuspendedBySystemCall else { return }
         _isSuspendedBySystemCall = true
         _wasPlayingBeforeSystemCall = isPlaying
+        // Symétrique de `close()` : si une transition de piste était en vol
+        // quand l'appel Meeshy arrive, `PlaybackCoordinator.stopAll()` va
+        // annuler le chargement et l'edge isPlaying==true qui termine
+        // normalement ce background task ne surviendra jamais — sans cette
+        // ligne, la tâche survivrait jusqu'à l'expiration OS (~30s).
+        endAdvanceBackgroundTask()
         // Une interruption système armée avant l'appel (Siri, autre appel) ne
         // doit pas survivre à la frontière : sans ce reset, un
         // `.interruptionEndedShouldResume` tardif renverserait la décision de

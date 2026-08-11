@@ -584,6 +584,34 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
     // MARK: - CallKit guard — togglePlayPause and playPrevious
 
+    /// Régression : un lecteur transitoire (préversion composer, statut,
+    /// réel) peut stopper le moteur via `PlaybackCoordinator.willStartPlaying`
+    /// pendant que la file reste affichée (`activeContext` non-nil). Le
+    /// moteur n'a alors plus de player chargé — un `togglePlayPause()` brut
+    /// serait un no-op silencieux, laissant le bouton play de la carte
+    /// système / mini-player mort. Le coordinator doit détecter ce cas
+    /// (`activeContext != nil` mais `engine.currentUrl == nil`) et recharger
+    /// la tête au lieu de togguer.
+    func test_togglePlayPause_withContextButUnloadedEngine_reloadsHead() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        engine.stop()   // un lecteur transitoire a volé la lecture
+
+        sut.togglePlayPause()
+
+        XCTAssertEqual(engine.playCallCount, 2, "la tête doit être rechargée, pas togglée")
+        XCTAssertEqual(engine.lastPlayedUrl, "https://x/a.m4a")
+        XCTAssertEqual(engine.togglePlayPauseCallCount, 0)
+    }
+
     func test_togglePlayPause_whileCallActive_isNoOp() {
         let (sut, engine) = makeSUT()
         sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],

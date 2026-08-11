@@ -826,7 +826,7 @@ private struct AudioFullscreenPage: View {
             }
             .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
 
-            AirPlayRoutePicker(tintColor: .white)
+            AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
                 .frame(width: 44, height: 44)
                 .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
                     defaultValue: "Diffuser sur un appareil", bundle: .main))
