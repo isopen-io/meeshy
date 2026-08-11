@@ -1745,6 +1745,94 @@ final class ConversationListViewModelTests: XCTestCase {
                      "Un texte qui remplace la position doit EFFACER la pastille du message précédent — c'est l'atomicité de la facette")
     }
 
+    // MARK: - conversation:updated : Prisme Linguistique de la ligne
+
+    /// Une ÉDITION arrive à horodatage ÉGAL — pas de bump, c'est la branche
+    /// `else`. Le gateway périme la carte du Prisme dans la MÊME écriture que
+    /// le nouveau texte (`translations: null`, `routes/messages.ts`). Sans
+    /// application de la paire, le résolveur — qui PRÉFÈRE la traduction à
+    /// `lastMessagePreview` — rendrait le texte D'AVANT indéfiniment.
+    func test_conversationUpdatedEvent_edit_expiresTheStalePrismCard() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        let sameInstant = Date(timeIntervalSince1970: 5_000)
+        var conv = makeConversation(id: "prism-edit", lastMessageAt: sameInstant)
+        conv.lastMessageId = "m-1"
+        conv.lastMessagePreview = "Old text"
+        conv.lastMessageTranslations = ["fr": "Ancien texte"]
+        conv.lastMessageOriginalLanguage = "en"
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-edit", lastMessageAt: sameInstant,
+            lastMessageId: "m-1", lastMessagePreview: "New text",
+            lastMessageTranslations: .replaced([:]))
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertNil(sut.conversations.first?.lastMessageTranslations,
+                     "Une carte reçue `null` DIT que la traduction est périmée : la garder fait rendre le texte d'avant")
+        XCTAssertEqual(
+            sut.conversations.first?.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "New text",
+            "Le lecteur francophone doit voir le texte ÉDITÉ, jamais la traduction de l'ancien")
+    }
+
+    /// Nouveau message : branche `bumpToTop`. La facette est délibérément
+    /// neutre pour ce qu'elle IGNORE, mais la carte que le gateway vient de
+    /// résoudre POUR CE lecteur voyage dans l'événement — la jeter affiche
+    /// l'original là où une traduction était disponible et déjà payée.
+    func test_conversationUpdatedEvent_bump_carriesThePrismCardToTheRow() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "prism-bump", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-bump", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-2", lastMessagePreview: "Hello",
+            lastMessageTranslations: .replaced(["fr": "Bonjour"]),
+            lastMessageOriginalLanguage: "en")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.lastMessageTranslations?["fr"], "Bonjour",
+                       "La carte résolue par le gateway pour ce lecteur doit atteindre la ligne dès le bump")
+        XCTAssertEqual(
+            sut.conversations.first?.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "Bonjour",
+            "Prisme ['fr'], message anglais, traduction française disponible ⇒ « Bonjour », jamais « Hello »")
+    }
+
+    /// Le tri-état existe pour CE cas : un renommage ne parle pas du dernier
+    /// message. Clé absente ⇒ `.unchanged` ⇒ la carte du cache survit. Un
+    /// `Optional` seul confondrait ce cas avec le `null` du test ci-dessus, et
+    /// vider inconditionnellement effacerait la carte que `message:new` vient
+    /// d'installer sur le chemin d'envoi.
+    func test_conversationUpdatedEvent_metadataOnly_leavesThePrismCardIntact() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "prism-meta", type: .group,
+                                    lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        conv.lastMessagePreview = "Hello"
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        conv.lastMessageOriginalLanguage = "en"
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-meta", lastMessageAt: nil, title: "Nouveau nom")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.title, "Nouveau nom")
+        XCTAssertEqual(sut.conversations.first?.lastMessageTranslations?["fr"], "Bonjour",
+                       "Une mise à jour de métadonnées ne parle pas du dernier message : sa carte doit survivre")
+    }
+
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
@@ -3306,6 +3394,9 @@ private func makeConversationUpdatedEvent(
     avatar: String? = nil,
     includeUpdatedBy: Bool = true,
     lastMessageId: String? = nil,
+    lastMessagePreview: String? = nil,
+    lastMessageTranslations: LastMessagePreviewTranslations? = nil,
+    lastMessageOriginalLanguage: String? = nil,
     locationName: String? = nil,
     senderId: String? = nil
 ) -> ConversationUpdatedEvent {
@@ -3321,6 +3412,17 @@ private func makeConversationUpdatedEvent(
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
     if let lastMessageId { json["lastMessageId"] = lastMessageId }
+    if let lastMessagePreview { json["lastMessagePreview"] = lastMessagePreview }
+    if let lastMessageOriginalLanguage { json["lastMessageOriginalLanguage"] = lastMessageOriginalLanguage }
+    // Le tri-état du Prisme se joue sur la PRÉSENCE de la clé, jamais sur sa
+    // valeur : `nil` ne l'écrit pas (donc `.unchanged` au décodage),
+    // `.replaced([:])` l'écrit à `null` — c'est littéralement ce que le gateway
+    // envoie pour périmer la carte après une édition — et `.replaced(map)`
+    // l'écrit peuplée. Passer par le JSON plutôt que par le mémberwise init est
+    // ce qui rend cette distinction exprimable ici.
+    if case .some(.replaced(let map)) = lastMessageTranslations {
+        json["lastMessageTranslations"] = map.isEmpty ? NSNull() as Any : map as Any
+    }
     if let senderId { json["senderId"] = senderId }
     if let locationName {
         json["location"] = ["latitude": 48.858, "longitude": 2.294, "name": locationName]
