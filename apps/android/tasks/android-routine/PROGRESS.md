@@ -9,6 +9,68 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-11 **`OutboxFlushWorker` never drained per-conversation message lanes in
+> production — root-caused and fixed** (slice `outbox-message-lane-discovery`, §Q — the
+> "`OutboxFlushWorker` re-drain même-run" candidate the previous iteration flagged without
+> detailing). **RE-PROUVEN before starting**, per the orchestrator's explicit instruction to
+> re-derive exactly what the candidate is: `git branch -r`/`gh pr list --state open` found no
+> interrupted run (only one open PR, `apps/web/calls`-scoped, unrelated to this routine). Reading
+> `OutboxFlushWorker.doWork()` closely (not just skimming the prior iteration's framing) found the
+> actual bug is far more severe than "same-run timing": `messageLanes` was discovered via
+> `outboxRepository.deliverable(OutboxLanes.forMessage(""))`, which resolves to an **exact-match**
+> SQL query (`WHERE lane = :lane`) against the literal string `"message:"` — no row is ever
+> enqueued with a blank conversation id, so this **always returned an empty list**. The "drain
+> per-conversation message lanes" loop was **dead code in production**: `SEND_MESSAGE`/
+> `EDIT_MESSAGE`/`DELETE_MESSAGE` rows were never attempted at all, not merely delayed by one
+> pass. **Proven empirically** with a new Robolectric test pinning the old call pattern's
+> brokenness (`deliverable(OutboxLanes.forMessage(""))` returns empty even with a real pending
+> `SEND_MESSAGE` enqueued on `"message:c1"`) before writing the fix. **Shipped (production, all
+> `apps/android`)**: `OutboxDao.activeMessageLanes()` (`core:database` — `SELECT lane FROM outbox
+> WHERE lane LIKE 'message:%' AND state != 'EXHAUSTED' GROUP BY lane ORDER BY MIN(createdAt) ASC`,
+> a genuine distinct-lane discovery query) + `OutboxRepository.activeMessageLanes()` wrapper
+> (`sdk-core`), wired into `OutboxFlushWorker.doWork()` in place of the broken call — a 1-line
+> swap once the discovery primitive exists. +4 new tests (discovers a lane holding a pending
+> send; discovers every distinct lane oldest-first without duplicating a 2-row lane; omits a lane
+> whose only row is `EXHAUSTED`; empty when the queue holds only shared-lane rows) + 1 regression-
+> pin test documenting the old broken call pattern. **No same-pass redrain logic was needed**:
+> `OutboxFlushPlan.outcome`'s existing `FlushOutcome.RETRY` (→ WorkManager's own `EXPONENTIAL,
+> 10s` backoff) already handles "prerequisite delivered later in the same pass" correctly by
+> design (its own doc comment says so) — it simply never fired for message lanes because they
+> were never visited. Fixing discovery alone makes the pre-existing retry design actually work
+> for the first time. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970
+> tasks, zero failures). Reviewer **PASS** (diff `apps/android` only — 4 files, 2 production +
+> 1 test + 1 worker wiring; SDK purity n/a — this is `core:database`/`sdk-core` internal plumbing,
+> no product decision; no coverage floor lowered; no tautological tests — every assertion checks
+> a real query result against real enqueued rows, not a canned mock).
+> **Full on-device verification against the live gateway** (`meeshy_pixel8`, already-authenticated
+> session): reopened the exact conversation the prior iteration's notes named
+> (`flip-test-verify`/`ime-verify-flip-c3`, both stuck pending for weeks) and sent a fresh
+> message. `adb logcat` now shows `OutboxFlush lane=message:68f3808baf186ffd9583b0fa ...` — a log
+> line that **could not structurally have appeared before this fix** (the loop producing it was
+> never entered). `flip-test-verify` was attempted for the first time ever and transitioned from
+> an inert clock icon to `Not sent — tap to retry` (a stale/old-schema payload decode failure,
+> now correctly surfaced to the user instead of rotting silently forever — an improvement in its
+> own right). A fresh message in a second, unpolluted conversation (`Windie Nh`) triggered a real
+> `POST https://gate.meeshy.me/api/v1/conversations/6a712c3acd1fb95d11b8fc6d/messages`, confirmed
+> via OkHttp request/response logcat lines. `adb logcat` checked for `FATAL EXCEPTION`/
+> `AndroidRuntime` across the whole verification pass — none. Emulator left on the home screen
+> afterward (app closed cleanly, not mid-flow).
+> **New, separate, out-of-lane finding — flagged, NOT fixed here** (gateway code; fixing it would
+> violate this PR's `apps/android`-only diff purity): both `POST /conversations/:id/messages`
+> calls above returned `400 {"error":"Internal Server Error"}`. Reproduced independently with a
+> bare `curl` using the same bearer token (rules out any Android request-shape cause) while a
+> `GET` on the same conversation's messages returns `200` normally — creating a new message via
+> the REST API currently appears broken in production, platform-independent. This means the fix
+> in this slice cannot be verified all the way to a green "delivered" checkmark right now — the
+> discovery-and-attempt pipeline is proven correct (real POSTs now reach the gateway, which never
+> happened before), but the gateway-side 400 is a pre-existing, currently-live, unrelated
+> production issue that deserves its own urgent investigation (likely `services/gateway`, POST
+> message-creation route). **Next slice candidates (not attempted this run)**: investigate/fix
+> the gateway `POST /conversations/:id/messages` 400 above (urgent, cross-platform, NOT
+> Android-scoped — needs its own lane/session); on-device transcription for the Feed audio
+> composer; location attachment for the Feed composer; the §Q persistent TUS checkpoint store;
+> widgets/PiP categorical re-check (due again per the ~5-run cadence).
+
 > On 2026-08-10 **the Feed post composer's audio-attachment sub-slice landed — re-proven and
 > shipped in the same iteration the prior slice's own follow-up list flagged it as unblocked**
 > (slice `feed-composer-voice-capture`, feature-parity §F — the standing "files, location, audio,

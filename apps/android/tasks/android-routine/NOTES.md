@@ -1353,3 +1353,59 @@ Append-only log of gotchas and decisions that save time next run.
   slots cleanly into `FeedComposerDraft.qualifiesAsReel`'s existing `mediaKinds()` projection
   rather than needing its own special case, the same kind of "reuse proves itself correct"
   signal noted for `feed-composer-video-capture`'s reel auto-classification.
+
+## Slice `outbox-message-lane-discovery` (2026-08-11)
+- **A Room DAO method named `deliverableForLane(lane: String)` binding an EXACT-match `WHERE
+  lane = :lane` can be called with a value that was never meant to be a real lane — and the
+  compiler cannot catch it.** `OutboxFlushWorker.doWork()` called
+  `outboxRepository.deliverable(OutboxLanes.forMessage(""))` to "discover" which dynamic
+  per-conversation message lanes needed draining. `OutboxLanes.forMessage("")` innocently
+  evaluates to the literal string `"message:"` — a syntactically valid `String`, so nothing
+  about the call looks wrong at a glance, and it type-checks perfectly. But no row is EVER
+  enqueued with a blank conversation id (every real call site passes a real id), so the exact-
+  match query behind `deliverable()` could never return anything for that input. The entire
+  "drain per-conversation message lanes" loop was silently dead code — `SEND_MESSAGE`/
+  `EDIT_MESSAGE`/`DELETE_MESSAGE` were never drained by `OutboxFlushWorker` at all, in any build
+  that has shipped this discovery mechanism. Lesson: when a "discovery" call reuses a
+  single-item lookup function (`deliverableForLane`, built for "give me lane X's rows") with a
+  deliberately-empty/placeholder argument to try to get "everything under this lane family"
+  behavior, that's a strong signal the lookup function's semantics (exact match) don't actually
+  support the caller's intent (prefix/family match) — the fix needed a genuinely different query
+  (`LIKE 'message:%' GROUP BY lane`), not a cleverer argument to the existing one.
+- **A message "stuck pending forever with a clock icon, even for a plain-text message with zero
+  dependencies" is strong direct evidence the DISCOVERY of its lane never ran at all — not
+  merely evidence of a same-pass dependency-timing race.** The previous iteration's own
+  on-device verification found `flip-test-verify`/`ime-verify-flip-c3` (plain text, no
+  attachment, no `dependsOn`) stuck pending and attributed it to the `OutboxFlushWorker`
+  same-pass graft-timing gap (a real, but narrower, issue that only explains attachment-
+  dependent sends). A `dependsOn`-free row has `DependencyVerdict.SATISFIED` immediately, so the
+  ONLY way it never drains on the very first `drainLane` call on its lane is if that lane is
+  never visited in the first place — which is exactly what the exact-match discovery bug caused.
+  When a "same-run timing" theory doesn't actually explain a **zero-dependency** row exhibiting
+  the identical symptom, treat that as a signal the theory is incomplete, not as an unrelated
+  data point to set aside.
+- **`OutboxFlushPlan.outcome`'s `FlushOutcome.RETRY`-on-blocked-dependency design was already
+  correct for the "prerequisite delivers later in the same pass" case — no additional same-pass
+  redrain loop was needed once lane discovery was fixed.** Before writing a fix, it's worth
+  reading the *existing* retry/backoff design's own doc comments closely: this file's already
+  explained (2026-07 era) that a lane stopping on `stoppedOnBlockedDependency` triggers
+  `Result.retry()`, which WorkManager reschedules via its own `EXPONENTIAL, 10s` backoff — the
+  next pass either delivers the now-satisfied dependent or cascade-exhausts it. That mechanism
+  simply never fired for ANY message lane because message lanes were never drained at all
+  (previous note). Fixing the root cause (discovery) made the already-correct retry design work
+  for the first time, rather than needing a second, parallel same-pass-redrain mechanism layered
+  on top — worth checking whether an adjacent "this looks incomplete" mechanism is actually
+  already complete and just unreachable, before building a second one next to it.
+- **A live-gateway on-device verification can surface a genuine, currently-active, unrelated
+  PRODUCTION incident — reproduce it with a bare `curl` before concluding the diff under test
+  caused it.** After the fix, a real `POST /conversations/:id/messages` finally reached
+  `gate.meeshy.me` (proving the Android-side discovery fix works) but the gateway responded `400
+  {"error":"Internal Server Error"}` for every attempt, in two different conversations. Before
+  writing this off as "my fix is broken" or silently ignoring it, replaying the exact same
+  request with `curl` (same bearer token, same body shape) reproduced the identical 400 outside
+  the app entirely — and a `GET` on the same conversation's messages returned a normal `200` —
+  proving the failure is server-side and platform-independent, not a symptom of anything in this
+  diff (which contains zero gateway changes). Flagged as a new, separate, urgent backlog item
+  rather than investigated further, since gateway code is out of this lane's diff-purity bounds
+  — but the `curl` reproduction step is what turns "my fix might be broken" into "found a live,
+  unrelated production bug" with confidence, in under a minute.
