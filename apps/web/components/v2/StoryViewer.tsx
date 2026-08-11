@@ -671,6 +671,7 @@ function StoryViewer({
     setShowComments(false);
     setShowViewers(false);
     setShowReactionPicker(false);
+    setIsPaused(false);
   }, [currentIndex]);
 
   // Mirrors handleOpenComments/handleCloseComments: the picker pauses the

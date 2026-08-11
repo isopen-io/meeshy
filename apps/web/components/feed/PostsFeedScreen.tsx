@@ -605,6 +605,7 @@ export function PostsFeedScreen() {
               mimeType: media.mimeType,
               fileUrl: media.fileUrl,
               thumbnailUrl: media.thumbnailUrl,
+              duration: media.duration,
               order: 0,
             }],
           },

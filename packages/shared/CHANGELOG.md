@@ -1,5 +1,54 @@
 # @meeshy/shared
 
+## 1.9.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
 ## 1.8.13
 
 ### Patch Changes
