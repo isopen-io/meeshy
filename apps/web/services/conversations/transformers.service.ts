@@ -27,6 +27,28 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { BackendMessageData, BackendConversationData } from './types';
 
 /**
+ * Valide la carte `{ langue: aperçu traduit }` du dernier message.
+ *
+ * Le gateway rend `null` — jamais `{}` — quand aucune traduction n'est utile,
+ * et le résolveur doit pouvoir distinguer « pas de carte » de « carte vide » :
+ * une carte matérialisée en objet vide lui ferait croire qu'il y a quelque
+ * chose à résoudre. Un tableau est un `object` en JavaScript, d'où le rejet
+ * explicite — sans lui, `['Bonjour']` traverserait comme une carte dont les
+ * clés sont des indices.
+ *
+ * Au niveau module, et non plus méthode privée, parce que le patch socket
+ * (`normalizeConversationPatch`) doit produire EXACTEMENT la même forme que
+ * l'hydratation REST : deux validations distinctes pour un même champ auraient
+ * laissé le cache détenir deux formes selon le transport.
+ */
+export function extractPreviewTranslations(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
  * Service de transformation des données backend vers frontend
  */
 export class TransformersService {
@@ -395,21 +417,8 @@ export class TransformersService {
     return transformedMessage;
   }
 
-  /**
-   * Valide la carte `{ langue: aperçu traduit }` du dernier message.
-   *
-   * Le gateway rend `null` — jamais `{}` — quand aucune traduction n'est utile,
-   * et le résolveur doit pouvoir distinguer « pas de carte » de « carte vide » :
-   * une carte matérialisée en objet vide lui ferait croire qu'il y a quelque
-   * chose à résoudre. Un tableau est un `object` en JavaScript, d'où le rejet
-   * explicite — sans lui, `['Bonjour']` traverserait comme une carte dont les
-   * clés sont des indices.
-   */
   private extractPreviewTranslations(raw: unknown): Record<string, string> | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-    const entries = Object.entries(raw as Record<string, unknown>)
-      .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
-    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+    return extractPreviewTranslations(raw);
   }
 
   /**

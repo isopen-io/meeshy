@@ -49,8 +49,31 @@ export function participantUserRooms(
   participants: ReadonlyArray<ParticipantRoomTarget>,
   seed: ReadonlyArray<string> = [],
 ): string[] {
-  const rooms = [...seed];
-  const seen = new Set<string>(rooms);
+  return [...seed, ...participantUserRoomTargets(participants, seed).map((target) => target.room)];
+}
+
+/**
+ * The same deduped room list, but each room paired with the participant that
+ * NAMED it — for the emitters that build a payload PER RECIPIENT rather than
+ * one payload shared by the whole fan-out.
+ *
+ * `conversation:updated` is exactly that case: its last-message preview
+ * translations are filtered to the reader's own Prisme (see
+ * `resolveLastMessagePreviewPrism`), so two participants with different
+ * language preferences must not receive the same map.
+ *
+ * This is where the dedupe rule now lives, and `participantUserRooms` is a
+ * projection of it — the two cannot drift, which matters because `userId ?? id`
+ * is, in this file's own words, "the only line every copy of this code got
+ * wrong". A room already present in `seed` is skipped here too, so a caller
+ * that seeds the conversation room never builds a second payload for it.
+ */
+export function participantUserRoomTargets<T extends ParticipantRoomTarget>(
+  participants: ReadonlyArray<T>,
+  seed: ReadonlyArray<string> = [],
+): Array<{ room: string; participant: T }> {
+  const seen = new Set<string>(seed);
+  const targets: Array<{ room: string; participant: T }> = [];
   for (const participant of participants) {
     // Neither identity present means no room CAN be named — a caller whose
     // `select` forgot both would otherwise blast every event at the single
@@ -62,9 +85,9 @@ export function participantUserRooms(
     const room = ROOMS.user(key);
     if (seen.has(room)) continue;
     seen.add(room);
-    rooms.push(room);
+    targets.push({ room, participant });
   }
-  return rooms;
+  return targets;
 }
 
 /**
