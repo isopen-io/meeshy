@@ -2896,12 +2896,37 @@ struct StoryActionButton: View {
     /// (non-nil) sélectionne la couleur du contour (cf. `body`).
     var accentOutline: String? = nil
     var accentOutlineColor: Color = .clear
+    /// Sites porteurs d'un geste séquencé longpress→drag (scrub) : le tap
+    /// interne d'un `Button` consomme le touch et la séquence posée en
+    /// `.highPriorityGesture` ne s'active JAMAIS — un maintien de 0,9 s
+    /// partait en ❤️ direct au relâchement au lieu d'ouvrir le strip
+    /// (reproduit au stream HID simulateur, 2026-08-11). `true` = vue plate
+    /// + `TapGesture` : le tap court reste servi (la séquence échoue sous
+    /// 0,25 s), le maintien laisse la séquence de l'appelant gagner.
+    /// VoiceOver est servi par une `accessibilityAction` explicite — VO ne
+    /// synthétise pas de TapGesture (leçon du bouton Sound, +Sidebar).
+    var handlesTapViaGesture: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button {
-            action()
-        } label: {
+        Group {
+            if handlesTapViaGesture {
+                buttonLabel
+                    .onTapGesture { action() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { action() }
+            } else {
+                Button(action: action) { buttonLabel }
+                    .buttonStyle(.plain)
+            }
+        }
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private var buttonLabel: some View {
+        Group {
             // Densité resserrée 2026-07-10 : spacing glyph→label 4→2 et padding
             // vertical 8→3 — le rail complet gagne ~30 % de compacité (parité
             // TikTok/IG) tout en gardant ≥ 44pt de hauteur tappable par bouton
@@ -2976,10 +3001,6 @@ struct StoryActionButton: View {
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
 
