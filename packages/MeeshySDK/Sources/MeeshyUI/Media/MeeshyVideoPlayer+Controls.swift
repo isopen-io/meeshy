@@ -149,16 +149,22 @@ internal struct _InlineOverlayControls: View {
 
     // MARK: - Center Controls (skip + play/pause)
     //
-    // Hierarchy visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
-    // clairement. Glass UI + accent tinté homogène à 0.3 sur tous les
-    // boutons. Le play porte une teinte d'accent plus marquée (0.55) pour
-    // tirer l'œil dessus.
+    // Hiérarchie visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
+    // clairement, tailles INCHANGÉES (l'inline reste plus compact que le
+    // plein écran 52/64pt, `VideoTransportControls.swift:87/105`). Lifting
+    // Liquid Glass 2026-08-11 (§ C) : migré vers
+    // `.adaptiveGlass`/`.adaptiveGlassProminent` sous `AdaptiveGlassContainer`
+    // — le double-fill `ultraThinMaterial` + `accent.opacity` + le stroke
+    // manuel disparaissent au profit des deux primitives partagées, comme
+    // `VideoTransportControls.centerControls`.
 
     private var centerControls: some View {
-        HStack(spacing: 24) {
-            skipButton(systemName: "gobackward.10", seconds: -10)
-            playPauseButton
-            skipButton(systemName: "goforward.10", seconds: 10)
+        AdaptiveGlassContainer(spacing: 24) {
+            HStack(spacing: 24) {
+                skipButton(systemName: "gobackward.10", seconds: -10)
+                playPauseButton
+                skipButton(systemName: "goforward.10", seconds: 10)
+            }
         }
     }
 
@@ -171,13 +177,7 @@ internal struct _InlineOverlayControls: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
-                .background(
-                    ZStack {
-                        Circle().fill(.ultraThinMaterial)
-                        Circle().fill(accent.opacity(0.30))
-                    }
-                )
-                .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 0.5))
+                .adaptiveGlass(in: Circle(), interactive: true)
         }
     }
 
@@ -186,14 +186,9 @@ internal struct _InlineOverlayControls: View {
             manager.togglePlayPause()
             HapticFeedback.light()
         } label: {
-            ZStack {
-                Circle().fill(.ultraThinMaterial)
-                Circle().fill(accent.opacity(0.55))
-                playPauseIcon
-            }
-            .frame(width: 54, height: 54)
-            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
-            .shadow(color: accent.opacity(0.35), radius: 10, y: 3)
+            playPauseIcon
+                .frame(width: 54, height: 54)
+                .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
         }
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
