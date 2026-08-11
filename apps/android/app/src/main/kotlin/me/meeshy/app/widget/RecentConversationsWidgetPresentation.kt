@@ -7,7 +7,10 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 
-private val directConversationTypes = setOf("direct", "dm")
+/** Shared with [FavoriteContactsWidgetPresentation] — the same "is this a 1:1 chat"
+ * gate both widgets need (sender-prefix suppression here, favorite-contact
+ * eligibility there). */
+internal val directConversationTypes = setOf("direct", "dm")
 
 /**
  * A single rendered row of [RecentConversationsWidget] — the pure decision behind

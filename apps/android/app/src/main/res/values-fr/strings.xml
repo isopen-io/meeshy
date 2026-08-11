@@ -73,4 +73,9 @@
     <string name="widget_recent_conversations_title">Conversations récentes</string>
     <string name="widget_recent_conversations_description">Voyez vos conversations récentes d\'un coup d\'œil</string>
     <string name="widget_recent_conversations_empty">Ouvrez Meeshy pour commencer</string>
+
+    <!-- Widget écran d'accueil : contacts favoris -->
+    <string name="widget_favorite_contacts_title">Favoris</string>
+    <string name="widget_favorite_contacts_description">Accès rapide à vos contacts favoris</string>
+    <string name="widget_favorite_contacts_empty">Épinglez une conversation directe pour ajouter un favori</string>
 </resources>

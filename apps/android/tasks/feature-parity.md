@@ -5284,8 +5284,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (persisté à côté du JWT) — `SessionRepository` est en mémoire seule et vide dans un
       processus widget froid qui n'a jamais tourné le flux de démarrage normal de l'app ; le
       widget lit désormais l'id utilisateur persisté pour résoudre le nom du bon participant
-      dans une conversation directe. Restent : favorite contacts, quick reply, mark-read,
-      tailles/kinds additionnels, push-refresh.
+      dans une conversation directe. **Troisième sous-tranche (2026-08-11)** :
+      `FavoriteContactsWidget` (slice `widget-favorite-contacts`), parité avec iOS
+      `MeeshyWidgets.FavoriteContactsWidget` — une "favorite contact" est une conversation
+      DIRECTE épinglée (`isPinned && type == direct`), pas une notion distincte, exactement
+      comme `WidgetDataManager.publishFavoriteContacts` sur iOS ; jusqu'à 8 lignes,
+      plus-récent-d'abord (`ConversationRowTime` SSOT), tap = deep-link direct dans la
+      conversation (`meeshy://conversation/{id}` — Android n'a pas l'équivalent de l'URI
+      `meeshy://contact/{id}` d'iOS, réutilise la route déjà câblée plutôt que d'en créer une
+      seconde pour le même id). Pas de badge de présence en ligne : `ApiConversation.participants`
+      ne porte aucun champ `isOnline`/`lastActiveAt` côté Android (contrairement à
+      `MeeshyConversation.lastSeenText` sur iOS) — un vrai gap documenté, pas un oubli. Restent :
+      quick reply, mark-read, tailles/kinds additionnels, push-refresh, badge de présence.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
 - [ ] Crash / hang / ANR diagnostics with on-device persistence + remote report

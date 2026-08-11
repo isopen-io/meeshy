@@ -1,5 +1,84 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **home-screen widgets' third sub-slice landed**: `FavoriteContactsWidget`
+> (slice `widget-favorite-contacts`, feature-parity §"Home-screen widgets" — picked from the
+> prior slice's own explicit "Next slice candidates" list, per the orchestrator's standing
+> guidance). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open --search
+> "apps/android OR apps/ios"` found no interrupted run of this routine — the sole open PR
+> (`#2846`) is an unrelated concurrent session on `apps/web`. Confirmed the prior run's own
+> "widget-recent-conversations" PR (`#2841`) had in fact already merged and finished CI while its
+> session ended (matches the documented "itérations 25, 29, 37, 38" recovery pattern exactly) —
+> finalized it first (squash-merged, `tasks/lane-cursor.md` pushed as its own dedicated commit,
+> stale remote branch deleted) before picking this new slice, rather than starting fresh work on
+> top of an unfinished prior run. Read iOS's `WidgetDataManager.publishFavoriteContacts` +
+> `MeeshyWidgets.FavoriteContactsWidget`/`FavoriteContactsProvider` before coding: a "favorite
+> contact" on iOS is **not a distinct concept** — it's `conversations.filter { isPinned &&
+> type == .direct }.prefix(8)`, mapped to `id`/`name`/`avatar`/`status` (`lastSeenText` or
+> `"Offline"`)/`accentColor`. **Shipped (production, all `apps/android`)**: new
+> `FavoriteContactsWidgetPresentation` (`:app/widget`, pure — same placement precedent as its two
+> siblings) filters `resolvedPreferences?.isPinned == true && type in directConversationTypes`,
+> sorts by `ConversationRowTime.epochMillis` descending (reused, not reimplemented — matches the
+> recency ordering `RecentConversationsWidgetPresentation` already applies, and mirrors iOS's own
+> implicit reliance on an already-recency-ordered upstream list), caps at 8 (iOS's own
+> `.prefix(8)`), and maps each row via the same two existing SSOTs the sibling widget uses
+> (`ApiConversation.displayTitle()`, `ApiConversation.accentHex()`). `directConversationTypes`
+> (previously `private` in `RecentConversationsWidgetPresentation.kt`) is now `internal` and
+> imported here — a one-line hoist, not a duplication, since it is a correctness-sensitive
+> business rule ("what counts as a 1:1 chat") shared by two call sites now, not disposable UI
+> glue. `FavoriteContactsWidget` (Glance `LazyColumn`, up to 8 rows, an accent-colored
+> initial-letter avatar circle per row) reads the same Room-only
+> `ConversationRepository.cachedConversations()` + persisted `TokenStore.userId` the
+> `RecentConversationsWidget` already reads via the shared `WidgetEntryPoint` — no new Hilt
+> plumbing needed, both existing accessors were already exposed. Tapping a row deep-links via the
+> already-wired `meeshy://conversation/{id}` (`Routes.CONVERSATION_SINGULAR_DEEP_LINK`) rather
+> than inventing an Android equivalent of iOS's own `meeshy://contact/{id}` route (which doesn't
+> exist on this platform and whose only real payload, even on iOS, is the same conversation id) —
+> a deliberate, documented parity decision, not a scope gap: opening the chat directly is at least
+> as good UX as opening a contact profile for what is, underneath, a favorite chat partner.
+> **A real, documented gap found and left open, not silently worked around**: Android's
+> `ApiConversation.participants` (`ApiParticipant`) carries no `isOnline`/`lastActiveAt` fields at
+> all — unlike iOS's `MeeshyConversation.lastSeenText`, there is currently no data source this
+> widget could read synchronously to render a presence status line/badge without adding a new
+> presence-cache dependency; the row therefore omits the online/offline indicator iOS's own face
+> shows, an explicit scope cut rather than a fabricated fallback. **+8 new tests**
+> (`FavoriteContactsWidgetPresentationTest`: empty list, other-participant-name resolution, an
+> unpinned direct conversation excluded, a pinned group conversation excluded, a mix of favorites
+> and non-favorites keeping only the true favorites, recency ordering, the 8-row cap, accent-color
+> passthrough). **Mutation-proven**, two axes: neutralizing the pinned+direct filter
+> (`.filter { it.resolvedPreferences?.isPinned == true && ... }` → `.filter { true }`) fails
+> **exactly** the 3 exclusion-focused tests (`an unpinned direct conversation is not a favorite`,
+> `a pinned group conversation is not a favorite contact`, `a mix of favorites and non-favorites
+> keeps only the favorites`; 5 others green); neutralizing the recency sort key
+> (`ConversationRowTime.epochMillis(it) ?: Long.MIN_VALUE` → `0L`) fails **exactly** `among
+> favorites, the most recently active sorts first` (7 others green). Both applied via a scratch
+> `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the backup
+> afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression; zero test failures across every
+> module's XML reports, `grep -L 'failures="0"'` empty). Reviewer **PASS** (diff `apps/android`
+> only, confirmed via `git status --short` — 10 files, all under `apps/android`; SDK purity — the
+> pure filter/sort/cap/map decision lives in `:app/widget` (correctly, per the grain test: a
+> product decision, not a reusable atom — mirrors both sibling widgets' own precedent exactly);
+> SSOT — reuses `displayTitle`/`accentHex`/`ConversationRowTime`/`cachedConversations`/
+> `WidgetEntryPoint`/`directConversationTypes` (hoisted, not duplicated), zero re-implementation;
+> no coverage floor lowered; no tautological tests). **Not attempted this run** (compile+test-only
+> per the local JVM gate; no simulator/emulator session for on-device verification — a future run
+> should install-and-verify against the live gateway with the shared `atabeth` account, confirming
+> a real pinned direct conversation renders as a favorite row and a pinned group does not). **Next
+> slice candidates (not attempted this run)**: Quick reply widget (still zero-hit — likely the
+> hardest of the four, Glance's interactive-input story for a text field inside a widget needs its
+> own investigation); the mark-read widget action (plumbing confirmed present via `javap` in the
+> prior slice, `ActionCallback`/`actionRunCallback` — genuinely thin glue with almost no new pure
+> decision logic to TDD beyond the already-tested `isUnread` gate, worth reconsidering only once a
+> presence-cache foundation or another action-callback use case makes the "first ActionCallback in
+> this app" investment pay off across more than one call site); a presence-cache foundation for
+> conversation participants (would unlock the favorite-contacts status badge AND several other
+> gaps at once — worth a dedicated foundation slice rather than bolting a one-off presence read
+> onto this widget); on-device transcription for the Feed audio composer; a shared `:sdk-ui`
+> `LanguagePickerDialog`; Voice-cloning onboarding wizard; map/search/reverse-geocoding for the
+> location attachment; PiP (calls + media) — per the orchestrator's guidance this remains a
+> documented, real, multi-slice-epic gap warranting a planning/decomposition pass rather than a
+> bare re-grep.
+
 > On 2026-08-11 **home-screen widgets' second sub-slice landed**: `RecentConversationsWidget`
 > (slice `widget-recent-conversations`, feature-parity §"Home-screen widgets" — RE-PROUVEN via the
 > orchestrator's explicit candidate list: "sous-tranches suivantes du widget écran d'accueil").
