@@ -1,3 +1,34 @@
+# Tête instruite pour le cycle 77 (3/3) — le focus de fenêtre relit la liste de conversations DE FORCE, page par page
+
+*Trouvé en instruisant le cycle 76, vérifié, NON corrigé.*
+
+Le cycle 76 a fermé la fenêtre du reconnect SOCKET avec un delta non destructeur. Il reste, sur la
+même surface, un chemin destructeur en place — hérité, pas introduit :
+| Messages d'une conversation | `refetchOnWindowFocus: **false**` + `syncNewerMessages` débouncé (« Trigger 2 ») |
+| **Liste de conversations** | `refetchOnWindowFocus: **'always'**` hérité du QueryClient global — aucune dérogation |
+
+C'est exactement le réglage que `use-conversation-messages-rq.ts` a désactivé, avec le motif écrit
+au-dessus de la ligne : *« Focus / reconnexion restent servis par le catch-up incrémental, moins
+coûteux qu'un refetch complet des pages »*. La liste, elle, prend le refetch complet : sur une
+`useInfiniteQuery`, `'always'` relit TOUTES les pages chargées, une par une, et REMPLACE le cache
+par le résultat — donc peut perdre ce que le socket y a écrit entre-temps.
+
+Deux bornes avant d'ouvrir :
+1. **Ne pas simplement basculer à `false`.** Le refetch de focus est aujourd'hui le SEUL chemin web
+   qui purge une ligne fantôme : le delta est upsert-only et une conversation HARD-supprimée côté
+   serveur n'y apparaît jamais. iOS a rencontré exactement ce cas (E2E 2026-07-02, « Test Conv »
+   épinglée et absente du serveur) et l'a réglé par une réconciliation complète bornée à 1× par
+   24 h (`fullReconcileInterval`), chaînée APRÈS le delta. Le vrai contenu du chantier est le
+   pendant web de cette borne, pas la désactivation.
+2. **Le coût croît avec la profondeur de scroll**, pas seulement avec la fréquence de focus : dix
+   pages chargées = dix requêtes à chaque retour d'onglet. C'est une question de charge autant que
+   de correction.
+
+---
+
+
+---
+
 
 # Cycle 77 — L'enrichissement audio n'atteignait que les lecteurs déjà dans le fil, et une page delta tronquée sautait des lignes
 
@@ -205,8 +236,6 @@ reste monté.
 
 Trois surfaces web pouvaient porter ce trou ; le cycle 75 avait établi le relevé :
 
-| Surface web | Rattrapage au reconnect SOCKET |
-|---|---|
 | Messages d'une conversation | oui — `syncNewerMessages` sur le front `false → true` (« Trigger 1 ») |
 | Notifications | oui depuis le cycle 75 — `onSyncDesync('reconnect')` |
 | **Liste de conversations** | **non** — corrigé ici |
@@ -319,6 +348,63 @@ Reste ouvert : faire voyager la frontière de lecture jusqu'au modèle web ferme
 l'écart pour de bon. Chantier de contrat, pas garde de fusion — noté dans
 `ConversationSyncEngine.swift` en tête de `deltaSyncCore`.
 
+
+---
+
+# Cycle 76b — Addendum : TROIS sessions ont livré le cycle 76 en parallèle
+
+Même défaut, même endpoint, même miroir iOS, jusqu'aux noms de fichiers à un mot près, découvert
+trois fois sans que personne se voie : `upbeat-dirac-ozao52` (mergée la première, sa version vit
+dans l'arbre), `keen-hamilton-jrysns` (mergée ensuite, addendum sur la même base), et celle-ci.
+Chacune s'aligne sur ce qui est déjà mergé et n'ajoute que ce qui manquait — appliqué par-dessus,
+jamais à la place (précédent du cycle 25b ; leçon du cycle 23 : comparer défaut par défaut, jamais
+« qui est arrivé en premier »).
+
+**Ce que la première version fait strictement mieux** que celle de cette session, et qui aurait
+manqué autrement :
+1. **Le plafond serveur est traité comme une preuve d'incomplétude.** Elle demande `limit = 100`
+   (le plafond réel de `Math.min(limit, 100)`) et, sur page PLEINE, escalade vers une relecture
+   complète. Cette session demandait le `limit` de la liste et prétendait, dans sa documentation,
+   que « le reste est rattrapé au reconnect suivant » — **c'est faux**, pour la raison que la
+   première a su nommer : la route trie par `lastMessageAt` décroissant et NON par `updatedAt`,
+   donc les lignes tronquées ne sont pas les plus anciennes, et le watermark calculé sur ce qui a
+   été fusionné passe définitivement par-dessus.
+2. **Les caches dérivés sont purgés** (`removedIds` → `conversations.detail`, puis
+   `messages.infinite` ajouté par la deuxième session).
+
+**Ce que cette session ajoute par-dessus** — la borne de la fenêtre chargée. Une conversation
+INCONNUE du cache et plus ancienne que la dernière ligne chargée était insérée par la fusion ; le
+`fetchNextPage` suivant la rapporte à sa place réelle, donc **la même conversation apparaissait
+deux fois**. `mergeConversationDelta` prend désormais `{ hasMore }` en plus de
+`{ openConversationId }`, et l'écarte tant qu'il reste des pages ; une inconnue récente appartient
+bien à la fenêtre et entre normalement, un retrait (`isActive: false`) n'est jamais écarté, et sans
+borne fournie on insère — perdre une ligne serait pire que la dupliquer jusqu'au prochain montage.
+Le plancher se mesure avec `orderKey`, la MÊME clé que le tri final : la borne signifie « sous la
+dernière ligne visible », et la fenêtre est ordonnée par cette clé.
+
+## Convergence indépendante sur la réconciliation du non-lu
+
+Cette session avait écrit, testé, puis **retiré** une règle « non-lu local à 0 et aucun message plus
+récent ⇒ garder 0 », au motif qu'elle confond un accusé de lecture en retard avec un `mark-unread`
+délibéré fait depuis un autre appareil. La deuxième session est arrivée **indépendamment à la même
+conclusion**, l'a écrite dans `ConversationDeltaMergeOptions` avec l'argument décisif que cette
+session n'avait pas formulé — côté iOS, `markAsUnread` fonctionne parce qu'il EFFACE `lastReadAt`,
+ce qui désarme la règle 2 et rend la main au serveur ; une transposition basée sur `unreadCount`
+n'a pas cet interrupteur — et a livré le sous-ensemble sûr : forcer à zéro la seule conversation
+OUVERTE, lue depuis `useNotificationStore.getState().activeConversationId`.
+
+Le reste (conversation FERMÉE dont l'accusé de lecture traîne encore) demande de faire voyager la
+frontière de lecture jusqu'au modèle web — chantier de contrat gateway, pas garde de fusion. Deux
+sessions y sont arrivées séparément : ce n'est pas une opinion, c'est la borne du modèle actuel.
+
+## Hors cycle — un flake d'une milliseconde dans le gateway
+
+`PostFeedService` › « bounds the author archive to a finite window in the past » comparait
+`before - floor` à `AUTHOR_ARCHIVE_WINDOW_MS` au millième près, alors que `before` est lu par le
+TEST avant l'appel et le plancher calculé par le SERVICE après : les deux ne sont égales que si
+l'horloge ne change pas de milliseconde entre elles. Rouge en CI sur une PR ne touchant pas le
+gateway (604799999 contre 604800000). L'invariant réel est un encadrement entre les deux lectures
+qui bornent l'appel — corrigé sans tolérance arbitraire.
 
 ---
 

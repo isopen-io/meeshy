@@ -165,6 +165,71 @@ describe('mergeConversationDelta', () => {
   });
 });
 
+/**
+ * La borne de fenêtre chargée. Sans elle, une conversation inconnue du cache
+ * et plus ancienne que la dernière ligne chargée entre dans la liste, puis y
+ * ENTRE UNE SECONDE FOIS au `fetchNextPage` suivant, qui la rapporte à sa
+ * place réelle.
+ */
+describe('mergeConversationDelta — borne de la fenêtre chargée', () => {
+  it('ÉCARTE une inconnue plus ancienne que la fenêtre chargée tant qu\u2019il reste des pages', () => {
+    const existing = [
+      conv('a', { lastMessageAt: new Date('2026-08-01T10:00:00.000Z') }),
+      conv('b', { lastMessageAt: new Date('2026-08-01T09:00:00.000Z') }),
+    ];
+    const deltas = [conv('vieille', { lastMessageAt: new Date('2026-07-01T00:00:00.000Z') })];
+
+    const { merged } = mergeConversationDelta(existing, deltas, { hasMore: true });
+
+    expect(merged.map((c) => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('accepte cette même inconnue quand la liste est entièrement chargée', () => {
+    const existing = [conv('a', { lastMessageAt: new Date('2026-08-01T10:00:00.000Z') })];
+    const deltas = [conv('vieille', { lastMessageAt: new Date('2026-07-01T00:00:00.000Z') })];
+
+    const { merged } = mergeConversationDelta(existing, deltas, { hasMore: false });
+
+    expect(merged.map((c) => c.id)).toEqual(['a', 'vieille']);
+  });
+
+  it('insère sans borne quand l\u2019appelant n\u2019en fournit pas — perdre une ligne serait pire', () => {
+    const existing = [conv('a', { lastMessageAt: new Date('2026-08-01T10:00:00.000Z') })];
+    const deltas = [conv('vieille', { lastMessageAt: new Date('2026-07-01T00:00:00.000Z') })];
+
+    const { merged } = mergeConversationDelta(existing, deltas);
+
+    expect(merged.map((c) => c.id)).toEqual(['a', 'vieille']);
+  });
+
+  it('laisse entrer une inconnue RÉCENTE même s\u2019il reste des pages — elle appartient à la fenêtre', () => {
+    const existing = [
+      conv('a', { lastMessageAt: new Date('2026-08-01T10:00:00.000Z') }),
+      conv('b', { lastMessageAt: new Date('2026-08-01T09:00:00.000Z') }),
+    ];
+    const deltas = [conv('neuve', { lastMessageAt: new Date('2026-08-01T14:00:00.000Z') })];
+
+    const { merged } = mergeConversationDelta(existing, deltas, { hasMore: true });
+
+    expect(merged.map((c) => c.id)).toEqual(['neuve', 'a', 'b']);
+  });
+
+  it('retire une inactive même hors fenêtre — un retrait n\u2019est jamais écarté', () => {
+    const existing = [
+      conv('a', { lastMessageAt: new Date('2026-08-01T10:00:00.000Z') }),
+      conv('vieille', { lastMessageAt: new Date('2026-07-01T00:00:00.000Z') }),
+    ];
+    const deltas = [
+      conv('vieille', { isActive: false, lastMessageAt: new Date('2026-07-01T00:00:00.000Z') }),
+    ];
+
+    const { merged, removedIds } = mergeConversationDelta(existing, deltas, { hasMore: true });
+
+    expect(merged.map((c) => c.id)).toEqual(['a']);
+    expect(removedIds).toEqual(['vieille']);
+  });
+});
+
 describe('mergeConversationDelta — garde de la conversation OUVERTE', () => {
   it('forces the open conversation to zero unread, whatever the server says', () => {
     const { merged } = mergeConversationDelta(
