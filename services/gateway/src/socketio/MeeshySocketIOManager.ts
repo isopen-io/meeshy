@@ -38,9 +38,13 @@ import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
-  participantUserRooms,
+  participantUserRoomTargets,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
+import {
+  PREVIEW_PRISM_PARTICIPANT_SELECT,
+  resolveLastMessagePreviewPrism,
+} from './utils/lastMessagePreviewPrism';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -2233,7 +2237,10 @@ export class MeeshySocketIOManager {
               conversationId: normalizedId,
               isActive: true
             },
-            select: { id: true, userId: true, joinedAt: true }
+            // `user` (préférences de langue) : le Prisme de la ligne de liste,
+            // résolu par destinataire ci-dessous. `joinedAt` reste requis par
+            // `emitUnreadCountsToRecipients`, qui partage cette requête.
+            select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
           });
 
           // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
@@ -2249,12 +2256,20 @@ export class MeeshySocketIOManager {
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
-          // `userId ?? id` (participantUserRooms) : parité avec le chemin socket
-          // de MessageHandler. Un participant sans compte a une room personnelle
-          // nommée d'après son `Participant.id` — la sauter privait un invité de
-          // lien partagé de tout re-tri de sa liste de conversations.
-          for (const room of participantUserRooms(allParticipants)) {
-            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          // `userId ?? id` (participantUserRoomTargets) : parité avec le chemin
+          // socket de MessageHandler. Un participant sans compte a une room
+          // personnelle nommée d'après son `Participant.id` — la sauter privait un
+          // invité de lien partagé de tout re-tri de sa liste de conversations.
+          //
+          // Le Prisme est résolu PAR destinataire, depuis le MÊME `message` qui
+          // alimente `message:new` ci-dessus : les deux événements portent donc
+          // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
+          // arriver derrière pour effacer ce que `message:new` vient d'installer.
+          for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
+            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+              ...updatePayload,
+              ...resolveLastMessagePreviewPrism(participant, message)
+            });
           }
 
           // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).

@@ -1315,6 +1315,21 @@ export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
+  /**
+   * Prisme Linguistique de la ligne de liste, résolu POUR CE destinataire —
+   * jumeaux des champs que `GET /conversations` pose déjà sur la conversation.
+   *
+   * Les trois champs d'aperçu (`lastMessagePreview` + ces deux-ci) s'appliquent
+   * EN GROUPE : le client préfère la traduction à l'aperçu brut, donc poser l'un
+   * sans les autres laisse la ligne rendre l'ANCIEN texte traduit après une
+   * édition. `null` est une VALEUR, pas une absence — une édition remet
+   * `Message.translations` à null dans la même écriture tout en gardant le même
+   * `lastMessageId`, et c'est ce `null` reçu qui périme la carte du client.
+   * Seul le serveur sait que la carte a été périmée ; le client ne peut pas le
+   * déduire.
+   */
+  readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
+  readonly lastMessageOriginalLanguage?: string | null;
   readonly [key: string]: unknown;
 }
 

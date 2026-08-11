@@ -500,6 +500,28 @@ public struct SocketEventUser: Decodable, Sendable {
     public let id: String
 }
 
+/// Tri-état du Prisme Linguistique de la ligne de liste, porté par
+/// `conversation:updated`.
+///
+/// `Optional` ne suffit pas : il confond « la clé était ABSENTE du payload »
+/// (une mise à jour de métadonnées — renommage, avatar — qui ne parle pas du
+/// dernier message) et « la clé valait `null` » (le serveur DIT que la carte
+/// est périmée). Les deux demandent des actions opposées.
+///
+/// C'est exactement ce qu'une ÉDITION produit : le gateway remet
+/// `Message.translations` à null dans la même écriture que le nouveau contenu,
+/// tout en gardant le MÊME `lastMessageId`. Aucune heuristique client ne peut
+/// trancher ce cas — « vider quand l'id change » le laisse passer, et vider
+/// inconditionnellement effacerait la carte que `message:new` vient
+/// d'installer sur le chemin d'envoi. Seul ce `null` REÇU le peut.
+public enum LastMessagePreviewTranslations: Sendable, Hashable {
+    /// Clé absente : la carte du cache n'est pas concernée par cet événement.
+    case unchanged
+    /// Clé présente : la carte du cache est REMPLACÉE par celle-ci — vide
+    /// comprise, et c'est tout l'intérêt.
+    case replaced([String: String])
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -522,6 +544,12 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// preview without a separate fetch.
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
+    /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
+    /// résolveur PRÉFÈRE la traduction hydratée par `GET /conversations` à
+    /// `lastMessagePreview`, et rien sur le fil ne disait qu'elle était périmée.
+    public let lastMessageTranslations: LastMessagePreviewTranslations
+    public let lastMessageOriginalLanguage: String?
     /// Position du dernier message, hissée par le chemin message-driven
     /// (`MessageHandler.ts`) et par `emitConversationPreviewUpdate`. Un message
     /// position-seule a un `lastMessagePreview` vide — c'est ce champ qui
@@ -544,6 +572,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
         case location
+        case lastMessageTranslations, lastMessageOriginalLanguage
     }
 
     public init(from decoder: Decoder) throws {
@@ -560,6 +589,17 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
         lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
+        // distingue « cet événement ne parle pas d'aperçu » de « la carte est
+        // périmée ». `decodeIfPresent` rend `nil` dans les deux cas et perdrait
+        // précisément le signal que le serveur envoie.
+        if container.contains(.lastMessageTranslations) {
+            let map = try container.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
+            lastMessageTranslations = .replaced(map ?? [:])
+        } else {
+            lastMessageTranslations = .unchanged
+        }
+        lastMessageOriginalLanguage = try container.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
         location = try container.decodeIfPresent(SharedPlace.self, forKey: .location)
         senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
@@ -579,6 +619,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
+        lastMessageOriginalLanguage: String? = nil,
         location: SharedPlace? = nil,
         senderId: String? = nil,
         updatedBy: SocketEventUser? = nil,
@@ -596,6 +638,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageTranslations = lastMessageTranslations
+        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         self.location = location
         self.senderId = senderId
         self.updatedBy = updatedBy
