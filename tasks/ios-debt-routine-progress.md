@@ -151,15 +151,20 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    étendre, il faudrait d'abord concevoir l'API unifiée (le rapport suppose une consolidation
    "layers" qui n'existe pas encore). Reporté : nécessite une décision de conception avant tout
    fix mécanique.
-6. **[BLOQUÉ — décision produit/architecture, PAS tenté]** Observation Macro —
+6. **[FERMÉ — décision utilisateur 2026-08-11 : « on reste à iOS 16 »]** Observation Macro —
    `ObservableObject` → macro `@Observable`. **118 classes** `ObservableObject` au 2026-08-09,
    **0** migrées vers `@Observable`. `@Observable` (framework Observation) nécessite
    **iOS 17+/macOS 14+** ; `apps/ios/CLAUDE.md` fixe le plancher de déploiement à **iOS 16.0+**
-   (`MeeshyWidgets` seule extension à iOS 17+). Une migration totale casserait la compatibilité
-   iOS 16 ; une migration partielle par-vue avec `#available` biseauté est une décision
-   d'architecture non triviale (double maintenance ObservableObject/`@Observable` dans les
-   ViewModels partagés). Ne PAS tenter sans validation utilisateur explicite sur : (a) relever le
-   plancher à iOS 17, ou (b) accepter un split d'implémentation par version d'OS.
+   (`MeeshyWidgets` seule extension à iOS 17+). Les deux options qui bloquaient l'item étaient
+   (a) relever le plancher à iOS 17, ou (b) accepter un split d'implémentation
+   `ObservableObject`/`@Observable` par version d'OS (double maintenance dans les ViewModels
+   partagés). **Tranché explicitement** : le plancher reste iOS 16.0+ (option a écartée) ; le
+   split par-OS-version (option b) n'a pas été demandé et ajouterait de la complexité de
+   maintenance sans bénéfice utilisateur clair — en cohérence avec le principe « Simplicity
+   First » de `CLAUDE.md` racine, cet item est donc **fermé, pas seulement reporté** : aucune
+   migration `@Observable` ne sera tentée tant que le plancher de déploiement n'est pas
+   explicitement relevé à iOS 17+ dans une décision future et séparée. Retiré du backlog actif —
+   ne plus re-proposer sans qu'une nouvelle décision utilisateur relève le plancher.
 
 7. **[OUVERT — nécessite une décomposition, PAS un mécanique direct — trouvé 2026-08-11]**
    `UIScreen.main` deprecated (iOS 16+, remplaçant : `@Environment(\.displayScale)` pour
@@ -695,9 +700,6 @@ suivi). Pas de branche `claude/apps/ios/*` créée (rien à committer sous `apps
 - **Item 5 — Modern Date Parsers** : nécessite une décision de conception (l'API `Date.ParseStrategy`
   unifiée n'existe pas encore dans le repo ; 20 sites `DateFormatter()` à faire converger vers un
   socle à concevoir).
-- **Item 6 — Observation Macro (`@Observable`)** : nécessite une décision produit — soit relever le
-  plancher de déploiement iOS 16.0+ → iOS 17.0+ (`apps/ios/CLAUDE.md`), soit accepter un split
-  d'implémentation `ObservableObject`/`@Observable` par version d'OS dans les ViewModels partagés.
 - **Item 4 (résidu, hors backlog actif) — 9 sites « escape SwiftUI »** : migrables uniquement après
   une session dédiée de vérification interactive sur simulateur/device (login démo, déclencher
   chaque flux concerné, observer la console avant/après pour le warning SwiftUI « Publishing changes

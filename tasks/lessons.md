@@ -4626,3 +4626,75 @@ Ce qu'il faut en retenir :
 2. **Un chemin absolu critique (worktree, fichier cible) gagne à être interpolé DANS le texte du script au moment de l'écrire, en plus (ou à la place) de son passage via `args`** — une constante littérale ne peut pas se perdre en transit.
 3. **Un agent à qui il manque un repère se rabat sur la mémoire projet, pas sur l'incertitude explicite** — et la mémoire peut nommer un chemin qui n'est plus le bon (chantier voisin, déjà clos). Un prompt qui dépend d'un chemin doit soit le vérifier lui-même en première étape (`test -d "$WORKTREE" || exit 1` avant tout `cd`), soit refuser de deviner.
 4. **Un sous-agent qui lance une commande longue en arrière-plan doit bloquer dessus jusqu'à un signal terminal réel, jamais retourner "j'attendrai la suite" comme conclusion.** Celui de ce run a fini par répondre "je vais attendre les notifications" comme texte FINAL après plusieurs tentatives de `sleep`/`Monitor` — un sous-agent n'est jamais réveillé plus tard dans le même appel `agent()` : soit il bloque en synchrone jusqu'à la fin réelle du process qu'il surveille, soit son tour se termine sans résultat exploitable et l'orchestrateur doit le traiter comme tel, pas comme un résultat définitif.
+
+
+## Leçon 117 — un mutant qui n'a pas été appliqué se lit EXACTEMENT comme un mutant survivant (2026-08-11, routine messaging, cycle 76)
+
+Le RED se prouvait par mutation : `sed` sur le fichier, relance des témoins, restauration.
+Trois mutants lancés, **deux annoncés survivants** — donc deux règles porteuses
+apparemment non couvertes. La conclusion naturelle était « mes témoins ne discriminent
+pas, il faut les renforcer ».
+
+C'était faux. Les deux `sed` avaient une indentation de motif erronée (8 espaces là où le
+code en a 4, les lignes vivant dans une closure). Ils n'ont RIEN remplacé. Les témoins
+tournaient contre le code d'origine et passaient.
+
+1. **« N passed » après une mutation n'est une information que si la mutation a eu lieu.**
+   `sed`/`perl -pi` échouent SILENCIEUSEMENT sur un motif non trouvé : code de sortie 0,
+   fichier inchangé. Un mutant se VÉRIFIE avant de se juger — `git diff --stat` sur le
+   fichier muté, et mutation par NUMÉRO DE LIGNE (`sed -i '148s|.*|...|'`) après
+   localisation au `grep -n`. Refait ainsi, tous les mutants sont tombés du premier coup.
+2. **Le faux négatif pousse à SUR-tester, pas à sous-tester** — c'est ce qui le rend
+   coûteux sans avoir l'air dangereux. On ajoute des témoins redondants pour une règle
+   déjà couverte et on ne découvre jamais que l'instrument de preuve était cassé. « Mon
+   témoin nommé pour CETTE règle ne tombe pas alors qu'il devrait » est un signal sur le
+   HARNAIS avant d'être un signal sur le témoin.
+
+## Leçon 118 — recharger un module pour remettre à zéro son état partagé recharge aussi son React
+
+Le cooldown du delta-sync vit au niveau module (plusieurs écrans montent la même liste).
+Pour isoler les témoins, premier réflexe : `jest.resetModules()` + `await import(...)`.
+
+Les témoins de fonction pure passaient ; les `renderHook` tombaient sur
+`TypeError: Cannot read properties of null (reading 'useContext')` — qui se lit comme un
+`QueryClientProvider` manquant, alors que le provider était là.
+
+`resetModules` vide le registre : le module fraîchement importé résout un `react` et un
+`@tanstack/react-query` **différents** de ceux que le fichier de test importe
+statiquement. Deux instances de React ⇒ dispatcher nul.
+
+**L'état partagé d'un module se remet à zéro par la porte que la PRODUCTION utilise, pas
+en détruisant le module.** Le garde lit `Date.now()` : un `jest.spyOn(Date, 'now')` qui
+avance de dix minutes entre les tests le rouvre exactement comme le temps réel — sans
+toucher au registre, sans export test-only dans le code de production. (La version
+retenue de ce cycle a réglé le même besoin autrement : garde porté par une `WeakMap`
+clé par `QueryClient`, donc naturellement isolé par client de test.)
+
+## Leçon 119 — la variante « plausible et plus complète » d'une garde se teste contre la FEATURE qu'elle pourrait éteindre
+
+Le cycle a proposé, par-dessus la version retenue, un cliquet sur le compteur de non-lus :
+« le delta peut toujours BAISSER le badge, il ne peut le MONTER que s'il apporte un
+`lastMessageAt` plus récent ». Le raisonnement tenait, le cas visé était réel (instantané
+serveur antérieur à un `mark-as-read` en vol), et la règle avait ses cinq témoins verts.
+
+Elle était fausse, et c'est un témoin PRÉEXISTANT de l'autre session — « the delta is
+server truth » — qui l'a fait tomber, pas une relecture.
+
+1. **Transposer une règle d'une plateforme à l'autre demande de transposer aussi son
+   INTERRUPTEUR.** iOS clampe sur `userState.lastReadAt` ; `markAsUnread` marche
+   précisément parce qu'il EFFACE cette frontière, ce qui désarme le clamp et rend la main
+   au serveur. Une transposition basée sur `unreadCount` + `lastMessageAt` reproduit la
+   condition mais PAS son moyen de désarmement — donc elle éteint silencieusement le
+   « marquer comme non lu » cross-device, une feature qu'aucun témoin du cycle ne
+   regardait. **Avant d'écrire une garde qui refuse une valeur serveur, chercher quelle
+   ACTION UTILISATEUR produit légitimement cette valeur.**
+2. **Comparer les coûts des deux erreurs, pas seulement leurs probabilités.** Un badge
+   rallumé une seconde et réparé par le `conversation:unread-updated` suivant est un faux
+   transitoire auto-réparant ; un mark-as-unread jamais affiché est un faux PERMANENT.
+   Une garde n'est justifiée que si le mal qu'elle empêche survit plus longtemps que celui
+   qu'elle cause.
+3. **Une garde se coupe à la portée qu'on peut PROUVER.** La moitié « conversation
+   ouverte » est démontrable sans frontière locale (l'écran la montre, le handler socket
+   la clampe déjà) et a été conservée. La moitié « conversation fermée » demande de faire
+   voyager la frontière de lecture jusqu'au modèle web : chantier de contrat, documenté et
+   laissé ouvert, pas approximé par un proxy.
