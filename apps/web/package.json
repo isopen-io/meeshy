@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web",
-  "version": "1.24.0",
+  "version": "1.23.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3100 --experimental-https",
