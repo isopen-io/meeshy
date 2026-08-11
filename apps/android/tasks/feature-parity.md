@@ -5276,8 +5276,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `apps/android` (slice `widget-unread-count-scaffold`) — foundation minimale + sous-tranche
       "unread count" (`UnreadCountWidget`, parité avec iOS `MeeshyWidgets.UnreadCountWidget`
       `.systemSmall`). Statique/déclenché par l'OS, pas de push-refresh sur changement de données
-      (l'analogue Android de `WidgetCenter.reloadAllTimelines()`). Restent : recent conversations,
-      favorite contacts, quick reply, mark-read, tailles/kinds additionnels, push-refresh.
+      (l'analogue Android de `WidgetCenter.reloadAllTimelines()`). **Deuxième sous-tranche
+      (2026-08-11)** : `RecentConversationsWidget` (slice `widget-recent-conversations`), parité
+      avec iOS `MeeshyWidgets.RecentConversationsWidget` — pinned-first puis plus-récent-d'abord
+      (`ConversationRowTime` SSOT), jusqu'à 5 lignes, tap sur une ligne = deep-link direct
+      `meeshy://conversation/{id}`. A nécessité un ajout de fondation : `TokenStore.userId`
+      (persisté à côté du JWT) — `SessionRepository` est en mémoire seule et vide dans un
+      processus widget froid qui n'a jamais tourné le flux de démarrage normal de l'app ; le
+      widget lit désormais l'id utilisateur persisté pour résoudre le nom du bon participant
+      dans une conversation directe. Restent : favorite contacts, quick reply, mark-read,
+      tailles/kinds additionnels, push-refresh.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
 - [ ] Crash / hang / ANR diagnostics with on-device persistence + remote report

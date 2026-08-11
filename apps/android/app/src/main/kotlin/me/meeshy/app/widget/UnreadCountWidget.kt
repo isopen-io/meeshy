@@ -51,7 +51,7 @@ internal class UnreadCountWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repository = EntryPointAccessors.fromApplication(
             context,
-            UnreadWidgetEntryPoint::class.java,
+            WidgetEntryPoint::class.java,
         ).conversationRepository()
 
         val total = repository.cachedConversations().first().totalUnreadCount()

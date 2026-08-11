@@ -68,4 +68,9 @@
     <string name="widget_unread_count_description">Veja rapidamente suas mensagens não lidas</string>
     <string name="widget_unread_label">Não lidas</string>
     <string name="widget_all_read_label">Tudo em dia</string>
+
+    <!-- Widget de tela inicial: conversas recentes -->
+    <string name="widget_recent_conversations_title">Conversas recentes</string>
+    <string name="widget_recent_conversations_description">Veja suas conversas recentes rapidamente</string>
+    <string name="widget_recent_conversations_empty">Abra o Meeshy para começar</string>
 </resources>

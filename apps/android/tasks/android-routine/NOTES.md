@@ -253,6 +253,47 @@ Append-only log of gotchas and decisions that save time next run.
   convention is about UI glue, not already-fully-generic pure logic; a pure type with zero
   feature-specific fields is a SSOT from the first reuse, not the third.
 
+## Slice `widget-recent-conversations` (2026-08-11)
+- **A `GlanceAppWidget` update can run in a cold app process that never executed the app's
+  normal startup flow — any in-memory-only session state silently reads as absent, not stale.**
+  `SessionRepository.currentUserId` is populated exclusively by `AuthRepository.restoreSession()`,
+  itself called from `MainActivity`'s/a ViewModel's own startup path. `AppWidgetManager` can spawn
+  the app's process purely to service `APPWIDGET_UPDATE` (via `GlanceAppWidgetReceiver.onUpdate`)
+  without ever launching an Activity — that process never runs `restoreSession()`, so
+  `SessionRepository.currentUserId` is `null` even though the user IS signed in on the device.
+  Any widget decision needing the current user's identity (here: resolving a direct conversation's
+  *other* participant) must read from something actually persisted across process death — added
+  `TokenStore.userId`, mirroring the existing `jwt`/`sessionToken` persistence exactly, rather than
+  reaching for the in-memory `SessionRepository` a first instinct suggests since it's the "obvious"
+  place identity lives everywhere else in the app.
+- **`androidx.glance.action.actionStartActivity` (the base `glance` artifact) has NO overload
+  accepting a raw `Intent` — only `ComponentName` or a reified `Class<T : Activity>`, both paired
+  with `ActionParameters` (an extras-like bundle, not a `data` URI).** The `Intent`-accepting
+  overload lives in a DIFFERENT package/artifact: `androidx.glance.appwidget.action.actionStartActivity(Intent, ActionParameters)`
+  (from `glance-appwidget`, imported under an alias to avoid colliding with the base package's
+  same-named function when both are needed in one file — the empty-state tap still wants the typed
+  `actionStartActivity<MainActivity>()` form). Verified via `javap` against the actual jars in
+  `~/.gradle/caches/*/transforms/*/transformed/glance-appwidget-1.1.1-api.jar` BEFORE writing any
+  code — there is no JDK on `$PATH` by default on this machine (`java_home -V` empty), but
+  `brew list` had `openjdk@21` already installed unlinked; `export JAVA_HOME="$(brew --prefix
+  openjdk@21)/libexec/openjdk.jdk/Contents/Home"` unblocks `javap`/Gradle without any install step.
+  This class of "does the API even have the overload I'm about to write against" doubt is cheap to
+  resolve by decompiling the actual dependency jar rather than guessing from memory or Android
+  documentation that may describe a different Glance version.
+- **Navigation-Compose 2.8.3 (this repo's pinned version) auto-consumes the hosting Activity's
+  launching `Intent` for registered `navDeepLink`s — no manual `NavController.handleDeepLink()`
+  call needed**, confirmed by `libs.versions.toml` (`navigationCompose = "2.8.3"`, the version that
+  added this) plus the total absence of any `handleDeepLink` call anywhere in `apps/android/app`.
+  Older Navigation-Compose versions require that call explicitly in `onNewIntent`; don't assume the
+  older requirement without checking the pinned version first — it would have led to writing dead
+  manual-wiring code for a mechanism this version already handles automatically.
+- **A Hilt `@EntryPoint` interface meant for a class of callers (not one specific caller) is worth
+  renaming the moment a second caller needs it, not accreting a misleadingly-scoped name.**
+  `UnreadWidgetEntryPoint` (singular-widget name) already generalizes cleanly to any
+  `GlanceAppWidget` needing a `@Singleton` binding — renamed to `WidgetEntryPoint` via `git mv` the
+  moment this second widget needed `tokenStore()` alongside the existing `conversationRepository()`,
+  rather than leaving the misnomer or spawning a near-duplicate second entry-point interface.
+
 ## Slice `conversation-hardpress-preview` (2026-08-11)
 - **A high-load host can trigger a genuine, single, real `ActivityManager` ANR on the emulator
   that has NOTHING to do with the diff under test — distinguish it from an app hang via the

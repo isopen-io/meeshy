@@ -110,6 +110,21 @@
                 android:resource="@xml/unread_count_widget_info" />
         </receiver>
 
+        <!-- Home-screen widget: recent conversations (feature-parity.md
+             "Home-screen widgets" — second sub-slice, after unread-count).
+             Parity target: iOS MeeshyWidgets.RecentConversationsWidget. -->
+        <receiver
+            android:name=".widget.RecentConversationsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_recent_conversations_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recent_conversations_widget_info" />
+        </receiver>
+
         <!-- WorkManager initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"
