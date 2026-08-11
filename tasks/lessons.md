@@ -4614,3 +4614,14 @@ ce qui est de la plateforme.
    front `false → true` du socket, les notifications non (corrigé), la liste de conversations non
    plus (documentée en tête du cycle suivant). Sans ce balayage, le rapport aurait annoncé « le web
    n'a pas de rattrapage », ce qui est faux, au lieu de nommer la seule surface restante.
+## Leçon 112 — `args` passé à Workflow doit être vérifié en tête de script, jamais consommé les yeux fermés (2026-08-11, mini-chantier follow-ups audio immersif iOS)
+
+Un script `Workflow` lancé avec `args: {"worktree": "/chemin/reel"}` et lisant `const WORKTREE = args.worktree` a vu CHAQUE prompt dispatché aux 14 sous-agents contenir littéralement `cd undefined` — `args` ne s'est pas propagé malgré un appel conforme à la doc de l'outil.
+
+Conséquence observée : les agents ont dû deviner le bon worktree eux-mêmes (`git worktree list` + correspondance de nom/branche). Trois follow-ups sur quatre (implémentation ET revue) ont deviné juste grâce au nom de branche fraîchement créée — mais l'agent de gate final, sans commit ni branche à faire correspondre, a été induit en erreur par la mémoire du projet (qui mentionne un worktree du MÊME chantier parent, déjà mergé, sous un nom proche) et a fait tourner le gate complet sur l'ancien worktree : zéro signal utile après ~50 tool calls et 53s.
+
+Ce qu'il faut en retenir :
+1. **Après tout lancement de `Workflow` avec `args`, lire le `promptPreview` du tout premier agent du journal AVANT de faire confiance au reste du run** — un `cd undefined` ou toute valeur manifestement fausse dans le premier prompt dispatché signale qu'`args` ne s'est pas propagé ; mieux vaut le savoir après le premier agent qu'après les 14.
+2. **Un chemin absolu critique (worktree, fichier cible) gagne à être interpolé DANS le texte du script au moment de l'écrire, en plus (ou à la place) de son passage via `args`** — une constante littérale ne peut pas se perdre en transit.
+3. **Un agent à qui il manque un repère se rabat sur la mémoire projet, pas sur l'incertitude explicite** — et la mémoire peut nommer un chemin qui n'est plus le bon (chantier voisin, déjà clos). Un prompt qui dépend d'un chemin doit soit le vérifier lui-même en première étape (`test -d "$WORKTREE" || exit 1` avant tout `cd`), soit refuser de deviner.
+4. **Un sous-agent qui lance une commande longue en arrière-plan doit bloquer dessus jusqu'à un signal terminal réel, jamais retourner "j'attendrai la suite" comme conclusion.** Celui de ce run a fini par répondre "je vais attendre les notifications" comme texte FINAL après plusieurs tentatives de `sleep`/`Monitor` — un sous-agent n'est jamais réveillé plus tard dans le même appel `agent()` : soit il bloque en synchrone jusqu'à la fin réelle du process qu'il surveille, soit son tour se termine sans résultat exploitable et l'orchestrateur doit le traiter comme tel, pas comme un résultat définitif.

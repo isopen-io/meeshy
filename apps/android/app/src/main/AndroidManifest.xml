@@ -125,6 +125,22 @@
                 android:resource="@xml/recent_conversations_widget_info" />
         </receiver>
 
+        <!-- Home-screen widget: favorite contacts (feature-parity.md
+             "Home-screen widgets" — third sub-slice, after unread-count and
+             recent-conversations). Parity target: iOS
+             MeeshyWidgets.FavoriteContactsWidget. -->
+        <receiver
+            android:name=".widget.FavoriteContactsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_favorite_contacts_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/favorite_contacts_widget_info" />
+        </receiver>
+
         <!-- WorkManager initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"
