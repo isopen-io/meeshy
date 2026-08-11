@@ -3513,15 +3513,83 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `{latitude, longitude, name, address, category}` and iOS's `SharedPlace` field-for-field)
       threaded through `CreatePostRequest.location` → `PostRepository.create(location:)` →
       `FeedViewModel.publishPost(location:)`. The attached place renders as its own removable
-      chip (raw coordinates via the new `formattedCoordinates()`, `Locale.ROOT`-pinned). **Still
-      open**: no map UI, no search, no reverse-geocoded name/address (each a separately-scoped,
-      heavier follow-up — the map picker alone needs a Maps SDK dependency this slice
-      deliberately avoided), on-device transcription (iOS's dedicated `AudioPostComposerView`
-      with `EdgeTranscriptionService` — a materially larger, separately-scoped feature), per-post
-      language override, durable-outbox queueing for offline resilience (media upload itself has
-      no offline-retry path yet either, unlike the story composer's — the whole Feed publish
-      isn't durable yet, so this is consistent, not a new gap) — each a separately-scoped
-      follow-up.
+      chip (raw coordinates via the new `formattedCoordinates()`, `Locale.ROOT`-pinned).
+      **Per-post language override now done too** (slice `feed-composer-language-override`,
+      2026-08-11 — the last unshipped item of this candidate besides on-device transcription):
+      a compact flag pill under the header (port of iOS's `ComposerLanguageFlag` button; the
+      collapsed pill shows ONLY the flag, matching iOS's own 2026-07-30 directive) opens a
+      search-filtered picker dialog (`ComposerLanguagePickerDialog`, a plain `AlertDialog` —
+      mirrors `SettingsScreen`'s own `RegionalLanguageDialog` shape rather than nesting a second
+      `ModalBottomSheet`, an established anti-pattern this codebase avoids) reusing the
+      already-tested `LanguageStepSelection.pickerLanguages`/`.filter` pure core the registration
+      wizard's language step already established — no re-implementation of the catalogue/filter
+      rule. New pure `ComposerLanguage` (`:core:model`, port of iOS `ComposerModels.swift`'s
+      `DefaultComposerLanguage.resolve()`/`ComposerLanguageFlag.label(for:)`): `DEFAULT` reuses
+      `LanguageResolver.FALLBACK_LANGUAGE` ("fr", SSOT — no second hardcoded literal), `flag(code)`
+      the catalogue flag or an uppercased raw-code fallback. **RE-PROUVEN before coding**: iOS's
+      own `FeedComposerSheet.composerLanguage` does NOT auto-detect from the typed text either
+      (confirmed by reading `FeedView+Attachments.swift` — the live-typing detector only wires
+      into `UniversalComposerBar`/messages, via `ComposeLanguageDetector` on Android's chat
+      composer) — it starts at a hardcoded `"fr"` and only a manual picker changes it, so this
+      slice mirrors that exactly rather than reusing chat's auto-detection. Also re-confirmed no
+      shared cross-feature language-picker UI component exists yet outside the registration
+      inline menu: the pure catalogue/filter core (`LanguageStepSelection`, `:core:model`) IS
+      reusable and was reused verbatim, but the Composable picker UI itself is now duplicated a
+      third time (registration's inline grid, Settings' `RegionalLanguageDialog`, this dialog) —
+      flagged as a legitimate `:sdk-ui` promotion candidate for a future iOS-dette-style pass, not
+      done here (stays feature-local per the SDK-purity convention of duplicating small UI glue
+      until 3+ call sites force a shared abstraction, and to keep this slice's diff scoped to
+      `:feature:feed`/`:core:model` alone). `FeedComposerDraft` gained `language` (defaults to
+      `ComposerLanguage.DEFAULT`) + `withLanguage(code)` (replaces, mirrors `withLocation`); the
+      choice is always forwarded on publish (`FeedPostPublishRequest.language` → `FeedViewModel.
+      publishPost(language:)` → `PostRepository.create(originalLanguage:)`, an already-existing,
+      previously-dead wire field — mirrors iOS always sending `originalLanguage: composerLanguage`,
+      never omitting it). +12 new tests (5 `ComposerLanguageTest`: default value, known-code flag,
+      case-insensitive match, unknown-code uppercase fallback, blank-code empty-string fallback; 5
+      `FeedComposerDraftTest`: default language, override, replace-not-accumulate, publish request
+      carries default, publish request carries override; 2 `FeedViewModelTest`: no-override
+      forwards `null` verbatim, override forwards verbatim). **Mutation-proven**, three axes:
+      hardcoding `publishRequest().language` to always `ComposerLanguage.DEFAULT` fails **exactly**
+      the "carries the author's chosen language override" test (54 others green); dropping the
+      uppercase fallback in `ComposerLanguage.flag` fails **exactly** the unknown-code test (4
+      others green); hardcoding `FeedViewModel.publishPost`'s repository call to `originalLanguage
+      = null` fails **exactly** the "forwards the author's chosen language override" test (58
+      others green) — each reverted via a scratch `cp`-backed edit, never `git checkout --`,
+      re-confirmed green. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970
+      tasks, matching every prior slice — no build-graph regression). Reviewer **PASS** (diff
+      `apps/android` only — 2 new `:core:model` files, 4 `:feature:feed` production files edited
+      [+1 UI file gaining 2 new Composables], 4 locale `strings.xml` [en/fr/es/pt, 3 new keys each,
+      one carrying a `%1$s` format spec used only as a content-description string, not rendered
+      literally], 2 test files edited; SDK purity — `ComposerLanguage`/`LanguageStepSelection`
+      stay the stateless building blocks, the picker dialog + pill are ordinary `:feature:feed` UI
+      glue over them; SSOT — `LanguageResolver.FALLBACK_LANGUAGE`/`LanguageStepSelection`/
+      `LanguageData` all reused verbatim, zero re-implementation; no coverage floor lowered; no
+      tautological tests). **Full on-device verification against the live gateway**
+      (`meeshy_pixel8`): repeated the itération-precedent's own corrected lesson — every tap
+      resolved via `uiautomator dump` + a grepped `bounds="[x1,y1][x2,y2]"` attribute, including
+      catching and correcting a first attempt that reused a screenshot-estimated Publish
+      coordinate (missed entirely, sheet stayed open) before switching to the dump-derived bounds.
+      Tapped the new flag pill (`content-desc="Francais"` confirmed the default), the picker
+      dialog opened showing all 6 catalogue languages with French pre-selected via `RadioButton`,
+      selected "Deutsch" — dialog closed, pill updated to the German flag
+      (`content-desc="Deutsch"` confirmed via a fresh dump), typed text, tapped the
+      dump-verified Publish bounds: `adb logcat` confirmed the real request body
+      `{"content":"TestLanguageOverride_de2","originalLanguage":"de"}` and the gateway's `201`
+      response echoed `"originalLanguage":"de"` on the persisted post — proving the full
+      composer-to-gateway pipeline round-trips the override correctly end to end, not just at the
+      unit-test level. Deleted the test post via `curl DELETE /api/v1/posts/:id` (confirmed gone
+      via a follow-up `GET` → 404). `adb logcat` checked across the whole session for `FATAL
+      EXCEPTION`/`AndroidRuntime` app crashes — none. Emulator left idle on the Feed screen
+      afterward (composer closed, not mid-flow). **Still open**: no map UI, no search, no
+      reverse-geocoded name/address for the location attachment (each a separately-scoped, heavier
+      follow-up — the map picker alone needs a Maps SDK dependency this slice deliberately
+      avoided), on-device transcription (iOS's dedicated `AudioPostComposerView` with
+      `EdgeTranscriptionService` — a materially larger, separately-scoped feature), durable-outbox
+      queueing for offline resilience (media upload itself has no offline-retry path yet either,
+      unlike the story composer's — the whole Feed publish isn't durable yet, so this is
+      consistent, not a new gap) — each a separately-scoped follow-up. With this slice, the Feed
+      post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
+      exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket

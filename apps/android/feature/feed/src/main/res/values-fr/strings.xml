@@ -109,6 +109,9 @@
     <string name="feed_composer_type_reel">Réel</string>
     <string name="feed_composer_type_post">Publier</string>
     <string name="feed_composer_type_hint">Bascule entre réel et post</string>
+    <string name="feed_composer_language_button">Langue du post : %1$s</string>
+    <string name="feed_composer_language_title">Langue du post</string>
+    <string name="feed_composer_language_search">Rechercher une langue</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Options du post</string>

@@ -9,6 +9,88 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-11 **the Feed post composer's per-post language override landed** (slice
+> `feed-composer-language-override`, feature-parity §F — the last item of the standing "files,
+> location, audio, per-post language" candidate besides on-device transcription). **RE-PROUVEN
+> before starting**: `git branch -r`/`gh pr list --state open` found no interrupted run of this
+> routine (no recently-touched `claude/apps/android/*`/`claude/apps/ios/debt-*` branch, no
+> matching open PR). Re-checked whether a reusable cross-feature language-picker UI component now
+> exists outside the registration inline menu (per the orchestrator's explicit prompt): the pure
+> catalogue/filter core (`LanguageStepSelection`, `:core:model`) is reusable and reachable from
+> every feature module transitively — reused verbatim here — but no shared *Composable* picker UI
+> exists in `:sdk-ui` yet; Settings' own `RegionalLanguageDialog` is module-private to
+> `:feature:settings`, unreachable from `:feature:feed`. Read iOS's `FeedView+Attachments.swift`
+> closely before coding: `FeedComposerSheet.composerLanguage` does **not** auto-detect from the
+> typed text (unlike chat's `UniversalComposerBar`, which wires `ComposeLanguageDetector`/
+> `TextAnalyzer`) — it starts hardcoded `"fr"` (`DefaultComposerLanguage.resolve()`) and only a
+> manual flag-pill → `AudioLanguagePickerView` picker changes it, so this slice mirrors that exact
+> shape rather than reusing Android chat's existing auto-detection. **Shipped (production, all
+> `apps/android`)**: new pure `ComposerLanguage` (`:core:model`, port of iOS `ComposerModels.
+> swift`'s `DefaultComposerLanguage.resolve()`/`ComposerLanguageFlag.label(for:)`) — `DEFAULT`
+> reuses `LanguageResolver.FALLBACK_LANGUAGE` (no second hardcoded `"fr"` literal), `flag(code)`
+> the catalogue flag or an uppercased raw-code fallback (blank-safe). `FeedComposerDraft` gained
+> `language` (defaults to `ComposerLanguage.DEFAULT`) + `withLanguage(code)` (replaces, mirrors
+> `withLocation`) — always forwarded on publish via `FeedPostPublishRequest.language` →
+> `FeedViewModel.publishPost(language:)` → `PostRepository.create(originalLanguage:)`, an
+> already-existing (previously always-`null`, effectively dead for this composer) wire parameter.
+> `FeedComposerSheet` gains a compact flag pill under the header (port of iOS's
+> `ComposerLanguageFlag` — collapsed state shows ONLY the flag, matching iOS's 2026-07-30
+> directive) opening `ComposerLanguagePickerDialog`, a plain `AlertDialog` search-filtered list
+> (mirrors `SettingsScreen`'s `RegionalLanguageDialog` shape rather than nesting a second
+> `ModalBottomSheet` — an established anti-pattern this codebase avoids) over
+> `LanguageStepSelection.pickerLanguages`/`.filter` — no catalogue/filter re-implementation.
+> **Flagged, not fixed, this slice**: the picker dialog UI itself is now duplicated a third time
+> (registration's inline grid, Settings' dialog, this dialog) — a legitimate `:sdk-ui` promotion
+> candidate for a future pass, deliberately deferred to keep this slice's diff scoped to
+> `:feature:feed`/`:core:model` alone (SDK-purity convention: duplicate small UI glue until 3+
+> call sites force a shared abstraction — this is now exactly 3, worth revisiting next time this
+> candidate resurfaces). +12 new tests (5 `ComposerLanguageTest`, 5 `FeedComposerDraftTest`, 2
+> `FeedViewModelTest`). **Mutation-proven**, three axes: `publishRequest().language` hardcoded to
+> the default fails **exactly** the override test (54 others green); `ComposerLanguage.flag`'s
+> uppercase fallback dropped fails **exactly** the unknown-code test (4 others green);
+> `FeedViewModel.publishPost`'s repository call hardcoded to `originalLanguage = null` fails
+> **exactly** the override-forwarding test (58 others green) — each reverted via a scratch
+> `cp`-backed edit, never `git checkout --`. **Gate**: `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice — no build-graph regression).
+> Reviewer **PASS** (diff `apps/android` only — 2 new `:core:model` files, 4 `:feature:feed`
+> production files edited [1 gaining 2 new Composables], 4 locale `strings.xml` [en/fr/es/pt, 3
+> new keys each], 2 test files edited; SDK purity, SSOT, no coverage floor lowered, no
+> tautological tests). **Full on-device verification against the live gateway**
+> (`meeshy_pixel8`): every tap resolved via `uiautomator dump` + a grepped `bounds=` attribute —
+> including catching and correcting, mid-verification, a repeat of the exact screenshot-estimated-
+> coordinate mistake this routine's own NOTES.md already documents once (the first Publish tap,
+> read off a scaled screenshot without the 1.2x device-pixel correction, missed entirely and left
+> the sheet open; the dump-derived bounds landed correctly on retry). Tapped the new flag pill
+> (`content-desc="Francais"` confirmed the default), the dialog opened with all 6 catalogue
+> languages and French pre-selected via `RadioButton`, selected "Deutsch" — pill updated to the
+> German flag (`content-desc="Deutsch"` on a fresh dump), typed text, tapped the dump-verified
+> Publish bounds: `adb logcat` confirmed the real request body `{"content":
+> "TestLanguageOverride_de2","originalLanguage":"de"}` and the gateway's `201` response echoed
+> `"originalLanguage":"de"` on the persisted post — the full composer-to-gateway pipeline
+> round-trips the override correctly, confirmed beyond the unit-test level. Deleted the test post
+> via `curl DELETE /api/v1/posts/:id` (confirmed gone via a follow-up `GET` → 404). `adb logcat`
+> checked across the whole session for `FATAL EXCEPTION`/`AndroidRuntime` — none. Emulator left
+> idle on the Feed screen afterward (composer closed, not mid-flow). **With this slice, the Feed
+> post composer now covers every base attachment/option iOS's `composerOverlay` toolbar exposes
+> except on-device transcription and the emoji picker.** **Next slice candidates (not attempted
+> this run)**: on-device transcription for the Feed audio attachment (still the only unshipped
+> item of this composer's standing candidate — needs its own foundation, no Android on-device
+> transcription capability exists anywhere in the app yet); promote a shared `:sdk-ui`
+> `LanguagePickerDialog`/similar component now that 3 near-identical picker UIs exist
+> (registration inline grid, Settings' `RegionalLanguageDialog`, this slice's
+> `ComposerLanguagePickerDialog`) — a refactor-only, safe candidate; map/search/reverse-geocoding
+> for the location attachment (still needs a Maps SDK dependency + API key provisioning); widgets/
+> PiP categorical re-check — per the orchestrator's explicit guidance this iteration, NOT
+> re-grepped this run (multiple prior consecutive re-checks already confirmed zero hits and both
+> already have checklist lines from the iteration-19 audit-gap fix); this is now a documented,
+> real, multi-slice-epic gap rather than an open question — the right next action is a concrete
+> sub-slice decomposition planning pass, not another bare re-grep. **Housekeeping**: this run's
+> own `NOTES.md` addition pushed that file to 1532 lines, just over the ~1500 hygiene threshold —
+> deliberately NOT archived in this same run (archiving is its own dedicated increment per
+> §Hygiène, and this run's chosen increment was already the slice above); a future run should
+> archive `NOTES.md`'s oldest ~300 lines to `NOTES-archive-2026-08.md` as its own dedicated
+> `chore(tasks): archive NOTES.md` commit before appending further lessons.
+
 > On 2026-08-11 **the Feed post composer's location-attachment sub-slice landed** (slice
 > `feed-composer-location-attachment`, feature-parity §F — the standing "files, location,
 > audio, per-post language" candidate's last unshipped attachment kind, decomposed to its

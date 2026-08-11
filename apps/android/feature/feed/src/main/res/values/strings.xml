@@ -108,6 +108,9 @@
     <string name="feed_composer_type_reel">Reel</string>
     <string name="feed_composer_type_post">Post</string>
     <string name="feed_composer_type_hint">Switch between reel and post</string>
+    <string name="feed_composer_language_button">Post language: %1$s</string>
+    <string name="feed_composer_language_title">Post language</string>
+    <string name="feed_composer_language_search">Search a language</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Post options</string>

@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.MediaKind
 import me.meeshy.sdk.model.MediaKindClassifier
 import me.meeshy.sdk.model.PostType
@@ -16,9 +17,9 @@ import me.meeshy.sdk.model.UploadedMedia
  * (`"POST"`/`"REEL"` — see [FeedComposerDraft.postType]/[ReelComposition]). Camera
  * capture and generic-file attachments now upload through the same [mediaIds]
  * projection (see [UploadedMedia.hasThumbnailPreview]); [location] carries the
- * device-captured [SharedPlace] attachment (mirrors iOS `pendingPlace`). Audio
- * attachment plus the per-post language override remain a documented, deferred
- * follow-up.
+ * device-captured [SharedPlace] attachment (mirrors iOS `pendingPlace`); [language]
+ * carries the author's source-language choice (mirrors iOS `composerLanguage`,
+ * always sent — see [FeedComposerDraft.language]).
  */
 data class FeedPostPublishRequest(
     val content: String,
@@ -26,6 +27,7 @@ data class FeedPostPublishRequest(
     val mediaIds: List<String> = emptyList(),
     val type: String = PostType.POST.name,
     val location: SharedPlace? = null,
+    val language: String = ComposerLanguage.DEFAULT,
 )
 
 /**
@@ -58,6 +60,10 @@ enum class FeedPostVisibility(val wire: String) {
  * - the **attached location** ([location]): at most one device-captured [SharedPlace]
  *   (mirror of iOS's single `pendingPlace` — a post carries zero or one location, never
  *   a list),
+ * - the **composed-in language** ([language]): the author's source-language choice
+ *   (mirror of iOS's `composerLanguage` `@State`, defaulting to [ComposerLanguage.DEFAULT]
+ *   and overridable via a manual picker — the Feed composer does not auto-detect it from
+ *   the typed text, exactly like iOS's own `FeedComposerSheet`),
  * - the **reel classification** ([postType]): [ReelComposition.defaultType]
  *   applied to the attached media's MIME types/durations — a qualifying
  *   composition (video/audio ≥3s, or ≥2 images) defaults to `REEL` unless the
@@ -78,6 +84,7 @@ data class FeedComposerDraft(
     val media: List<UploadedMedia> = emptyList(),
     val forcePlainPost: Boolean = false,
     val location: SharedPlace? = null,
+    val language: String = ComposerLanguage.DEFAULT,
 ) {
     /** The post body actually published — whitespace-stripped. */
     val trimmedContent: String get() = text.trim()
@@ -147,6 +154,13 @@ data class FeedComposerDraft(
     /** Removes the attached location, if any. Inert on a draft with none. */
     fun withoutLocation(): FeedComposerDraft = copy(location = null)
 
+    /**
+     * Overrides the source [language] the post is composed in (mirrors iOS's manual
+     * flag-picker changing `composerLanguage`) — replaces rather than accumulates, since
+     * a post has exactly one source language, never a list.
+     */
+    fun withLanguage(code: String): FeedComposerDraft = copy(language = code)
+
     /** The payload to publish, or `null` when the draft is not yet publishable (see [canPublish]). */
     fun publishRequest(): FeedPostPublishRequest? {
         if (!canPublish) return null
@@ -156,6 +170,7 @@ data class FeedComposerDraft(
             mediaIds = mediaIds,
             type = postType.name,
             location = location,
+            language = language,
         )
     }
 

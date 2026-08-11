@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
@@ -423,5 +424,42 @@ class FeedComposerDraftTest {
 
         assertThat(request).isNotNull()
         assertThat(request!!.location).isNull()
+    }
+
+    // --- per-post language override -----------------------------------------
+
+    @Test
+    fun `a fresh draft's language defaults to ComposerLanguage-DEFAULT`() {
+        assertThat(FeedComposerDraft().language).isEqualTo(ComposerLanguage.DEFAULT)
+    }
+
+    @Test
+    fun `withLanguage overrides the composer language`() {
+        val draft = FeedComposerDraft().withLanguage("es")
+
+        assertThat(draft.language).isEqualTo("es")
+    }
+
+    @Test
+    fun `withLanguage replaces a previous choice rather than accumulating`() {
+        val draft = FeedComposerDraft().withLanguage("es").withLanguage("de")
+
+        assertThat(draft.language).isEqualTo("de")
+    }
+
+    @Test
+    fun `a publish request carries the default language when the author never overrides it`() {
+        val request = FeedComposerDraft().withText("hello").publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.language).isEqualTo(ComposerLanguage.DEFAULT)
+    }
+
+    @Test
+    fun `a publish request carries the author's chosen language override`() {
+        val request = FeedComposerDraft().withText("hello").withLanguage("ja").publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.language).isEqualTo("ja")
     }
 }

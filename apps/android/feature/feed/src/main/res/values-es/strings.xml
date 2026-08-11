@@ -109,6 +109,9 @@
     <string name="feed_composer_type_reel">Reel</string>
     <string name="feed_composer_type_post">Publicar</string>
     <string name="feed_composer_type_hint">Cambiar entre reel y publicación</string>
+    <string name="feed_composer_language_button">Idioma de la publicación: %1$s</string>
+    <string name="feed_composer_language_title">Idioma de la publicación</string>
+    <string name="feed_composer_language_search">Buscar un idioma</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Opciones de la publicación</string>

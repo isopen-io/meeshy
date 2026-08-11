@@ -333,6 +333,7 @@ fun FeedScreen(
                     mediaIds = request.mediaIds,
                     type = request.type,
                     location = request.location,
+                    language = request.language,
                 )
                 composerDraft = null
             },
