@@ -9,6 +9,7 @@ import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from 
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
+import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
 
 export interface PostPublishPayload {
@@ -61,6 +62,10 @@ function PostComposer({
   // partaient sans liste → visibilité cassée). Même picker/gate que stories.
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
+  // W7 — Reel ⇄ Post toggle (Task 5). Default REEL, as iOS; only meaningful
+  // while `compositionQualifies` is true — see below, `handlePublish` always
+  // sends 'POST' otherwise so this state can never leak a false promotion.
+  const [postType, setPostType] = useState<PostType>('REEL');
   const [isExpanded, setIsExpanded] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,6 +95,15 @@ function PostComposer({
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
   const uploadPercentage = uploadProgress[0] ?? 0;
+
+  // W7 — same source-of-truth predicate the gateway degrades REEL→POST with
+  // (`@meeshy/shared/utils/reel-composition`). An attachment whose duration
+  // is not yet known client-side is treated as non-qualifying — never a
+  // false REEL promise the gateway would silently downgrade.
+  const compositionQualifies = qualifiesAsReel(
+    uploadedAttachments.map((att) => ({ mimeType: att.mimeType, duration: att.duration })),
+  );
+  const effectivePostType: PostType = compositionQualifies ? postType : 'POST';
 
   // Blob URLs for image previews, memoized per File identity so retyping the
   // caption (re-render on every keystroke) never mints a new object URL —
@@ -168,7 +182,7 @@ function PostComposer({
 
     onPublish({
       content: trimmed,
-      type: 'POST',
+      type: effectivePostType,
       visibility,
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
         ? visibilityUserIds
@@ -180,8 +194,9 @@ function PostComposer({
     setVisibilityUserIds([]);
     setIsExpanded(false);
     setMediaError(null);
+    setPostType('REEL');
     clearAttachments();
-  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, clearAttachments]);
+  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -347,6 +362,47 @@ function PostComposer({
                       </div>
                     )}
                   </div>
+
+                  {/* W7 — Reel ⇄ Post toggle: only shown once the uploaded
+                      composition qualifies (mirrors the gateway's
+                      qualifiesAsReel degradation threshold client-side) */}
+                  {compositionQualifies && (
+                    <div
+                      className="flex items-center gap-0.5 rounded-lg border border-[var(--gp-border)] p-0.5"
+                      role="group"
+                      aria-label="Post type"
+                      data-testid="post-composer-type-toggle"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPostType('REEL')}
+                        aria-pressed={postType === 'REEL'}
+                        aria-label="Post as a Reel"
+                        className={cn(
+                          'px-2 py-1 rounded-md text-xs transition-colors',
+                          postType === 'REEL'
+                            ? 'bg-[var(--gp-terracotta)] text-white'
+                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
+                        )}
+                      >
+                        🎬 Reel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPostType('POST')}
+                        aria-pressed={postType === 'POST'}
+                        aria-label="Post as a regular post"
+                        className={cn(
+                          'px-2 py-1 rounded-md text-xs transition-colors',
+                          postType === 'POST'
+                            ? 'bg-[var(--gp-terracotta)] text-white'
+                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
+                        )}
+                      >
+                        Post
+                      </button>
+                    </div>
+                  )}
 
                   {/* Character count */}
                   {charCount > 4500 && (
