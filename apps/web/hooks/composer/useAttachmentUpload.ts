@@ -358,8 +358,12 @@ export function useAttachmentUpload({
       uniqueFiles.splice(0, uniqueFiles.length, ...nonEmptyFiles);
     }
 
-    // Vérifier la limite
-    const currentTotalAttachments = selectedFiles.length + uploadedAttachments.length;
+    // Vérifier la limite — `selectedFiles` est la SEULE source de vérité :
+    // il contient déjà tout fichier en attente OU uploadé avec succès
+    // (jamais purgé au succès, purgé sur échec — cf. rollback plus bas),
+    // donc l'additionner à `uploadedAttachments.length` double le compte en
+    // régime établi (N + N au lieu de N).
+    const currentTotalAttachments = selectedFiles.length;
     const newTotalAttachments = currentTotalAttachments + uniqueFiles.length;
 
     if (newTotalAttachments > maxAttachments) {

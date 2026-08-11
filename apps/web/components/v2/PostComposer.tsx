@@ -92,13 +92,12 @@ function PostComposer({
     clearAttachments,
   } = useAttachmentUpload({
     token: authToken ?? undefined,
-    // useAttachmentUpload counts `selectedFiles.length + uploadedAttachments.length`
-    // against maxAttachments (useAttachmentUpload.ts:280-281), but selectedFiles is
-    // never trimmed after a successful upload while uploadedAttachments grows
-    // alongside it (:332, :359) — after N successful uploads both arrays hold N,
-    // so the hook counts 2N. Double the ceiling here for headroom; MEDIA_LIMIT
-    // stays the single client-facing cap via `mediaLimitReached` below.
-    maxAttachments: MEDIA_LIMIT * 2,
+    // useAttachmentUpload now counts `selectedFiles` alone as the single
+    // source of truth for the cap check (Task 7, point 2 — it used to sum
+    // selectedFiles.length + uploadedAttachments.length, double-counting
+    // once uploads settled since selectedFiles is never trimmed on
+    // success). MEDIA_LIMIT can be passed as-is.
+    maxAttachments: MEDIA_LIMIT,
   });
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;

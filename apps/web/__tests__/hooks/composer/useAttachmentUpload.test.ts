@@ -534,8 +534,10 @@ describe('useAttachmentUpload', () => {
       });
 
       expect(result.current.showAttachmentLimitModal).toBe(true);
-      // attemptedCount is total: 1 selected + 1 uploaded + 1 new = 3
-      expect(result.current.attemptedCount).toBe(3);
+      // attemptedCount uses selectedFiles as the single source of truth
+      // (Task 7, point 2 — no more double-count against uploadedAttachments):
+      // 1 already selected + 1 new = 2.
+      expect(result.current.attemptedCount).toBe(2);
     });
 
     it('should close modal and reset count', async () => {
@@ -569,6 +571,33 @@ describe('useAttachmentUpload', () => {
 
       expect(result.current.showAttachmentLimitModal).toBe(false);
       expect(result.current.attemptedCount).toBe(0);
+    });
+
+    it('lets exactly maxAttachments sequential single-file uploads succeed without doubling the count (Task 7, point 2)', async () => {
+      const { result } = renderHook(() => useAttachmentUpload({ maxAttachments: 3 }));
+
+      for (let i = 0; i < 3; i += 1) {
+        mockServiceFns.uploadFiles.mockResolvedValueOnce({
+          success: true,
+          attachments: [createMockUploadedAttachment(`${i}`, `img-${i}.jpg`, 'image/jpeg', 1024)],
+        });
+
+        await act(async () => {
+          await result.current.handleFilesSelected([createMockFile(`img-${i}.jpg`, 1024, 'image/jpeg', 1000 + i)]);
+        });
+      }
+
+      expect(result.current.showAttachmentLimitModal).toBe(false);
+      expect(result.current.uploadedAttachments).toHaveLength(3);
+
+      // A 4th file must now be rejected by the cap — if the hook still
+      // double-counted (selectedFiles + uploadedAttachments), the cap would
+      // already have been hit after the 2nd file (2 + 2 = 4 > 3).
+      await act(async () => {
+        await result.current.handleFilesSelected([createMockFile('img-3.jpg', 1024, 'image/jpeg', 2000)]);
+      });
+
+      expect(result.current.showAttachmentLimitModal).toBe(true);
     });
 
     it('should use default max of 50 attachments', async () => {
