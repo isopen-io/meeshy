@@ -82,9 +82,10 @@ Haptique — iOS : `.light()` à l'ouverture longpress et à chaque changement d
 `LongPress` à l'ouverture et à la sélection, `TextHandleMove` au changement de survol.
 
 L'animation « big reaction » iOS actuelle (emoji 100 pt qui monte à l'écran,
-`bigReactionPhase`) est **remplacée** par l'animation de vol sur tous les chemins
-(barre, tap ❤️ direct, picker complet — depuis le picker complet, le vol part de la
-position de l'emoji tappé dans la grille).
+`bigReactionPhase`) est **remplacée** par l'animation de vol sur tous les chemins.
+Le vol part du cadre de la tuile pour la barre scrubbable ; pour le tap ❤️ direct et
+la sélection depuis le picker complet (chemins sans tuile ancrée), il dégénère en pop
+sur le cœur — même chemin de code, départ = cadre du cœur.
 
 ## Architecture iOS
 
