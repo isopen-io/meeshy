@@ -86,16 +86,38 @@ function createMockNotificationService() {
   };
 }
 
+/**
+ * `.to()` rend un émetteur CHAÎNABLE, comme le vrai : `io.to(a).to(b).emit()`
+ * est la forme qu'utilise `emitToConversationParticipants` pour ne livrer
+ * qu'UNE copie par socket. Un `.to()` qui rend `{ emit }` sans `.to` faisait
+ * planter le second maillon — et un mock qui casse sur la forme de production
+ * est un témoin qui décrit un autre programme.
+ *
+ * `_roomsFor` rend les rooms de la chaîne qui a émis un événement donné :
+ * c'est la seule façon de prouver « la room personnelle a été adressée », que
+ * `expect(io.to).toHaveBeenCalledWith(...)` ne peut pas distinguer d'un simple
+ * appel isolé.
+ */
 function createMockIO() {
   const mockEmit = jest.fn<any>();
   const mockLeave = jest.fn<any>();
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
+  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: unknown) => {
+      sent.push({ rooms, event, payload });
+      mockEmit(event, payload);
+    },
+  });
   const io = {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
+    to: jest.fn<any>((room: string) => chain([room])),
     in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
     _leave: mockLeave,
     _fetchSockets: mockFetchSockets,
+    _roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    _payloadFor: (event: string) => sent.find((s) => s.event === event)?.payload,
   };
   return io;
 }
@@ -804,7 +826,68 @@ describe('registerParticipantsRoutes', () => {
       expect(io._emit).toHaveBeenCalledWith('conversation:joined', {
         conversationId: VALID_CONV_ID,
         userId: TARGET_USER_ID,
+        memberCount: 0,
       });
+    });
+
+    // La ligne de LISTE rend l'effectif (badge de groupe iOS `memberCount > 1`,
+    // saturation de la couleur d'accent). Un membre posé sur cet écran a quitté
+    // `conversation:<id>` : la room de conversation seule ne l'atteint pas.
+    it('adresse aussi les rooms PERSONNELLES des membres actifs', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      const io = createMockIO();
+      const request = createPostRequest({ server: { io, notificationService: createMockNotificationService() } });
+      mockPrisma.participant.findFirst
+        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
+        .mockResolvedValueOnce(null);
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: TARGET_USER_ID, username: 'target', displayName: 'Target',
+        firstName: null, lastName: null, avatar: null, systemLanguage: 'en',
+      });
+      mockPrisma.participant.create.mockResolvedValue({});
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-1', userId: 'user-1' },
+        // Participant sans compte : sa room porte son `Participant.id`.
+        { id: 'p-anon', userId: null },
+        { id: 'p-2', userId: TARGET_USER_ID },
+      ]);
+      const reply = createMockReply();
+
+      await route.handler(request, reply);
+
+      const rooms = io._roomsFor('conversation:joined');
+      expect(rooms).toContain(`conversation:${VALID_CONV_ID}`);
+      expect(rooms).toContain('user:user-1');
+      expect(rooms).toContain('user:p-anon');
+      expect(rooms).toContain(`user:${TARGET_USER_ID}`);
+    });
+
+    // `conversation:joined` porte deux sens sous un même nom : celui-ci
+    // (« untel devient membre ») et l'accusé de room de `ConversationHandler`,
+    // ré-émis à chaque ouverture de conversation. Seul un effectif ABSOLU les
+    // distingue — le web incrémentait de 1 sur les deux.
+    it('porte l\'effectif ABSOLU, pas un delta', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      const io = createMockIO();
+      const request = createPostRequest({ server: { io, notificationService: createMockNotificationService() } });
+      mockPrisma.participant.findFirst
+        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
+        .mockResolvedValueOnce(null);
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: TARGET_USER_ID, username: 'target', displayName: 'Target',
+        firstName: null, lastName: null, avatar: null, systemLanguage: 'en',
+      });
+      mockPrisma.participant.create.mockResolvedValue({});
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-1', userId: 'user-1' },
+        { id: 'p-2', userId: 'user-2' },
+        { id: 'p-3', userId: TARGET_USER_ID },
+      ]);
+      const reply = createMockReply();
+
+      await route.handler(request, reply);
+
+      expect(io._payloadFor('conversation:joined')).toMatchObject({ memberCount: 3 });
     });
 
     it('should not crash when io is undefined (R6-1 graceful)', async () => {

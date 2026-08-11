@@ -72,6 +72,12 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findFirst: jest.fn<any>().mockResolvedValue(mockParticipant),
       count: jest.fn<any>().mockResolvedValue(0),
       update: jest.fn<any>().mockResolvedValue({ ...mockParticipant, isActive: false }),
+      // Membres restants APRÈS le départ — la ligne qui vient d'être désactivée
+      // est hors du `where`. Ils nomment les rooms personnelles ET portent
+      // l'effectif du payload.
+      findMany: jest.fn<any>().mockResolvedValue([
+        { id: 'p-other', userId: 'user-other' },
+      ]),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
@@ -80,10 +86,37 @@ function makePrisma(overrides: Record<string, any> = {}) {
   };
 }
 
+/**
+ * `.to()` rend un émetteur CHAÎNABLE et retient les rooms de CHAQUE chaîne :
+ * `to(a).to(b).emit()` est la forme que produit
+ * `emitToConversationParticipants` pour ne livrer qu'une copie par socket, et
+ * `expect(io.to).toHaveBeenCalledWith(room)` ne peut pas distinguer « adressé
+ * dans la chaîne qui a émis » de « adressé ailleurs ».
+ */
+function captureEmits() {
+  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: unknown) => { sent.push({ rooms, event, payload }); },
+  });
+  const io = {
+    to: jest.fn((room: string) => chain([room])),
+    emit: jest.fn(),
+    in: jest.fn().mockReturnThis(),
+    fetchSockets: jest.fn<any>().mockResolvedValue([]),
+  };
+  return {
+    io,
+    roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    payloadFor: (event: string) => sent.find((s) => s.event === event)?.payload,
+  };
+}
+
 async function buildApp(opts: {
   authenticated?: boolean;
   prisma?: any;
   withSocket?: boolean;
+  io?: any;
 } = {}): Promise<FastifyInstance> {
   const { authenticated = true, prisma = makePrisma(), withSocket = false } = opts;
 
@@ -91,7 +124,7 @@ async function buildApp(opts: {
   const requiredAuth = makePreValidationAuth(authenticated);
 
   if (withSocket) {
-    const mockIO = {
+    const mockIO = opts.io ?? {
       to: jest.fn().mockReturnThis(),
       emit: jest.fn(),
       in: jest.fn().mockReturnThis(),
@@ -179,6 +212,34 @@ describe('POST /conversations/:id/leave — success with socket events', () => {
     const app = await buildApp({ withSocket: true });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // La ligne de LISTE rend l'effectif ; un membre posé sur cet écran a quitté
+  // `conversation:<id>` et n'est joignable que par sa room personnelle. Le
+  // commentaire de la route nommait pourtant l'écran de liste depuis toujours.
+  it('adresse la room personnelle des membres restants, pas seulement le fil', async () => {
+    const captured = captureEmits();
+    const app = await buildApp({ withSocket: true, io: captured.io });
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    const rooms = captured.roomsFor('conversation:participant-left');
+    expect(rooms).toContain('conversation:conv-resolved-id');
+    expect(rooms).toContain('user:user-other');
+    await app.close();
+  });
+
+  it('porte l\'effectif ABSOLU restant, pas un delta', async () => {
+    const captured = captureEmits();
+    const prisma = makePrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([
+      { id: 'p-1', userId: 'user-1' },
+      { id: 'p-2', userId: null },
+    ]);
+    const app = await buildApp({ withSocket: true, io: captured.io, prisma });
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(captured.payloadFor('conversation:participant-left')).toMatchObject({ memberCount: 2 });
     await app.close();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { makeChainableIO } from '../../helpers/chainable-io';
 
 // ─── Module mocks (must be hoisted before imports) ───────────────────────────
 
@@ -126,7 +127,10 @@ function createMockPrisma() {
     },
     participant: {
       findFirst: jest.fn<any>(),
-      findMany: jest.fn<any>(),
+      // Défaut `[]` et non `undefined` : départ, bannissement et levée lisent
+      // les membres restants pour nommer les rooms personnelles de leur
+      // diffusion et porter l'effectif absolu du payload.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       count: jest.fn<any>().mockResolvedValue(0),
     },
@@ -137,15 +141,7 @@ function createMockPrisma() {
 }
 
 function createMockIO(extraSockets: any[] = []) {
-  const mockEmit = jest.fn<any>();
-  const mockLeave = jest.fn<any>();
-  const sockets = extraSockets.length > 0 ? extraSockets : [{ leave: mockLeave }];
-  return {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
-    in: jest.fn<any>().mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue(sockets) }),
-    _emit: mockEmit,
-    _leave: mockLeave,
-  };
+  return makeChainableIO(extraSockets.length > 0 ? { sockets: extraSockets } : {});
 }
 
 function wireIO(fastify: ReturnType<typeof createMockFastify>, io?: any) {

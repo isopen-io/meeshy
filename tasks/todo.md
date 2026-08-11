@@ -1,3 +1,205 @@
+# Cycle 71 — L'effectif de la ligne de liste : faux à la source, et non convergent en temps réel
+
+## La question posée par le cycle 70, et sa réponse
+
+Le cycle 70 instruisait : *avant d'élargir l'audience des trois émetteurs de
+`participants.ts`, établir si la ligne de liste rend quelque chose qui dépende de ces faits.*
+
+**Elle en rend.** `ThemedConversationRow.swift` :
+- `:351` badge de groupe, affiché sous condition `conversation.memberCount > 1` ;
+- `:66` intensité visuelle, `min(memberCount / 50, 1)` ;
+- et surtout `ConversationContext(… memberCount:)` → `DynamicColorGenerator`, où l'effectif
+  pilote le **saturation boost** de la couleur d'accent (`min(memberCount / 100, 1) × 0.2`).
+
+C'est cette vérification qui a trouvé le vrai défaut, et il n'était pas où le cycle 70 le
+cherchait : **l'effectif était déjà faux avant tout événement.**
+
+## Défaut 1 — `Conversation.memberCount` est une colonne MORTE, et deux routes en dépendaient
+
+`memberCount Int @default(0)` existe dans le schéma. Le gateway ne l'écrit **nulle part** :
+la seule écriture du dépôt est `migrations/migrate-from-legacy.ts`, qui recopie la valeur du
+document hérité. Aucun `conversation.create` ne la pose, aucun `update` ne la maintient.
+
+Toute conversation créée par le code actuel porte donc `0` à vie. Or :
+
+| Route | Ce qu'elle servait |
+|---|---|
+| `GET /conversations` (LISTE) | la colonne → **0** |
+| `GET /conversations/:id` (DÉTAIL) | `_count` filtré `isActive` → l'effectif réel |
+| `GET /conversations/search` | `_count` filtré → l'effectif réel |
+| `GET /admin/users/:id/conversations` | la colonne → **0** |
+
+Deux réponses portaient le même nom de champ pour deux valeurs différentes. Conséquences
+visibles, et elles n'ont pas la signature d'un bug de compteur :
+- le badge de groupe iOS ne s'affiche JAMAIS sur la liste (`0 > 1` est faux) ;
+- **la couleur d'accent d'une conversation change quand on l'ouvre** — saturation 0 sur la
+  liste, saturation réelle sur le fil. La règle « toute la surface d'une conversation utilise
+  `accentColor` » était respectée partout ; c'est son entrée qui divergeait ;
+- côté web, `transformers.service.ts` faisait `memberCount || _count?.participants ||
+  participants.length` : le `0` tombait sur le repli, et la liste n'envoie que 5 participants —
+  un groupe de 200 s'affichait « 5 ».
+- l'écran admin annonçait « 0 membres » sur toute conversation post-migration.
+
+Le fragment `_count` est hissé en `utils/active-member-count.ts` et partagé par le détail, la
+liste et l'admin. Il vit dans son propre module et non dans `core.ts` : l'écran admin peut le
+consommer sans importer un module de routes entier — l'import qui traîne ses dépendances
+jusque dans les doubles jest des suites voisines est exactement la leçon 93.
+
+## Défaut 2 — `conversation:joined` porte DEUX sens, et le web incrémentait sur les deux
+
+`SERVER_EVENTS.CONVERSATION_JOINED` est émis par :
+- `routes/conversations/participants.ts:377` — « untel devient membre » (diffusion) ;
+- `socketio/handlers/ConversationHandler.ts:144` — « ton socket vient d'entrer dans la room »,
+  un accusé adressé au SEUL socket qui rejoint, réémis à **chaque ouverture de conversation**
+  et à chaque reconnexion.
+
+`use-socket-cache-sync.ts` faisait `memberCount + 1` sur cet événement. **Ouvrir cinq fois le
+même fil ajoutait cinq membres au compteur de la ligne de liste**, et `staleTime: Infinity`
+ne relit jamais de lui-même pour corriger. C'est un défaut vivant, reproductible sans réseau
+dégradé ni concurrence.
+
+Aucun client ne pouvait faire mieux : rien dans le payload ne distinguait les deux sens.
+
+## Le correctif — un effectif ABSOLU dans le payload, pas un delta
+
+Les quatre transitions d'appartenance (`participants.ts` ajout et retrait, `leave.ts`,
+`ban.ts` ban et unban) portent désormais `memberCount`, compté APRÈS l'écriture, sur la même
+requête qui sert déjà à nommer les rooms — aucune requête supplémentaire.
+
+C'est ce qui rend l'effectif **convergent**, et c'est le point de fond du cycle :
+- un delta ne se rattrape jamais d'un événement manqué (hors room, hors ligne, trou de
+  reconnexion), et les deux clients PERSISTENT la dérive — cache disque iOS
+  (`schedulePersist`), `staleTime: Infinity` côté web ;
+- un compte absolu se rattrape à l'événement suivant ;
+- il tranche `membershipEnded` / `membershipRestored` de lui-même : bannir un ex-membre ne
+  retire personne, donc le compte est simplement inchangé. Les drapeaux restent pour les
+  clients qui décomptent encore ;
+- **et il sépare les deux sens de `conversation:joined`** : seul l'événement d'appartenance
+  le porte. Son absence n'est pas « serveur ancien » mais « cet événement ne parle pas
+  d'appartenance » — le web ne touche donc plus au compteur sur l'accusé de room.
+
+## Le correctif — l'audience, comme au cycle 70
+
+Départ, retrait, bannissement, levée et ajout passent par `emitToConversationParticipants` :
+rooms personnelles des membres ACTIFS comprises. Le commentaire de `participants.ts` nommait
+pourtant « ConversationListViewModel count » depuis sa création — l'intention était écrite, et
+l'audience la contredisait.
+
+Aucune question de confidentialité : l'audience passe de « les membres qui ont le fil ouvert »
+à « les membres », soit les mêmes personnes sur d'autres sockets.
+
+La liste des membres restants est lue APRÈS l'écriture, donc la personne retirée ou bannie en
+est naturellement absente — elle n'apprend pas son retrait par une ligne de liste qui se
+décrémente, mais par la notification que la route lui envoie déjà. À l'inverse, une levée de
+bannissement qui RESTAURE l'appartenance remet la cible dans l'audience : elle apprend son
+retour sur sa propre ligne de liste, ce que la room de conversation ne pouvait pas lui dire.
+Le commentaire de `ban.ts` qui justifiait l'ordre « rebrancher AVANT de diffuser » par
+« la diffusion ne va qu'à la room de conversation » est devenu faux : il est corrigé, pas
+supprimé — l'ordre garde une raison (aucun événement de room manqué entre les deux).
+
+## `PARTICIPANT_ROLE_UPDATED` reste thread-only, et c'est écrit dans le code
+
+Le troisième émetteur du balayage du cycle 70. Vérifié plutôt que supposé : aucun écran de
+liste ne rend un rôle. Les consommateurs sont `use-participants.ts` (web) et `ParticipantsView`
+(iOS), qui ne vivent que le fil ouvert. Élargir ferait payer une diffusion par changement de
+rôle sans rien mettre à jour. La note est dans le code, pour que le cycle 72 ne refasse pas
+l'enquête.
+
+## Témoins
+
+- liste : l'effectif vient du `_count` et non de la colonne ; le `select` demande bien le
+  compte filtré `isActive` ; `_count` ne fuit pas dans la réponse ;
+- admin : même chose, sur la route d'un autre module ;
+- ajout de membre : les rooms personnelles sont adressées — y compris celle d'un participant
+  SANS compte, nommée par son `Participant.id` — et le payload porte l'effectif absolu ;
+- départ : idem, et le compte est celui des restants ;
+- web : l'accusé de room (sans `memberCount`) ne touche plus au compteur, même répété ;
+  l'événement d'appartenance POSE la valeur ; et un `memberCount: 2` sur un cache à 5 rend 2 —
+  c'est la propriété de rattrapage, qu'un décrément (qui rendrait 4) ne peut pas avoir.
+
+Le double `io` des suites touchées CHAÎNE désormais (`__tests__/helpers/chainable-io.ts`,
+extrait de `recordEmitChains`) : `io.to(fil).to(perso).emit()` est la forme de production, et
+un double qui casse dessus décrit un autre programme. `expect(io.to).toHaveBeenCalledWith(room)`
+ne prouvait de toute façon pas que la room appartenait à la chaîne qui a émis.
+
+Un défaut de fixture trouvé en passant : `conversations-ban.test.ts` faisait
+`{ participant: { …défauts, ...overrides.participant }, ...overrides }` — le second spread
+réécrasait `participant` en entier, annulant la fusion par clé que le premier prétendait faire.
+
+## Ce que ce cycle NE fait pas
+
+- **iOS**. Aucune chaîne Swift dans ce conteneur, et `ios-tests.yml` reste indéclenchable
+  depuis cette routine (`403 Resource not accessible by integration` — pas d'`actions: write`).
+  Le client iOS continue de faire ±1 ; il reçoit désormais un `memberCount` qu'il ignore.
+  C'est la tête du cycle 72, et elle est maintenant sans risque : le serveur est correct et
+  se décrit lui-même.
+- **La colonne morte elle-même**. Elle reste dans le schéma. Plus aucune route du gateway ne
+  la lit ; `services/agent/src/scheduler/eligible-conversations.ts` la recopie encore dans un
+  champ que rien ne consomme.
+
+---
+
+# Tête instruite pour le cycle 72 — le client iOS compte encore par deltas, sur un serveur qui lui donne le total
+
+*Vérifié dans le code de `main`, pas déduit. Aucune ligne de Swift écrite : `apps/ios` n'est ni
+compilable ni gatable dans ce conteneur, et `ios-tests.yml` ne se déclenche que sur `dev` ou à la
+main (`403` depuis cette routine, cf. cycle 70). Écrire du Swift invérifiable qui atterrit sur
+`main` est ce que la leçon 95 condamne — d'où l'instruction plutôt que le correctif.*
+
+## Le défaut : `ConversationListViewModel` fait ±1, et ne fait JAMAIS +1 sur un ajout
+
+`apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift`, ~ligne 950 :
+
+- `participantSelfLeft` → `memberCount -= 1` puis `schedulePersist()` ;
+- `participantBanned` (si `didEndMembership`) → `-= 1` ;
+- `participantUnbanned` (si `didRestoreMembership`) → `+= 1` ;
+- **`conversationJoined` : aucun abonnement.** Le compteur ne peut donc que DESCENDRE.
+
+Le second point est la conséquence directe du défaut 2 du cycle 71 : `conversation:joined`
+portait deux sens, et iOS a choisi — raisonnablement — de n'en tirer aucun delta. Le web avait
+choisi l'autre branche et gonflait son compteur à chaque ouverture.
+
+**Ce qui a changé** : les cinq transitions portent maintenant `memberCount`, ABSOLU, et l'accusé
+de room de `ConversationHandler` est le seul à ne pas le porter. Le correctif iOS est donc une
+AFFECTATION, pas un abonnement de plus à arbitrer :
+
+1. ajouter `memberCount: Int?` à `ParticipantLeftEvent`, `ParticipantBannedEvent`,
+   `ParticipantUnbannedEvent` et `ConversationParticipationEvent`
+   (`packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`) — optionnel, un
+   serveur plus ancien ne le porte pas ;
+2. dans chaque `sink`, `if let count = event.memberCount { conversations[i].memberCount = count }`
+   **avant** de retomber sur le delta existant. Poser plutôt que soustraire est ce qui rattrape
+   une dérive au lieu de la continuer — et `schedulePersist()` écrit la valeur corrigée ;
+3. s'abonner à `conversationJoined` UNIQUEMENT pour l'affectation, jamais pour un `+= 1` :
+   l'événement sans `memberCount` est l'accusé de room, réémis à chaque ouverture. C'est le
+   piège exact dans lequel le web était tombé — le reproduire à l'identique côté iOS serait la
+   pire issue possible de ce cycle.
+
+Les trois témoins à écrire sont symétriques de ceux du web : accusé de room répété ⇒ compteur
+inchangé ; événement d'appartenance ⇒ valeur POSÉE ; cache à 5 + payload à 2 ⇒ 2.
+
+## Second point, plus petit : la colonne morte
+
+`Conversation.memberCount` n'est plus lue par aucune route du gateway. Restent deux gestes, à
+arbitrer plutôt qu'à exécuter en aveugle :
+- `services/agent/src/scheduler/eligible-conversations.ts:66` la recopie dans un champ
+  `EligibleConversation.memberCount` que **rien ne consomme** (`conversation-scanner.ts` pose
+  même `0` en dur sur l'autre chemin). C'est du code mort au sens strict.
+- la colonne elle-même : la supprimer du schéma est une migration Mongo, donc un geste de
+  déploiement, pas de code. La laisser coûte un champ trompeur que la prochaine route
+  sélectionnera par mimétisme — c'est déjà arrivé deux fois.
+
+## Points hérités, inchangés
+
+- Les mentions du chemin de lien attendent toujours l'extraction qui écrit
+  `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ; les pièces
+  jointes du chemin de lien n'entrent pas dans le pipeline audio ; l'arbitrage `delete-for-me`
+  du cycle 12 attend une validation humaine.
+- `bun run lint` échoue toujours immédiatement (ESLint v9) — condition préexistante, la CI ne
+  gate que `test:coverage`.
+- La suppression de branche distante échoue depuis cette routine (`git push --delete` répond
+  « Everything up-to-date » sans agir) — à faire depuis l'interface GitHub.
+
 # Cycle 70 — Le Prisme franchit la porte du ViewModel, et deux événements de conversation trouvent enfin les écrans de liste
 
 ## Contrainte d'environnement — un maillon de PLUS que les cycles précédents

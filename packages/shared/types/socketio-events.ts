@@ -512,6 +512,23 @@ export interface MessageDeletedEventData {
 export interface ConversationParticipationEventData {
   readonly conversationId: string;
   readonly userId: string;
+  /**
+   * Effectif ACTIF de la conversation APRÈS la transition, absolu.
+   *
+   * `conversation:joined` porte deux sens sous un seul nom : « untel devient
+   * membre » (`routes/conversations/participants.ts`) et « ton socket vient
+   * d'entrer dans la room » — un accusé que `ConversationHandler` réémet à
+   * CHAQUE ouverture de conversation et à chaque reconnexion. Ce champ est ce
+   * qui les distingue : SEUL l'événement d'appartenance le porte. Un client qui
+   * incrémentait un compteur sur les deux gonflait son effectif d'un membre par
+   * ouverture (le web le faisait).
+   *
+   * Absolu, et non un delta, parce qu'un delta ne converge pas : l'événement
+   * manqué — hors room, hors ligne, trou de reconnexion — laisse une dérive que
+   * rien ne rattrape, et que les clients persistent (cache disque iOS,
+   * `staleTime: Infinity` côté web).
+   */
+  readonly memberCount?: number;
 }
 
 /**
@@ -1291,6 +1308,13 @@ export interface ConversationParticipantBannedEventData {
    * retirant.
    */
   readonly membershipEnded?: boolean;
+  /**
+   * Effectif ACTIF APRÈS le bannissement, absolu. Quand il est là, il tranche
+   * le cas ci-dessus de lui-même : bannir un ex-membre ne retire personne, donc
+   * le compte est simplement inchangé. `membershipEnded` reste pour les clients
+   * qui décomptent encore.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationParticipantUnbannedEventData {
@@ -1305,6 +1329,10 @@ export interface ConversationParticipantUnbannedEventData {
    * Même lecture que `membershipEnded` côté bannissement — absent ⇒ `true`.
    */
   readonly membershipRestored?: boolean;
+  /**
+   * Effectif ACTIF APRÈS la levée, absolu — à poser plutôt qu'à incrémenter.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationParticipantLeftEventData {
@@ -1312,6 +1340,13 @@ export interface ConversationParticipantLeftEventData {
   readonly userId: string;
   readonly displayName: string;
   readonly leftAt: string;
+  /**
+   * Effectif ACTIF APRÈS le départ, absolu — à POSER, pas à soustraire. Un
+   * client qui décrémente ne se rattrape jamais d'un événement manqué.
+   * Absent des serveurs antérieurs à ce contrat, où le décrément reste le
+   * seul repli disponible.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationUpdatedEventData {
