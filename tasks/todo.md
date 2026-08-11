@@ -1,3 +1,93 @@
+# Cycle 69b — Solde d'une session parallèle, et la tête du cycle 70
+
+*Deux sessions ont traité la tête instruite du cycle 68 en même temps. Celle-ci a rebasé sur
+l'autre plutôt que de la doubler. Rien de nouveau n'est écrit ici : ce bloc note ce qui a été
+comparé, et instruit le maillon qu'AUCUNE des deux n'a fermé.*
+
+## L'intégration, faite dans le sens de la leçon des cycles 23/25b
+
+Les deux implémentations ont été comparées **défaut par défaut**, jamais « qui est arrivé en
+premier ». Celle du cycle 69 est **strictement meilleure partout où les deux se recouvrent**, et
+c'est elle qui reste :
+
+- unité partagée `lastMessagePreviewPrism.ts` (fragment `select` + résolveur), là où cette session
+  câblait l'appel en ligne dans chaque émetteur ;
+- `participantUserRoomTargets` avec `participantUserRooms` réécrit **comme une projection** de lui —
+  cette session ajoutait une seconde fonction à côté, donc deux traversées à garder d'accord ;
+- tri-état Swift `LastMessagePreviewTranslations` (`.unchanged` / `.replaced`), là où cette session
+  portait un `Bool` parallèle à un `Optional` — deux champs à garder cohérents contre un seul ;
+- `ConversationStore.merging` hissée en fonction pure `nonisolated` **partagée avec le writer de
+  cache disque** : le store RAM et la liste persistée ne peuvent plus diverger sur ce que signifie
+  un `conversation:updated`. Cette session n'avait pas vu ce second consommateur ;
+- côté web, `extractPreviewTranslations` hissée et partagée avec le chemin REST, là où cette session
+  se contentait d'un `?? undefined` ;
+- côté témoins, `recordEmitChains` lie le payload à SA room. L'assertion de cette session comparait
+  un ensemble non ordonné de payloads : elle ne pouvait pas prouver **qui** recevait **quelle**
+  carte — exactement la propriété que « par destinataire » revendique.
+
+Les deux sessions s'accordaient, indépendamment, sur les deux points les plus délicats : le
+`>` → `>=` du garde monotone, et `container.contains` comme seul endroit où « clé absente » se
+distingue de « clé nulle ». Le troisième émetteur (`MessageHandler.broadcastNewMessage`, l'envoi
+WebSocket PRIMAIRE) manquait au cadrage initial « les deux émetteurs jumeaux » ; il a été greffé
+sur `main` (`c74d82e9`) pendant que cette session le rédigeait, dans une version plus propre
+(réutilise le type exporté `PreviewPrismParticipant`). Rien à ajouter.
+
+---
+
+# Tête instruite pour le cycle 70 — le Prisme s'arrête à la porte du ViewModel iOS
+
+*Vérifié dans le code de `main` après le cycle 69, pas déduit. Aucune ligne de production écrite :
+`apps/ios` n'est compilable ni gatable dans ce conteneur (aucune chaîne Swift ; `ios-tests.yml` ne
+tourne que sur `dev` ou à la demande). Écrire du Swift invérifiable qui atterrit sur `main` est
+précisément ce que la leçon 95 condamne — d'où l'instruction plutôt que le correctif.*
+
+## Le défaut : la moitié cliente du cycle 69 ne touche pas l'écran de la liste
+
+Le cycle 69 a corrigé `ConversationStore` (SDK). Mais l'écran de liste de l'app passe par
+`ConversationListViewModel.conversationUpdated` (`apps/ios/.../ConversationListViewModel.swift`,
+~ligne 800), qui **ne lit JAMAIS le Prisme** — `grep lastMessageTranslations` sur ce fichier ne rend
+rien. Deux branches, deux symptômes distincts :
+
+1. **Branche `else` (horodatage égal ⇒ ÉDITION).** Elle applique bien `lastMessageId`,
+   `lastMessageLocation` et `lastMessagePreview`… et laisse `lastMessageTranslations` intacte.
+   C'est **littéralement le défaut du cycle 69, toujours vivant** : nouveau texte + carte de
+   l'ancien, et `resolvedLastMessagePreview` préfère la carte. Le gateway envoie désormais le
+   `.replaced` qui périmerait la carte ; personne ne l'écoute ici.
+
+2. **Branche `bumpToTop` (nouveau message).** La facette est construite en
+   `LastMessageFacet(id:preview:senderName:at:location:)`, sans `translations:` ni
+   `originalLanguage:` — donc `applyLastMessage` pose `nil`. Pas de texte périmé (c'est la vertu de
+   la facette « en bloc »), mais la carte que le gateway vient de résoudre **pour ce lecteur** est
+   jetée : la ligne montre l'original là où une traduction était disponible et payée.
+
+## Ce qu'il faut écrire
+
+`LastMessageFacet.init` accepte DÉJÀ `translations:` et `originalLanguage:`
+(`packages/MeeshySDK/.../LastMessageFacet.swift`) — rien à élargir :
+
+- **branche bump** : passer `translations:` / `originalLanguage:` depuis l'événement ;
+- **branche `else`** : appliquer la paire au même titre que `lastMessagePreview`, en respectant le
+  tri-état — `if case .replaced(let map) = event.lastMessageTranslations` ⇒ poser
+  `map.isEmpty ? nil : map` **et** `lastMessageOriginalLanguage` ; `.unchanged` ⇒ ne rien toucher.
+  `ConversationStore.merging` (SDK) est la formulation de référence, à recopier telle quelle plutôt
+  qu'à réinventer.
+
+**Ne PAS toucher au `>` strict de cette branche.** Il ne s'agit pas du même garde que celui du SDK :
+ici il protège l'appel à `bumpToTop`, qui applique une facette **délibérément neutre**. Le relâcher
+en `>=` ferait perdre à la ligne la pièce jointe, l'expiration et le drapeau « vue unique » du
+message courant à chaque édition — le remède serait pire, et la branche `else` existe précisément
+pour traiter ce cas sans réordonner.
+
+**Témoins** : `ConversationListViewModelTests` a déjà `makeConversationUpdatedEvent`, qui construit
+l'événement **depuis du JSON** — donc `"lastMessageTranslations": null` et une carte peuplée sont
+tous deux exprimables sans toucher au helper. Deux témoins suffisent : édition ⇒ carte périmée,
+nouveau message ⇒ carte servie.
+
+**Gate** : `ios-tests.yml` ne se déclenche pas sur les PR. Lancer le workflow à la main sur la
+branche (onglet Actions → « Run workflow ») avant de merger, sinon la vérification n'existe pas.
+
+---
+
 # Cycle 69 — Après une édition, la ligne de liste affichait le texte D'AVANT
 
 ## Contrainte d'environnement (identique aux cycles 61/63→68, revérifiée)
