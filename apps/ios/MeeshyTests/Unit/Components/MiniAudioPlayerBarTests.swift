@@ -32,11 +32,57 @@ final class MiniAudioPlayerBarTests: XCTestCase {
     }
 
     func test_tapPlayPause_invokesCoordinator() async {
-        let (coord, engine) = makeCoord(isPlaying: false, activeAttachment: "a1")
+        // Seed via `play()` (not `test_setActiveContext`) so the mock engine has
+        // a loaded `currentUrl` — `togglePlayPause()` only forwards to
+        // `engine.togglePlayPause()` when a track is actually loaded; otherwise it
+        // takes the revive-dead-play-button branch (see the test below). Delta,
+        // never absolute — the host app's own background services can tap other
+        // coordinators/engines during the run.
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let current = QueuedAudio(
+            attachmentId: "a1", messageId: "m1", conversationId: "c1",
+            fileUrl: "https://cdn/a1.m4a", durationMs: 0, senderName: "A",
+            senderAvatarURL: nil, receivedAt: Date()
+        )
+        coord.play(current: current, tail: [],
+                   conversationName: "Conv", conversationArtworkURL: nil)
+        let initialToggleCount = engine.togglePlayPauseCallCount
+
         let bar = MiniAudioPlayerBar(coordinatorForTesting: coord)
         bar.simulateTapPlayPauseForTesting()
         await Task.yield()
-        XCTAssertEqual(engine.togglePlayPauseCallCount, 1)
+        XCTAssertEqual(engine.togglePlayPauseCallCount, initialToggleCount + 1)
+    }
+
+    func test_tapPlayPause_withStolenEngine_reloadsCurrentHead() async {
+        // A transient player (composer preview, status, reel) can steal the
+        // engine via `PlaybackCoordinator.willStartPlaying` and `stop()` it while
+        // the mini-player stays visible (`activeContext` non-nil) — the engine's
+        // `currentUrl` goes nil. `togglePlayPause()` detects this and reloads the
+        // queue head instead of forwarding a no-op toggle to a dead player
+        // (ConversationAudioCoordinator.togglePlayPause(), the "revive dead play
+        // button" branch). Effect on the mock: `startCurrentHead()` calls
+        // `engine.play(urlString:)`, so `playCallCount` — not
+        // `togglePlayPauseCallCount` — advances.
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let current = QueuedAudio(
+            attachmentId: "a1", messageId: "m1", conversationId: "c1",
+            fileUrl: "https://cdn/a1.m4a", durationMs: 0, senderName: "A",
+            senderAvatarURL: nil, receivedAt: Date()
+        )
+        coord.play(current: current, tail: [],
+                   conversationName: "Conv", conversationArtworkURL: nil)
+        engine.stop() // simulates the transient-player steal: currentUrl -> nil
+        let initialPlayCount = engine.playCallCount
+        let initialToggleCount = engine.togglePlayPauseCallCount
+
+        let bar = MiniAudioPlayerBar(coordinatorForTesting: coord)
+        bar.simulateTapPlayPauseForTesting()
+        await Task.yield()
+        XCTAssertEqual(engine.playCallCount, initialPlayCount + 1)
+        XCTAssertEqual(engine.togglePlayPauseCallCount, initialToggleCount)
     }
 
     func test_tapNext_invokesCoordinatorPlayNext() async {
