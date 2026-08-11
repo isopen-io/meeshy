@@ -716,7 +716,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            mask.add(anim, forKey: "opening-reveal")
+            mask.add(anim, forKey: openingRevealAnimationKey)
 
         case .fade:
             let anim = CABasicAnimation(keyPath: "opacity")
@@ -725,7 +725,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            rootLayer.add(anim, forKey: "opening-fade")
+            rootLayer.add(anim, forKey: openingFadeAnimationKey)
 
         case .zoom:
             let anim = CABasicAnimation(keyPath: "sublayerTransform")
@@ -735,7 +735,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            rootLayer.add(anim, forKey: "opening-zoom")
+            rootLayer.add(anim, forKey: openingZoomAnimationKey)
 
         case .slide:
             let travel = rootLayer.bounds.width * slideTransitionTravelFraction
@@ -745,7 +745,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            rootLayer.add(anim, forKey: "opening-slide")
+            rootLayer.add(anim, forKey: openingSlideAnimationKey)
         }
     }
 }
@@ -755,6 +755,43 @@ extension StoryRenderer {
 extension StoryRenderer {
 
     nonisolated static let closingRevealMaskName = "closing-reveal-mask"
+
+    /// Keys of the `applyOpening` animations that write ROOT-LAYER properties
+    /// `applyClosing` also writes, grouped by the property they animate.
+    ///
+    /// They matter because the opening animations are installed with
+    /// `fillMode = .forwards` + `isRemovedOnCompletion = false`: once finished
+    /// they STAY attached to the layer and keep holding their `toValue` over
+    /// the model value — for the whole life of the canvas, `rootLayer` being a
+    /// stored `let` that `rebuildLayers()` never replaces. A playhead-driven
+    /// snapshot writing the model value is therefore invisible on screen until
+    /// the fill is removed. `opening-reveal` is absent on purpose: it animates
+    /// the MASK layer's `path`, and the closing reveal swaps the mask wholesale.
+    nonisolated static let openingFadeAnimationKey = "opening-fade"
+    nonisolated static let openingZoomAnimationKey = "opening-zoom"
+    nonisolated static let openingSlideAnimationKey = "opening-slide"
+    nonisolated static let openingRevealAnimationKey = "opening-reveal"
+
+    nonisolated static let openingOpacityAnimationKeys = [openingFadeAnimationKey]
+    nonisolated static let openingTransformAnimationKeys = [openingZoomAnimationKey,
+                                                            openingSlideAnimationKey]
+
+    /// Drops the opening fills that would override what `applyClosing` is about
+    /// to write — and ONLY those. An opening `.fade` left in place while the
+    /// slide exits by `.zoom` is harmless (different keyPath), so removing it
+    /// would truncate a still-running entrance for nothing.
+    @MainActor
+    private static func clearOpeningFill(for effect: StoryTransitionEffect,
+                                         on rootLayer: CALayer) {
+        switch effect {
+        case .fade:
+            openingOpacityAnimationKeys.forEach(rootLayer.removeAnimation(forKey:))
+        case .zoom, .slide:
+            openingTransformAnimationKeys.forEach(rootLayer.removeAnimation(forKey:))
+        case .reveal:
+            break
+        }
+    }
 
     /// Linear exit progress in `[0, 1]` of the slide-closing transition at
     /// `elapsed`: `0` before `totalDuration − slideTransitionDuration`, ramping
@@ -793,6 +830,15 @@ extension StoryRenderer {
                                     totalDuration: Double) {
         guard let effect else { return }
         let progress = closingProgress(totalDuration: totalDuration, at: elapsed)
+        // Once the exit has actually started, the entrance's fill-forward
+        // animation must go: it holds its `toValue` over the model layer, so
+        // every value written below would be computed, stored — and never seen.
+        // Strictly BEFORE the window (progress 0) the opening is left alone: on
+        // a slide shorter than twice `slideTransitionDuration` the two windows
+        // overlap, and the entrance keeps playing until the exit takes over.
+        if progress > 0 {
+            clearOpeningFill(for: effect, on: rootLayer)
+        }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -824,6 +870,13 @@ extension StoryRenderer {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
+        // Neutral means neutral ON SCREEN: assigning the model value is not
+        // enough while an opening fill still overrides it. `setMode` calls this
+        // BEFORE `applyOpening`, so a slide entering `.play` re-installs its own
+        // entrance right after — and a canvas going back to `.edit`, or reused
+        // for the next slide, stops inheriting the previous slide's.
+        (openingOpacityAnimationKeys + openingTransformAnimationKeys)
+            .forEach(rootLayer.removeAnimation(forKey:))
         rootLayer.opacity = 1
         rootLayer.sublayerTransform = CATransform3DIdentity
         if rootLayer.mask?.name == closingRevealMaskName {
