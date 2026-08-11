@@ -30,6 +30,16 @@ internal struct _InlineOverlayControls: View {
         return isSeeking ? seekValue : manager.currentTime / manager.duration
     }
 
+    /// Décision pure extraite pour la testabilité — `_InlineOverlayControls`
+    /// est une `View` SwiftUI, pas un point d'entrée décidable en soi. Même
+    /// pattern que `_InlineRenderer.shouldAutoplayOnAppear`. `isPipSupported`
+    /// est injecté : le body passe
+    /// `AVPictureInPictureController.isPictureInPictureSupported()`, donc le
+    /// test ne dépend jamais de l'environnement (faux en CI/simulateur).
+    nonisolated static func showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool {
+        controls.contains(.pip) && isPipSupported
+    }
+
     var body: some View {
         ZStack {
             scrimGradients
