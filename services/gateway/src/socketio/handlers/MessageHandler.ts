@@ -29,7 +29,12 @@ import { transformTranslationsToArray, type MessageTranslationJSON } from '../..
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
-import { emitToConversationParticipants, participantUserRooms } from '../emitToConversationParticipants';
+import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
+import {
+  PREVIEW_PRISM_PARTICIPANT_SELECT,
+  resolveLastMessagePreviewPrism,
+  type PreviewPrismParticipant,
+} from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -1296,12 +1301,17 @@ export class MessageHandler {
 
       // Single participant query shared between CONVERSATION_UPDATED and
       // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
-      // The superset select (id + userId + joinedAt) satisfies both callers.
-      let sharedParticipants: { id: string; userId: string | null; joinedAt: Date }[] = [];
+      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
+      // satisfies both callers — `user` (préférences de langue) est le Prisme
+      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
+      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
+      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
+      // qui charge le même superset pour la même raison.
+      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> = [];
       try {
         sharedParticipants = await this.prisma.participant.findMany({
           where: { conversationId: normalizedId, isActive: true },
-          select: { id: true, userId: true, joinedAt: true }
+          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
         });
       } catch (err) {
         handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
@@ -1343,11 +1353,23 @@ export class MessageHandler {
         // apprend qu'une conversation remonte en tête de liste. Sans elle, un
         // invité de lien partagé ne voit jamais sa liste se retrier, et une
         // conversation toute neuve n'y apparaît pas du tout.
-        const rooms = participantUserRooms(sharedParticipants);
-        for (const room of rooms) {
-          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+        //
+        // Un payload PAR destinataire : la carte d'aperçu est filtrée au prisme
+        // du lecteur (resolveLastMessagePreviewPrism), donc deux participants de
+        // langues différentes n'ont pas la même carte de traductions. Parité
+        // avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`)
+        // et `emitConversationPreviewUpdate` (édition/suppression) — sans ce
+        // Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
+        // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
+        // rechargement manuel.
+        const targets = participantUserRoomTargets(sharedParticipants);
+        for (const { room, participant } of targets) {
+          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+            ...updatePayload,
+            ...resolveLastMessagePreviewPrism(participant, message)
+          });
         }
-        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: rooms.length });
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });
       }
 
       // Offline delivery queue — parity with the REST send path

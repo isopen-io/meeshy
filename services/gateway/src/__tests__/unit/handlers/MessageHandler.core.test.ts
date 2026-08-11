@@ -206,6 +206,32 @@ function makeMockIo(rooms?: Map<string, Set<string>>) {
   } as any;
 }
 
+/**
+ * `makeMockIo().to()` always returns the SAME chainable object with a single
+ * shared `emit` mock, so `expect(io._to).toHaveBeenCalledWith(room)` proves
+ * only that some emitter addressed that room — never which payload landed
+ * there. `conversation:updated` builds one payload PER destinataire (Prisme
+ * du lecteur), so an assertion needs to pick the payload OUT of a specific
+ * room. Mirrors `recordEmitChains` in `MeeshySocketIOManager.test.ts`,
+ * adapted to a plain (non-jest.fn) `.to` property.
+ */
+function recordEmitChains(io: any) {
+  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    except: () => chain(rooms),
+    emit: (event: string, payload: unknown) => { sent.push({ rooms, event, payload }); },
+  });
+  const originalTo = io.to;
+  io.to = (room: string) => chain([room]);
+  return {
+    roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    payloadFor: (event: string, room: string) =>
+      sent.find((s) => s.event === event && s.rooms.includes(room))?.payload,
+    restore: () => { io.to = originalTo; },
+  };
+}
+
 function makeMockPrisma(overrides: Record<string, any> = {}) {
   return {
     conversation: {
@@ -1345,6 +1371,109 @@ describe('MessageHandler.broadcastNewMessage', () => {
     const msg = makeMessage({ sender: null });
     // Should not throw even if conversation:updated fails
     await expect(handler.broadcastNewMessage(msg, 'conv-abc')).resolves.toBeUndefined();
+  });
+
+  // Jumeau du chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`) et du
+  // chemin édition/suppression (`emitConversationPreviewUpdate`) : la carte de
+  // traductions de l'aperçu de ligne de liste ne doit PAS dépendre du transport.
+  // Sans ce Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
+  // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
+  // rechargement manuel.
+  it('carries each recipient OWN preview prism in CONVERSATION_UPDATED, with lastMessageTranslations: null as a value when no match', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'part-fr',
+            userId: 'user-fr',
+            joinedAt: new Date(),
+            user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          },
+          {
+            id: 'part-es',
+            userId: 'user-es',
+            joinedAt: new Date(),
+            user: { systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          },
+          {
+            id: 'part-de',
+            userId: 'user-de',
+            joinedAt: new Date(),
+            user: { systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          },
+        ]),
+      },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage({
+      sender: null,
+      originalLanguage: 'en',
+      translations: {
+        fr: { text: 'Bonjour', targetLanguage: 'fr' },
+        es: { text: 'Hola', targetLanguage: 'es' },
+      },
+    });
+
+    const sent = recordEmitChains(io);
+    try {
+      await handler.broadcastNewMessage(msg, 'conv-abc');
+    } finally {
+      sent.restore();
+    }
+
+    const fr = sent.payloadFor('conversation:updated', 'user:user-fr');
+    const es = sent.payloadFor('conversation:updated', 'user:user-es');
+    const de = sent.payloadFor('conversation:updated', 'user:user-de');
+
+    expect(fr.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+    expect(es.lastMessageTranslations).toEqual({ es: 'Hola' });
+    expect(fr.lastMessageOriginalLanguage).toBe('en');
+    expect(es.lastMessageOriginalLanguage).toBe('en');
+    // Aucune traduction 'de' dans la carte : le prisme du lecteur ne matche
+    // rien, mais la clé DOIT être présente avec `null` comme VALEUR — pas
+    // omise — pour que le client puisse périmer une carte devenue fausse.
+    expect(de).toHaveProperty('lastMessageTranslations', null);
+  });
+
+  // Un invité de lien partagé (pas de ligne `User`) a un prisme vide : sa carte
+  // est `null`, mais il doit quand même recevoir l'événement — sur la room
+  // nommée par son `Participant.id` (`participantUserRoomTargets`), pas par un
+  // `userId` qui n'existe pas.
+  it('addresses an anonymous participant by its participant id with the null preview card', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: {
+        findMany: jest.fn(async () => [
+          { id: 'part-anon', userId: null, joinedAt: new Date() },
+        ]),
+      },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage({
+      sender: null,
+      originalLanguage: 'en',
+      translations: { fr: { text: 'Bonjour', targetLanguage: 'fr' } },
+    });
+
+    const sent = recordEmitChains(io);
+    try {
+      await handler.broadcastNewMessage(msg, 'conv-abc');
+    } finally {
+      sent.restore();
+    }
+
+    const anon = sent.payloadFor('conversation:updated', 'user:part-anon');
+    expect(anon).toBeDefined();
+    expect(anon).toHaveProperty('lastMessageTranslations', null);
   });
 
   it('strips clientMessageId from broadcastPayload but keeps it in senderPayload', async () => {
