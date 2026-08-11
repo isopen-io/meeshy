@@ -1370,18 +1370,26 @@ export class PostService {
 
   /**
    * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
-   * réelle (création du PostView) — permet à l'appelant de ne déclencher les
-   * effets de bord coûteux « une fois » (ex : marquer les notifications du post
-   * comme lues) sans les rejouer à chaque impression répétée du feed.
+   * réelle du post AFFICHÉ (création du PostView) — permet à l'appelant de ne
+   * déclencher les effets de bord coûteux « une fois » (ex : marquer les
+   * notifications du post comme lues) sans les rejouer à chaque impression
+   * répétée du feed. Le crédit de la racine (ci-dessous) n'influence JAMAIS
+   * cette valeur de retour.
    *
    * Repost (chantier reposts cohérents & watermark, tâche 1) : quand le post
    * visionné pointe vers un original (`repostOfId`), la RACINE de la chaîne
    * (`originalRepostOfId ?? repostOfId` — jamais le parent intermédiaire) est
    * créditée EN PLUS via `creditPostView`, donc avec EXACTEMENT les mêmes
-   * règles de dédup que le post affiché. Même garde-fou anti-auto-inflation
-   * que ci-dessus : l'auteur de la racine qui ouvre un repost de son propre
-   * contenu ne gonfle pas son propre compteur. Le post affiché garde SON
-   * propre enregistrement, strictement inchangé.
+   * règles de dédup que le post affiché — y compris le MÊME filtre de
+   * visibilité que le post affiché (une racine FRIENDS-only repostée en
+   * PUBLIC reste inaccessible à un inconnu : sans ce filtre, n'importe qui
+   * pourrait créditer/exposer un original privé via son repost public).
+   *
+   * Chaque crédit (affiché, racine) est gardé INDÉPENDAMMENT par le même
+   * invariant anti-auto-inflation : l'auteur d'UN post donné n'inflate jamais
+   * SON PROPRE compteur en le consultant. Un reposteur qui revisionne son
+   * propre repost ne gonfle donc pas ce repost, mais reste un viewer légitime
+   * de l'ORIGINAL — dont l'auteur diffère — et crédite bien la racine.
    */
   async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
     try {
@@ -1396,21 +1404,26 @@ export class PostService {
       });
       if (!post) return false;
 
-      // Author re-opening their own story shouldn't inflate viewCount.
-      if (post.authorId === userId) return false;
-
       // Sanitize duration: client-supplied → cap at 5 minutes (way past any
       // reasonable story).
       const safeDuration = duration !== undefined
         ? Math.max(0, Math.min(300_000, Math.round(duration)))
         : undefined;
 
-      const isNewView = await this.creditPostView(postId, userId, safeDuration);
+      // Author re-opening their own story shouldn't inflate viewCount — but
+      // this guards ONLY the displayed post's own credit. It must NOT abort
+      // the whole call: a reposter viewing their own repost is still a
+      // legitimate viewer of the ORIGINAL (see root credit below).
+      const isNewView = post.authorId === userId
+        ? false
+        : await this.creditPostView(postId, userId, safeDuration);
 
       const rootId = post.originalRepostOfId ?? post.repostOfId;
       if (rootId && rootId !== postId) {
+        // Même filtre de visibilité que le post affiché — pas de requête
+        // supplémentaire hors périmètre, le filtre est déjà résolu ci-dessus.
         const root = await this.prisma.post.findFirst({
-          where: { id: rootId, deletedAt: NOT_DELETED },
+          where: { id: rootId, deletedAt: NOT_DELETED, ...visibilityFilter },
           select: { id: true, authorId: true },
         });
         if (root && root.authorId !== userId) {
