@@ -1298,3 +1298,58 @@ Append-only log of gotchas and decisions that save time next run.
   candidate (`feature-parity.md` §Q) rather than fixed in this slice — it's a cross-cutting
   `OutboxFlushWorker` reliability gap affecting every dependent chat attachment send, well beyond
   "wire the voice recorder."
+
+## Slice `feed-composer-voice-capture` (2026-08-10)
+- **A feature-module-private state machine landing in one composer is a live candidate to check
+  for cross-composer reuse before its NEXT sibling composer needs the same capability — a
+  Gradle module-dependency check (`grep project(":..." apps/*/build.gradle.kts`), not an
+  assumption, decides whether it can be imported as-is or needs promoting first.** Chat's
+  `VoiceRecordingSession`/`VoiceRecordingFile`/`VoiceRecordingPill` (landed
+  `chat-voice-recording-capture`, same day) lived in `:feature:chat`, module-private — and
+  `:feature:feed` has no dependency on `:feature:chat` (confirmed via `build.gradle.kts`, both
+  only depend on `:sdk-core`/`:sdk-ui`), so this composer literally could not `import` them
+  without first moving them. `MicAmplitudeDecibels`, by contrast, was ALREADY in `:core:model`
+  and reachable transitively via `:sdk-core`'s `api(project(":core:model"))` — no move needed.
+  The move itself was mechanical and safe: same file content, same tests, only the `package`
+  line and two import sites (`ChatScreen.kt`) changed — `./apps/android/meeshy.sh check` stayed
+  green throughout, and the two relocated test files (`VoiceRecordingSessionTest`,
+  `VoiceRecordingFileTest`) needed zero test-body changes.
+- **A pure state machine with no chat-specific dependency is worth promoting to `:core:model`/
+  `:sdk-ui`; the Android-runtime glue that drives it (permission request, `MediaRecorder`
+  construction, tick-loop wiring) is worth duplicating per composer rather than sharing.** This
+  mirrors the codebase's own existing precedent (`readMediaUploadItem` deliberately duplicated
+  from `StoryComposerScreen`'s equivalent) — I/O glue has no further pure decision to extract,
+  so a second small copy is cheaper and safer than inventing a shared-glue abstraction two
+  call sites don't yet justify. `VoiceRecordingSession`'s own doc comment already explained why
+  it stayed a pure value type independent of any specific composer; that pre-existing design
+  choice is exactly what made the split (share the pure part, duplicate the glue) clean.
+- **Don't trust `ContentResolver.getType()` to MIME-sniff a freshly-`FileProvider`-wrapped `.m4a`
+  recording — build the `MediaUploadItem` with an explicit MIME instead, matching how the
+  ORIGINAL implementation (chat) already does it.** This composer's existing `dispatchPicked`
+  path reads MIME via `ContentResolver.getType(uri)` for picked/captured Uris, which works fine
+  for gallery/camera picks. But `ChatScreen`'s own voice-recording code deliberately hardcodes
+  `"audio/mp4"` rather than relying on resolver sniffing for the identical `.m4a` file shape —
+  a signal worth reading as "MIME-sniffing an `.m4a` via `ContentResolver` is not reliable
+  across Android versions/OEMs" before copying the Uri-based path for the new mic tile. Refactored
+  `dispatchPicked` into a shared `dispatchItems(items: List<MediaUploadItem>)` tail instead, so
+  the recorder hands off pre-built bytes+explicit-MIME directly, bypassing the sniffing step
+  entirely — avoided a real, easy-to-miss correctness bug rather than fixing one after the fact.
+- **A `ModalBottomSheet` composer holding a live `MediaRecorder` needs an explicit
+  `DisposableEffect` release — chat's own composer (anchored to a screen) gets away without one,
+  but a modal sheet dismissible via the system back gesture at any time (already documented:
+  `feed-composer-file-attachment`'s own on-device verification) cannot.** Without it, backing out
+  mid-recording would discard the `remember`-scoped `MediaRecorder` reference with no explicit
+  `.stop()`/`.release()` call — the native recording session's fate then depends on GC
+  finalisation timing, not a deterministic release, meaning a live microphone (and an open file
+  handle) could keep running past the point the user believes they've left the screen. Worth
+  treating a picker/session/resource-holding `remember` inside ANY dismissible sheet as needing
+  its own disposal audit, not just composers anchored to a stable screen.
+- **A newly-attached media item's server-probed duration composing with an UNRELATED,
+  already-shipped feature (here: `ReelComposition`'s reel-classification floor) is a strong,
+  free integration signal — worth calling out explicitly in verification notes rather than
+  treating it as an unrelated aside.** The ~15.7s recorded voice clip correctly triggered the
+  Feed composer's existing Réel⇄Post toggle chip (same rule that already fires for a qualifying
+  video), with zero new code written to make that happen — confirms the new attachment type
+  slots cleanly into `FeedComposerDraft.qualifiesAsReel`'s existing `mediaKinds()` projection
+  rather than needing its own special case, the same kind of "reuse proves itself correct"
+  signal noted for `feed-composer-video-capture`'s reel auto-classification.

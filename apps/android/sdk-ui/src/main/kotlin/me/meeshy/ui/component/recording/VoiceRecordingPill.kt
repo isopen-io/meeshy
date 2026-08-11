@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.ui.component.recording
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -42,9 +43,13 @@ import me.meeshy.ui.theme.MeeshyTheme
  * All state and gating live in the [session]; this composable only paints it. The
  * stop and send controls dim and disable below [VoiceRecordingSession.canSend],
  * exactly like the iOS pill, so an unusably short take can never be sent.
+ *
+ * Lives in `:sdk-ui` (moved here from `:feature:chat` — no visual/behaviour change —
+ * in `feed-composer-voice-capture`) so both the chat composer and the Feed post
+ * composer render the exact same pill instead of two drifting copies.
  */
 @Composable
-internal fun VoiceRecordingPill(
+public fun VoiceRecordingPill(
     session: VoiceRecordingSession,
     accentColor: Color,
     onCancel: () -> Unit,

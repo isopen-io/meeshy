@@ -98,6 +98,7 @@
     <string name="feed_composer_take_photo">Take a photo</string>
     <string name="feed_composer_take_video">Record a video</string>
     <string name="feed_composer_attach_file">Attach a file</string>
+    <string name="feed_composer_record_voice">Record audio</string>
     <string name="feed_composer_remove_media">Remove media</string>
     <string name="feed_composer_media_limit">You can attach up to %1$d items</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>

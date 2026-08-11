@@ -1,15 +1,16 @@
-package me.meeshy.app.chat
+package me.meeshy.sdk.model.waveform
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * [VoiceRecordingFile] names the destination file a chat voice-recording take writes
+ * [VoiceRecordingFile] names the destination file a voice-recording take writes
  * into before `android.media.MediaRecorder.start()` — the recorder needs a concrete
  * `File` path up front, unlike a picked gallery item which hands back an already-existing
  * content `Uri`. Pure — the timestamp is an explicit parameter, never read internally, so
  * the same instant always yields the same name. Mirrors `:feature:feed`'s
- * `CameraCaptureFile` naming pattern.
+ * `CameraCaptureFile` naming pattern. Shared by both the chat composer's voice pill and
+ * the Feed post composer's audio-attachment pill.
  */
 class VoiceRecordingFileTest {
 
