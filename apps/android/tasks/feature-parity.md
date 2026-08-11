@@ -1540,7 +1540,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `markUnreadOptimistic is a no-op when the conversation is already unread`
       (18 run, 1 failed, no collateral). ; details/invite/favorite/move/
       lock/block/delete pending
-- [ ] Hard-press conversation preview popover
+- [x] Hard-press conversation preview popover — port of iOS `ConversationPreviewView` (header +
+      up to 5 recent cached messages, Prisme-resolved) rendered as the first child of the
+      long-press context menu (slice `conversation-hardpress-preview`, 2026-08-11)
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
       « Vous » pour soi) + unread badge + **draft preview** done (slice

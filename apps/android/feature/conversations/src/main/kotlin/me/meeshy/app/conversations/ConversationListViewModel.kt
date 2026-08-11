@@ -15,11 +15,14 @@ import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -38,6 +41,13 @@ data class ConversationListUiState(
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
     val currentUserId: String? = null,
+    /**
+     * The signed-in identity, kept alongside [currentUserId] so the preview
+     * card can resolve the Prisme Linguistique ([me.meeshy.sdk.model.MeeshyUser]
+     * implements [me.meeshy.sdk.lang.LanguageResolver.ContentLanguagePreferences])
+     * without a second session read at render time.
+     */
+    val currentUser: MeeshyUser? = null,
     val selectedFilter: ConversationFilter = ConversationFilter.ALL,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
@@ -49,11 +59,21 @@ data class ConversationListUiState(
      * catalogue keeps the list on the pinned/all split, so this is a safe default.
      */
     val categories: List<CategoryOption> = emptyList(),
+    /**
+     * The hard-press preview card's most-recent messages, keyed by conversation
+     * id — populated once on demand ([ConversationListViewModel.loadPreviewMessages])
+     * rather than eagerly for every row. Absent key = not loaded yet (or in
+     * flight); present-but-empty = loaded, genuinely no cached messages.
+     */
+    val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
     /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
     fun draftFor(conversationId: String): ConversationDraft? = drafts[conversationId]
+
+    /** The preview card's cached messages for [conversationId], or `null` while not yet loaded. */
+    fun previewFor(conversationId: String): List<LocalMessage>? = previewMessages[conversationId]
 
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
@@ -64,6 +84,7 @@ data class ConversationListUiState(
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
+    private val messageRepository: MessageRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
@@ -112,7 +133,9 @@ class ConversationListViewModel @Inject constructor(
 
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(currentUserId = user?.id).withVisible(rawConversations) }
+                _state.update {
+                    it.copy(currentUserId = user?.id, currentUser = user).withVisible(rawConversations)
+                }
             }
         }
 
@@ -304,6 +327,29 @@ class ConversationListViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(drafts = snapshot, errorMessage = e.message).withVisible(rawConversations) }
+            }
+        }
+    }
+
+    /** Conversation ids with an in-flight [loadPreviewMessages] call — guards a double-load. */
+    private val previewLoadingIds = mutableSetOf<String>()
+
+    /**
+     * Loads (once, cache-only) the most recent messages for [conversationId] into
+     * [ConversationListUiState.previewMessages], for the hard-press preview card.
+     * A no-op when the preview is already loaded or already in flight, so
+     * re-opening the same row's menu never re-queries Room. Deliberately never
+     * triggers a network refresh — see [MessageRepository.recentMessages].
+     */
+    fun loadPreviewMessages(conversationId: String) {
+        if (_state.value.previewMessages.containsKey(conversationId)) return
+        if (!previewLoadingIds.add(conversationId)) return
+        viewModelScope.launch {
+            try {
+                val recent = messageRepository.recentMessages(conversationId)
+                _state.update { it.copy(previewMessages = it.previewMessages + (conversationId to recent)) }
+            } finally {
+                previewLoadingIds -= conversationId
             }
         }
     }
