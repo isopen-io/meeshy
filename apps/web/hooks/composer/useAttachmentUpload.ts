@@ -84,6 +84,87 @@ interface UseAttachmentUploadReturn {
 
 // Constantes
 const MAX_ATTACHMENTS_DEFAULT = 50;
+const MEDIA_DURATION_EXTRACTION_TIMEOUT_MS = 4000;
+
+type AttachmentSelectionMetadata = Record<string, unknown> & { duration?: number };
+type AttachmentSelectionMetadataList = Array<AttachmentSelectionMetadata | undefined>;
+
+function isDurationEligibleFile(file: File): boolean {
+  return file.type.startsWith('video/') || file.type.startsWith('audio/');
+}
+
+/**
+ * Extrait la durée (en millisecondes, contrat gateway — voir
+ * packages/shared/types/attachment.ts:197) d'un fichier vidéo/audio via un
+ * élément média caché monté sur une object URL et l'évènement
+ * `loadedmetadata`. Timeout court : ne bloque JAMAIS l'upload — résout
+ * `undefined` sur erreur/timeout plutôt que de rejeter.
+ */
+function extractMediaDurationMs(file: File): Promise<number | undefined> {
+  if (!isDurationEligibleFile(file) || typeof document === 'undefined') {
+    return Promise.resolve(undefined);
+  }
+
+  return new Promise((resolve) => {
+    const tagName = file.type.startsWith('video/') ? 'video' : 'audio';
+    const element = document.createElement(tagName) as HTMLMediaElement;
+    const objectUrl = URL.createObjectURL(file);
+    let settled = false;
+
+    const finish = (durationMs: number | undefined) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      element.removeEventListener('loadedmetadata', onLoadedMetadata);
+      element.removeEventListener('error', onError);
+      URL.revokeObjectURL(objectUrl);
+      resolve(durationMs);
+    };
+
+    const onLoadedMetadata = () => {
+      const seconds = element.duration;
+      finish(Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : undefined);
+    };
+
+    const onError = () => finish(undefined);
+
+    const timeoutId = setTimeout(() => finish(undefined), MEDIA_DURATION_EXTRACTION_TIMEOUT_MS);
+
+    element.addEventListener('loadedmetadata', onLoadedMetadata);
+    element.addEventListener('error', onError);
+    element.preload = 'metadata';
+    element.src = objectUrl;
+  });
+}
+
+/**
+ * Construit le tableau de métadonnées par fichier envoyé à l'upload, en
+ * fusionnant la durée extraite côté client (vidéo/audio) avec les
+ * métadonnées éventuellement fournies par l'appelant (ex: audioEffectsTimeline
+ * du recorder audio). Ne fabrique jamais de tableau si ni l'appelant ni
+ * l'extraction n'ont produit la moindre donnée — préserve `undefined` pour un
+ * comportement identique à avant sur les sélections sans média temporel.
+ */
+async function buildUploadMetadata(
+  files: File[],
+  provided?: AttachmentSelectionMetadataList,
+): Promise<AttachmentSelectionMetadataList | undefined> {
+  const durations = await Promise.all(files.map(extractMediaDurationMs));
+  const hasExtractedDuration = durations.some((duration) => duration !== undefined);
+
+  if (!hasExtractedDuration) {
+    return provided;
+  }
+
+  return files.map((_file, index) => {
+    const entry = provided?.[index];
+    const duration = durations[index];
+    if (duration === undefined) {
+      return entry;
+    }
+    return { ...entry, duration: entry?.duration ?? duration };
+  });
+}
 
 /**
  * Génère une signature unique pour un fichier
@@ -166,7 +247,7 @@ export function useAttachmentUpload({
   }, [attachmentIdsString, onAttachmentsChange]);
 
   // Upload en batches
-  const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: any) => {
+  const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: AttachmentSelectionMetadataList) => {
     const totalFiles = files.length;
     const totalBatches = Math.ceil(totalFiles / batchSize);
 
@@ -184,6 +265,7 @@ export function useAttachmentUpload({
       const start = i * batchSize;
       const end = Math.min(start + batchSize, totalFiles);
       const batch = files.slice(start, end);
+      const batchMetadata = additionalMetadata?.slice(start, end);
 
       setBatchProgress(prev => ({
         ...prev,
@@ -194,7 +276,7 @@ export function useAttachmentUpload({
         const response = await AttachmentService.uploadFiles(
           batch,
           token,
-          additionalMetadata,
+          batchMetadata,
           (percentage, loaded, total) => {
             setUploadProgress(prev => ({ ...prev, [i]: percentage }));
           }
@@ -333,14 +415,21 @@ export function useAttachmentUpload({
     setIsUploading(true);
 
     try {
+      // Durée média (vidéo/audio) extraite côté client, fusionnée aux
+      // métadonnées éventuellement fournies par l'appelant, avant l'upload —
+      // débloque le toggle Réel et la duration des stories (Task 7, point 1).
+      // Faite APRÈS setIsUploading(true) (et non avant) pour que l'état
+      // "upload en cours" reste synchrone à l'appel, avant tout `await`.
+      const metadataForUpload = await buildUploadMetadata(uniqueFiles, additionalMetadata);
+
       if (uniqueFiles.length > batchSize) {
         console.log(`📦 Upload en batches: ${uniqueFiles.length} fichiers (${Math.ceil(uniqueFiles.length / batchSize)} batches)`);
-        await uploadFilesInBatches(uniqueFiles, additionalMetadata);
+        await uploadFilesInBatches(uniqueFiles, metadataForUpload);
       } else {
         const response = await AttachmentService.uploadFiles(
           uniqueFiles,
           token,
-          additionalMetadata,
+          metadataForUpload,
           (percentage, loaded, total) => {
             setUploadProgress(prev => ({ ...prev, 0: percentage }));
             if (percentage % 25 === 0) {

@@ -245,8 +245,13 @@ describe('useAttachmentUpload', () => {
         uploadPromise = result.current.handleFilesSelected([mockFile]);
       });
 
-      // Check isUploading is true during upload
+      // Check isUploading is true during upload (set synchronously, before
+      // the async client-side duration-extraction pass — Task 7, point 1)
       expect(result.current.isUploading).toBe(true);
+
+      // The (async, even for a non-media file) metadata-build step runs
+      // before AttachmentService.uploadFiles is actually invoked.
+      await waitFor(() => expect(resolveUpload).toBeDefined());
 
       // Complete upload
       await act(async () => {
@@ -268,6 +273,149 @@ describe('useAttachmentUpload', () => {
       });
 
       expect(mockToastFns.error).toHaveBeenCalledWith('Upload failed: Upload failed');
+    });
+  });
+
+
+  describe('Media Duration Extraction (Task 7, point 1)', () => {
+    const realCreateElement = document.createElement.bind(document);
+
+    type FakeMediaElement = {
+      preload: string;
+      src: string;
+      duration: number | undefined;
+      addEventListener: (event: string, cb: () => void) => void;
+      removeEventListener: (event: string, cb: () => void) => void;
+    };
+
+    function mockMediaElement({ duration, shouldError = false }: { duration?: number; shouldError?: boolean }) {
+      return jest.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+        if (tagName !== 'video' && tagName !== 'audio') {
+          return realCreateElement(tagName);
+        }
+        const listeners: Record<string, Array<() => void>> = {};
+        const fakeElement: FakeMediaElement = {
+          preload: '',
+          src: '',
+          duration,
+          addEventListener: (event, cb) => {
+            listeners[event] = listeners[event] || [];
+            listeners[event].push(cb);
+          },
+          removeEventListener: (event, cb) => {
+            listeners[event] = (listeners[event] || []).filter((l) => l !== cb);
+          },
+        };
+        queueMicrotask(() => {
+          const eventName = shouldError ? 'error' : 'loadedmetadata';
+          (listeners[eventName] || []).forEach((cb) => cb());
+        });
+        return fakeElement as unknown as HTMLElement;
+      }) as typeof document.createElement);
+    }
+
+    beforeEach(() => {
+      global.URL.createObjectURL = jest.fn().mockReturnValue('blob:mock-media-url');
+      global.URL.revokeObjectURL = jest.fn();
+    });
+
+    it('attaches the extracted duration (ms) to the metadata sent for a video file', async () => {
+      mockMediaElement({ duration: 12.5 });
+      const videoFile = createMockFile('clip.mp4', 2048, 'video/mp4');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'clip.mp4', 'video/mp4', 2048)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([videoFile]);
+      });
+
+      expect(mockServiceFns.uploadFiles).toHaveBeenCalledWith(
+        [videoFile],
+        'test-token',
+        [expect.objectContaining({ duration: 12500 })],
+        expect.any(Function),
+      );
+    });
+
+    it('attaches the extracted duration (ms) to the metadata sent for an audio file', async () => {
+      mockMediaElement({ duration: 3 });
+      const audioFile = createMockFile('voice.mp3', 512, 'audio/mpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'voice.mp3', 'audio/mpeg', 512)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([audioFile]);
+      });
+
+      expect(mockServiceFns.uploadFiles).toHaveBeenCalledWith(
+        [audioFile],
+        'test-token',
+        [expect.objectContaining({ duration: 3000 })],
+        expect.any(Function),
+      );
+    });
+
+    it('does not build a metadata array for image-only selections', async () => {
+      const imageFile = createMockFile('pic.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'pic.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([imageFile]);
+      });
+
+      const callArgs = mockServiceFns.uploadFiles.mock.calls[0];
+      expect(callArgs[2]).toBeUndefined();
+    });
+
+    it('uploads a video without a duration (never blocks) when extraction errors out', async () => {
+      mockMediaElement({ shouldError: true });
+      const videoFile = createMockFile('broken.mp4', 2048, 'video/mp4');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'broken.mp4', 'video/mp4', 2048)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([videoFile]);
+      });
+
+      expect(mockServiceFns.uploadFiles).toHaveBeenCalled();
+      const [, , metadataArray] = mockServiceFns.uploadFiles.mock.calls[0];
+      expect(metadataArray?.[0]?.duration).toBeUndefined();
+      expect(result.current.uploadedAttachments).toHaveLength(1);
+    });
+
+    it('merges the extracted duration into caller-provided metadata without dropping existing fields', async () => {
+      mockMediaElement({ duration: 5 });
+      const audioFile = createMockFile('recorded.webm', 512, 'audio/webm');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'recorded.webm', 'audio/webm', 512)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([audioFile], [{ audioEffectsTimeline: { events: [] } }]);
+      });
+
+      const [, , metadataArray] = mockServiceFns.uploadFiles.mock.calls[0];
+      expect(metadataArray[0]).toEqual({ audioEffectsTimeline: { events: [] }, duration: 5000 });
     });
   });
 
