@@ -293,7 +293,7 @@ public struct TranslateRequest: Encodable {
     }
 }
 
-public struct TranslateResponse: Decodable {
+public struct TranslateResponse: Decodable, Sendable {
     public let translatedText: String
     public let detectedLanguage: String?
 
@@ -445,6 +445,12 @@ public struct AttachmentConsentError: Error, Sendable {
     public let code: String
     public let message: String
     public let requiredConsents: [String]
+
+    public init(code: String, message: String, requiredConsents: [String]) {
+        self.code = code
+        self.message = message
+        self.requiredConsents = requiredConsents
+    }
 }
 
 /// Decodable shape of the HTTP 403 body for consent-required 403 responses.

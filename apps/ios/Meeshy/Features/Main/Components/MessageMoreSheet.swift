@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -33,6 +34,13 @@ struct MessageMoreSheet: View {
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onReport: ((String, String?) -> Void)? = nil
+    /// See `MessageLanguageDetailView` — ViewModel-owned in-flight state so
+    /// the "Traduire" loader survives this sheet being dismissed/reopened.
+    var translatingTextLanguages: Set<String> = []
+    var translatingAudioLanguages: Set<String> = []
+    var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
+    var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
+    var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -399,7 +407,10 @@ struct MessageMoreSheet: View {
         case .language:
             MessageLanguageDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
                 textTranslations: textTranslations, transcription: transcription, translatedAudios: translatedAudios,
-                onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage)
+                onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage,
+                translatingTextLanguages: translatingTextLanguages, translatingAudioLanguages: translatingAudioLanguages,
+                translationRequestFailedPublisher: translationRequestFailedPublisher,
+                onRequestTextTranslation: onRequestTextTranslation, onRequestAudioTranslation: onRequestAudioTranslation)
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
