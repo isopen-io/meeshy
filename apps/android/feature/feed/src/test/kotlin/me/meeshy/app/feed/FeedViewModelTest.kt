@@ -787,6 +787,34 @@ class FeedViewModelTest {
         }
     }
 
+    @Test
+    fun `publishPost with no language override forwards a null originalLanguage to the repository`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = null)
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = null)
+        }
+    }
+
+    @Test
+    fun `publishPost forwards the author's chosen language override to the repository verbatim`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = "ja")
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC", language = "ja")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = "ja")
+        }
+    }
+
     // --- Composer media upload (uploadMedia) ---
 
     @Test

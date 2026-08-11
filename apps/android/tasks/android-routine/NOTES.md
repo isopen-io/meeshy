@@ -1489,3 +1489,44 @@ Append-only log of gotchas and decisions that save time next run.
   (which also unregisters itself via `removeUpdates(this)`), and `continuation.invokeOnCancellation
   { removeUpdates(listener) }` covers the timeout/cancellation path so the listener never leaks
   past the call's lifetime either way.
+
+## Slice `feed-composer-language-override` (2026-08-11)
+- **The exact screenshot-estimated-tap mistake this file already documents once (previous
+  slice's own note) recurred mid-verification, on the identical "Publish" button, within the
+  same run.** After confirming the language-picker dialog worked correctly via dump-derived
+  bounds, the very next tap (Publish, after typing text) was read off a *displayed* screenshot
+  coordinate without reapplying the 1.2x scale-to-device-pixel correction — the tap silently
+  landed nowhere near the button and the composer sheet stayed open with no request fired. Caught
+  by checking the resulting screenshot (composer still open) rather than assuming success, then
+  corrected by dumping `uiautomator` fresh and reading the real `bounds="[874,1360][1006,1414]"`
+  for "Publish" — center `(940,1387)`, not the eyeballed `(783,1156)` from the scaled screenshot.
+  Confirms the standing rule needs restating even more bluntly: **every single tap in a
+  verification session needs its own fresh bounds lookup, including ones that feel "the same
+  button I already located a few steps ago"** — a sheet can re-render (draft reset on reopen,
+  keyboard IME changing layout, a dialog closing) and shift coordinates between two visually
+  similar-looking moments, and muscle-memory-reusing an earlier screenshot-derived guess is just
+  as unreliable as never having read a bounds attribute at all.
+- **A wire request parameter that has existed on a `Repository`/`ApiRequest` DTO for a long time
+  can still be entirely dead for one specific call site.** `PostRepository.create(originalLanguage
+  ...)` and `CreatePostRequest.originalLanguage` both already existed (used by other flows), but
+  `FeedViewModel.publishPost` never threaded a value into that parameter — every Feed post ever
+  published from this composer silently sent `originalLanguage: null`. No production change was
+  needed in `PostRepository`/`PostApi` at all; the gap was entirely in the two callers above it
+  (`FeedComposerDraft` never carried a language field, `FeedViewModel.publishPost` never had a
+  parameter to forward). Worth grepping the full call chain of an "already-wired" field before
+  assuming a gap needs wire-model changes — sometimes only the composer-side plumbing is missing.
+- **Giving a ViewModel-level pass-through parameter a `null` default (not the app's own real
+  default) is what keeps every pre-existing test green when threading a new field through an
+  established, heavily-tested method.** `FeedComposerDraft.language` defaults to
+  `ComposerLanguage.DEFAULT` ("fr", matching iOS's own composer always having *some* language
+  selected) — but `FeedViewModel.publishPost(language: String? = null)` deliberately defaults to
+  `null`, not `"fr"`, even though the real composer always supplies a non-null value. Defaulting
+  the ViewModel param to `"fr"` would have silently changed the `originalLanguage` argument
+  every existing `publishPost(content=.., visibility=..)` test call implicitly sends to
+  `repository.create(...)` — MockK's `coEvery`/`coVerify` match on the exact argument values a
+  call site passes (defaults included), so every pre-existing stub omitting `originalLanguage`
+  (implicitly `null`) would have stopped matching and gone red, with zero relation to the actual
+  new behavior under test. Mirrors the established `location: SharedPlace? = null` precedent from
+  the prior slice — an additive, nullable pass-through parameter is the only shape that adds new
+  forwarding capability without silently mutating the default behavior every untouched caller
+  relies on.

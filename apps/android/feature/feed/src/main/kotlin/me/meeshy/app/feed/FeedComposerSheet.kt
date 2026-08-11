@@ -27,11 +27,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.AttachFile
@@ -42,7 +44,9 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +72,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -80,8 +89,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.formattedCoordinates
 import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
 import me.meeshy.sdk.model.waveform.VoiceRecordingFile
@@ -138,9 +149,19 @@ import kotlin.coroutines.resume
  * item answers `false`. **Deliberate, documented scope cut**: no filename/size label on the file tile yet —
  * [UploadedMedia] (`:core:model`) doesn't carry the original filename the gateway's TUS response
  * discards on this path, unlike iOS's `MessageAttachment.fileName`; adding it is a separately-scoped
- * follow-up touching the wire model, not a rendering-only change. Location, the emoji picker and
- * per-post language override remain unshipped too — iOS's `composerOverlay` toolbar of 6
- * glyphes, each a real, separately-scoped follow-up.
+ * follow-up touching the wire model, not a rendering-only change. The emoji picker remains
+ * unshipped — a real, separately-scoped follow-up.
+ *
+ * **Per-post language override** (a compact flag pill under the header, mirrors iOS's
+ * `ComposerLanguageFlag` button opening `AudioLanguagePickerView`): defaults to
+ * [ComposerLanguage.DEFAULT] (never auto-detected from the typed text — the Feed composer
+ * has no live-typing detector, exactly like iOS's own `FeedComposerSheet.composerLanguage`),
+ * tapping it opens [ComposerLanguagePickerDialog], a search-filtered list reusing the
+ * already-tested [LanguageStepSelection.pickerLanguages]/[LanguageStepSelection.filter]
+ * pure core (the same catalogue the registration wizard's language step already uses) — no
+ * re-implementation of the catalogue or the filter rule. The chosen code is always forwarded
+ * on publish ([FeedComposerDraft.language]), matching iOS always sending
+ * `originalLanguage: composerLanguage`, never omitting it once a draft exists.
  *
  * **Audio attachment** (`requestVoiceRecording`, [Icons.Filled.Mic] tile) mirrors iOS's
  * `mic.fill` button, but scoped to the smallest genuinely-unblocked slice rather than porting
@@ -200,6 +221,7 @@ fun FeedComposerSheet(
     var draft by remember { mutableStateOf(initialDraft) }
     var attachedMedia by remember { mutableStateOf<List<UploadedMedia>>(emptyList()) }
     var isUploadingMedia by remember { mutableStateOf(false) }
+    var showLanguagePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val mediaLimitMessage = stringResource(R.string.feed_composer_media_limit, FeedComposerDraft.MAX_MEDIA)
@@ -512,6 +534,11 @@ fun FeedComposerSheet(
                 onPublish = { draft.publishRequest()?.let(onPublish) },
             )
 
+            ComposerLanguagePill(
+                code = draft.language,
+                onClick = { showLanguagePicker = true },
+            )
+
             VisibilityRow(
                 selected = draft.visibility,
                 onSelect = { visibility -> draft = draft.withVisibility(visibility) },
@@ -576,6 +603,17 @@ fun FeedComposerSheet(
                 )
             }
         }
+    }
+
+    if (showLanguagePicker) {
+        ComposerLanguagePickerDialog(
+            currentCode = draft.language,
+            onSelect = { code ->
+                draft = draft.withLanguage(code)
+                showLanguagePicker = false
+            },
+            onDismiss = { showLanguagePicker = false },
+        )
     }
 }
 
@@ -650,6 +688,103 @@ private suspend fun LocationManager.awaitFreshFix(timeoutMs: Long = 12_000): Loc
             requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
         }
     }
+}
+
+/**
+ * The compact language-flag pill, shown under the header — port of iOS's
+ * `ComposerLanguageFlag` button (collapsed state shows ONLY the flag; the language
+ * name only appears inside the picker list, matching iOS's own 2026-07-30 directive).
+ * Its accessible value carries the language's native name, via the already-tested
+ * [LanguageStepSelection.selectedLanguageName], so a screen reader announces the
+ * chosen language even though the glyph alone doesn't.
+ */
+@Composable
+private fun ComposerLanguagePill(
+    code: String,
+    onClick: () -> Unit,
+) {
+    val displayName = LanguageStepSelection.selectedLanguageName(code)
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(MeeshyTheme.tokens.inputBackground)
+            .border(1.dp, MeeshyTheme.tokens.inputBorder, CircleShape)
+            .clickable(onClickLabel = displayName, onClick = onClick)
+            .semantics { contentDescription = displayName },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = ComposerLanguage.flag(code), style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/**
+ * The per-post language picker — a search-filtered list over [LanguageStepSelection.
+ * pickerLanguages]/[LanguageStepSelection.filter], the same pure catalogue/filter core
+ * the registration wizard's language step already uses (no re-implementation). Mirrors
+ * the shape of `SettingsScreen`'s own `RegionalLanguageDialog` (a plain [AlertDialog],
+ * not a nested [ModalBottomSheet] — two stacked modal sheets is an established anti-
+ * pattern this codebase avoids) rather than porting iOS's dedicated full-screen
+ * `AudioLanguagePickerView`.
+ */
+@Composable
+private fun ComposerLanguagePickerDialog(
+    currentCode: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val languages = remember(query) { LanguageStepSelection.filter(query) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.feed_composer_language_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholder = { Text(stringResource(R.string.feed_composer_language_search)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = MeeshySpacing.xs),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    languages.forEach { info ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = { onSelect(info.code) })
+                                .semantics { role = Role.RadioButton }
+                                .padding(vertical = MeeshySpacing.xs),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = info.code.equals(currentCode, ignoreCase = true),
+                                onClick = { onSelect(info.code) },
+                            )
+                            Text(
+                                text = "${info.flag}  ${info.nativeName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = MeeshySpacing.sm),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.feed_composer_cancel))
+            }
+        },
+    )
 }
 
 /**

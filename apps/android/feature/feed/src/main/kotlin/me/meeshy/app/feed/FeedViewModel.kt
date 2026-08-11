@@ -345,12 +345,17 @@ class FeedViewModel @Inject constructor(
      * defaulted to [PostType.POST] so any other call site is unaffected. [location]
      * carries the optional device-captured [me.meeshy.sdk.model.SharedPlace] attachment
      * the composer's location tile resolved — forwarded to the gateway verbatim,
-     * `null` when no location was attached (the common case, unaffected). **Deliberate,
-     * documented scope cuts**: no durable-outbox queueing yet (unlike iOS's
-     * `enqueueDurableTextPost`, U1 ST3) — a post typed while offline is lost rather than
-     * durably queued; a tracked follow-up once Android's `OutboxKind` gains a
-     * `CREATE_POST` lane. Camera capture, file and audio attachments remain
-     * separately-scoped follow-ups to this photo/video sub-slice.
+     * `null` when no location was attached (the common case, unaffected). [language]
+     * carries the composer's source-language choice ([me.meeshy.sdk.model.ComposerLanguage],
+     * mirrors iOS's `composerLanguage`) — forwarded to the gateway's `originalLanguage`
+     * field verbatim, `null` when the caller doesn't supply one (every other existing
+     * call site is unaffected; the real composer always supplies one, see
+     * `FeedComposerDraft.language`). **Deliberate, documented scope cuts**: no
+     * durable-outbox queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a
+     * post typed while offline is lost rather than durably queued; a tracked follow-up
+     * once Android's `OutboxKind` gains a `CREATE_POST` lane. Camera capture, file and
+     * audio attachments remain separately-scoped follow-ups to this photo/video
+     * sub-slice.
      */
     fun publishPost(
         content: String,
@@ -358,6 +363,7 @@ class FeedViewModel @Inject constructor(
         mediaIds: List<String> = emptyList(),
         type: String = PostType.POST.name,
         location: SharedPlace? = null,
+        language: String? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -367,6 +373,7 @@ class FeedViewModel @Inject constructor(
                     visibility = visibility,
                     mediaIds = mediaIds.ifEmpty { null },
                     location = location,
+                    originalLanguage = language,
                 )
                 when (result) {
                     is NetworkResult.Success ->
