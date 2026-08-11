@@ -205,17 +205,40 @@ bas par `updateReactionSummaryInMessageCache`.
   rendue à l'infini, ce qui passe au vert quoi que fasse la boucle.
 - Web : **562 suites / 12 098 tests verts** en local (bun/jest).
 - iOS/SDK : **non exécutable ici** (conteneur Linux, ni Xcode ni toolchain Swift) — la
-  vérification est déléguée à `sdk-tests` + `ios-tests` sur macOS. Dit franchement plutôt
-  qu'implicitement : c'est la borne de ce cycle.
+  vérification est déléguée à `sdk-tests` sur macOS, VERT sur cette branche (run #965,
+  38 min de suite). À noter, parce que ça se déduit mal : `ios-tests.yml` ne se déclenche
+  QUE sur `push` vers `dev`, donc il ne garde AUCUNE PR — `sdk-tests` est le seul gate Swift
+  d'une PR. Dit franchement plutôt qu'implicitement : c'est la borne de ce cycle.
+- CI complète verte : 13 jobs (Quality, Security, Prisma, web, shared, gateway, agent, Python,
+  Voice API, TTS/STT, Audio Pipeline, Build, Summary).
+
+## Addendum — D2 a été livré DEUX FOIS, en parallèle
+
+Une session parallèle a ouvert et fait merger la PR #2860 (« un seul cache de liste de
+conversations ») pendant que celle-ci était en CI. Elle a pris le lot que ce cycle avait
+laissé ouvert — le retrait des ~20 écrivains morts de la forme plate — et, ce faisant, a
+supprimé les deux mêmes invalidations de réaction. Convergence indépendante sur le même
+geste, comme aux cycles 76/76b.
+
+Le merge manuel a donc conflité sur `use-reactions-query.ts`, les deux côtés ayant retiré les
+mêmes lignes. Résolution : garder le COMMENTAIRE (main supprimait en silence), réécrit pour
+l'état d'après #2860 — la forme plate n'existe plus, donc le commentaire ne peut plus
+l'invoquer ; ce qu'il doit encore dire, c'est **« ne pas rebrancher vers `infinite()` »**, la
+seule erreur encore possible ici. Un retrait silencieux invite le prochain lecteur à
+« réparer l'invalidation manquante ».
+
+Second conflit du même run : `tasks/lane-cursor.md`, avancé à `ANDROID streak 3` par la
+routine Android. Résolu en faveur de main, sans discussion — ce fichier est l'état d'UNE
+AUTRE routine, et ce cycle n'avait aucune raison d'y écrire. La leçon tient en une ligne :
+**un fichier d'état partagé entre routines ne s'écrit que par la routine qui le possède.**
 
 ## Reste ouvert après ce cycle
 
-- **Les écrivains morts de la liste PLATE** (`use-socket-cache-sync`, `unread-cache`,
-  `use-send-message-mutation`, `use-conversations-query` — ~20 sites) ne sont PAS retirés. D2 a
-  traité la seule PANNE du lot ; le reste est un retrait de code mort, à faire d'un bloc avec
-  les deux hooks sans consommateur (`useConversationsQuery`,
-  `useConversationsWithPagination`) plutôt qu'en miettes. Le coût est la lisibilité : le code
-  se lit comme si deux caches étaient tenus en phase alors qu'un seul existe.
+- ~~Les écrivains morts de la liste PLATE (~20 sites) ne sont PAS retirés.~~ **CLOS pendant ce
+  cycle par la PR #2860** d'une session parallèle (cf. Addendum ci-dessus), qui a pris
+  exactement le lot laissé ouvert ici. Ce point n'est plus à instruire ; ce qui reste de cette
+  famille est listé dans le « Reste ouvert » de l'entrée #2860 (les autres familles de clés —
+  `posts`, `notifications` — n'ont pas eu le même audit).
 - **Le résidu des égalités reste un résidu.** iOS escalade désormais au lieu de perdre, mais
   une écriture en masse de plus de 100 conversations à la même milliseconde force toujours une
   relecture complète. La vraie fermeture demanderait un curseur composite
