@@ -815,6 +815,21 @@ class ConversationListViewModel: ObservableObject {
                 // effacer par la remise à neutre du bump une ligne plus bas :
                 // la ligne restait muette jusqu'à la synchro suivante alors même
                 // que le gateway venait d'envoyer le texte.
+                //
+                // Le Prisme de la ligne, résolu par le gateway POUR CE
+                // destinataire. Il fait groupe avec `lastMessagePreview` : le
+                // résolveur de la ligne PRÉFÈRE la traduction à l'aperçu brut,
+                // donc appliquer l'un sans l'autre laisse la ligne rendre
+                // l'ANCIEN texte traduit. Extrait UNE fois parce que les deux
+                // branches ci-dessous en ont besoin, chacune à sa façon.
+                // `nil` ici = `.unchanged` = « cet événement ne parle pas
+                // d'aperçu » (renommage, avatar) : la carte du cache survit.
+                // Règle recopiée de `ConversationStore.merging` (SDK), seule
+                // formulation de référence.
+                let replacedPrism: (map: [String: String], originalLanguage: String?)? = {
+                    guard case .replaced(let map) = event.lastMessageTranslations else { return nil }
+                    return (map, event.lastMessageOriginalLanguage)
+                }()
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
@@ -841,6 +856,11 @@ class ConversationListViewModel: ObservableObject {
                             preview: event.lastMessagePreview,
                             senderName: resolvedSenderName,
                             at: newLastAt,
+                            // La facette décrit UN message : la carte du message
+                            // PRÉCÉDENT n'est pas la sienne, donc `.unchanged`
+                            // vaut `nil` ici (neutre) et non « conserver ».
+                            translations: replacedPrism?.map,
+                            originalLanguage: replacedPrism?.originalLanguage,
                             location: event.location
                         )
                     )
@@ -854,6 +874,19 @@ class ConversationListViewModel: ObservableObject {
                     }
                     if let preview = event.lastMessagePreview {
                         self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
+                    }
+                    // Appliquée AU MÊME TITRE que l'aperçu, et au même endroit :
+                    // la paire doit rester cohérente, sinon on recrée le mélange
+                    // exact que le tri-état sert à empêcher — texte neuf, carte
+                    // de l'ancien, et le résolveur qui préfère la carte. C'est
+                    // le cas de l'ÉDITION : même `lastMessageId`, horodatage
+                    // ÉGAL, contenu changé, `translations: null` reçu.
+                    // `.replaced([:])` → `nil` : le résolveur distingue « pas de
+                    // carte » d'une carte vide.
+                    if let prism = replacedPrism {
+                        self.conversations[index].lastMessageTranslations =
+                            prism.map.isEmpty ? nil : prism.map
+                        self.conversations[index].lastMessageOriginalLanguage = prism.originalLanguage
                     }
                     // Metadata-only mutation (rename, avatar swap, broadcast
                     // toggle) still needs to land in L2 so a cold restart
