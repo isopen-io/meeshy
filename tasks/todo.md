@@ -1,4 +1,139 @@
-# Tête du cycle 68 — INSTRUITE ET PROUVÉE, prête à écrire
+# Cycle 68 — L'écho REST ne portait pas le `clientMessageId` que le client attendait
+
+## Contrainte d'environnement (identique aux cycles 61/63/64/65/66/67, revérifiée)
+
+Même conteneur Linux distant. Aucune chaîne Swift (`swift: command not found`), aucun SDK Android
+(`~/Android` absent → pas de `./apps/android/meeshy.sh check`, seul gate de cette lane).
+`tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane reste matériellement impossible ici :
+**le curseur n'a donc PAS été touché.** Lanes gatables : gateway, web, shared.
+
+Note d'environnement, nouvelle : `node_modules` était absent au démarrage. `bun install` échoue sur
+le postinstall de `grpc-tools` (`node-pre-gyp` → « Could not parse s3 bucket name from virtual host
+url », le proxy sortant). **`bun install --ignore-scripts` passe** et suffit à tous les gates de ce
+cycle. À réutiliser tel quel au prochain run plutôt que de rejouer le diagnostic.
+
+## Le défaut
+
+`MeeshySocketIOManager._broadcastNewMessage` — l'émetteur de `message:new` du chemin **REST/ZMQ** —
+ne mettait `clientMessageId` **dans aucun payload**, et n'émettait qu'une seule copie à la room de
+conversation.
+
+Le contrat que la clé sert est écrit noir sur blanc dans le dépôt
+(`socketio/utils/message-ack-shaping.ts`, invariants #1 et #2) et implémenté par les DEUX autres
+transports : le chemin socket (`MessageHandler.broadcastNewMessage`, `:1199-1265`) sépare un
+`senderPayload` cid-aware adressé à `ROOMS.user(sender.userId)` d'un `broadcastPayload` cid-strippé
+adressé à la room `.except()` cette room personnelle ; les deux routes de lien appellent
+`stripClientMessageId` (`routes/links/messages.ts:392`, `:676`). Le chemin REST/ZMQ n'avait ni l'une
+ni l'autre moitié.
+
+## Pourquoi ça compte, prouvé côté client et non supposé
+
+Ce n'est pas un chemin secondaire. `ConversationViewModel.sendMessage` (iOS) n'emprunte le
+socket-first que si `socketFirstEligible` — qui exige `!isEncrypted && (attachmentIds?.isEmpty ??
+true) && resolvedExpiresAt == nil && !resolvedIsViewOnce && resolvedBlur != true &&
+!pendingEffects.hasAnyEffect`. **Tout le reste part en REST** : chaque pièce jointe, chaque DM
+chiffré (l'E2EE est appliqué automatiquement dès `isDirect`), chaque vue-unique, chaque éphémère,
+chaque message à effets — plus tout raté du socket-first.
+
+Et le client avait écrit une garde POUR CETTE COURSE, qui ne pouvait pas se déclencher.
+`MessagePersistenceActor.upsert` (`:1710-1718`) place `clientMessageId` en **branche 0**, avant
+`PendingIdRecord` et avant l'id serveur, avec ce commentaire :
+
+> « catches an echo that races ahead of `applyEvent(.serverAck)` … Without it, an echo arriving
+> before the REST ACK falls through to the insert branch and produces a duplicate `cid` /
+> server-id pair (Sprint 2 RC2.3b). »
+
+« an echo arriving before the REST ACK » : la course nommée est exactement celle du chemin REST. Le
+gateway ne posait jamais la clé sur laquelle cette branche indexe — la défense était **inatteignable
+par construction**.
+
+Le pire cas n'est pas le doublon, c'est la bulle bloquée. La route saute délibérément le broadcast
+sur un renvoi idempotent (garde `!isDuplicate`, `routes/conversations/messages.ts:1843`). Quand la
+réponse HTTP du premier POST se perd (app mise en fond, cellulaire coupé, crash) et que l'outbox
+durable renvoie avec le même `clientMessageId`, le gateway déduplique et **n'émet rien**. Les deux
+seules voies de promotion étaient la réponse HTTP (perdue) et un `message:new` porteur du cid
+(jamais envoyé) : la ligne optimiste restait en `.sending` indéfiniment alors que le message était
+stocké et distribué à tout le monde. Seul un rechargement complet la réconciliait.
+
+## Le correctif
+
+Le split du chemin socket, à l'identique, en réutilisant les unités qui existaient déjà :
+
+- `clientMessageId` entre dans le payload (même accès que `MessageHandler._buildMessagePayload:1813`) ;
+- `stripClientMessageId(messagePayload)` produit la copie des pairs — **sans cast** en
+  `Record<string, unknown>`, le helper étant générique et préservant (cycle 7), donc l'emit typé
+  `message:new` reste vérifié par le compilateur ;
+- `io.to(room).except(ROOMS.user(senderUserId))` pour les pairs, `io.to(ROOMS.user(senderUserId))`
+  pour l'expéditeur — le `.except()` est ce qui empêche un appareil de l'expéditeur présent dans la
+  room de recevoir DEUX `message:new` ;
+- expéditeur sans compte (invité de lien) : une seule émission room-wide cid-strippée, comportement
+  strictement inchangé ;
+- `_emitMessageNewByLanguage` du manager reçoit l'option `excludeUserId` que son jumeau de
+  `MessageHandler` avait déjà, pour que `SOCKET_LANG_FILTER=true` ne réintroduise pas le doublon ;
+- le rejeu hors ligne (`deliveryQueue.enqueue`) stocke désormais le corps **destinataire** : même
+  règle que `enqueueOfflineLinkMessage`, dont le doc-comment la formule déjà (« a replay carrying
+  the author's `clientMessageId` would leak their local optimistic id into another user's id
+  space »).
+
+## Vérification
+
+- Gateway : **suite complète — 650 suites / 16 371 tests verts.** Base du cycle 67 : 650 / 16 366.
+  L'écart est exactement les 5 témoins ajoutés — aucune régression, aucun témoin perdu.
+- Gateway : RED observé avant implémentation sur 2 des 5 (`toSender` vide ; `excepted` vide). Les
+  3 autres passaient **à vide** avant le correctif — le cid n'étant nulle part, son absence chez les
+  pairs était trivialement vraie. Ils deviennent portants une fois la clé sur le fil : ils tombent
+  si un futur changement oublie le `strip`.
+- Gateway : `tsc --noEmit` — **0 erreur sur tout le service** (après `prisma generate --generator
+  client` + `bun run build` du shared, prérequis CI documentés dans `CLAUDE.md`).
+
+## Reste ouvert après ce cycle
+
+- **Le chemin REST/ZMQ n'emporte toujours pas l'enveloppe de chiffrement.** `_broadcastNewMessage`
+  omet `isEncrypted` / `encryptionMode` / `encryptedContent` / `encryptionMetadata` /
+  `encryptedPayload`, que `_buildMessagePayload` porte tous. Or `MessageProcessor.saveMessage:396`
+  stocke `content: ''` pour un message chiffré, et le web lit `encryptedContent` +
+  `encryptionMetadata` **sur le payload socket** pour déchiffrer
+  (`messaging.service.ts:229-247`) : un message chiffré posté en REST arriverait en bulle VIDE.
+  **Latent aujourd'hui** — le web ne chiffre que sur le chemin socket, et iOS met son cryptogramme
+  dans `content` sans jamais poster `encryptedContent`, si bien que le gateway le range en clair.
+  Ce dernier point mérite sa propre enquête : c'est un désaccord de contrat entre `SendMessageRequest`
+  (iOS) et `SendMessageBodySchema` (gateway), pas une omission de broadcast.
+- **`forwardedFromId` / `forwardedFromConversationId` / le snapshot `forwardedFrom` manquent aussi
+  au payload REST**, alors que la route les accepte (`messages.ts:1648`, `:1802`) et que le chemin
+  socket les construit (`MessageHandler:1121-1143`). Un message transféré via REST arriverait en
+  temps réel sans marqueur « Transféré ». Même famille que ce cycle, même fichier — traité à part
+  pour ne pas mélanger deux contrats dans un diff.
+- **`lastMessagePreview: message.content` (brut) dans `CONVERSATION_UPDATED` du même chemin** —
+  hors Prisme, et vide pour un message chiffré. **C'est exactement le jumeau que la tête instruite
+  ci-dessous (reportée au cycle 69) nomme** : `MeeshySocketIOManager.ts:2181` doit être traité avec
+  `emitConversationPreviewUpdate.ts:88`, sinon l'aperçu redevient dépendant du transport. La
+  question « payload PAR DESTINATAIRE » du cycle 60 y est tranchée — la boucle par participant
+  existe déjà.
+- **`serializeAttachmentForSocket` est un whitelist strictement plus étroit que `attachmentFullSelect`** :
+  il laisse tomber l'enveloppe de chiffrement, les compteurs de consommation, le couple de
+  transfert et l'état vue-unique/flou/effets, alors que son doc-comment promet la « parité avec le
+  payload REST `/messages` ». Le chemin socket sélectionne `attachmentMediaSelect`, qui ne les
+  charge pas non plus : élargir le sérialiseur seul ne changerait rien. Instruit, non écrit —
+  demande de trancher quelles pièces jointes ont besoin de quoi sur le fil.
+- Les points hérités restent inchangés : `eslint` ne peut pas tourner sur le gateway (pas
+  d'`eslint.config.js` depuis ESLint v9) ; `PinnedMessageBanner` n'affiche qu'UNE épingle ;
+  `ConversationPicker.tsx` (admin) rend `lastMessage.content` brut ; le « mensonge de type » de
+  `Message.translations` est instrumenté mais pas résolu ; `isDuplicate` n'est protégé par aucun
+  témoin au niveau du spread ; les deux scripts de réparation base attendent une exécution humaine ;
+  l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `getMentionsForMessage` / `getRecentMentionsForUser` n'ont toujours aucun écran.
+
+---
+
+# Tête instruite, NON CONSOMMÉE — reportée au cycle 69
+
+> **Note d'intégration (cycle 68).** Ce bloc a été écrit par une session parallèle et a atterri sur
+> `main` *pendant* que le cycle 68 ci-dessus était déjà en cours d'écriture sur une autre branche.
+> Il n'a donc pas été consommé — il n'est pas périmé pour autant : rien de ce que le cycle 68 a
+> touché ne recoupe `emitConversationPreviewUpdate` ni les résolveurs d'aperçu de liste. Il reste
+> le candidat le plus étayé du backlog et **le cycle 69 doit le prendre en tête**, sans refaire
+> l'enquête. Conservé mot pour mot ci-dessous.
+
 
 *Enquête menée pendant l'attente de la CI du cycle 67. Rien n'est supposé ci-dessous : chaque
 maillon a été lu dans le code. Aucune ligne de production n'a été écrite — la correction est
