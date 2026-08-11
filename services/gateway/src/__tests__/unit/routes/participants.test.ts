@@ -12,6 +12,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
     CONVERSATION_JOINED: 'conversation:joined',
+    CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   },
   ROOMS: {
@@ -826,68 +827,7 @@ describe('registerParticipantsRoutes', () => {
       expect(io._emit).toHaveBeenCalledWith('conversation:joined', {
         conversationId: VALID_CONV_ID,
         userId: TARGET_USER_ID,
-        memberCount: 0,
       });
-    });
-
-    // La ligne de LISTE rend l'effectif (badge de groupe iOS `memberCount > 1`,
-    // saturation de la couleur d'accent). Un membre posé sur cet écran a quitté
-    // `conversation:<id>` : la room de conversation seule ne l'atteint pas.
-    it('adresse aussi les rooms PERSONNELLES des membres actifs', async () => {
-      const route = getRoute(mockFastify, 'POST', '/participants');
-      const io = createMockIO();
-      const request = createPostRequest({ server: { io, notificationService: createMockNotificationService() } });
-      mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
-        .mockResolvedValueOnce(null);
-      mockPrisma.user.findFirst.mockResolvedValue({
-        id: TARGET_USER_ID, username: 'target', displayName: 'Target',
-        firstName: null, lastName: null, avatar: null, systemLanguage: 'en',
-      });
-      mockPrisma.participant.create.mockResolvedValue({});
-      mockPrisma.participant.findMany.mockResolvedValue([
-        { id: 'p-1', userId: 'user-1' },
-        // Participant sans compte : sa room porte son `Participant.id`.
-        { id: 'p-anon', userId: null },
-        { id: 'p-2', userId: TARGET_USER_ID },
-      ]);
-      const reply = createMockReply();
-
-      await route.handler(request, reply);
-
-      const rooms = io._roomsFor('conversation:joined');
-      expect(rooms).toContain(`conversation:${VALID_CONV_ID}`);
-      expect(rooms).toContain('user:user-1');
-      expect(rooms).toContain('user:p-anon');
-      expect(rooms).toContain(`user:${TARGET_USER_ID}`);
-    });
-
-    // `conversation:joined` porte deux sens sous un même nom : celui-ci
-    // (« untel devient membre ») et l'accusé de room de `ConversationHandler`,
-    // ré-émis à chaque ouverture de conversation. Seul un effectif ABSOLU les
-    // distingue — le web incrémentait de 1 sur les deux.
-    it('porte l\'effectif ABSOLU, pas un delta', async () => {
-      const route = getRoute(mockFastify, 'POST', '/participants');
-      const io = createMockIO();
-      const request = createPostRequest({ server: { io, notificationService: createMockNotificationService() } });
-      mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
-        .mockResolvedValueOnce(null);
-      mockPrisma.user.findFirst.mockResolvedValue({
-        id: TARGET_USER_ID, username: 'target', displayName: 'Target',
-        firstName: null, lastName: null, avatar: null, systemLanguage: 'en',
-      });
-      mockPrisma.participant.create.mockResolvedValue({});
-      mockPrisma.participant.findMany.mockResolvedValue([
-        { id: 'p-1', userId: 'user-1' },
-        { id: 'p-2', userId: 'user-2' },
-        { id: 'p-3', userId: TARGET_USER_ID },
-      ]);
-      const reply = createMockReply();
-
-      await route.handler(request, reply);
-
-      expect(io._payloadFor('conversation:joined')).toMatchObject({ memberCount: 3 });
     });
 
     it('should not crash when io is undefined (R6-1 graceful)', async () => {

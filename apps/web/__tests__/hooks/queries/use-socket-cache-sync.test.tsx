@@ -29,8 +29,10 @@ let messageDeletedCallback: ((messageId: string) => void) | null = null;
 let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
+let conversationJoinedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
+let conversationParticipantJoinedCallback: ((data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) | null = null;
+let conversationLeftCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => void) | null = null;
-let conversationJoinedCallback: ((data: { conversationId: string; userId: string; memberCount?: number }) => void) | null = null;
 let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean }) => void) | null = null;
 let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
@@ -91,11 +93,18 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       preferencesUpdatedCallback = callback;
       return jest.fn();
     },
-    onConversationJoined: (callback: (data: { conversationId: string; userId: string; memberCount?: number }) => void) => {
+    onConversationJoined: (callback: (data: { conversationId: string; userId: string }) => void) => {
       conversationJoinedCallback = callback;
       return jest.fn();
     },
-    onConversationLeft: jest.fn(() => jest.fn()),
+    onConversationParticipantJoined: (callback: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) => {
+      conversationParticipantJoinedCallback = callback;
+      return jest.fn();
+    },
+    onConversationLeft: (callback: (data: { conversationId: string; userId: string }) => void) => {
+      conversationLeftCallback = callback;
+      return jest.fn();
+    },
     onConversationNew: jest.fn(() => jest.fn()),
     onConversationDeleted: (callback: (data: { userId: string; conversationId: string }) => void) => {
       conversationDeletedCallback = callback;
@@ -934,14 +943,12 @@ describe('useSocketCacheSync', () => {
     });
   });
 
-  describe('Conversation Joined Handler', () => {
-    // `conversation:joined` porte deux sens sous un seul nom : « untel devient
-    // membre » (routes/conversations/participants.ts) et l'accusé de room de
-    // `ConversationHandler`, ré-émis à CHAQUE ouverture de conversation et à
-    // chaque reconnexion. Ce handler incrémentait sur les deux : ouvrir cinq
-    // fois le même fil ajoutait cinq membres au compteur, et `staleTime:
-    // Infinity` ne relit jamais de lui-même pour corriger.
-    it('ne touche pas à l\'effectif sur l\'accusé de room (sans memberCount)', () => {
+  describe('Conversation Participant Joined Handler', () => {
+    // L'effectif que porte l'événement est ABSOLU : il se POSE. C'est ce qui le
+    // sépare d'un delta — il RATTRAPE une dérive au lieu de la continuer. Cache
+    // à 4, serveur à 9 : un incrément rendrait 5 et garderait l'écart à jamais
+    // (`staleTime: Infinity` ne relit rien de lui-même).
+    it('pose l\'effectif du serveur plutôt que d\'incrémenter le cache', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
       queryClient.setQueryData(['conversations', 'infinite'], {
@@ -952,15 +959,66 @@ describe('useSocketCacheSync', () => {
       renderHook(() => useSocketCacheSync(), { wrapper });
 
       act(() => {
-        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-1' });
-        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-1' });
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString(), memberCount: 9 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(9);
+    });
+
+    it('increments memberCount when a member is actually added', () => {
+      // Le pendant montant de `participant-left`. Sans lui, l'effectif ne
+      // connaissait que des soustractions et dérivait vers le bas — et
+      // `staleTime: Infinity` ne le relit jamais de lui-même.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(5);
+    });
+
+    it('laisse conversation:joined SANS effet sur l\'effectif', () => {
+      // `conversation:joined` porte aussi l'ack self-only du socket qui REJOINT
+      // LA ROOM — à chaque ouverture de fil, avec le même payload. Incrémenter
+      // dessus gonflait la ligne de liste d'une unité par ouverture,
+      // indéfiniment : trois ouvertures suffisaient à afficher un groupe de 4
+      // comme un groupe de 7.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
       });
 
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
       expect((cached.pages[0].conversations[0] as any).memberCount).toBe(4);
     });
 
-    it('pose l\'effectif ABSOLU quand l\'événement d\'appartenance le porte', () => {
+    it('laisse conversation:left SANS effet sur l\'effectif', () => {
+      // Le pendant exact : `conversation:left` n'est émis que par
+      // `socket.emit` après `socket.leave(room)` — la FERMETURE d'un fil.
+      // Décrémenter dessus retirait un membre à chaque fermeture. Les deux
+      // erreurs se compensaient en partie, jamais exactement : une reconnexion
+      // rejoint sans `leave`, et la soustraction était bornée à 0 quand
+      // l'addition ne l'était pas.
       const { wrapper, queryClient } = createWrapperWithClient();
 
       queryClient.setQueryData(['conversations', 'infinite'], {
@@ -971,18 +1029,33 @@ describe('useSocketCacheSync', () => {
       renderHook(() => useSocketCacheSync(), { wrapper });
 
       act(() => {
-        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', memberCount: 12 });
+        conversationLeftCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+        conversationLeftCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
       });
 
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
-      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(12);
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(4);
+    });
+
+    it('invalide tout de même la liste des participants sur conversation:joined', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
+      );
     });
   });
 
   describe('Conversation Participant Left Handler', () => {
-    // Le point du compte absolu : il RATTRAPE une dérive au lieu de la
-    // continuer. Le cache dit 5, le serveur dit 2 — un décrément rendrait 4 et
-    // garderait l'écart à jamais.
+    // Symétrique du témoin d'adhésion : le compte absolu rattrape vers le BAS
+    // aussi. Cache à 5, serveur à 2 — un décrément rendrait 4.
     it('pose l\'effectif du serveur plutôt que de décrémenter le cache', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 

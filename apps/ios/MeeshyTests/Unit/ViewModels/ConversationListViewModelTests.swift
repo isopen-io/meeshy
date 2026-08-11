@@ -720,6 +720,86 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations[1].userState.unreadCount, 3, "Other conversations should not be affected")
     }
 
+    // MARK: - Socket: effectif de la ligne de liste
+
+    /// Les événements d'appartenance sont `Decodable` seuls : leur init
+    /// mémberwise reste interne au SDK. Le JSON est donc la seule façon de les
+    /// construire depuis le module de test — et c'est aussi la forme exacte
+    /// que le gateway envoie.
+    private func makeParticipantJoinedEvent(
+        conversationId: String,
+        userId: String
+    ) -> ParticipantJoinedEvent {
+        JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"}
+        """)
+    }
+
+    private func makeParticipantLeftEvent(
+        conversationId: String,
+        userId: String
+    ) -> ParticipantLeftEvent {
+        JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","leftAt":"2026-08-11T10:00:00.000Z"}
+        """)
+    }
+
+    /// L'effectif ne connaissait que des soustractions — départ, retrait,
+    /// bannissement — et dérivait durablement vers le bas, `schedulePersist`
+    /// écrivant chaque valeur fausse dans le cache disque.
+    func test_socketParticipantJoined_incrementsMemberCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 5)
+    }
+
+    /// Le nouvel arrivant reçoit son effectif par `conversation:new`, où le
+    /// serveur le compte DÉJÀ. Le gateway l'écarte de l'éventail, mais son
+    /// auto-join de room est asynchrone : le garde local est la seconde barrière.
+    func test_socketParticipantJoined_ignoresSelf() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "me")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 4)
+    }
+
+    func test_socketParticipantSelfLeft_decrementsMemberCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 3)
+    }
+
     // MARK: - Socket: Typing
 
     func test_socketTypingStarted_addsUsernameToTypingDictionary() async throws {

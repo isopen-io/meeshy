@@ -127,9 +127,6 @@ function createMockPrisma() {
     },
     participant: {
       findFirst: jest.fn<any>(),
-      // Défaut `[]` et non `undefined` : départ, bannissement et levée lisent
-      // les membres restants pour nommer les rooms personnelles de leur
-      // diffusion et porter l'effectif absolu du payload.
       findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       count: jest.fn<any>().mockResolvedValue(0),
@@ -140,6 +137,10 @@ function createMockPrisma() {
   } as any;
 }
 
+// `.to()` doit CHAÎNER : bannissement et levée passent désormais par
+// `emitToConversationParticipants`, qui écrit `io.to(fil).to(perso…).emit()`
+// pour ne livrer qu'une copie par socket. Un double dont `.to()` rend `{ emit }`
+// sans `.to` plante au second maillon.
 function createMockIO(extraSockets: any[] = []) {
   return makeChainableIO(extraSockets.length > 0 ? { sockets: extraSockets } : {});
 }

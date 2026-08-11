@@ -650,6 +650,20 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     }
 }
 
+/// `conversation:participant-joined` — quelqu'un a été AJOUTÉ à la conversation.
+///
+/// Symétrique de `ParticipantLeftEvent`, et le seul événement qui porte ce fait
+/// sans ambiguïté : `conversation:joined` sert le MÊME payload pour l'ack
+/// self-only qu'un socket reçoit en rejoignant la room, que produit chaque
+/// ouverture de fil et qui ne change aucune appartenance. Compter dessus
+/// gonflerait l'effectif à chaque ouverture.
+public struct ParticipantJoinedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let displayName: String
+    public let joinedAt: String
+}
+
 public struct ParticipantLeftEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
@@ -1186,6 +1200,9 @@ public protocol MessageSocketProviding: Sendable {
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
+    /// `conversation:participant-joined` — l'adhésion d'un tiers, distincte de
+    /// `conversationJoined` (ack de room, cf. `ParticipantJoinedEvent`).
+    var participantJoined: PassthroughSubject<ParticipantJoinedEvent, Never> { get }
     var participantSelfLeft: PassthroughSubject<ParticipantLeftEvent, Never> { get }
     var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
@@ -1433,6 +1450,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — conversation & participant lifecycle
     public let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    public let participantJoined = PassthroughSubject<ParticipantJoinedEvent, Never>()
     public let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     public let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     public let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
@@ -3009,6 +3027,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ConversationUpdatedEvent.self, from: data) { [weak self] event in
                 self?.conversationUpdated.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-joined") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantJoinedEvent.self, from: data) { [weak self] event in
+                self?.participantJoined.send(event)
             }
         }
 

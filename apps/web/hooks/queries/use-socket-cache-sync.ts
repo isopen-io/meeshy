@@ -741,16 +741,28 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       }
     };
 
+    // `conversation:joined` n'est PAS une adhésion : le gateway l'émet aussi —
+    // même nom, même payload — comme l'ack self-only d'un socket qui REJOINT LA
+    // ROOM (`ConversationHandler`), c'est-à-dire à CHAQUE ouverture de fil.
+    // L'incrémentation qui vivait ici gonflait donc l'effectif de la ligne de
+    // liste d'une unité par ouverture, indéfiniment. L'adhésion réelle passe
+    // par `conversation:participant-joined` ci-dessous ; il ne reste ici que
+    // l'invalidation, légitime dans les deux lectures.
+    const handleConversationJoined = (data: { conversationId: string; userId: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
     // Réécrit l'effectif d'UNE conversation dans les deux formes de cache de
-    // liste, et invalide le roster paginé. Cinq handliers d'appartenance en
-    // faisaient chacun une copie ; la seule chose qui les distingue est
-    // `resolve`.
+    // liste, et invalide le roster paginé. Quatre handlers d'appartenance en
+    // faisaient chacun une copie ; seul `resolve` les distingue.
     //
     // `resolve` reçoit l'effectif en cache et rend le nouveau. Les événements
     // du gateway portent désormais un `memberCount` ABSOLU : c'est lui qu'il
-    // faut poser. Le delta n'est plus qu'un repli pour un serveur antérieur au
-    // contrat — et il ne converge pas, puisqu'un événement manqué (hors ligne,
-    // trou de reconnexion) laisse une dérive définitive dans un cache dont le
+    // faut POSER. Le delta n'est plus qu'un repli pour un serveur antérieur au
+    // contrat, et il ne converge pas — un événement manqué (hors ligne, trou de
+    // reconnexion) laisse une dérive définitive dans un cache dont le
     // `staleTime: Infinity` interdit la relecture spontanée.
     const applyMemberCount = (conversationId: string, resolve: (current: number) => number) => {
       const updater = (convs: Conversation[]) =>
@@ -769,32 +781,31 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // Handler for participant joined — update memberCount in conversation lists.
-    //
-    // `conversation:joined` porte DEUX sens sous le même nom : « untel devient
-    // membre » (routes/conversations/participants.ts) et « ton socket vient
-    // d'entrer dans la room » — un accusé que `ConversationHandler` ré-émet à
-    // CHAQUE ouverture de conversation et à chaque reconnexion. Ce handler
-    // incrémentait sur les deux : ouvrir cinq fois le même fil ajoutait cinq
-    // membres au compteur de la ligne de liste, durablement.
-    //
-    // Seul l'accusé de room ne porte pas `memberCount`. Son absence n'est donc
-    // pas « un serveur ancien » mais « cet événement ne parle pas
-    // d'appartenance » : ne toucher à rien, et se contenter d'invalider le
-    // roster.
-    const handleConversationJoined = (data: { conversationId: string; userId: string; memberCount?: number }) => {
-      if (typeof data.memberCount !== 'number') {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.conversations.participants(data.conversationId),
-        });
-        return;
-      }
-      applyMemberCount(data.conversationId, () => data.memberCount as number);
+    // Handler for participant joined — the symmetric counterpart of
+    // `handleConversationParticipantLeft`, and the only unambiguous carrier of
+    // an actual membership gain. The gateway leaves the new member OUT of this
+    // fan-out: their own list gets the conversation from `conversation:new`,
+    // whose member count already includes them.
+    const handleConversationParticipantJoined = (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => {
+      applyMemberCount(data.conversationId, (current) => data.memberCount ?? current + 1);
     };
 
-    // Handler for participant left — update memberCount in conversation lists
-    const handleConversationLeft = (data: { conversationId: string; userId: string; memberCount?: number }) => {
-      applyMemberCount(data.conversationId, (current) => data.memberCount ?? Math.max(0, current - 1));
+    // Le pendant EXACT de `conversation:joined` ci-dessus, et le même piège :
+    // `conversation:left` n'a qu'un seul émetteur, `socket.emit` après
+    // `socket.leave(room)` (`ConversationHandler.handleConversationLeave`). Il
+    // dit « ce socket a quitté la ROOM » — ce que produit la fermeture d'un
+    // fil — jamais « quelqu'un a quitté la conversation ». La décrémentation
+    // qui vivait ici retirait donc un membre à chaque fermeture de fil.
+    //
+    // Les deux erreurs se compensaient EN PARTIE, ce qui les cachait, mais
+    // jamais exactement : une reconnexion socket rejoint la room sans avoir
+    // émis de `leave`, et l'appli fermée ne l'émet pas non plus, tandis que la
+    // soustraction était bornée à 0 et l'addition ne l'était pas. Le départ
+    // réel passe par `conversation:participant-left`.
+    const handleConversationLeft = (data: { conversationId: string; userId: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
     };
 
     // Handler for participant-left (room broadcast) — another member was removed/left
@@ -808,9 +819,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // but it removes no membership, so the count must not move. Absent on
     // servers older than that contract, where a ban always removed one.
     const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number }) => {
-      // L'effectif absolu tranche le cas `membershipEnded: false` de lui-même
-      // (bannir un ex-membre ne retire personne, donc le compte est inchangé) ;
-      // le court-circuit ne subsiste que pour les serveurs qui ne l'envoient pas.
+      // L'effectif absolu tranche `membershipEnded` de lui-même — bannir un
+      // ex-membre ne retire personne, donc le compte est simplement inchangé.
+      // Le court-circuit ne subsiste que pour les serveurs qui ne l'envoient pas.
       if (typeof data.memberCount !== 'number' && data.membershipEnded === false) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.conversations.participants(data.conversationId),
@@ -1163,6 +1174,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
     const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
     const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
+    const unsubscribeParticipantJoined = meeshySocketIOService.onConversationParticipantJoined(handleConversationParticipantJoined);
     const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
     const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
     const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
@@ -1192,6 +1204,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationNew?.();
       unsubscribeConversationDeleted?.();
       unsubscribeConversationUpdated?.();
+      unsubscribeParticipantJoined?.();
       unsubscribeParticipantLeft?.();
       unsubscribeParticipantBanned?.();
       unsubscribeParticipantUnbanned?.();

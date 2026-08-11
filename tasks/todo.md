@@ -1,4 +1,38 @@
-# Cycle 71 — L'effectif de la ligne de liste : faux à la source, et non convergent en temps réel
+# Cycle 71b — L'effectif était AUSSI faux à la SOURCE (session parallèle, intégrée)
+
+*Deux sessions ont traité la tête du cycle 71 en même temps, et sont tombées sur la MÊME racine —
+un nom d'événement pour deux faits. Celle-ci a rebasé sur l'autre plutôt que de la doubler. Ce
+qui suit ne garde de ce côté-ci que ce que l'autre n'avait pas, et dit pourquoi.*
+
+## Ce qui a été REPRIS de l'autre session, et pourquoi c'est meilleur
+
+- **Un événement dédié (`conversation:participant-joined`) plutôt qu'un champ discriminant.**
+  Cette session distinguait les deux sens de `conversation:joined` par la PRÉSENCE de
+  `memberCount` dans le payload. Ça marche, mais ça fait porter une sémantique à une option, et
+  ça élargit l'audience d'un événement que des clients déployés écoutent déjà. Un nom distinct
+  ne demande rien à personne : `conversation:joined` reste intact, room et payload compris, et
+  un témoin le fige. **Repris, et le `memberCount` de `ConversationParticipationEventData` a été
+  RETIRÉ** — il y aurait entretenu l'idée que cet événement parle d'appartenance.
+- **`conversation:left` est le MÊME piège, et cette session ne l'avait pas vu.** L'autre l'a
+  trouvé : un seul émetteur, `socket.emit` après `socket.leave(room)`, c'est-à-dire la FERMETURE
+  d'un fil. Le web y décrémentait — un membre en moins à chaque fermeture. Les deux erreurs se
+  compensaient en partie, ce qui les cachait.
+- **L'arrivant écarté de l'éventail** : son effectif lui vient de `conversation:new`, qui le
+  compte déjà.
+
+## Ce qui reste de CE côté-ci, parce que l'autre session ne l'avait pas
+
+1. **La colonne `memberCount` est MORTE, et deux routes en dépendaient.** C'est le défaut le plus
+   grave des deux, et il est en amont de tout le travail temps réel : le compteur que l'autre
+   session vient de maintenir correctement en direct partait, sur la LISTE, d'une valeur qui vaut
+   `0` pour toute conversation créée depuis la migration héritée. Détail ci-dessous.
+2. **Le bannissement et la levée n'atteignaient pas non plus les écrans de liste.** L'autre
+   session a élargi départ, retrait et ajout ; `ban.ts` était resté thread-only.
+3. **L'effectif absolu dans le payload.** L'autre session laisse les clients faire ±1. Un delta
+   ne converge pas — détail ci-dessous — et le total ne coûte rien : il est lu sur la requête qui
+   sert déjà à nommer les rooms. Porté par les quatre événements d'appartenance, y compris le
+   nouveau `conversation:participant-joined`.
+
 
 ## La question posée par le cycle 70, et sa réponse
 
@@ -45,7 +79,7 @@ liste et l'admin. Il vit dans son propre module et non dans `core.ts` : l'écran
 consommer sans importer un module de routes entier — l'import qui traîne ses dépendances
 jusque dans les doubles jest des suites voisines est exactement la leçon 93.
 
-## Défaut 2 — `conversation:joined` porte DEUX sens, et le web incrémentait sur les deux
+## Défaut 2 — `conversation:joined` porte DEUX sens (trouvé des DEUX côtés ; c'est la forme de l'AUTRE session qui reste)
 
 `SERVER_EVENTS.CONVERSATION_JOINED` est émis par :
 - `routes/conversations/participants.ts:377` — « untel devient membre » (diffusion) ;
@@ -59,6 +93,13 @@ ne relit jamais de lui-même pour corriger. C'est un défaut vivant, reproductib
 dégradé ni concurrence.
 
 Aucun client ne pouvait faire mieux : rien dans le payload ne distinguait les deux sens.
+
+**Le correctif retenu est celui de l'autre session** — un événement dédié
+`conversation:participant-joined`, `conversation:joined` laissé strictement intact. Cette session
+proposait de discriminer par la présence de `memberCount` ; c'est moins bon, et le champ a été
+retiré de `ConversationParticipationEventData` pour ne pas laisser croire l'inverse. L'autre
+session a en outre trouvé le jumeau que celle-ci avait manqué : `conversation:left` est lui aussi
+un accusé de ROOM, et le web y décrémentait à chaque fermeture de fil.
 
 ## Le correctif — un effectif ABSOLU dans le payload, pas un delta
 
@@ -139,6 +180,172 @@ réécrasait `participant` en entier, annulant la fusion par clé que le premier
 
 ---
 
+
+# Cycle 71 — L'effectif d'une conversation cesse de mentir : un événement pour l'adhésion, une audience pour les listes
+
+## Contrainte d'environnement — inchangée depuis le cycle 68
+
+Conteneur Linux distant : aucune chaîne Swift (`swift: command not found`), aucun SDK Android,
+`node_modules` absent au démarrage. Les trois commandes de la leçon 102 se réutilisent telles
+quelles (`bun install --ignore-scripts`, `prisma generate --generator client`, `shared: bun run build`).
+
+**Le premier geste instruit par le cycle 70 — « faire tourner `ios-tests.yml` sur `main` » — reste
+impossible** : l'intégration GitHub de cette routine n'a pas `actions: write`, et le workflow ne se
+déclenche autrement que sur push vers `dev`. La dette est donc reportée telle quelle. Ce cycle la
+limite autrement : **la moitié la plus grave du défaut a été trouvée sur le WEB**, qui est gaté par
+jest ici. Le Swift écrit reste ungatable, mais il n'est plus la seule preuve.
+
+## Le fil instruit : trois émetteurs thread-only de `participants.ts`
+
+Le cycle 70 demandait d'ÉTABLIR, avant d'écrire, si la ligne de liste rend quelque chose qui dépende
+de ces trois faits. Réponse, vérifiée dans le code des deux clients :
+
+- **Oui pour l'adhésion et le départ.** iOS `ThemedConversationRow:351` rend `conversation.memberCount`,
+  et web `use-socket-cache-sync` le tient dans le cache React Query.
+- **Non pour le rôle.** `PARTICIPANT_ROLE_UPDATED` n'a que des consommateurs d'écrans de participants,
+  tous ouverts DANS la conversation. Il reste thread-only, et la raison est désormais **écrite dans le
+  code** (`participants.ts`) plutôt que redécouverte au cycle 72, exactement comme demandé.
+
+## Le vrai défaut, plus grave que l'audience : `conversation:joined` porte DEUX faits
+
+C'est la découverte du cycle, et elle ne se déduisait pas du balayage des rooms.
+
+`conversation:joined` est émis à deux endroits, avec **le même nom et le même payload
+`{conversationId, userId}`** :
+- `ConversationHandler:144` — ack **self-only** d'un socket qui vient de REJOINDRE LA ROOM, produit
+  à **chaque ouverture de fil**, et qui ne change aucune appartenance ;
+- `participants.ts:377` — diffusion d'une **adhésion réelle**.
+
+Un client ne peut pas les distinguer. Conséquences mesurées dans chaque client :
+
+1. **Web — le compteur grossissait d'une unité à chaque ouverture du fil.** `handleConversationJoined`
+   faisait `memberCount + 1` sur l'ack. Trois ouvertures affichaient un groupe de 4 comme un groupe
+   de 7, et `staleTime: Infinity` ne relit jamais la valeur d'elle-même. C'est un défaut visible,
+   quotidien, et il vivait dans le code gaté.
+2. **iOS — le compteur ne pouvait que décroître.** Aucun `+1` n'existait (précisément parce qu'il
+   aurait compté les ouvertures), alors que départ, retrait et bannissement soustraient tous. Dérive
+   monotone vers le bas, **persistée** par `schedulePersist` dans le cache disque.
+
+Les deux symptômes sont opposés et ont la même racine : un nom d'événement pour deux faits.
+
+### Et le pendant, trouvé en corrigeant le premier : `conversation:left`
+
+Une fonction plus bas dans le MÊME fichier web, `handleConversationLeft` **décrémentait**
+`memberCount` sur `conversation:left` — qui n'a qu'un seul émetteur, `socket.emit` après
+`socket.leave(room)` (`ConversationHandler.handleConversationLeave`). C'est la FERMETURE d'un fil,
+jamais un départ.
+
+Les deux erreurs se compensaient **en partie**, ce qui les a cachées — et c'est précisément ce qui
+rendait la correction partielle dangereuse : retirer le `+1` sans retirer le `-1` aurait transformé
+une dérive à peu près nulle en **une soustraction nette par fermeture de fil**. Elles ne se
+compensaient d'ailleurs jamais exactement : une reconnexion socket rejoint la room sans avoir émis
+de `leave`, l'appli fermée n'en émet pas non plus, et la soustraction était bornée à 0 quand
+l'addition ne l'était pas. Les deux handlers ne gardent désormais que leur invalidation.
+
+iOS n'était pas exposé : ni `ConversationSyncEngine` ni `ParticipantsView` ne touchent l'effectif
+sur `conversationLeft`.
+
+## Le correctif : séparer les faits, puis élargir l'audience
+
+`conversation:participant-joined` — nouvel événement, **symétrique de `conversation:participant-left`
+jusque dans son payload** (`{conversationId, userId, displayName, joinedAt}`).
+
+- `conversation:joined` **n'est pas touché** : même émetteur, même room, même payload. Les
+  consommateurs existants (ParticipantsView, ConversationSyncEngine, web) ne bougent pas, et aucun
+  client déployé ne régresse. Un témoin le fige.
+- Web : `handleConversationJoined` perd son `+1` et ne garde que l'invalidation, légitime dans les
+  deux lectures. Le `+1` passe sur le nouvel événement.
+- iOS : nouveau `participantJoined` (SDK) et `+1` dans `ConversationListViewModel`.
+- **Le nouvel arrivant est écarté de l'éventail, des DEUX côtés.** Le serveur l'omet
+  (`NOT: { userId }`) ; le client écarte aussi sa propre identité, parce que l'auto-join de room
+  côté serveur est asynchrone et pourrait le faire entrer dans la room avant l'emit. Son effectif
+  lui vient de `conversation:new`, qui le compte déjà — l'incrémenter le mettrait en trop.
+
+Et l'audience, comme au cycle 70 : `leave.ts`, le retrait et l'ajout passent tous par
+`emitToConversationParticipants` — chaînage des rooms (au plus une copie par socket), room d'un
+participant sans compte nommée par son `Participant.id`, membres inactifs écartés. **La room de
+conversation reste en tête de chaîne** : elle porte le partant / le retiré, encore dedans à cet
+instant (l'éviction vient après l'emit), donc leur propre signal est strictement inchangé.
+
+## Témoins
+
+- gateway `participants-membership-fanout.test.ts` (5) : la chaîne de rooms de l'ajout et du
+  retrait, l'exclusion du nouvel arrivant, le payload symétrique, et `conversation:joined` figé sur
+  la seule room du fil ;
+- gateway `leave.test.ts` (+2) : la chaîne du départ, et le fait que l'éventail ne lise que les
+  membres ACTIFS. Le test socket qui existait n'assertait rien du tout sur l'audience ;
+- web `use-socket-cache-sync.test.tsx` (+4) : le `+1` sur le nouvel événement, et surtout **trois
+  `conversation:joined` d'affilée qui laissent l'effectif à 4**, plus deux `conversation:left` qui
+  le laissent à 4 également — les deux défauts web exactement ;
+- web `presence.service.test.ts` (+1) : le relais du nouvel événement ;
+- iOS `ConversationListViewModelTests` (+3) : `+1`, garde sur soi-même, et le `-1` du départ qui
+  n'avait aucun témoin jusqu'ici. **Non exécutés** (pas de chaîne Swift ici).
+
+---
+
+
+# Tête instruite pour le cycle 72 — `sdk-tests` est ROUGE sur `main`, cause trouvée et prouvée
+
+*Découvert en gatant le cycle 71, diagnostiqué mais NON corrigé : le correctif est du Swift que ce
+conteneur ne peut ni compiler ni exécuter, et la leçon 95 condamne précisément d'en poser sur `main`
+sans gate. Ce qui suit rend la correction mécanique pour qui dispose d'un Mac — l'arithmétique est
+déjà faite.*
+
+## Le fait
+
+`sdk-tests.yml` échoue sur `main` : **8 échecs / 7017 succès / 35 ignorés** — chiffres et valeurs
+**identiques** sur la PR #2817, donc totalement indépendants d'elle (c'est ce qui a autorisé son
+merge). Déterministe, pas un flake : les mêmes valeurs octet pour octet à deux runs distants de 2 h.
+
+Fenêtre de régression : run `b100ccfd1` (04:05) **vert** → run `9477dd74` (07:25) **rouge**.
+
+## La cause, prouvée
+
+`fcd002ee` — *« feat(story): allonge les interludes de lecture à 1,2 s »* — fait passer
+`StoryRenderer.slideTransitionDuration` de **0.5 à 1.2**. Ce commit a relevé la borne de
+`StoryOpeningParityTests` (1.0 → 1.5), mais **a oublié `StoryClosingTests` et
+`TransitionChromeLaneTests`**, qui codent en dur des valeurs dérivées de 0,5 s.
+
+L'arithmétique referme le dossier sans compilateur :
+
+- `test_badgeWidth_matchesSlideTransitionDuration` attend `25.0`, obtient `60.0`.
+  **60 / 25 = 2,4 = 1,2 / 0,5.** La largeur du badge est proportionnelle à la durée.
+- `test_closingProgress_beforeWindow_returnsZero` : `closingProgress(totalDuration: 6.0, at: 5.5)`.
+  Avec 0,5 s la fermeture commence à `6,0 − 0,5 = 5,5` ⇒ progress 0. Avec 1,2 s elle commence à
+  `4,8` ⇒ `(5,5 − 4,8) / 1,2 = 0,58333…` — **exactement la valeur observée** `0.5833333333333335`.
+- `test_closingProgress_midWindow_returnsLinearRamp` : `at: 5.75` ⇒ `(5,75 − 4,8) / 1,2 = 0,79166…`
+  — **exactement** `0.7916666666666669`.
+
+Les 5 autres (`applyClosing_fade/reveal/slide/zoom`, `simulateTickAt_fadeClosingInsideWindow`)
+échouent par le même mécanisme : un instant d'échantillonnage choisi pour une fenêtre de 0,5 s.
+
+## Le correctif à écrire
+
+**Lier les témoins à la SSOT plutôt que de recaler des littéraux** — exactement ce que l'auteur de
+`fcd002ee` a fait pour `StoryOpeningParityTests`. Les instants d'échantillonnage s'expriment en
+fonction de `StoryRenderer.slideTransitionDuration` :
+
+- « avant la fenêtre » ⇒ `at: totalDuration - StoryRenderer.slideTransitionDuration` (progress 0) ;
+- « mi-fenêtre » ⇒ `at: totalDuration - StoryRenderer.slideTransitionDuration / 2` (progress 0,5) ;
+- largeur de badge ⇒ dériver de la même constante.
+
+Recaler les littéraux sur 1,2 s « marcherait » et **re-casserait au prochain ajustement de durée** —
+c'est la troisième fois que cette constante bouge. Fichiers :
+`packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Animation/StoryClosingTests.swift` et
+`.../Timeline/Views/TransitionChromeLaneTests.swift`.
+
+## Ce que ce cycle n'a PAS pu faire, et ce qu'il faudrait
+
+`ios-tests.yml` reste hors de portée de cette routine (`403 Resource not accessible by integration`
+— pas de `actions: write`). **`sdk-tests.yml`, lui, tourne sur les PR** : c'est le seul gate Swift
+dont cette routine dispose, et il a bien servi au cycle 71 — les 7017 tests verts incluent les tests
+de cache du SDK qui consomment `MockMessageSocket`, donc la moitié SDK du cycle a bien été compilée
+et vérifiée. À garder en tête : **une PR suffit à gater le SDK ; seule la couche `apps/ios` reste
+aveugle.**
+
+---
+
+
 # Tête instruite pour le cycle 72 — le client iOS compte encore par deltas, sur un serveur qui lui donne le total
 
 *Vérifié dans le code de `main`, pas déduit. Aucune ligne de Swift écrite : `apps/ios` n'est ni
@@ -199,6 +406,46 @@ arbitrer plutôt qu'à exécuter en aveugle :
   gate que `test:coverage`.
 - La suppression de branche distante échoue depuis cette routine (`git push --delete` répond
   « Everything up-to-date » sans agir) — à faire depuis l'interface GitHub.
+
+# Tête instruite pour le cycle 72 — le même « un nom, deux faits » ailleurs, et la réconciliation de l'effectif
+
+*Deux pistes, la première vérifiée, la seconde à instruire.*
+
+## 1. L'effectif n'a AUCUN chemin de réconciliation — ~~à instruire~~ **RÉPONDU, et corrigé (cycle 71b)**
+
+*La question posée ici — « est-ce que `GET /conversations` renvoie `memberCount` à chaque page,
+et le client l'écrase-t-il ? » — a été instruite par la session parallèle. La réponse était pire
+que les deux branches envisagées, et elle est écrite au cycle 71b ci-dessus :*
+
+**la liste renvoyait bien un `memberCount`… lu dans une colonne dénormalisée que le gateway
+n'écrit NULLE PART.** Il n'y avait donc pas « rafraîchissement qui auto-corrige » ni « pas de
+source de vérité » : il y avait une source de vérité qui MENTAIT, et qui valait `0` pour toute
+conversation créée depuis la migration héritée. Un rafraîchissement de liste ne réparait pas la
+dérive : il la remplaçait par zéro.
+
+Les deux moitiés sont faites : la liste (et l'écran admin) comptent désormais les participants
+actifs en base, et les quatre événements d'appartenance portent un `memberCount` **absolu** que
+le web POSE au lieu de l'additionner. Reste la moitié iOS, instruite juste au-dessus.
+
+## 2. Chercher les autres événements surchargés
+
+`conversation:joined` et `conversation:left` sont traités — les deux sont **clos**. Le critère de
+recherche se réutilise tel quel et n'a PAS été appliqué au-delà de ces deux-là : **un
+`SERVER_EVENTS.X` émis à la fois par `socket.emit` (self-only) et par `io.to(...).emit`
+(diffusion)**, ou dont le nom décrit un ÉTAT DE SOCKET là où un client lit un ÉTAT MÉTIER. Le
+balayage complet reste à faire ; `grep -n "socket.emit(SERVER_EVENTS" services/gateway/src` en est
+le point de départ, à croiser avec les émetteurs `io.to(`.
+
+## Points hérités, inchangés
+
+- Les mentions du chemin de lien attendent toujours l'extraction qui écrit `Message.validatedMentions` ;
+  aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas
+  dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
+- `bun run lint` échoue toujours immédiatement (ESLint v9) — condition préexistante, la CI ne gate
+  que `test:coverage`.
+- `ios-tests.yml` reste hors de portée de cette routine (`actions: write` manquant). Chaque cycle
+  iOS repousse la même dette tant que le droit n'est pas accordé.
+- La suppression de branche distante échoue depuis cette routine — à faire depuis l'interface GitHub.
 
 # Cycle 70 — Le Prisme franchit la porte du ViewModel, et deux événements de conversation trouvent enfin les écrans de liste
 

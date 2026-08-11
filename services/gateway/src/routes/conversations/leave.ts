@@ -73,19 +73,21 @@ export function registerLeaveRoutes(
 
       const manager = socketIOHandler?.getManager()
       if (io) {
-        // Effectif APRÈS le départ : la ligne qui vient d'être désactivée est
-        // hors de ce `where`. Il sert deux fois — à nommer les rooms
-        // personnelles, et à porter le compte autoritatif dans le payload.
+        // Les membres restants tiennent un COMPTEUR d'effectif sur leur écran de
+        // liste (iOS `ThemedConversationRow`, alimenté par
+        // `ConversationListViewModel.participantSelfLeft`). Un membre posé sur
+        // cette liste a quitté la room de conversation : adressé à la seule
+        // room, le départ ne l'atteignait pas et son compteur restait faux
+        // jusqu'à un rechargement complet — pire, `schedulePersist` écrivait la
+        // valeur périmée dans le cache disque.
+        //
+        // La room de conversation reste en tête de chaîne : elle porte le
+        // partant lui-même, encore dedans à cet instant (il n'en sort que plus
+        // bas), ce qui laisse son propre acquittement inchangé.
         const remaining = await prisma.participant.findMany({
           where: { conversationId: id, isActive: true },
           select: { id: true, userId: true },
         })
-
-        // La room de conversation ne suffit pas : un membre posé sur l'écran de
-        // LISTE l'a quittée et n'est joignable que par sa room personnelle. Or
-        // la ligne de liste rend l'effectif — c'est le commentaire de cette
-        // route qui le dit depuis sa création (« ConversationListViewModel
-        // count ») — donc l'événement n'atteignait pas l'écran qu'il sert.
         emitToConversationParticipants({
           io,
           conversationId: id,
@@ -96,10 +98,11 @@ export function registerLeaveRoutes(
             userId,
             displayName: participant.displayName,
             leftAt: now.toISOString(),
-            // Compte ABSOLU, pas un delta. Un client qui décrémente de 1 ne
-            // converge jamais : l'événement manqué (hors room, hors ligne,
-            // trou de reconnexion) laisse une dérive définitive — et iOS
-            // persiste la valeur fausse dans son cache disque.
+            // Compte ABSOLU, gratuit — `remaining` est déjà chargé pour nommer
+            // les rooms. Un client qui soustrait 1 ne converge pas : l'événement
+            // manqué (hors ligne, trou de reconnexion) laisse une dérive que
+            // rien ne rattrape, et que les deux clients PERSISTENT (cache disque
+            // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
             memberCount: remaining.length,
           },
         })

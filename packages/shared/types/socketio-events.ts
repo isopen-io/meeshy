@@ -221,6 +221,20 @@ export const SERVER_EVENTS = {
    * system notification, emitted in parallel.
    */
   FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
+  /**
+   * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
+   * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
+   * event that carries that fact unambiguously.
+   *
+   * `CONVERSATION_JOINED` cannot serve here: it carries the same
+   * `{ conversationId, userId }` shape for a completely different fact — the
+   * self-only ack a socket receives after JOINING THE ROOM
+   * (`ConversationHandler`), which every thread opening produces and which
+   * changes no membership. A client counting members off `conversation:joined`
+   * would inflate its count on every thread opening; that ambiguity is why no
+   * client ever incremented, and why the count could only ever drift DOWN.
+   */
+  CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   /**
@@ -512,23 +526,12 @@ export interface MessageDeletedEventData {
 export interface ConversationParticipationEventData {
   readonly conversationId: string;
   readonly userId: string;
-  /**
-   * Effectif ACTIF de la conversation APRÈS la transition, absolu.
-   *
-   * `conversation:joined` porte deux sens sous un seul nom : « untel devient
-   * membre » (`routes/conversations/participants.ts`) et « ton socket vient
-   * d'entrer dans la room » — un accusé que `ConversationHandler` réémet à
-   * CHAQUE ouverture de conversation et à chaque reconnexion. Ce champ est ce
-   * qui les distingue : SEUL l'événement d'appartenance le porte. Un client qui
-   * incrémentait un compteur sur les deux gonflait son effectif d'un membre par
-   * ouverture (le web le faisait).
-   *
-   * Absolu, et non un delta, parce qu'un delta ne converge pas : l'événement
-   * manqué — hors room, hors ligne, trou de reconnexion — laisse une dérive que
-   * rien ne rattrape, et que les clients persistent (cache disque iOS,
-   * `staleTime: Infinity` côté web).
-   */
-  readonly memberCount?: number;
+  // PAS d'effectif ici, et c'est délibéré : `conversation:joined` /
+  // `conversation:left` sont des accusés de ROOM (`ConversationHandler`),
+  // réémis à chaque ouverture et à chaque fermeture de fil, sans qu'aucune
+  // appartenance change. L'adhésion et le départ réels ont leurs propres
+  // événements — `CONVERSATION_PARTICIPANT_JOINED` / `_LEFT` — et ce sont eux
+  // qui portent `memberCount`.
 }
 
 /**
@@ -1335,6 +1338,28 @@ export interface ConversationParticipantUnbannedEventData {
   readonly memberCount?: number;
 }
 
+export interface ConversationParticipantJoinedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly joinedAt: string;
+  /**
+   * Effectif ACTIF APRÈS l'adhésion, absolu — à POSER, pas à incrémenter.
+   *
+   * Un delta ne converge pas : l'événement manqué (hors room, hors ligne, trou
+   * de reconnexion) laisse une dérive que rien ne rattrape, et que les deux
+   * clients PERSISTENT — cache disque iOS (`schedulePersist`), `staleTime:
+   * Infinity` côté web. Un total se rattrape à l'événement suivant.
+   *
+   * Le compte INCLUT l'arrivant, alors même que l'éventail l'écarte : son
+   * propre écran reçoit l'effectif par `conversation:new`.
+   *
+   * Absent des serveurs antérieurs à ce contrat, où l'incrément reste le seul
+   * repli disponible.
+   */
+  readonly memberCount?: number;
+}
+
 export interface ConversationParticipantLeftEventData {
   readonly conversationId: string;
   readonly userId: string;
@@ -1568,6 +1593,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;
