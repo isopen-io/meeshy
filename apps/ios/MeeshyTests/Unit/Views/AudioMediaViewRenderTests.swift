@@ -116,6 +116,28 @@ final class AudioMediaViewRenderTests: XCTestCase {
         XCTAssertNil(source.queueTailProvider?())
     }
 
+    /// Le pager du plein écran appelle `fullscreenSource(for:)` par item —
+    /// chaque page doit résoudre SA PROPRE file via SON PROPRE attachmentId,
+    /// pas celui (fixe) de la vue hôte. Un stub `{ _ in ... }` ne peut pas
+    /// détecter une régression vers `provider(attachment.id)` (attachment de
+    /// la vue, pas de l'item) : ce test capture l'id réellement reçu.
+    func test_fullscreenSource_queueTailProvider_capturesPerItemAttachmentId() {
+        var capturedIds: [String] = []
+        let sut = AudioMediaView.makeForTest(
+            conversationName: "Team Chat",
+            audioQueueTailProvider: { id in
+                capturedIds.append(id)
+                return []
+            }
+        )
+
+        _ = sut.fullscreenSource(for: makeAudioItemFixture(attachmentId: "att-item-A")).queueTailProvider?()
+        _ = sut.fullscreenSource(for: makeAudioItemFixture(attachmentId: "att-item-B")).queueTailProvider?()
+
+        XCTAssertEqual(capturedIds, ["att-item-A", "att-item-B"],
+            "Chaque page du pager doit resoudre sa propre file via son propre attachmentId, pas celui de la vue hote")
+    }
+
     // MARK: - Prisme: resolvedPreferredTranscriptionLanguage
 
     private func withCurrentUser<T>(_ user: MeeshyUser?, _ body: () -> T) -> T {
