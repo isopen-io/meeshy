@@ -6887,3 +6887,51 @@ d'atteinte dans ce sandbox) : dead code / god-object `CallManager.swift` (~5880 
 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
 (Vague 84, on-device requis) ; `removeParticipant()` web (Vague 91, non-régression) ;
 `call:force-leave`/`call:check-active` en string literals hors du type-map partagé (cosmétique).
+
+## Vague 106 — `CallService.updateCallStatus` anchrait `duration` sur `startedAt` au lieu de `answeredAt` (gateway) (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch`/vérif sur `origin/main`, branche
+`claude/upbeat-dirac-h5nrb8` strictement à jour avec `main` au démarrage (0 commit d'avance/retard),
+aucune PR ouverte de cette routine. Vague 105 (PR mergée) déjà intégrée à `main` avant le début de
+cette session. Candidat pris directement dans le « Reste ouvert » loggé par la Vague 104/105 plutôt
+que ré-auditer à froid — c'était le dernier candidat gateway laissé en attente.
+
+- **Root cause confirmée par lecture directe** (`CallService.ts`, `updateCallStatus`) : la branche
+  terminal-status calculait `duration = Math.floor((now - call.startedAt) / 1000)`
+  inconditionnellement — le SEUL des 8 writers terminaux du fichier à ne pas suivre l'invariant déjà
+  imposé partout ailleurs (`endCall`, `leaveCall`, `forceEndOrphanedCallSession`, la branche
+  idempotente de `leaveCall`, les deux sweeps de `CallCleanupService`, `markCallAsMissed` — Vague
+  25/27/30) : ancrer `duration` sur `answeredAt` (temps de parole réel), jamais `startedAt` (temps de
+  sonnerie + parole), et retomber à `0` si l'appel n'a jamais été décroché. Confirmé mort aujourd'hui
+  par grep — aucun appelant actuel ne passe un statut terminal à `updateCallStatus` (seulement `active`
+  et `reconnecting`) — mais une mine pour le prochain appelant/refactor, qui résusciterait
+  silencieusement le fantôme « Manqué · N:NN » que ces Vagues ont fermé sur tous les autres chemins.
+- **Fix** : `updateData.duration = call.answeredAt ? Math.floor((now - call.answeredAt) / 1000) : 0`,
+  même patron que les 7 autres writers, avec un commentaire d'audit expliquant pourquoi ce chemin est
+  aujourd'hui inatteignable mais reste corrigé préventivement.
+- **Tests** (TDD, RED confirmé en exécutant réellement les 2 nouveaux cas AVANT le fix via `git stash`
+  du seul fichier de prod — `duration: 300` reçu au lieu de `30`/`0` prédits, GREEN après
+  `stash pop`) : un cas appel décroché il y a 30s après avoir sonné 5min (`duration: 30`, pas ~300),
+  un cas jamais décroché passant à `rejected` (`duration: 0`, pas le temps de sonnerie).
+- **Vérification** (sandbox Linux, suite gateway réellement exécutable ici) : `bun install
+  --ignore-scripts` + `packages/shared && npx prisma generate --generator client && bun run build`
+  (prérequis CLAUDE.md, `node_modules` absent au démarrage de cette session) ; nouvelle suite ciblée
+  **10/10 verte** ; sweep complet `--testPathPatterns="[Cc]all"` — **48 suites / 1122 tests verts**
+  (1120 + 2 nouveaux), 0 régression. `npx tsc --noEmit` : **0 erreur**. Full `bun run test:coverage`
+  (sweep complet, pas seulement calls) — **653 suites / 16 456 tests verts**, 0 échec.
+- **Portée volontairement non étendue** : un audit iOS dédié (agent Explore, lecture readonly) a été
+  mandaté en parallèle pour proposer un candidat frais pour la Vague 107 — résultat documenté
+  séparément ci-dessous une fois reçu, pas retenu dans ce commit pour garder le diff scopé et
+  revuable indépendamment (même politique que les Vagues 103-105).
+
+### Reste ouvert
+
+Le backlog gateway MEDIUM laissé par la Vague 104/105 est maintenant **vide** — les deux candidats
+qu'il portait ont été traités (Vague 105, Vague 106 ci-dessus). Reconduit tel quel (rien de plus
+trouvé côté gateway ce cycle) : dead code / god-object `CallManager.swift` iOS (~5880 lignes) ; ADR
+`actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+(Vague 84, on-device requis) ; `removeParticipant()` web (Vague 91, non-régression) ;
+`call:force-leave`/`call:check-active` en string literals hors du type-map partagé (cosmétique) ;
+toolchains iOS/Android hors d'atteinte dans ce sandbox.
