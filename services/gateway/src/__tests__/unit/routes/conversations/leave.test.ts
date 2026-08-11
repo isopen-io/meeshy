@@ -237,6 +237,20 @@ describe('POST /conversations/:id/leave — audience du départ', () => {
     await app.close();
   });
 
+  // Le payload porte l'effectif RESTANT, absolu. C'est ce qui rend le compteur
+  // convergent : un client qui soustrait 1 ne se rattrape jamais d'un événement
+  // manqué, et les deux le PERSISTENT (cache disque iOS, `staleTime: Infinity`
+  // web). Ici deux membres restent — un avec compte, un sans.
+  it('porte l\'effectif ABSOLU restant, pas un delta', async () => {
+    const emitted: EmittedEvent[] = [];
+    const app = await buildApp({ withSocket: true, emitted });
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    const left = emitted.find(e => e.event === 'conversation:participant-left');
+    expect(left?.payload).toMatchObject({ memberCount: remainingParticipants.length });
+    await app.close();
+  });
+
   it('n\'adresse que les membres ACTIFS restants', async () => {
     const emitted: EmittedEvent[] = [];
     const prisma = makePrisma();

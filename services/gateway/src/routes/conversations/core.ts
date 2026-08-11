@@ -24,6 +24,7 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -162,7 +163,7 @@ export const conversationDetailInclude = {
     }
   },
   _count: {
-    select: { participants: { where: { isActive: true } } }
+    select: conversationActiveMemberCountSelect
   }
 } as const;
 
@@ -397,7 +398,14 @@ export function registerCoreRoutes(
           banner: true,
           avatar: true,
           communityId: true,
-          memberCount: true,
+          // Effectif compté par la base, PAS la colonne dénormalisée du même
+          // nom : voir `conversationActiveMemberCountSelect`. La ligne de liste
+          // en dépend visiblement (badge de groupe iOS `memberCount > 1`,
+          // saturation de la couleur d'accent `min(memberCount/100, 1) × 0.2`),
+          // et la colonne rendait `0` pour toute conversation créée depuis la
+          // migration héritée : badge absent, et couleur d'accent différente
+          // entre la liste et le fil ouvert, qui lui compte.
+          _count: { select: conversationActiveMemberCountSelect },
           isAnnouncementChannel: true,
           participants: {
             take: 5,
@@ -646,8 +654,17 @@ export function registerCoreRoutes(
           | { translations?: unknown; originalLanguage?: string | null }
           | undefined;
 
+        // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
+        // le schéma wire ne déclare pas, et le champ que les clients lisent est
+        // `memberCount`. Le laisser passer paierait la sérialisation d'un objet
+        // que `fast-json-stringify` strippe.
+        const { _count: activeMembers, ...conversationData } = conversation as typeof conversation & {
+          _count: { participants: number };
+        };
+
         return {
-          ...conversation,
+          ...conversationData,
+          memberCount: activeMembers.participants,
           participants: membersWithUser,
           title: displayTitle,
           // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés

@@ -7,6 +7,7 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { makeChainableIO } from '../../helpers/chainable-io';
 
 // ─── Mocks (must be hoisted before imports) ──────────────────────────────────
 
@@ -39,15 +40,10 @@ const PARTICIPANT_ID = '507f1f77bcf86cd799439033';
 // ─── Factories ────────────────────────────────────────────────────────────────
 
 function makeSocketIO() {
-  const mockLeave = jest.fn<any>();
-  const mockEmit = jest.fn<any>();
-  const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
-  const mockIo = {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
-    in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
-    _emit: mockEmit,
-    _leave: mockLeave,
-  };
+  const mockIo = makeChainableIO();
+  const mockEmit = mockIo._emit;
+  const mockLeave = mockIo._leave;
+  const mockFetchSockets = mockIo._fetchSockets;
   const mockManager = {
     getIO: jest.fn<any>().mockReturnValue(mockIo),
     invalidateParticipantCache: jest.fn<any>(),

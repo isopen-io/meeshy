@@ -87,16 +87,38 @@ function createMockNotificationService() {
   };
 }
 
+/**
+ * `.to()` rend un émetteur CHAÎNABLE, comme le vrai : `io.to(a).to(b).emit()`
+ * est la forme qu'utilise `emitToConversationParticipants` pour ne livrer
+ * qu'UNE copie par socket. Un `.to()` qui rend `{ emit }` sans `.to` faisait
+ * planter le second maillon — et un mock qui casse sur la forme de production
+ * est un témoin qui décrit un autre programme.
+ *
+ * `_roomsFor` rend les rooms de la chaîne qui a émis un événement donné :
+ * c'est la seule façon de prouver « la room personnelle a été adressée », que
+ * `expect(io.to).toHaveBeenCalledWith(...)` ne peut pas distinguer d'un simple
+ * appel isolé.
+ */
 function createMockIO() {
   const mockEmit = jest.fn<any>();
   const mockLeave = jest.fn<any>();
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
+  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: unknown) => {
+      sent.push({ rooms, event, payload });
+      mockEmit(event, payload);
+    },
+  });
   const io = {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
+    to: jest.fn<any>((room: string) => chain([room])),
     in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
     _leave: mockLeave,
     _fetchSockets: mockFetchSockets,
+    _roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    _payloadFor: (event: string) => sent.find((s) => s.event === event)?.payload,
   };
   return io;
 }
