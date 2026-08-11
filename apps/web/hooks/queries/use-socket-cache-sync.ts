@@ -832,10 +832,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for participant-unbanned — member was unbanned and is an active
-    // member again. Increments memberCount as the exact inverse of the ban
-    // decrement above: without it every ban/unban round-trip drifts the cached
-    // count one lower than reality, and the drift persists until an unrelated
-    // full refetch (staleTime: Infinity never re-reads on its own).
+    // member again. Pose l'effectif du serveur, et à défaut incrémente comme
+    // l'exact inverse du décrément de bannissement : sans cela, chaque
+    // aller-retour ban/unban laissait le cache un cran sous la réalité, et la
+    // dérive tenait jusqu'à un refetch complet sans rapport (`staleTime:
+    // Infinity` ne relit jamais de lui-même).
     //
     // `membershipRestored: false` means the unban lifted the ban WITHOUT
     // re-admitting anyone — the person had left on their own before being
