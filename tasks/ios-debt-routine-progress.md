@@ -670,3 +670,32 @@ suivant, envisager une repasse complète de `apps/ios/CURRENT_QUALITY_REVIEW.md`
 mis à jour) et/ou un audit plus large (au-delà des 4 grep prescrits) pour identifier de nouvelles
 catégories de dette, sur le modèle de l'angle mort catégoriel documenté pour la lane Android
 (§Choix de la lane du prompt de routine).
+
+## Run — 2026-08-11 (élargissement de l'audit, backlog reconstitué)
+
+Suite à la note ci-dessus : relecture complète de `apps/ios/CURRENT_QUALITY_REVIEW.md` (au-delà des
+4 grep prescrits) — a révélé une catégorie de dette non couverte par le backlog original : **API
+dépréciée `NavigationView`** (soft-dépréciée iOS 16+ au profit de `NavigationStack`, plancher de
+déploiement du SDK). Grep exhaustif sous `packages/MeeshySDK/Sources/MeeshyUI/` :
+
+**Livré** : migration de 5 sites (`VoiceProfileWizardView`, `VoiceProfileManageView`,
+`UnifiedPostComposer`, `CodeViewerView`, `DocumentViewerView`) — chacun instanciait
+`NavigationView { <une seule vue enfant> }`. Aucun n'exploite le mode master/detail iPad
+(`NavigationView` ne bascule en `.doubleColumn` que si DEUX vues enfants distinctes sont fournies),
+donc remplacement comportementalement identique par `NavigationStack { ... }` — mêmes
+`.navigationTitle`/`.toolbar`, aucun changement visuel iPhone/iPad.
+
+Garde de régression `NavigationViewDeprecatedAPISourceGuardTests` (4 tests : garde réelle + 2
+méta-tests de contrôle positif/négatif + garde anti-faux-positif sur `NavigationViewModel`) —
+balaie tout `Sources/MeeshyUI/` récursivement, pas une liste de fichiers nommés, pour attraper toute
+réintroduction future par copier-coller.
+
+**Vérifications** : `xcodebuild build -scheme MeeshySDK-Package` vert, `xcodebuild test
+-only-testing:MeeshyUITests/NavigationViewDeprecatedAPISourceGuardTests` → 4/4 tests verts (dont la
+garde principale qui a réellement scanné les fichiers du repo, pas un mock).
+
+Cette entrée documente le fait que le backlog mécanique n'était PAS réellement épuisé — il était
+seulement épuisé des items déjà identifiés par le grep original. Un audit élargi (relecture intégrale
+du document source, pas juste les motifs déjà connus) a trouvé une nouvelle catégorie en un seul
+passage. Prochain run IOS_DETTE : appliquer la même discipline d'élargissement avant de conclure à
+un backlog vide.

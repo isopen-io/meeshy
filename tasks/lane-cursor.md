@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=5 last_run=tus-upload-checkpoint-resume
+lane=ANDROID android_streak=0 last_run=ios-navigationview-to-navigationstack
