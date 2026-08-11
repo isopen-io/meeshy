@@ -7,7 +7,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
 import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
 import type { StoryVisibility } from '@/components/v2';
-import { PostComposer } from '@/components/v2/PostComposer';
+import { PostComposer, type PostPublishPayload } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
 import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
@@ -324,9 +324,15 @@ export function PostsFeedScreen() {
   // ─── Post handlers ────────────────────────────────────────────────────
 
   const handlePublish = useCallback(
-    (data: { content: string; type: 'POST' | 'STORY' | 'STATUS'; visibility: string }) => {
+    (data: PostPublishPayload) => {
       createPostMutation.mutate(
-        { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        {
+          content: data.content || undefined,
+          type: data.type,
+          visibility: data.visibility,
+          visibilityUserIds: data.visibilityUserIds,
+          mediaIds: data.mediaIds,
+        },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
           onError: () => showToast(t('toast.error', 'Error'), 'error', t('toast.postPublishError', "Couldn't publish the post.")),
