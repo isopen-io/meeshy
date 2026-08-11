@@ -79,20 +79,61 @@ export type ConversationDeltaMerge = {
   readonly removedIds: string[];
 };
 
+export type ConversationDeltaMergeOptions = {
+  /**
+   * Conversation ouverte à l'écran, dont la pastille est forcée à zéro — la
+   * SEULE exception à l'upsert intégral.
+   *
+   * Le gateway calcule le compteur pour TOUS les destinataires, lecteur
+   * compris : un delta qui atterrit pendant qu'on lit rapporte le compteur
+   * d'avant l'aller-retour `mark-as-read` et rallume le badge de la
+   * conversation qu'on a sous les yeux. Le handler socket
+   * `conversation:unread-updated` porte déjà exactement cette garde
+   * (`useSocketCacheSync`) ; le delta est le second chemin d'écriture du même
+   * compteur et doit la porter aussi. Miroir de la règle 1 de
+   * `ConversationSyncEngine.reconcileUnread` (SDK iOS).
+   *
+   * ## Pourquoi la garde s'arrête là
+   *
+   * iOS porte une règle 2 — « lecture locale postérieure au dernier message
+   * connu du serveur ⇒ 0 » — qui couvre AUSSI la conversation fermée dont
+   * l'accusé de lecture traîne encore dans l'outbox. Elle repose sur
+   * `userState.lastReadAt`, une frontière LOCALE que le modèle web ne porte
+   * pas.
+   *
+   * La transposer en « le delta ne peut monter le compteur que s'il apporte un
+   * `lastMessageAt` plus récent » est tentante et FAUSSE : côté iOS,
+   * `markAsUnread` marche précisément parce qu'il EFFACE `lastReadAt`, ce qui
+   * désarme la règle 2 et rend la main au serveur. Une transposition basée sur
+   * `unreadCount` n'a pas cet interrupteur — elle rendrait un « marquer comme
+   * non lu » fait sur un autre appareil définitivement invisible sur le web,
+   * puisque cette action ne déplace aucun `lastMessageAt`. Un badge qui se
+   * rallume une seconde après un reconnect se répare tout seul au
+   * `conversation:unread-updated` qui suit ; un mark-as-unread perdu, non.
+   *
+   * Fermer proprement le reste demande de faire voyager la frontière de lecture
+   * jusqu'au modèle web — chantier de contrat, pas garde de fusion.
+   */
+  readonly openConversationId?: string | null;
+};
+
 /**
  * Fusionne un lot delta dans la liste en cache, par id.
  *
  * Un delta actif fait un UPSERT (remplacement intégral, jamais un patch champ à
  * champ : il vient de la même route que la liste, avec la même projection, et
- * c'est la vérité serveur). Un delta `isActive: false` retire l'entrée et son id
- * est rendu à l'appelant, qui purge les caches dérivés.
+ * c'est la vérité serveur) — à la seule exception du compteur de non-lus de la
+ * conversation OUVERTE, voir `ConversationDeltaMergeOptions`. Un delta
+ * `isActive: false` retire l'entrée et son id est rendu à l'appelant, qui purge
+ * les caches dérivés.
  *
  * Le résultat est re-trié par `lastMessageAt` décroissant — l'ordre du serveur,
  * pour que les frontières de pages reconstruites gardent un sens.
  */
 export function mergeConversationDelta(
   existing: readonly Conversation[],
-  deltas: readonly Conversation[]
+  deltas: readonly Conversation[],
+  options: ConversationDeltaMergeOptions = {}
 ): ConversationDeltaMerge {
   const byId = new Map(existing.map((conversation) => [conversation.id, conversation]));
   const removedIds: string[] = [];
@@ -102,7 +143,10 @@ export function mergeConversationDelta(
       if (byId.delete(delta.id)) removedIds.push(delta.id);
       continue;
     }
-    byId.set(delta.id, delta);
+    byId.set(
+      delta.id,
+      delta.id === options.openConversationId ? { ...delta, unreadCount: 0 } : delta
+    );
   }
 
   const merged = Array.from(byId.values()).sort((a, b) => orderKey(b) - orderKey(a));
