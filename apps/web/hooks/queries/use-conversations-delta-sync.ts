@@ -111,6 +111,10 @@ export function useConversationsDeltaSync(enabled: boolean): void {
       });
       if (conversations.length === 0) return;
 
+      // Accumulateur local du seul résultat de la fusion qui intéresse un AUTRE
+      // cache. `setQueryData` appelle son updater synchronement et une seule
+      // fois : la valeur est lisible juste après, et l'updater reste une
+      // fonction pure de `old`.
       let removedIds: string[] = [];
       queryClient.setQueryData(
         queryKeys.conversations.infinite(),
