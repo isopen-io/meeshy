@@ -84,9 +84,18 @@ import type { Conversation } from '@meeshy/shared/types';
  *
  * L'escalade reste, pour le seul cas que l'ordre ne rattrape pas : plus de 100
  * conversations portant la MÊME milliseconde d'`updatedAt` (écriture en masse)
- * débordent d'une page que la borne stricte `gt` ne peut pas reprendre. Une page
- * PLEINE est donc toujours traitée comme une preuve d'incomplétude, et non comme
- * un delta de confiance.
+ * débordent d'une page que la borne stricte `gt` ne peut pas reprendre.
+ *
+ * Ce qui déclenche l'escalade n'est PAS « la page est pleine » mais le
+ * `pagination.hasMore` du serveur, qui est autoritaire ici : une page delta part
+ * toujours d'`offset=0`, ce qui fait compter au serveur toutes les lignes de la
+ * MÊME clause `updatedAt > since` (`routes/conversations/core.ts`) — `hasMore` y
+ * vaut `N < total`. Une fenêtre de très exactement 100 conversations ne relit
+ * donc plus toute la liste pour rien. Quand la réponse omet le bloc pagination,
+ * `getConversations` retombe déjà sur `length >= limit`, conservateur.
+ *
+ * JUMEAU iOS : `ConversationSyncEngine.deltaSyncCore` lit le même `hasMore` et
+ * escalade vers `fullSync()`.
  */
 const DELTA_PAGE_LIMIT = 100;
 
@@ -266,7 +275,7 @@ export function useConversationsDeltaSync(enabled: boolean): void {
     guard.inFlight = true;
     guard.lastRunAt = now;
     try {
-      const { conversations } = await conversationsService.getConversations({
+      const { conversations, pagination } = await conversationsService.getConversations({
         limit: DELTA_PAGE_LIMIT,
         offset: 0,
         updatedSince: watermark.toISOString(),
@@ -278,11 +287,11 @@ export function useConversationsDeltaSync(enabled: boolean): void {
       // Réconciliation complète, chaînée APRÈS un delta RÉUSSI. Deux raisons de
       // la déclencher, une seule action :
       //
-      // - page PLEINE ⇒ le delta ne PROUVE plus qu'il a tout vu. On garde la
-      //   fusion (correction immédiate de ce qu'on tient) et on escalade, seule
-      //   voie pour combler le reste. Ce chemin n'existe que pour une coupure
-      //   ayant touché 100 conversations ou plus, c'est-à-dire précisément le cas
-      //   où une resync entière est justifiée ;
+      // - le serveur annonce du RESTE ⇒ le delta ne PROUVE plus qu'il a tout vu.
+      //   On garde la fusion (correction immédiate de ce qu'on tient) et on
+      //   escalade, seule voie pour combler le reste. Ce chemin n'existe que
+      //   pour une coupure ayant touché 100 conversations ou plus, c'est-à-dire
+      //   précisément le cas où une resync entière est justifiée ;
       // - fenêtre de 24 h échue ⇒ purge des lignes fantômes, que le delta
       //   upsert-only ne peut pas voir. Testé MÊME sur un delta vide : une
       //   conversation hard-supprimée ne produit AUCUNE ligne de delta, donc
@@ -291,7 +300,7 @@ export function useConversationsDeltaSync(enabled: boolean): void {
       //
       // Sur delta ÉCHOUÉ : rien. Offline ou panne gateway, on garde le cache
       // intact (local-first) et on retentera au prochain déclenchement.
-      const reconcile = conversations.length >= DELTA_PAGE_LIMIT || isFullReconcileDue(guard, now);
+      const reconcile = pagination.hasMore || isFullReconcileDue(guard, now);
       if (reconcile) {
         stampFullReconcile(guard, now);
         void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.infinite() });

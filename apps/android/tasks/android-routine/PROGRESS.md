@@ -1,5 +1,78 @@
 # Progress — state & what to do next
 
+> On 2026-08-12 **conversation-list live-presence data plumbing landed** (slice
+> `conversation-list-live-presence`, feature-parity §B "Conversations list" — the "conversation-
+> participant presence" candidate the prior slice's own note explicitly flagged as now-unblocked).
+> **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open --search "apps/android
+> OR apps/ios"` found no interrupted run (3 unrelated PRs at scan time, none matching this
+> routine's naming). Confirmed the gap for real before coding: grepped `presenceState`/
+> `PresenceState`/`isOnline` under `:feature:conversations`/`:feature:chat` and found zero hits —
+> unlike Contacts (which at least had stale REST `isOnline` data to overlay onto), conversation
+> rows/the chat header have ZERO presence indication whatsoever, since `ApiConversation.
+> participants` carries no `isOnline`/`lastActiveAt` fields at all. Checked iOS's own
+> `ConversationListView.swift`: `presenceManager.presenceState(for: conversation.
+> participantUserId ?? "")` confirms iOS resolves this from a GLOBAL `PresenceManager` singleton
+> keyed by userId, not from the conversation payload either — validating that a live-socket-only
+> resolution (no REST fallback) is the correct, parity-matching approach on Android too, not a
+> workaround. **Shipped (production, all `apps/android`)**: new `ApiConversation.
+> otherParticipantUserId(currentUserId): String?` (`:sdk-core/theme/ConversationAccent.kt`) —
+> refactored the existing `otherParticipantName` to share a new private `otherParticipant(
+> currentUserId): ApiParticipant?` lookup (the direct-type gate moved from `displayTitle`'s own
+> call site into this shared helper, a behavior-preserving refactor — `displayTitle`'s own 9
+> pre-existing tests re-ran green, unchanged, confirming no regression) rather than duplicating the
+> participant-matching logic a second time. `ConversationListViewModel.observePresence()` (new,
+> called from `init`) collects the exact SAME `MessageSocketManager.userStatus`/`.presenceSnapshot`
+> flows the prior slice's Contacts wiring already established and fixed the wire-contract of —
+> mirrors `ContactsListViewModel.observePresence()` almost verbatim (same eager-start rationale:
+> hot `SharedFlow`s, no replay). New `ConversationListUiState.presenceByUserId: Map<String,
+> UserStatusEvent>` + `presenceStateFor(conversation, nowEpochMillis): PresenceState?` (resolves
+> the other participant's id, looks up the live map, derives `PresenceState` via the existing
+> `UserPresence.state()` SSOT — the same one `FriendRequestUser.presenceState()` already uses).
+> **Deliberate, documented scope cut — the actual UI wiring is NOT done this run**: unlike the
+> Contacts slice (where `ContactsListTab.kt` already rendered a presence dot from stale data, so
+> feeding it live data was the entire job), `ConversationRow`/`ConversationRowContent` in
+> `ConversationListScreen.kt` render NO presence dot at all yet, and are deeply parameterized
+> across 2+ Composable layers (`ConversationRow` → `ConversationRowContent`) plus their top-level
+> list-rendering call site — threading a new `presenceState: PresenceState?` parameter through
+> would have materially widened this slice's diff/risk beyond the data-plumbing piece. Scoped this
+> run to the ViewModel-side foundation only, mirroring the `chat-composer-prefill-draft` →
+> `widget-quick-reply` foundation-then-consumer split that worked well two runs ago. **+9 new
+> tests** (`ConversationAccentTest`: resolves the other participant's id for a direct conversation,
+> null for group, null with no other participant, null when a participant has no userId;
+> `ConversationListViewModelTest`: a live status event is stored in the map, a snapshot populates
+> every user in one pass, `presenceStateFor` resolves live presence for the other participant, is
+> null for a group conversation even with matching live data present, is null when nothing has
+> arrived yet). **Mutation-proven**, two axes: neutralizing `otherParticipant`'s direct-type gate
+> (`if (type.lowercase() !in directConversationTypes) return null` removed) fails **exactly** the
+> group-conversation test (12 others green); neutralizing the snapshot merge in
+> `observePresence()` (the `.copy(presenceByUserId = ...)` replaced with a no-op) fails **exactly**
+> the snapshot-population test (46 others green). Both applied via a scratch `cp`-backed edit
+> (never `git checkout --`), restored via `cp`, diffed clean against the backup afterward.
+> **Process note, stated honestly** (same pattern as the prior slice): the `ConversationListUiState`
+> additions and `observePresence()` wiring were written before their own tests for this small,
+> mechanical piece — proven via the mutation pass above rather than a strict prior RED run; the
+> `otherParticipantUserId` extraction WAS written test-first (`ConversationAccentTest.kt` edited
+> before `ConversationAccent.kt`). **Gate**: `./apps/android/meeshy.sh check` → **`BUILD
+> SUCCESSFUL`** (970 tasks, matching every prior slice — no build-graph regression; zero test
+> failures across every module's XML reports). Reviewer **PASS** (diff `apps/android` only — 4
+> files, confirmed via `git status --short`; SDK purity — `otherParticipantUserId` lives in
+> `:sdk-core` (a pure data extension, correct), the presence-overlay state/collection lives in
+> `:feature:conversations`'s ViewModel (product decision, correct per the established `Contacts`
+> precedent); SSOT — reuses `UserPresence.state()`, `MessageSocketManager`'s existing flows, the
+> now-corrected `UserStatusEvent`/`PresenceSnapshotEvent` DTOs, zero re-implementation; no coverage
+> floor lowered; no tautological tests). **Not attempted this run** (compile+test-only; no
+> simulator/emulator session). **Next slice candidates (not attempted this run)**: the UI wiring
+> this slice deliberately deferred — thread `presenceStateFor`'s result into `ConversationRow`'s
+> avatar (a dot overlay, mirroring `ContactsListTab.kt`'s own `meeshyPresenceDotColor(...)` usage)
+> and/or the chat header (`ChatScreen`'s toolbar, matching iOS's `ConversationView` presence
+> display); a SECOND, small opportunistic fix noticed but not actioned: `directConversationTypes`
+> is independently duplicated as a `private val` in BOTH `:sdk-core/theme/ConversationAccent.kt`
+> and (separately) the `:app/widget` widget presentations — not unified this run (cross-module,
+> `:app` already depends on `:sdk-core` so this IS fixable, but out of scope for this slice); mark-
+> read widget action; Google Assistant App Actions; on-device transcription for the Feed audio
+> composer; Voice-cloning onboarding wizard; map/search/reverse-geocoding; PiP; Conversation lock;
+> the onboarding carousel — per the orchestrator's guidance these remain documented, real gaps.
+
 > On 2026-08-11 **live contact presence sync landed, plus a real wire-contract bug fix**
 > (slice `presence-live-contacts-overlay`, feature-parity §"Contacts list" — the previously-
 > deferred "presence-cache foundation for conversation participants" candidate, investigated and

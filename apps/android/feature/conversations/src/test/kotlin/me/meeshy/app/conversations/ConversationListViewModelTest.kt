@@ -34,10 +34,13 @@ import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.StarredMessages
+import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -70,6 +73,8 @@ class ConversationListViewModelTest {
     private fun socketManager(
         conversationDeleted: MutableSharedFlow<ConversationDeletedSocketEvent> = MutableSharedFlow(),
         participantLeft: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
+        userStatus: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
+        presenceSnapshot: MutableSharedFlow<PresenceSnapshotEvent> = MutableSharedFlow(),
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { unreadUpdated } returns MutableSharedFlow()
@@ -77,6 +82,8 @@ class ConversationListViewModelTest {
             every { conversationUpdated } returns MutableSharedFlow()
             every { this@mockk.conversationDeleted } returns conversationDeleted
             every { this@mockk.participantLeft } returns participantLeft
+            every { this@mockk.userStatus } returns userStatus
+            every { this@mockk.presenceSnapshot } returns presenceSnapshot
         }
 
     private fun connectionSocket(
@@ -124,6 +131,97 @@ class ConversationListViewModelTest {
         repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, connection, session,
     )
+
+    private fun direct(id: String, otherId: String = "other") = ApiConversation(
+        id = id,
+        type = "direct",
+        participants = listOf(
+            ApiParticipant(id = "p-me", userId = "me", displayName = "Me"),
+            ApiParticipant(id = "p-other", userId = otherId, displayName = "Contact"),
+        ),
+    )
+
+    @Test
+    fun a_live_user_status_event_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
+        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow))
+        advanceUntilIdle()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
+    }
+
+    @Test
+    fun a_presence_snapshot_populates_every_user_in_one_pass() = runTest(dispatcher) {
+        val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, socket = socketManager(presenceSnapshot = presenceSnapshotFlow))
+        advanceUntilIdle()
+
+        presenceSnapshotFlow.emit(
+            PresenceSnapshotEvent(
+                users = listOf(
+                    UserStatusEvent(userId = "u1", isOnline = true),
+                    UserStatusEvent(userId = "u2", isOnline = false),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceByUserId.keys).containsExactly("u1", "u2")
+    }
+
+    @Test
+    fun presenceStateFor_resolves_the_other_participants_live_presence() = runTest(dispatcher) {
+        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val conversation = direct(id = "c1", otherId = "other")
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)),
+        )
+        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
+        advanceUntilIdle()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L))
+            .isEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
+    }
+
+    @Test
+    fun presenceStateFor_is_null_for_a_group_conversation() = runTest(dispatcher) {
+        val group = ApiConversation(
+            id = "c2",
+            type = "group",
+            title = "Team",
+            participants = listOf(
+                ApiParticipant(id = "p-me", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p-other", userId = "other", displayName = "Contact"),
+            ),
+        )
+        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(group), ageMillis = 0)))
+        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
+        advanceUntilIdle()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceStateFor(group, nowEpochMillis = 0L)).isNull()
+    }
+
+    @Test
+    fun presenceStateFor_is_null_when_nothing_has_arrived_for_the_other_participant_yet() = runTest(dispatcher) {
+        val conversation = direct(id = "c3", otherId = "other")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)))
+        val vm = viewModel(repo, session = session("me"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L)).isNull()
+    }
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {

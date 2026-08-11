@@ -107,38 +107,41 @@ final class SyncWatermarkTests: XCTestCase {
         XCTAssertEqual(SyncWatermark.fromFullSync(receivedUpdatedAt: [], fallback: fallback), fallback)
     }
 
-    // MARK: - Resuming a FULL (therefore possibly truncated) delta page
+    // MARK: - Page delta tronquée (cycle 79)
 
-    /// A full page proves nothing about where the window ends: the server cut it
-    /// at the cap, and the cut can fall INSIDE a group of rows sharing one
-    /// `updatedAt` (ordered by `updatedAt` asc, `id` asc). Advancing to the page
-    /// max would put the strict `gt` bound past that group's survivors, dropping
-    /// them until the 24h reconcile. Resuming BELOW the top group re-reads it
-    /// whole — the only cursor that can't skip a sibling.
-    func test_resumeAfterFullPage_dropsTheTopGroup_soItsSiblingsAreReRead() {
-        let t1 = past.addingTimeInterval(10)
-        let t2 = past.addingTimeInterval(20)
-        let received = [t1, t2, t2, t2] // the t2 group may continue past the cut
-        XCTAssertEqual(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: received), t1)
+    /// Une page qui laisse du reste n'a pas rendu toute la fenêtre. Avancer le
+    /// curseur au max des `updatedAt` reçus affirmerait une couverture non
+    /// démontrée — et comme la borne serveur est STRICTE (`gt`), les lignes
+    /// partageant la milliseconde de coupure ne reviendraient plus jamais. Le
+    /// curseur reste où il est.
+    func test_advancedAfterDeltaPage_serverHasMore_leavesCursorInPlace() {
+        let prev = past
+        let received = [past.addingTimeInterval(10), past.addingTimeInterval(20)]
+        XCTAssertEqual(
+            SyncWatermark.advancedAfterDeltaPage(previous: prev, receivedUpdatedAt: received, pageMayHaveMore: true),
+            prev,
+            "une page qui laisse du reste ne prouve pas sa complétude — le curseur ne doit pas l'enjamber"
+        )
     }
 
-    func test_resumeAfterFullPage_isOrderIndependent() {
-        let t1 = past.addingTimeInterval(10)
-        let t2 = past.addingTimeInterval(20)
-        XCTAssertEqual(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: [t2, t1, t2]), t1)
+    /// Le pendant : une page sans reste a rendu toute la fenêtre, le curseur
+    /// avance normalement (même règle que `advanced`).
+    func test_advancedAfterDeltaPage_completePage_advancesToServerMax() {
+        let serverMax = past.addingTimeInterval(20)
+        let received = [past.addingTimeInterval(10), serverMax]
+        XCTAssertEqual(
+            SyncWatermark.advancedAfterDeltaPage(previous: past, receivedUpdatedAt: received, pageMayHaveMore: false),
+            serverMax
+        )
     }
 
-    /// The residue the ordering cannot rescue: a full page whose rows ALL carry
-    /// the same `updatedAt` (mass write). There is no value below the top group
-    /// to resume from, so no `gt` cursor can both keep the group and make
-    /// progress — the caller must escalate to a full reconcile instead of
-    /// walking pages.
-    func test_resumeAfterFullPage_singleTimestampPage_hasNoResumePoint() {
-        let t = past.addingTimeInterval(10)
-        XCTAssertNil(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: [t, t, t]))
-    }
-
-    func test_resumeAfterFullPage_emptyPage_hasNoResumePoint() {
-        XCTAssertNil(SyncWatermark.resumeAfterFullPage(receivedUpdatedAt: []))
+    /// Non-régression : sur une page complète la règle hérite de `advanced`,
+    /// donc elle ne régresse jamais sous `previous`.
+    func test_advancedAfterDeltaPage_completePage_neverRegressesBelowPrevious() {
+        let prev = past.addingTimeInterval(100)
+        XCTAssertEqual(
+            SyncWatermark.advancedAfterDeltaPage(previous: prev, receivedUpdatedAt: [past], pageMayHaveMore: false),
+            prev
+        )
     }
 }

@@ -1,48 +1,134 @@
-# Tête instruite pour le cycle 79 — iOS avance son curseur delta par-dessus une page TRONQUÉE
+# Tête instruite pour le cycle 80 — le delta des stories ignore les deux signaux de troncature que le serveur lui tend
 
-*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur.*
+*Trouvé en instruisant le cycle 79, vérifié par lecture croisée client/serveur.*
 
-> **RÉDUITE PAR LE CYCLE 77 (D2).** La route trie désormais une page delta par `updatedAt`
-> croissant : les lignes coupées sont celles d'`updatedAt` supérieur à la dernière rendue,
-> donc le watermark pointe dessus au lieu de les enjamber. Ce qui suit reste vrai pour le
-> SEUL résidu que l'ordre ne rattrape pas — plus de 100 conversations portant la même
-> milliseconde d'`updatedAt` — et le point 2 (« ne pas avancer le curseur sur une page qu'on
-> sait tronquée ») garde toute sa valeur.
+Même famille que le cycle 79, sur l'autre delta du produit. `GET /posts/feed/stories?updatedSince=`
+(`services/gateway/src/routes/posts/feed.ts`) plafonne `limit` à **50** et rend
+`pagination: { limit, hasMore, nextCursor }`. Le client iOS
+(`StoryViewModel.fetchStoriesFromNetwork(deltaSince:)`,
+`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`) appelle
+`storyService.list(cursor: nil, limit: 50, updatedSince: deltaSince)` et **ne lit ni `hasMore` ni
+`nextCursor`**.
 
-`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
-`GET /conversations?updatedSince=`. La route plafonne à 100
-(`Math.min(parseInt(limit), 100)`, `services/gateway/src/routes/conversations/core.ts`)
-et trie par **`lastMessageAt` décroissant, pas par `updatedAt`**. Trois faits qui
-s'additionnent :
+Trois faits qui s'additionnent, tous vérifiés :
 
-1. une fenêtre aveugle ayant touché plus de 100 conversations rend une page tronquée ;
-2. les lignes coupées ne sont pas « les plus anciennes mises à jour » — l'ordre du tri
-   n'a aucun rapport avec le filtre ;
-3. `lastSyncTimestamp` avance quand même au max des `updatedAt` REÇUS
-   (`SyncWatermark.advanced`), ce qui enjambe définitivement les lignes coupées.
+1. une fenêtre delta ayant touché plus de 50 stories rend une page tronquée, et rien côté client
+   ne le remarque ;
+2. le curseur est DÉRIVÉ du tray après fusion (`StoryViewModel.deltaSince(for:)` =
+   `groups.flatMap(\.stories).compactMap(\.updatedAt).max()`), donc il monte au max de ce qu'on
+   vient de recevoir — c'est-à-dire **par-dessus les lignes coupées**, que la borne serveur
+   stricte (`gt`) ne rendra plus ;
+3. le repli existe mais n'est jamais emprunté : le full fetch ne court que si l'appel delta
+   **jette**. Une page tronquée est un succès.
 
-Elles ne reviennent qu'au `fullSync` périodique — borné à 1× par 24 h
-(`fullReconcileInterval`). Pendant ce temps la liste iOS affiche des compteurs de
-non-lus et des aperçus périmés, sans qu'aucun signal ne l'indique.
+**Et le second signal, lui, n'existe pas encore.** Les tombstones
+(`meta.deletedStoryIds`) sont plafonnés à `STORY_TOMBSTONE_LIMIT = 500`
+(`PostFeedService.getStories`) et la troncature est signalée par un `logger.warn` **côté serveur
+uniquement** — la charge utile ne porte aucun drapeau. Un client dont les tombstones ont été coupés
+garde ses stories fantômes sans qu'aucune ligne de code ne puisse s'en apercevoir. C'est un
+changement de CONTRAT (un booléen dans `meta`), pas une garde client, et il touche
+`packages/shared/types/api-responses.ts` dont le commentaire décrit déjà ce champ.
 
-Le web a fermé ce cas au cycle 76 : une page PLEINE (`conversations.length >=
-DELTA_PAGE_LIMIT`) est traitée comme une preuve d'incomplétude et escalade vers la
-relecture complète. Le geste iOS est le même, mais il ne suffit PAS de copier le test :
-`deltaSyncCore` ne pagine pas, et son curseur est persisté — il faut décider si
-l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fait déjà
-`syncSinceLastCheckpoint`) ou une boucle de pages. Deux bornes avant d'ouvrir :
+Trois bornes avant d'ouvrir :
 
-1. **`limit=500` est un mensonge silencieux depuis toujours** — le corriger à 100 ne
-   change rien au défaut, il le rend seulement lisible. La détection est le correctif ;
-   la constante n'est que de l'hygiène.
-2. **Le curseur ne doit pas avancer sur une page dont on sait qu'elle est tronquée**,
-   sinon l'escalade elle-même repart d'un watermark déjà trop haut. L'ordre des gestes
-   (ne pas avancer, PUIS escalader) est le contenu du correctif, pas un détail.
+1. **Le curseur des stories n'est PAS persisté** (contrairement à celui des conversations) : il se
+   recalcule depuis le tray à chaque passe. La leçon du cycle 79 — « ne pas avancer un curseur
+   persisté sur une page tronquée » — ne se transpose donc pas telle quelle ; ici le geste est
+   d'ESCALADER (full fetch) sur `hasMore`, ou de paginer sur `nextCursor`.
+2. **Paginer est peut-être le geste juste ici, contrairement aux conversations** : la route rend
+   un `nextCursor`, et le tray est borné par nature (24 h). Une boucle de pages bornée coûte moins
+   qu'un full fetch et ne perd rien. À trancher en mesurant, pas en recopiant le cycle 79.
+3. **Le tombstone tronqué et la page tronquée sont DEUX défauts** ; le premier ne se corrige pas
+   sans toucher le contrat partagé. Les livrer ensemble ou séparément est un choix, mais les
+   confondre ferait passer un correctif client pour une couverture complète.
 
-Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
-— la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
+Point d'entrée : `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+(`fetchStoriesFromNetwork`), miroir serveur `services/gateway/src/services/PostFeedService.ts`
+(`getStories`).
 
 ---
+
+# Cycle 79 — Un curseur persisté qui avance sur une page dont on ignore si elle est complète
+
+## Le défaut
+
+`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demandait `limit=500` à
+`GET /conversations?updatedSince=`, que la route plafonne à 100
+(`Math.min(parseInt(limit), 100)`). Puis il avançait `lastSyncTimestamp` au max des `updatedAt`
+REÇUS — **sans jamais regarder si la page avait été coupée**.
+
+Le tri par `updatedAt` croissant livré au cycle 77 fait pointer le curseur sur les lignes coupées
+dans le cas général : la troncature y est devenue une pagination. Le résidu que l'ordre ne rattrape
+pas est celui de plus de 100 conversations partageant la MÊME milliseconde d'`updatedAt` : la borne
+serveur est stricte (`gt`), donc le débordement était enjambé **définitivement**, jusqu'à la
+réconciliation complète bornée à 1× par 24 h. Entre les deux, la liste iOS affichait des compteurs
+de non-lus et des aperçus périmés sans qu'aucun signal ne l'indique.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Le serveur dit déjà la vérité, personne ne l'écoutait.** Une page delta part toujours
+d'`offset=0`, et la route ne compte alors PAS un total décoratif : elle exécute
+`prisma.conversation.count({ where: whereClause })` sur la **même clause `updatedAt > since`**
+(`routes/conversations/core.ts`, branche `totalCount > 0 && (includeCount || offset === 0)`).
+Son `pagination.hasMore` vaut donc exactement « la fenêtre contenait plus de lignes que cette page
+n'en rend ». La tête proposait de détecter la troncature par `count >= limit` — l'heuristique du
+web. Le signal autoritaire était disponible des deux côtés depuis toujours.
+
+**La différence n'est pas cosmétique** : `count >= limit` escalade sur une fenêtre de très
+exactement 100 conversations, qui est pourtant COMPLÈTE. Sur le web, cette escalade est une
+relecture de TOUTES les pages chargées — précisément ce que le cycle 77 avait retiré du chemin de
+focus. Le web a donc été corrigé dans le même lot : il lit `pagination.hasMore`, dont
+`getConversations` porte déjà le repli conservateur `length >= limit` quand la réponse omet son
+bloc pagination.
+
+## L'ordre des gestes, qui EST le correctif
+
+Ne pas avancer le curseur, PUIS escalader. Pas l'inverse, et pas seulement escalader :
+`fullSync()` peut échouer (offline, panne gateway), et un curseur persisté déjà avancé aurait
+survécu à cet échec — les lignes coupées auraient été perdues pour de bon, le delta suivant
+repartant d'après elles. Parce que le curseur est resté en arrière, une escalade échouée laisse la
+fenêtre **entière** rejouable au prochain delta. La fusion de la page reçue, elle, est conservée
+dans les deux cas : ce qu'on a reçu est vrai, c'est seulement la COUVERTURE qui n'est pas prouvée.
+
+## D1 — la divergence web/iOS sur le curseur est assumée, pas une dette
+
+Le web ne peut pas « ne pas avancer » : son curseur est RECALCULÉ depuis le cache à chaque passe,
+donc fusionner la page l'avance mécaniquement. iOS PERSISTE le sien. Deux natures, deux gestes —
+et c'est le curseur persisté qui exige la garde, puisque lui seul survit à l'échec de l'escalade.
+La note est écrite en tête de `syncSinceLastCheckpoint` pour que la prochaine passe de parité ne
+« corrige » pas l'un vers l'autre.
+
+## D2 — `limit=500` n'était pas qu'une coquette inexactitude
+
+Le corriger à 100 ne change rien au nombre de lignes rendues — la route plafonnait déjà. Mais le
+repli heuristique `data.count >= deltaPageLimit`, celui qui sert quand une réponse n'annonce pas sa
+pagination, **n'aurait jamais pu déclencher** sous `limit=500`. Un mensonge de constante avait
+désactivé silencieusement le filet de sécurité qu'on venait d'écrire.
+
+## Vérification
+
+- `apps/web` : suite `use-conversations-delta-sync` **28/28 verte**, dont le nouveau témoin
+  « page de très exactement 100 que le serveur dit complète ⇒ aucune escalade », **vérifié ROUGE**
+  contre l'ancienne règle `length >= DELTA_PAGE_LIMIT` avant d'être livré.
+- `apps/web` (large) : `__tests__/hooks` + `__tests__/lib/conversations` — 2 003 tests verts,
+  2 sautés. Les 6 suites qui ne démarrent pas (posts/commentaires/register/encryption) échouent sur
+  de la résolution de module dans ce conteneur, sans rapport avec le lot.
+- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+- SDK iOS : 4 témoins d'ingénierie (`ConversationSyncEngineTests`) + 3 témoins de règle pure
+  (`SyncWatermarkTests`) — pas de toolchain Swift dans ce conteneur, la validation passe par
+  `sdk-tests.yml` (macOS) sur la PR.
+
+## Reste ouvert après ce cycle
+
+- **Le résidu même-milliseconde n'est pas FERMÉ, il est rendu convergent.** Une fenêtre de plus de
+  100 conversations à la même milliseconde escalade désormais vers `fullSync` ; elle ne se rattrape
+  toujours pas par pagination delta. Fermer vraiment demanderait un curseur composite
+  `(updatedAt, id)` côté route — chantier de contrat.
+- **La troncature de tombstones du delta des stories est le même angle mort, un cran plus grave**
+  (le serveur la journalise sans la dire au client). Voir la tête du cycle 80 ci-dessus.
+- **`ConversationSyncEngine.deltaPageLimit` et `DELTA_PAGE_LIMIT` (web) restent deux constantes
+  jumelles tenues à la main**, comme `fullReconcileInterval` / `FULL_RECONCILE_INTERVAL_MS`. Rien
+  de mécanique ne les lie au `Math.min(limit, 100)` de la route.
 
 ---
 
@@ -136,113 +222,118 @@ Une liste filtrée, le jour où elle existera, devra naître avec sa propre clé
 
 ---
 
-# Cycle 78 — Une page delta pleine n'est pas une fin de fenêtre, et une réaction n'est pas une ligne de liste
+# Cycle 78 — Une réaction n'est pas une ligne de liste (et D1 a été livré par une autre session)
 
-Les deux têtes instruites pour le cycle 78 sont traitées. Elles n'ont rien en commun sauf leur
-forme : **un client qui croit avoir fini alors qu'il n'a aucune preuve de l'avoir fini**, et
-**un cache qu'on croit tenir à jour alors qu'on écrit à côté**.
+Ce cycle a instruit et corrigé les DEUX têtes ouvertes pour le cycle 78. Il n'en livre qu'une.
+Le récit de la seconde est conservé ici parce qu'il vaut plus que le code retiré.
 
-## D1 — iOS avançait son curseur delta par-dessus une page coupée (`ConversationSyncEngine`)
-
-`deltaSyncCore` demandait `limit=500` à une route qui plafonne à 100. La page revenait donc à
-100 et **rien ne la distinguait d'une fenêtre épuisée** : le curseur avançait au max des
-`updatedAt` reçus, et la borne stricte `gt` du tour suivant enjambait le reste — jusqu'au
-`fullSync` périodique, borné à 1×/24 h. Pendant ce temps la liste iOS montre des non-lus et des
-aperçus périmés, sans aucun signal.
-
-Le cycle 77 (D2) avait fait la moitié du chemin côté serveur en triant la page delta par
-`updatedAt` croissant. Il restait la moitié client. Trois règles, dans cet ordre :
-
-1. **Page COURTE ⇒ fin de fenêtre.** C'est la seule preuve possible, et c'est pour l'obtenir
-   qu'on demande exactement le plafond serveur. `limit=500` n'était pas seulement un mensonge
-   d'hygiène : il rendait la détection **structurellement impossible**.
-2. **Page PLEINE ⇒ curseur juste SOUS son groupe d'`updatedAt` le plus haut**
-   (`SyncWatermark.resumeAfterFullPage`). C'est le point qui ne se devine pas : la coupure peut
-   tomber AU MILIEU d'un groupe de lignes partageant une milliseconde. Avancer au max de la page
-   perd les survivantes de ce groupe. Reprendre sous le groupe le relit entier au tour suivant —
-   l'upsert est idempotent, donc relire coûte, mais ne casse rien. Une page pleine coûte donc
-   toujours une requête de plus ; c'est le prix de la preuve.
-3. **Le résidu que l'ordre ne rattrape pas** — page pleine dont TOUTES les lignes portent la même
-   milliseconde (écriture en masse) — n'a **aucun curseur qui progresse sans sauter une ligne**.
-   Le curseur ne bouge pas et la boucle escalade vers `fullSync`. Idem au-delà de
-   `maxDeltaPages` (5) : une fenêtre qui demande plus de pages n'est plus un delta.
-
-Une décision explicite : **l'escalade IGNORE la borne des 24 h.** `fullReconcileInterval` borne
-un entretien PÉRIODIQUE (purger les fantômes hard-supprimés) ; il n'a pas à throttler une
-RÉPARATION que le delta vient lui-même de demander. Les confondre laisserait la liste
-sciemment trouée jusqu'à 24 h.
-
-Ordre des gestes, tel qu'instruit : ne pas avancer, PUIS escalader. Une escalade partant d'un
-curseur déjà trop haut hériterait du trou qu'elle existe pour fermer.
-
-## D2 — deux invalidations de réaction ne matchaient aucun cache (web)
+## D2 — deux invalidations de réaction ne matchaient aucun cache (LIVRÉ)
 
 `use-reactions-query.ts` invalidait `conversations.lists()` (`['conversations','list']`) sur
-réaction ajoutée / retirée. La sidebar lit `conversations.infinite()`
-(`['conversations','infinite']`) : **préfixes disjoints, intention jamais exécutée**.
+réaction ajoutée / retirée, commentaire à l'appui : « réaction ajoutée = conversation modifiée ».
+La sidebar lit `conversations.infinite()` : **préfixes disjoints, intention jamais exécutée.**
+Panne silencieuse, pas code mort — le commentaire faisait foi pour le prochain lecteur.
 
-Le geste juste n'était PAS de rediriger vers `infinite()` — ça aurait relu toutes les pages
+Le geste juste n'était PAS de rediriger vers `infinite()` : ça aurait relu toutes les pages
 chargées à chaque réaction, exactement le refetch que le cycle 77 venait de retirer du chemin de
 focus. Vérifié avant de trancher : **une ligne de liste ne porte rien qui dérive des réactions**
 (aperçu, non-lus, horodatage). Le `reaction` rendu par `ConversationList` est l'emoji de
-PRÉFÉRENCE de conversation, homonyme et sans rapport. Les deux invalidations sont donc
-supprimées ; le seul cache concerné (celui du message) était déjà mis à jour deux lignes plus
-bas par `updateReactionSummaryInMessageCache`.
+PRÉFÉRENCE de conversation — homonyme, sans rapport.
+
+Convergence : la PR #2860 (session parallèle, entrée ci-dessus) a supprimé les mêmes deux lignes
+en retirant la forme plate. Ce qui reste ici est donc le **commentaire** qui dit pourquoi il n'y
+a pas d'invalidation, plus les deux témoins. Un retrait silencieux invite le prochain lecteur à
+« réparer l'invalidation manquante » ; c'est le seul piège encore ouvert sur ce site.
+
+## D1 — la page delta tronquée : LIVRÉ PAR LA PR #2863, pas par ce cycle
+
+Ce cycle avait écrit, testé et fait passer la CI (SDK Tests verts, runs #965/#967/#971) sur une
+marche de pages : `limit=100` demandé, page courte = fin de fenêtre, page pleine = reprise SOUS
+son groupe d'`updatedAt` le plus haut (`SyncWatermark.resumeAfterFullPage`), escalade vers
+`fullSync` sur le seul résidu (page pleine à une milliseconde unique, ou au-delà de 5 pages).
+
+Pendant la CI, la PR #2863 (« une page delta qui laisse du reste ne fait plus avancer le
+curseur ») a été mergée sur `main` par une session parallèle. Elle corrige le MÊME défaut, plus
+simplement : `advancedAfterDeltaPage(previous:receivedUpdatedAt:pageMayHaveMore:)` — si la page
+laisse du reste, **le curseur ne bouge pas du tout**, et l'appelant escalade vers `fullSync`.
+
+**Le merge a été résolu en faveur de `main`, intégralement.** Trois raisons, dans cet ordre :
+
+1. **Leur détection est MEILLEURE que la mienne.** `mayHaveMore = pagination?.hasMore ??
+   (data.count >= deltaPageLimit)` : le serveur ANNONCE le reste, et le comptage n'est que le
+   repli. Ma version ne connaissait que le repli.
+2. **Les deux mécanismes sont incompatibles, pas superposables.** Leur contrat testé dit « le
+   curseur n'avance pas sur une page qui laisse du reste » ; ma marche, elle, AVANCE (sous le
+   groupe du haut) pour paginer. Garder les deux, c'est faire échouer leurs témoins.
+3. **Réécrire en résolution de merge un correctif déjà mergé et testé n'est pas un droit qu'on
+   se donne.** L'instruction de la routine est explicite : gérer le merge à la main pour ne rien
+   écraser. Le fait d'être arrivé deuxième ne rend pas ma version prioritaire.
+
+Ce qui est retiré avec elle : `SyncWatermark.resumeAfterFullPage`, la boucle de pages,
+`maxDeltaPages`, `DeltaSyncOutcome`, `MockAPIClient.stubSequence` et 10 témoins. Aucun n'a de
+consommateur une fois `main` adopté ; les garder aurait été exactement la « plomberie
+mensongère » que ce cycle dénonce par ailleurs.
+
+### Ce qui reste vrai et non couvert par `main` — tête instruite pour un prochain cycle
+
+`main` escalade vers `fullSync` sur **CHAQUE** page qui laisse du reste. C'est correct et
+prudent, et c'est cher : dès que plus de 100 conversations bougent dans la fenêtre (reconnexion
+après une longue coupure, compte à gros volume), le client relit sa liste ENTIÈRE au lieu de
+tirer une deuxième page.
+
+La marche paginée reste donc une amélioration réelle, mais elle doit être instruite CONTRE le
+comportement désormais en place, pas contre l'ancien défaut. Deux bornes qui ne se devinent pas,
+payées par ce cycle :
+
+1. **Sur une page pleine, reprendre au max des `updatedAt` reçus est FAUX.** La coupure peut
+   tomber au milieu d'un groupe partageant une milliseconde ; la borne stricte `gt` enjamberait
+   ses survivantes. Le seul curseur sûr est le plus haut `updatedAt` STRICTEMENT inférieur au
+   max de la page — le groupe du haut est alors relu entier (upsert idempotent).
+2. **Il reste un résidu qu'aucun curseur ne franchit** : une page pleine dont toutes les lignes
+   portent la même milliseconde. Là, et là seulement, l'escalade de `main` est la seule réponse.
+   Une marche qui l'oublierait bouclerait à l'infini.
+
+Fermer proprement demanderait plutôt un curseur composite `(updatedAt, id)` côté route —
+chantier de contrat serveur, pas garde de client.
 
 ## Vérification
 
-- **12 témoins neufs**, écrits AVANT le code :
-  - `SyncWatermarkTests` (4) — le groupe du haut est laissé de côté, l'ordre d'arrivée
-    n'influe pas, et les deux cas sans point de reprise (page à une seule milliseconde, page
-    vide) rendent `nil`.
-  - `ConversationSyncEngineTests` (6) — `limit=100` demandé ; une page pleine enchaîne une 2ᵉ
-    page dont l'`updatedSince` est le timestamp SOUS le groupe du haut ; page courte ⇒ une
-    requête, curseur au max, zéro escalade ; page pleine à une seule milliseconde ⇒ la marche
-    s'arrête et `fullSync` court ; l'escalade court MALGRÉ une réconciliation récente ; la
-    marche s'arrête à `maxDeltaPages` en escaladant.
-  - `use-reactions-query.test.tsx` (2) — **RED observé** (`flatFetch` appelé 2× au lieu de 1×).
-- `stubSequence` ajouté à `MockAPIClient` : sans lui une pagination se teste contre la même page
-  rendue à l'infini, ce qui passe au vert quoi que fasse la boucle.
-- Web : **562 suites / 12 098 tests verts** en local (bun/jest).
-- iOS/SDK : **non exécutable ici** (conteneur Linux, ni Xcode ni toolchain Swift) — la
-  vérification est déléguée à `sdk-tests` sur macOS, VERT sur cette branche (run #965,
-  38 min de suite). À noter, parce que ça se déduit mal : `ios-tests.yml` ne se déclenche
-  QUE sur `push` vers `dev`, donc il ne garde AUCUNE PR — `sdk-tests` est le seul gate Swift
-  d'une PR. Dit franchement plutôt qu'implicitement : c'est la borne de ce cycle.
-- CI complète verte : 13 jobs (Quality, Security, Prisma, web, shared, gateway, agent, Python,
-  Voice API, TTS/STT, Audio Pipeline, Build, Summary).
+- **D2** : 2 témoins neufs, **RED observé** avant correctif (`flatFetch` appelé 2× au lieu de
+  1×). Ils montent de VRAIS observateurs sur les deux formes de clé — une `invalidateQueries` ne
+  refetch que les requêtes ACTIVES, donc un cache posé à la main (`setQueryData`/`fetchQuery`)
+  serait resté muet et le témoin serait passé au vert sans rien prouver.
+- Suite web complète : **561 suites / 12 057 tests verts** en local (bun/jest) après le merge de
+  `main`.
+- CI complète verte sur la tête (13 jobs) + SDK Tests verts.
+- **D1 : la vérification de ce cycle a bien eu lieu et est verte** (SDK Tests #965, #967, #971
+  sur la marche de pages) — elle ne prouve plus rien d'utile, puisque le code qu'elle couvrait
+  a été retiré au profit de celui de `main`. C'est dit franchement plutôt qu'effacé : le coût
+  d'un cycle est aussi ce qu'il jette.
 
-## Addendum — D2 a été livré DEUX FOIS, en parallèle
+## Addendum — trois sessions, un cycle, deux collisions
 
-Une session parallèle a ouvert et fait merger la PR #2860 (« un seul cache de liste de
-conversations ») pendant que celle-ci était en CI. Elle a pris le lot que ce cycle avait
-laissé ouvert — le retrait des ~20 écrivains morts de la forme plate — et, ce faisant, a
-supprimé les deux mêmes invalidations de réaction. Convergence indépendante sur le même
-geste, comme aux cycles 76/76b.
+Ce cycle a collisionné DEUX fois avec des sessions parallèles :
 
-Le merge manuel a donc conflité sur `use-reactions-query.ts`, les deux côtés ayant retiré les
-mêmes lignes. Résolution : garder le COMMENTAIRE (main supprimait en silence), réécrit pour
-l'état d'après #2860 — la forme plate n'existe plus, donc le commentaire ne peut plus
-l'invoquer ; ce qu'il doit encore dire, c'est **« ne pas rebrancher vers `infinite()` »**, la
-seule erreur encore possible ici. Un retrait silencieux invite le prochain lecteur à
-« réparer l'invalidation manquante ».
+| Tête | Session parallèle | Issue |
+|---|---|---|
+| D2 (invalidations mortes) | PR #2860 | convergence — les deux ont retiré les mêmes lignes ; ce cycle garde le commentaire |
+| D1 (page delta tronquée) | PR #2863 | **collision** — leur version, mergée d'abord et mieux instrumentée, l'emporte intégralement |
 
-Second conflit du même run : `tasks/lane-cursor.md`, avancé à `ANDROID streak 3` par la
-routine Android. Résolu en faveur de main, sans discussion — ce fichier est l'état d'UNE
-AUTRE routine, et ce cycle n'avait aucune raison d'y écrire. La leçon tient en une ligne :
-**un fichier d'état partagé entre routines ne s'écrit que par la routine qui le possède.**
+Plus un troisième conflit, sans rapport avec le fond : `tasks/lane-cursor.md`, avancé par la
+routine Android pendant le run. Résolu en faveur de `main` sans discussion — ce fichier est
+l'état d'une AUTRE routine, et ce cycle n'avait aucune raison d'y écrire.
+
+Trois collisions sur un cycle, ce n'est plus de la malchance : c'est le régime normal quand
+plusieurs routines instruisent la MÊME liste de têtes ouvertes. La parade n'est pas de merger
+plus vite — c'est de **relire `main` avant d'ouvrir une tête, pas seulement avant de merger**.
+Une tête instruite dans `todo.md` n'est pas une réservation.
 
 ## Reste ouvert après ce cycle
 
-- ~~Les écrivains morts de la liste PLATE (~20 sites) ne sont PAS retirés.~~ **CLOS pendant ce
-  cycle par la PR #2860** d'une session parallèle (cf. Addendum ci-dessus), qui a pris
-  exactement le lot laissé ouvert ici. Ce point n'est plus à instruire ; ce qui reste de cette
-  famille est listé dans le « Reste ouvert » de l'entrée #2860 (les autres familles de clés —
-  `posts`, `notifications` — n'ont pas eu le même audit).
-- **Le résidu des égalités reste un résidu.** iOS escalade désormais au lieu de perdre, mais
-  une écriture en masse de plus de 100 conversations à la même milliseconde force toujours une
-  relecture complète. La vraie fermeture demanderait un curseur composite
-  (`updatedAt`, `id`) côté route — chantier de contrat, pas garde de client.
+- **La marche paginée** (ci-dessus), à instruire contre le comportement de `main`, avec ses deux
+  bornes déjà payées.
+- **Le résidu des égalités** — plus de 100 conversations à la même milliseconde — reste ouvert
+  sur les deux plateformes ; il demande un curseur composite `(updatedAt, id)` côté route.
 - **`apps/web` porte 1224 erreurs `tsc --noEmit` préexistantes** sous son propre tsconfig
   (aucune introduite ici ; le fichier de tests touché en portait déjà 20 de la même forme). Ce
   n'est pas un gate CI aujourd'hui, et c'est précisément pourquoi ça mérite d'être écrit.
@@ -8772,3 +8863,64 @@ d'investigation (pas régénéré) — `main` a bien les 4 références attendue
 - `AudioFullscreenSource.conversationId` porte 3 sens différents (vraie `Conversation.id` / id
   d'entité porteuse / `nil`) documentés par de la prose plutôt qu'un renommage — `playbackSessionId`
   éliminerait le besoin d'expliquer. Touche l'API publique du coordinator, hors scope d'un mini-fix.
+
+## Review — 3 chantiers UI Liquid Glass/menu (2026-08-12, branches fix/message-more-menu-and-media + feat/inline-video-liquid-glass + feat/scroll-to-bottom-morph, mergées dans main)
+
+Workflow autonome (Opus, 51 agents, TDD RED-GREEN + revue par tâche + revue finale holistique par
+piste) sur 3 sous-projets indépendants. Verdicts des 3 revues finales : **MERGEABLE AVEC RÉSERVES**
+(message-more), **MERGEABLE AVEC RÉSERVES** (inline-video), **MERGEABLE** (scroll-morph). Aucun
+Critical sur les 3 pistes. Gate complet réel vérifié sur chaque worktree + sur le résultat fusionné.
+
+**Corrigé avant merge** (pas un follow-up, déjà fait) : le bouton "Enregistrer" du sous-menu média
+affichait dès qu'un message avait ≥1 attachment non-location, alors que la règle SSOT du dépôt
+(`MessageActionResolver.saveableAttachmentCount == 1`) exige EXACTEMENT UN — un message à 3 photos
+aurait silencieusement sauvegardé la première seulement. Fix + test corrigés avant le merge.
+
+**Follow-ups Important non-bloquants (verdict des revues finales)** :
+- **Auto-PiP en arrière-plan désormais armé pour TOUTE vidéo inline** (`inline-video`, 6 surfaces :
+  bulle, pièce jointe de bulle, feed, détail de post, média de commentaire, attachment de bulle) —
+  conséquence directe des 2 décisions produit prises pendant le brainstorm (câbler le PiP + élargir
+  `inlineDefault` partout). `MediaLifecycleBridge.prepareForBackground` ne met plus en pause une
+  vidéo dont le PiP s'engage. Invisible en simulateur (`isPictureInPictureSupported()` y est
+  toujours faux) — à ajouter explicitement à la checklist de vérification device, avec le scénario
+  bulle-en-lecture → passage aux réels (contention du `pipController` singleton partagé).
+- `apps/ios/meeshy.sh` : le nouveau garde-fou anti-tests-non-enregistrés (`verify_test_classes_are_compiled`,
+  Leçon 120) utilise `nm | grep -oF` — correspondance par SOUS-CHAÎNE. 7 paires de classes en
+  collision existent aujourd'hui (`RouterTests` ⊂ `DeepLinkRouterTests`/`ComposerIngestRouterTests`/
+  `AudioBubbleRouterTests`/`NotificationContentRouterTests`, `ConversationViewModelTests` ⊂
+  `NewConversationViewModelTests`, `StatusViewModelTests` ⊂ `ConnectionStatusViewModelTests`,
+  `BubbleEquatableTests` ⊂ `ThemedMessageBubbleEquatableTests`) : si l'une devenait orpheline, la
+  garde ne la verrait pas. Fix : ancrer sur le nom manglé Swift (préfixe de longueur, ex.
+  `11RouterTests`) au lieu du nom nu. Fichier PARTAGÉ par tous les worktrees iOS — coordonner avant
+  d'y toucher.
+- `_FullscreenRenderer` (plein écran vidéo) n'opte toujours pas pour le PiP après un expand depuis
+  l'inline : le `pipController` singleton reste lié au layer inline masqué. No-op en pratique
+  aujourd'hui, mais `prepareForBackground` y consomme jusqu'à 400ms d'attente inutile. Suivi
+  naturel : propager `enablesPip` à la surface plein écran aussi.
+
+**Follow-ups Minor (dette, aucun ne bloque)** :
+- 3ᵉ copie verbatim de la construction `MediaSaveRequest` dans `ConversationView.swift` (757, 1800,
+  1950) — extraction en helper `requestSaveFirstMedia(of:)` recommandée.
+- Cibles incohérentes dans le sous-menu média : Supprimer vise `attachments.first?.id` (sans filtre
+  `.location`), Enregistrer vise `first(where: { $0.type != .location })` — pré-existant, rendu
+  visible par le regroupement des 2 actions dans un seul dialog.
+- `.media` reste gaté par `canDelete` (`MessageActionResolver.swift:92`) — un média REÇU (non
+  admin/mod) ne voit pas ce point d'entrée Enregistrer/Transférer (atténué : `.saveMedia` primaire
+  et `.forward` pellet couvrent déjà le cas).
+- `isCompactShape` (scroll-to-bottom) porte un nom inversé — renvoie `true` pour la capsule LARGE,
+  `false` pour le cercle compact. `usesCapsuleShape` dirait la vérité ; figé dans 4 tests.
+- Glyphe média dupliqué entre `unreadCallIndicator` (app) et `CallNoticePresentation.mediaGlyph`
+  (`BubbleCallNoticeView.swift:278`) — extraire un helper partagé sur `CallNoticePresentation`.
+- Accessibilité : `scrollToBottomAccessibilityLabel` ne mentionne pas l'état d'appel — VoiceOver
+  n'annonce que "N messages non lus", alors que manqué/échoué se distinguent SEULEMENT par la
+  teinte (WCAG 1.4.1, couleur seule).
+- Aucun des 3 fichiers de plan n'a ses cases `- [ ]` cochées après exécution — les plans ne
+  reflètent plus l'état d'avancement réel pour une session qui reprendrait. Sans impact fonctionnel.
+
+**Découverte annexe, HORS PÉRIMÈTRE de ce chantier** : le gate complet sur le résultat fusionné a
+révélé `CallViewAccessibilityTests.test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone`
+ROUGE de façon déterministe (reproduit isolément, 1/36 dans la classe) — `hasActiveEffects` ne
+vérifie que `config.isEnabled`, pas `config.hasAdvancedFilters`. Fichier dernièrement touché par
+`7b8f7e33d` (PR #2859, "calls: updateCallStatus duration anchor + video filter silent no-op"),
+totalement étranger aux 3 chantiers ci-dessus. Poussé sur `main` tel quel (pré-existant, pas
+introduit par ce travail) — à triager par qui possède la zone calls/effets vidéo.

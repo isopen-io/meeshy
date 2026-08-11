@@ -6999,3 +6999,66 @@ Reconduit tel quel (rien de plus trouvé côté iOS au-delà du fix ci-dessus) :
 `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
 string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
 ce sandbox.
+
+## Vague 108 — `VideoFiltersPanel.activePreset` ne se restaurait pas depuis `filterConfig` à la réouverture du panneau (iOS) (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche `claude/upbeat-dirac-c7hnbb`
+strictement à jour avec `origin/main` au démarrage (`2c141a004`, qui contient déjà la Vague 106+107 —
+PR #2859 mergée), 0 commit d'avance/retard, aucune PR ouverte de cette routine. Candidat pris
+directement dans le « Reste ouvert » loggé par la Vague 107 plutôt que ré-auditer à froid — c'était
+l'unique candidat explicitement réservé pour cette vague.
+
+- **Root cause confirmée par lecture directe** (`VideoFiltersPanel.swift`) : `activePreset` était un
+  `@State private var activePreset: VideoFilterPreset? = .natural` — initialisé une seule fois à la
+  création de la View, jamais re-dérivé. `.onAppear` re-hydrate bien `filterConfig` depuis
+  `callManager.videoFilters.config` (la config persistée du call en cours), mais `activePreset` n'était
+  touché nulle part dans ce bloc. Toute réouverture du panneau après avoir choisi un preset non-natural
+  (`.warm`/`.cool`/`.vivid`/`.muted`) restaurait donc correctement le filtre réellement appliqué
+  (`filterConfig`, donc le rendu vidéo live était toujours juste) mais réaffichait le chip « Naturel »
+  en surbrillance — un mensonge visuel pur, sans perte de fonction (cf. constat déjà posé par la Vague
+  107 qui avait laissé ce candidat de côté). Le même défaut de source unique aurait aussi laissé un chip
+  preset en surbrillance après que l'utilisateur ait manuellement dérivé la colorimétrie via un slider
+  de `VideoFilterControlView` (`$filterConfig` bindé directement, sans jamais passer par `presetChip`) —
+  un second symptôme du même bug de fond, non mentionné par la Vague 107 mais couvert par le même fix.
+- **Fix** : `activePreset` n'est plus un `@State` séparé mais une **propriété calculée** dérivée de
+  `filterConfig` à chaque rendu (`VideoFilterPreset.matching(filterConfig)`), source unique — élimine la
+  classe de bug entière plutôt que rapiécer le seul site `.onAppear`. Nouvelle fonction pure
+  `VideoFilterPreset.matching(_:)` (`VideoFilterPipeline.swift`) : reverse-lookup comparant uniquement
+  les 6 champs colorimétriques (`temperature`/`tint`/`brightness`/`contrast`/`saturation`/`exposure`)
+  contre chaque preset — jamais `isEnabled` (le bouton « Reset » pose la colorimétrie de `.natural` mais
+  repasse `isEnabled` à `false`, et doit quand même résoudre `.natural`) ni les deux champs avancés
+  (`presetChip` propage déjà volontairement le `backgroundBlurEnabled`/`skinSmoothingEnabled` du
+  06/appelant à travers un changement de preset — orthogonaux au preset colorimétrique actif). Retourne
+  `nil` si aucun preset ne matche (slider dérivé à la main) — absence légitime de sélection, pas un bug.
+  Les deux anciennes affectations manuelles (`activePreset = .natural` dans Reset, `activePreset = preset`
+  dans `presetChip`) sont supprimées : la dérivation automatique produit exactement le même résultat
+  puisque les deux sites posent `filterConfig` avec la colorimétrie exacte du preset visé.
+- **Tests** (ajoutés, pas exécutables dans ce sandbox Linux — cf. Vérification) : 5 nouveaux cas dans
+  `VideoFilterPipelineTests.swift` (`VideoFilterPresetTests`) — `matching()` retrouve chaque preset
+  depuis sa propre config, ignore `isEnabled` (cas Reset), ignore les champs avancés (cas presetChip),
+  retourne `nil` sur une colorimétrie dérivée à la main, et résout `.natural` depuis
+  `VideoFilterConfig.default` (comportement par défaut inchangé, panneau jamais touché).
+- **Vérification** : build/tests iOS **non exécutables dans ce sandbox** (conteneur Linux, aucun Xcode
+  — cf. `apps/ios/CLAUDE.md`). Relecture ligne à ligne des 2 fichiers de prod touchés + comptage
+  d'accolades avant/après (équilibré : 78/78 `VideoFilterPipeline.swift`, 31/31 `VideoFiltersPanel.swift`,
+  37/37 sur le fichier de tests). Les 2 sites de test source-scan existants
+  (`VideoFiltersPanelAccessibilityTests`, `CallViewObservedObjectInjectionTests`) référencent des
+  littéraux inchangés par ce diff — vérifiés non affectés par lecture. Vérification réelle déléguée à la
+  CI GitHub Actions (macOS, job « iOS Tests ») au push — PR suivie jusqu'au vert avant merge.
+- **Portée volontairement non étendue** : aucun nouveau candidat frais audité ce cycle (le backlog
+  « Reste ouvert » de la Vague 107 ne portait que ce seul item réservé) — cf. liste reconduite ci-dessous
+  pour la Vague 109.
+
+### Reste ouvert
+
+Le backlog iOS laissé par la Vague 107 est maintenant **vide** — son unique candidat réservé a été
+traité (Vague 108 ci-dessus). Reconduit tel quel (aucun audit frais mandaté ce cycle, portée limitée à
+un candidat par audit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+`actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+(Vague 84, on-device requis) ; `removeParticipant()` web (Vague 91, non-régression) ;
+`call:force-leave`/`call:check-active` en string literals hors du type-map partagé (cosmétique) ;
+toolchains iOS/Android hors d'atteinte dans ce sandbox. **Candidat sérieux pour la Vague 109** : un
+audit frais (gateway ou iOS) reste à mandater au prochain cycle — aucun nouveau candidat concret n'a
+été identifié cette fois-ci au-delà du fix ci-dessus.

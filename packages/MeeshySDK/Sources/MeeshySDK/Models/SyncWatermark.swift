@@ -48,23 +48,26 @@ public enum SyncWatermark {
         Swift.max(previous, receivedUpdatedAt.max() ?? previous)
     }
 
-    /// Next cursor for a delta page known to be FULL — i.e. cut at the server
-    /// cap, with an unknown number of rows left behind.
+    /// Curseur à persister après UNE page delta, `pageMayHaveMore` disant si la
+    /// fenêtre `updatedSince` contenait plus de lignes que la page n'en a rendues.
     ///
-    /// The route orders a delta page by (`updatedAt` asc, `id` asc), so the cut
-    /// can fall INSIDE a group of rows sharing one `updatedAt`. `advanced` would
-    /// push the cursor to the page max, and the next page's strict `gt` bound
-    /// would skip that group's survivors for good. Resuming just BELOW the top
-    /// group re-reads it whole on the next page: rows already applied are
-    /// upserted again (idempotent), none is skipped.
+    /// Une page qui laisse du reste n'a pas rendu toute la fenêtre. Avancer le
+    /// curseur au max des `updatedAt` REÇUS reviendrait à affirmer une couverture
+    /// qu'elle ne démontre pas — et comme la borne serveur est STRICTE (`gt`),
+    /// les lignes partageant la milliseconde de coupure ne reviendraient plus
+    /// jamais.
     ///
-    /// `nil` means "no cursor can make progress here": the page carries a SINGLE
-    /// distinct `updatedAt` (mass write past the cap), so there is nothing below
-    /// the top group to resume from. The caller must escalate to a full
-    /// reconcile rather than advance — this is the residue the server ordering
-    /// alone cannot rescue.
-    static func resumeAfterFullPage(receivedUpdatedAt: [Date]) -> Date? {
-        Set(receivedUpdatedAt).sorted().dropLast().last
+    /// Le curseur reste donc où il est, et l'appelant escalade vers la vérité
+    /// serveur complète. L'ORDRE compte : c'est parce que le curseur n'a pas
+    /// bougé qu'une escalade ÉCHOUÉE (offline, panne) laisse la fenêtre entière
+    /// rejouable au prochain delta au lieu d'un trou définitif.
+    static func advancedAfterDeltaPage(
+        previous: Date,
+        receivedUpdatedAt: [Date],
+        pageMayHaveMore: Bool
+    ) -> Date {
+        guard !pageMayHaveMore else { return previous }
+        return advanced(previous: previous, receivedUpdatedAt: receivedUpdatedAt)
     }
 
     /// AUTHORITATIVE watermark after a full sync. A full fetch is the ground

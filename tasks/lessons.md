@@ -4773,27 +4773,54 @@ cette comparaison impossible**. Une page à 100 devenait indistinguable d'une fe
 
 Trois règles à reprendre partout où un curseur pagine :
 
-1. **Demander EXACTEMENT le plafond serveur.** Une page courte devient alors la preuve — la
-   seule — que la fenêtre est finie. Le nombre demandé n'est pas un réglage de performance,
-   c'est le dénominateur d'un test.
-2. **Sur une page pleine, reprendre SOUS le groupe du haut, jamais à son max.** La coupure peut
-   tomber au milieu d'un groupe de lignes partageant la même valeur de curseur ; une borne
-   stricte `gt` posée sur le max enjambe les survivantes du groupe. Reprendre sous le groupe le
-   relit entier (idempotent) au lieu d'en perdre une partie. Corollaire : **une page pleine coûte
-   toujours une requête de plus**, et c'est le prix de la preuve, pas un défaut à optimiser.
-3. **Quand aucun curseur ne progresse sans perdre une ligne, NE PAS AVANCER, puis escalader.**
-   L'ordre est le contenu du correctif. Une escalade partant d'un curseur déjà trop haut hérite
-   du trou qu'elle existe pour fermer.
+1. **Demander EXACTEMENT le plafond serveur** — ou mieux, **lire ce que le serveur ANNONCE**.
+   La version retenue sur `main` (PR #2863) fait `pagination?.hasMore ?? (count >= limit)` : le
+   comptage n'est que le repli. Une preuve déclarée par la source bat une preuve déduite ; ne
+   déduire que lorsque la source se tait.
+2. **Sur une page qui laisse du reste, NE PAS AVANCER LE CURSEUR** — puis escalader. L'ordre est
+   le contenu du correctif : une escalade partant d'un curseur déjà trop haut hérite du trou
+   qu'elle existe pour fermer. Et c'est parce que le curseur n'a pas bougé qu'une escalade
+   ÉCHOUÉE (offline) laisse la fenêtre entière rejouable au lieu d'un trou définitif.
+3. **Si on choisit de paginer plutôt que d'escalader, reprendre au max de la page est FAUX.**
+   La coupure peut tomber au milieu d'un groupe partageant la même valeur de curseur ; une borne
+   stricte `gt` posée sur le max enjambe les survivantes du groupe. Le seul curseur sûr est la
+   plus haute valeur STRICTEMENT inférieure au max de la page. Et il reste un cas qu'aucun
+   curseur ne franchit — toute la page à une seule valeur — où l'escalade est la seule réponse.
 
-Et une distinction qui vaut au-delà de ce cas : **une borne de fréquence sur un entretien
-PÉRIODIQUE ne doit jamais throttler une RÉPARATION.** `fullReconcileInterval` (24 h) borne la
-purge des fantômes ; il n'a rien à dire à un `fullSync` que le delta vient lui-même de réclamer
-parce qu'il sait sa fenêtre incomplète. Les confondre, c'est laisser la liste sciemment trouée
-pendant une journée.
+Distinction qui vaut au-delà de ce cas : **une borne de fréquence sur un entretien PÉRIODIQUE ne
+doit jamais throttler une RÉPARATION.** `fullReconcileInterval` (24 h) borne la purge des
+fantômes ; il n'a rien à dire à un `fullSync` que le delta vient de réclamer parce qu'il sait sa
+fenêtre incomplète.
 
 Côté test : une pagination ne se teste pas contre un mock qui rend la MÊME page à chaque appel —
-la boucle passe au vert quoi qu'elle fasse. Il faut une file de réponses (`stubSequence`). Le
-mock qui ne sait pas répondre différemment au 2ᵉ appel est un mock qui ne teste pas la marche.
+la boucle passe au vert quoi qu'elle fasse. Il faut une file de réponses.
+
+## Leçon 122b — arriver deuxième sur la même tête ne donne aucun droit de réécriture (2026-08-11, routine messaging, cycle 78)
+
+Ce cycle a écrit, testé et fait passer la CI sur une correction de la page delta tronquée.
+Pendant la CI, une session parallèle a mergé la PR #2863 : même défaut, correction plus simple et
+mieux instrumentée. Le merge a conflité sur les quatre fichiers.
+
+La tentation est de « fusionner intelligemment » — garder sa propre mécanique en résolution de
+conflit. C'est un piège à trois détentes :
+
+1. **Deux mécanismes pour une règle ne se superposent pas.** Leur contrat testé disait « le
+   curseur n'avance pas » ; le mien avançait pour paginer. Garder les deux, c'est faire échouer
+   leurs témoins — donc les retirer — donc écraser leur travail en prétendant l'intégrer.
+2. **Le code déjà mergé a une propriété que le mien n'a pas : il est sur `main`.** Il a été revu,
+   il a passé sa CI, d'autres branches partent déjà de lui. Le remplacer par une variante lors
+   d'une résolution de merge est une décision d'architecture prise dans le pire endroit possible.
+3. **Ce qu'on jette, on le documente.** Le récit, les deux bornes trouvées (reprise sous le
+   groupe du haut, résidu des égalités) et le coût mesuré de l'escalade systématique valent plus
+   que le code retiré : ils deviennent une tête instruite CONTRE le comportement en place.
+
+Règle : quand `main` a déjà fermé la tête qu'on instruit, on prend `main`, on retire sa propre
+plomberie devenue sans consommateur, et on convertit son travail en instruction. On ne se sert
+pas d'un conflit comme d'un droit de veto.
+
+Corollaire de cadence : **relire `main` avant d'OUVRIR une tête, pas seulement avant de merger.**
+Une tête écrite dans `todo.md` n'est pas une réservation ; trois routines lisent la même liste.
+
 
 ## Leçon 123 — une invalidation qui ne matche aucun cache est une PANNE, et sa correction n'est pas de la rebrancher (2026-08-11, routine messaging, cycle 78)
 

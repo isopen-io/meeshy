@@ -58,32 +58,11 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         stubs[endpoint] = result
     }
 
-    /// Stub CONSECUTIVE calls to the same endpoint, one result per call, in
-    /// order. Needed by anything that pages: a single `stub` would hand the
-    /// same page back forever, which reads as "the walk works" whatever it
-    /// actually does. Once the sequence is exhausted the plain `stub` (if any)
-    /// takes over, so a test can say "these pages, then this steady state".
-    private var stubSequences: [String: [Any]] = [:]
-
-    func stubSequence<T>(_ endpoint: String, results: [T]) {
-        stubSequences[endpoint] = results.map { $0 as Any }
-    }
-
-    private func nextStub(for endpoint: String) -> Any? {
-        if var queued = stubSequences[endpoint], !queued.isEmpty {
-            let head = queued.removeFirst()
-            stubSequences[endpoint] = queued
-            return head
-        }
-        return stubs[endpoint]
-    }
-
     // MARK: - Reset
 
     func reset() {
         requests.removeAll()
         stubs.removeAll()
-        stubSequences.removeAll()
         errorToThrow = nil
         endpointErrors.removeAll()
         authToken = nil
@@ -101,7 +80,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
-        guard let result = nextStub(for: endpoint) as? T else {
+        guard let result = stubs[endpoint] as? T else {
             throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
         }
         return result
@@ -120,7 +99,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems, headers: headers)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
-        guard let result = nextStub(for: endpoint) as? T else {
+        guard let result = stubs[endpoint] as? T else {
             throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
         }
         return result
