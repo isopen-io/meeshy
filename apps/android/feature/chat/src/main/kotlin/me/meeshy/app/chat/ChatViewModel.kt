@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.net.URLDecoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -293,7 +294,20 @@ class ChatViewModel @Inject constructor(
         "ChatViewModel requires a '$CONVERSATION_ID_ARG' navigation argument"
     }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
+    /**
+     * An incoming quick-reply/deep-link draft (`meeshy://conversation/{id}?draft=...`),
+     * e.g. from a future Quick Reply widget. Seeded into [_state] below so it wins over
+     * whatever [DraftAutosave.restore] would otherwise restore from [draftStore] — that
+     * function's own idle guard (`currentDraft.isNotBlank() -> null`) already refuses to
+     * clobber a non-empty composer, so no separate precedence rule is needed here; a
+     * blank/absent arg leaves the composer empty exactly as before, letting the stored
+     * draft restore normally.
+     */
+    private val initialDraft: String? = savedStateHandle.get<String>(DRAFT_ARG)
+        ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+        ?.takeIf { it.isNotBlank() }
+
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
@@ -1791,6 +1805,9 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         const val CONVERSATION_ID_ARG: String = "conversationId"
+
+        /** Optional deep-link query arg (`?draft=...`) — see [initialDraft]. */
+        const val DRAFT_ARG: String = "draft"
         private const val QUICK_REACTION_COUNT = 8
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
