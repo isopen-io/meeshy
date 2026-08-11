@@ -706,6 +706,23 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Real-time Socket Subscriptions
 
+    /// Le Prisme de la ligne porté par `conversation:updated`, quand le serveur
+    /// en parle. `nil` = `.unchanged` = « cet événement ne parle pas d'aperçu »
+    /// (renommage, avatar) : la carte du cache survit. Une carte VIDE, elle,
+    /// est un fait — le serveur DIT que la traduction est périmée.
+    ///
+    /// La paire voyage ensemble et jamais séparément : le résolveur de la ligne
+    /// (`resolvedLastMessagePreview`) PRÉFÈRE la traduction à `lastMessagePreview`,
+    /// donc poser l'un sans l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+    /// Règle recopiée de `ConversationStore.merging` (SDK), seule formulation de
+    /// référence — les deux doivent bouger ensemble.
+    private static func replacedPrism(
+        from event: ConversationUpdatedEvent
+    ) -> (map: [String: String], originalLanguage: String?)? {
+        guard case .replaced(let map) = event.lastMessageTranslations else { return nil }
+        return (map, event.lastMessageOriginalLanguage)
+    }
+
     private func subscribeToSocketEvents() {
         // Typing indicator — affiche "<Auteur> écrit..." dans le row
         messageSocket.typingStarted
@@ -816,20 +833,9 @@ class ConversationListViewModel: ObservableObject {
                 // la ligne restait muette jusqu'à la synchro suivante alors même
                 // que le gateway venait d'envoyer le texte.
                 //
-                // Le Prisme de la ligne, résolu par le gateway POUR CE
-                // destinataire. Il fait groupe avec `lastMessagePreview` : le
-                // résolveur de la ligne PRÉFÈRE la traduction à l'aperçu brut,
-                // donc appliquer l'un sans l'autre laisse la ligne rendre
-                // l'ANCIEN texte traduit. Extrait UNE fois parce que les deux
+                // Le Prisme voyage avec l'aperçu. Extrait UNE fois : les deux
                 // branches ci-dessous en ont besoin, chacune à sa façon.
-                // `nil` ici = `.unchanged` = « cet événement ne parle pas
-                // d'aperçu » (renommage, avatar) : la carte du cache survit.
-                // Règle recopiée de `ConversationStore.merging` (SDK), seule
-                // formulation de référence.
-                let replacedPrism: (map: [String: String], originalLanguage: String?)? = {
-                    guard case .replaced(let map) = event.lastMessageTranslations else { return nil }
-                    return (map, event.lastMessageOriginalLanguage)
-                }()
+                let replacedPrism = Self.replacedPrism(from: event)
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")

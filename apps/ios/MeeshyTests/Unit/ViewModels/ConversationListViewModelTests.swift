@@ -3420,8 +3420,8 @@ private func makeConversationUpdatedEvent(
     // envoie pour périmer la carte après une édition — et `.replaced(map)`
     // l'écrit peuplée. Passer par le JSON plutôt que par le mémberwise init est
     // ce qui rend cette distinction exprimable ici.
-    if case .replaced(let map)? = lastMessageTranslations {
-        json["lastMessageTranslations"] = map.isEmpty ? NSNull() : map
+    if case .some(.replaced(let map)) = lastMessageTranslations {
+        json["lastMessageTranslations"] = map.isEmpty ? NSNull() as Any : map as Any
     }
     if let senderId { json["senderId"] = senderId }
     if let locationName {
