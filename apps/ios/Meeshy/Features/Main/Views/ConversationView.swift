@@ -751,6 +751,16 @@ struct ConversationView: View {
                         overlayState.replyThreadParentId = msg.id
                         overlayState.showReplyThread = true
                     },
+                    onSaveMedia: {
+                        guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
+                        HapticFeedback.light()
+                        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                            kind: attachment.kind,
+                            remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+                            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                            attachmentId: attachment.id.isEmpty ? nil : attachment.id
+                        ))
+                    },
                     onDeleteMedia: {
                         if let attId = msg.attachments.first?.id {
                             Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
@@ -1824,7 +1834,8 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                 },
                 onShowMore: {
-                    overlayState.moreSheetInitialItem = nil
+                    overlayState.moreSheetInitialItem =
+                        UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                     overlayState.detailSheetMessage = msg
                 },
                 onExpandFullPicker: {
@@ -1994,7 +2005,8 @@ struct ConversationView: View {
             }
         case .more:
             Button {
-                overlayState.moreSheetInitialItem = nil
+                overlayState.moreSheetInitialItem =
+                    UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                 overlayState.detailSheetMessage = msg
             } label: {
                 Label(String(localized: "action.more", defaultValue: "Plus…", bundle: .main), systemImage: "ellipsis")
