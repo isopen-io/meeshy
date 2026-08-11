@@ -174,6 +174,7 @@ public final class ConversationStoreSocketBridge {
             lastMessageAt: event.lastMessageAt,
             lastMessageId: event.lastMessageId,
             lastMessagePreview: event.lastMessagePreview,
+            lastMessagePrisme: event.lastMessagePrisme,
             title: event.title,
             avatar: event.avatar,
             description: event.description,

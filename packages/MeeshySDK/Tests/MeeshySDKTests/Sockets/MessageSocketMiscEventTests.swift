@@ -236,6 +236,67 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertNil(event.slowModeSeconds)
         XCTAssertNil(event.autoTranslateEnabled)
         XCTAssertNil(event.lastMessageAt, "Old payloads without lastMessageAt must still decode and expose nil")
+        XCTAssertNil(event.lastMessagePrisme,
+                     "une charge utile sans les clés du prisme ne DÉCRIT PAS le dernier message : ne rien périmer")
+    }
+
+    // MARK: - ConversationUpdatedEvent — les trois états du prisme
+
+    func test_conversationUpdatedEvent_prismeMap_decoded() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "lastMessagePreview": "Hello everyone",
+            "lastMessageTranslations": {"fr": "Bonjour tout le monde"},
+            "lastMessageOriginalLanguage": "en",
+            "updatedBy": {"id": "u1"},
+            "updatedAt": "2026-08-11T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessagePrisme?.translations, ["fr": "Bonjour tout le monde"])
+        XCTAssertEqual(event.lastMessagePrisme?.originalLanguage, "en")
+    }
+
+    /// `null` et clé ABSENTE décodent tous deux en `nil` avec
+    /// `decodeIfPresent` — et ce sont précisément les deux états que le contrat
+    /// doit séparer. Un `null` REÇU périme la carte de l'ancien texte après une
+    /// édition ; une clé absente ne doit rien toucher.
+    func test_conversationUpdatedEvent_prismeExplicitNull_isPresentButEmpty() throws {
+        let json = """
+        {
+            "conversationId": "conv4",
+            "lastMessagePreview": "Hello everyone, edited",
+            "lastMessageTranslations": null,
+            "lastMessageOriginalLanguage": "en",
+            "updatedBy": {"id": "u1"},
+            "updatedAt": "2026-08-11T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertNotNil(event.lastMessagePrisme,
+                        "un `null` explicite est une VALEUR : le prisme est présent")
+        XCTAssertNil(event.lastMessagePrisme?.translations)
+        XCTAssertEqual(event.lastMessagePrisme?.originalLanguage, "en")
+    }
+
+    func test_conversationUpdatedEvent_prismeBothNull_stillPresent() throws {
+        let json = """
+        {
+            "conversationId": "conv5",
+            "lastMessageTranslations": null,
+            "lastMessageOriginalLanguage": null,
+            "updatedBy": {"id": "u1"},
+            "updatedAt": "2026-08-11T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertNotNil(event.lastMessagePrisme)
+        XCTAssertNil(event.lastMessagePrisme?.translations)
+        XCTAssertNil(event.lastMessagePrisme?.originalLanguage)
     }
 
     /// The gateway's message-driven CONVERSATION_UPDATED payload

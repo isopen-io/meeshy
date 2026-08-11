@@ -27,6 +27,7 @@ import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../ser
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
+import { resolveLastMessagePrismeByRoom } from '../utils/lastMessagePrisme';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { emitToConversationParticipants, participantUserRooms } from '../emitToConversationParticipants';
@@ -1297,11 +1298,13 @@ export class MessageHandler {
       // Single participant query shared between CONVERSATION_UPDATED and
       // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
       // The superset select (id + userId + joinedAt) satisfies both callers.
-      let sharedParticipants: { id: string; userId: string | null; joinedAt: Date }[] = [];
+      let sharedParticipants: { id: string; userId: string | null; joinedAt: Date; language: string }[] = [];
       try {
         sharedParticipants = await this.prisma.participant.findMany({
           where: { conversationId: normalizedId, isActive: true },
-          select: { id: true, userId: true, joinedAt: true }
+          // `language` : la seule préférence linguistique d'un participant sans
+          // compte, lue par le Prisme de la ligne de liste ci-dessous.
+          select: { id: true, userId: true, joinedAt: true, language: true }
         });
       } catch (err) {
         handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
@@ -1316,6 +1319,23 @@ export class MessageHandler {
       // the row stays at its old position until a manual refresh,
       // and brand-new DMs never appear in the list at all.
       if (sharedParticipants.length > 0) {
+        // Le Prisme de la ligne de liste, résolu PAR destinataire. Un lecteur
+        // resté sur la liste n'est plus dans `conversation:<id>` : il ne reçoit
+        // pas `message:new` et n'a donc aucun moyen de dériver lui-même la carte
+        // d'aperçus traduits. Sans ces deux champs, sa ligne affichait le
+        // nouveau texte accompagné de la carte de traductions du message
+        // PRÉCÉDENT — que son résolveur préfère, donc l'ancien contenu.
+        // Aucune requête ajoutée au cas nominal : un message qui vient d'être
+        // stocké n'a pas encore de traductions (pipeline NLLB asynchrone), et
+        // le résolveur court-circuite alors sans toucher la base.
+        const prismeByRoom = await resolveLastMessagePrismeByRoom({
+          prisma: this.prisma,
+          participants: sharedParticipants,
+          translations: (message as { translations?: unknown }).translations,
+          originalLanguage: (message as { originalLanguage?: string | null }).originalLanguage,
+          onError: (error) => handlerLogger.warn('last-message prisme resolution failed', { error }),
+        });
+
         const updatePayload = {
           conversationId: normalizedId,
           // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the sender's
@@ -1335,6 +1355,11 @@ export class MessageHandler {
             const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
             return place ? { location: place } : {};
           })(),
+          // Voyage avec l'aperçu, en groupe monotone. `null` est une VALEUR :
+          // « aucune traduction ne sert ton prisme », ce qui périme la carte que
+          // le client garde du message précédent.
+          lastMessageOriginalLanguage:
+            (message as { originalLanguage?: string | null }).originalLanguage ?? null,
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
@@ -1345,7 +1370,10 @@ export class MessageHandler {
         // conversation toute neuve n'y apparaît pas du tout.
         const rooms = participantUserRooms(sharedParticipants);
         for (const room of rooms) {
-          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+            ...updatePayload,
+            lastMessageTranslations: prismeByRoom.get(room) ?? null,
+          });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: rooms.length });
       }

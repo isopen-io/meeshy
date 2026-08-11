@@ -1315,6 +1315,28 @@ export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
+  /**
+   * Le Prisme Linguistique de la ligne de liste, RÉSOLU POUR CE DESTINATAIRE.
+   * Parité avec ce que `GET /conversations` sert déjà sous le même nom
+   * (`buildLastMessagePreviewTranslations`).
+   *
+   * Trois états, et le client doit les distinguer tous les trois :
+   *  - clé ABSENTE → la charge utile ne décrit pas le dernier message (renommage,
+   *    avatar…) et ne doit rien périmer ;
+   *  - `null` → « aucune traduction ne sert ton prisme » ; c'est ce vide REÇU qui
+   *    périme la carte que le client garde de l'ancien texte après une édition
+   *    (le gateway met `Message.translations` à `null` dans la même écriture) ;
+   *  - carte → les aperçus traduits, tronqués comme ceux du REST.
+   *
+   * Le client ne peut pas trancher seul : une édition garde le même
+   * `lastMessageId`, et vider inconditionnellement casserait le chemin d'envoi.
+   * Les trois émetteurs porteurs d'aperçu (`MessageHandler.broadcastNewMessage`,
+   * `MeeshySocketIOManager._broadcastNewMessage`, `emitConversationPreviewUpdate`)
+   * posent donc TOUJOURS les deux clés, ensemble.
+   */
+  readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
+  /** Jumeau obligatoire du champ ci-dessus — sans lui le prisme ne peut pas classer l'original à son rang. */
+  readonly lastMessageOriginalLanguage?: string | null;
   readonly [key: string]: unknown;
 }
 

@@ -60,6 +60,25 @@ const CONVERSATION_DATE_FIELDS = new Set([
 ]);
 
 /**
+ * `lastMessageTranslations` arrive par le fil comme n'importe quelle clé du
+ * payload — sans passer par `transformersService`, qui valide la même carte
+ * pour le chemin REST. Le jumeau est donc recopié ici : même refus des
+ * tableaux (sinon `['Bonjour']` traverserait comme une carte indexée par des
+ * entiers) et des valeurs non-textuelles.
+ *
+ * `null` (ce que le gateway envoie quand plus aucune traduction ne sert le
+ * prisme du lecteur) devient `undefined` et reste APPLIQUÉ : c'est ce vide
+ * reçu qui périme la carte de l'ancien texte après une édition. Le laisser
+ * tomber rendrait le correctif inopérant côté web.
+ */
+function normalizePreviewTranslations(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
  * Turns an untyped `conversation:updated` payload into a patch that matches
  * `Conversation`: date fields are materialised, and an unparseable date is
  * dropped rather than overwriting a valid cached value with garbage.
@@ -71,6 +90,17 @@ const CONVERSATION_DATE_FIELDS = new Set([
 export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
+    if (key === 'lastMessageTranslations') {
+      patch[key] = normalizePreviewTranslations(value);
+      continue;
+    }
+    // Jumeau obligatoire de la carte : `Conversation` le déclare `string?`, et
+    // le fil envoie `null` quand il n'y a plus de dernier message. Appliqué en
+    // `undefined` — appliqué, pas ignoré : les deux champs forment un groupe.
+    if (key === 'lastMessageOriginalLanguage') {
+      patch[key] = typeof value === 'string' ? value : undefined;
+      continue;
+    }
     if (!CONVERSATION_DATE_FIELDS.has(key)) {
       patch[key] = value;
       continue;

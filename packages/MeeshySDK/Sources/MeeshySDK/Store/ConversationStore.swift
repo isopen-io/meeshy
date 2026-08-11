@@ -437,6 +437,21 @@ public actor ConversationStore {
             if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
             if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
             if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+            // Le prisme fait partie du MÊME groupe monotone que l'aperçu, et
+            // s'applique en bloc — `nil` compris. Sans lui, la ligne recevait le
+            // nouvel aperçu et gardait la carte de traductions de l'ANCIEN texte,
+            // que `resolvedLastMessagePreview` préfère : le contenu d'avant
+            // restait affiché jusqu'à un rechargement complet de la liste.
+            //
+            // Le vide vient du SERVEUR et jamais d'une déduction locale : vider
+            // dès qu'un aperçu arrive effacerait ce que `message:new` vient
+            // d'installer sur le chemin d'envoi, et « vider si `lastMessageId`
+            // diffère » laisserait passer l'édition, qui garde le même id.
+            if let prisme = event.lastMessagePrisme {
+                conv.lastMessageTranslations = prisme.translations
+                conv.lastMessageOriginalLanguage = prisme.originalLanguage
+                changed = true
+            }
         }
         if let v = event.title { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }
@@ -762,6 +777,10 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let lastMessageAt: Date?
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Le couple prisme de la ligne de liste. `nil` = la charge utile ne décrit
+    /// pas le dernier message ; présent avec `translations == nil` = le serveur
+    /// périme la carte. Voir `LastMessagePrisme`.
+    public let lastMessagePrisme: LastMessagePrisme?
     public let title: String?
     public let avatar: String?
     public let description: String?
@@ -776,6 +795,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        lastMessagePrisme: LastMessagePrisme? = nil,
         title: String? = nil,
         avatar: String? = nil,
         description: String? = nil,
@@ -789,6 +809,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessagePrisme = lastMessagePrisme
         self.title = title
         self.avatar = avatar
         self.description = description

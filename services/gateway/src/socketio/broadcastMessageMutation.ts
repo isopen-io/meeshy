@@ -2,7 +2,10 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { emitConversationPreviewUpdate, type PreviewEmitIO } from './emitConversationPreviewUpdate';
 
-type MutationPrisma = Pick<PrismaClient, 'participant' | 'message'>;
+// `user` : `emitConversationPreviewUpdate` résout le Prisme de la ligne de
+// liste par destinataire, ce qui demande de lire les préférences linguistiques
+// des participants qui ont un compte.
+type MutationPrisma = Pick<PrismaClient, 'participant' | 'message' | 'user'>;
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it

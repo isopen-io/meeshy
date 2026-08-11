@@ -5340,4 +5340,79 @@ describe('MeeshySocketIOManager', () => {
       expect(entry.payload).not.toHaveProperty('clientMessageId');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // _broadcastNewMessage — le Prisme de la ligne de liste sur conversation:updated
+  // -------------------------------------------------------------------------
+
+  /**
+   * Jumeau REST/ZMQ de `MessageHandler.broadcastNewMessage`. Les deux émetteurs
+   * doivent porter le couple `{ lastMessageTranslations, lastMessageOriginalLanguage }`
+   * ENSEMBLE : sinon l'aperçu qu'une ligne de liste affiche dépend du transport
+   * par lequel le message est arrivé.
+   */
+  describe('_broadcastNewMessage — Prisme de la ligne de liste', () => {
+    const CONV = 'conv-123456789012';
+
+    it('porte le couple du Prisme, `null` compris, sur conversation:updated', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-a', userId: 'user-a', joinedAt: new Date(), language: 'fr' },
+      ]);
+      const sent = recordEmitPayloads(ioState);
+      try {
+        await manager.broadcastMessage(makeMessage({ conversationId: CONV, originalLanguage: 'en' }), CONV);
+      } finally {
+        sent.restore();
+      }
+
+      const updates = sent.forEvent(SERVER_EVENTS.CONVERSATION_UPDATED);
+      expect(updates).toHaveLength(1);
+      expect(updates[0].payload).toHaveProperty('lastMessageTranslations', null);
+      expect(updates[0].payload).toHaveProperty('lastMessageOriginalLanguage', 'en');
+    });
+
+    it('sert à chaque destinataire la traduction de SON prisme', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-a', userId: 'user-a', joinedAt: new Date(), language: 'en' },
+        { id: 'part-b', userId: 'user-b', joinedAt: new Date(), language: 'en' },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'user-a', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        { id: 'user-b', systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+      ] as never);
+      const sent = recordEmitPayloads(ioState);
+      try {
+        await manager.broadcastMessage(
+          makeMessage({
+            conversationId: CONV,
+            originalLanguage: 'en',
+            translations: { fr: { text: 'Bonjour' }, es: { text: 'Hola' } },
+          }),
+          CONV
+        );
+      } finally {
+        sent.restore();
+      }
+
+      const byRoom = new Map(
+        sent.forEvent(SERVER_EVENTS.CONVERSATION_UPDATED).map((s) => [s.rooms[0], s.payload])
+      );
+      expect(byRoom.get(ROOMS.user('user-a')).lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+      expect(byRoom.get(ROOMS.user('user-b')).lastMessageTranslations).toEqual({ es: 'Hola' });
+    });
+
+    it("n'interroge pas les préférences quand le message n'a aucune traduction — le cas nominal de l'envoi", async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-a', userId: 'user-a', joinedAt: new Date(), language: 'fr' },
+      ]);
+      prisma.user.findMany.mockClear();
+
+      await manager.broadcastMessage(makeMessage({ conversationId: CONV, translations: null }), CONV);
+
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

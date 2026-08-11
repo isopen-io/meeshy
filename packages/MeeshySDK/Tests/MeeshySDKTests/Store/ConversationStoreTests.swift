@@ -626,6 +626,102 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(after.avatar, "https://cdn.meeshy.me/avatar.jpg")
     }
 
+    // MARK: - applyConversationUpdated — Prisme de la ligne de liste
+
+    func test_applyConversationUpdated_prismeProvided_replacesTranslationsAndOriginalLanguage() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageTranslations = ["fr": "texte AVANT"]
+        conv.lastMessageOriginalLanguage = "en"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_001_000),
+            lastMessagePreview: "Hello again",
+            lastMessagePrisme: LastMessagePrisme(
+                translations: ["fr": "Bonjour à nouveau"],
+                originalLanguage: "en"
+            )
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "Bonjour à nouveau"])
+        XCTAssertEqual(after.lastMessageOriginalLanguage, "en")
+    }
+
+    /// Le cœur du correctif : le serveur périme `Message.translations` dans la
+    /// MÊME écriture que l'édition. C'est ce vide REÇU — et non une déduction
+    /// locale — qui doit vider la carte, sans quoi le résolveur, qui préfère la
+    /// traduction, rend indéfiniment le texte D'AVANT.
+    func test_applyConversationUpdated_prismeWithNilTranslations_clearsTheStaleMap() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageTranslations = ["fr": "Bonjour, texte AVANT édition"]
+        conv.lastMessageOriginalLanguage = "en"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_001_000),
+            lastMessagePreview: "Hello everyone, edited",
+            lastMessagePrisme: LastMessagePrisme(translations: nil, originalLanguage: "en")
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertNil(after.lastMessageTranslations,
+                     "un prisme REÇU sans traduction doit périmer la carte de l'ancien texte")
+        XCTAssertEqual(after.lastMessagePreview, "Hello everyone, edited")
+    }
+
+    /// Le pendant du témoin précédent : une charge utile de métadonnées ne
+    /// décrit pas le dernier message et ne doit RIEN périmer. Vider dès qu'un
+    /// aperçu arrive effacerait ce que `message:new` installe sur le chemin
+    /// d'envoi.
+    func test_applyConversationUpdated_noPrisme_leavesTranslationsUntouched() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        conv.lastMessageOriginalLanguage = "en"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            title: "Renamed Group"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "Bonjour"])
+        XCTAssertEqual(after.lastMessageOriginalLanguage, "en")
+        XCTAssertEqual(after.title, "Renamed Group")
+    }
+
+    /// Le prisme appartient au groupe monotone : une diffusion en retard qui
+    /// décrit un message plus ANCIEN ne doit pas davantage écraser la carte
+    /// qu'elle n'écrase l'aperçu.
+    func test_applyConversationUpdated_stalePrisme_skippedWithTheRestOfTheGroup() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_699_000_000),
+            lastMessagePreview: "stale",
+            lastMessagePrisme: LastMessagePrisme(translations: nil, originalLanguage: "en")
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "Bonjour"])
+    }
+
     func test_applyConversationUpdated_unknownConversation_noop() async {
         let (store, _, _, _) = makeStore()
         await store.hydrate(makeConv(id: "conv-1"))

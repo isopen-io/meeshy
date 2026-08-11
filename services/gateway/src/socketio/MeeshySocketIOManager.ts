@@ -10,6 +10,7 @@ import { MessageTranslationService, MessageData } from '../services/message-tran
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
+import { resolveLastMessagePrismeByRoom } from './utils/lastMessagePrisme';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -2233,7 +2234,21 @@ export class MeeshySocketIOManager {
               conversationId: normalizedId,
               isActive: true
             },
-            select: { id: true, userId: true, joinedAt: true }
+            // `language` : la seule préférence linguistique d'un participant
+            // sans compte, lue par le Prisme de la ligne de liste ci-dessous.
+            select: { id: true, userId: true, joinedAt: true, language: true }
+          });
+
+          // Prisme de la ligne de liste, PAR destinataire — jumeau exact du
+          // chemin socket (`MessageHandler.broadcastNewMessage`). Les deux
+          // émetteurs doivent le porter ensemble : sinon l'aperçu affiché
+          // dépend du transport qui l'a apporté.
+          const prismeByRoom = await resolveLastMessagePrismeByRoom({
+            prisma: this.prisma,
+            participants: allParticipants,
+            translations: (message as { translations?: unknown }).translations,
+            originalLanguage: (message as { originalLanguage?: string | null }).originalLanguage,
+            onError: (error) => logger.warn('last-message prisme resolution failed', { error }),
           });
 
           // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
@@ -2246,6 +2261,11 @@ export class MeeshySocketIOManager {
             lastMessageAt: message.createdAt || new Date(),
             lastMessageId: message.id,
             lastMessagePreview: message.content,
+            // Voyage avec l'aperçu, en groupe monotone. `null` est une VALEUR :
+            // « aucune traduction ne sert ton prisme », ce qui périme la carte
+            // que le client garde du message précédent.
+            lastMessageOriginalLanguage:
+              (message as { originalLanguage?: string | null }).originalLanguage ?? null,
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
@@ -2254,7 +2274,10 @@ export class MeeshySocketIOManager {
           // nommée d'après son `Participant.id` — la sauter privait un invité de
           // lien partagé de tout re-tri de sa liste de conversations.
           for (const room of participantUserRooms(allParticipants)) {
-            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+              ...updatePayload,
+              lastMessageTranslations: prismeByRoom.get(room) ?? null,
+            });
           }
 
           // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).

@@ -114,7 +114,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
-        title: String? = nil
+        title: String? = nil,
+        lastMessagePrisme: LastMessagePrisme? = nil
     ) -> ConversationUpdatedEvent {
         ConversationUpdatedEvent(
             conversationId: conversationId,
@@ -122,8 +123,32 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             lastMessageAt: lastMessageAt,
             lastMessageId: lastMessageId,
             lastMessagePreview: lastMessagePreview,
-            updatedAt: "2024-01-01T00:00:00.000Z"
+            updatedAt: "2024-01-01T00:00:00.000Z",
+            lastMessagePrisme: lastMessagePrisme
         )
+    }
+
+    /// Le pont est le seul endroit où le prisme peut se perdre entre le
+    /// décodage et le store — un champ oublié ici rend tout le reste inerte.
+    func test_mapConversationUpdated_carriesThePrismeThrough() {
+        let event = makeConversationUpdatedEvent(
+            conversationId: "conv-1",
+            lastMessagePreview: "Hello",
+            lastMessagePrisme: LastMessagePrisme(translations: ["fr": "Bonjour"], originalLanguage: "en")
+        )
+
+        let mapped = ConversationStoreSocketBridge.mapConversationUpdated(event)
+
+        XCTAssertEqual(mapped.lastMessagePrisme?.translations, ["fr": "Bonjour"])
+        XCTAssertEqual(mapped.lastMessagePrisme?.originalLanguage, "en")
+    }
+
+    func test_mapConversationUpdated_metadataOnly_carriesNoPrisme() {
+        let mapped = ConversationStoreSocketBridge.mapConversationUpdated(
+            makeConversationUpdatedEvent(conversationId: "conv-1", title: "Renamed")
+        )
+
+        XCTAssertNil(mapped.lastMessagePrisme)
     }
 
     // MARK: conversation:updated

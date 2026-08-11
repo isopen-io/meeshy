@@ -1325,6 +1325,63 @@ describe('MessageHandler.broadcastNewMessage', () => {
     expect(updated![1]).toMatchObject({ updatedBy: { id: 'user-sender' } });
   });
 
+  // Le lecteur resté sur la LISTE n'est plus dans `conversation:<id>` : il ne
+  // reçoit pas `message:new` et ne peut donc pas dériver la carte d'aperçus
+  // traduits lui-même. Sans ces deux champs sur `conversation:updated`, sa
+  // ligne recevait le nouvel aperçu et gardait la carte du message PRÉCÉDENT —
+  // que son résolveur préfère, donc l'ancien contenu s'affichait.
+  it('CONVERSATION_UPDATED porte le couple du Prisme, même vide', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => [{ id: 'part-a', userId: 'user-a' }]) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    await handler.broadcastNewMessage(makeMessage({ originalLanguage: 'en' }), 'conv-abc');
+
+    const updated = io._emit.mock.calls.find((c: any[]) => c[0] === 'conversation:updated');
+    expect(updated![1]).toHaveProperty('lastMessageTranslations', null);
+    expect(updated![1]).toHaveProperty('lastMessageOriginalLanguage', 'en');
+  });
+
+  it('CONVERSATION_UPDATED sert à chaque destinataire la traduction de SON prisme', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: {
+        findMany: jest.fn(async () => [
+          { id: 'part-a', userId: 'user-a' },
+          { id: 'part-b', userId: 'user-b' },
+        ]),
+      },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+      user: {
+        findMany: jest.fn(async () => [
+          { id: 'user-a', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          { id: 'user-b', systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        ]),
+      },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage({
+      originalLanguage: 'en',
+      translations: { fr: { text: 'Bonjour' }, es: { text: 'Hola' } },
+    });
+    await handler.broadcastNewMessage(msg, 'conv-abc');
+
+    const updates = io._emit.mock.calls
+      .map((c: any[], i: number) => ({ event: c[0], payload: c[1], room: io._to.mock.calls[i]?.[0] }))
+      .filter((c: any) => c.event === 'conversation:updated');
+    const byRoom = new Map(updates.map((u: any) => [u.room, u.payload]));
+    expect((byRoom.get('user:user-a') as any).lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+    expect((byRoom.get('user:user-b') as any).lastMessageTranslations).toEqual({ es: 'Hola' });
+  });
+
   it('catches error in CONVERSATION_UPDATED silently', async () => {
     const io = makeMockIo();
     // participant.findMany throws on 2nd call (conversation:updated path)

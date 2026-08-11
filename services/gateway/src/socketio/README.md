@@ -449,6 +449,59 @@ jamais la cle sur laquelle elle indexe.
 
 ---
 
+## `conversation:updated` — le Prisme voyage AVEC l'apercu (cycle 69)
+
+**Tout emetteur qui pose `lastMessagePreview` doit poser AUSSI
+`lastMessageTranslations` et `lastMessageOriginalLanguage`**, meme quand la
+reponse est vide. Les trois emetteurs concernes :
+
+| Emetteur | Chemin |
+|---|---|
+| `MessageHandler.broadcastNewMessage` | envoi WS |
+| `MeeshySocketIOManager._broadcastNewMessage` | envoi REST/ZMQ |
+| `emitConversationPreviewUpdate` | edition / suppression |
+
+`routes/conversations/core.ts` (renommage, avatar…) ne pose pas d'apercu : il
+n'emporte donc aucun des deux champs, et **c'est cette absence qui dit au client
+« je ne decris pas le dernier message »**.
+
+**`null` est une VALEUR, pas une absence.** Une edition perime
+`Message.translations` dans la MEME ecriture que le nouveau contenu
+(`routes/messages.ts`). Le serveur faisait donc deja son travail — c'est le fil
+qui ne le disait pas : le client recevait le NOUVEAU texte et gardait la carte
+de traductions de l'ANCIEN, que son resolveur prefere. La ligne de liste rendait
+le contenu d'avant indefiniment.
+
+**Le client ne peut pas trancher seul**, et il faut le savoir avant de proposer
+le correctif « evident » :
+
+- vider la carte des qu'un apercu arrive **casse le chemin d'envoi**, ou
+  `message:new` vient justement de l'installer (cycle 65) ;
+- « vider seulement si `lastMessageId` differe » **laisse passer l'edition**,
+  qui garde le meme id. C'est exactement le cas a traiter.
+
+Seul le serveur sait que la carte a ete perimee. Le correctif appartient au fil.
+
+**Le payload est PAR DESTINATAIRE.** Le prisme est une propriete du LECTEUR : la
+boucle `participantUserRooms(...)` existait deja dans les trois emetteurs, elle
+envoyait simplement le meme objet a tout le monde. `resolveLastMessagePrismeByRoom`
+(`socketio/utils/lastMessagePrisme.ts`) rend la carte `room -> apercus traduits` ;
+une room absente vaut `null` sur le fil. Il delegue a
+`buildLastMessagePreviewTranslations`, la MEME unite que `GET /conversations` —
+les quatre exclusions ne peuvent pas diverger entre REST et socket.
+
+**Chemin rapide, et c'est le cas nominal :** un message qui vient d'etre stocke
+n'a pas encore de traductions (pipeline NLLB asynchrone via ZMQ). Quand la
+colonne ne porte rien d'exploitable, la reponse est `null` pour tout le monde et
+**aucune requete n'est ajoutee au chemin d'envoi**.
+
+Cote client, les trois etats se lisent sur la PRESENCE de la cle, pas sur sa
+valeur : `LastMessagePrisme` (SDK iOS) est `nil` quand la cle est absente et
+present-avec-`translations: nil` quand le serveur envoie `null`. Un
+`decodeIfPresent` seul confondrait les deux.
+
+---
+
 ## Revocation de session — couper la socket, pas seulement la ligne en base
 
 `disconnectRevokedSessions.ts` ferme **toutes** les sockets d'un utilisateur

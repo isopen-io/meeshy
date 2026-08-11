@@ -500,6 +500,35 @@ public struct SocketEventUser: Decodable, Sendable {
     public let id: String
 }
 
+/// Le Prisme Linguistique de la ligne de liste, tel que `conversation:updated`
+/// le porte — résolu par le gateway POUR CE LECTEUR, à parité avec ce que
+/// `GET /conversations` sert déjà (`buildLastMessagePreviewTranslations`).
+///
+/// L'existence de ce type est ce qui distingue les trois états du fil, que
+/// `[String: String]?` seul confondrait :
+///
+///  - `ConversationUpdatedEvent.lastMessagePrisme == nil` — la charge utile ne
+///    DÉCRIT PAS le dernier message (renommage, avatar…) : ne rien périmer ;
+///  - `translations == nil` dans un prisme PRÉSENT — le serveur dit « aucune
+///    traduction ne sert ton prisme ». C'est ce vide REÇU qui périme la carte
+///    que le client garde de l'ancien texte : une édition met
+///    `Message.translations` à `null` dans la même écriture que le nouveau
+///    contenu, et sans ce signal la ligne rendait l'ANCIEN contenu
+///    indéfiniment (le résolveur préfère la traduction) ;
+///  - `translations` peuplé — les aperçus traduits, déjà tronqués.
+///
+/// Le client ne peut pas trancher seul : une édition garde le même
+/// `lastMessageId`, et vider inconditionnellement casserait le chemin d'envoi.
+public struct LastMessagePrisme: Sendable, Hashable {
+    public let translations: [String: String]?
+    public let originalLanguage: String?
+
+    public init(translations: [String: String]?, originalLanguage: String?) {
+        self.translations = translations
+        self.originalLanguage = originalLanguage
+    }
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -538,12 +567,16 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// `updatedBy` and continue to populate this field.
     public let updatedBy: SocketEventUser?
     public let updatedAt: String
+    /// Le couple prisme de la ligne de liste. `nil` quand la charge utile ne
+    /// décrit pas le dernier message — voir `LastMessagePrisme`.
+    public let lastMessagePrisme: LastMessagePrisme?
 
     private enum CodingKeys: String, CodingKey {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
         case location
+        case lastMessageTranslations, lastMessageOriginalLanguage
     }
 
     public init(from decoder: Decoder) throws {
@@ -564,6 +597,18 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
+        // `contains` et non `decodeIfPresent` : `null` et clé ABSENTE décodent
+        // tous deux en `nil`, et ce sont précisément les deux états que le
+        // correctif doit séparer — un `null` reçu périme la carte, une clé
+        // absente ne doit rien toucher.
+        let carriesPrisme = container.contains(.lastMessageTranslations)
+            || container.contains(.lastMessageOriginalLanguage)
+        lastMessagePrisme = carriesPrisme
+            ? LastMessagePrisme(
+                translations: try container.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations),
+                originalLanguage: try container.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
+            )
+            : nil
     }
 
     public init(
@@ -582,7 +627,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         location: SharedPlace? = nil,
         senderId: String? = nil,
         updatedBy: SocketEventUser? = nil,
-        updatedAt: String
+        updatedAt: String,
+        lastMessagePrisme: LastMessagePrisme? = nil
     ) {
         self.conversationId = conversationId
         self.title = title
@@ -600,6 +646,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.senderId = senderId
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
+        self.lastMessagePrisme = lastMessagePrisme
     }
 }
 

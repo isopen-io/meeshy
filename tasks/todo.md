@@ -1,3 +1,156 @@
+# Cycle 69 — Après une édition, la ligne de liste affichait le texte D'AVANT
+
+## Contrainte d'environnement (identique aux cycles 61→68, revérifiée)
+
+Même conteneur Linux distant. Aucune chaîne Swift (`swift: command not found`), aucun SDK Android
+(`~/Android` absent). `tasks/lane-cursor.md` dit toujours `lane=ANDROID` et la lane reste
+matériellement impossible ici : **le curseur n'a donc PAS été touché.** Lanes gatables localement :
+gateway, web, shared. Le SDK iOS l'est **en CI** (`sdk-tests.yml` se déclenche sur
+`packages/MeeshySDK/**`, en PR comme en push) — précédent cycle 65.
+
+`node_modules` était de nouveau absent au démarrage : **`bun install --ignore-scripts` passe**, un
+`bun install` nu échoue sur le postinstall de `grpc-tools` (proxy sortant). Recette du cycle 68
+réutilisée telle quelle, elle est bonne.
+
+## La tête instruite a été consommée sans refaire l'enquête
+
+Le bloc « Tête instruite, NON CONSOMMÉE — reportée au cycle 69 » (conservé plus bas) décrivait la
+chaîne maillon par maillon. Ce cycle l'a prise telle quelle et est passé directement à l'écriture
+des témoins. Deux de ses conclusions ont été **vérifiées à nouveau dans le code avant d'écrire**,
+parce que tout le correctif en dépend, et deux faits NOUVEAUX ont été trouvés en chemin.
+
+## Le défaut
+
+`conversation:updated` portait `lastMessagePreview` **sans** `lastMessageTranslations` ni
+`lastMessageOriginalLanguage`. Le client posait donc le NOUVEAU texte à côté de la carte de
+traductions de l'ANCIEN — et son résolveur préfère la traduction. La ligne de liste rendait le
+contenu d'avant, indéfiniment, jusqu'à un rechargement complet.
+
+Le serveur, lui, faisait déjà son travail : une édition périme `Message.translations` dans la MÊME
+écriture que le nouveau contenu (`routes/messages.ts`, `translations: null`, commentaire adjacent à
+l'appui). **C'est le fil qui ne le disait pas.**
+
+Et le correctif ÉVIDENT est faux, ce que la tête instruite avait déjà établi et que ce cycle a
+re-vérifié avant d'écrire une ligne :
+
+- vider la carte dès qu'un aperçu arrive **casse le cycle 65** — le chemin d'envoi émet les deux
+  événements, et `message:new` vient justement d'installer la carte ;
+- « vider seulement si `lastMessageId` diffère » **laisse passer l'édition**, qui garde le même id.
+  C'est exactement, et uniquement, le cas à traiter.
+
+Seul le serveur sait que la carte a été périmée. Le correctif appartient au fil.
+
+## Ce que l'enquête a ajouté à la tête instruite
+
+**1. Ce n'est pas seulement l'édition — c'est aussi TOUT ENVOI.** La tête nommait l'édition. Mais un
+lecteur resté sur la LISTE a quitté `conversation:<id>` : il ne reçoit pas `message:new` et n'a donc
+aucun moyen de dériver la carte lui-même. À chaque message reçu, sa ligne affichait le nouvel aperçu
+accompagné de la carte du message PRÉCÉDENT. Le défaut vit donc sur les **trois** émetteurs porteurs
+d'aperçu, pas sur le seul chemin d'édition — et le chemin d'envoi est le plus fréquent des trois.
+
+**2. `Message.translations` arrive sous DEUX formes à ces émetteurs**, et les confondre n'échoue pas
+bruyamment. `MessageHandler._getMessageTranslations` documente les deux : la carte Mongo
+(`{ fr: { text, isEncrypted } }`) et le tableau au format API
+(`[{ targetLanguage, translatedContent }]`, ce que le type partagé PROMET). Un résolveur qui
+n'accepte que la carte rejetterait le tableau comme « pas une carte » et rendrait `null` à TOUS les
+destinataires alors que les traductions existent : aperçu non traduit, silencieusement. Le tableau
+est donc ramené à la carte avant de juger — c'est le « mensonge de type » du backlog, traité
+défensivement ici plutôt que démêlé.
+
+## Le correctif
+
+Une unité, `resolveLastMessagePrismeByRoom` (`socketio/utils/lastMessagePrisme.ts`), et trois
+appelants :
+
+| Étage | Fichier |
+|---|---|
+| envoi WS | `MessageHandler.broadcastNewMessage` |
+| envoi REST/ZMQ | `MeeshySocketIOManager._broadcastNewMessage` |
+| édition / suppression | `emitConversationPreviewUpdate` |
+
+- **Par destinataire, et la boucle existait déjà.** Le backlog portait ce point depuis le cycle 60
+  sous « payload PAR DESTINATAIRE, question de conception non tranchée ». Elle est tranchée par le
+  code : les trois émetteurs bouclent déjà sur `participantUserRooms(...)`, ils envoyaient
+  simplement le même objet à tout le monde. Il ne manquait que la résolution.
+- **Une seule unité de jugement.** Le résolveur délègue à `buildLastMessagePreviewTranslations`,
+  celle que `GET /conversations` utilise déjà. Les quatre exclusions (hors prisme, langue d'origine,
+  traduction chiffrée, texte inexploitable) ne peuvent donc pas diverger entre REST et socket.
+- **`null` est une VALEUR.** Une room absente de la carte vaut `lastMessageTranslations: null` sur
+  le fil. C'est ce vide REÇU — jamais déduit — qui périme proprement la carte du client.
+- **Chemin rapide, et c'est le cas nominal.** Un message qui vient d'être stocké n'a pas encore de
+  traductions (pipeline NLLB asynchrone via ZMQ). Quand la colonne ne porte rien d'exploitable, la
+  réponse est `null` pour tout le monde **sans aucune requête** : le chemin d'envoi ne paie rien.
+  Quand il y a des traductions, une seule `user.findMany` sert tous les participants, et le calcul
+  est mémoïsé sur le prisme — coût borné au nombre de prismes DISTINCTS, pas de participants.
+- **Un invité de lien n'est pas oublié.** Sans ligne `User`, sa seule préférence est
+  `Participant.language` — la même source que `groupSocketsByLanguage` utilise pour lui sur
+  `message:new`. Elle passe par `resolveUserLanguagesOrdered` pour hériter de la normalisation
+  BCP-47 (`'pt-BR'` matche la traduction `'pt'`).
+
+Côté clients, le point délicat est de distinguer **trois** états là où `nil` en confond deux :
+
+- **SDK iOS** — un type dédié, `LastMessagePrisme`. `ConversationUpdatedEvent.lastMessagePrisme` est
+  `nil` quand les clés sont ABSENTES (la charge utile ne décrit pas le dernier message : ne rien
+  périmer), et présent-avec-`translations: nil` quand le serveur envoie `null`. Le décodeur teste
+  `container.contains(...)`, pas `decodeIfPresent` — qui rendrait `nil` dans les deux cas. Le couple
+  s'applique dans le MÊME groupe monotone que l'aperçu (`ConversationStore.applyConversationUpdated`).
+- **Web** — `normalizeConversationPatch` valide la carte comme le fait déjà `transformersService`
+  pour le chemin REST (refus des tableaux, entrées non textuelles écartées) et transforme `null` en
+  `undefined` **appliqué** : le laisser tomber rendrait le correctif inopérant, puisque c'est
+  l'écriture de la clé dans le patch qui périme la valeur en cache.
+
+## Vérification
+
+- Gateway : **suite complète — 652 suites / 16 391 tests verts.** Base du cycle 68 : 650 / 16 371.
+  L'écart est exactement les 2 fichiers et 20 témoins ajoutés — aucune régression, aucun témoin
+  perdu. `tsc --noEmit` : 0 erreur sur tout le service.
+- Gateway : RED avant implémentation sur les 20 témoins ajoutés — aucun des trois émetteurs ne
+  posait la clé, donc toutes les assertions `toHaveProperty('lastMessageTranslations', …)`
+  échouaient par absence.
+- Web : 10 suites liées vertes (257 tests), dont les 6 nouveaux témoins de
+  `normalizeConversationPatch`. `tsc --noEmit` : aucune erreur sur le fichier touché (le service en
+  porte des centaines, toutes préexistantes et hors périmètre).
+- Shared : 50 suites / 1 484 tests verts.
+- SDK iOS : **non exécutable ici** (pas de chaîne Swift) — 9 témoins ajoutés, gatés par
+  `sdk-tests.yml` en CI.
+
+## Reste ouvert après ce cycle
+
+- **L'écran iOS n'est PAS encore corrigé, et c'est la tête du cycle 70.** La liste rendue par l'app
+  appartient à `ConversationListViewModel` (`apps/ios`), pas à `ConversationStore` : son propre
+  commentaire le dit — « Metadata + ordering stay owned by this VM (the store only sorts by
+  `lastMessageAt`) ». Deux obstacles distincts s'y trouvent, tous deux vérifiés dans le code :
+  1. **La comparaison est STRICTE** (`newLastAt > conversations[index].lastMessageAt`). Une édition
+     ne change pas `createdAt` : le payload porte un `lastMessageAt` ÉGAL, la branche entière est
+     sautée et **le nouveau texte n'atteint jamais la ligne**. Même `>` strict dans
+     `ConversationStore.applyConversationUpdated`. L'aperçu édité est donc invisible sur iOS
+     indépendamment du prisme — défaut plus basique que celui de ce cycle, et jamais nommé jusqu'ici.
+  2. **La facette construite par ce chemin est NEUTRE** (`LastMessageFacet(id:preview:senderName:at:location:)`,
+     donc `translations: nil`), et `applyLastMessage` remplace les onze champs EN BLOC. La laisser
+     s'appliquer à une édition effacerait l'auteur, les pièces jointes et l'état vue-unique d'un
+     message par ailleurs inchangé. « Incomplet plutôt que faux » est la règle de la facette pour un
+     message NOUVEAU ; pour une édition, le message est le MÊME et la règle ne tient plus.
+  Le travail est donc : séparer « appliquer la facette » de « remonter en tête », et passer
+  `event.lastMessagePrisme` dans la facette. **Non écrit ici délibérément** : `apps/ios/**` n'a
+  aucun gate en PR (`ios-tests.yml` ne se déclenche automatiquement que sur `dev`) et cette session
+  n'a pas de chaîne Swift — l'écrire en aveugle serait exactement ce que la leçon 95 condamne.
+- **`emitConversationPreviewUpdate` recharge le dernier message mais pas la carte par langue de
+  chaque lecteur en cas de conversation vide** : `latest === null` produit `null` partout, ce qui
+  est correct, mais le champ `lastMessageOriginalLanguage: null` est alors le seul signal. Aucun
+  client ne s'en sert aujourd'hui ; à surveiller si un écran affiche « conversation vide ».
+- Les points hérités du cycle 68 restent inchangés : le chemin REST/ZMQ n'emporte toujours pas
+  l'enveloppe de chiffrement (`isEncrypted`/`encryptedContent`/…) ni le couple de transfert
+  (`forwardedFromId`/`forwardedFromConversationId`/`forwardedFrom`) ; `serializeAttachmentForSocket`
+  est plus étroit que `attachmentFullSelect` ; `eslint` ne peut pas tourner sur le gateway (pas
+  d'`eslint.config.js` depuis ESLint v9) ; `PinnedMessageBanner` n'affiche qu'UNE épingle ;
+  `ConversationPicker.tsx` (admin) rend `lastMessage.content` brut ; le « mensonge de type » de
+  `Message.translations` est désormais **instrumenté à un troisième endroit** (ce cycle) mais
+  toujours pas résolu ; les deux scripts de réparation base attendent une exécution humaine ;
+  l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine ;
+  `getMentionsForMessage` / `getRecentMentionsForUser` n'ont toujours aucun écran.
+
+---
+
 # Cycle 68 — L'écho REST ne portait pas le `clientMessageId` que le client attendait
 
 ## Contrainte d'environnement (identique aux cycles 61/63/64/65/66/67, revérifiée)
@@ -125,7 +278,15 @@ Le split du chemin socket, à l'identique, en réutilisant les unités qui exist
 
 ---
 
-# Tête instruite, NON CONSOMMÉE — reportée au cycle 69
+# Tête instruite — CONSOMMÉE par le cycle 69
+
+> **Statut (cycle 69).** Ce bloc a été pris en tête et exécuté. Il est conservé mot pour mot parce
+> qu'il porte l'enquête maillon par maillon que le compte rendu du cycle 69 ne répète pas. Deux
+> choses y ont été ajoutées en chemin, et elles sont dans le compte rendu ci-dessus, pas ici : le
+> défaut touche AUSSI tout envoi (pas seulement l'édition), et `Message.translations` arrive sous
+> deux formes qu'il faut réconcilier avant de juger. L'étage iOS `apps/ios` que ce bloc n'avait pas
+> vu — la liste appartient à `ConversationListViewModel`, pas à `ConversationStore` — devient la
+> tête du cycle 70.
 
 > **Note d'intégration (cycle 68).** Ce bloc a été écrit par une session parallèle et a atterri sur
 > `main` *pendant* que le cycle 68 ci-dessus était déjà en cours d'écriture sur une autre branche.

@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
 import { participantUserRooms } from './emitToConversationParticipants';
+import { resolveLastMessagePrismeByRoom } from './utils/lastMessagePrisme';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -12,7 +13,7 @@ export interface PreviewEmitIO {
   to(room: string): { emit(event: string, payload: unknown): unknown };
 }
 
-type PreviewPrisma = Pick<PrismaClient, 'participant' | 'message'>;
+type PreviewPrisma = Pick<PrismaClient, 'participant' | 'message' | 'user'>;
 
 /**
  * Fan a `conversation:updated` preview refresh to every active
@@ -59,14 +60,27 @@ export async function emitConversationPreviewUpdate(
         // `id` is not decoration: it NAMES the personal room of a participant
         // with no `User` row. Selecting `userId` alone did not ignore the
         // fallback identity, it never read it.
-        select: { id: true, userId: true },
+        // `language` est la seule préférence linguistique d'un participant sans
+        // compte — sans elle, un invité de lien n'aurait jamais d'aperçu traduit.
+        select: { id: true, userId: true, language: true },
       }),
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         // Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche
         // jamais sa position dans ce fanout temps réel de l'aperçu.
-        select: { id: true, content: true, senderId: true, createdAt: true, metadata: true },
+        // `translations` / `originalLanguage` : le Prisme de la ligne de liste.
+        // Une édition périme la colonne dans la MÊME écriture (`translations:
+        // null`) — les relire ici est ce qui transporte ce vide jusqu'au client.
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          createdAt: true,
+          metadata: true,
+          translations: true,
+          originalLanguage: true,
+        },
       }),
     ]);
 
@@ -75,6 +89,14 @@ export async function emitConversationPreviewUpdate(
     // client décide comment rendre "" + location (ex. via messageType ou la
     // seule présence de `location`), pas ce helper.
     const place = sharedPlaceFromMetadata((latest as { metadata?: unknown } | null)?.metadata);
+
+    const prismeByRoom = await resolveLastMessagePrismeByRoom({
+      prisma,
+      participants,
+      translations: latest?.translations,
+      originalLanguage: latest?.originalLanguage,
+      onError,
+    });
 
     const payload = {
       conversationId,
@@ -88,13 +110,24 @@ export async function emitConversationPreviewUpdate(
       lastMessageAt: latest?.createdAt ?? null,
       lastMessageId: latest?.id ?? null,
       lastMessagePreview: latest?.content ?? null,
+      // Le Prisme de la ligne de liste voyage AVEC l'aperçu, en groupe monotone.
+      // `null` n'est pas une absence : c'est le serveur qui dit « plus aucune
+      // traduction ne sert ton prisme », et c'est ce vide reçu qui périme la
+      // carte que le client garde de l'ANCIEN texte. Sans lui, une édition
+      // laissait la ligne rendre le contenu d'avant indéfiniment — le résolveur
+      // client préfère la traduction, et personne ne lui avait dit qu'elle ne
+      // décrivait plus le message.
+      lastMessageOriginalLanguage: latest?.originalLanguage ?? null,
       senderId: latest?.senderId ?? null,
       updatedAt: new Date().toISOString(),
       ...(place ? { location: place } : {}),
     };
 
     for (const room of participantUserRooms(participants)) {
-      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, payload);
+      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        ...payload,
+        lastMessageTranslations: prismeByRoom.get(room) ?? null,
+      });
     }
   } catch (error) {
     onError?.(error);
