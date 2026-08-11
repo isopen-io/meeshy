@@ -427,7 +427,8 @@ export function useBookmarkPostMutation() {
       if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
 
-    onSettled: () => {
+    onSettled: (_data, _err, postId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.detail(postId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.bookmarks() });
     },
   });
@@ -467,7 +468,8 @@ export function useUnbookmarkPostMutation() {
       if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
 
-    onSettled: () => {
+    onSettled: (_data, _err, postId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.detail(postId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.bookmarks() });
     },
   });

@@ -1165,3 +1165,53 @@ describe('useLikePostMutation - socket ack error (no error message → default)'
     expect(result.current.error?.message).toBe('Failed to add reaction');
   });
 });
+
+// =============================================================================
+// useBookmarkPostMutation - detail cache invalidation
+// =============================================================================
+
+describe('useBookmarkPostMutation - detail cache invalidation', () => {
+  it('invalidates post detail query on success', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    qc.setQueryData(['posts', 'detail', 'post-1'], mockPost);
+    mockBookmarkPost.mockResolvedValue({ success: true, data: { bookmarked: true } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useBookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['posts', 'detail', 'post-1'] })
+    );
+  });
+});
+
+// =============================================================================
+// useUnbookmarkPostMutation - detail cache invalidation
+// =============================================================================
+
+describe('useUnbookmarkPostMutation - detail cache invalidation', () => {
+  it('invalidates post detail query on success', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    qc.setQueryData(['posts', 'detail', 'post-1'], mockPost);
+    mockUnbookmarkPost.mockResolvedValue({ success: true, data: { bookmarked: false } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUnbookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['posts', 'detail', 'post-1'] })
+    );
+  });
+});
