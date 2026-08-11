@@ -122,6 +122,22 @@ function getCategoryLabelKey(category: MediaCategory): string {
   }
 }
 
+function generateStoryObjectId(): string {
+  const cryptoRef = (globalThis as { crypto?: Crypto }).crypto;
+  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
+    return cryptoRef.randomUUID();
+  }
+  if (cryptoRef && typeof cryptoRef.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    cryptoRef.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  }
+  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+}
+
 // ============================================================================
 // StoryComposer
 // ============================================================================
@@ -183,11 +199,38 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
 
   const handlePublish = useCallback(() => {
     const mediaIds = uploadedAttachments.map(att => att.id);
+    const firstVisualMedia = uploadedAttachments.find((att) => {
+      const category = getMediaCategory(att.mimeType);
+      return category === 'image' || category === 'video';
+    });
+    const firstAudioMedia = uploadedAttachments.find((att) => getMediaCategory(att.mimeType) === 'audio');
+
+    const mediaObjects = firstVisualMedia ? [{
+      id: generateStoryObjectId(),
+      postMediaId: firstVisualMedia.id,
+      mediaType: getMediaCategory(firstVisualMedia.mimeType) === 'video' ? 'video' : 'image',
+      x: 0.5,
+      y: 0.5,
+      isBackground: true,
+      ...(typeof firstVisualMedia.duration === 'number' ? { duration: firstVisualMedia.duration / 1000 } : {}),
+    }] : undefined;
+
+    const audioPlayerObjects = firstAudioMedia ? [{
+      id: generateStoryObjectId(),
+      postMediaId: firstAudioMedia.id,
+      x: 0.5,
+      y: 0.85,
+      isBackground: true,
+      ...(typeof firstAudioMedia.duration === 'number' ? { duration: firstAudioMedia.duration / 1000 } : {}),
+    }] : undefined;
+
     onPublish({
       content: content || undefined,
       storyEffects: {
         backgroundColor: selectedBg,
         textStyle: selectedTextStyle,
+        ...(mediaObjects ? { mediaObjects } : {}),
+        ...(audioPlayerObjects ? { audioPlayerObjects } : {}),
       },
       visibility,
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) ? visibilityUserIds : undefined,
