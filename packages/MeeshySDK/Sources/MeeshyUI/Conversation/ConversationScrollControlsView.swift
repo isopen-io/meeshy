@@ -24,7 +24,13 @@ public struct ConversationScrollControlsView: View {
     public var isSearchingQuotedMessage: Bool
     public var accentColor: String
     public var secondaryColor: String
-    
+    /// SF Symbol du dernier message non lu quand c'est une notice d'appel
+    /// (téléphone / caméra). `nil` quand le dernier non-lu n'est pas un appel.
+    public var unreadCallSymbol: String? = nil
+    /// Teinte hex du glyphe d'appel (ex. "F87171"). Même convention que
+    /// `accentColor`/`secondaryColor`. `nil` → pas de teinte spécifique.
+    public var unreadCallTint: String? = nil
+
     public var onScrollToBottom: () -> Void
     public var onPlayAudio: () -> Void
     
@@ -44,6 +50,8 @@ public struct ConversationScrollControlsView: View {
         isSearchingQuotedMessage: Bool = false,
         accentColor: String,
         secondaryColor: String,
+        unreadCallSymbol: String? = nil,
+        unreadCallTint: String? = nil,
         onScrollToBottom: @escaping () -> Void,
         onPlayAudio: @escaping () -> Void
     ) {
@@ -62,6 +70,8 @@ public struct ConversationScrollControlsView: View {
         self.isSearchingQuotedMessage = isSearchingQuotedMessage
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
+        self.unreadCallSymbol = unreadCallSymbol
+        self.unreadCallTint = unreadCallTint
         self.onScrollToBottom = onScrollToBottom
         self.onPlayAudio = onPlayAudio
     }
@@ -239,13 +249,34 @@ public struct ConversationScrollControlsView: View {
     }
     
     /// Whether the last unread message carries a renderable attachment preview
-    /// (audio control, image/video thumbnail, or a type glyph).
+    /// (audio control, image/video thumbnail, a type glyph, or a call notice).
     private var hasAttachmentPreview: Bool {
+        Self.hasAttachmentPreview(
+            unreadAttachmentIsAudio: unreadAttachmentIsAudio,
+            unreadAttachmentThumbHash: unreadAttachmentThumbHash,
+            unreadAttachmentThumbnailUrl: unreadAttachmentThumbnailUrl,
+            unreadAttachmentFullUrl: unreadAttachmentFullUrl,
+            unreadAttachmentSymbol: unreadAttachmentSymbol,
+            unreadCallSymbol: unreadCallSymbol
+        )
+    }
+
+    /// Extracted `nonisolated static` so it's unit-testable without a full view
+    /// instance — same pattern as `shouldShowAttachmentPreview` below.
+    nonisolated static func hasAttachmentPreview(
+        unreadAttachmentIsAudio: Bool,
+        unreadAttachmentThumbHash: String?,
+        unreadAttachmentThumbnailUrl: String?,
+        unreadAttachmentFullUrl: String?,
+        unreadAttachmentSymbol: String?,
+        unreadCallSymbol: String?
+    ) -> Bool {
         unreadAttachmentIsAudio
             || unreadAttachmentThumbHash != nil
             || unreadAttachmentThumbnailUrl != nil
             || unreadAttachmentFullUrl != nil
             || unreadAttachmentSymbol != nil
+            || unreadCallSymbol != nil
     }
 
     /// Whether the rich attachment preview should appear on the scroll-to-bottom
@@ -379,6 +410,17 @@ public struct ConversationScrollControlsView: View {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
+        } else if let callSymbol = unreadCallSymbol {
+            // Notice d'appel (en cours/manqué/rejeté/annulé/échoué) : même
+            // gabarit que le glyphe générique ci-dessus, mais teinté par
+            // `unreadCallTint` (hex fourni app-side) plutôt que du blanc fixe —
+            // `nil` (ex. appel en cours, pastille déjà teintée accent) retombe
+            // sur `contentColor` pour rester lisible.
+            Image(systemName: callSymbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(unreadCallTint.map { Color(hex: $0) } ?? contentColor)
                 .frame(width: 36, height: 36)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
         } else {

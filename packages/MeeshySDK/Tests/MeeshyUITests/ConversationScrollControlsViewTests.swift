@@ -84,6 +84,32 @@ final class ConversationScrollControlsViewTests: XCTestCase {
             ConversationScrollControlsView.isCompactShape(hasUnreadContent: false, isOffline: false, isSearchingQuotedMessage: true))
     }
 
+    // MARK: - hasAttachmentPreview (call notice branch)
+
+    func test_hasAttachmentPreview_unreadCallSymbolPresent_isTrue() {
+        XCTAssertTrue(
+            ConversationScrollControlsView.hasAttachmentPreview(
+                unreadAttachmentIsAudio: false,
+                unreadAttachmentThumbHash: nil,
+                unreadAttachmentThumbnailUrl: nil,
+                unreadAttachmentFullUrl: nil,
+                unreadAttachmentSymbol: nil,
+                unreadCallSymbol: "phone.fill"
+            ))
+    }
+
+    func test_hasAttachmentPreview_allNil_isFalse() {
+        XCTAssertFalse(
+            ConversationScrollControlsView.hasAttachmentPreview(
+                unreadAttachmentIsAudio: false,
+                unreadAttachmentThumbHash: nil,
+                unreadAttachmentThumbnailUrl: nil,
+                unreadAttachmentFullUrl: nil,
+                unreadAttachmentSymbol: nil,
+                unreadCallSymbol: nil
+            ))
+    }
+
     // MARK: - typingDotTimer property wrapper (audit backlog 2026-07-20,
     // lane "Perf divers", P2)
     //
