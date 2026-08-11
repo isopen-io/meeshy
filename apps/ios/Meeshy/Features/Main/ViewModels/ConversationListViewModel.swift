@@ -950,6 +950,30 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Le pendant montant de `participantSelfLeft`, et il a longtemps manqué :
+        // l'effectif ne connaissait que des soustractions (départ, retrait,
+        // bannissement) et dérivait durablement vers le bas — `schedulePersist`
+        // écrivant chaque valeur fausse dans le cache disque.
+        //
+        // Il ne pouvait PAS s'écouter sur `conversationJoined` : cet événement
+        // porte aussi l'ack self-only du socket qui REJOINT LA ROOM, que produit
+        // chaque ouverture de fil, avec le même payload. `participantJoined`
+        // (`conversation:participant-joined`) ne porte que l'adhésion.
+        //
+        // Le nouvel arrivant s'écarte lui-même : le serveur l'omet de l'éventail,
+        // mais l'auto-join de room côté serveur est asynchrone et pourrait le
+        // faire entrer dans la room de conversation avant l'emit. Son effectif
+        // lui vient de `conversation:new`, qui le compte déjà.
+        messageSocket.participantJoined
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, event.userId != self.currentUserId else { return }
+                guard let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount += 1
+                self.schedulePersist()
+            }
+            .store(in: &cancellables)
+
         messageSocket.participantSelfLeft
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in

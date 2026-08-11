@@ -221,6 +221,20 @@ export const SERVER_EVENTS = {
    * system notification, emitted in parallel.
    */
   FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
+  /**
+   * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
+   * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
+   * event that carries that fact unambiguously.
+   *
+   * `CONVERSATION_JOINED` cannot serve here: it carries the same
+   * `{ conversationId, userId }` shape for a completely different fact — the
+   * self-only ack a socket receives after JOINING THE ROOM
+   * (`ConversationHandler`), which every thread opening produces and which
+   * changes no membership. A client counting members off `conversation:joined`
+   * would inflate its count on every thread opening; that ambiguity is why no
+   * client ever incremented, and why the count could only ever drift DOWN.
+   */
+  CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   /**
@@ -1307,6 +1321,13 @@ export interface ConversationParticipantUnbannedEventData {
   readonly membershipRestored?: boolean;
 }
 
+export interface ConversationParticipantJoinedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly joinedAt: string;
+}
+
 export interface ConversationParticipantLeftEventData {
   readonly conversationId: string;
   readonly userId: string;
@@ -1533,6 +1554,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;
