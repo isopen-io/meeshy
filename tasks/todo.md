@@ -1,3 +1,95 @@
+# Tête du cycle 68 — INSTRUITE ET PROUVÉE, prête à écrire
+
+*Enquête menée pendant l'attente de la CI du cycle 67. Rien n'est supposé ci-dessous : chaque
+maillon a été lu dans le code. Aucune ligne de production n'a été écrite — la correction est
+cross-stack (gateway + SDK iOS + web) et méritait son propre cycle plutôt qu'une fin de course.*
+
+## Le défaut : après une édition, la ligne de liste affiche le texte D'AVANT
+
+Le symptôme n'est pas « la ligne n'est pas traduite ». C'est **la ligne affiche l'ANCIEN contenu**,
+indéfiniment, jusqu'à un rechargement complet de la liste.
+
+La chaîne, maillon par maillon :
+
+1. `GET /conversations` hydrate la ligne avec `lastMessagePreview` (l'original tronqué),
+   `lastMessageTranslations` (la carte du prisme du lecteur) et `lastMessageOriginalLanguage`
+   — cycles 61/64, `routes/conversations/core.ts:659-664`.
+2. Le client résout par `resolvedLastMessagePreview(preferredLanguages:)`
+   (`CoreModels.swift:238`) / `resolveLastMessagePreview` (web) : si une traduction sert le prisme,
+   **c'est elle qui s'affiche**, pas `lastMessagePreview`.
+3. Une édition arrive. Le gateway **périme la colonne dans la même écriture** —
+   `translations: null` (`routes/messages.ts:361`, et le commentaire adjacent explique que
+   c'est délibérément atomique).
+4. Le gateway émet `conversation:updated` avec, en tout et pour tout,
+   `lastMessagePreview: latest?.content` — le NOUVEAU texte, **sans traductions, sans
+   `lastMessageOriginalLanguage`** (`socketio/emitConversationPreviewUpdate.ts:88-90`).
+   Le chemin d'envoi fait pareil (`MeeshySocketIOManager.ts:2181-2183`).
+5. Les deux clients appliquent le patch **en n'écrasant que l'aperçu** :
+   - iOS : `applyConversationUpdated` pose `conv.lastMessagePreview` et ne touche jamais
+     `lastMessageTranslations` (`ConversationStore.swift:436`). Le type d'entrée
+     `ConversationUpdatedStoreEvent` (`:759-772`) **n'a même pas de champ traductions**.
+   - web : `{ ...c, ...patch }` avec un patch construit par `normalizeConversationPatch` à partir
+     des seules clés reçues (`use-socket-cache-sync.ts:1086-1089`).
+6. Résultat : `lastMessagePreview` = nouveau texte, `lastMessageTranslations` = **carte de
+   l'ANCIEN texte**. Le résolveur, qui préfère la traduction, rend l'ancien contenu.
+
+**Qui le voit :** tout lecteur dont la langue primaire diffère de la langue d'origine du message et
+pour qui une traduction existait — c'est-à-dire le cas NOMINAL du produit. Le serveur, lui, a bien
+fait son travail : il a périmé la colonne. C'est le fil qui ne le dit pas.
+
+## Pourquoi le correctif ÉVIDENT est faux — vérifié avant de l'écrire
+
+Réflexe naturel : « quand `conversation:updated` apporte un nouvel aperçu, vider la carte de
+traductions côté client ». **Ça casserait le cycle 65.**
+
+Le chemin d'ENVOI émet les deux événements. `message:new` installe `lastMessageTranslations` via
+`previewTranslations(from:viewerLanguages:)` — c'est précisément ce que le cycle 65 a construit —
+et le `conversation:updated` jumeau arriverait derrière pour l'effacer. Un vide inconditionnel
+échange un défaut contre un autre.
+
+Raffiner en « vider seulement si `lastMessageId` diffère » ne marche pas non plus : **une édition
+garde le MÊME message**, donc le même id. C'est exactement le cas à traiter, et le seul que ce
+raffinement laisse passer.
+
+**Conclusion : le client ne peut pas trancher seul.** Seul le serveur sait si la carte a été
+périmée. Le correctif appartient au fil.
+
+## Le correctif attendu — et la question du cycle 60, enfin tranchée
+
+`conversation:updated` doit porter `lastMessageTranslations` + `lastMessageOriginalLanguage`, à
+parité avec ce que `GET /conversations` sert déjà. Après une édition la carte fraîchement
+construite est **vide**, et c'est ce vide — reçu, pas déduit — qui périme proprement la carte du
+client. Les trois champs s'appliquent alors **en groupe monotone**, comme iOS le fait déjà pour
+`lastMessageAt` / `lastMessageId` / `lastMessagePreview`.
+
+Le backlog portait ce point depuis le cycle 60 sous l'étiquette « payload PAR DESTINATAIRE,
+question de conception non tranchée ». **Elle est tranchée, et par le code existant :**
+`emitConversationPreviewUpdate` **boucle déjà par participant**
+(`for (const room of participantUserRooms(participants))`, `:97`). Un payload par destinataire n'est
+pas une architecture à inventer — la boucle est là, elle envoie simplement le même objet à tout le
+monde. Il reste à résoudre le prisme de chaque participant et à appeler
+`buildLastMessagePreviewTranslations`, que `core.ts` utilise déjà pour la même donnée.
+
+## Périmètre, et pourquoi il n'a pas été écrit ici
+
+Trois étages, tous gatables :
+
+| Étage | Fichier | Gate |
+|---|---|---|
+| gateway | `emitConversationPreviewUpdate.ts` + le jumeau `MeeshySocketIOManager.ts:2181` | suite gateway, locale |
+| SDK iOS | `ConversationUpdatedStoreEvent`, `applyConversationUpdated`, `ConversationStoreSocketBridge` | `sdk-tests.yml` en CI (précédent : cycle 65) |
+| web | `normalizeConversationPatch` / `handleConversationUpdated` | suite web, locale |
+
+**Deux émetteurs, pas un** — la règle des « sources de vérité jumelles » impose de les traiter
+ensemble, sinon l'aperçu dépend à nouveau du transport (envoi vs édition).
+
+Écrire ça correctement demande un cycle entier ; le cycle 67 était déjà livré et mergé. Le bâcler
+en fin de course aurait produit exactement ce que la leçon 95 condamne : un correctif dont personne
+n'a vérifié la moitié. **Instruit ici pour que le cycle 68 commence par écrire des témoins, pas par
+enquêter.**
+
+---
+
 # Cycle 67 — Épingler un message rendait la route d'épingles inexploitable
 
 ## Contrainte d'environnement (identique aux cycles 61/63/64/65/66, revérifiée)
@@ -134,8 +226,10 @@ qui circulent réellement sous le même nom, mais on peut le rendre **détectabl
   requête et non par une lecture de code.
 - **`ConversationPicker.tsx` (admin) rend `lastMessage.content` brut** (cycle 64) — dernier rendu
   d'aperçu web hors Prisme identifié.
-- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60) : payload PAR
-  DESTINATAIRE, question de conception non tranchée.
+- **`emitConversationPreviewUpdate` n'emporte toujours pas le prisme** (cycle 60) — **la question
+  de conception est TRANCHÉE et le défaut est PROUVÉ : voir la tête du cycle 68 en haut de ce
+  fichier.** Ce n'est pas une lacune de traduction, c'est l'ANCIEN contenu qui reste affiché après
+  une édition.
 - **`isDuplicate` n'est protégé par aucun témoin au niveau du spread** (cycle 66).
 - Les points hérités restent inchangés : `eslint` ne peut pas tourner sur le gateway (pas
   d'`eslint.config.js` depuis ESLint v9) ; les deux scripts de réparation base attendent une
