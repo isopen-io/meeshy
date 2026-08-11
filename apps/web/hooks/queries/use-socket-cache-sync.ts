@@ -8,7 +8,10 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
-import { updateInfiniteConversationCache } from '@/lib/conversations/infinite-cache';
+import {
+  rebuildInfiniteConversationPages,
+  type InfiniteConversationData,
+} from '@/lib/conversations/infinite-cache';
 import { extractPreviewTranslations } from '@/services/conversations/transformers.service';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
@@ -95,6 +98,22 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
     if (asDate) patch[key] = asDate;
   }
   return patch as Partial<Conversation>;
+}
+
+function updateInfiniteConversationCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updater: (conversations: Conversation[]) => Conversation[]
+): void {
+  queryClient.setQueryData(
+    queryKeys.conversations.infinite(),
+    (old: InfiniteConversationData | undefined) => {
+      if (!old) return old;
+      const allConversations = old.pages.flatMap(page => page.conversations);
+      const updated = updater(allConversations);
+      if (updated === allConversations) return old;
+      return rebuildInfiniteConversationPages(old, updated);
+    }
+  );
 }
 
 // After a message is deleted, advance the conversation-list preview to the

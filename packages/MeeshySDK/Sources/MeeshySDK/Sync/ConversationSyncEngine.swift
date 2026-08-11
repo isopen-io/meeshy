@@ -567,6 +567,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Delta Sync (foreground / reconnect)
 
+    /// JUMEAU WEB — `apps/web/hooks/queries/use-conversations-delta-sync.ts` +
+    /// `apps/web/lib/conversations/delta-sync.ts` portent la même règle sur le
+    /// cache React Query : même endpoint (`GET /conversations?updatedSince=`),
+    /// même upsert par id, même retrait sur `isActive == false`, même repli sur
+    /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
+    /// évolution de la règle touche les DEUX plateformes.
+    ///
+    /// DIVERGENCE CONNUE, non corrigée ici : `deltaSyncCore` demande
+    /// `limit=500`, mais `GET /conversations` plafonne à 100
+    /// (`Math.min(limit, 100)`, `routes/conversations/core.ts`) et trie par
+    /// `lastMessageAt` décroissant, PAS par `updatedAt`. Une fenêtre ayant
+    /// touché plus de 100 conversations rend donc une page tronquée dont les
+    /// lignes coupées ne sont pas « les plus anciennes » — et `lastSyncTimestamp`
+    /// avance quand même au max des `updatedAt` reçus, ce qui les enjambe
+    /// définitivement jusqu'au `fullSync` (24 h). Le web détecte ce cas
+    /// (`conversations.length >= DELTA_PAGE_LIMIT` ⇒ relecture complète) ;
+    /// iOS ne le détecte pas encore.
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
         let ok = await deltaSyncCore()
@@ -583,20 +600,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         return ok
     }
 
-    /// JUMEAU WEB — `syncConversationsDelta`
-    /// (`apps/web/hooks/queries/use-conversations-delta-sync.ts`), dont les
-    /// règles pures vivent dans `apps/web/lib/conversations/delta-merge.ts`
-    /// (`mergeDeltaConversations`, `sortConversationsByRecency`,
-    /// `reconcileDeltaUnread`, `conversationDeltaWatermark`).
+    /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
+    /// `syncSinceLastCheckpoint` ci-dessus pour la règle de fusion elle-même.
     ///
-    /// Deux divergences ASSUMÉES, pas des dérives :
-    /// - le web CALCULE son curseur depuis le contenu du cache au lieu de le
-    ///   persister — il n'a donc aucune purge d'identité à orchestrer ;
-    /// - le web n'a pas de frontière locale `userState.lastReadAt` : sa
-    ///   réconciliation de non-lus laisse le delta baisser la pastille, et ne
-    ///   la laisse monter que s'il apporte aussi un `lastMessageAt` plus récent.
-    ///
-    /// Toute évolution de la règle touche les deux fichiers.
+    /// `mergeConversationDelta` (`apps/web/lib/conversations/delta-sync.ts`) ne
+    /// porte que la RÈGLE 1 de `reconcileUnread` — conversation ouverte ⇒ 0.
+    /// La règle 2 (« lecture locale postérieure au dernier message serveur »)
+    /// n'a pas de transposition sûre : elle s'appuie sur `userState.lastReadAt`,
+    /// frontière LOCALE que le modèle web ne porte pas, et c'est le fait que
+    /// `markAsUnread` EFFACE cette frontière qui laisse le compteur serveur
+    /// reprendre la main. Une transposition basée sur `unreadCount` +
+    /// `lastMessageAt` n'a pas cet interrupteur : elle rendrait un
+    /// « marquer comme non lu » cross-device définitivement invisible sur le
+    /// web. Fermer l'écart demande de faire voyager la frontière de lecture
+    /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
     private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,

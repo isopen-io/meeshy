@@ -57,13 +57,12 @@ interface UseInfiniteConversationsOptions {
 export function useInfiniteConversationsQuery(options: UseInfiniteConversationsOptions = {}) {
   const { limit = 20, filters, enabled = true } = options;
 
-  // Rattrapage au reconnect SOCKET, monté ici — dans le hook qui POSSÈDE
-  // l'entrée de cache — pour qu'aucun écran ne puisse l'oublier. Même
-  // placement que le « Trigger 1 » de `use-conversation-messages-rq`.
-  // `refetchOnReconnect: 'always'` du QueryClient global ne le couvre PAS :
-  // il écoute l'`onlineManager` (réseau navigateur), et une coupure purement
-  // socket ne bouge pas `navigator.onLine`.
-  useConversationsDeltaSync({ enabled });
+  // Rattrapage après une coupure SOCKET — que `refetchOnMount` (montage) et
+  // `refetchOnReconnect` (réseau navigateur) laissent tous deux découverte.
+  // Monté ICI, sur le propriétaire du cache `conversations.infinite()`, pour
+  // qu'aucun consommateur ne puisse l'oublier ; le garde par QueryClient fait
+  // que plusieurs consommateurs montés ensemble ne tirent qu'une fois.
+  useConversationsDeltaSync(enabled);
 
   return useInfiniteQuery({
     queryKey: queryKeys.conversations.infinite(),

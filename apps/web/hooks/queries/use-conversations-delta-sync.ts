@@ -1,187 +1,175 @@
 'use client';
 
-/**
- * Rattrapage de la LISTE de conversations après une coupure SOCKET.
- *
- * Le QueryClient global tourne en `staleTime: Infinity` — Socket.IO EST la
- * source de vérité temps réel. `refetchOnReconnect: 'always'` semble couvrir la
- * reconnexion, mais il écoute l'`onlineManager` de React Query, c'est-à-dire la
- * transition réseau du NAVIGATEUR : un redémarrage gateway, un drop de load
- * balancer ou un échec d'upgrade de transport ne bougent pas `navigator.onLine`.
- * Pendant cette fenêtre la liste garde ses compteurs de non-lus, ses aperçus de
- * dernier message et son effectif d'avant la coupure, et ne se corrige qu'au
- * prochain focus de fenêtre ou remontage.
- *
- * Jumeau de `ConversationSyncEngine.deltaSyncCore`
- * (`packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`) ;
- * les règles de fusion, de tri et de curseur vivent dans
- * `@/lib/conversations/delta-merge`, valeur pure partagée par les deux témoins.
- *
- * Le pendant côté messages est `syncNewerMessages`
- * (`use-conversation-messages-rq.ts`, « Trigger 1 »), et côté notifications
- * `onSyncDesync('reconnect')` (`use-notifications-manager-rq.ts`).
- */
-
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { useNotificationStore } from '@/stores/notification-store';
-import { updateInfiniteConversationCache } from '@/lib/conversations/infinite-cache';
 import {
   conversationDeltaWatermark,
-  mergeDeltaConversations,
-  sortConversationsByRecency,
-} from '@/lib/conversations/delta-merge';
-import type { Conversation } from '@meeshy/shared/types';
+  mergeConversationDelta,
+} from '@/lib/conversations/delta-sync';
+import {
+  rebuildInfiniteConversationPages,
+  type InfiniteConversationData,
+} from '@/lib/conversations/infinite-cache';
 
-/** Plafond de `limit` du gateway (`GET /conversations`). */
+/**
+ * Rattrapage de la liste de conversations après une coupure SOCKET.
+ *
+ * ## La fenêtre aveugle que ce hook ferme
+ *
+ * Le QueryClient global tourne en `staleTime: Infinity` — Socket.IO EST la
+ * source de vérité temps réel. Ce qui n'arrive pas par socket n'est rattrapé
+ * par rien tant que l'écran reste monté.
+ *
+ * `refetchOnReconnect: 'always'` ressemble à la couverture manquante mais ne
+ * l'est pas : il écoute le `onlineManager` de React Query, c'est-à-dire la
+ * transition réseau du NAVIGATEUR. Un redémarrage gateway, un drop de load
+ * balancer ou un échec d'upgrade de transport tuent la socket sans bouger
+ * `navigator.onLine` — rien ne se déclenche, et la liste garde ses compteurs de
+ * non-lus, ses aperçus de dernier message et son effectif d'avant la coupure.
+ *
+ * C'est le pendant, pour la liste, du « Trigger 1 » de
+ * `use-conversation-messages-rq.ts` (front `false → true` de `isSocketConnected`),
+ * et le miroir web de `ConversationSyncEngine.syncSinceLastCheckpoint` sur iOS.
+ *
+ * ## Delta, pas `refetch()`
+ *
+ * `refetch()` rejouerait TOUTES les pages chargées d'une route lourde
+ * (participants, dernier message avec ses traductions et sa pièce jointe,
+ * compteurs de non-lus par curseur). Le rattrapage est UNE requête bornée par ce
+ * qui a réellement bougé — voir `lib/conversations/delta-sync.ts` pour la
+ * démonstration que le watermark déduit du cache ne peut rien rater.
+ */
+
+/**
+ * Plafond serveur de `GET /conversations` (`Math.min(limit, 100)` dans
+ * `routes/conversations/core.ts`) — demander plus ne rend pas plus.
+ *
+ * La troncature n'est pas récupérable en avançant le watermark : la route trie
+ * par `lastMessageAt` décroissant, PAS par `updatedAt`, donc les lignes coupées
+ * ne sont pas « les plus anciennes » et le prochain `updatedSince` — calculé sur
+ * ce qui a été fusionné — passerait par-dessus. Une page PLEINE est donc traitée
+ * comme une preuve d'incomplétude, et non comme un delta de confiance.
+ */
 const DELTA_PAGE_LIMIT = 100;
 
 /**
- * Nombre maximal de pages parcourues avant de rendre les armes. Au-delà de
- * `DELTA_MAX_PAGES × DELTA_PAGE_LIMIT` conversations touchées, le delta n'est
- * plus le chemin bon marché qu'il prétend être : la relecture complète est le
- * seul rattrapage honnête. Exporté pour que le témoin nomme la même borne.
+ * Anti-rafale sur les flaps de reconnexion. Sauter une exécution est sans
+ * conséquence : le watermark est DÉDUIT du cache, jamais avancé par une
+ * exécution sautée — la suivante couvre exactement la même fenêtre.
  */
-export const DELTA_MAX_PAGES = 5;
+const DELTA_COOLDOWN_MS = 5_000;
+
+type DeltaGuard = { inFlight: boolean; lastRunAt: number };
 
 /**
- * Fenêtre pendant laquelle un delta qui vient de courir suffit. La liste est
- * montée par plusieurs écrans à la fois et une socket qui bat la chamade
- * enchaîne les fronts de reconnexion — sans ce garde PARTAGÉ (niveau module,
- * pas par hook), chaque montage et chaque battement produirait sa requête.
- * iOS a corrigé exactement ce défaut (`deltaSyncCooldown = 3`).
+ * Le garde protège un cache, il appartient donc à son propriétaire plutôt qu'au
+ * module : plusieurs consommateurs de `useInfiniteConversationsQuery` montés en
+ * même temps partagent un QueryClient et ne doivent tirer qu'une fois.
  */
-const DELTA_SYNC_COOLDOWN_MS = 3_000;
+const guards = new WeakMap<QueryClient, DeltaGuard>();
 
-let lastDeltaSyncAt = 0;
-let deltaSyncInFlight = false;
-
-type InfiniteConversationCache = {
-  pages: { conversations: Conversation[] }[];
-};
-
-/**
- * Lit le delta `GET /conversations?updatedSince=` et le fusionne dans le cache
- * infinite SANS le remplacer.
- *
- * Pourquoi pas `refetch()` : sur une infinite query il relit TOUTES les pages
- * et REMPLACE le cache — il perd donc les écritures que les handlers socket y
- * ont faites (aperçus, effectifs, pastilles), et coûte N requêtes là où le
- * delta en coûte une. C'est la même raison qui a fait écrire `syncNewerMessages`
- * plutôt qu'un refetch côté messages.
- *
- * Ne rejette jamais : hors ligne ou gateway en vrac, on garde le cache intact
- * (local-first) et le prochain front de reconnexion retentera.
- */
-export async function syncConversationsDelta(queryClient: QueryClient): Promise<void> {
-  if (deltaSyncInFlight) return;
-
-  const cached = queryClient.getQueryData<InfiniteConversationCache>(
-    queryKeys.conversations.infinite()
-  );
-  if (!cached) return;
-
-  const existing = cached.pages.flatMap((page) => page.conversations);
-  const updatedSince = conversationDeltaWatermark(existing, new Date());
-  if (!updatedSince) return;
-
-  const now = Date.now();
-  if (now - lastDeltaSyncAt < DELTA_SYNC_COOLDOWN_MS) return;
-  lastDeltaSyncAt = now;
-  deltaSyncInFlight = true;
-
-  try {
-    let offset = 0;
-    for (let attempt = 0; attempt < DELTA_MAX_PAGES; attempt++) {
-      const result = await conversationsService.getConversations({
-        limit: DELTA_PAGE_LIMIT,
-        offset,
-        updatedSince,
-      });
-
-      const deltas = result.conversations ?? [];
-      if (deltas.length > 0) {
-        applyConversationDeltas(queryClient, deltas);
-        offset += deltas.length;
-      }
-
-      // Une page vide, ou un serveur qui annonce la fin : le rattrapage est
-      // complet. Une page vide AVEC `hasMore` ne peut pas faire avancer
-      // l'offset — sortir est le seul moyen de ne pas boucler sur place.
-      if (deltas.length === 0 || !result.pagination.hasMore) return;
-    }
-
-    // Le trou dépasse ce que la marche peut couvrir : la relecture complète
-    // reprend la main. `invalidate` plutôt que `refetch` pour laisser React
-    // Query n'agir que sur les observateurs montés.
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.conversations.infinite(),
-    });
-  } catch {
-    // Silence volontaire — le cache reste tel quel et les events socket
-    // reprennent le relais dès que la connexion tient.
-  } finally {
-    deltaSyncInFlight = false;
-  }
+function guardFor(queryClient: QueryClient): DeltaGuard {
+  const existing = guards.get(queryClient);
+  if (existing) return existing;
+  const created: DeltaGuard = { inFlight: false, lastRunAt: 0 };
+  guards.set(queryClient, created);
+  return created;
 }
 
-function applyConversationDeltas(
-  queryClient: QueryClient,
-  deltas: readonly Conversation[]
-): void {
-  // Lu au moment de la fusion, jamais capturé plus tôt : le rattrapage peut
-  // courir plusieurs centaines de millisecondes, pendant lesquelles
-  // l'utilisateur a pu ouvrir ou fermer une conversation.
-  const openConversationId = useNotificationStore.getState().activeConversationId;
-  let removedIds: readonly string[] = [];
-
-  updateInfiniteConversationCache(queryClient, (conversations) => {
-    const merged = mergeDeltaConversations(conversations, deltas, { openConversationId });
-    removedIds = merged.removedIds;
-    return sortConversationsByRecency(merged.merged);
-  });
-
-  // Miroir de `cache.messages.invalidate(for:)` sur iOS. Défensif sur cet
-  // endpoint — `GET /conversations` filtre déjà `isActive: true` — mais la
-  // règle doit rester la même des deux côtés.
-  for (const removedId of removedIds) {
-    queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(removedId) });
-  }
-}
-
-type UseConversationsDeltaSyncOptions = {
-  enabled?: boolean;
-};
-
-/**
- * Déclenche le delta sur le front `false → true` de la socket, et sur lui seul.
- *
- * Pas de rattrapage au montage, délibérément : `useInfiniteConversationsQuery`
- * monte déjà en `refetchOnMount: 'always'`, ce qui couvre strictement plus que
- * le delta. Les deux lectures se seraient concurrencées.
- *
- * Pas de rattrapage sur la PREMIÈRE connexion non plus : seule une RE-connexion
- * prouve qu'il y a eu une fenêtre aveugle.
- */
-export function useConversationsDeltaSync(
-  options: UseConversationsDeltaSyncOptions = {}
-): void {
-  const { enabled = true } = options;
+export function useConversationsDeltaSync(enabled: boolean): void {
   const queryClient = useQueryClient();
   const { isSocketConnected } = useConnectionStatus();
   const prevSocketConnectedRef = useRef<boolean | null>(null);
 
-  useEffect(() => {
-    if (!enabled) return;
+  const runDelta = useCallback(async () => {
+    const guard = guardFor(queryClient);
+    if (guard.inFlight) return;
+    const now = Date.now();
+    if (now - guard.lastRunAt < DELTA_COOLDOWN_MS) return;
 
+    const cached = queryClient.getQueryData<InfiniteConversationData>(
+      queryKeys.conversations.infinite()
+    );
+    const watermark = conversationDeltaWatermark(
+      cached?.pages.flatMap((page) => page.conversations) ?? []
+    );
+    // Cache vide (démarrage à froid) : rien à quoi comparer, et le montage lit
+    // déjà le serveur en entier. Un repli sur l'horloge locale n'aurait ici
+    // aucune vérité derrière lui.
+    if (!watermark) return;
+
+    guard.inFlight = true;
+    guard.lastRunAt = now;
+    try {
+      const { conversations } = await conversationsService.getConversations({
+        limit: DELTA_PAGE_LIMIT,
+        offset: 0,
+        updatedSince: watermark.toISOString(),
+      });
+      if (conversations.length === 0) return;
+
+      // Accumulateur local du seul résultat de la fusion qui intéresse un AUTRE
+      // cache. `setQueryData` appelle son updater synchronement et une seule
+      // fois : la valeur est lisible juste après, et l'updater reste une
+      // fonction pure de `old`.
+      let removedIds: string[] = [];
+      // Lue ICI, au moment de la fusion : la requête a pu courir plusieurs
+      // centaines de millisecondes, pendant lesquelles l'utilisateur a pu ouvrir
+      // ou fermer une conversation.
+      const openConversationId = useNotificationStore.getState().activeConversationId;
+      queryClient.setQueryData(
+        queryKeys.conversations.infinite(),
+        (old: InfiniteConversationData | undefined) => {
+          if (!old) return old;
+          // Le cache est relu ICI, pas avant l'await : un event socket arrivé
+          // pendant la requête doit survivre à la fusion.
+          const existing = old.pages.flatMap((page) => page.conversations);
+          const merge = mergeConversationDelta(existing, conversations, {
+            openConversationId,
+          });
+          removedIds = merge.removedIds;
+          return rebuildInfiniteConversationPages(old, merge.merged);
+        }
+      );
+
+      for (const removedId of removedIds) {
+        queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(removedId) });
+        // Miroir de `cache.messages.invalidate(for:)` sur iOS : une conversation
+        // retirée de la liste ne doit pas laisser derrière elle un fil de
+        // messages que `staleTime: Infinity` ne relira jamais, et qu'un retour
+        // sur l'URL afficherait tel quel.
+        queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(removedId) });
+      }
+
+      // Page pleine ⇒ le delta ne PROUVE plus qu'il a tout vu. On garde la
+      // fusion (correction immédiate de ce qu'on tient) et on escalade vers la
+      // relecture complète, seule à pouvoir combler le reste. Ce chemin coûteux
+      // n'existe que pour une coupure ayant touché 100 conversations ou plus,
+      // c'est-à-dire précisément le cas où une resync entière est justifiée.
+      if (conversations.length >= DELTA_PAGE_LIMIT) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.infinite() });
+      }
+    } catch {
+      // Silencieux : la socket porte la suite, et le prochain reconnect
+      // repartira du MÊME watermark — un échec ne consomme pas la fenêtre.
+    } finally {
+      guard.inFlight = false;
+    }
+  }, [queryClient]);
+
+  useEffect(() => {
     const prev = prevSocketConnectedRef.current;
     prevSocketConnectedRef.current = isSocketConnected;
 
-    if (prev !== false || isSocketConnected !== true) return;
+    if (!enabled) return;
+    // Seul un RE-connect prouve une fenêtre aveugle. Au premier `connect`, la
+    // liste vient d'être lue côté serveur par `refetchOnMount: 'always'`.
+    if (!(prev === false && isSocketConnected === true)) return;
 
-    void syncConversationsDelta(queryClient);
-  }, [enabled, isSocketConnected, queryClient]);
+    void runDelta();
+  }, [enabled, isSocketConnected, runDelta]);
 }

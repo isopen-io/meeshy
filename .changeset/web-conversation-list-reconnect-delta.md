@@ -2,35 +2,23 @@
 "@meeshy/web": patch
 ---
 
-La liste de conversations web se rattrape enfin après une coupure socket
+Le delta de reconnexion ne rallume plus le badge de la conversation qu'on est en train de lire
 
-Le QueryClient web tourne en `staleTime: Infinity` — Socket.IO EST la source de
-vérité temps réel. `refetchOnReconnect: 'always'` semblait couvrir la reprise,
-mais il écoute l'`onlineManager` de React Query, c'est-à-dire la transition
-réseau du NAVIGATEUR : un redémarrage gateway, un drop de load balancer ou un
-échec d'upgrade de transport ne bougent pas `navigator.onLine`. La sidebar
-gardait donc ses compteurs de non-lus, ses aperçus de dernier message et son
-effectif d'avant la coupure jusqu'au prochain focus de fenêtre ou remontage.
+Complément du catch-up delta de la liste de conversations (coupure socket) : la fusion
+prenait la vérité serveur pour TOUS les champs, compteur de non-lus compris. Le gateway
+calcule ce compteur pour tous les destinataires, lecteur inclus — un delta qui atterrit
+pendant qu'on lit rapporte donc la valeur d'avant l'aller-retour `mark-as-read` et
+rallume la pastille de la conversation qu'on a sous les yeux. Le handler socket
+`conversation:unread-updated` portait déjà exactement cette garde ; le delta est le
+second chemin d'écriture du même compteur et la porte désormais aussi.
 
-Le rattrapage se lit en DELTA — `GET /conversations?updatedSince=`, filtre déjà
-indexé côté gateway et déjà consommé par iOS — jamais en refetch : sur une
-infinite query, un refetch relit toutes les pages et REMPLACE le cache, donc
-perd ce que les handlers socket y ont écrit.
+Une conversation que le delta signale inactive voit également son cache de MESSAGES
+purgé, à côté de son `detail` — miroir de `cache.messages.invalidate(for:)` sur iOS.
+Sans cela, revenir sur son URL affichait un fil que `staleTime: Infinity` ne relit
+jamais.
 
-Trois arbitrages portent le correctif :
-
-- **Le curseur se calcule depuis le cache, il ne se persiste pas.** Il décrit
-  exactement ce que le client détient et n'a donc aucune purge d'identité à
-  orchestrer au changement de compte. Il est borné par `now`, ce qui ne peut
-  qu'élargir la fenêtre — au pire on relit une ligne déjà détenue.
-- **Le delta peut toujours BAISSER une pastille de non-lus, il ne peut la
-  MONTER que s'il apporte aussi un message plus récent.** Sans cette borne, un
-  instantané serveur antérieur à un `mark-as-read` encore en vol rallume la
-  pastille que l'utilisateur vient d'éteindre.
-- **Seul un RE-connect déclenche.** La première connexion ne prouve aucune
-  fenêtre aveugle, et le montage relit déjà le serveur
-  (`refetchOnMount: 'always'`).
-
-Les règles de fusion, de tri et de curseur sont des valeurs pures, miroir nommé
-de `ConversationSyncEngine.deltaSyncCore` et `SyncWatermark` côté SDK iOS — les
-deux fichiers se nomment mutuellement.
+La garde s'arrête volontairement à la conversation ouverte. L'étendre à la conversation
+fermée dont l'accusé de lecture traîne demanderait de faire voyager la frontière de
+lecture (`lastReadAt`, que iOS porte et que le modèle web n'a pas) : la transposer via
+`unreadCount` + `lastMessageAt` éteindrait le « marquer comme non lu » cross-device,
+puisque cette action ne déplace aucun `lastMessageAt`.

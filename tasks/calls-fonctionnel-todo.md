@@ -6719,3 +6719,107 @@ toolchain iOS/Android).
   `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en string
   literals hors du type-map partagé (cosmétique, basse priorité) ; toolchains iOS/Android hors d'atteinte
   dans ce sandbox.
+
+## Vague 104 — `ALREADY_ANSWERED` faux-positif multi-device au join (gateway) + `MediaSessionCoordinator.callActive`/`events` non synchronisés (iOS SDK) (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch`/vérif sur `origin/main`, branche
+`claude/upbeat-dirac-ozao52` strictement à jour avec `main` au démarrage (0 commit d'avance, 0 de
+retard), aucune PR ouverte de cette routine. Vague 103 (`1f1f2700f`, PR #2843) déjà mergée avant le
+début de cette session. Deux audits dédiés en parallèle (agents Explore, lecture seule) mandatés avec
+un résumé synthétique des trouvailles déjà closes/déjà triées des Vagues 1-103 pour éviter toute
+redite : un scope iOS (CallKit/PushKit/WebRTC/AVAudioSession/accessibilité/dead-code/concurrency), un
+scope gateway (`CallService.ts`, `CallEventsHandler.ts`, `CallCleanupService.ts`,
+`call-push-mirroring.ts`, `TURNCredentialService.ts`, `callHistory.ts`, `call-schemas.ts`). Les deux
+ont chacun remonté un candidat neuf à haute confiance — les deux traités dans ce cycle (2 commits
+distincts, même PR), le gateway étant intégralement vérifiable dans ce sandbox contrairement à l'iOS.
+
+### 1. Gateway — `call:join` émettait `CALL_EVENTS.ALREADY_ANSWERED` inconditionnellement, faisant
+taire à tort un device qui sonne toujours légitimement en multi-device
+
+- **Root cause confirmée par lecture directe** : `CallEventsHandler.ts`, handler `call:join` — émettait
+  `socket.to(ROOMS.user(userId)).emit(CALL_EVENTS.ALREADY_ANSWERED, {...})` sur CHAQUE join réussi, sans
+  aucune garde sur l'état réel de l'appel. Or « Item F » (fix antérieur, documenté dans
+  `CallService.ts` autour de `joinCallAttempt`) a changé ce qu'un join SIGNIFIE : il ne transitionne
+  JAMAIS l'appel à `active`, seulement à `ringing` — le device qui join reçoit l'offer SDP EN SONNANT,
+  avant que l'utilisateur ait répondu. iOS auto-early-join la room dès `call:initiated`
+  (`joinCallRoomReliably`), précisément pour recevoir l'offer pendant la sonnerie. Avec un utilisateur
+  connecté sur deux devices, le premier des deux à early-join fait taire le SECOND — qui sonne toujours
+  réellement, n'a rien répondu — via ce même ALREADY_ANSWERED, dismissant sa bannière d'appel entrant.
+  Un appel réel peut ainsi être manqué bien que les deux devices sonnaient authentiquement. Le jumeau
+  push de cette même notification (`call_answered_elsewhere`, pour les devices sans socket vivant) avait
+  déjà été correctement relocalisé hors de `call:join` en Vague 27 pour exactement cette raison — mais
+  le commentaire qui l'accompagne (« the ALREADY_ANSWERED socket event above ») montre que l'auteur de
+  la Vague 27 croyait à tort que le jumeau socket-direct restait, lui, correctement scopé.
+- **Fix** : émission relocalisée dans `call:signal`, branche `'answer'` (les DEUX branches — relais
+  normal ET cible sans socket actif), gardée par le même prédicat pur `shouldMirrorAnsweredElsewhere`
+  déjà éprouvé pour le mirror push (première answer réelle uniquement, jamais la propre answer de
+  l'initiateur, jamais une renégociation ultérieure).
+- **Tests** (TDD, RED confirmé en exécutant réellement la suite AVANT le fix — 4/6 assertions
+  échouaient exactement comme prédit : le join émettait toujours, les deux branches signal n'émettaient
+  jamais) : nouveau fichier `CallEventsHandler-already-answered-scope.test.ts` (6 cas : join simple,
+  join en second device, première answer réelle, renégociation, self-answer de l'initiateur, target
+  sans socket actif). L'e2e réel à 3 sockets (`calls-two-socket-e2e.test.ts`) codifiait littéralement
+  l'ANCIEN comportement bogué comme son contrat attendu (« B1 join → B2 reçoit already-answered ») —
+  réécrit pour vérifier l'ABSENCE de dismiss au join puis le dismiss réel seulement sur la vraie SDP
+  answer, avec les mêmes gardes anti-fuite (B1 ne se dismiss jamais lui-même, B2 ne reçoit jamais le
+  signal ciblé à A).
+- **Vérification** (sandbox Linux, suite gateway réellement exécutable ici) : `bun install
+  --ignore-scripts` + `packages/shared && npx prisma generate --generator client && bun run build`
+  (prérequis CLAUDE.md) ; nouvelle suite **6/6 verte** (RED confirmé avant fix via `git stash` du seul
+  fichier de prod, GREEN après `stash pop`) ; e2e 2-sockets **8/8 vert** ; sweep complet
+  `--testPathPatterns="[Cc]all"` — **48 suites / 1115 tests verts**, 0 régression. `npx tsc --noEmit` :
+  **0 erreur**. Full `bun run test:coverage` (249 suites) lancé en tâche de fond pour confirmation
+  large-spectre — résultat à documenter au cycle suivant si non capturé avant la fin de cette session.
+
+### 2. iOS SDK — `MediaSessionCoordinator.callActive`/`events` non synchronisés malgré une doc affirmant
+le contraire
+
+- **Root cause confirmée par lecture directe** (`MediaSessionCoordinator.swift`) : `callActive` était
+  un `Bool` `nonisolated(unsafe)` nu, écrit synchrone depuis le MainActor
+  (`CallManager.callState.didSet` → `setCallActive`) et lu depuis l'exécuteur sérialisé propre à cet
+  ACTOR (`request`/`release`/`deactivateForBackground`) — une vraie race sous le modèle de concurrence
+  Swift. Son commentaire affirmait « same pattern as `CallManager.isCallActiveFlag` » — mais ce dernier
+  a TOUJOURS été gardé par un `OSAllocatedUnfairLock` (`CallManager.swift:330`, vérifié) ; l'affirmation
+  était aspirationnelle, pas réelle. `events` (un `PassthroughSubject`) était publié via `.send(_:)`
+  depuis DEUX contextes d'exécution distincts (MainActor synchrone dans `setCallActive`, exécuteur de
+  l'actor via un `Task` dans `forward(_:)`) malgré l'absence de garantie Combine de thread-safety
+  concurrente pour `send(_:)`.
+- **Fix** : `callActive` porté sur le même patron `OSAllocatedUnfairLock` que `CallManager`, en une
+  seule transaction atomique lecture-puis-écriture dans `setCallActive` (au lieu de deux accès
+  lock-libres séparés). Point d'entrée unique `emit(_:)` sérialisé par lock ajouté ; les deux
+  publishers (`setCallActive`, `forward`) y passent désormais exclusivement, plus aucun
+  `events.send(_:)` direct. Comportement inchangé — mêmes sémantiques lecture/écriture, maintenant
+  synchronisées.
+- **Tests** : nouvelle suite source-guard dans `MediaSessionCoordinatorTests.swift`, même idiome que
+  `CallManagerIsCallActiveFlagSourceGuardTests` (pas de `nonisolated(unsafe)` non gardé, lock présent,
+  `events.send` appelé exactement une fois dans tout le fichier — dans `emit(_:)`), plus un test de
+  charge concurrente (`withTaskGroup`, 50×3 tâches hammering `setCallActive`/`isCallActive`/notification
+  système en parallèle) qui prouve l'absence de crash/deadlock sous pression réelle.
+- **Vérification** : build/tests iOS **non exécutables dans ce sandbox** (conteneur Linux, aucun Xcode
+  — cf. `apps/ios/CLAUDE.md`). Relecture ligne à ligne + comptage d'accolades avant/après sur les 2
+  fichiers touchés (équilibré). Vérification réelle déléguée à la CI GitHub Actions (macOS, job
+  « SDK Tests ») au push — PR ouverte et suivie jusqu'au vert avant merge.
+
+### Reste ouvert
+
+Deux trouvailles gateway supplémentaires de l'audit de ce cycle, MEDIUM, PAS traitées ce cycle (portée
+volontairement limitée à un candidat par audit pour garder chaque commit revuable indépendamment) —
+**candidats sérieux pour la Vague 105** :
+
+- **`CallService.updateCallStatus`'s terminal-status branch ancre `duration` sur `startedAt` au lieu de
+  `answeredAt`**, violant l'invariant que TOUS les 7 autres writers terminaux de ce fichier respectent
+  déjà (Vagues 25/27/30 — sinon un « Manqué · N:NN » fantôme apparaît dans l'historique). Confirmé mort
+  aujourd'hui (grep : `updateCallStatus` n'est jamais appelé avec un statut terminal actuellement) mais
+  une mine pour tout futur appelant/refactor.
+- **`callHistory.deriveCallDirection` ne vérifie pas que l'utilisateur a réellement PARTICIPÉ à l'appel**
+  — juste qu'il est membre de la conversation. Dans une conversation de groupe avec un appel P2P plafonné
+  à 2 participants actifs, un 3e membre jamais joint peut voir l'appel étiqueté « incoming » dans son
+  historique bien qu'il n'y ait jamais participé.
+
+Reconduit tel quel (rien de plus trouvé côté iOS au-delà du fix #2 ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en string
+literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce sandbox.
