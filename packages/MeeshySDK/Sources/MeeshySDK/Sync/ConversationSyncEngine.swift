@@ -600,6 +600,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         return ok
     }
 
+    /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
+    /// `syncSinceLastCheckpoint` ci-dessus pour la règle de fusion elle-même.
+    ///
+    /// `mergeConversationDelta` (`apps/web/lib/conversations/delta-sync.ts`) ne
+    /// porte que la RÈGLE 1 de `reconcileUnread` — conversation ouverte ⇒ 0.
+    /// La règle 2 (« lecture locale postérieure au dernier message serveur »)
+    /// n'a pas de transposition sûre : elle s'appuie sur `userState.lastReadAt`,
+    /// frontière LOCALE que le modèle web ne porte pas, et c'est le fait que
+    /// `markAsUnread` EFFACE cette frontière qui laisse le compteur serveur
+    /// reprendre la main. Une transposition basée sur `unreadCount` +
+    /// `lastMessageAt` n'a pas cet interrupteur : elle rendrait un
+    /// « marquer comme non lu » cross-device définitivement invisible sur le
+    /// web. Fermer l'écart demande de faire voyager la frontière de lecture
+    /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
     private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,

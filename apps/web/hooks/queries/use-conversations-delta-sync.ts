@@ -5,6 +5,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useNotificationStore } from '@/stores/notification-store';
 import {
   conversationDeltaWatermark,
   mergeConversationDelta,
@@ -116,6 +117,10 @@ export function useConversationsDeltaSync(enabled: boolean): void {
       // fois : la valeur est lisible juste après, et l'updater reste une
       // fonction pure de `old`.
       let removedIds: string[] = [];
+      // Lue ICI, au moment de la fusion : la requête a pu courir plusieurs
+      // centaines de millisecondes, pendant lesquelles l'utilisateur a pu ouvrir
+      // ou fermer une conversation.
+      const openConversationId = useNotificationStore.getState().activeConversationId;
       queryClient.setQueryData(
         queryKeys.conversations.infinite(),
         (old: InfiniteConversationData | undefined) => {
@@ -127,7 +132,10 @@ export function useConversationsDeltaSync(enabled: boolean): void {
           // plus ancienne que la fenêtre chargée appartient à une page non lue
           // et entrerait en double au `fetchNextPage` suivant.
           const hasMore = Boolean(old.pages[old.pages.length - 1]?.pagination?.hasMore);
-          const merge = mergeConversationDelta(existing, conversations, { hasMore });
+          const merge = mergeConversationDelta(existing, conversations, {
+            hasMore,
+            openConversationId,
+          });
           removedIds = merge.removedIds;
           return rebuildInfiniteConversationPages(old, merge.merged);
         }
@@ -135,6 +143,11 @@ export function useConversationsDeltaSync(enabled: boolean): void {
 
       for (const removedId of removedIds) {
         queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(removedId) });
+        // Miroir de `cache.messages.invalidate(for:)` sur iOS : une conversation
+        // retirée de la liste ne doit pas laisser derrière elle un fil de
+        // messages que `staleTime: Infinity` ne relira jamais, et qu'un retour
+        // sur l'URL afficherait tel quel.
+        queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(removedId) });
       }
 
       // Page pleine ⇒ le delta ne PROUVE plus qu'il a tout vu. On garde la

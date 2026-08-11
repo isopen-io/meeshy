@@ -166,10 +166,9 @@ describe('mergeConversationDelta', () => {
 });
 
 /**
- * Règle ajoutée par la session parallèle du même cycle (voir `tasks/todo.md`,
- * cycle 76b) : la borne de fenêtre chargée. Sans elle, une conversation inconnue
- * du cache et plus ancienne que la dernière ligne chargée entre dans la liste,
- * puis y ENTRE UNE SECONDE FOIS au `fetchNextPage` suivant, qui la rapporte à sa
+ * La borne de fenêtre chargée. Sans elle, une conversation inconnue du cache
+ * et plus ancienne que la dernière ligne chargée entre dans la liste, puis y
+ * ENTRE UNE SECONDE FOIS au `fetchNextPage` suivant, qui la rapporte à sa
  * place réelle.
  */
 describe('mergeConversationDelta — borne de la fenêtre chargée', () => {
@@ -228,5 +227,47 @@ describe('mergeConversationDelta — borne de la fenêtre chargée', () => {
 
     expect(merged.map((c) => c.id)).toEqual(['a']);
     expect(removedIds).toEqual(['vieille']);
+  });
+});
+
+describe('mergeConversationDelta — garde de la conversation OUVERTE', () => {
+  it('forces the open conversation to zero unread, whatever the server says', () => {
+    const { merged } = mergeConversationDelta(
+      [conv('open', { unreadCount: 0 })],
+      [conv('open', { unreadCount: 6, lastMessageAt: new Date('2026-08-05T00:00:00.000Z') })],
+      { openConversationId: 'open' }
+    );
+
+    expect(merged[0].unreadCount).toBe(0);
+  });
+
+  it('keeps every OTHER field of the open conversation from the server row', () => {
+    const { merged } = mergeConversationDelta(
+      [conv('open', { title: 'stale', unreadCount: 0 })],
+      [conv('open', { title: 'fresh', unreadCount: 6 })],
+      { openConversationId: 'open' }
+    );
+
+    expect(merged[0].title).toBe('fresh');
+  });
+
+  it('leaves a NON-open conversation free to light its badge up', () => {
+    const { merged } = mergeConversationDelta(
+      [conv('other', { unreadCount: 0 })],
+      [conv('other', { unreadCount: 6 })],
+      { openConversationId: 'open' }
+    );
+
+    expect(merged[0].unreadCount).toBe(6);
+  });
+
+  it('takes the server count when no conversation is open', () => {
+    const { merged } = mergeConversationDelta(
+      [conv('a', { unreadCount: 0 })],
+      [conv('a', { unreadCount: 4 })],
+      { openConversationId: null }
+    );
+
+    expect(merged[0].unreadCount).toBe(4);
   });
 });
