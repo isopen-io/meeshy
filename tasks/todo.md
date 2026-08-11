@@ -8829,3 +8829,64 @@ d'investigation (pas régénéré) — `main` a bien les 4 références attendue
 - `AudioFullscreenSource.conversationId` porte 3 sens différents (vraie `Conversation.id` / id
   d'entité porteuse / `nil`) documentés par de la prose plutôt qu'un renommage — `playbackSessionId`
   éliminerait le besoin d'expliquer. Touche l'API publique du coordinator, hors scope d'un mini-fix.
+
+## Review — 3 chantiers UI Liquid Glass/menu (2026-08-12, branches fix/message-more-menu-and-media + feat/inline-video-liquid-glass + feat/scroll-to-bottom-morph, mergées dans main)
+
+Workflow autonome (Opus, 51 agents, TDD RED-GREEN + revue par tâche + revue finale holistique par
+piste) sur 3 sous-projets indépendants. Verdicts des 3 revues finales : **MERGEABLE AVEC RÉSERVES**
+(message-more), **MERGEABLE AVEC RÉSERVES** (inline-video), **MERGEABLE** (scroll-morph). Aucun
+Critical sur les 3 pistes. Gate complet réel vérifié sur chaque worktree + sur le résultat fusionné.
+
+**Corrigé avant merge** (pas un follow-up, déjà fait) : le bouton "Enregistrer" du sous-menu média
+affichait dès qu'un message avait ≥1 attachment non-location, alors que la règle SSOT du dépôt
+(`MessageActionResolver.saveableAttachmentCount == 1`) exige EXACTEMENT UN — un message à 3 photos
+aurait silencieusement sauvegardé la première seulement. Fix + test corrigés avant le merge.
+
+**Follow-ups Important non-bloquants (verdict des revues finales)** :
+- **Auto-PiP en arrière-plan désormais armé pour TOUTE vidéo inline** (`inline-video`, 6 surfaces :
+  bulle, pièce jointe de bulle, feed, détail de post, média de commentaire, attachment de bulle) —
+  conséquence directe des 2 décisions produit prises pendant le brainstorm (câbler le PiP + élargir
+  `inlineDefault` partout). `MediaLifecycleBridge.prepareForBackground` ne met plus en pause une
+  vidéo dont le PiP s'engage. Invisible en simulateur (`isPictureInPictureSupported()` y est
+  toujours faux) — à ajouter explicitement à la checklist de vérification device, avec le scénario
+  bulle-en-lecture → passage aux réels (contention du `pipController` singleton partagé).
+- `apps/ios/meeshy.sh` : le nouveau garde-fou anti-tests-non-enregistrés (`verify_test_classes_are_compiled`,
+  Leçon 120) utilise `nm | grep -oF` — correspondance par SOUS-CHAÎNE. 7 paires de classes en
+  collision existent aujourd'hui (`RouterTests` ⊂ `DeepLinkRouterTests`/`ComposerIngestRouterTests`/
+  `AudioBubbleRouterTests`/`NotificationContentRouterTests`, `ConversationViewModelTests` ⊂
+  `NewConversationViewModelTests`, `StatusViewModelTests` ⊂ `ConnectionStatusViewModelTests`,
+  `BubbleEquatableTests` ⊂ `ThemedMessageBubbleEquatableTests`) : si l'une devenait orpheline, la
+  garde ne la verrait pas. Fix : ancrer sur le nom manglé Swift (préfixe de longueur, ex.
+  `11RouterTests`) au lieu du nom nu. Fichier PARTAGÉ par tous les worktrees iOS — coordonner avant
+  d'y toucher.
+- `_FullscreenRenderer` (plein écran vidéo) n'opte toujours pas pour le PiP après un expand depuis
+  l'inline : le `pipController` singleton reste lié au layer inline masqué. No-op en pratique
+  aujourd'hui, mais `prepareForBackground` y consomme jusqu'à 400ms d'attente inutile. Suivi
+  naturel : propager `enablesPip` à la surface plein écran aussi.
+
+**Follow-ups Minor (dette, aucun ne bloque)** :
+- 3ᵉ copie verbatim de la construction `MediaSaveRequest` dans `ConversationView.swift` (757, 1800,
+  1950) — extraction en helper `requestSaveFirstMedia(of:)` recommandée.
+- Cibles incohérentes dans le sous-menu média : Supprimer vise `attachments.first?.id` (sans filtre
+  `.location`), Enregistrer vise `first(where: { $0.type != .location })` — pré-existant, rendu
+  visible par le regroupement des 2 actions dans un seul dialog.
+- `.media` reste gaté par `canDelete` (`MessageActionResolver.swift:92`) — un média REÇU (non
+  admin/mod) ne voit pas ce point d'entrée Enregistrer/Transférer (atténué : `.saveMedia` primaire
+  et `.forward` pellet couvrent déjà le cas).
+- `isCompactShape` (scroll-to-bottom) porte un nom inversé — renvoie `true` pour la capsule LARGE,
+  `false` pour le cercle compact. `usesCapsuleShape` dirait la vérité ; figé dans 4 tests.
+- Glyphe média dupliqué entre `unreadCallIndicator` (app) et `CallNoticePresentation.mediaGlyph`
+  (`BubbleCallNoticeView.swift:278`) — extraire un helper partagé sur `CallNoticePresentation`.
+- Accessibilité : `scrollToBottomAccessibilityLabel` ne mentionne pas l'état d'appel — VoiceOver
+  n'annonce que "N messages non lus", alors que manqué/échoué se distinguent SEULEMENT par la
+  teinte (WCAG 1.4.1, couleur seule).
+- Aucun des 3 fichiers de plan n'a ses cases `- [ ]` cochées après exécution — les plans ne
+  reflètent plus l'état d'avancement réel pour une session qui reprendrait. Sans impact fonctionnel.
+
+**Découverte annexe, HORS PÉRIMÈTRE de ce chantier** : le gate complet sur le résultat fusionné a
+révélé `CallViewAccessibilityTests.test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone`
+ROUGE de façon déterministe (reproduit isolément, 1/36 dans la classe) — `hasActiveEffects` ne
+vérifie que `config.isEnabled`, pas `config.hasAdvancedFilters`. Fichier dernièrement touché par
+`7b8f7e33d` (PR #2859, "calls: updateCallStatus duration anchor + video filter silent no-op"),
+totalement étranger aux 3 chantiers ci-dessus. Poussé sur `main` tel quel (pré-existant, pas
+introduit par ce travail) — à triager par qui possède la zone calls/effets vidéo.
