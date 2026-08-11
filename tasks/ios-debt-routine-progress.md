@@ -161,9 +161,50 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    ViewModels partagés). Ne PAS tenter sans validation utilisateur explicite sur : (a) relever le
    plancher à iOS 17, ou (b) accepter un split d'implémentation par version d'OS.
 
+7. **[OUVERT — nécessite une décomposition, PAS un mécanique direct — trouvé 2026-08-11]**
+   `UIScreen.main` deprecated (iOS 16+, remplaçant : `@Environment(\.displayScale)` pour
+   `.scale` en contexte View, la fenêtre active pour `.bounds`). **25 fichiers matchent le grep,
+   mais l'écrasante majorité N'EST PAS un vrai gap** — triage complet effectué avant de conclure
+   quoi que ce soit (ne PAS re-grep sans lire ce triage) :
+   - **Faux positifs (commentaires seuls, zéro usage réel)** : `StatusBubbleOverlay.swift`,
+     `RecentMediaStrip.swift`, `StoryViewerView.swift`, `StoryViewerView+Content.swift`,
+     `ConversationListView.swift`, `CallManager.swift`, `StoryBackdropCapture.swift`,
+     `StoryAVCompositor.swift` — ces fichiers ONT DÉJÀ migré vers la fenêtre active et laissent un
+     commentaire expliquant pourquoi ils évitent `UIScreen.main` ; le nom de l'API apparaît dans
+     le commentaire, jamais dans du code exécuté.
+   - **Contrainte MainActor/CALayer délibérée et documentée — NE PAS TOUCHER** :
+     `StoryMediaLayer.swift`, `StoryRenderer.swift`, `StoryLocationLayer.swift`,
+     `StoryTextLayer.swift`, `StoryStickerLayer.swift` — toutes utilisent `UIScreen.main.scale`
+     comme **valeur par défaut d'un paramètre** sur un type `nonisolated`/CALayer, précisément
+     parce qu'un défaut de paramètre ne peut ni être `async` ni lire un `@Environment` (accessible
+     seulement depuis une `View`/`ViewModifier`). `StoryTextLayer.swift:67-69` documente la
+     contrainte exacte en détail. Aller contre cette conception casserait la compilation ou
+     réintroduirait le bug de concurrence que le design évite — cf. `NOTES.md`/mémoire projet sur
+     la fragilité connue du canvas story (grappe `index_swiftui_ui.md`).
+   - **Usage réel en contexte NON-View (fonction statique / utilitaire hors body)** — nécessite un
+     **threading de paramètre** (changement de signature, pas un remplacement mécanique) :
+     `ImageDownsamplingConfig.maxPixelSize(for:)` (`enum` public, appelé potentiellement hors
+     contexte `View` par le pipeline `DiskCacheStore`), `CachedAsyncImage.pixelSize(for:)`
+     (`@MainActor private static func` — `@MainActor` ne donne PAS accès à `@Environment`, qui
+     exige une `View`/`ViewModifier` réelle), `VideoFilmstrip.swift` (utilitaire
+     `AVAssetImageGenerator`, hors `View`), `AudioWaveform.swift` (traitement de waveform hors
+     `View`).
+   - **Usage réel en contexte `View` — candidats les plus probables pour un futur slice mécanique,
+     PAS vérifiés en détail ce run (contexte exact body-vs-helper à confirmer avant de coder)** :
+     `ConversationMediaGalleryView.swift:251`, `Bubble/BubbleStandardLayout.swift:612`,
+     `Bubble/BubbleStandardLayout+Media.swift:548`, `SkeletonView.swift` (3 occurrences),
+     `LanguagePickerSheet.swift` (2 occurrences), `ImageViewerView.swift:50`,
+     `StoryComposerView+Canvas.swift:908` (déjà un repli `?? UIScreen.main.bounds.height`, même
+     forme que `DeviceLayout.windowSize` — pourrait n'être qu'un simple swap vers cette SSOT déjà
+     existante plutôt qu'un `@Environment`).
+   Prochain run qui reprend cet item : NE PAS re-grep à l'aveugle — partir de la dernière liste
+   (View-context, non vérifiée) ci-dessus, confirmer pour chacune que l'usage vit bien dans une
+   méthode d'instance `View`/`ViewModifier` (pas un `static func`), puis scoper un premier
+   sous-slice mécanique sur ce sous-ensemble confirmé seulement.
+
 Le backlog sera réapprovisionné (grep `print(`, `DispatchQueue.main.async`, `#file\b`,
 `.system(size:` restants + dernières entrées de `tasks/lessons.md`) quand les items ouverts
-restants (3, 4, 5) auront été soit décomposés en sous-slices exécutables, soit clos.
+restants (3, 4, 5, 7) auront été soit décomposés en sous-slices exécutables, soit clos.
 
 ## Journal d'itération
 
@@ -699,3 +740,60 @@ seulement épuisé des items déjà identifiés par le grep original. Un audit �
 du document source, pas juste les motifs déjà connus) a trouvé une nouvelle catégorie en un seul
 passage. Prochain run IOS_DETTE : appliquer la même discipline d'élargissement avant de conclure à
 un backlog vide.
+
+## Run — 2026-08-11 (bascule streak=5, audit élargi #2 — backlog item 7 trouvé, PAS de code livré)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5 last_run=dynamic-launcher-shortcuts`
+— règle d'alternance (streak ≥ 5) déclenchée, bascule vers `IOS_DETTE`. Scan de reprise (Étape 0
+point 5) : `gh pr list --state open --search "apps/android OR apps/ios"` = 2 PR, `#2849`/`#2851`,
+toutes deux `apps/web` (branches `claude/keen-hamilton-*`, naming ne matchant pas cette routine) —
+pas de run interrompu à terminer.
+
+**RE-PROUVÉ le backlog avant de choisir** : items 1/2 toujours FAIT/ÉCARTÉ (inchangés). Item 3
+(`ConversationLoadingPhase`) toujours FAIT/M2 conclu. Item 4 résiduel toujours hors mandat autonome
+(vérification interactive requise). Items 5/6 toujours BLOQUÉS — aucune décision utilisateur
+n'est arrivée entre temps (aucune trace dans `tasks/lessons.md`/`tasks/todo.md` ni dans la
+conversation). Re-grep des 4 motifs mécaniques standards : `print(` → 0 (toujours propre) ;
+`DispatchQueue.main.async` → 53 fichiers (le résidu "item 4", toujours hétérogène, toujours hors
+mandat mécanique sans décomposition dédiée) ; `#file\b` hors `#filePath` → 8 matches, mais **tous
+dans les commentaires/la regex-en-string-littérale de `Swift6TestFileArgSourceGuardTests.swift`
+lui-même** (le guard s'exclut explicitement, cf. son propre commentaire ligne 46) — zéro violation
+réelle, confirmé faux positif, item 1 reste clos ; `.system(size:` → 1029 matches (bruit trop
+massif pour être un signal exploitable tel quel, jamais été un item du backlog original — ignoré
+comme dans les runs précédents).
+
+**Audit élargi (note du run précédent appliquée)** : plutôt que conclure à un backlog vide après le
+zéro-résultat des 4 greps mécaniques, recherché une nouvelle catégorie d'API dépréciée sur le modèle
+de `NavigationView` (run précédent). Trouvé `UIScreen.main` (deprecated iOS 16+) — grep initial : 25
+fichiers. **Triage complet fichier par fichier avant toute conclusion** (voir Backlog item 7
+ci-dessus pour le détail) : 8 fichiers sont des faux positifs (commentaire seul, la migration vers la
+fenêtre active a déjà eu lieu et le commentaire ne fait que référencer l'ancienne API par son nom) ;
+5 fichiers (`Story*Layer.swift`/`StoryRenderer.swift`) utilisent `UIScreen.main.scale` comme valeur
+par défaut d'un paramètre sur un type `nonisolated`/CALayer — contrainte MainActor documentée
+explicitement dans le code (`StoryTextLayer.swift:67-69` en détail), à ne PAS toucher ; 4 fichiers
+(`ImageDownsamplingConfig`, `CachedAsyncImage.pixelSize`, `VideoFilmstrip`, `AudioWaveform`) vivent
+dans des fonctions statiques/utilitaires hors contexte `View` où `@Environment(\.displayScale)`
+n'est structurellement pas accessible — un vrai fix demanderait un threading de paramètre
+(changement de signature en cascade), pas un remplacement mécanique ; il reste 7 fichiers dont
+l'usage semble être en contexte `View` (candidats les plus probables pour un futur slice), **mais
+leur contexte exact (méthode d'instance `View` vs helper `static func`) n'a pas été vérifié
+individuellement ce run** — RE-PROUVER cette dernière hypothèse est le point de départ explicite du
+prochain run qui reprend cet item, pas un mécanique à lancer tel quel.
+
+**Décision : aucun code livré ce run.** Comme l'entrée « Item 4 closed — backlog exhausted »
+précédente, cette itération conclut qu'aucun item du backlog n'est à la fois réel, borné et
+mécaniquement sûr sans étude/décision supplémentaire — mais CONTRAIREMENT à cette entrée-là (qui
+avait conclu à un backlog vide), celle-ci enrichit le backlog d'un item 7 concret et précisément
+triagé, prêt à être repris sans redevoir refaire cette investigation. Forcer un fix sur un
+sous-ensemble non vérifié du groupe "candidats View" aurait risqué soit de casser la compilation
+(si l'un d'eux s'avère être une `static func` comme `CachedAsyncImage.pixelSize`), soit d'introduire
+une régression de rendu — le filtre de sûreté de la routine (« mécanique/à risque borné ») n'est pas
+satisfait tant que ce dernier tri n'est pas fait.
+
+**Vérification** : aucune (aucun code applicatif touché — seule cette mise à jour de fichier de
+suivi). Pas de branche `claude/apps/ios/*` créée, pas de PR, pas de CI.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-uiscreen-main-audit-triage`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`, cf. §Choix de
+  la lane — même commit que cette mise à jour de `tasks/ios-debt-routine-progress.md`, les deux
+  fichiers vivant hors `apps/android/`/`apps/ios/`).
