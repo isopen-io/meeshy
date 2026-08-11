@@ -1,50 +1,135 @@
-# Tête instruite pour le cycle 80 — le delta des stories ignore les deux signaux de troncature que le serveur lui tend
+# Tête instruite pour le cycle 81 — le tray de stories du WEB est coupé à 50, et deux services s'en disputent la responsabilité
 
-*Trouvé en instruisant le cycle 79, vérifié par lecture croisée client/serveur.*
+*Trouvé en livrant le cycle 80, vérifié par grep exhaustif des consommateurs.*
 
-Même famille que le cycle 79, sur l'autre delta du produit. `GET /posts/feed/stories?updatedSince=`
-(`services/gateway/src/routes/posts/feed.ts`) plafonne `limit` à **50** et rend
-`pagination: { limit, hasMore, nextCursor }`. Le client iOS
-(`StoryViewModel.fetchStoriesFromNetwork(deltaSince:)`,
-`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`) appelle
-`storyService.list(cursor: nil, limit: 50, updatedSince: deltaSince)` et **ne lit ni `hasMore` ni
-`nextCursor`**.
-
-Trois faits qui s'additionnent, tous vérifiés :
-
-1. une fenêtre delta ayant touché plus de 50 stories rend une page tronquée, et rien côté client
-   ne le remarque ;
-2. le curseur est DÉRIVÉ du tray après fusion (`StoryViewModel.deltaSince(for:)` =
-   `groups.flatMap(\.stories).compactMap(\.updatedAt).max()`), donc il monte au max de ce qu'on
-   vient de recevoir — c'est-à-dire **par-dessus les lignes coupées**, que la borne serveur
-   stricte (`gt`) ne rendra plus ;
-3. le repli existe mais n'est jamais emprunté : le full fetch ne court que si l'appel delta
-   **jette**. Une page tronquée est un succès.
-
-**Et le second signal, lui, n'existe pas encore.** Les tombstones
-(`meta.deletedStoryIds`) sont plafonnés à `STORY_TOMBSTONE_LIMIT = 500`
-(`PostFeedService.getStories`) et la troncature est signalée par un `logger.warn` **côté serveur
-uniquement** — la charge utile ne porte aucun drapeau. Un client dont les tombstones ont été coupés
-garde ses stories fantômes sans qu'aucune ligne de code ne puisse s'en apercevoir. C'est un
-changement de CONTRAT (un booléen dans `meta`), pas une garde client, et il touche
-`packages/shared/types/api-responses.ts` dont le commentaire décrit déjà ce champ.
+Le cycle 80 a fait draîner ses pages au client iOS. **Le web, lui, jette l'enveloppe entière.**
+`apps/web/services/story.service.ts` (`getStories`) et `apps/web/services/posts.service.ts`
+(ligne 200) appellent tous deux `GET /posts/feed/stories` **sans aucun paramètre** et rendent
+`response.data?.data ?? []` : ni `limit`, ni `cursor`, ni `updatedSince`, et surtout aucune lecture
+de `pagination.hasMore`/`nextCursor`. Le tray web est donc plafonné à 50 stories exactement comme
+l'était celui d'iOS, pour la même raison, avec le même silence.
 
 Trois bornes avant d'ouvrir :
 
-1. **Le curseur des stories n'est PAS persisté** (contrairement à celui des conversations) : il se
-   recalcule depuis le tray à chaque passe. La leçon du cycle 79 — « ne pas avancer un curseur
-   persisté sur une page tronquée » — ne se transpose donc pas telle quelle ; ici le geste est
-   d'ESCALADER (full fetch) sur `hasMore`, ou de paginer sur `nextCursor`.
-2. **Paginer est peut-être le geste juste ici, contrairement aux conversations** : la route rend
-   un `nextCursor`, et le tray est borné par nature (24 h). Une boucle de pages bornée coûte moins
-   qu'un full fetch et ne perd rien. À trancher en mesurant, pas en recopiant le cycle 79.
-3. **Le tombstone tronqué et la page tronquée sont DEUX défauts** ; le premier ne se corrige pas
-   sans toucher le contrat partagé. Les livrer ensemble ou séparément est un choix, mais les
-   confondre ferait passer un correctif client pour une couverture complète.
+1. **Ce n'est PAS un drain de 3 lignes à recopier depuis iOS.** Il y a **deux** services qui font
+   la même chose, et la première question est laquelle des deux copies est vivante (grep des
+   consommateurs de chacune) — puis si l'autre doit mourir. Ajouter la pagination aux deux
+   dupliquerait la dette au lieu de la payer. C'est la même famille que le cycle 78 (« une dizaine
+   d'écrivains tenaient un cache que personne ne lisait ») : commencer par l'inventaire des
+   LECTEURS, pas par le correctif.
+2. **Le web n'a pas de delta stories du tout.** Il ne passe jamais `updatedSince`, donc
+   `meta.deletedStoryIds` lui vaut toujours `[]` et le drapeau
+   `meta.deletedStoryIdsTruncated` livré au cycle 80 est toujours `false` pour lui. Le geste
+   « escalader sur troncature de tombstones » n'a donc **rien à faire ici** — ne pas le transposer
+   par symétrie. Le seul défaut web est la page tronquée.
+3. **Le curseur web serait recalculé, pas persisté** (D1 du cycle 79) : si un delta arrive un jour,
+   c'est le geste iOS qui ne se transpose pas, pas l'inverse.
 
-Point d'entrée : `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
-(`fetchStoriesFromNetwork`), miroir serveur `services/gateway/src/services/PostFeedService.ts`
-(`getStories`).
+Point d'entrée : `apps/web/services/story.service.ts` + `apps/web/services/posts.service.ts`,
+miroir serveur inchangé (`PostFeedService.getStories` rend déjà `hasMore`/`nextCursor` juste).
+
+---
+
+# Cycle 80 — Deux troncatures, deux gestes opposés : l'une se pagine, l'autre s'escalade
+
+## Le défaut
+
+`GET /posts/feed/stories` plafonne `limit` à 50 et annonce la suite par
+`pagination.hasMore`/`nextCursor`. **Ces deux champs n'avaient aucun lecteur dans tout le dépôt** —
+`rg` sur `apps/ios`, `packages/MeeshySDK` et `apps/web` : les 3 call sites iOS passent
+`cursor: nil` et ne lisent jamais `pagination`. Le tray était donc coupé à 50 stories pour tout le
+monde, sans qu'une ligne de code puisse s'en apercevoir.
+
+Et le plafond des tombstones (`STORY_TOMBSTONE_LIMIT = 500`) n'était signalé que par un
+`logger.warn` **côté serveur** : un client dont les disparitions avaient été coupées gardait ses
+stories fantômes en silence.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Le fetch « complet » n'est pas complet — il emprunte la MÊME route plafonnée à 50.** La tête
+proposait, en s'appuyant sur le cycle 79, d'escalader vers un full fetch sur `hasMore`. Ce geste
+n'aurait **rien rattrapé** : `storyService.list(cursor: nil, limit: 50)` est une page unique, elle
+aussi tronquée. Pire, c'est le chemin qui fait `storyGroups = groups` (REMPLACEMENT) puis sauve le
+cache disque : la troncature n'y laissait pas un trou, elle EFFAÇAIT les stories coupées de l'état
+affiché et gravait le résultat. Le défaut était donc plus grave sur le chemin que la tête
+considérait comme le recours.
+
+**La route offre une pagination réellement exacte, contrairement aux conversations.** La page est
+filtrée par `updatedAt` mais ordonnée par `(createdAt, id)` — le mésappariement de la leçon 121 —
+SAUF que son curseur porte sur ce même couple `(createdAt, id)`. Le parcours est donc exact : ni
+saut ni doublon. C'est ce qui rend le drain suffisant ici là où le cycle 79 devait escalader.
+
+**Le coût redouté n'existe pas.** `prefetchAllStoryMedia` est borné à `groups.prefix(8)` : drainer
+6 pages ne télécharge pas un octet de média de plus. La borne de pages ne protège donc pas la
+bande passante — elle protège contre un serveur qui annoncerait `hasMore` sans fin.
+
+## L'ordre des gestes, qui EST le correctif
+
+**Deux signaux de troncature, deux gestes OPPOSÉS** — et c'est le point du cycle :
+
+- **Page tronquée ⇒ paginer.** Un curseur de reprise existe et il est exact. Escalader serait
+  inutile (même plafond) et coûteux.
+- **Tombstones tronqués ⇒ escalader.** Aucun curseur de reprise n'existe pour les disparitions :
+  il n'y a pas de « page suivante » de tombstones à demander. Le seul geste qui fasse sortir les
+  fantômes restants est le REMPLACEMENT du tray par un fetch complet.
+
+Les confondre — appliquer le geste de l'un à l'autre — donnait dans un sens une escalade stérile,
+dans l'autre une purge qu'on croit complète. Et l'escalade des tombstones ne devient *correcte*
+que parce que le drain a été livré : sans lui, le fetch complet vers lequel on escalade serait
+lui-même tronqué.
+
+## D1 — la sonde plutôt que l'égalité, et pourquoi ce n'est pas cosmétique
+
+`deletedIds.length === STORY_TOMBSTONE_LIMIT` ne distingue pas une page coupée d'une fenêtre de très
+exactement 500 suppressions, qui est **complète**. Sous cette égalité, un tel utilisateur aurait
+déclenché un fetch complet **à chaque delta**, indéfiniment, tant que sa fenêtre reste sur ce
+nombre. La sonde (`take: LIMIT + 1` + slice) est le patron que la même méthode utilise déjà trois
+lignes plus haut pour `hasMore` — il n'y avait pas de raison de l'abandonner ici.
+
+## D2 — un `hasMore` sans curseur s'arrête, il ne rejoue pas
+
+`hasMore: true` avec `nextCursor` nul ou vide est une page suivante qu'on ne sait pas demander.
+Boucler dessus rejouerait la même page indéfiniment ; le drain s'arrête. Témoin dédié
+(`test_fullFetch_stopsWhenHasMoreCarriesNoCursor`), parce que c'est exactement le genre de branche
+qu'un serveur mal réveillé finit par produire.
+
+## D3 — la fiche gwcontract-11 existait, et disait juste
+
+`docs/reviews/2026-08-01-ios-local-first-realtime/06-reseau-et-contrat-gateway.md` prescrivait
+déjà ce correctif de tombstones, sonde comprise, et nommait même le RED discriminant. Trouvée en
+cherchant où documenter, pas avant. **Chercher la fiche d'audit AVANT de concevoir** aurait fait
+gagner l'aller-retour de conception — le backlog du dépôt est une source, pas seulement un
+registre. Elle est marquée LIVRÉ, avec la mention du défaut voisin qu'elle ne listait pas.
+
+## Vérification
+
+- Gateway : `PostFeedService.test.ts` **64/64 vert**, `routes/posts/feed.test.ts` **46/46 vert**.
+- **Mutations appliquées et vérifiées** (leçon 117) : l'égalité `=== LIMIT` remise en place fait
+  tomber **2 témoins sur 2** (les deux qui distinguent sonde et heuristique) ; le retrait du champ
+  `meta.deletedStoryIdsTruncated` de la route fait tomber ses **2 témoins**. Reverts confirmés par
+  grep après coup.
+- `tsc --noEmit` gateway : 0 erreur (après `packages/shared && bun run build`).
+- Suite gateway complète : voir §Reste ouvert pour le verdict de la passe `test:coverage`.
+- iOS : 9 témoins ajoutés à `StoryViewModelTests` (drain de pages, chaînage des curseurs, plafond
+  de pages, `hasMore` sans curseur, union des tombstones inter-pages, escalade sur troncature,
+  non-escalade sur fenêtre complète, rétro-compat `meta` absent). **Aucune toolchain Swift dans ce
+  conteneur** — la validation passe par `sdk-tests.yml` (déclenché par le diff
+  `packages/MeeshySDK/**`) et par `ios-tests.yml`, qui ne tourne PAS automatiquement sur une PR et
+  doit être lancé à la main sur la branche.
+- Aucun fichier Swift NEUF : les témoins vivent dans des suites déjà enregistrées au pbxproj —
+  donc pas d'orphelin possible (leçon 120).
+
+## Reste ouvert après ce cycle
+
+- **Le tray WEB reste coupé à 50**, et deux services se disputent la route. Voir la tête du
+  cycle 81 ci-dessus.
+- **`maxTrayPagesPerPass = 6` est une borne tenue à la main**, comme `trayPageLimit = 50` face au
+  `Math.min(limit, 50)` de la route. Rien de mécanique ne les lie — même dette jumelle que
+  `deltaPageLimit`/`DELTA_PAGE_LIMIT` relevée au cycle 79.
+- **Le drain ne déduplique pas entre pages.** Une story dont l'`updatedAt` bouge PENDANT la passe
+  peut apparaître deux fois (la borne keyset porte sur `createdAt`, pas sur ce qui a changé).
+  `toStoryGroups` + `insertOrMergeStoryGroups` dédupliquent par id en aval, donc l'effet est nul
+  aujourd'hui — mais c'est une propriété du consommateur, pas du drain.
 
 ---
 
