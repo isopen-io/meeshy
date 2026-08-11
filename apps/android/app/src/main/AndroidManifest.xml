@@ -95,6 +95,21 @@
             android:name=".push.DeclineCallReceiver"
             android:exported="false" />
 
+        <!-- Home-screen widget: unread-count scaffold (feature-parity.md
+             "Home-screen widgets" — first sub-slice). Parity target: iOS
+             MeeshyWidgets.UnreadCountWidget. -->
+        <receiver
+            android:name=".widget.UnreadCountWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_unread_count_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/unread_count_widget_info" />
+        </receiver>
+
         <!-- WorkManager initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"

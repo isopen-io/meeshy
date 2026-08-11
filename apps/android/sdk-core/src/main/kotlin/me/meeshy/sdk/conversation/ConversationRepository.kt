@@ -64,6 +64,17 @@ class ConversationRepository @Inject constructor(
             row?.let { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
         }
 
+    /**
+     * Local-only cached conversations — a plain Room read with **no** network
+     * revalidation. Powers the home-screen widget (`:app` `UnreadCountWidget`),
+     * which must render from whatever is already cached (possibly offline, no
+     * connectivity guarantee at widget-refresh time) rather than block on a
+     * fetch. An empty/never-synced cache resolves to an empty list, never a
+     * fabricated placeholder.
+     */
+    fun cachedConversations(): Flow<List<ApiConversation>> =
+        cacheSource.observe().map { it ?: emptyList() }
+
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()

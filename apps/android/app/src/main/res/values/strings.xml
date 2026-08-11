@@ -62,4 +62,10 @@
     <string name="call_incoming_audio">Incoming call</string>
     <string name="call_incoming_video">Incoming video call</string>
     <string name="a11y_floating_menu">Navigation menu</string>
+
+    <!-- Home-screen widget: unread count -->
+    <string name="widget_unread_count_title">Unread messages</string>
+    <string name="widget_unread_count_description">See how many unread messages you have at a glance</string>
+    <string name="widget_unread_label">Unread</string>
+    <string name="widget_all_read_label">All caught up</string>
 </resources>

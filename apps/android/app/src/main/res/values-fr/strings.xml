@@ -62,4 +62,10 @@
     <string name="call_incoming_audio">Appel entrant</string>
     <string name="call_incoming_video">Appel vidéo entrant</string>
     <string name="a11y_floating_menu">Menu de navigation</string>
+
+    <!-- Widget écran d'accueil : compteur de non-lus -->
+    <string name="widget_unread_count_title">Messages non lus</string>
+    <string name="widget_unread_count_description">Voyez d\'un coup d\'œil vos messages non lus</string>
+    <string name="widget_unread_label">Non lus</string>
+    <string name="widget_all_read_label">Tout est lu</string>
 </resources>
