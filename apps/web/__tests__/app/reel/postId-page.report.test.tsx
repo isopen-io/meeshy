@@ -129,4 +129,14 @@ describe('ReelPage — report wiring', () => {
 
     expect(mockReportPost).not.toHaveBeenCalled();
   });
+
+  it('withholds onReport on the author own reel', () => {
+    const originalAuthorId = mockReel.authorId;
+    mockReel.authorId = 'viewer-1';
+    render(<ReelPage />);
+
+    expect(screen.queryByTestId('reel-report')).not.toBeInTheDocument();
+
+    mockReel.authorId = originalAuthorId;
+  });
 });

@@ -31,6 +31,10 @@ jest.mock('@/components/v2', () => ({
   useToast: () => ({ addToast: mockAddToast }),
 }));
 
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: { id: 'viewer-1' } }),
+}));
+
 jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({
     t: (key: string, paramsOrFallback?: Record<string, unknown> | string) =>
@@ -157,5 +161,19 @@ describe('HashtagPage', () => {
     expect(confirmSpy).toHaveBeenCalled();
     await waitFor(() => expect(mockReportPost).toHaveBeenCalledWith('post-1', 'inappropriate', ''));
     confirmSpy.mockRestore();
+  });
+
+  it('withholds the Report entry on the viewer own post (isAuthor)', async () => {
+    mockGetPostsByHashtag.mockResolvedValue({
+      success: true,
+      data: [makePost({ authorId: 'viewer-1', author: { id: 'viewer-1', username: 'me', displayName: 'Me' } })],
+      meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('post.menu')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('post.menu'));
+
+    expect(screen.queryByText('Report')).not.toBeInTheDocument();
   });
 });

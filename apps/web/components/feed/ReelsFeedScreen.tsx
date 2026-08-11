@@ -236,7 +236,7 @@ export function ReelsFeedScreen() {
           onComment={onComment}
           onShare={onShare}
           onBookmark={onBookmark}
-          onReport={onReport}
+          onReport={authUser?.id !== current.authorId ? onReport : undefined}
           onRepost={onRepost}
           onDownload={onDownload}
         />
@@ -276,7 +276,7 @@ export function ReelsFeedScreen() {
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, onDownload, reelsQuery, t]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, onDownload, reelsQuery, t, authUser]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">

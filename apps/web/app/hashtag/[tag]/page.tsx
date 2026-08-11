@@ -14,6 +14,7 @@ import {
   useTrendingHashtagsQuery,
 } from '@/hooks/queries/use-feed-query';
 import { reportService } from '@/services/report.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 
@@ -59,6 +60,7 @@ export default function HashtagPage() {
   const { t } = useI18n('feed');
   const userLanguage = usePreferredLanguage();
   const toastCtx = useToast();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const feedQuery = useHashtagFeedQuery(tag);
   const posts = useFeedPosts(feedQuery);
@@ -112,6 +114,7 @@ export default function HashtagPage() {
               time={formatRelativeTime(post.createdAt, t)}
               likes={post.likeCount}
               comments={post.commentCount}
+              isAuthor={post.authorId === currentUserId}
               onReport={() => handleReportPost(post.id)}
               onClick={() => router.push(`/feeds/post/${post.id}`)}
             />

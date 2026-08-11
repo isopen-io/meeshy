@@ -114,7 +114,7 @@ export default function ReelPage() {
   // n'émettait AUCUN marquage : les notifications de réels restaient non lues
   // à vie. Miroir du `onPostOpened` iOS, coalescé par le module.
   const queryClient = useQueryClient();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   useEffect(() => {
     if (currentId && isAuthenticated) {
       markScopeNotificationsRead(queryClient, { kind: 'post', postId: currentId });
@@ -252,7 +252,7 @@ export default function ReelPage() {
           onComment={onComment}
           onShare={onShare}
           onBookmark={onBookmark}
-          onReport={onReport}
+          onReport={user?.id !== current.authorId ? onReport : undefined}
           onRepost={onRepost}
           onDownload={onDownload}
         />

@@ -82,7 +82,7 @@ jest.mock('@/hooks/use-i18n', () => ({
 }));
 
 jest.mock('@/stores/auth-store', () => ({
-  useAuthStore: (selector: (s: unknown) => unknown) => selector({ id: 'viewer-1' }),
+  useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: { id: 'viewer-1' } }),
 }));
 
 jest.mock('@/lib/clipboard', () => ({ copyToClipboard: jest.fn() }));
@@ -144,5 +144,15 @@ describe('ReelsFeedScreen — report wiring', () => {
     });
 
     expect(mockReportPost).not.toHaveBeenCalled();
+  });
+
+  it('withholds onReport on the author own reel', () => {
+    const originalAuthorId = mockReel.authorId;
+    mockReel.authorId = 'viewer-1';
+    render(<ReelsFeedScreen />);
+
+    expect(screen.queryByTestId('reel-report')).not.toBeInTheDocument();
+
+    mockReel.authorId = originalAuthorId;
   });
 });
