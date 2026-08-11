@@ -1,5 +1,73 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **"Change email / phone" landed** (slice `settings-account-contact-change`,
+> feature-parity §K — found via the orchestrator's explicit "broad sweep of `feature-parity.md`"
+> guidance rather than staying scoped to the Feed composer). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (the one open
+> PR, `#2807`, is an unrelated concurrent session on `apps/ios` calls, headRef doesn't match this
+> routine's naming). Confirmed the gap for real, not just from the note: `grep`ping
+> `changeEmail|verifyEmailChange|changePhone|verifyPhoneChange` across `apps/android` found the
+> wire-level plumbing already complete (`UserApi`/`UserRepository`, `UserRequests.kt` DTOs, all
+> pre-existing) but **zero** call sites under `feature/` or `app/` — the same "wired but unconsumed"
+> shape as the note claimed, now independently confirmed. Read iOS's `SecurityView.swift` (1053
+> lines) end to end before coding: email confirms out-of-band (a link mailed to the new address —
+> `submitEmailChange()`/`resendEmailVerification()` only; iOS never calls `verifyEmailChange`
+> anywhere in production code either, confirmed via grep — only its test mocks reference it, so
+> skipping that wire-up on Android is TRUE parity, not a scope cut) with a 60s resend cooldown
+> Timer; phone confirms in-app via a 6-digit SMS code (`submitPhoneChange()` → `verifyPhoneCode()`).
+> Both sections also expose a "Verify" quick action for an already-set-but-unverified value that
+> resubmits without opening the editor first. **Shipped (production, all `apps/android`)**: new
+> `AccountContactViewModel`/`AccountContactScreen` (`:feature:settings`), reached via a new
+> "Email & phone" Settings row between Two-factor and Active sessions. Reuses
+> `SignupFieldValidation.isEmailValidLocally`/`isPhoneValidLocally` (`:core:model`, already the
+> registration wizard's SSOT) for the local submit gates — no new validator duplicated. Reuses
+> `MagicLinkCountdown` (`:core:model`, previously magic-link-login-only) verbatim for the 60s email
+> resend cooldown — same `start`/`tick`/`canResend`/`expired` shape the magic-link flow already
+> uses, just a second call site; deliberately did NOT rename/generalize the type for this (only the
+> 2nd occurrence — this codebase's established convention is to duplicate small glue until a 3rd
+> call site forces a shared abstraction, and `MagicLinkCountdown`'s shape was already fully generic,
+> so reusing beat both renaming and reimplementing). Phone code entry filters non-digits +
+> truncates to 6 as typed (mirrors iOS's `.adaptiveOnChange` filter), so `canVerifyPhoneCode` is a
+> plain length check. Error mapping follows the `TwoFactorErrorKind`/`ChangePasswordError`
+> precedent — a fixed per-action `AccountContactErrorKind` the screen localizes (en/fr/es/pt),
+> never the gateway's raw English message (`contact-change.ts`'s `sendBadRequest` calls are
+> free-text, not structured codes). Verify-phone-code 400 maps to a dedicated "incorrect or expired
+> code" message (mirrors iOS's own targeted P1 fix for this exact case), other failures generic.
+> On success, `verifyPhoneCode()` calls `SessionRepository.refresh()` so the displayed number
+> updates immediately (mirrors iOS's `authManager.checkExistingSession()`). Both flows are
+> inherently *online* (the gateway must reach a real inbox/handset) — online-only like
+> `ChangePasswordViewModel`, never optimistic/offline-queued like `ProfileViewModel`. +31 tests
+> (`AccountContactViewModelTest`: buffer editing, both submit gates, success/failure transitions,
+> the cooldown tick/expire/resend-unlock cycle via `advanceTimeBy`, the double-tap in-flight guard
+> on both submit paths and phone-verify, the two "Verify current value" quick actions, and
+> field-scoped error clearing — editing email never clears a phone error and vice versa).
+> **Mutation-proven**: neutralizing `canVerifyPhoneCode`'s length check (`== PHONE_CODE_LENGTH` →
+> `true`) fails **exactly** `canVerifyPhoneCode_falseUntilExactlySixDigits` +
+> `verifyPhoneCode_whenInvalid_doesNothing` (29 others green); neutralizing
+> `toPhoneVerifyErrorKind`'s `httpStatus == 400` branch fails **exactly**
+> `verifyPhoneCode_http400_mapsToInvalidCode` (30 others green). Both applied via a scratch
+> `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the backup
+> afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression). Reviewer **PASS** (diff `apps/android`
+> only; SDK purity — the two reused pure SSOTs live in `:core:model`, all orchestration/network/
+> session-refresh glue stays app-side in `:feature:settings`; SSOT — no re-implementation of
+> email/phone format validation or countdown ticking; no coverage floor lowered; no tautological
+> tests). **Not attempted this run** (no simulator/emulator session for on-device verification —
+> this run was compile+test-only per the local JVM gate; a future run should install-and-verify
+> against the live gateway with the shared `atabeth` account, following the same
+> `uiautomator dump` + real `bounds=` discipline as every prior on-device pass in this file).
+> **Next slice candidates (not attempted this run)**: on-device transcription for the Feed audio
+> attachment (still the standing candidate, needs its own foundation); a shared `:sdk-ui`
+> `LanguagePickerDialog` (3 near-identical picker UIs now exist — registration inline grid,
+> Settings' `RegionalLanguageDialog`, the Feed composer's `ComposerLanguagePickerDialog`); Voice-
+> cloning onboarding wizard / voice-profile management (§K, both still unchecked, both genuinely
+> unshipped — no `VoiceProfile`/`VoiceCloning` surface exists anywhere in `apps/android`); map/
+> search/reverse-geocoding for the location attachment (needs a Maps SDK dependency + API key);
+> widgets/PiP categorical re-check — per the orchestrator's standing guidance, NOT re-grepped this
+> run (already re-confirmed zero-hit at iteration 44/45, already has checklist lines from the
+> iteration-19 audit-gap fix — this remains a documented, real, multi-slice-epic gap needing a
+> concrete sub-slice decomposition pass, not another bare re-grep).
+
 > On 2026-08-11 **two-factor authentication was restored** (slice `settings-two-factor-auth`,
 > feature-parity §L — a RE-PROUVER find during a broad re-sweep of `feature-parity.md`'s ~140
 > unchecked boxes, per the orchestrator's explicit "the Feed composer is quasi-bouclé, re-balaie
