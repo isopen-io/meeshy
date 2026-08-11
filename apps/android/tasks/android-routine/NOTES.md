@@ -383,3 +383,31 @@ Append-only log of gotchas and decisions that save time next run.
   decision logic to cover. Worth re-surfacing "mark-read" once either (a) a second `ActionCallback`
   use case exists to justify the framework-glue investment across more than one call site, or
   (b) someone explicitly decides thin, near-untestable wiring is still worth a slice on its own.
+
+## Slice `dynamic-launcher-shortcuts` (2026-08-11)
+- **"Port this iOS widget/intent" is not a safe default without first checking whether the iOS
+  side's own deep link is actually wired to anything.** iOS's `QuickReplyWidget` ships 4 canned-
+  reply buttons that deep-link via `meeshy://quickreply/{id}?text=...`, and its
+  `FavoriteContactsWidget` uses `meeshy://contact/{id}` — both look like real, intentional URI
+  contracts from the widget file alone. Grepping the FULL app-side router
+  (`DeepLinkRouter.swift`'s complete `switch` over recognized `host` values) found **neither
+  `quickreply` nor `contact` is a case anywhere** — both widgets' primary interaction is dead in
+  production iOS today, not a hidden/obscure fallback path this session simply didn't find. The
+  lesson generalizes past this one file: before treating an iOS widget/intent/extension's own URI
+  scheme as a spec to port, grep the MAIN APP's router for that exact host string, not just the
+  widget/extension file that emits it — a URI can be perfectly well-formed and still go nowhere.
+  Two consequences this run: (1) retroactively confirmed the PRIOR slice's own independent choice
+  (reusing `meeshy://conversation/{id}` instead of inventing a matching `contact` host on Android)
+  was the right call, not just a defensible one; (2) this run's own first candidate (Quick Reply)
+  was disqualified as "port this" and reclassified as "needs a genuinely new mechanism to be worth
+  building" — see `PROGRESS.md` for the pivot.
+- **A single iOS "App Shortcuts" provider can bundle voice-driven (Siri/Assistant NL parameter
+  resolution) and purely-navigational (open a fixed destination) intents under one umbrella —
+  splitting them before scoping an Android port avoids conflating a small, safe slice with a much
+  bigger one.** `MeeshyAppShortcuts` (`MeeshyAppIntents.swift`) lists 5 phrases; 4 need `AppIntents`
+  natural-language parameter resolution against a contact/language with no Android equivalent
+  short of Google Assistant App Actions (external indexing/review, not locally verifiable), while
+  the 5th (`OpenRecentConversationIntent`) is a plain "open this URL" action with a direct,
+  fully-local Android analogue (`ShortcutManagerCompat` dynamic launcher shortcuts). Read the
+  intent bodies, not just the shortcut list, before deciding whether "port the App Shortcuts
+  epic" is one slice or several.
