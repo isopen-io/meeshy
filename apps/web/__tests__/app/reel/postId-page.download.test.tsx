@@ -76,14 +76,19 @@ jest.mock('@/components/v2', () => ({ useToast: () => ({ addToast: mockAddToast 
 jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 
 type ReelPlayerStubProps = {
-  onDownload?: (mediaId: string) => void;
+  onDownload?: (mediaId: string, owningPostId: string) => void;
 };
 jest.mock('@/components/feed/ReelPlayer', () => ({
   ReelPlayer: ({ onDownload }: ReelPlayerStubProps) => (
     <div>
       {onDownload && (
-        <button data-testid="reel-download" onClick={() => onDownload('media-1')}>
+        <button data-testid="reel-download" onClick={() => onDownload('media-1', 'reel-1')}>
           Download
+        </button>
+      )}
+      {onDownload && (
+        <button data-testid="reel-download-repost" onClick={() => onDownload('orig-media-1', 'original-1')}>
+          Download (repost)
         </button>
       )}
     </div>
@@ -105,10 +110,18 @@ describe('ReelPage — media download analytics', () => {
     jest.clearAllMocks();
   });
 
-  it('pings recordMediaDownloads with the reel id, media id and surface reel', () => {
+  it('pings recordMediaDownloads with the owning post id, media id and surface reel', () => {
     render(<ReelPage />);
     fireEvent.click(screen.getByTestId('reel-download'));
 
     expect(mockRecordMediaDownloads).toHaveBeenCalledWith('reel-1', ['media-1'], 'reel');
+  });
+
+  it('forwards the ORIGINAL post id ReelPlayer resolved for a reposted reel, not the displayed reel id', () => {
+    render(<ReelPage />);
+    fireEvent.click(screen.getByTestId('reel-download-repost'));
+
+    expect(mockRecordMediaDownloads).toHaveBeenCalledWith('original-1', ['orig-media-1'], 'reel');
+    expect(mockRecordMediaDownloads).not.toHaveBeenCalledWith(mockReel.id, ['orig-media-1'], 'reel');
   });
 });

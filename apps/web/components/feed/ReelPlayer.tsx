@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Post } from '@meeshy/shared/types/post';
+import Link from 'next/link';
+import type { Post, PostMedia } from '@meeshy/shared/types/post';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/initials';
@@ -52,18 +53,54 @@ function downloadFileName(media: { id: string; mimeType: string; alt?: string | 
  * Prisme Linguistique pick: prefer a translation matching `userLanguage`,
  * otherwise the original content. Never falls back to an arbitrary language.
  */
-function resolveCaption(post: Post, userLanguage?: string): string {
+function resolveCaption(post: Pick<Post, 'content' | 'translations'>, userLanguage?: string): string {
   const original = post.content ?? '';
   if (!userLanguage || !post.translations || typeof post.translations !== 'object') return original;
   const entry = (post.translations as Record<string, { text?: string }>)[userLanguage];
   return entry?.text ?? original;
 }
 
-function firstVideo(post: Post) {
-  return post.media?.find((m) => m.mimeType.startsWith('video/'));
+/**
+ * Repost-aware caption: the reposter's own content wins when present (a
+ * quote repost always sets it) — otherwise the original's, resolved through
+ * the same Prisme mechanism. A plain repost carries no content of its own,
+ * so it naturally falls through to the original.
+ */
+function resolveDisplayCaption(post: Post, userLanguage?: string): string {
+  const own = resolveCaption(post, userLanguage);
+  if (own) return own;
+  return post.repostOf ? resolveCaption(post.repostOf, userLanguage) : own;
 }
-function firstImage(post: Post) {
-  return post.media?.find((m) => m.mimeType.startsWith('image/'));
+
+/**
+ * A reposted REEL carries no media of its own — the gateway only snapshots
+ * ephemeral types (STORY/STATUS) into `repostOf`, a REEL repost stays a bare
+ * pointer. Falls back to the original's media, mirroring iOS
+ * `primaryReelDisplayMedia` (ReelFeedCard.swift:118-145).
+ *
+ * `ownerId` is the id of whichever post the returned media rows actually
+ * belong to server-side (`PostMedia.postId`) — the gateway's download
+ * endpoint filters `postMedia.findMany({ id in [...], postId })`, so any
+ * caller crediting a download MUST use this id, never the displayed reel's
+ * id, or the original's media rows never match and the ping silently
+ * records zero. Media and owner are resolved together so they can never
+ * diverge.
+ */
+function resolveReelMedia(post: Post): { media: readonly PostMedia[]; ownerId: string } {
+  if (post.media && post.media.length > 0) return { media: post.media, ownerId: post.id };
+  if (post.repostOf?.media && post.repostOf.media.length > 0) {
+    return { media: post.repostOf.media, ownerId: post.repostOf.id ?? post.id };
+  }
+  return { media: post.media ?? [], ownerId: post.id };
+}
+
+/** Displayed counters mirror the original's when it's a repost (Task 2 parity). */
+function displayCount(post: Post, key: 'likeCount' | 'commentCount'): number {
+  return post.repostOf?.[key] ?? post[key];
+}
+
+function repostAuthorHandle(original: Partial<Post>): string {
+  return original.author?.username ?? original.author?.displayName ?? '';
 }
 
 // ─── Action rail button ──────────────────────────────────────────────────
@@ -126,7 +163,10 @@ export interface ReelPlayerProps {
   onBookmark: () => void;
   onReport?: () => void;
   onRepost?: () => void;
-  onDownload?: (mediaId: string) => void;
+  /** `owningPostId` is the post the downloaded media actually belongs to
+   *  server-side — the displayed reel's id for its own media, the
+   *  original's id when the media was resolved from `repostOf`. */
+  onDownload?: (mediaId: string, owningPostId: string) => void;
 }
 
 /**
@@ -162,11 +202,12 @@ export function ReelPlayer({
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
 
-  const video = firstVideo(reel);
-  const image = firstImage(reel);
+  const { media: reelMedia, ownerId: reelMediaOwnerId } = resolveReelMedia(reel);
+  const video = reelMedia.find((m) => m.mimeType.startsWith('video/'));
+  const image = reelMedia.find((m) => m.mimeType.startsWith('image/'));
   const downloadTarget = video ?? image;
   const name = authorName(reel);
-  const caption = resolveCaption(reel, userLanguage);
+  const caption = resolveDisplayCaption(reel, userLanguage);
 
   const goNext = useCallback(() => {
     if (hasNext) onNext();
@@ -333,10 +374,10 @@ export function ReelPlayer({
 
         {/* Action rail */}
         <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5 z-10">
-          <RailButton label={t('player.like', 'Like')} count={reel.likeCount} active={isLiked} activeColor="#fb7185" onClick={(e) => { e.stopPropagation(); onLike(); }}>
+          <RailButton label={t('player.like', 'Like')} count={displayCount(reel, 'likeCount')} active={isLiked} activeColor="#fb7185" onClick={(e) => { e.stopPropagation(); onLike(); }}>
             <Heart className="h-6 w-6" fill={isLiked ? 'currentColor' : 'none'} />
           </RailButton>
-          <RailButton label={t('player.comment', 'Comment')} count={reel.commentCount} onClick={(e) => { e.stopPropagation(); onComment(); }}>
+          <RailButton label={t('player.comment', 'Comment')} count={displayCount(reel, 'commentCount')} onClick={(e) => { e.stopPropagation(); onComment(); }}>
             <MessageCircle className="h-6 w-6" />
           </RailButton>
           <RailButton label={t('player.share', 'Share')} onClick={(e) => { e.stopPropagation(); onShare(); }}>
@@ -356,7 +397,7 @@ export function ReelPlayer({
               onClick={(e) => {
                 e.stopPropagation();
                 triggerMediaDownload(downloadTarget.fileUrl, downloadFileName(downloadTarget));
-                onDownload(downloadTarget.id);
+                onDownload(downloadTarget.id, reelMediaOwnerId);
               }}
             >
               <Download className="h-6 w-6" />
@@ -371,6 +412,16 @@ export function ReelPlayer({
 
         {/* Author + caption */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pb-8 pr-20 text-white z-10">
+          {reel.repostOf && (
+            <Link
+              href={`/reel/${reel.repostOf.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="mb-2 inline-flex w-fit items-center gap-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white"
+            >
+              <Repeat2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{t('player.repostedFrom', 'Reposted from')} @{repostAuthorHandle(reel.repostOf)}</span>
+            </Link>
+          )}
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 ring-2 ring-white/50">
               {reel.author?.avatar ? <AvatarImage src={reel.author.avatar} alt="" /> : null}
