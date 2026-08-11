@@ -1,4 +1,3 @@
-# Tête instruite pour le cycle 77 (3/3) — le focus de fenêtre relit la liste de conversations DE FORCE, page par page
 
 *Trouvé en instruisant le cycle 76, vérifié, NON corrigé.*
 
@@ -144,7 +143,7 @@ milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que la bor
 # Tête instruite pour le cycle 78 (2/2) — la liste PLATE de conversations a des écrivains, aucun lecteur
 
 *Trouvé en instruisant le cycle 76 depuis la session parallèle, vérifié, NON corrigé.
-Indépendant de la tête ci-dessus ; les deux peuvent être pris séparément.*
+Indépendant de la tête iOS ci-dessous ; les deux peuvent être pris séparément.*
 
 `queryKeys.conversations.lists()` vaut `['conversations','list']` ; `infinite()` vaut
 `['conversations','infinite']`. Les deux préfixes sont DISJOINTS — un `setQueriesData`
@@ -179,8 +178,26 @@ Trois bornes avant d'ouvrir :
    conversations.all })` couvrent bien le cache infinite (préfixe commun) : ceux-là sont
    vivants et hors lot.
 
+**Complément instruit pendant le cycle 77 — la borne 1 est levée, et il y a une VRAIE panne
+dans le lot.** `rg` sur tout le dépôt : `useConversationsQuery` et `useConversationsWithPagination`
+n'apparaissent QUE dans leur propre fichier, dans leur fichier de tests, et dans le baril
+`hooks/queries/index.ts`. Aucun consommateur, ni dans `apps/web` ni ailleurs. La forme plate est
+donc bien morte, et le lot est un retrait — pas une réconciliation.
+
+Mais deux sites ne sont pas de simples écritures mortes : `use-reactions-query.ts:427` et `:460`
+font `invalidateQueries({ queryKey: queryKeys.conversations.lists() })` sur réaction ajoutée /
+retirée, commentaire à l'appui (« réaction ajoutée = conversation modifiée »). Le préfixe ne
+matche pas `infinite()` : **l'intention déclarée n'est jamais exécutée.** C'est une panne
+silencieuse, pas du code mort — et sa correction n'est PAS « rediriger vers `infinite()` », ce
+qui déclencherait une relecture de toutes les pages chargées à chaque réaction, exactement ce que
+le cycle 77 vient de retirer du chemin de focus. Le geste juste est probablement de **supprimer
+ces deux invalidations** : une réaction ne change pas l'aperçu de la ligne de liste. À trancher
+en ouvrant le lot, en regardant si la ligne de liste porte quoi que ce soit qui dépende des
+réactions.
+
 ---
 # Tête instruite pour le cycle 78 — iOS ne détecte pas une page delta tronquée
+# Tête instruite pour le cycle 78 — iOS avance son curseur delta par-dessus une page TRONQUÉE
 
 *Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur.*
 
@@ -223,6 +240,110 @@ l'escalade est un `fullSync()` immédiat (hors du garde `isSyncing`, comme le fa
 
 Point d'entrée : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift`
 — la divergence y est déjà écrite en tête de `syncSinceLastCheckpoint`.
+
+---
+
+# Cycle 77 — Le retour d'onglet relisait la liste de conversations page par page, et l'écrasait
+
+## Le défaut
+
+`useInfiniteConversationsQuery` héritait du `refetchOnWindowFocus: 'always'` du QueryClient global.
+Sur une `useInfiniteQuery`, ce réglage ne « rafraîchit » pas : il **rejoue TOUTES les pages
+chargées et REMPLACE le cache**. Trois coûts distincts, pas un :
+
+1. **Charge** — dix pages de scroll = dix requêtes à chaque retour d'onglet, sur une route qui
+   charge participants, dernier message avec ses traductions et sa pièce jointe, et les compteurs
+   de non-lus par curseur.
+2. **Écrasement** — tout ce que la socket écrit pendant la séquence est remplacé par une réponse
+   partie avant.
+3. **Instabilité d'offset** — c'est le point qu'aucune note antérieure n'avait relevé. La route
+   pagine par OFFSET sur un tri `lastMessageAt` DÉCROISSANT (`orderBy: { lastMessageAt: 'desc' }`,
+   `services/gateway/src/routes/conversations/core.ts:498`). Les pages sont relues
+   SÉQUENTIELLEMENT : un message arrivé entre la page k et la page k+1 promeut sa conversation en
+   tête et décale toutes les pages suivantes d'un cran. Résultat : une ligne **dupliquée** à la
+   frontière, une autre **disparue**. Sur une messagerie, ce n'est pas un cas rare — c'est le cas
+   nominal dès qu'un onglet reprend le focus pendant qu'une conversation vit.
+
+C'est exactement le réglage que `use-conversation-messages-rq.ts` avait désactivé pour le fil de
+messages, motif écrit au-dessus de la ligne. La liste, elle, l'avait gardé.
+
+## Ce qu'on ne pouvait PAS faire : basculer à `false`
+
+Le refetch de focus était le SEUL chemin web qui purgeait une ligne **fantôme** — une conversation
+hard-supprimée côté serveur. Le delta du cycle 76 est upsert-only : une ligne qui n'existe plus ne
+revient dans AUCUNE réponse `updatedSince`, donc rien ne la retire. iOS avait rencontré ce cas
+exact (E2E 2026-07-02, « Test Conv » épinglée et absente du serveur) et l'avait réglé par une
+réconciliation complète bornée à 1× par 24 h. Le contenu du chantier était donc le **pendant web de
+cette borne**, jamais la désactivation seule.
+
+## Le correctif
+
+- `refetchOnWindowFocus: false` sur `useInfiniteConversationsQuery`, dérogation documentée jumelle
+  de celle du fil de messages.
+- **Trigger 2 — focus** dans `useConversationsDeltaSync` : le focus tire le MÊME delta borné que le
+  reconnect socket (une requête, fusion non destructrice), débouncé 1 s — la valeur de
+  `FOCUS_CATCH_UP_DEBOUNCE_MS` du fil de messages, pour que les deux rattrapages répondent ensemble
+  au même geste plutôt qu'en escalier. Il partage le garde anti-rafale de 5 s déjà en place.
+- **Réconciliation complète bornée** : `invalidateQueries` sur la clé infinie, chaînée APRÈS un
+  delta RÉUSSI, au plus 1× par 24 h. Pendant exact de `fullReconcileInterval` /
+  `syncSinceLastCheckpoint` (SDK iOS). Horodatage dans `localStorage`
+  (`meeshy_conversations_last_full_reconcile_at`, pendant de la clé `UserDefaults`
+  `me.meeshy.lastFullReconcileAt`).
+
+## Trois décisions qui ne se déduisent pas
+
+**D1 — la réconciliation doit courir MÊME sur un delta VIDE.** L'ancien corps sortait tôt
+(`if (conversations.length === 0) return;`). Y adosser la réconciliation aurait rendu la purge
+**inatteignable** : une conversation hard-supprimée ne produit AUCUNE ligne de delta, donc le compte
+calme — précisément celui qui garde son fantôme le plus longtemps — n'aurait jamais réconcilié. Le
+corps a donc été restructuré : la fusion est conditionnelle, la réconciliation ne l'est pas.
+
+**D2 — un delta ÉCHOUÉ ne réconcilie pas et ne consomme pas la fenêtre.** Même règle que
+`syncSinceLastCheckpoint` sur iOS (`if ok && isFullReconcileDue`). Offline ou gateway en panne, on
+garde le cache intact (local-first) plutôt que de déclencher une relecture complète qui échouera
+aussi, et l'horodatage n'avance pas — le prochain déclenchement couvre la même fenêtre.
+
+**D3 — la fenêtre de 24 h démarre au PREMIER delta, pas à l'époque zéro.** iOS part de
+`.distantPast` et réconcilie donc au premier lancement. Le web ne peut pas copier ce choix : le
+montage vient de lire le serveur en entier (`refetchOnMount: 'always'`), et réconcilier tout de
+suite doublerait cette lecture pour rien. Un navigateur sans horodatage en reçoit donc un, daté de
+maintenant, sans réconcilier.
+
+Repli mémoire par QueryClient si `localStorage` jette (navigation privée, quota) : la borne dégrade
+en « 1× par session », jamais en « à chaque focus » — le garde tient la valeur autoritaire, le
+stockage n'en est que la persistance.
+
+## Hygiène au passage
+
+`mergeConversationDelta` était appelé avec un littéral portant **deux fois** la clé `hasMore`
+(`{ hasMore, openConversationId, hasMore }`). Sans effet — la seconde écrasait la première avec la
+même valeur — mais c'est le genre de ligne qui fait douter le prochain lecteur du contrat. Le corps
+de la fusion a été sorti en helper de module (`mergeDeltaIntoCache`) au lieu de vivre dans le `try`,
+et le doublon a disparu avec.
+
+## Vérification
+
+- `apps/web` : **562 suites, 12 095 tests verts** (0 régression). 7 tests neufs sur le delta
+  (`use-conversations-delta-sync.test.tsx` : 16 → 26 avec les 4 du focus), 1 sur la liste
+  (`use-conversations-query.test.tsx`).
+- Le témoin de la liste a été vérifié ROUGE contre le code d'avant (`refetchOnWindowFocus` remis à
+  l'hérité ⇒ `mockGetConversations` appelé au focus), puis vert après.
+- `tsc --noEmit` : aucune erreur sur les trois fichiers touchés (le bruit préexistant du dossier
+  `__tests__/admin` est hors lot).
+
+## Reste ouvert après ce cycle
+
+- **La réconciliation complète relit elle aussi les pages une par une**, donc porte la même
+  instabilité d'offset décrite en 3 ci-dessus — mais 1× par 24 h au lieu d'à chaque focus, et c'est
+  déjà le comportement de `fullSync()` sur iOS. La fermer demanderait une pagination par CURSEUR
+  (`lastMessageAt` + id) côté gateway, chantier de contrat, pas correctif.
+- **Les autres surfaces héritent toujours du `refetchOnWindowFocus: 'always'` global.** Le réglage
+  n'est un défaut que sur les listes INFINIES temps réel ; les deux qui existent
+  (`useInfiniteConversationsQuery`, `useConversationMessagesRQ`) y dérogent désormais toutes les
+  deux. Une troisième qui naîtrait sans déroger reprendrait le défaut en silence — le noter dans
+  `apps/web/CLAUDE.md` était le seul garde-fou disponible.
+- **iOS n'a toujours pas la détection de page tronquée** — tête instruite du cycle 78 ci-dessus,
+  inchangée par ce lot.
 
 ---
 

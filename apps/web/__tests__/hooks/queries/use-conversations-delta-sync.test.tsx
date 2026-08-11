@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { useConversationsDeltaSync } from '@/hooks/queries/use-conversations-delta-sync';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { Conversation } from '@/types';
@@ -99,11 +99,28 @@ const reconnect = async (rerender: (props: { on: boolean }) => void, enabled = t
   });
 };
 
+/**
+ * Fait passer la fenêtre de floue à focalisée et laisse le debounce s'écouler.
+ * Miroir de `triggerFocusCatchUp` dans `use-conversation-messages-rq.test.tsx`.
+ */
+const focusWindow = async () => {
+  act(() => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(1_100);
+  });
+};
+
+const FULL_RECONCILE_KEY = 'meeshy_conversations_last_full_reconcile_at';
+
 beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
   jest.setSystemTime(new Date('2026-08-01T12:00:00.000Z'));
   socketConnected = false;
   activeConversationId = null;
+  window.localStorage.clear();
   getConversations.mockReset();
   getConversations.mockResolvedValue({
     conversations: [],
@@ -112,6 +129,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  focusManager.setFocused(undefined as unknown as boolean);
   jest.useRealTimers();
 });
 
@@ -409,5 +427,221 @@ describe('useConversationsDeltaSync', () => {
     await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
     expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a']);
     expect(queryClient.getQueryData(queryKeys.messages.infinite('gone'))).toBeUndefined();
+  });
+});
+
+/**
+ * Trigger 2 — le retour de focus.
+ *
+ * Ce que le hook REMPLACE ici : `refetchOnWindowFocus: 'always'`, hérité du
+ * QueryClient global, relisait la liste page par page à chaque retour d'onglet.
+ * Sur une `useInfiniteQuery`, ce refetch rejoue TOUTES les pages chargées et
+ * REMPLACE le cache — donc dix pages de scroll = dix requêtes sur une route
+ * lourde, et tout ce que la socket a écrit pendant la séquence est perdu. Pire,
+ * la route pagine par OFFSET sur un tri `lastMessageAt` décroissant : un message
+ * arrivé entre la page k et la page k+1 décale toutes les suivantes d'un cran,
+ * ce qui duplique une ligne à la frontière et en fait disparaître une autre.
+ *
+ * Le focus reste un signal — mais il tire le MÊME delta borné que le reconnect.
+ */
+describe('useConversationsDeltaSync — retour de focus', () => {
+  it('tire un delta au retour de focus, sans relire les pages', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(
+      queryKeys.conversations.infinite(),
+      pagedCache([[conv('a', { updatedAt: new Date('2026-08-01T11:45:00.000Z') })]])
+    );
+
+    renderDeltaSync(queryClient);
+    await focusWindow();
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+    expect(getConversations).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedSince: '2026-08-01T11:45:00.000Z', offset: 0 })
+    );
+  });
+
+  it('fond des allers-retours d’onglet rapides en un seul delta', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+
+    renderDeltaSync(queryClient);
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(1_100);
+    });
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+  });
+
+  it('ne tire rien quand la fenêtre PERD le focus', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+
+    renderDeltaSync(queryClient);
+    act(() => {
+      focusManager.setFocused(false);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(1_100);
+    });
+
+    expect(getConversations).not.toHaveBeenCalled();
+  });
+
+  it('ne tire rien au focus quand le hook est désactivé', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+
+    renderDeltaSync(queryClient, false);
+    await focusWindow();
+
+    expect(getConversations).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Réconciliation complète bornée — le pendant web de `fullReconcileInterval`
+ * (iOS `ConversationSyncEngine`, 24 h).
+ *
+ * Le delta est upsert-only : une conversation HARD-supprimée côté serveur ne
+ * revient dans AUCUNE réponse `updatedSince`, donc rien ne la retire du cache.
+ * Avant ce lot, le seul chemin web qui purgeait une telle ligne fantôme était
+ * justement le `refetchOnWindowFocus` destructeur. Il est remplacé par une
+ * relecture complète chaînée APRÈS le delta, au plus 1× par 24 h.
+ */
+describe('useConversationsDeltaSync — réconciliation complète bornée', () => {
+  it('escalade vers une relecture complète quand 24 h se sont écoulées, MÊME sur un delta vide', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    window.localStorage.setItem(
+      FULL_RECONCILE_KEY,
+      String(new Date('2026-07-30T12:00:00.000Z').getTime())
+    );
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.conversations.infinite() })
+    );
+  });
+
+  it('ne réconcilie pas deux fois dans la même fenêtre de 24 h', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    window.localStorage.setItem(
+      FULL_RECONCILE_KEY,
+      String(new Date('2026-07-30T12:00:00.000Z').getTime())
+    );
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
+
+    jest.setSystemTime(new Date('2026-08-01T18:00:00.000Z'));
+    await reconnect(rerender);
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(2));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it('horodate la réconciliation pour qu’un rechargement de page ne la rejoue pas', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    window.localStorage.setItem(
+      FULL_RECONCILE_KEY,
+      String(new Date('2026-07-30T12:00:00.000Z').getTime())
+    );
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+
+    expect(window.localStorage.getItem(FULL_RECONCILE_KEY)).toBe(
+      String(new Date('2026-08-01T12:00:00.000Z').getTime())
+    );
+  });
+
+  it('ne réconcilie pas quand le delta a ÉCHOUÉ — local-first, on garde le cache', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    window.localStorage.setItem(
+      FULL_RECONCILE_KEY,
+      String(new Date('2026-07-30T12:00:00.000Z').getTime())
+    );
+    getConversations.mockRejectedValue(new Error('gateway still restarting'));
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(FULL_RECONCILE_KEY)).toBe(
+      String(new Date('2026-07-30T12:00:00.000Z').getTime())
+    );
+  });
+
+  it('ne réconcilie PAS au tout premier delta d’un navigateur neuf — le montage vient de lire le serveur', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+    expect(invalidate).not.toHaveBeenCalled();
+    // La fenêtre de 24 h démarre maintenant, pas à l'époque zéro.
+    expect(window.localStorage.getItem(FULL_RECONCILE_KEY)).toBe(
+      String(new Date('2026-08-01T12:00:00.000Z').getTime())
+    );
+  });
+
+  it('ne se laisse pas geler par une borne dans le FUTUR — horloge reculée, stockage bricolé', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    window.localStorage.setItem(
+      FULL_RECONCILE_KEY,
+      String(new Date('2027-01-01T00:00:00.000Z').getTime())
+    );
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+
+    // Ramenée à maintenant : la fenêtre redevient atteignable dans 24 h au lieu
+    // d'être hors d'atteinte à vie.
+    expect(window.localStorage.getItem(FULL_RECONCILE_KEY)).toBe(
+      String(new Date('2026-08-01T12:00:00.000Z').getTime())
+    );
+  });
+
+  it('l’escalade « page pleine » compte comme une réconciliation et repousse la fenêtre', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+    getConversations.mockResolvedValue({
+      conversations: Array.from({ length: 100 }, (_, i) => conv(`d${i}`)),
+      pagination: { limit: 100, offset: 0, total: 100, hasMore: true },
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
+
+    expect(window.localStorage.getItem(FULL_RECONCILE_KEY)).toBe(
+      String(new Date('2026-08-01T12:00:00.000Z').getTime())
+    );
   });
 });

@@ -11,7 +11,7 @@
  */
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import React from 'react';
 import {
   useConversationsQuery,
@@ -358,6 +358,46 @@ describe('useInfiniteConversationsQuery', () => {
     });
 
     expect(result.current.hasNextPage).toBe(false);
+  });
+
+  /**
+   * Le QueryClient global tourne en `refetchOnWindowFocus: 'always'`. Sur une
+   * `useInfiniteQuery`, ce réglage rejoue TOUTES les pages chargées et REMPLACE
+   * le cache : dix pages de scroll = dix requêtes sur une route lourde à chaque
+   * retour d'onglet, les écritures socket concurrentes écrasées, et — la route
+   * paginant par OFFSET sur un tri `lastMessageAt` décroissant — une ligne
+   * dupliquée à la frontière dès qu'un message arrive entre deux pages.
+   * Le focus est servi à la place par le delta borné de
+   * `useConversationsDeltaSync`.
+   */
+  it('ne relit PAS ses pages au retour de focus, malgré le défaut global', async () => {
+    mockGetConversations.mockResolvedValue({
+      ...mockPaginatedResponse,
+      pagination: { limit: 20, offset: 0, total: 40, hasMore: true },
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Infinity, refetchOnWindowFocus: 'always' },
+      },
+    });
+    const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    };
+
+    const { result } = renderHook(() => useInfiniteConversationsQuery({ limit: 20 }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    mockGetConversations.mockClear();
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    expect(mockGetConversations).not.toHaveBeenCalled();
+    focusManager.setFocused(undefined as unknown as boolean);
   });
 
   it('should fetch next page with correct offset', async () => {
