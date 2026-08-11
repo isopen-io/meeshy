@@ -392,16 +392,6 @@ export function registerInteractionRoutes(
       const { postId } = request.params;
       const source = (request.body as any)?.source ?? 'feed';
 
-      // Résout la racine AVANT d'écrire : un repost doit créditer son
-      // original (`originalRepostOfId ?? repostOfId`) du même
-      // impressionCount, en plus de son propre compteur — sinon aucune UI ne
-      // peut afficher la portée réelle d'un contenu consulté via repost
-      // (chantier reposts cohérents & watermark, tâche 1).
-      const target = await prisma.post.findUnique({
-        where: { id: postId },
-        select: { repostOfId: true, originalRepostOfId: true },
-      });
-
       await prisma.postImpression.create({
         data: { postId, userId: authContext.registeredUser.id, source }
       });
@@ -417,9 +407,15 @@ export function registerInteractionRoutes(
         counters.postOpenCount = { increment: 1 };
       }
 
-      await prisma.post.update({
+      // Résout repostOfId/originalRepostOfId depuis le RETOUR de `update` —
+      // pas une lecture séparée : un repost doit créditer son original du
+      // même impressionCount en plus de son propre compteur (chantier
+      // reposts cohérents & watermark, tâche 1), sans ajouter de requête sur
+      // ce chemin chaud (chaque impression, majoritairement des non-reposts).
+      const target = await prisma.post.update({
         where: { id: postId },
-        data: counters
+        data: counters,
+        select: { repostOfId: true, originalRepostOfId: true },
       });
 
       const rootId = target?.originalRepostOfId ?? target?.repostOfId;

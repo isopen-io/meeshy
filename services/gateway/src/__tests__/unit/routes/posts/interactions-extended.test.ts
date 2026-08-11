@@ -103,10 +103,10 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
       findFirst: jest.fn().mockResolvedValue({
         authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
       }),
-      // Résolution repostOfId/originalRepostOfId pour le crédit de racine des
-      // impressions (chantier reposts cohérents, tâche 1) — par défaut aucun
-      // repost dans le batch/unitaire.
-      findUnique: jest.fn().mockResolvedValue(null),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine du
+      // batch d'impressions (chantier reposts cohérents, tâche 1) — par
+      // défaut aucun repost dans le batch. L'unitaire replie sa résolution
+      // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
       findMany: jest.fn().mockResolvedValue([]),
     },
   } as any;

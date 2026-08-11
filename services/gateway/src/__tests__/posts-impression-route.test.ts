@@ -41,10 +41,12 @@ const POST_ID = '507f1f77bcf86cd799439011';
 
 const impressionCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({});
 const postUpdate = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({});
-// Résolution repostOfId/originalRepostOfId pour le crédit de racine (chantier
-// reposts cohérents, tâche 1) — `null` par défaut : aucun de ces tests ne
-// porte sur un repost, comportement inchangé.
-const postFindUnique = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(null);
+// Espion inutilisé côté implémentation : `findUnique` ne doit PLUS être
+// appelé sur ce chemin chaud. La résolution repostOfId/originalRepostOfId
+// (chantier reposts cohérents, tâche 1) est repliée dans le `select` de
+// `update` — garder ce spy prouve l'absence de lecture séparée plutôt que
+// de simplement l'omettre (Important #2, revue chantier reposts).
+const postFindUnique = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 const buildAuthMiddleware = (userId?: string) =>
   (req: any, _reply: unknown, done: () => void) => {
@@ -87,6 +89,7 @@ describe('POST /posts/:postId/impression', () => {
   beforeEach(() => {
     impressionCreate.mockClear();
     postUpdate.mockClear();
+    postFindUnique.mockClear();
   });
 
   it('source "detail" = +1 impression AND +1 total view (postOpenCount), immediately', async () => {
@@ -103,7 +106,12 @@ describe('POST /posts/:postId/impression', () => {
     expect(postUpdate).toHaveBeenCalledWith({
       where: { id: POST_ID },
       data: { impressionCount: { increment: 1 }, postOpenCount: { increment: 1 } },
+      select: { repostOfId: true, originalRepostOfId: true },
     });
+    // Réduction de requêtes : la résolution repostOfId/originalRepostOfId
+    // est repliée dans le `select` de `update` ci-dessus — plus de lecture
+    // dédiée avant l'écriture (Important #2, revue chantier reposts).
+    expect(postFindUnique).not.toHaveBeenCalled();
   });
 
   it('source "feed" increments ONLY impressionCount (no total view on a feed appearance)', async () => {
@@ -116,7 +124,9 @@ describe('POST /posts/:postId/impression', () => {
     expect(postUpdate).toHaveBeenCalledWith({
       where: { id: POST_ID },
       data: { impressionCount: { increment: 1 } },
+      select: { repostOfId: true, originalRepostOfId: true },
     });
+    expect(postFindUnique).not.toHaveBeenCalled();
   });
 
   it('counts EVERY open with no dedup (N opens → N impressions)', async () => {
@@ -130,6 +140,7 @@ describe('POST /posts/:postId/impression', () => {
     }
     expect(impressionCreate).toHaveBeenCalledTimes(3);
     expect(postUpdate).toHaveBeenCalledTimes(3);
+    expect(postFindUnique).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown source with 400', async () => {

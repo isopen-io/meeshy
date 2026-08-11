@@ -118,10 +118,11 @@ async function buildApp(opts: {
       findFirst: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
       }),
-      // Résolution repostOfId/originalRepostOfId pour le crédit de racine des
-      // impressions (chantier reposts cohérents, tâche 1). Défaut : aucun
-      // repost dans le batch/unitaire — mêmes comportements qu'avant.
-      findUnique: jest.fn<any>().mockResolvedValue(null),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine du
+      // batch d'impressions (chantier reposts cohérents, tâche 1). Défaut :
+      // aucun repost dans le batch — même comportement qu'avant. L'unitaire
+      // replie sa résolution dans le `select` de `update` (Important #2,
+      // revue), aucun `findUnique` séparé n'est plus nécessaire.
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
   };
@@ -577,22 +578,27 @@ describe('POST /posts/:id/impression — detail source increments postOpenCount'
 });
 
 describe('POST /posts/:id/impression — on a repost, credits the root impressionCount too', () => {
-  it('resolves repostOfId/originalRepostOfId and increments the root once, in addition to the displayed post', async () => {
+  it('folds repostOfId/originalRepostOfId resolution into the update select (no standalone findUnique) and increments the root once', async () => {
     const ROOT_ID = '507f1f77bcf86cd799439077';
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
       post: {
-        update: jest.fn<any>().mockResolvedValue({}),
+        // Le `select` de `update` porte la résolution — pas de findUnique
+        // séparé sur ce chemin chaud (Important #2, revue chantier reposts).
+        update: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-        findUnique: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
+        findUnique: jest.fn<any>(),
       },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
     expect(res.statusCode).toBe(200);
+    // Réduction de requêtes : plus de lecture dédiée avant l'écriture.
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
     expect(prisma.post.update).toHaveBeenCalledWith({
       where: { id: POST_ID },
       data: { impressionCount: { increment: 1 } },
+      select: { repostOfId: true, originalRepostOfId: true },
     });
     expect(prisma.post.updateMany).toHaveBeenCalledWith({
       where: { id: ROOT_ID, deletedAt: { isSet: false } },
@@ -601,18 +607,19 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
     await app.close();
   });
 
-  it('non-repost post: no root credit attempted', async () => {
+  it('non-repost post: no root credit attempted, no standalone findUnique either', async () => {
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
       post: {
         update: jest.fn<any>().mockResolvedValue({}),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-        findUnique: jest.fn<any>().mockResolvedValue({ repostOfId: null, originalRepostOfId: null }),
+        findUnique: jest.fn<any>(),
       },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
     expect(res.statusCode).toBe(200);
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
     expect(prisma.post.updateMany).not.toHaveBeenCalled();
     await app.close();
   });
@@ -622,7 +629,7 @@ describe('POST /posts/:id/impression — service error', () => {
   it('returns 500 when prisma.postImpression.create throws', async () => {
     const prisma = {
       postImpression: { create: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), findUnique: jest.fn<any>().mockResolvedValue(null) },
+      post: { update: jest.fn<any>().mockResolvedValue({}) },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
