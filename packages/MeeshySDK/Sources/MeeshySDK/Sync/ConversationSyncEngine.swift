@@ -925,6 +925,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Profil public d'un CONTACT (nom, avatar, bannière). Même raison que
+        // le relais ci-dessus : sans lui, la ligne redevient périmée au
+        // prochain démarrage à froid, le temps que le REST réponde.
+        messageSocket.userUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleUserUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Conversation deleted server-side — drop the row (and its messages)
         // from the persisted cache, not only from the RAM store.
         messageSocket.conversationDeleted
@@ -1406,6 +1416,47 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         updated[index] = merged
         guard merged.lastMessageAt != conversations[index].lastMessageAt else { return updated }
         return updated.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    /// `user:updated` relayed into the PERSISTED list. Le store RAM l'applique
+    /// déjà via `ConversationStoreSocketBridge` ; sans ce relais, un contact
+    /// renommé pendant que l'écran de liste était fermé retrouvait son ancien
+    /// nom au prochain démarrage à froid.
+    ///
+    /// Même découpage que `handleConversationUpdated` : la fusion tourne DANS
+    /// la fermeture de mutation pour ne pas écraser une écriture `userState`
+    /// concurrente, et la pré-lecture ne sert qu'à éviter l'écriture — et le
+    /// fan-out `_conversationsDidChange` — quand rien ne change.
+    private func handleUserUpdated(_ event: UserUpdatedEvent) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard Self.applyingUserUpdate(event, to: list) != nil else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            Self.applyingUserUpdate(event, to: conversations) ?? conversations
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// Apply a `user:updated` payload to a cached list, returning `nil` when it
+    /// changes nothing. Delegates the per-row rule to
+    /// `ConversationStore.merging(_:withUserUpdate:)` — même raison que son
+    /// jumeau ci-dessus : la liste persistée et le store RAM ne peuvent pas
+    /// diverger sur ce que l'événement VEUT DIRE.
+    ///
+    /// Aucun tri : une identité de contact ne touche jamais `lastMessageAt`, et
+    /// `sorted(by:)` n'étant pas stable, re-trier brasserait pour rien les
+    /// lignes qui partagent un horodatage.
+    nonisolated static func applyingUserUpdate(
+        _ event: UserUpdatedEvent,
+        to conversations: [MeeshyConversation]
+    ) -> [MeeshyConversation]? {
+        var updated = conversations
+        var changed = false
+        for index in updated.indices {
+            guard let merged = ConversationStore.merging(updated[index], withUserUpdate: event) else { continue }
+            updated[index] = merged
+            changed = true
+        }
+        return changed ? updated : nil
     }
 
     /// `conversation:deleted` relayed into the PERSISTED list. Without it the

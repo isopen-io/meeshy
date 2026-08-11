@@ -688,16 +688,31 @@ export interface FriendRequestRejectedEventData {
  * profil change (displayName, avatar, banner, username). Delta léger : seuls
  * les champs modifiés sont présents dans `changes`, pas le user complet.
  * Voir tasks/socketio-events-cleanup.md #6.
+ *
+ * **Exception : les quatre composants du nom voyagent en GROUPE.** Dès que
+ * `displayName`, `firstName`, `lastName` OU `username` change, les quatre sont
+ * présents. Le nom RENDU par un client est `displayName > « Prénom Nom » >
+ * username` ; un client ne stocke que le nom déjà composé, donc un delta
+ * partiel (« firstName vaut désormais Bob ») est irrecomposable chez lui — il
+ * lui manque toujours les autres composants. Le groupe entier lui permet
+ * d'appliquer SON résolveur (`getUserDisplayName` web,
+ * `APIConversationUser.name` iOS) sans qu'une quatrième copie de la règle
+ * apparaisse côté serveur. La présence de `username` est donc le marqueur du
+ * groupe : `avatar`/`banner` changent seuls, le nom jamais.
+ *
+ * `null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ, et c'est le
+ * seul moyen pour le client de faire retomber le nom sur le composant suivant.
+ * `username` est obligatoire côté base, donc jamais `null`.
  */
 export interface UserUpdatedEventData {
   readonly userId: string;
   readonly changes: Readonly<{
-    displayName?: string;
+    displayName?: string | null;
     avatar?: string | null;
     banner?: string | null;
     username?: string;
-    firstName?: string;
-    lastName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
   }>;
 }
 

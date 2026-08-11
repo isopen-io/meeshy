@@ -121,6 +121,99 @@ vigilance des call sites.
 
 ---
 
+# Cycle 74b — iOS n'écoutait pas `user:updated`, et le contrat rendait l'écoute inutile
+
+*Deux sessions ont tourné en parallèle sur le cycle 74. Celle-ci a travaillé sur une AUTRE
+surface (le profil public d'un contact, pas le Prisme de l'aperçu) : aucun fichier commun, rien
+à arbitrer. Les deux rapports sont conservés tels quels.*
+
+## Le défaut
+
+`emitUserUpdated` (`NotificationService:2858`) diffuse le profil public d'un
+utilisateur à TOUS ses contacts — quatre appelants dans `routes/users/profile.ts`
+(profil, avatar, bannière, handle). Le web l'applique
+(`use-socket-cache-sync.ts:1107`). **iOS n'avait aucun `socket.on("user:updated")`.**
+
+Surfaces figées côté iOS jusqu'au prochain refetch complet : la ligne de liste
+d'une conversation directe (`title`, `participantAvatarURL`, `participantBanner`),
+l'en-tête de conversation, `ForwardPickerSheet`, `GlobalSearchViewModel`,
+`ProfileSheetUser`.
+
+## Le contrat rendait l'écoute inutile
+
+Brancher un listener n'aurait pas suffi. Le nom RENDU est
+`displayName > « Prénom Nom » > username`, et un client ne stocke que le nom
+**déjà composé** (`MeeshyConversation.title`) — pas ses composants. Un delta
+partiel (« firstName vaut désormais Bob ») est donc **irrecomposable** chez le
+destinataire : il lui manque toujours les autres composants.
+
+Deux corrections possibles, une seule tenable :
+- *Résoudre côté serveur et envoyer un `resolvedDisplayName`* — écarté : cela
+  fabrique une QUATRIÈME copie de la règle (web, iOS, Android, serveur), qui
+  diverge silencieusement dès qu'un client change la sienne.
+- **Envoyer les quatre composants en GROUPE** — retenu : chaque client applique
+  SON résolveur, déjà écrit, déjà testé. Aucun nouveau champ dans le contrat.
+
+`null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ. Omettre la clé
+se lirait « inchangé » et figerait l'ancien nom — c'est le seul moyen de faire
+retomber l'affichage sur le composant suivant.
+
+Le chemin `PATCH /users/me/username` demandait en plus d'élargir son `select`,
+qui ne ramenait que `{ id, username }` : envoyer le groupe sans le sélectionner
+aurait produit trois `undefined`, c'est-à-dire un groupe qui ment. Un témoin
+verrouille le `select` lui-même, pas seulement l'emit.
+
+## Ce qui a été VÉRIFIÉ, pas déduit
+
+- **La présence de `username` est un marqueur de groupe FIABLE.** Les quatre
+  appelants de `emitUserUpdated` ont été lus : `avatar` et `banner` partent
+  seuls, le nom jamais. `hasNameGroup` peut donc se lire sur `changes.username`.
+- **Le nom recomposé côté socket suit la règle du chemin REST**, pas celle de
+  web. `title` d'une conversation directe est hydraté par
+  `APIConversationUser.name` (`displayName ?? username`, sans first/last).
+  Recomposer avec `displayName > « Prénom Nom » > username` aurait fait diverger
+  la ligne selon le transport qui l'a remplie — un utilisateur sans
+  `displayName` mais avec un prénom aurait vu son nom changer au rechargement.
+- **`avatar`/`banner` sont tri-états**, comme `LastMessagePreviewTranslations` :
+  clé absente ≠ `null`. Un `if let` sur la valeur aurait gardé l'ancienne image
+  après une SUPPRESSION d'avatar — le défaut inverse de celui corrigé.
+- **La liste persistée devait suivre.** Le store RAM seul laissait la ligne
+  redevenir périmée au prochain démarrage à froid. `ConversationSyncEngine`
+  délègue à la MÊME règle pure que le store, comme son jumeau
+  `applyingConversationUpdate`.
+
+## Vérification
+
+- 5 témoins gateway (dont 2 neufs) — **RED prouvé par mutation** : le stash du
+  seul `profile.ts` les fait tomber tous les cinq.
+- 12 témoins Swift neufs (8 sur la règle pure et son décodage, 1 sur l'actor,
+  1 sur le bridge, 2 sur les non-cibles groupe/autre-contact).
+- Suite Jest complète du gateway : **652 suites, 16429 tests, verte**.
+  `tsc --noEmit` gateway : vert. Le Swift est gaté par `sdk-tests` (pas de
+  toolchain Swift sur cette machine).
+
+## Reste ouvert après ce cycle
+
+- **Le web a la même famille de défaut sur la LIGNE DE LISTE.** Son
+  `handleUserUpdated` n'invalide que `queryKeys.users.detail(userId)` ; la ligne
+  d'une conversation directe se nourrit du payload conversation, pas de cette
+  requête. À instruire en lisant d'où `ConversationList` tire le nom et l'avatar
+  d'un direct — pas en le déduisant. Non traité ici : une session parallèle
+  travaille sur `apps/web` (PR #2836).
+- **Android ne décode pas `user:updated` non plus** — lane d'une autre routine
+  (`tasks/android-parity-ios-debt-agent-prompt.md`), comme le Prisme de la ligne
+  de liste du cycle 73. Documenté, pas corrigé.
+- **`conversation:online-stats` est déclaré, écouté par le web, JAMAIS émis.**
+  Trouvé en balayant les 120 `SERVER_EVENTS` (émis gateway vs consommés
+  iOS/web). Le web y branche `onActiveUsersUpdate` depuis
+  `use-stream-socket.ts:244` — code mort tant que rien ne l'émet. À trancher :
+  l'émettre ou le supprimer. `conversation:stats` (émis, lui) alimente déjà la
+  même sortie, ce qui plaide pour la suppression.
+- Les points hérités restent tels quels — voir « Reste ouvert » du cycle 73
+  ci-dessous.
+
+---
+
 # Tête instruite pour le cycle 74 — Android ne DÉCODE pas le Prisme de la ligne de liste
 
 *Trouvé en instruisant le cycle 73, vérifié, NON corrigé : le défaut est réel et user-visible, mais
