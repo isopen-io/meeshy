@@ -243,4 +243,30 @@ describe('PostsFeedScreen — audio publish audience wiring', () => {
       expect.anything(),
     );
   });
+
+  it('carries the raw millisecond duration from the upload result into optimisticMedia', async () => {
+    mockUploadFiles.mockResolvedValue([{
+      id: 'media-1',
+      mimeType: 'audio/webm',
+      fileUrl: 'https://cdn.test/media-1.webm',
+      thumbnailUrl: undefined,
+      duration: 75000,
+    }]);
+    setAudioPublishPayload();
+    render(<PostsFeedScreen />);
+
+    fireEvent.click(screen.getByLabelText('Record an audio post'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('audio-composer-publish'));
+    });
+
+    await waitFor(() => expect(mockCreatePostMutate).toHaveBeenCalled());
+    expect(mockCreatePostMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        optimisticMedia: [expect.objectContaining({ id: 'media-1', duration: 75000 })],
+      }),
+      expect.anything(),
+    );
+  });
 });

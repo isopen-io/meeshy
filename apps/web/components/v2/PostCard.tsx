@@ -324,7 +324,7 @@ function PostCard({
                     </svg>
                     {typeof m.duration === 'number' && (
                       <span className="text-xs font-medium text-[var(--gp-text-secondary)]">
-                        {formatDuration(m.duration)}
+                        {formatDuration(Math.round(m.duration / 1000))}
                       </span>
                     )}
                   </div>

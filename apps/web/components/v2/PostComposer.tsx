@@ -201,6 +201,7 @@ function PostComposer({
             mimeType: att.mimeType,
             fileUrl: att.fileUrl,
             thumbnailUrl: att.thumbnailUrl,
+            duration: att.duration,
             order,
           }))
         : undefined,
