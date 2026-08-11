@@ -1530,3 +1530,46 @@ Append-only log of gotchas and decisions that save time next run.
   the prior slice — an additive, nullable pass-through parameter is the only shape that adds new
   forwarding capability without silently mutating the default behavior every untouched caller
   relies on.
+
+## Slice `settings-two-factor-auth` (2026-08-11)
+- **A commit message's stated reason for removing a feature is a claim, not a fact — re-verify it
+  against the actual backend before trusting it, even when the commit is barely a day old.**
+  `761164959` (2026-08-10) removed the 2FA settings row with the message "aucune route gateway
+  n'existe" (no gateway route exists). `grep`ping `services/gateway/src/routes/two-factor.ts` +
+  `TwoFactorService.ts` + `route-registration.ts` showed six real, tested, live endpoints under
+  `auth/2fa`, registered since a much OLDER commit (`c44ded3d5`) — the removal's premise was wrong
+  from the moment it was written, not a regression that happened later. A same-day-old commit
+  message is not inherently more trustworthy than an old one; both are claims about the codebase
+  that the codebase itself can confirm or refute in under a minute.
+- **`./apps/android/meeshy.sh check` (`assembleDebug` + `testDebugUnitTest`) does NOT install the
+  APK — a fresh `:app:installDebug` is a separate, required step before on-device verification can
+  see new code.** Tapped the newly-restored Settings row on the emulator and it wasn't there;
+  the emulator was still running whatever build was last installed (from a prior, unrelated
+  slice). `adb shell pm list packages`/screen state can look identical whether or not the running
+  APK matches the current worktree — always `installDebug` explicitly before any on-device
+  verification pass, never assume `check`'s green result means the emulator is running that code.
+- **Kotlin block comments nest (unlike Java/C) — a literal `/*` sequence inside a KDoc comment's
+  prose (not a code fence) silently opens a SECOND comment that the doc's own closing `*/` then
+  closes, leaving the outer one unclosed until EOF.** Writing `` `/auth/2fa/*` `` (a glob-style
+  path in backticks) inside a `/** ... */` doc comment produced `kspDebugKotlin: Unclosed comment`
+  pointing at the LAST line of the file, nowhere near the actual typo — because Kotlin's nested-
+  comment support means the "closing" `*/` at the end of that KDoc block actually closed the
+  accidental nested comment opened by `2fa/*`, and the real outer comment kept consuming the rest
+  of the file. When "Unclosed comment" points at EOF, grep every doc comment for a literal `/*`
+  substring (not just missing `*/`) — the bug is almost certainly an accidental nested-open, not a
+  missing close.
+- **A security-toggle feature (2FA) exercised against the routine's own shared, long-lived test
+  account needs an explicit stop-point BEFORE the state-changing call, not just "verify it works
+  end to end."** The account (`atabeth`) is reused across every verification run this routine has
+  ever done, by both the Android and iOS lanes — and this session does not know its password
+  (needed by the `disable` endpoint's `DisableBodySchema`, which requires it unconditionally).
+  Computing a valid live TOTP code from the real `POST auth/2fa/setup` secret and calling `/enable`
+  was technically straightforward, but would have left the account's real login flow behind 2FA
+  with no password-holder in this session able to complete a subsequent disable — a real risk of
+  locking every future run of this routine out of the account it depends on. Verified the read-only
+  and non-destructive parts instead (`GET status`, `POST setup`, and that `cancel()` fires zero
+  network calls and leaves the account's real status unchanged) and stopped there. When a
+  verification pass would need to flip a real, hard-to-reverse account-level flag on a SHARED
+  fixture the session doesn't fully control (no known password, no dedicated disposable account),
+  the safety-first move is to verify up to but not including that flip, not to "complete the loop"
+  for its own sake.
