@@ -90,7 +90,7 @@ public actor MediaSessionCoordinator {
     /// Non-isolated Combine subject so observers can subscribe from any
     /// context without hopping into the actor. Only ever published to via
     /// `emit(_:)`, which serializes concurrent senders with `_eventsLock` —
-    /// do not call `events.send(_:)` directly from a new call site.
+    /// do not call `.send(_:)` on this subject directly from a new call site.
     public nonisolated(unsafe) let events = PassthroughSubject<Event, Never>()
 
     /// Single, lock-serialized entry point for publishing on `events`. See
