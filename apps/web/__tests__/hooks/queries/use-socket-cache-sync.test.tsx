@@ -30,9 +30,9 @@ let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
 let conversationJoinedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
-let conversationParticipantJoinedCallback: ((data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void) | null = null;
+let conversationParticipantJoinedCallback: ((data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) | null = null;
 let conversationLeftCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
-let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void) | null = null;
+let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => void) | null = null;
 let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean }) => void) | null = null;
 let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
@@ -97,7 +97,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       conversationJoinedCallback = callback;
       return jest.fn();
     },
-    onConversationParticipantJoined: (callback: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void) => {
+    onConversationParticipantJoined: (callback: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) => {
       conversationParticipantJoinedCallback = callback;
       return jest.fn();
     },
@@ -944,6 +944,28 @@ describe('useSocketCacheSync', () => {
   });
 
   describe('Conversation Participant Joined Handler', () => {
+    // L'effectif que porte l'événement est ABSOLU : il se POSE. C'est ce qui le
+    // sépare d'un delta — il RATTRAPE une dérive au lieu de la continuer. Cache
+    // à 4, serveur à 9 : un incrément rendrait 5 et garderait l'écart à jamais
+    // (`staleTime: Infinity` ne relit rien de lui-même).
+    it('pose l\'effectif du serveur plutôt que d\'incrémenter le cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString(), memberCount: 9 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(9);
+    });
+
     it('increments memberCount when a member is actually added', () => {
       // Le pendant montant de `participant-left`. Sans lui, l'effectif ne
       // connaissait que des soustractions et dérivait vers le bas — et
@@ -1032,6 +1054,26 @@ describe('useSocketCacheSync', () => {
   });
 
   describe('Conversation Participant Left Handler', () => {
+    // Symétrique du témoin d'adhésion : le compte absolu rattrape vers le BAS
+    // aussi. Cache à 5, serveur à 2 — un décrément rendrait 4.
+    it('pose l\'effectif du serveur plutôt que de décrémenter le cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 5 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'user-2', displayName: 'Bob', leftAt: new Date().toISOString(), memberCount: 2 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(2);
+    });
+
     it('decrements memberCount when a participant leaves', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 

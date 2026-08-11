@@ -103,18 +103,27 @@ function makeDiscriminatingPrisma(rows: { caller: ParticipantRow | null; target:
         updates.push({ where: args.where, data: args.data });
         return {};
       }),
+      // Membres actifs APRÈS l'écriture : ils nomment les rooms personnelles de
+      // la diffusion et portent l'effectif absolu du payload. La cible n'y
+      // figure que si l'appartenance lui a été rendue.
+      findMany: jest.fn<any>(async () => [{ id: 'part-caller', userId: CALLER_ID }]),
     },
   };
 }
 
 function makeSocketRecorder() {
-  const emits: { room: string; event: string; payload: any }[] = [];
+  const emits: { room: string; rooms: string[]; event: string; payload: any }[] = [];
   const joinUserToConversationRoom = jest.fn<any>(async () => undefined);
 
+  // `.to()` CHAÎNE : `emitToConversationParticipants` écrit
+  // `io.to(fil).to(perso…).emit(...)` pour ne livrer qu'une copie par socket.
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: any) => emits.push({ room: rooms[0], rooms, event, payload }),
+  });
+
   const io = {
-    to: (room: string) => ({
-      emit: (event: string, payload: any) => emits.push({ room, event, payload }),
-    }),
+    to: (room: string) => chain([room]),
     in: (_room: string) => ({ fetchSockets: async () => [{ leave: () => undefined }] }),
   };
 

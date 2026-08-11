@@ -385,7 +385,7 @@ describe('registerCoreRoutes', () => {
       banner: null,
       avatar: null,
       communityId: null,
-      memberCount: 2,
+      _count: { participants: 2 },
       isAnnouncementChannel: false,
       participants: [
         {
@@ -417,6 +417,56 @@ describe('registerCoreRoutes', () => {
       await getListHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).toHaveBeenCalled();
+    });
+
+    // ── memberCount : compté par la base, jamais lu dans la colonne ──────────
+    // `Conversation.memberCount` est une colonne dénormalisée que RIEN n'écrit
+    // dans le gateway (seule `migrations/migrate-from-legacy.ts` la pose, une
+    // fois). La liste la servait telle quelle : `0` pour toute conversation
+    // créée depuis. `GET /conversations/:id` servait au même moment le `_count`
+    // filtré — deux valeurs sous un même nom de champ, et une ligne de liste
+    // iOS qui masque son badge de groupe (`memberCount > 1`) et calcule une
+    // couleur d'accent différente de celle du fil ouvert.
+    it('sert l\'effectif ACTIF compté par la base, pas la colonne dénormalisée', async () => {
+      const conv = makeConversation({ _count: { participants: 7 } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+      prisma.conversation.count.mockResolvedValue(1);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(reply._body.data[0].memberCount).toBe(7);
+    });
+
+    it('demande à Prisma le compte filtré sur les participants ACTIFS', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const select = prisma.conversation.findMany.mock.calls[0][0].select;
+      expect(select._count).toEqual({
+        select: { participants: { where: { isActive: true } } }
+      });
+      // Un `select` qui garderait AUSSI la colonne rendrait le défaut
+      // réintroductible par un simple spread au retour.
+      expect('memberCount' in select).toBe(false);
+    });
+
+    it('ne laisse pas l\'agrégat `_count` fuiter dans la réponse', async () => {
+      const conv = makeConversation({ _count: { participants: 3 } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect('_count' in reply._body.data[0]).toBe(false);
     });
 
     it('returns empty list with default pagination', async () => {
@@ -2059,7 +2109,7 @@ describe('registerCoreRoutes', () => {
       banner: null,
       avatar: null,
       communityId: null,
-      memberCount: 2,
+      _count: { participants: 2 },
       isAnnouncementChannel: false,
       participants: [
         {
@@ -2594,7 +2644,7 @@ describe('registerCoreRoutes', () => {
         banner: null,
         avatar: null,
         communityId: null,
-        memberCount: 2,
+        _count: { participants: 2 },
         isAnnouncementChannel: false,
         participants: [],
         userPreferences: [],
@@ -2634,7 +2684,7 @@ describe('registerCoreRoutes', () => {
       banner: null,
       avatar: null,
       communityId: null,
-      memberCount: 2,
+      _count: { participants: 2 },
       isAnnouncementChannel: false,
       participants: [
         {

@@ -81,7 +81,7 @@ final class DependencyContainerTests: XCTestCase {
         }
         XCTAssertEqual(one, 1)
         XCTAssertFalse(diagnostics.recoveryAttempted)
-        XCTAssertFalse(diagnostics.fellBackToInMemory)
+        XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
         XCTAssertNil(diagnostics.firstAttemptError)
     }
 
@@ -118,7 +118,7 @@ final class DependencyContainerTests: XCTestCase {
 
         XCTAssertTrue(diagnostics.recoveryAttempted)
         XCTAssertTrue(diagnostics.recoveredFromCorruption)
-        XCTAssertFalse(diagnostics.fellBackToInMemory)
+        XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
         XCTAssertNotNil(diagnostics.firstAttemptError)
         XCTAssertNotNil(diagnostics.quarantinedFilePath)
 
@@ -174,6 +174,101 @@ final class DependencyContainerTests: XCTestCase {
 
         XCTAssertNil(quarantined)
         XCTAssertFalse(FileManager.default.fileExists(atPath: dbPath + "-wal"))
+    }
+
+    /// Regression — crash-loop macOS TestFlight build 1750 (2026-08-11).
+    /// Sur iOS-app-on-Mac, un binaire signé SANS l'entitlement app-group
+    /// obtient quand même une URL de conteneur (containermanagerd résout le
+    /// chemin), mais le sandbox refuse ensuite CHAQUE accès fichier
+    /// (SQLITE_AUTH « authorization denied »). Le fichier n'est PAS corrompu :
+    /// il ne doit être ni renommé ni supprimé — la quarantaine est réservée à
+    /// la corruption. L'ouverture doit basculer sur le chemin de repli.
+    @MainActor
+    func test_openWithRecovery_unreadablePrimary_fallsBackToFallbackPathWithoutQuarantine() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let primaryPath = dir.appendingPathComponent("denied.sqlite").path
+        let preciousBytes = Data("user data the app must never destroy".utf8)
+        try preciousBytes.write(to: URL(fileURLWithPath: primaryPath))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o000], ofItemAtPath: primaryPath)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o644], ofItemAtPath: primaryPath)
+        }
+
+        let fallbackPath = dir.appendingPathComponent("fallback.sqlite").path
+
+        var diagnostics = DatabaseInitDiagnostics()
+        let pool = DependencyContainer.openWithRecovery(
+            dbPath: primaryPath,
+            fallbackPath: fallbackPath,
+            config: DependencyContainer.dbConfig(),
+            diagnostics: &diagnostics
+        )
+
+        let one = try await pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT 1") ?? 0
+        }
+        XCTAssertEqual(one, 1)
+        XCTAssertTrue(diagnostics.fellBackToSecondaryPath)
+        XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
+        XCTAssertNotNil(diagnostics.firstAttemptError)
+
+        // Le repli doit être un vrai fichier au chemin secondaire…
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fallbackPath))
+        // …et le fichier refusé doit rester INTACT à son chemin d'origine.
+        XCTAssertNil(diagnostics.quarantinedFilePath)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o644], ofItemAtPath: primaryPath)
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: primaryPath)),
+            preciousBytes,
+            "un fichier inaccessible n'est pas corrompu — il ne doit jamais être quarantainé ni écrasé"
+        )
+    }
+
+    /// Dernier filet : quand le chemin primaire ET le repli sont inaccessibles,
+    /// le container doit livrer un pool utilisable sur un fichier temporaire
+    /// éphémère — jamais trapper. L'ancien repli `DatabasePool(":memory:")`
+    /// était mort-né : un DatabasePool exige le mode WAL, impossible en
+    /// mémoire (« could not activate WAL Mode at path: :memory: »), donc le
+    /// « filet » trappait TOUJOURS (preconditionFailure → SIGTRAP au boot).
+    @MainActor
+    func test_openWithRecovery_allPathsUnavailable_fallsBackToEphemeralPool() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        let lockedDir = dir.appendingPathComponent("locked")
+        try FileManager.default.createDirectory(at: lockedDir, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o000], ofItemAtPath: lockedDir.path)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: lockedDir.path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        var diagnostics = DatabaseInitDiagnostics()
+        let pool = DependencyContainer.openWithRecovery(
+            dbPath: lockedDir.appendingPathComponent("a.sqlite").path,
+            fallbackPath: lockedDir.appendingPathComponent("b.sqlite").path,
+            config: DependencyContainer.dbConfig(),
+            diagnostics: &diagnostics
+        )
+
+        try await pool.write { db in
+            try db.execute(sql: "CREATE TABLE probe (id INTEGER PRIMARY KEY, value TEXT)")
+            try db.execute(sql: "INSERT INTO probe (value) VALUES ('ephemeral')")
+        }
+        let value = try await pool.read { db in
+            try String.fetchOne(db, sql: "SELECT value FROM probe LIMIT 1")
+        }
+        XCTAssertEqual(value, "ephemeral")
+        XCTAssertTrue(diagnostics.fellBackToSecondaryPath)
+        XCTAssertTrue(diagnostics.fellBackToEphemeralStorage)
     }
 
     // MARK: - databasePath (TestFlight crash 2026-06-12 — nil app-group container)
