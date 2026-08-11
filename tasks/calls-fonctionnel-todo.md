@@ -6664,3 +6664,58 @@ haute confiance.
   `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en string
   literals hors du type-map partagé (cosmétique, basse priorité) ; toolchains iOS/Android hors d'atteinte
   dans ce sandbox.
+
+## Vague 103 — `CallNotification` pouvait orpheliner la sonnerie sur un démontage rapide, avant que le `import()` dynamique ne résolve (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch`/vérif sur `origin/main`, branche `claude/
+upbeat-dirac-iyvpcu` strictement à jour avec `main` au démarrage (aucun commit propre à cette routine en
+attente), aucune PR ouverte de cette routine. Vague 102 (`2d1f65e7`, PR #2836) déjà mergée avant le début
+de cette session. Un audit dédié (agent Explore, lecture seule) mandaté avec la liste complète des items
+déjà clos/déjà triés des Vagues 1-102 pour éviter toute redite, scope web+gateway (sandbox Linux, sans
+toolchain iOS/Android).
+
+- **Root cause confirmée par lecture directe** : `apps/web/components/video-call/CallNotification.tsx`
+  — la bannière montée pour TOUT appel entrant sonnant sur web — charge l'utilitaire de sonnerie via un
+  `import('@/utils/ringtone')` dynamique et n'assigne `ringtoneRef.current` QUE dans le `.then()` de
+  cette promesse. Si la bannière se démonte AVANT que ce chunk ne résolve (appel décroché ailleurs,
+  annulé, ou supplanté par un appelant plus prioritaire — tous des chemins que `CallManager` résout déjà
+  rapidement), le cleanup de l'effet tourne contre une ref encore `null` et n'arrête rien. Le `.then()`
+  se déclenche ensuite inconditionnellement quelques instants plus tard, démarrant le singleton
+  `Ringtone` partagé (boucle audio + vibration répétée, `ringPatternTimeout` se re-planifiant tous les
+  2,3 s tant que `isPlaying` reste `true`) pour un appel déjà disparu, sans plus rien dans l'arbre capable
+  d'appeler `.stop()` dessus. Comme `getRingtone()` retourne un singleton module-level dont `play()`
+  ne fait rien si `isPlaying` vaut déjà `true`, le PROCHAIN vrai appel entrant voit sa propre requête
+  `play()` silencieusement avalée par la boucle orpheline — un appel réel sonne sans le moindre son.
+- **Fix** : un flag `cancelled`, posé `true` dans le cleanup de l'effet, vérifié dans le `.then()` du
+  `import()` avant d'assigner `ringtoneRef.current` ou d'appeler `.play()` — le patron standard React de
+  garde d'annulation sur effet asynchrone, appliqué ici pour la première fois à cet effet précis. Aucun
+  changement à `utils/ringtone.ts` : le singleton et ses gardes `stop()`/`play()` étaient déjà corrects ;
+  le défaut vivait entièrement dans le composant qui n'atteignait jamais `stop()` faute de référence.
+- **Tests** (TDD, RED confirmé en exécutant réellement la nouvelle suite AVANT le fix — `play()` appelé
+  une fois malgré le démontage préalable, exactement l'échec prédit) :
+  `CallNotification.ringtoneUnmountRace.test.tsx` (nouveau fichier) — deux témoins : (1) démontage
+  synchrone juste après le rendu, avant que le microtask du `import()` ne résolve → `play()`/`stop()`
+  jamais appelés ; (2) montage/démontage normal (non-régression) → `play()` une fois au montage,
+  `stop()` une fois au démontage. Le premier témoin exploite directement l'ordre d'exécution JS
+  (synchrone avant microtask) plutôt qu'un mock à délai artificiel — le rendu + démontage tournent avant
+  que la promesse mockée `import()` n'ait la moindre chance de résoudre.
+- **Vérification** (sandbox Linux, suite web réellement exécutable ici — contrairement à iOS) :
+  `bun install --ignore-scripts` + `packages/shared && npx prisma generate --generator client && bun run
+  build` (prérequis CLAUDE.md, `node_modules` absent au démarrage de cette session) ; suite ciblée
+  **2/2 verts** (RED confirmé avant fix, GREEN après) ; sweep complet `video-call|use-webrtc|use-call|
+  orchestrator|call-store|adaptive-degradation|audio-effect|webrtc-service|call-infrastructure|
+  CallNotification|ringtone` — **54 suites / 766 tests verts**, 0 régression. `npx tsc --noEmit` sur
+  `apps/web` : **1753 erreurs avant et après le diff** (comparaison ligne à ligne complète via `git
+  stash`/`stash pop`), zéro nouvelle erreur. `eslint` sur les fichiers touchés : échoue dans CE sandbox
+  avec la même erreur de sérialisation JSON circulaire pré-existante déjà documentée Vague 101/102
+  (résolution du plugin React dans `@eslint/eslintrc`, reproduite sur un fichier étranger au diff) —
+  vérification réelle déléguée au job lint de la CI. Diff strictement scopé à `apps/web` (aucun fichier
+  gateway/iOS/Android touché) ; suites gateway/iOS/Android non rejouées, hors du diff.
+- **Reste ouvert** (reconduit, rien de plus trouvé côté web/gateway ce cycle au-delà de ce qui précède) :
+  dead code / god-object `CallManager.swift` iOS (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la
+  Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+  `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en string
+  literals hors du type-map partagé (cosmétique, basse priorité) ; toolchains iOS/Android hors d'atteinte
+  dans ce sandbox.
