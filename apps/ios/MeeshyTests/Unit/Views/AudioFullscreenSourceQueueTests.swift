@@ -61,4 +61,53 @@ final class AudioFullscreenSourceQueueTests: XCTestCase {
         XCTAssertEqual(queued.durationMs, 0)
         XCTAssertEqual(queued.senderName, "ashley")
     }
+
+    // MARK: - F2: `.fromFeed` carrier-entity id propagation
+    //
+    // `CommentMediaView` / `FeedPostCard+Media` / `PostDetailView` play the
+    // SAME attachment through two routes: an inline `CoordinatedAudioPlayer`
+    // whose `QueuedAudio.conversationId` is set to the carrier entity's id
+    // (commentId / post.id / repost.id — see `ConversationAudioCoordinator`
+    // "same session" matching in `AudioFullscreenView.playThroughCoordinator`),
+    // and the `.fromFeed`-built `AudioFullscreenSource` behind the "expand"
+    // button. Both routes MUST agree on that id — else opening fullscreen for
+    // a second audio item under the same entity looks like a different
+    // session to the coordinator and needlessly resets the queue/Now Playing
+    // card, breaking the invariant documented on `AudioFullscreenSource.conversationId`.
+
+    func test_fromFeed_wiresCarrierEntityConversationId() {
+        let media = FeedMedia.audio(duration: 3000)
+        let author = ProfileSheetUser(
+            userId: "u1", username: "ashley", displayName: "Ashley",
+            avatarURL: nil, accentColor: "#6366F1"
+        )
+
+        let source = AudioFullscreenSource.fromFeed(
+            media: media, author: author, originalLanguage: "fr",
+            caption: "", createdAt: Date(), conversationId: "post-123"
+        )
+
+        XCTAssertEqual(source.conversationId, "post-123",
+            "Le plein écran d'un post/commentaire doit porter l'id de l'entité porteuse, pas rester vide")
+        XCTAssertEqual(source.queuedAudio(urlString: media.url ?? "").conversationId, "post-123",
+            "L'id porteur doit survivre jusqu'au QueuedAudio consommé par le coordinator")
+    }
+
+    /// Sans id porteur explicite (surface réellement standalone, ex. réels
+    /// non wirés à ce jour), `.fromFeed` garde le repli existant : aucune
+    /// session à faire correspondre côté coordinator.
+    func test_fromFeed_noConversationId_defaultsToNil() {
+        let media = FeedMedia.audio(duration: 3000)
+        let author = ProfileSheetUser(
+            userId: "u1", username: "ashley", displayName: "Ashley",
+            avatarURL: nil, accentColor: "#6366F1"
+        )
+
+        let source = AudioFullscreenSource.fromFeed(
+            media: media, author: author, originalLanguage: "fr",
+            caption: "", createdAt: Date()
+        )
+
+        XCTAssertNil(source.conversationId)
+    }
 }
