@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=4 last_run=widget-favorite-contacts
+lane=ANDROID android_streak=5 last_run=dynamic-launcher-shortcuts
