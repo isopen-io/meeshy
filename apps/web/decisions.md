@@ -100,6 +100,37 @@ la couverture reste celle du pilote. Émission et observation doivent rester en 
 Le curseur n'est pas persisté (mémoire d'onglet), donc une fenêtre onglet-fermé reste couverte par
 le seul `refetchOnMount: 'always'`.
 
+## 2026-08-11: Un SEUL cache de liste de conversations — la forme plate est retirée
+**Statut**: Accepté
+**Contexte**: `queryKeys.conversations` exposait deux formes : `lists()` / `list(filters)` valant
+`['conversations','list', …]`, et `infinite()` valant `['conversations','infinite']`. Les deux
+préfixes sont DISJOINTS — un `setQueriesData` sur l'un ne touche jamais l'autre. Or **aucun écran
+ne lisait la forme plate** : la sidebar passe par `useConversationsPaginationRQ` →
+`useInfiniteConversationsQuery`. Une dizaine d'écrivains l'alimentaient quand même
+(`use-socket-cache-sync` ×6, `unread-cache`, `use-send-message-mutation` ×6, les mutations
+create/delete de `use-conversations-query`), et deux `invalidateQueries` de `use-reactions-query`
+la ciblaient. Le coût n'était pas la performance — un `setQueriesData` sans correspondance est un
+no-op — mais la LECTURE : le code se lisait comme si deux caches étaient tenus en phase alors qu'un
+seul existait, et les témoins qui l'assertaient passaient au vert sans rien prouver du chemin réel.
+**Decision**: la forme plate est supprimée de `queryKeys`, avec ses écrivains, ses hooks sans
+consommateur (`useConversationsQuery`, `useConversationsWithPagination`,
+`useCreateConversationMutation`, `useDeleteConversationMutation`, et tout
+`use-send-message-mutation.ts` dont les quatre mutations n'avaient elles non plus aucun appelant —
+l'envoi réel passe par l'orchestrateur Socket.IO) et ses exports de baril. Les six écritures de
+`use-socket-cache-sync` étaient chacune DOUBLÉE d'une écriture `infinite()` identique : leur retrait
+est strictement neutre, et les témoins correspondants ont été rebranchés sur `infinite()` PUIS
+vérifiés rouges contre une écriture `infinite()` cassée avant que le retrait n'ait lieu.
+**Alternatives rejetées**: rediriger les écrivains vers `infinite()` (ils y écrivent déjà) ;
+rediriger les deux `invalidateQueries` de réaction vers `infinite()` — cela déclencherait une
+relecture de TOUTES les pages chargées à chaque réaction, exactement ce que l'ADR ci-dessus vient
+de retirer du chemin de focus, et la ligne de liste ne porte rien qui dépende des réactions de
+message (`reaction={prefs?.reaction}` dans `ConversationList` est une PRÉFÉRENCE de conversation,
+pas un agrégat de réactions) ; garder les hooks « au cas où » (les câbler plus tard aurait écrit
+dans un cache sans lecteur, donc silencieusement rien fait).
+**Cons**: `useInfiniteConversationsQuery` acceptait un `filters` que sa clé de requête n'a jamais
+inclus — retiré aussi, pour la même raison : une option silencieusement ignorée est un piège. Une
+liste filtrée, le jour où elle existera, devra naître avec sa propre clé ET son lecteur.
+
 ## 2026-08-11: Liste de conversations — le focus de fenêtre tire un DELTA, plus un refetch de toutes les pages
 **Statut**: Accepté
 **Contexte**: `useInfiniteConversationsQuery` héritait du `refetchOnWindowFocus: 'always'` global.

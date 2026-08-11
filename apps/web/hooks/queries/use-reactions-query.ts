@@ -423,9 +423,6 @@ export function useReactionsQuery({
         return { reactions: newReactions, userReactions: newUserReactions };
       });
 
-      // Invalidate conversations lists (réaction ajoutée = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
-
       // W4: Update reactionSummary on the message object in messages.infinite cache
       updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
     };
@@ -455,9 +452,6 @@ export function useReactionsQuery({
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });
-
-      // Invalidate conversations lists (réaction supprimée = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
 
       // W4: Update reactionSummary on the message object in messages.infinite cache
       updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
