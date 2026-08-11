@@ -374,6 +374,13 @@ export function registerCoreRoutes(
         }
       }
 
+      // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
+      // ce que « mis à jour » veut dire :
+      //   - iOS   : `ConversationSyncEngine.deltaSyncCore`
+      //   - web   : `syncConversationsDelta` (use-conversations-delta-sync.ts)
+      // Il porte son propre index (`@@index([isActive, updatedAt])`). La borne
+      // est STRICTE (`gt`) : un client qui repasse son dernier `updatedAt` ne
+      // re-télécharge pas la ligne qu'il détient déjà.
       if (updatedSince) {
         const sinceDate = new Date(updatedSince);
         if (!isNaN(sinceDate.getTime())) {

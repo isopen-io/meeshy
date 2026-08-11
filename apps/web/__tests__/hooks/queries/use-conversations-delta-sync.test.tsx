@@ -27,6 +27,11 @@ jest.mock('@/hooks/use-connection-status', () => ({
   }),
 }));
 
+let activeConversationId: string | null = null;
+jest.mock('@/stores/notification-store', () => ({
+  useNotificationStore: { getState: () => ({ activeConversationId }) },
+}));
+
 const getConversations = jest.fn();
 jest.mock('@/services/conversations.service', () => ({
   conversationsService: {
@@ -98,6 +103,7 @@ beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
   jest.setSystemTime(new Date('2026-08-01T12:00:00.000Z'));
   socketConnected = false;
+  activeConversationId = null;
   getConversations.mockReset();
   getConversations.mockResolvedValue({
     conversations: [],
@@ -358,5 +364,50 @@ describe('useConversationsDeltaSync', () => {
     jest.setSystemTime(new Date('2026-08-01T12:01:00.000Z'));
     await reconnect(rerender);
     await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaves the OPEN conversation at zero unread — the delta writes the same counter as the socket', async () => {
+    activeConversationId = 'open';
+    const queryClient = makeClient();
+    queryClient.setQueryData(
+      queryKeys.conversations.infinite(),
+      pagedCache([[conv('open', { unreadCount: 0 })]])
+    );
+    getConversations.mockResolvedValue({
+      conversations: [
+        conv('open', {
+          unreadCount: 7,
+          lastMessageAt: new Date('2026-08-01T11:00:00.000Z'),
+          updatedAt: new Date('2026-08-01T11:00:00.000Z'),
+        }),
+      ],
+      pagination: { limit: 100, offset: 0, total: 1, hasMore: false },
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+    expect(cachedConversations(queryClient)[0].unreadCount).toBe(0);
+  });
+
+  it('drops the MESSAGE cache of a conversation the delta reports gone, not just its detail', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(
+      queryKeys.conversations.infinite(),
+      pagedCache([[conv('a'), conv('gone')]])
+    );
+    queryClient.setQueryData(queryKeys.messages.infinite('gone'), { pages: [], pageParams: [] });
+    getConversations.mockResolvedValue({
+      conversations: [conv('gone', { isActive: false })],
+      pagination: { limit: 100, offset: 0, total: 1, hasMore: false },
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() => expect(getConversations).toHaveBeenCalledTimes(1));
+    expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a']);
+    expect(queryClient.getQueryData(queryKeys.messages.infinite('gone'))).toBeUndefined();
   });
 });

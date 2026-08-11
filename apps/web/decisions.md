@@ -126,7 +126,9 @@ est déjà la source ; un second curseur pourrait diverger de lui).
 **Cons**: le delta est upsert-only — une conversation HARD-supprimée côté serveur n'y apparaît
 jamais (iOS compense par une réconciliation complète 24 h ; le web s'appuie sur `refetchOnMount` et
 `refetchOnWindowFocus`). Une inconnue plus ancienne que la fenêtre chargée est écartée tant qu'il
-reste des pages, sinon elle se dupliquerait au prochain `fetchNextPage`. Le non-lu du delta n'est
-PAS réconcilié contre l'état local : la frontière de lecture (`lastReadAt`) ne circule pas dans la
-charge utile de la liste, et le seul substitut disponible confondrait un accusé de lecture en
-retard avec un `mark-unread` délibéré fait depuis un autre appareil (cf. `tasks/todo.md`, cycle 76b).
+reste des pages (`hasMore`), sinon elle se dupliquerait au prochain `fetchNextPage`. Le non-lu est
+forcé à zéro pour la seule conversation OUVERTE ; celui d'une conversation FERMÉE dont l'accusé de
+lecture traîne encore n'est PAS réconcilié, faute de frontière de lecture (`lastReadAt`) dans la
+charge utile de la liste — le substitut basé sur `unreadCount` rendrait un `mark-unread` fait sur un
+autre appareil définitivement invisible (cf. `tasks/todo.md`, cycle 76b : deux sessions y sont
+arrivées indépendamment).

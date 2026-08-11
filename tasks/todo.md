@@ -1,4 +1,4 @@
-# Tête instruite pour le cycle 77 — le focus de fenêtre relit la liste de conversations DE FORCE, page par page
+# Tête instruite pour le cycle 77 (3/3) — le focus de fenêtre relit la liste de conversations DE FORCE, page par page
 
 *Trouvé en instruisant le cycle 76, vérifié, NON corrigé.*
 
@@ -26,6 +26,49 @@ Deux bornes avant d'ouvrir :
 
 ---
 
+
+---
+
+
+# Tête instruite pour le cycle 77 (2/2) — la liste PLATE de conversations a des écrivains, aucun lecteur
+
+*Trouvé en instruisant le cycle 76 depuis la session parallèle, vérifié, NON corrigé.
+Indépendant de la tête ci-dessus ; les deux peuvent être pris séparément.*
+
+`queryKeys.conversations.lists()` vaut `['conversations','list']` ; `infinite()` vaut
+`['conversations','infinite']`. Les deux préfixes sont DISJOINTS — un `setQueriesData`
+sur l'un ne touche jamais l'autre. Or **aucun hook ne LIT la forme plate** :
+`useConversationsQuery` et `useConversationsWithPagination` n'ont zéro consommateur dans
+`apps/web`. La sidebar lit `useConversationsPaginationRQ`, donc `infinite()`.
+
+Ce qui écrit quand même dedans, à chaque événement :
+
+| Écrivain | Sites |
+|---|---|
+| `use-socket-cache-sync.ts` | `handleNewMessage`, `handleMessageEdited`, `advanceConversationPreviewOnDelete`, `applyMemberCount`, `handleLinkMessageNew`, `handleConversationJoinError` |
+| `unread-cache.ts` | `setConversationUnreadInCache` |
+| `use-send-message-mutation.ts` | 6 sites |
+| `use-conversations-query.ts` | les deux mutations create/delete |
+
+Le coût n'est pas la performance (un `setQueriesData` sans correspondance est un no-op) :
+c'est que **le code se LIT comme si deux caches étaient tenus en phase alors qu'un seul
+existe**. Le prochain à corriger un aperçu de liste a une chance sur deux de corriger la
+copie morte et de conclure que son correctif ne marche pas. Le delta du cycle 76 n'écrit
+volontairement QUE dans `infinite()`, pour cette raison exacte.
+
+Trois bornes avant d'ouvrir :
+1. **Trancher le SENS avant de supprimer.** Soit la forme plate visait un écran filtré
+   jamais livré (⇒ retirer les écrivains ET les deux hooks), soit un consommateur existe
+   hors `apps/web` (⇒ rien à faire). `rg "conversations\.list\("` sur tout le repo est la
+   première commande, pas une vérification après coup.
+2. **`useCreateConversationMutation` CRÉE l'entrée** via `setQueryData` sur une clé sans
+   observateur : elle vit puis se fait ramasser au `gcTime`. Un lecteur ajouté plus tard
+   verrait donc parfois une liste partielle.
+3. **Ne pas confondre avec `conversations.all`.** Les `invalidateQueries({ queryKey:
+   conversations.all })` couvrent bien le cache infinite (préfixe commun) : ceux-là sont
+   vivants et hors lot.
+
+---
 # Tête instruite pour le cycle 77 — iOS avance son curseur delta par-dessus une page TRONQUÉE
 
 *Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur, NON corrigé.*
@@ -142,55 +185,108 @@ Le relevé des trois surfaces web est désormais complet — plus aucune n'est d
 reconnect socket. La liste PLATE (`useConversationsQuery`) n'est pas traitée : `grep` sur
 tout `apps/web` ne rend **aucun consommateur** hors du module de hooks lui-même.
 
+
+## Addendum — deux sessions ont livré ce cycle en parallèle
+
+La tête du cycle 75 a été instruite par deux sessions à la fois. Les deux ont écrit le
+même correctif, sur les mêmes fichiers, avec les mêmes arbitrages de fond (delta plutôt
+que refetch, watermark déduit du cache, front `false → true` seul déclencheur, montage
+sur le propriétaire du cache). La version ci-dessus est celle qui a atterri la première ;
+la seconde s'aligne dessus et n'ajoute que ce qui manquait. Règle héritée du cycle 25b :
+**comparer défaut par défaut, jamais « qui est arrivé en premier »**.
+
+Ce que la version ci-dessus fait STRICTEMENT MIEUX, et qui est conservé tel quel :
+- la démonstration `T <= F` du watermark, qui rend le clamp `now` de l'autre version
+  inutile plutôt que faux ;
+- le traitement de la page PLEINE comme preuve d'incomplétude, adossé au fait que la
+  route trie par `lastMessageAt` et pas par `updatedAt`. L'autre version paginait par
+  offset sur 5 pages : correct en régime stable, mais exposé au décalage d'offset si une
+  ligne change de rang entre deux pages, et surtout moins bien argumenté ;
+- la découverte du défaut iOS qui en découle (tête du cycle 77 ci-dessus).
+
+Ce que la seconde version apporte, appliqué PAR-DESSUS :
+- **la garde de la conversation OUVERTE** (`ConversationDeltaMergeOptions`). L'upsert
+  intégral écrasait le compteur de non-lus avec la valeur serveur, y compris pour la
+  conversation qu'on est en train de LIRE — rallumant un badge que le handler socket
+  `conversation:unread-updated` prend déjà soin de clamper. Le delta est le second
+  chemin d'écriture du même compteur ; il devait porter la même garde ;
+- **la purge du cache de MESSAGES** d'une conversation retirée, à côté de la purge de son
+  `detail` — miroir de `cache.messages.invalidate(for:)` sur iOS.
+
+Ce que la seconde version proposait et qui est REJETÉ, preuve à l'appui : un cliquet plus
+large (« le delta ne peut monter le compteur que s'il apporte un `lastMessageAt` plus
+récent »), censé couvrir aussi la conversation fermée dont le `mark-as-read` traîne.
+C'est la transposition de la règle 2 de `reconcileUnread` (iOS) — sauf que celle-ci
+s'appuie sur `userState.lastReadAt`, et que **`markAsUnread` marche précisément parce
+qu'il EFFACE cette frontière**, ce qui désarme la règle et rend la main au serveur. Un
+cliquet basé sur `unreadCount` n'a pas cet interrupteur : il rendrait un « marquer comme
+non lu » fait sur un autre appareil définitivement invisible sur le web. Un témoin
+existant de la version ci-dessus (« the delta is server truth ») l'a fait tomber
+immédiatement — c'est lui qui a révélé le défaut, pas une relecture. Un badge rallumé une
+seconde après un reconnect se répare au `conversation:unread-updated` suivant ; un
+mark-as-unread perdu, non.
+
+Reste ouvert : faire voyager la frontière de lecture jusqu'au modèle web fermerait
+l'écart pour de bon. Chantier de contrat, pas garde de fusion — noté dans
+`ConversationSyncEngine.swift` en tête de `deltaSyncCore`.
+
+
 ---
 
-# Cycle 76b — Addendum d'une session parallèle
+# Cycle 76b — Addendum : TROIS sessions ont livré le cycle 76 en parallèle
 
-Deux sessions ont livré le cycle 76 **en même temps, sans se voir** : même défaut, même endpoint,
-même miroir iOS, jusqu'aux noms de fichiers à un mot près. La session `upbeat-dirac-ozao52` a mergé
-la première ; c'est sa version qui vit dans l'arbre, et la seconde s'y aligne — appliqué
-par-dessus, jamais à la place (précédent du cycle 25b, leçon d'intégration du cycle 23 : comparer
-défaut par défaut, jamais « qui est arrivé en premier »).
+Même défaut, même endpoint, même miroir iOS, jusqu'aux noms de fichiers à un mot près, découvert
+trois fois sans que personne se voie : `upbeat-dirac-ozao52` (mergée la première, sa version vit
+dans l'arbre), `keen-hamilton-jrysns` (mergée ensuite, addendum sur la même base), et celle-ci.
+Chacune s'aligne sur ce qui est déjà mergé et n'ajoute que ce qui manquait — appliqué par-dessus,
+jamais à la place (précédent du cycle 25b ; leçon du cycle 23 : comparer défaut par défaut, jamais
+« qui est arrivé en premier »).
 
-**Ce que la version mergée fait strictement mieux**, et qui aurait manqué autrement :
-1. **Le plafond serveur est traité comme une preuve d'incomplétude.** Elle demande
-   `limit = 100` (le plafond réel de `Math.min(limit, 100)`) et, sur page PLEINE, escalade vers une
-   relecture complète. La seconde session demandait le `limit` de la liste et prétendait, dans sa
-   documentation, que « le reste est rattrapé au reconnect suivant » — **c'est faux**, pour la
-   raison que la première a su nommer : la route trie par `lastMessageAt` décroissant et NON par
-   `updatedAt`, donc les lignes tronquées ne sont pas les plus anciennes, et le watermark calculé
-   sur ce qui a été fusionné passe définitivement par-dessus.
-2. **Les caches dérivés sont purgés** : `mergeConversationDelta` rend les `removedIds`, et le hook
-   retire le `conversations.detail(id)` correspondant. La seconde version retirait la ligne de la
-   liste et laissait le détail en cache.
+**Ce que la première version fait strictement mieux** que celle de cette session, et qui aurait
+manqué autrement :
+1. **Le plafond serveur est traité comme une preuve d'incomplétude.** Elle demande `limit = 100`
+   (le plafond réel de `Math.min(limit, 100)`) et, sur page PLEINE, escalade vers une relecture
+   complète. Cette session demandait le `limit` de la liste et prétendait, dans sa documentation,
+   que « le reste est rattrapé au reconnect suivant » — **c'est faux**, pour la raison que la
+   première a su nommer : la route trie par `lastMessageAt` décroissant et NON par `updatedAt`,
+   donc les lignes tronquées ne sont pas les plus anciennes, et le watermark calculé sur ce qui a
+   été fusionné passe définitivement par-dessus.
+2. **Les caches dérivés sont purgés** (`removedIds` → `conversations.detail`, puis
+   `messages.infinite` ajouté par la deuxième session).
 
 **Ce que cette session ajoute par-dessus** — la borne de la fenêtre chargée. Une conversation
 INCONNUE du cache et plus ancienne que la dernière ligne chargée était insérée par la fusion ; le
 `fetchNextPage` suivant la rapporte à sa place réelle, donc **la même conversation apparaissait
-deux fois**. `mergeConversationDelta` prend désormais `{ hasMore }` et l'écarte tant qu'il reste des
-pages ; une inconnue récente appartient bien à la fenêtre et entre normalement, et un retrait
-(`isActive: false`) n'est jamais écarté, quelle que soit sa place. Sans borne fournie, on insère —
-perdre une ligne serait pire que la dupliquer jusqu'au prochain montage.
+deux fois**. `mergeConversationDelta` prend désormais `{ hasMore }` en plus de
+`{ openConversationId }`, et l'écarte tant qu'il reste des pages ; une inconnue récente appartient
+bien à la fenêtre et entre normalement, un retrait (`isActive: false`) n'est jamais écarté, et sans
+borne fournie on insère — perdre une ligne serait pire que la dupliquer jusqu'au prochain montage.
+Le plancher se mesure avec `orderKey`, la MÊME clé que le tri final : la borne signifie « sous la
+dernière ligne visible », et la fenêtre est ordonnée par cette clé.
 
-## Trouvé, NON corrigé — le non-lu du delta n'est pas réconcilié, et ne peut pas l'être aujourd'hui
+## Convergence indépendante sur la réconciliation du non-lu
 
-iOS réconcilie ce champ au chokepoint de TOUTE écriture de liste dérivée du serveur (`saveSorted` →
-`reconcileUnread`) pour une raison écrite dans son code : un instantané serveur en retard sur un
-`markAsRead` encore en vol fait « partir puis revenir » la pastille. Le delta EST une telle
-écriture ; la question se pose donc identiquement côté web.
+Cette session avait écrit, testé, puis **retiré** une règle « non-lu local à 0 et aucun message plus
+récent ⇒ garder 0 », au motif qu'elle confond un accusé de lecture en retard avec un `mark-unread`
+délibéré fait depuis un autre appareil. La deuxième session est arrivée **indépendamment à la même
+conclusion**, l'a écrite dans `ConversationDeltaMergeOptions` avec l'argument décisif que cette
+session n'avait pas formulé — côté iOS, `markAsUnread` fonctionne parce qu'il EFFACE `lastReadAt`,
+ce qui désarme la règle 2 et rend la main au serveur ; une transposition basée sur `unreadCount`
+n'a pas cet interrupteur — et a livré le sous-ensemble sûr : forcer à zéro la seule conversation
+OUVERTE, lue depuis `useNotificationStore.getState().activeConversationId`.
 
-Elle n'est pas tranchable avec ce que le web tient. iOS s'appuie sur `userState.lastReadAt`, que
-`GET /conversations` **n'expose pas** — le web ne reçoit que `unreadCount`
-(`transformers.service.ts`). Le seul substitut disponible — « non-lu local à 0 et aucun message plus
-récent » — confond deux situations opposées : l'accusé de lecture en retard, et un `mark-unread`
-DÉLIBÉRÉ fait depuis un autre appareil (`POST /conversations/:id/mark-unread`, que iOS appelle),
-qui produit exactement la même forme. Suppresser le compteur masquerait une action volontaire de
-l'utilisateur.
+Le reste (conversation FERMÉE dont l'accusé de lecture traîne encore) demande de faire voyager la
+frontière de lecture jusqu'au modèle web — chantier de contrat gateway, pas garde de fusion. Deux
+sessions y sont arrivées séparément : ce n'est pas une opinion, c'est la borne du modèle actuel.
 
-La règle a donc été écrite, testée, puis **retirée** : elle est documentée en creux dans
-`lib/conversations/delta-sync.ts`. Fermer proprement demande de faire circuler la frontière de
-lecture dans la charge utile de la liste — un changement de contrat gateway, pas un correctif de
-fusion.
+## Hors cycle — un flake d'une milliseconde dans le gateway
+
+`PostFeedService` › « bounds the author archive to a finite window in the past » comparait
+`before - floor` à `AUTHOR_ARCHIVE_WINDOW_MS` au millième près, alors que `before` est lu par le
+TEST avant l'appel et le plancher calculé par le SERVICE après : les deux ne sont égales que si
+l'horloge ne change pas de milliseconde entre elles. Rouge en CI sur une PR ne touchant pas le
+gateway (604799999 contre 604800000). L'invariant réel est un encadrement entre les deux lectures
+qui bornent l'appel — corrigé sans tolérance arbitraire.
 
 ---
 
