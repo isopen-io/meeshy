@@ -240,6 +240,11 @@ struct iPadRootView: View {
                 guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
                 navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
             }
+            // Tap sur la carte Now Playing (l'app est simplement ré-ouverte) →
+            // ramène vers la conversation et le message audio en cours de lecture.
+            .nowPlayingReturnNavigation(router: router) { conversationId in
+                conversationViewModel.conversations.contains { $0.id == conversationId }
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)
             }
