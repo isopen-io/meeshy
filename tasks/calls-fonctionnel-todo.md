@@ -6592,3 +6592,75 @@ livrables : un bug réel neuf et la confirmation d'une piste de dead-code déjà
   Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
   `removeParticipant()` web (Vague 91, non-régression) ; toolchains iOS/Android hors d'atteinte dans ce
   sandbox.
+
+## Vague 102 — `use-video-call.ts` (le seul point d'entrée d'appel sortant web) émettait tous ses toasts en anglais codé en dur, hors du pipeline i18n (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch`/reset sur `origin/main` (branche 1 commit en
+retard, `a5da9b036`), aucune PR ouverte de cette routine (`list_pull_requests` vide côté
+`claude/upbeat-dirac-*`/`calls`) — Vague 101 (`951b0ab79`, PR #2815) déjà mergée avant le début de cette
+session. Deux audits dédiés en parallèle (agents Explore, lecture seule) mandatés avec la liste complète
+des items déjà clos/déjà triés des Vagues 1-101 pour éviter toute redite : un sur web+gateway, un sur
+iOS (CallKit/PushKit/WebRTC/AVAudioSession/accessibilité/dead-code). L'audit iOS n'a rien trouvé de neuf
+après un balayage complet (retain cycles, PushKit, CXProvider, a11y, dead code) — codebase mature,
+verdict honnête plutôt qu'une trouvaille forcée. L'audit web+gateway a remonté un candidat unique à
+haute confiance.
+
+- **Root cause confirmée par lecture directe** : `apps/web/hooks/conversations/use-video-call.ts` —
+  SEUL point d'entrée de production pour initier un appel web (câblé depuis le bouton « Appeler » de
+  `ConversationLayout.tsx` et depuis le rappel `CallSystemMessage.tsx`) — n'importait jamais `useI18n`.
+  Les 8 `toast.error`/`toast.success` de `startCall()` et de son helper `handleMediaError()` étaient des
+  littéraux anglais bruts (`'Please select a conversation first'`, `'Calls are only available for direct
+  conversations'`, `'Connection error. Please try again.'`, `'Failed to start call. Please try again.'`
+  x2, `'Starting call...'`, `'Camera/microphone permission denied.'`, `'No camera or microphone found.'`,
+  ``Failed to access camera/microphone: ${error.message}``, `'Failed to access camera/microphone'`) —
+  alors que TOUS les fichiers soeurs du même feature (`CallManager.tsx`, `CallControls.tsx`,
+  `VideoCallInterface.tsx`, `use-call-retry-toast.ts`) passent déjà par `useI18n('calls')`. Les locales
+  `fr`/`es`/`pt` de `calls.toasts.connectionError` existent et sont traduites, mais ce hook n'y touchait
+  jamais. Un utilisateur avec l'interface en français/espagnol/portugais qui n'a pas de conversation
+  sélectionnée, tente d'appeler un groupe, subit une déconnexion socket, se voit refuser l'appel par le
+  gateway, ou refuse l'accès caméra/micro — voit du texte anglais brut dans les 8 cas, sur le chemin
+  d'initiation d'appel le plus emprunté de toute la feature.
+- **Fix** : `useI18n('calls')` câblé dans le hook ; les 8 littéraux remplacés par des clés
+  `calls.toasts.*` — 1 réutilisée (`connectionError` pour le socket down/null, existante) et 8
+  nouvelles ajoutées aux 4 locales (`en`/`fr`/`es`/`pt`) : `selectConversation`, `directOnly`,
+  `startFailed`, `startingCall`, `micPermissionDenied`, `micNotFound`, `micAccessFailed` (avec
+  interpolation `{message}`, seule clé paramétrée), `micAccessFailedGeneric`. `handleMediaError`
+  (fonction module-level, hors du hook) reçoit désormais `t: TFunction` en paramètre plutôt que d'appeler
+  `toast` avec un littéral. `ack?.error?.message` (texte serveur, hors périmètre i18n client) reste
+  inchangé — seul le FALLBACK quand le serveur ne fournit aucun message passe par `t()`.
+- **Tests** (TDD, RED confirmé par `git stash` du seul fichier de production — 12 assertions ont échoué
+  exactement sur les 8 sites migrés, aucune régression annexe — puis `git stash pop` pour repasser GREEN) :
+  `use-video-call.test.tsx` — les 12 assertions littérales migrées vers les clés de traduction, plus un
+  mock `jest.mock('@/hooks/useI18n', ...)` identité (même convention que `use-call-retry-toast.test.tsx` :
+  `t: (k) => k`), avec la particularité que `t` est défini HORS de l'objet retourné par le mock (référence
+  stable module-scope, miroir du `useMemo` du vrai hook) — un piège trouvé en cours de route : un mock
+  naïf recréant `t` à chaque appel de `useI18n()` cassait `should return stable startCall reference`
+  (`useCallback([conversation, user, t])` recalculait son identité à chaque rerender uniquement à cause du
+  mock, pas du vrai hook). Le cas `micAccessFailed` (seule clé paramétrée) est vérifié en faisant
+  concaténer au mock la clé et les params sérialisés, pour garder l'assertion sur le message d'erreur
+  original sans réimplémenter la vraie substitution `{message}`.
+- **Vérification** (sandbox Linux, suite web réellement exécutable) : `bun install --ignore-scripts` +
+  `packages/shared && npx prisma generate --generator client && bun run build` (prérequis CLAUDE.md,
+  `node_modules` absent au démarrage) ; suite ciblée `bunx jest use-video-call.test.tsx` **35/35 verts**
+  (RED confirmé avant fix : 12 échecs exacts sur les littéraux migrés ; GREEN après). Sweep complet
+  `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-degradation|audio-effect|
+  webrtc-service|call-infrastructure` — **52 suites / 760 tests verts**, 0 régression. `npx tsc --noEmit`
+  sur `apps/web` : **1193 erreurs avant et après le diff** (comparaison ligne à ligne complète, `git
+  stash`/`stash pop`), zéro nouvelle erreur — les 3 seuls deltas restants sont les mêmes erreurs
+  préexistantes d'ordre d'union non-déterministe déjà documentées Vague 101 (`BubbleMessage.tsx`,
+  `ConversationMessages.tsx`, `ConversationSettingsModal.tsx`), sans rapport avec ce diff. `eslint` sur
+  les fichiers touchés : échoue dans CE sandbox avec une erreur de sérialisation JSON circulaire
+  pré-existante à l'environnement (reproduite sur un fichier totalement étranger au diff,
+  `hooks/use-i18n.ts`, non causée par ce changement) — vérification réelle déléguée au job lint de la CI.
+  JSON des 4 locales validé par parsing Python round-trip, diff `git diff` propre (formatage identique,
+  10 lignes ajoutées par fichier). Diff strictement scopé à `apps/web` (aucun fichier gateway/iOS/Android
+  touché) — audit iOS de ce cycle n'a rien trouvé de neuf (voir plus haut), suites gateway/iOS/Android non
+  rejouées, hors du diff.
+- **Reste ouvert** (reconduit, rien de plus trouvé côté web/gateway ce cycle au-delà de ce qui précède) :
+  dead code / god-object `CallManager.swift` iOS (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la
+  Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+  `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en string
+  literals hors du type-map partagé (cosmétique, basse priorité) ; toolchains iOS/Android hors d'atteinte
+  dans ce sandbox.
