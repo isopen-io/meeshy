@@ -311,6 +311,27 @@ describe('useConversationsDeltaSync', () => {
     expect(cachedConversations(queryClient).map((c) => c.id)).toContain('d0');
   });
 
+  it('does not escalate on an exactly-full page the server says is complete', async () => {
+    // `hasMore` est autoritaire sur une page delta (offset=0 ⇒ le serveur compte
+    // la MÊME clause `updatedAt > since`). Une fenêtre de très exactement 100
+    // conversations est COMPLÈTE : escalader relirait toutes les pages chargées
+    // pour rien. C'est ce que l'ancien test `length >= DELTA_PAGE_LIMIT` faisait.
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    getConversations.mockResolvedValue({
+      conversations: Array.from({ length: 100 }, (_, i) => conv(`d${i}`)),
+      pagination: { limit: 100, offset: 0, total: 100, hasMore: false },
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() => expect(cachedConversations(queryClient).map((c) => c.id)).toContain('d0'));
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
   it('does not escalate on a partial delta — that page IS the whole truth', async () => {
     const queryClient = makeClient();
     queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
