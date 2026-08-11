@@ -182,6 +182,36 @@ function getFileSignature(file: File): string {
 }
 
 /**
+ * Réconcilie les fichiers envoyés avec les attachments effectivement échoués
+ * par la réponse serveur. Nécessaire car `UploadProcessor.uploadMultiple`
+ * avale les échecs par fichier et renvoie un tableau `attachments` plus court
+ * (voire vide) sous `success: true` — la route `/attachments/upload` répond
+ * toujours `sendSuccess`, donc `response.success` seul ne détecte rien.
+ *
+ * Apparie chaque fichier envoyé au premier attachment retourné dont
+ * `originalName` correspond (par ordre, une seule consommation par match) ;
+ * tout fichier n'ayant trouvé aucune correspondance est considéré échoué et
+ * retourné pour rollback. Corrélation par nom uniquement (le serveur ne
+ * renvoie aucun index d'origine) — fiable dans le cas courant (noms
+ * uniques dans une même sélection) ; en cas d'homonymes, l'appariement par
+ * ordre reste déterministe et conservateur (jamais un match fantaisiste).
+ */
+function reconcileUploadFailures(
+  files: readonly File[],
+  succeededAttachments: readonly UploadedAttachmentResponse[],
+): File[] {
+  const remainingNames = succeededAttachments.map((attachment) => attachment.originalName);
+  return files.filter((file) => {
+    const matchIndex = remainingNames.indexOf(file.name);
+    if (matchIndex === -1) {
+      return true;
+    }
+    remainingNames.splice(matchIndex, 1);
+    return false;
+  });
+}
+
+/**
  * Génère un nom de fichier texte avec timestamp
  */
 function generateTextFileName(): string {
@@ -293,8 +323,23 @@ export function useAttachmentUpload({
         );
 
         const attachments = response.attachments || (response as any).data?.attachments;
-        if (response.success && attachments) {
-          allUploadedAttachments.push(...attachments);
+        const succeededAttachments = response.success && attachments ? attachments : [];
+        if (succeededAttachments.length > 0) {
+          allUploadedAttachments.push(...succeededAttachments);
+        }
+
+        // La route répond toujours success:true (sendSuccess) même quand
+        // UploadProcessor.uploadMultiple a avalé des échecs par fichier et
+        // renvoyé un tableau plus court — response.success seul ne le
+        // détecte pas. Réconcilier par nom pour purger précisément les
+        // fichiers de CE lot qui n'ont pas d'attachment correspondant.
+        const failedFiles = reconcileUploadFailures(batch, succeededAttachments);
+        if (failedFiles.length > 0) {
+          console.warn(`⚠️ Batch ${i + 1}: ${failedFiles.length}/${batch.length} fichier(s) non uploadé(s) (réponse serveur incomplète)`, response);
+          const message = `${failedFiles.length} fichier(s) sur ${batch.length} n'ont pas pu être uploadé(s).`;
+          setUploadError(message);
+          onUploadError?.(message);
+          setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
         }
       } catch (error) {
         console.error(`❌ Batch ${i + 1} upload error:`, error);
@@ -463,11 +508,28 @@ export function useAttachmentUpload({
 
         // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
         const attachments = response.attachments || (response as any).data?.attachments;
-        if (response.success && attachments) {
-          console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
-          setUploadedAttachments(prev => [...prev, ...attachments]);
-        } else {
-          console.warn('⚠️ Upload sans succès:', response);
+        const succeededAttachments = response.success && attachments ? attachments : [];
+        if (succeededAttachments.length > 0) {
+          console.log(`✅ Upload réussi: ${succeededAttachments.length} fichier(s)`);
+          setUploadedAttachments(prev => [...prev, ...succeededAttachments]);
+        }
+
+        // La route /attachments/upload répond toujours success:true (sendSuccess),
+        // même quand UploadProcessor.uploadMultiple a avalé des échecs par
+        // fichier côté serveur et renvoyé moins d'attachments que de fichiers
+        // envoyés (voire aucun) — `response.success` seul ne détecte donc pas
+        // cette perte silencieuse. Réconcilier par nom pour purger précisément
+        // les fichiers sans attachment correspondant (Task 7 review, Important #2).
+        const failedFiles = reconcileUploadFailures(uniqueFiles, succeededAttachments);
+        if (failedFiles.length > 0) {
+          console.warn('⚠️ Upload partiellement ou totalement échoué côté serveur:', response);
+          const message = uniqueFiles.length === 1
+            ? 'Upload failed. Please try again.'
+            : `${failedFiles.length} fichier(s) sur ${uniqueFiles.length} n'ont pas pu être uploadé(s).`;
+          toast.error(message);
+          setUploadError(message);
+          onUploadError?.(message);
+          setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
         }
       }
     } catch (error) {
