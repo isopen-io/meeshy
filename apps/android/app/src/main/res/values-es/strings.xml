@@ -62,4 +62,10 @@
     <string name="call_incoming_audio">Llamada entrante</string>
     <string name="call_incoming_video">Videollamada entrante</string>
     <string name="a11y_floating_menu">Menú de navegación</string>
+
+    <!-- Widget de pantalla de inicio: contador de no leídos -->
+    <string name="widget_unread_count_title">Mensajes no leídos</string>
+    <string name="widget_unread_count_description">Consulta de un vistazo tus mensajes no leídos</string>
+    <string name="widget_unread_label">No leídos</string>
+    <string name="widget_all_read_label">Todo leído</string>
 </resources>

@@ -299,6 +299,47 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `cachedConversations emits an empty list on a cold cache without touching the network`() = runTest {
+        val api = FakeConversationApi(ApiResponse(success = false, error = "should never be called"))
+        val repo = repository(api)
+
+        assertThat(repo.cachedConversations().first()).isEmpty()
+    }
+
+    @Test
+    fun `cachedConversations emits the locally-cached conversations after a refresh`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        ApiConversation(id = "c1", title = "Team", unreadCount = 3),
+                        ApiConversation(id = "c2", title = "Family", unreadCount = 2),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        assertThat(repo.cachedConversations().first().map { it.id }).containsExactly("c1", "c2")
+    }
+
+    @Test
+    fun `cachedConversations reflects a subsequent refresh without a caller re-subscribing`() = runTest {
+        val api = FakeConversationApi(
+            ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", unreadCount = 1))),
+        )
+        val repo = repository(api)
+        repo.refresh()
+        assertThat(repo.cachedConversations().first().single().unreadCount).isEqualTo(1)
+
+        api.response = ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", unreadCount = 9)))
+        repo.refresh()
+
+        assertThat(repo.cachedConversations().first().single().unreadCount).isEqualTo(9)
+    }
+
+    @Test
     fun `refresh persists conversations and sync metadata`() = runTest {
         val repo = repository(
             FakeConversationApi(
