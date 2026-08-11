@@ -1,3 +1,148 @@
+# Cycle 70 — Le Prisme franchit la porte du ViewModel, et deux événements de conversation trouvent enfin les écrans de liste
+
+## Contrainte d'environnement — un maillon de PLUS que les cycles précédents
+
+Même conteneur Linux distant : aucune chaîne Swift (`swift: command not found`), aucun SDK Android,
+`node_modules` absent au démarrage (`bun install --ignore-scripts` puis les deux commandes de la
+leçon 102 : verifié, la note du cycle 68 se réutilise telle quelle).
+
+**Nouveau, et il faut le lire avant d'instruire une lane iOS** : le cycle 69 laissait comme gate
+« lancer `ios-tests.yml` à la main sur la branche (onglet Actions → Run workflow) ». **Cette
+routine n'en a pas le droit.** `POST /actions/workflows/ios-tests.yml/dispatches` répond
+`403 Resource not accessible by integration` — l'intégration GitHub de la routine n'a pas
+`actions: write`. Le workflow ne se déclenche par ailleurs QUE sur push vers `dev`, et pousser sur
+`dev` n'est pas autorisé depuis cette branche.
+
+Conséquence à écrire noir sur blanc plutôt qu'à contourner : **la moitié iOS de ce cycle est
+livrée SANS son gate**. Ni compilée, ni testée. Ce qui a été fait à la place, faute de mieux :
+- toute inférence de type évitable a été retirée du Swift écrit (la closure immédiatement appliquée
+  à type tuple étiqueté est devenue une `private static func` à type déclaré ; le ternaire
+  `NSNull() : map` du helper de test porte `as Any` des deux côtés, sinon les deux branches n'ont
+  pas de type commun) ;
+- chaque API touchée a été relue dans son fichier source (`LastMessageFacet.init` accepte bien
+  `translations:`/`originalLanguage:` ; `MeeshyConversation.lastMessageTranslations` est bien
+  `public var` ; `MockMessageSocket.conversationUpdated` est bien un `PassthroughSubject`) ;
+- `line_length` et les règles de style sont dans `disabled_rules` de `.swiftlint.yml` — rien à
+  gagner de ce côté.
+
+Cela ne remplace pas une compilation. **Premier geste du cycle 71 : faire tourner `ios-tests.yml`
+sur `main` et corriger ce qui rougit.** Si la routine doit continuer à traiter des lanes iOS, il
+faut lui accorder `actions: write` — sans quoi chaque cycle iOS repousse la même dette.
+
+## Moitié iOS — la tête instruite du cycle 70, consommée
+
+Le défaut décrit par le cycle 69 a été **revérifié dans le code de `main` avant la première ligne**
+et la description était exacte : `ConversationListViewModel.conversationUpdated` ne lisait jamais
+`lastMessageTranslations`.
+
+- **Branche `else` (horodatage ÉGAL ⇒ ÉDITION)** : le nouveau texte était appliqué, la carte de
+  traduction de l'ANCIEN restait. Le résolveur PRÉFÉRANT la traduction à `lastMessagePreview`, la
+  ligne rendait le texte d'avant **indéfiniment**. C'était le défaut du cycle 69, toujours vivant
+  sur le chemin que voit l'écran.
+- **Branche `bumpToTop`** : la facette était construite sans `translations:` ni `originalLanguage:`
+  — la carte que le gateway venait de résoudre POUR CE lecteur était jetée.
+
+L'extraction du tri-état est faite **une seule fois**, avant les deux branches, en recopiant
+`ConversationStore.merging` (SDK) : `.replaced` applique la paire (carte vide ⇒ `nil`),
+`.unchanged` ne touche à rien. Le `>` strict du garde de bump **n'a pas bougé**, exactement comme
+le cycle 69 l'avait instruit : il protège une facette délibérément neutre, et le relâcher ferait
+perdre pièce jointe, expiration et « vue unique » à chaque édition.
+
+Trois témoins : édition ⇒ carte périmée, nouveau message ⇒ carte servie, **métadonnées ⇒ carte
+intacte**. Le troisième est le seul qui exerce la moitié `.unchanged` du tri-état, et il se trouve
+que la moitié gateway de ce même cycle en dépend (voir ci-dessous) : les deux se prouvent
+mutuellement le contrat.
+
+Le helper `makeConversationUpdatedEvent` construit l'événement **depuis du JSON** — seule façon
+d'exprimer « clé absente » face à « clé nulle ». Il a fallu l'élargir (`lastMessagePreview`,
+`lastMessageTranslations`, `lastMessageOriginalLanguage`) : la note du cycle 69 disait que les deux
+cas étaient déjà exprimables sans y toucher, ce n'était pas le cas.
+
+## Moitié gateway — deux événements de conversation n'atteignaient QUE le fil ouvert
+
+Trouvé en cherchant les autres émetteurs de `CONVERSATION_UPDATED`, gaté localement (jest).
+
+`PUT /conversations/:id` et `DELETE /conversations/:id` n'adressaient leurs événements qu'à
+`ROOMS.conversation(id)`. Or c'est **le cas exact que `emitConversationPreviewUpdate` documente
+depuis sa création pour l'autre moitié du même payload** : un participant posé sur l'écran de liste
+a QUITTÉ la room de conversation et n'est joignable que par sa room personnelle.
+
+1. **Renommage** (et avatar, bannière, mode lent, canal d'annonce, traduction auto) : la ligne de
+   liste de tous ceux qui n'avaient pas le fil ouvert gardait l'ancienne valeur jusqu'à un
+   rechargement complet.
+2. **Clôture** : le membre gardait la ligne dans sa liste et ne l'apprenait qu'en tapant dessus.
+   Le commentaire du code annonçait pourtant « Broadcast closure to all members ». Les deux clients
+   écoutent bien `conversation:closed` — web `use-socket-cache-sync.ts` (qui RETIRE la ligne du
+   cache de liste), iOS `MessageSocketManager` — l'événement ne leur parvenait simplement jamais.
+
+Les deux passent par `emitToConversationParticipants`, déjà la formulation de référence : chaînage
+des rooms (au plus UNE copie par socket), room d'un participant sans compte nommée par son
+`Participant.id` (`userId ?? id`), participants inactifs écartés. La clôture lit ses participants
+**dans son écriture** (`include`), sans requête supplémentaire.
+
+Un témoin fige que le payload ne porte **aucune clé `lastMessage*`** — et c'est ici que les deux
+moitiés du cycle se rejoignent : le tri-état client distingue « clé absente » de « clé nulle », donc
+un `lastMessageTranslations: null` posé par un renommage effacerait une traduction parfaitement
+valide sur toutes les lignes de liste. Le témoin iOS n° 3 est l'autre bout de ce même contrat.
+
+Le hard-delete de conversation **n'avait aucun témoin de route** jusqu'ici : le fichier de test
+homonyme (`conversation-deleted-broadcast.test.ts`) couvre `delete-for-me`, une autre route.
+
+## Retiré du backlog après enquête — l'audit `ROOMS.user(` est CLOS
+
+Le backlog le portait depuis le cycle 69 : « la règle *adresser par `userId ?? id`* vaut pour tout
+émetteur personnel, et rien ne garantit que les autres la respectent ». Instruit par recherche sur
+`ROOMS.user(`, comme demandé, plutôt que par déduction. **Aucun défaut restant** :
+
+- `emitConversationPreviewUpdate` passe déjà par `participantUserRoomTargets` (cycle 69) ;
+- `emitUnreadCountsToRecipients`, `callEndedFanout`, `offlineParticipantQueue`, `MessageHandler`
+  portent tous `userId ?? id` ;
+- `core.ts:1238` (CONVERSATION_NEW) adresse des **User.id**, pas des lignes `Participant` — la
+  règle ne s'y applique pas ;
+- les `.map(p => p.userId)` restants sont **sémantiquement corrects** et non des oublis : contrôle
+  de blocage (`MessageHandler:2029`, `messages.ts:1769` — un anonyme ne peut pas être bloqué),
+  préférences d'accusés de lecture (`MessageReadStatusService:1080` — pas de `userId`, pas de ligne
+  de préférence, donc visible par défaut), notifications push (il faut un compte).
+
+C'est un résultat négatif, et il vaut d'être écrit : sans lui, le prochain cycle refait l'enquête.
+
+---
+
+# Tête instruite pour le cycle 71 — les mêmes écrans de liste, sur les événements de MEMBRES
+
+*Repéré par le même balayage que ci-dessus (`to(ROOMS.conversation(`), NON traité faute d'avoir
+vérifié ce que la ligne de liste rend réellement. C'est cette vérification qui doit précéder le
+correctif, pas l'inverse : élargir une audience a un coût et une dimension de confidentialité.*
+
+Trois émetteurs de `routes/conversations/participants.ts` sont thread-only, comme l'étaient le
+renommage et la clôture :
+
+- `:377` `CONVERSATION_JOINED` — un membre rejoint ;
+- `:562` `CONVERSATION_PARTICIPANT_LEFT` — un membre part ;
+- `:748` `PARTICIPANT_ROLE_UPDATED` — un rôle change.
+
+**Ce qu'il faut établir AVANT d'écrire quoi que ce soit** : la ligne de liste rend-elle quelque
+chose qui dépende de ces trois faits ? Si la ligne affiche un compteur de membres ou une pile
+d'avatars, les deux premiers sont le même défaut que ce cycle vient de corriger et se corrigent
+pareil (`emitToConversationParticipants`, participants actifs, payload inchangé). Si elle n'en rend
+rien, ils sont thread-only à juste titre et il faut le NOTER dans le code plutôt que de le
+redécouvrir au cycle 72. `PARTICIPANT_ROLE_UPDATED` est le plus douteux des trois : un rôle ne se
+voit nulle part dans une liste.
+
+Le reste des émetteurs thread-only du balayage est légitime et n'a pas besoin d'être réinstruit :
+réactions, typing, position live, transcription/traduction audio, `MESSAGE_EDITED` (déjà doublé par
+`emitConversationPreviewUpdate` pour la liste).
+
+## Points hérités, inchangés
+
+- Les mentions du chemin de lien attendent toujours l'extraction qui écrit `Message.validatedMentions` ;
+  aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas
+  dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
+- `bun run lint` échoue toujours immédiatement (ESLint v9) — condition préexistante, la CI ne gate
+  que `test:coverage`.
+- La suppression de branche distante échoue depuis cette routine (`git push --delete` répond
+  « Everything up-to-date » sans agir) — à faire depuis l'interface GitHub.
+
 # Cycle 69b — Solde d'une session parallèle, et la tête du cycle 70
 
 *Deux sessions ont traité la tête instruite du cycle 68 en même temps. Celle-ci a rebasé sur
