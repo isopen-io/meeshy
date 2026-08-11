@@ -37,6 +37,23 @@ Trois bornes avant d'ouvrir :
    conversations.all })` couvrent bien le cache infinite (préfixe commun) : ceux-là sont
    vivants et hors lot.
 
+**Complément instruit pendant le cycle 77 — la borne 1 est levée, et il y a une VRAIE panne
+dans le lot.** `rg` sur tout le dépôt : `useConversationsQuery` et `useConversationsWithPagination`
+n'apparaissent QUE dans leur propre fichier, dans leur fichier de tests, et dans le baril
+`hooks/queries/index.ts`. Aucun consommateur, ni dans `apps/web` ni ailleurs. La forme plate est
+donc bien morte, et le lot est un retrait — pas une réconciliation.
+
+Mais deux sites ne sont pas de simples écritures mortes : `use-reactions-query.ts:427` et `:460`
+font `invalidateQueries({ queryKey: queryKeys.conversations.lists() })` sur réaction ajoutée /
+retirée, commentaire à l'appui (« réaction ajoutée = conversation modifiée »). Le préfixe ne
+matche pas `infinite()` : **l'intention déclarée n'est jamais exécutée.** C'est une panne
+silencieuse, pas du code mort — et sa correction n'est PAS « rediriger vers `infinite()` », ce
+qui déclencherait une relecture de toutes les pages chargées à chaque réaction, exactement ce que
+le cycle 77 vient de retirer du chemin de focus. Le geste juste est probablement de **supprimer
+ces deux invalidations** : une réaction ne change pas l'aperçu de la ligne de liste. À trancher
+en ouvrant le lot, en regardant si la ligne de liste porte quoi que ce soit qui dépende des
+réactions.
+
 ---
 # Tête instruite pour le cycle 78 — iOS avance son curseur delta par-dessus une page TRONQUÉE
 
