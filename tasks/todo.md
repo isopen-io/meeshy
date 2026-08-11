@@ -1,5 +1,116 @@
 
-# Tête instruite pour le cycle 77 (2/2) — la liste PLATE de conversations a des écrivains, aucun lecteur
+# Cycle 77 — L'enrichissement audio n'atteignait que les lecteurs déjà dans le fil, et une page delta tronquée sautait des lignes
+
+Deux défauts de la même famille, tous deux côté gateway, tous deux du type « la convergence
+dépend de la ROUTE du lecteur plutôt que de son état » : le premier trouvé en balayant les
+émetteurs qui n'adressent QUE `ROOMS.conversation(...)`, le second déjà instruit par la tête
+du cycle 77 — dont la moitié SERVEUR se corrige sans toucher au client.
+
+## D1 — `message:attachment-updated` devait trois audiences, en servait une
+
+Whisper finit de transcrire une note vocale une à deux secondes après l'envoi ;
+NLLB+Chatterbox rendent l'audio traduit langue par langue, plus tard encore. Chaque étape
+écrit la pièce jointe en base et diffuse un delta — **dans la seule room de conversation**.
+
+| Audience | Ce qu'elle perdait |
+|---|---|
+| lecteurs DANS le fil | rien — la seule servie |
+| lecteurs sur la LISTE | iOS ne joint `conversation:<id>` qu'à **l'ouverture** du fil (`roomsToRejoinOnConnect`) : au lancement de l'app, un lecteur resté sur la liste n'est dans AUCUNE room de conversation |
+| lecteurs HORS LIGNE | le `message:new` mis en file à l'ENVOI porte la pièce jointe SANS transcription ni audio traduit (ils n'existent pas encore) : sans rejeu, la copie rejouée à la reconnexion reste définitivement celle-là |
+
+Vérifié, pas déduit : le SDK iOS applique ce delta **sans regarder quel fil est ouvert**
+(`ConversationSyncEngine.handleAttachmentUpdated` patche le message en cache de n'importe
+quelle conversation, no-op s'il est absent) — la room personnelle n'est donc pas une
+audience plus large pour le principe, c'est là que l'écriture atterrit vraiment. Le web est
+pareillement idempotent et clé par conversation (`use-socket-cache-sync`).
+
+Même classe que les cycles 73/74 : le Prisme — « il s'applique à TOUT le contenu,
+transcriptions audio comprises » — devenait fonction du fait d'avoir le fil ouvert au moment
+où Whisper a fini.
+
+Le correctif chaîne room de conversation + rooms personnelles (une seule copie par socket,
+`emitToConversationParticipants`) et met l'enrichissement en file sous le nouveau
+`eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` au drain.
+
+Deux points qui ne se devinent pas :
+
+1. **`dedupKey` = l'id de la PIÈCE JOINTE.** L'identité par défaut `(messageId, eventType)`
+   ferait superséder l'enrichissement de la première pièce jointe par celui de la seconde
+   sur un message à deux audios. Par pièce jointe, la règle « le dernier payload gagne » est
+   exactement la bonne : le payload porte l'état COMPLET de la pièce jointe.
+2. **Aucun filtrage par langue du destinataire**, contrairement à `message:new`
+   (`filterMessagePayloadForLanguages`). Les clients REMPLACENT la carte de traductions de
+   la pièce jointe : un sous-ensemble par lecteur EFFACERAIT les langues qu'un fetch REST
+   antérieur avait mises en cache. La bande passante n'est pas gratuite ; la corriger ici
+   demanderait un contrat de fusion côté client, pas un filtre.
+
+Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+d'avant), jamais vers le silence.
+
+## D2 — l'ordre d'une page delta décide si sa troncature est rattrapable
+
+`GET /conversations?updatedSince=` plafonne à 100 et triait par `lastMessageAt` décroissant
+— l'ordre de l'écran de liste, **sans aucun rapport avec le filtre**. Les deux clients
+avancent pourtant leur watermark au max des `updatedAt` REÇUS : les lignes coupées étaient
+enjambées **définitivement**, jusqu'à la réconciliation complète (1×/24 h sur iOS).
+
+Trié par `updatedAt` croissant, les lignes coupées sont exactement celles d'`updatedAt`
+SUPÉRIEUR à la dernière rendue : le watermark qui les enjambait pointe dessus. La troncature
+devient une pagination naturelle, **sans aucun changement client** — la tête du cycle 77
+proposait de câbler la détection côté iOS ; l'ordre serveur rend la détection presque sans
+objet. `id` départage les égalités pour que deux appels identiques rendent la même page.
+
+Résidu assumé, et il reste à la charge des clients (le web le couvre déjà via
+`DELTA_PAGE_LIMIT` ⇒ relecture complète) : plus de 100 conversations portant la MÊME
+milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que la borne stricte
+`gt` ne peut pas reprendre.
+
+## Vérification
+
+- **13 témoins neufs**, écrits AVANT le code, RED observé sur chacun :
+  - `emitAttachmentUpdated.test.ts` (10) — l'audience chaînée dans l'ORDRE attendu, une
+    seule émission pour un socket présent dans deux rooms, la mise en file des seuls hors
+    ligne, l'auteur inclus (« Whisper et NLLB ne sont pas des gens »), la clé de dédup par
+    pièce jointe, la réutilisation de la liste de participants (une requête, pas deux), et
+    les deux dégradations : requête participants en panne ⇒ room de conversation seule,
+    file en panne ⇒ l'émission live a quand même eu lieu.
+  - `MeeshySocketIOManager.test.ts` (1) — `attachment-updated` rejoué en
+    `MESSAGE_ATTACHMENT_UPDATED` au drain.
+  - `conversation-core.test.ts` (3) — page delta triée par `updatedAt` croissant, page
+    ordinaire et `updatedSince` illisible gardant l'ordre de récence.
+- `tsc --noEmit` propre sur le gateway.
+
+## Reste ouvert après ce cycle
+
+- **Les deux têtes instruites pour le cycle 77 restent ouvertes** (voir ci-dessous), la
+  première REDUITE par D2 : côté iOS il ne reste que la détection du résidu d'égalités,
+  plus la perte systématique. La seconde (écrivains du cache PLAT côté web) est intacte.
+- **`limit=500` demandé par `deltaSyncCore` reste un mensonge silencieux** — le plafond
+  serveur est 100. Hygiène, sans effet sur le défaut, maintenant que la troncature se
+  rattrape.
+- **`message:attachment-updated` n'est pas filtré par langue** (voir D1 §2) : une
+  conversation à N langues paie N diffusions complètes de la pièce jointe à tous les
+  participants. Le rendre par destinataire suppose que les clients FUSIONNENT la carte de
+  traductions au lieu de la remplacer — chantier de contrat client, à instruire avant tout
+  code serveur.
+- **`ATTACHMENT_STATUS_UPDATED` (`routes/messages.ts`) n'a pas été audité contre la même
+  règle** — il porte un état par utilisateur (écouté/vu/téléchargé), donc sa room n'est
+  peut-être pas la bonne non plus. À instruire, pas à déduire.
+- **Aucun client iOS n'écoute `message:pending-delivered`** (le web s'en sert pour invalider
+  les conversations touchées par un drain). Constaté en croisant les 110 `SERVER_EVENTS`
+  avec les deux clients ; conséquence non mesurée.
+- **`message:read-status-updated` n'a toujours aucun consommateur** : les deux clients
+  écoutent le legacy `read-status:updated`, dual-émis depuis le 2026-07-05 avec une
+  coexistence annoncée d'environ 3 mois (échéance ~2026-10-05). Migrer les clients est un
+  geste par client, sûr tant que le serveur émet les deux ; retirer le legacy ne l'est pas
+  avant qu'Android ait migré aussi.
+- Les points hérités des cycles précédents restent ouverts tels quels (mentions du chemin de
+  lien, `link:message:new` sans écouteur iOS, arbitrage `delete-for-me` du cycle 12, `eslint`
+  impossible sur le gateway faute de `eslint.config.js`).
+
+---
+
+# Tête instruite pour le cycle 78 (2/2) — la liste PLATE de conversations a des écrivains, aucun lecteur
 
 *Trouvé en instruisant le cycle 76 depuis la session parallèle, vérifié, NON corrigé.
 Indépendant de la tête ci-dessus ; les deux peuvent être pris séparément.*
@@ -38,9 +149,16 @@ Trois bornes avant d'ouvrir :
    vivants et hors lot.
 
 ---
-# Tête instruite pour le cycle 77 — iOS avance son curseur delta par-dessus une page TRONQUÉE
+# Tête instruite pour le cycle 78 — iOS ne détecte pas une page delta tronquée
 
-*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur, NON corrigé.*
+*Trouvé en instruisant le cycle 76, vérifié par lecture croisée client/serveur.*
+
+> **RÉDUITE PAR LE CYCLE 77 (D2).** La route trie désormais une page delta par `updatedAt`
+> croissant : les lignes coupées sont celles d'`updatedAt` supérieur à la dernière rendue,
+> donc le watermark pointe dessus au lieu de les enjamber. Ce qui suit reste vrai pour le
+> SEUL résidu que l'ordre ne rattrape pas — plus de 100 conversations portant la même
+> milliseconde d'`updatedAt` — et le point 2 (« ne pas avancer le curseur sur une page qu'on
+> sait tronquée ») garde toute sa valeur.
 
 `ConversationSyncEngine.deltaSyncCore` (SDK iOS) demande `limit=500` à
 `GET /conversations?updatedSince=`. La route plafonne à 100

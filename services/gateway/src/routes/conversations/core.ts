@@ -381,12 +381,48 @@ export function registerCoreRoutes(
       // Il porte son propre index (`@@index([isActive, updatedAt])`). La borne
       // est STRICTE (`gt`) : un client qui repasse son dernier `updatedAt` ne
       // re-télécharge pas la ligne qu'il détient déjà.
+      let isDeltaPage = false;
       if (updatedSince) {
         const sinceDate = new Date(updatedSince);
         if (!isNaN(sinceDate.getTime())) {
           whereClause.updatedAt = { gt: sinceDate };
+          isDeltaPage = true;
         }
       }
+
+      // L'ORDRE d'une page delta n'est pas cosmétique : il décide si une page
+      // TRONQUÉE est rattrapable.
+      //
+      // Le `limit` est plafonné à 100 (voir plus haut) et les deux clients
+      // avancent leur watermark au max des `updatedAt` REÇUS. Trié par
+      // `lastMessageAt` décroissant — l'ordre de l'écran de liste, sans aucun
+      // rapport avec le filtre — les lignes coupées ne sont pas « les plus
+      // anciennes mises à jour » : le prochain `updatedSince` passe PAR-DESSUS
+      // et ne les revoit qu'à la réconciliation complète (1×/24 h sur iOS).
+      // Pendant ce temps la liste affiche des compteurs de non-lus et des
+      // aperçus périmés sans qu'aucun signal ne l'indique.
+      //
+      // Trié par `updatedAt` croissant, les lignes coupées sont exactement
+      // celles dont l'`updatedAt` est SUPÉRIEUR à celui de la dernière ligne
+      // rendue : le watermark qui les enjambait pointe désormais dessus, et
+      // l'appel delta suivant les rend. La troncature devient une pagination
+      // naturelle, sans aucun changement client. `id` départage les égalités
+      // pour que deux appels identiques rendent la même page.
+      //
+      // Résidu assumé : plus de `limit` conversations portant la MÊME
+      // milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
+      // la borne stricte `gt` ne peut pas reprendre. Le web traite déjà une page
+      // PLEINE comme une preuve d'incomplétude et escalade vers la relecture
+      // complète (`DELTA_PAGE_LIMIT`, use-conversations-delta-sync.ts) : c'est
+      // ce cas-là, et lui seul, qui reste à sa charge.
+      //
+      // Le curseur `before` garde la main : il BORNE sur `lastMessageAt`, donc
+      // une page ordonnée par `updatedAt` le rendrait incohérent. Aucun client
+      // ne combine les deux aujourd'hui — la garde existe pour que celui qui
+      // essaiera obtienne une pagination cohérente plutôt qu'un mélange.
+      const orderBy = isDeltaPage && !beforeCursor
+        ? [{ updatedAt: 'asc' as const }, { id: 'asc' as const }]
+        : { lastMessageAt: 'desc' as const };
 
       t0 = performance.now();
       const conversations = await prisma.conversation.findMany({
@@ -495,7 +531,7 @@ export function registerCoreRoutes(
             }
           }
         },
-        orderBy: { lastMessageAt: 'desc' }
+        orderBy
       });
       perfTimings.conversationsQuery = performance.now() - t0;
 

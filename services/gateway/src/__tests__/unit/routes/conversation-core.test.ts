@@ -649,6 +649,75 @@ describe('registerCoreRoutes', () => {
       );
     });
 
+    it('orders a delta page by updatedAt ASC so a truncated page resumes instead of skipping', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // A delta window that touched more than `limit` conversations returns a
+      // TRUNCATED page. Sorted by `lastMessageAt desc`, the rows left out bear
+      // no relation to the filter, so a client advancing its watermark to the
+      // max `updatedAt` it received steps OVER them — permanently, until its
+      // next full reconcile (24h on iOS). Sorted by `updatedAt` ascending, the
+      // rows left out are exactly those with a HIGHER `updatedAt` than the
+      // page's last row: the same watermark that used to skip them now points
+      // right at them.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        })
+      );
+    });
+
+    it('keeps the recency order for a normal (non-delta) page', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // The list screen reads this route too, and it wants the most recent
+      // conversation first. Only the delta consumers trade recency for
+      // resumability.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
+    it('lets the before-cursor keep the recency order it bounds on', async () => {
+      const cursorDate = new Date('2024-01-01');
+      prisma.conversation.findFirst.mockResolvedValue({ lastMessageAt: cursorDate });
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: { before: CONV_ID, updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // `before` bounds on `lastMessageAt`; ordering that page by `updatedAt`
+      // would pair a cursor with a sort it has no relation to. No client
+      // combines the two — the guard is for the one that tries.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
+    it('keeps the recency order when updatedSince is unusable', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { updatedSince: 'not-a-date' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // No delta filter was applied, so this is a normal page: ordering it by
+      // `updatedAt` would hand the list screen its OLDEST conversations first.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
     it('ignores invalid updatedSince date (NaN)', async () => {
       prisma.conversation.findMany.mockResolvedValue([]);
       const req = makeRequest({ query: { updatedSince: 'not-a-date' } });

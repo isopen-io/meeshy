@@ -2311,6 +2311,26 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_UNPINNED, { messageId: 'msg-pin' });
     });
 
+    it('routes attachment entries: attachment-updated → MESSAGE_ATTACHMENT_UPDATED', async () => {
+      // The `message:new` queued at SEND time carries the voice note WITHOUT
+      // its transcription (Whisper finishes a second later). Without this
+      // replay, a peer who was offline at that instant keeps the un-enriched
+      // attachment for as long as their cache lives.
+      const enriched = {
+        conversationId: 'conv-a',
+        messageId: 'msg-audio',
+        attachment: { id: 'att-1', transcription: { text: 'Bonjour' } },
+      };
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: enriched, eventType: 'attachment-updated', dedupKey: 'att-1' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-attachments', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, enriched);
+    });
+
     // A share-link message is a CREATION replayed under BOTH wire events, each
     // in the shape that event carries: `link:message:new` keeps its `{ message }`
     // envelope (the web reads it), `message:new` gets the message object itself
