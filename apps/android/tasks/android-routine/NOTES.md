@@ -338,3 +338,48 @@ Append-only log of gotchas and decisions that save time next run.
   recent one, so this is an inherited pre-existing quirk of the reused formatter, not a new
   regression — refactoring `lastMessagePreview`'s fallback semantics is out of scope for a slice
   whose job was reusing it, not rewriting it.
+
+## Slice `widget-favorite-contacts` (2026-08-11)
+- **A `private val` constant becomes worth hoisting to `internal` at its SECOND call site, not
+  its third, when it encodes a correctness-sensitive business rule rather than disposable UI
+  glue.** `directConversationTypes = setOf("direct", "dm")` lived `private` in
+  `RecentConversationsWidgetPresentation.kt`. This slice's `FavoriteContactsWidgetPresentation`
+  needed the exact same "is this a 1:1 chat" gate. The codebase's own established convention
+  (`MagicLinkCountdown`, documented in an earlier slice's note) is to keep duplicating small UI
+  glue until a 3rd call site forces a shared abstraction — but that convention exists because UI
+  glue drifting apart at 2 call sites is cheap to notice and cheap to fix. A `setOf("direct",
+  "dm")` string-literal duplicate is different: if the canonical set of "direct" type strings
+  ever changes (a new value added server-side, a rename), two independently-maintained copies can
+  silently drift apart with no compiler signal — a correctness bug, not a style inconsistency.
+  Changing `private val` to `internal val` plus one import is a strictly smaller diff than
+  duplicating the literal, so there was no actual cost to avoiding the duplication here either.
+  Rule of thumb going forward: duplicate-until-3rd-site applies to disposable glue; anything that
+  encodes "what counts as X" business logic gets hoisted at the 2nd site regardless of size.
+- **`ApiConversation.participants` (`ApiParticipant`) carries no presence fields
+  (`isOnline`/`lastActiveAt`) anywhere in this codebase — confirmed by reading the full model,
+  not assumed.** iOS's `FavoriteContactsWidget` shows an online/offline status line per contact
+  (`MeeshyConversation.lastSeenText`), sourced from a richer conversation snapshot iOS's main app
+  publishes into the widget's App Group. Android's widget architecture is structurally different
+  (a live Room read via a Hilt `EntryPoint`, not an App-Group snapshot the main app pre-publishes)
+  and its `ApiParticipant` model was never given presence fields at all — this is a real, load-
+  bearing platform gap for ANY future participant-facing Android surface that wants a presence
+  dot without first threading a `PresenceRepository`/cache through to that surface, not specific
+  to widgets. Grepped for a `PresenceRepository`/presence-cache class before concluding this —
+  none exists; `isOnline` today only appears on `Friend`/`MeeshyUser`/`Participant` models used by
+  the contacts/profile surfaces, never joined onto a conversation's participant list.
+- **The "mark-read widget action" candidate, twice flagged as the natural next widget sub-slice
+  in two consecutive prior runs' notes, turned out to have almost no new pure decision logic to
+  TDD once actually scoped.** Investigated before picking a slice this run: the only "decision"
+  involved (show the affordance only on an unread row) is already the existing, already-tested
+  `row.isUnread` field — the `ActionCallback.onAction` body itself would be pure Android-framework
+  glue (`Context`/`GlanceId`/`ActionParameters` → a one-line delegate to the already-tested
+  `ConversationRepository.markReadOptimistic(id)` → `GlanceAppWidget().updateAll(context)`),
+  structurally identical in kind to `provideGlance()` itself, which has zero direct JVM tests in
+  either shipped widget (only its downstream pure `*Presentation.from(...)` is covered — the
+  established, `TDD-COVERAGE.md`-sanctioned exemption for Compose/framework glue). A slice that
+  would ship with genuinely zero new unit tests breaks this routine's own evidence rhythm (every
+  prior `PROGRESS.md` entry cites N new mutation-proven tests) even though nothing about it is
+  technically wrong — picked `FavoriteContactsWidget` instead, which had real new filter/sort/cap
+  decision logic to cover. Worth re-surfacing "mark-read" once either (a) a second `ActionCallback`
+  use case exists to justify the framework-glue investment across more than one call site, or
+  (b) someone explicitly decides thin, near-untestable wiring is still worth a slice on its own.
