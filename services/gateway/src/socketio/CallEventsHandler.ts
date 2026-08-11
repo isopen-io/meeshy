@@ -2448,13 +2448,20 @@ export class CallEventsHandler {
           }
         }
 
-        // Audit P1-27 — notify the joining user's OTHER devices that the
-        // call was answered elsewhere, so they dismiss their ringing UI /
-        // CallKit incoming card. `socket.to(...)` excludes the answering
-        // socket automatically.
-        socket.to(ROOMS.user(userId)).emit(CALL_EVENTS.ALREADY_ANSWERED, {
-          callId: data.callId
-        });
+        // Audit P1-27 originally emitted ALREADY_ANSWERED unconditionally
+        // here, on every successful join. Vague 104 — Item F (above) changed
+        // what a join MEANS: since then, joinCallAttempt only ever
+        // transitions the call to `ringing` (the callee's device is ringing,
+        // receiving the SDP offer) — never `active`. An unconditional emit
+        // here therefore fired on ORDINARY multi-device ringing (any second
+        // device auto-early-joining the room to receive the offer while
+        // still ringing, e.g. iOS's `joinCallRoomReliably`), not on an actual
+        // answer — so a second ringing device would immediately dismiss its
+        // still-unanswered incoming-call UI as "answered elsewhere". The
+        // genuine "callee answered" transition happens on the SDP `answer`
+        // signal (`call:signal`, below), which is where this notification
+        // now lives — gated by the same `shouldMirrorAnsweredElsewhere`
+        // predicate as its push-notification twin (Audit Vague 27).
 
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,
@@ -3058,19 +3065,27 @@ export class CallEventsHandler {
           // chemin relais, et les autres devices du callee sonnaient
           // jusqu'à leur timeout local alors que l'appel était décroché.
           // Même prédicat pur que la branche relais ; best-effort.
-          if (this.pushService && shouldMirrorAnsweredElsewhere({
+          if (shouldMirrorAnsweredElsewhere({
             signalType: data.signal.type,
             answererUserId: userId,
             initiatorId: callSession.initiatorId,
             alreadyAnswered: !!callSession.answeredAt
           })) {
-            this.pushService.sendToUser(
-              buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
-            ).catch((error) => {
-              logger.error('call_answered_elsewhere push failed (no-socket branch)', {
-                callId: data.callId, userId, error
-              });
+            // Vague 104 — direct-socket twin of the push mirror just below,
+            // for the answerer's OTHER devices that DO have a live socket
+            // (see the removed call:join emit, above, for the full story).
+            socket.to(ROOMS.user(userId)).emit(CALL_EVENTS.ALREADY_ANSWERED, {
+              callId: data.callId
             });
+            if (this.pushService) {
+              this.pushService.sendToUser(
+                buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
+              ).catch((error) => {
+                logger.error('call_answered_elsewhere push failed (no-socket branch)', {
+                  callId: data.callId, userId, error
+                });
+              });
+            }
           }
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
@@ -3115,29 +3130,37 @@ export class CallEventsHandler {
           // a status the FSM (Item F) never actually writes (joinCallAttempt
           // only ever transitions initiated/ringing → ringing). The real
           // "callee answered" transition happens HERE, on the SDP answer.
-          // Multi-device socketless — the ALREADY_ANSWERED socket event above
-          // cannot reach a secondary device woken by the VoIP push whose
-          // WebSocket never came up: it would ring until its local timeout
-          // although the call was answered elsewhere. Mirror of the
-          // call_cancel hardening: a silent background push to the
-          // answerer's OTHER devices; the answering device (and any device
-          // not ringing on this callId) drops it via the client-side FSM
-          // guard. Never for the initiator's own answer, never for a later
-          // renegotiation answer. Best-effort: a push failure must never
-          // fail the signal relay.
-          if (this.pushService && shouldMirrorAnsweredElsewhere({
+          // Mirror of the call_cancel hardening: a silent background push to
+          // the answerer's OTHER devices, for the multi-device-socketless
+          // case (VoIP push wake whose WebSocket never came up). Never for
+          // the initiator's own answer, never for a later renegotiation
+          // answer. Best-effort: a push failure must never fail the signal
+          // relay.
+          //
+          // Vague 104 — the direct-socket ALREADY_ANSWERED notification for
+          // the answerer's OTHER devices that DO have a live socket used to
+          // live in call:join, firing unconditionally on every join
+          // (including ordinary early-ring-join, see the removed emit
+          // there). It now shares this exact gate with its push twin, so
+          // both fire once, only on a genuine first answer.
+          if (shouldMirrorAnsweredElsewhere({
             signalType: data.signal.type,
             answererUserId: userId,
             initiatorId: callSession.initiatorId,
             alreadyAnswered: !isFirstAnswer
           })) {
-            this.pushService.sendToUser(
-              buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
-            ).catch((error) => {
-              logger.error('call_answered_elsewhere push failed (signal unaffected)', {
-                callId: data.callId, userId, error
-              });
+            socket.to(ROOMS.user(userId)).emit(CALL_EVENTS.ALREADY_ANSWERED, {
+              callId: data.callId
             });
+            if (this.pushService) {
+              this.pushService.sendToUser(
+                buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
+              ).catch((error) => {
+                logger.error('call_answered_elsewhere push failed (signal unaffected)', {
+                  callId: data.callId, userId, error
+                });
+              });
+            }
           }
         }
 
