@@ -149,6 +149,7 @@ private fun RailButton(
     onBounds: (Rect) -> Unit,
 ) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var scrubStartedThisGesture by remember { mutableStateOf(false) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
@@ -161,11 +162,15 @@ private fun RailButton(
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.35f))
                 .pointerInput(Unit) {
-                    detectTapGestures { onTap() }
+                    detectTapGestures(
+                        onPress = { scrubStartedThisGesture = false },
+                        onTap = { if (!scrubStartedThisGesture) onTap() },
+                    )
                 }
                 .pointerInput(scrubKind) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { offset ->
+                            scrubStartedThisGesture = true
                             val root = coords?.localToRoot(offset) ?: offset
                             onScrubEvent(StoryScrubEvent.Started(scrubKind, root))
                         },
