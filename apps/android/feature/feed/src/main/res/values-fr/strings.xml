@@ -101,6 +101,9 @@
     <string name="feed_composer_attach_file">Joindre un fichier</string>
     <string name="feed_composer_record_voice">Enregistrer un audio</string>
     <string name="feed_composer_remove_media">Supprimer le média</string>
+    <string name="feed_composer_add_location">Ajouter ma position</string>
+    <string name="feed_composer_remove_location">Supprimer la position</string>
+    <string name="feed_composer_location_unavailable">Position indisponible — vérifiez vos paramètres de localisation et réessayez</string>
     <string name="feed_composer_media_limit">Vous pouvez joindre jusqu\'à %1$d éléments</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
     <string name="feed_composer_type_reel">Réel</string>

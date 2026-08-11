@@ -100,6 +100,9 @@
     <string name="feed_composer_attach_file">Attach a file</string>
     <string name="feed_composer_record_voice">Record audio</string>
     <string name="feed_composer_remove_media">Remove media</string>
+    <string name="feed_composer_add_location">Add my location</string>
+    <string name="feed_composer_remove_location">Remove location</string>
+    <string name="feed_composer_location_unavailable">Location unavailable — check your location settings and try again</string>
     <string name="feed_composer_media_limit">You can attach up to %1$d items</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>
     <string name="feed_composer_type_reel">Reel</string>

@@ -9,6 +9,99 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
+> On 2026-08-11 **the Feed post composer's location-attachment sub-slice landed** (slice
+> `feed-composer-location-attachment`, feature-parity §F — the standing "files, location,
+> audio, per-post language" candidate's last unshipped attachment kind, decomposed to its
+> smallest safe first step rather than porting iOS's full `LocationPickerView` map picker
+> whole). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open` found only
+> one open PR (`apps/web/calls`-scoped, unrelated to this routine) and a long tail of
+> mono-commit `claude/apps/android/*` branches all >24h old with no matching open PR — none an
+> interrupted run of this routine. Confirmed via `grep` that `apps/android` had **zero**
+> `FusedLocationProviderClient`/`LocationServices`/`ACCESS_*_LOCATION` usage anywhere (not even
+> in chat's existing static-location *display* path) — the send-side capability genuinely did
+> not exist yet, matching the prior iteration's own re-scoping note. Read iOS's
+> `LocationPickerView.swift` (879 lines) end to end: a full-screen MapKit picker with search,
+> "my position" recentring, precision-degrading and `CLGeocoder` reverse-geocoding into a
+> name/address — confirmed porting it whole would need a new Maps SDK dependency (with its own
+> API-key provisioning, out of scope for an unattended run) and is a materially larger, multi-part
+> feature, so **explicitly decomposed** before coding (matching this routine's own established
+> precedent — `tus-chunked-upload-core`, `feed-composer-file-attachment`): this slice ships only
+> the smallest genuinely-valuable step (capture the device's raw coordinate, attach it, publish
+> it), map/search/geocoding deferred as separately-scoped, heavier follow-ups. **Shipped
+> (production, all `apps/android`)**: new pure `SharedPlace` (`:core:model`, mirrors the
+> gateway's `services/gateway/src/services/location/sharedPlace.ts` and iOS's
+> `packages/MeeshySDK/.../SharedPlace.swift` field-for-field: `{latitude, longitude, name,
+> address, category}`) + `formattedCoordinates(decimalPlaces)` extension (`Locale.ROOT`-pinned,
+> never the JVM default — see NOTES.md). Threaded through `CreatePostRequest.location` →
+> `PostRepository.create(location:)` → `FeedComposerDraft.withLocation`/`withoutLocation`
+> (replaces rather than accumulates — a post carries at most one location, mirroring iOS's
+> single `pendingPlace`; does NOT affect `canPublish`, mirroring iOS where `pendingPlace` is not
+> itself part of the publish gate) → `FeedPostPublishRequest.location` →
+> `FeedViewModel.publishPost(location:)`. `FeedComposerSheet` gains a seventh attach tile
+> (`Icons.Filled.LocationOn`, mirrors iOS's `location.fill`): requests
+> `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` (both declared in `AndroidManifest.xml`), then
+> captures a single fresh fix via a new `LocationManager.awaitFreshFix()` suspend extension (GPS
+> preferred, network fallback, 12s timeout via `withTimeoutOrNull` + `suspendCancellableCoroutine`
+> — **no Play Services dependency added**, a deliberate choice to keep this slice's footprint
+> minimal even though `play-services-location` would have been low-friction given `firebase-
+> messaging` already pulls Play Services transitively). The attached place renders as a
+> removable `LocationAttachmentChip` (same pill-with-close visual language as `ReelTypeToggle`),
+> separate from `MediaAttachmentsRow` since a post carries at most one location, never a list.
+> +20 new tests (8 `SharedPlaceTest`: default/custom decimal places, rounding not truncating,
+> negative-coordinate sign, JVM-default-locale independence, zero-decimal rounding, equality,
+> null defaults; 8 `FeedComposerDraftTest`: fresh-draft-has-none, attach, replace-not-accumulate,
+> remove, remove-when-absent-is-inert, location-alone-does-not-unlock-publish, publish-request-
+> carries-location, publish-request-null-when-absent; 2 `PostRepositoryTest`: null-location
+> forwarding, location forwarded verbatim via a captured `CreatePostRequest` slot; 2
+> `FeedViewModelTest`: null and non-null location forwarding to the repository).
+> **Mutation-proven**: dropping `Locale.ROOT` from `formattedCoordinates` fails **exactly** the
+> one locale-independence test (the other 7 stay green); adding `|| location != null` to
+> `canPublish` fails **exactly** the "location alone does not unlock publishing" test (the other
+> 47 `FeedComposerDraftTest` cases stay green). Both mutations applied via a scratch `cp`-backed
+> edit (never `git checkout --`), restored via `cp`, re-confirmed green. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching the prior
+> slice's task count — no build-graph regression). Reviewer **PASS** (diff `apps/android` only —
+> 2 new `:core:model` files, 12 edited across `:core:network`/`:sdk-core`/`:feature:feed`
+> [production + tests] + 4 locale `strings.xml` [en/fr/es/pt] + `AndroidManifest.xml`
+> [`ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`]; SDK purity — the `SharedPlace` model/
+> formatting is a stateless building block in `:core:model`, the permission-request →
+> `LocationManager` capture glue stays app-side in `:feature:feed` [Android-runtime I/O glue
+> with no further pure decision to extract, matching this composer's own established convention
+> for `readMediaUploadItem`/`startVoiceRecording`]; SSOT — one `SharedPlace` shape reused
+> verbatim from the gateway's own wire contract, no reimplementation; no coverage floor lowered;
+> no tautological tests). **Full on-device verification against the live gateway**
+> (`meeshy_pixel8`, real GNSS provider active): tapped the real Location tile
+> (`uiautomator dump` bounds throughout — including catching and correcting an earlier mistake
+> where a `Publish` tap coordinate was estimated visually from a screenshot without a bounds
+> dump, which missed the target entirely; see NOTES.md), the real Android system permission
+> dialog appeared (`Precise`/`Approximate`, `While using the app`/`Only this time`/`Don't
+> allow`), granted `While using the app` — confirmed the tile then showed a genuine loading
+> spinner and the status bar's live-location indicator appeared. A real `GnssLocationProvider`
+> fix streamed in (`adb logcat`: `Gnss:onGnssLocationCb`) and the composer rendered a chip
+> reading `37.42200, -122.08400` — the emulator's real default GPS coordinate
+> (37.421998, -122.084), confirming the value is a genuine device fix, not a stub. Typed text,
+> tapped Publish: `adb logcat` (background-captured to a file to survive the noisy post-tap
+> window) confirmed the real request body —
+> `{"content":"Meeshy_","location":{"latitude":37.421998333333335,"longitude":-122.084}}` — and
+> the gateway's `201` response echoed the persisted `location` both in `metadata.location` and
+> the hoisted top-level `location` field, proving the full `parseSharedPlace`/`hoistLocationDeep`
+> gateway pipeline round-tripped it correctly end to end. Deleted the test post via `curl DELETE
+> /api/v1/posts/:id` (confirmed gone via a follow-up `GET` → 404). `adb logcat` checked for
+> `FATAL EXCEPTION`/`AndroidRuntime` app crashes across the whole session — none (only unrelated
+> `uiautomator` process-start noise, which also logs under the `AndroidRuntime` tag). Emulator
+> left on the Feed screen afterward (composer closed, not mid-flow). **Next slice candidates
+> (not attempted this run)**: map/search/reverse-geocoding for the location attachment (needs a
+> Maps SDK dependency + API key provisioning — a separately-scoped, heavier follow-up, not a
+> small addition); on-device transcription for the Feed audio attachment (still no Android
+> on-device transcription capability anywhere in the app); per-post language override; the
+> gateway `POST /conversations/:id/messages` 400 flagged out-of-lane by a prior slice
+> (unconfirmed whether still live — worth re-checking, cross-platform, not Android-scoped);
+> widgets/PiP categorical re-check — **the orchestrator flagged this iteration that this
+> category has produced zero hits across several re-checks now and suggested treating it as a
+> documented gap needing a planning pass rather than continuing to bare re-grep it**; this run
+> deliberately did not re-run that grep, deferring to that guidance rather than repeating a
+> negative-result check with no forward progress.
+
 > On 2026-08-11 **TUS uploads gained a Room-backed checkpoint so a retried upload resumes past
 > already-acknowledged chunks instead of restarting from byte zero** (slice
 > `tus-upload-checkpoint-resume`, §Q — the "persistent checkpoint" candidate `tus-chunked-upload-

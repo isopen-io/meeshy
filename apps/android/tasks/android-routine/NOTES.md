@@ -1445,3 +1445,47 @@ Append-only log of gotchas and decisions that save time next run.
   attach-tile bounds convention (content-desc-first) carries over; the clickable node is a
   sibling `android.widget.Button` with a `resource-id` in that package's namespace, not the
   app's.
+
+## Slice `feed-composer-location-attachment` (2026-08-11)
+- **A single visually-estimated tap coordinate broke the routine's own hard rule mid-verification
+  — caught and corrected, but worth restating precisely why the rule exists.** After reading the
+  "Publish" button's approximate on-screen position from a screenshot and computing a tap
+  coordinate by eye, the tap landed nowhere near the button (the composer sheet didn't dismiss,
+  no request fired) — the screenshot viewer displays the 1080×2400 PNG scaled to 900 px wide, and
+  every coordinate read off it needs the stated 1.2× multiplier back to device pixels, a step
+  that's easy to silently skip when eyeballing a position rather than reading a bounds attribute.
+  Every OTHER tap in this same verification session used `uiautomator dump` + a grepped `bounds="
+  [x1,y1][x2,y2]"` attribute (already in real device pixels, no scaling needed) and landed
+  correctly on the first try. Re-confirms the standing rule in absolute terms: there is no
+  "close enough" visual estimate that's actually reliable once a screenshot's display scale
+  enters the picture — the dump-and-grep step is not optional even for "obvious" targets.
+- **A `String.format("%.Nf", …)` call with no explicit `Locale` is a live production bug waiting
+  for a comma-decimal device locale (`fr_FR`, `de_DE`, …), not a theoretical one.** Kotlin's
+  `String.format` without a `Locale` argument defaults to the JVM's current default locale, which
+  on a real device tracks the user's system language — a French or German device would silently
+  render `"48,86"` instead of `"48.86"` for a value the gateway's `parseSharedPlace` treats as a
+  `Double` on the wire. `Locale.ROOT` (not `Locale.US`, which has its own regional quirks over
+  the JDK versions) pins the format regardless of device locale. Proven, not assumed: a dedicated
+  test temporarily calls `Locale.setDefault(Locale.FRANCE)`, asserts the output is still
+  dot-separated, then restores the original default in a `finally` block so no other test in the
+  suite observes a changed JVM-wide default — this is the kind of gotcha that a CI running in a
+  single fixed locale (typically `en_US`) will never catch on its own, so the test has to force
+  the adversarial locale itself rather than rely on the ambient one.
+- **A full port of an iOS map-based picker (search, "my position", `CLGeocoder` reverse-geocoding)
+  is a multi-part epic requiring a new Maps SDK dependency with its own API-key provisioning — not
+  a slice an unattended routine run should attempt whole.** Confirmed by reading iOS's
+  `LocationPickerView.swift` end to end (879 lines) before writing any Android code: the map UI
+  alone needs `com.google.android.gms:play-services-maps`/Maps Compose plus a provisioned API key
+  outside this routine's reach, on top of the picker's own state machine (search debounce,
+  precision degrading, coarse-name fallback). The right-sized first sub-slice instead captured
+  the device's raw coordinate via the plain Android SDK's `android.location.LocationManager` (no
+  new Gradle dependency at all) and shipped a genuinely valuable, wire-compatible "attach my
+  location" capability — deferring map/search/geocoding as explicitly-scoped, heavier follow-ups
+  rather than either attempting the whole epic in one run or silently skipping the candidate
+  again.
+- **`LocationManager.requestLocationUpdates` wrapped in `suspendCancellableCoroutine` +
+  `withTimeoutOrNull` is a clean, dependency-free way to get "one fresh fix or a timeout" without
+  Play Services** — the coroutine resumes on the listener's first `onLocationChanged` callback
+  (which also unregisters itself via `removeUpdates(this)`), and `continuation.invokeOnCancellation
+  { removeUpdates(listener) }` covers the timeout/cancellation path so the listener never leaks
+  past the call's lifetime either way.

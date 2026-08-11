@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
@@ -754,6 +755,35 @@ class FeedViewModelTest {
 
         coVerify(exactly = 1) {
             repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        }
+    }
+
+    @Test
+    fun `publishPost with no location forwards a null location to the repository`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = null)
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = null)
+        }
+    }
+
+    @Test
+    fun `publishPost forwards an attached location to the repository verbatim`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        val place = SharedPlace(latitude = 48.8566, longitude = 2.3522)
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = place)
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC", location = place)
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = place)
         }
     }
 

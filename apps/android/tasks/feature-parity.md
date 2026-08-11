@@ -3503,12 +3503,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       chip, zero special-casing needed). Published for real (`POST /api/v1/posts` → 201,
       `type:"REEL"`), confirmed via `GET`, deleted via `DELETE` → follow-up `GET` 404; the local
       recording file is deleted after upload (confirmed empty cache dir), no crash throughout.
-      **Still open**: location, on-device transcription (iOS's dedicated `AudioPostComposerView`
-      with `EdgeTranscriptionService` — a materially larger, separately-scoped feature, not
-      attempted here), per-post language override, durable-outbox queueing for offline
-      resilience (media upload itself has no offline-retry path yet either, unlike the story
-      composer's — the whole Feed publish isn't durable yet, so this is consistent, not a new
-      gap) — each a separately-scoped follow-up.
+      **Location attachment now done too** (slice `feed-composer-location-attachment`,
+      2026-08-11 — the smallest, lowest-risk sub-slice of the standing candidate, deliberately
+      scoped narrower than iOS's map-based `LocationPickerView`): a seventh attach tile
+      ([Icons.Filled.LocationOn]) mirrors iOS's `location.fill` button, requesting
+      `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` then capturing one fresh fix straight from
+      `android.location.LocationManager` (GPS preferred, network fallback — no Play Services
+      dependency added). New pure `SharedPlace` (`:core:model`, mirrors the gateway's
+      `{latitude, longitude, name, address, category}` and iOS's `SharedPlace` field-for-field)
+      threaded through `CreatePostRequest.location` → `PostRepository.create(location:)` →
+      `FeedViewModel.publishPost(location:)`. The attached place renders as its own removable
+      chip (raw coordinates via the new `formattedCoordinates()`, `Locale.ROOT`-pinned). **Still
+      open**: no map UI, no search, no reverse-geocoded name/address (each a separately-scoped,
+      heavier follow-up — the map picker alone needs a Maps SDK dependency this slice
+      deliberately avoided), on-device transcription (iOS's dedicated `AudioPostComposerView`
+      with `EdgeTranscriptionService` — a materially larger, separately-scoped feature), per-post
+      language override, durable-outbox queueing for offline resilience (media upload itself has
+      no offline-retry path yet either, unlike the story composer's — the whole Feed publish
+      isn't durable yet, so this is consistent, not a new gap) — each a separately-scoped
+      follow-up.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket

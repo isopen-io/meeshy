@@ -101,6 +101,9 @@
     <string name="feed_composer_attach_file">Adjuntar un archivo</string>
     <string name="feed_composer_record_voice">Grabar audio</string>
     <string name="feed_composer_remove_media">Quitar contenido multimedia</string>
+    <string name="feed_composer_add_location">Añadir mi ubicación</string>
+    <string name="feed_composer_remove_location">Quitar ubicación</string>
+    <string name="feed_composer_location_unavailable">Ubicación no disponible — revisa tu configuración de ubicación e inténtalo de nuevo</string>
     <string name="feed_composer_media_limit">Puedes adjuntar hasta %1$d elementos</string>
     <string name="feed_composer_media_unusable">No se pudo adjuntar ese contenido multimedia</string>
     <string name="feed_composer_type_reel">Reel</string>
