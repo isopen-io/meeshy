@@ -1,10 +1,13 @@
 package me.meeshy.app.feed
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,6 +33,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Videocam
@@ -43,6 +47,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,15 +63,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
+import me.meeshy.sdk.model.waveform.VoiceRecordingFile
+import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
+import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -114,9 +127,32 @@ import java.io.File
  * item answers `false`. **Deliberate, documented scope cut**: no filename/size label on the file tile yet —
  * [UploadedMedia] (`:core:model`) doesn't carry the original filename the gateway's TUS response
  * discards on this path, unlike iOS's `MessageAttachment.fileName`; adding it is a separately-scoped
- * follow-up touching the wire model, not a rendering-only change. Location or audio attachments and
- * the emoji picker or per-post language override remain unshipped too — iOS's `composerOverlay`
- * toolbar of 6 glyphes, each a real, separately-scoped follow-up.
+ * follow-up touching the wire model, not a rendering-only change. Location, the emoji picker and
+ * per-post language override remain unshipped too — iOS's `composerOverlay` toolbar of 6
+ * glyphes, each a real, separately-scoped follow-up.
+ *
+ * **Audio attachment** (`requestVoiceRecording`, [Icons.Filled.Mic] tile) mirrors iOS's
+ * `mic.fill` button, but scoped to the smallest genuinely-unblocked slice rather than porting
+ * iOS's dedicated full-screen `AudioPostComposerView` (its own record → on-device-transcribe →
+ * pick-language → preview flow): a take recorded here dispatches through [dispatchItems] as one
+ * more `audio/mp4` attachment — the exact same MIME-agnostic upload pipeline the file tile
+ * already proved handles non-media attachments correctly (renders as the generic file icon via
+ * the already-tested [UploadedMedia.hasThumbnailPreview] `AUDIO` case). **Reuses, not
+ * duplicates, chat's proven recording stack** (`chat-voice-recording-capture`) — the pure
+ * [VoiceRecordingSession]/[VoiceRecordingOutcome]/[VoiceRecordingFile] and the
+ * [VoiceRecordingPill] Composable moved to `:core:model`/`:sdk-ui` in this same slice
+ * (`feed-composer-voice-capture`, no behaviour change to chat) specifically so this composer
+ * reuses them verbatim instead of a second copy of the same state machine. The permission
+ * request (`RECORD_AUDIO`) -> `MediaRecorder` (`MPEG_4`/`AAC`) -> 100 ms tick-and-meter loop ->
+ * Stop/Send-finalises-identically shape mirrors `ChatScreen`'s composer glue exactly, since
+ * that's Android-runtime I/O glue with no further pure decision left to share (matching this
+ * codebase's own established convention of duplicating I/O glue rather than pure logic — see
+ * also [readMediaUploadItem]). While recording, the pill **replaces** [MediaAttachmentsRow] in
+ * place (same UX shape as the chat composer swapping its whole input row for the pill) — the
+ * already-attached media/spinner reappear immediately once the take is cancelled/finalised.
+ * **Deliberate, documented scope cut vs. iOS**: no on-device transcription preview, no per-post
+ * language override tied to the clip, no dedicated full-screen composer — each a
+ * separately-scoped, heavier follow-up.
  *
  * Every text/visibility/media-id decision lives in the pure
  * [FeedComposerDraft]; this Composable holds one in `remember` (plus the
@@ -143,6 +179,27 @@ fun FeedComposerSheet(
     val mediaLimitMessage = stringResource(R.string.feed_composer_media_limit, FeedComposerDraft.MAX_MEDIA)
     val mediaUnusableMessage = stringResource(R.string.feed_composer_media_unusable)
 
+    // The shared upload tail every attach path (gallery/camera/file Uris, and now a
+    // directly-built voice-recording MediaUploadItem) converges on: upload, then fold the
+    // result into both the pure draft and the richer display-only previews. Extracted from
+    // dispatchPicked (refactor while extending, not duplicating — same precedent as
+    // launchCamera/launchVideoCapture sharing grantCaptureWritePermission/createCaptureUri).
+    suspend fun uploadAndAttach(items: List<MediaUploadItem>) {
+        if (items.isEmpty()) return
+        isUploadingMedia = true
+        when (val result = onUploadMedia(items)) {
+            is NetworkResult.Success ->
+                if (result.data.isEmpty()) {
+                    onMediaError(mediaUnusableMessage)
+                } else {
+                    draft = draft.withMedia(result.data)
+                    attachedMedia = attachedMedia + result.data
+                }
+            is NetworkResult.Failure -> onMediaError(result.error.message ?: mediaUnusableMessage)
+        }
+        isUploadingMedia = false
+    }
+
     fun dispatchPicked(uris: List<Uri>) {
         if (uris.isEmpty() || isUploadingMedia) return
         val remaining = draft.remainingMediaSlots
@@ -154,20 +211,21 @@ fun FeedComposerSheet(
             val items = withContext(Dispatchers.IO) {
                 uris.take(remaining).mapNotNull { context.contentResolver.readMediaUploadItem(it) }
             }
-            if (items.isEmpty()) return@launch
-            isUploadingMedia = true
-            when (val result = onUploadMedia(items)) {
-                is NetworkResult.Success ->
-                    if (result.data.isEmpty()) {
-                        onMediaError(mediaUnusableMessage)
-                    } else {
-                        draft = draft.withMedia(result.data)
-                        attachedMedia = attachedMedia + result.data
-                    }
-                is NetworkResult.Failure -> onMediaError(result.error.message ?: mediaUnusableMessage)
-            }
-            isUploadingMedia = false
+            uploadAndAttach(items)
         }
+    }
+
+    // Entry point for an already-built MediaUploadItem (the voice recorder hands off real
+    // bytes + an explicit "audio/mp4" MIME directly, unlike a picked Uri whose MIME/filename
+    // dispatchPicked reads via the ContentResolver) — same cap/error/upload tail as dispatchPicked,
+    // minus the Uri-reading step it doesn't need.
+    fun dispatchItems(items: List<MediaUploadItem>) {
+        if (items.isEmpty() || isUploadingMedia) return
+        if (draft.remainingMediaSlots <= 0) {
+            onMediaError(mediaLimitMessage)
+            return
+        }
+        scope.launch { uploadAndAttach(items) }
     }
 
     val pickSingle = rememberLauncherForActivityResult(
@@ -257,6 +315,107 @@ fun FeedComposerSheet(
         pickFiles.launch(arrayOf("*/*"))
     }
 
+    // Audio attachment: an in-app recording, not a system-delegated picker (Android has no
+    // system "record audio to a file" intent this composer can rely on) — mirrors ChatScreen's
+    // proven MediaRecorder wiring verbatim (same MPEG_4/AAC config, same permission-then-record
+    // shape). This is Android-runtime I/O glue with no further pure decision to extract, so it's
+    // duplicated rather than shared, exactly like this composer's own readMediaUploadItem is
+    // deliberately duplicated from StoryComposerScreen's/RegistrationScreen's — the pure state
+    // machine it drives (VoiceRecordingSession/VoiceRecordingFile) and the VoiceRecordingPill it
+    // renders ARE shared (see the class doc on each, moved to :core:model/:sdk-ui this slice).
+    var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
+    var activeVoiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var activeVoiceRecordingFile by remember { mutableStateOf<File?>(null) }
+
+    // A ModalBottomSheet can be dismissed at any time via the system back gesture, discarding
+    // this Composable's remember-scoped state with no confirmation (documented gotcha from the
+    // file-attachment slice's own on-device verification) — unlike a picked-but-unsent image,
+    // an un-released MediaRecorder left recording would leak an open microphone/file handle
+    // past the sheet's lifetime. Release on dispose covers every dismissal path (Cancel, back
+    // gesture, publish) uniformly.
+    DisposableEffect(Unit) {
+        onDispose {
+            activeVoiceRecorder?.let { recorder -> runCatching { recorder.release() } }
+            activeVoiceRecordingFile?.delete()
+        }
+    }
+
+    fun releaseVoiceRecorder(): File? {
+        activeVoiceRecorder?.let { recorder ->
+            // stop() throws IllegalStateException if called too soon after start() with no
+            // data captured yet (e.g. a cancel within the same frame as the tap) — never worth
+            // crashing the composer over a take too short to matter.
+            runCatching { recorder.stop() }
+            recorder.release()
+        }
+        activeVoiceRecorder = null
+        val file = activeVoiceRecordingFile
+        activeVoiceRecordingFile = null
+        return file
+    }
+
+    fun startVoiceRecording() {
+        val dir = File(context.cacheDir, "voice").apply { mkdirs() }
+        val file = File(dir, VoiceRecordingFile.next(System.currentTimeMillis()))
+        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
+        }
+        try {
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setOutputFile(file.absolutePath)
+            recorder.prepare()
+            recorder.start()
+            activeVoiceRecorder = recorder
+            activeVoiceRecordingFile = file
+            recording = recording.start()
+        } catch (e: Exception) {
+            recorder.release()
+            file.delete()
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) startVoiceRecording() }
+
+    fun requestVoiceRecording() {
+        if (draft.isMediaFull) {
+            onMediaError(mediaLimitMessage)
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) startVoiceRecording() else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    fun cancelVoiceRecording() {
+        releaseVoiceRecorder()?.delete()
+        recording = recording.cancel()
+    }
+
+    // Both Stop and Send finalise the take identically — there is no staging tray in this
+    // composer either (every other attachment kind delivers on pick too), so "stop and add to
+    // attachments" reads as "deliver it now", identically to "send". A take below the minimum
+    // sendable duration never reaches here — the pill disables both buttons (VoiceRecordingSession.canSend).
+    fun finishVoiceRecording() {
+        val file = releaseVoiceRecorder()
+        val stop = recording.stop()
+        recording = stop.session
+        val completedFile = file.takeIf { stop.outcome is VoiceRecordingOutcome.Completed }
+        val bytes = completedFile?.let { runCatching { it.readBytes() }.getOrNull() }
+        file?.delete()
+        if (completedFile != null && bytes != null && bytes.isNotEmpty()) {
+            dispatchItems(listOf(MediaUploadItem(bytes = bytes, fileName = completedFile.name, mimeType = "audio/mp4")))
+        }
+    }
+
     fun removeMedia(id: String) {
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }
@@ -274,7 +433,7 @@ fun FeedComposerSheet(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             Header(
-                canPublish = draft.canPublish && !isUploadingMedia,
+                canPublish = draft.canPublish && !isUploadingMedia && !recording.isRecording,
                 onClose = onDismiss,
                 onPublish = { draft.publishRequest()?.let(onPublish) },
             )
@@ -299,16 +458,40 @@ fun FeedComposerSheet(
                 minLines = 4,
             )
 
-            MediaAttachmentsRow(
-                media = attachedMedia,
-                isUploading = isUploadingMedia,
-                canAddMore = !draft.isMediaFull,
-                onAdd = ::launchMediaPicker,
-                onCamera = ::launchCamera,
-                onVideoCapture = ::launchVideoCapture,
-                onAttachFile = ::launchFilePicker,
-                onRemove = ::removeMedia,
-            )
+            // 100ms tick-and-meter loop, only alive while recording — identical shape to
+            // ChatScreen's own LaunchedEffect(recording.isRecording) driving the same pill.
+            LaunchedEffect(recording.isRecording) {
+                while (recording.isRecording) {
+                    delay(100)
+                    recording = recording.tick(0.1)
+                    val amplitude = activeVoiceRecorder?.let { runCatching { it.maxAmplitude }.getOrNull() }
+                    if (amplitude != null) {
+                        recording = recording.meter(MicAmplitudeDecibels.toDecibels(amplitude))
+                    }
+                }
+            }
+
+            if (recording.isRecording) {
+                VoiceRecordingPill(
+                    session = recording,
+                    accentColor = MeeshyPalette.Indigo500,
+                    onCancel = ::cancelVoiceRecording,
+                    onStop = ::finishVoiceRecording,
+                    onSend = ::finishVoiceRecording,
+                )
+            } else {
+                MediaAttachmentsRow(
+                    media = attachedMedia,
+                    isUploading = isUploadingMedia,
+                    canAddMore = !draft.isMediaFull,
+                    onAdd = ::launchMediaPicker,
+                    onCamera = ::launchCamera,
+                    onVideoCapture = ::launchVideoCapture,
+                    onAttachFile = ::launchFilePicker,
+                    onRecordVoice = ::requestVoiceRecording,
+                    onRemove = ::removeMedia,
+                )
+            }
         }
     }
 }
@@ -351,11 +534,14 @@ private fun Context.grantCaptureWritePermission(action: String, uri: Uri) {
 }
 
 /**
- * The attach-media/take-photo/take-video/attach-file affordances plus the
- * picked-attachment strip — always shows the gallery, camera, video-capture and
- * file tiles first (all disabled once [canAddMore] is false or while
+ * The attach-media/take-photo/take-video/attach-file/record-voice affordances plus
+ * the picked-attachment strip — always shows the gallery, camera, video-capture,
+ * file and mic tiles first (all disabled once [canAddMore] is false or while
  * [isUploading]), then each attached [media] item with a remove overlay, then an
- * in-flight spinner tile while a pick is uploading. Each attached item renders
+ * in-flight spinner tile while a pick is uploading. The caller only renders this
+ * Composable at all while no recording is in progress (see [FeedComposerSheet] —
+ * [VoiceRecordingPill] takes its place during an active take), so [onRecordVoice]
+ * only ever needs to start one, never stop/cancel it. Each attached item renders
  * either its real thumbnail ([UploadedMedia.hasThumbnailPreview]) or a generic
  * file-icon tile — the only rendering decision made here, and it delegates to
  * that already-tested pure extension rather than re-sniffing the MIME type.
@@ -371,6 +557,7 @@ private fun MediaAttachmentsRow(
     onCamera: () -> Unit,
     onVideoCapture: () -> Unit,
     onAttachFile: () -> Unit,
+    onRecordVoice: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Row(
@@ -441,6 +628,22 @@ private fun MediaAttachmentsRow(
             Icon(
                 imageVector = Icons.Filled.AttachFile,
                 contentDescription = stringResource(R.string.feed_composer_attach_file),
+                tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
+            )
+        }
+
+        IconButton(
+            onClick = onRecordVoice,
+            enabled = attachEnabled,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(MeeshyTheme.tokens.inputBackground)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, RoundedCornerShape(MeeshyRadius.md)),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Mic,
+                contentDescription = stringResource(R.string.feed_composer_record_voice),
                 tint = if (attachEnabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
             )
         }

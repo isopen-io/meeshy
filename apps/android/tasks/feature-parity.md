@@ -3437,11 +3437,31 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       filename/size label on the file tile yet — `UploadedMedia` (`:core:model`) doesn't carry
       the original filename the gateway's TUS response discards on this path, unlike iOS's
       `MessageAttachment.fileName`; adding it is a separately-scoped follow-up touching the wire
-      model, not a rendering-only change. **Still open**: location, audio+transcription,
-      per-post language override, durable-outbox queueing for offline resilience (media upload
-      itself has no offline-retry path yet either, unlike the story composer's — the whole Feed
-      publish isn't durable yet, so this is consistent, not a new gap) — each a
-      separately-scoped follow-up.
+      model, not a rendering-only change. **Audio attachment now done too** (slice
+      `feed-composer-voice-capture`, 2026-08-10 — unblocked by the chat composer's real
+      `MediaRecorder` capture landing the same day, `chat-voice-recording-capture`): a sixth
+      attach tile (`Icons.Filled.Mic`) records in-app via the exact same `VoiceRecordingSession`/
+      `VoiceRecordingPill`/`VoiceRecordingFile`/`MicAmplitudeDecibels` stack chat uses — moved to
+      `:core:model`/`:sdk-ui` this slice (no behaviour change to chat) specifically so both
+      composers share one state machine instead of two drifting copies. While recording, the
+      pill replaces the attach-tiles row (same UX shape as chat swapping its input row); Stop/
+      Send hands the take to `dispatchItems` (a new shared upload tail extracted from
+      `dispatchPicked`) as one more `audio/mp4` `MediaUploadItem` — no gateway/pipeline change
+      needed, reusing the already-tested generic-icon fallback (`hasThumbnailPreview`'s `AUDIO`
+      case). On-device verification against the live gateway: real mic capture (system
+      indicator, growing `cacheDir/voice/*.m4a` file), real TUS `POST`+`PATCH` round-trip
+      (`filetype=audio/mp4`, `uploadcontext=post`), gateway's own audio probe confirming genuine
+      AAC (`duration:15741,codec:"MPEG-4/AAC"`) — composed cleanly with the existing
+      `ReelComposition` duration-floor rule (the ≥3s clip correctly triggered the Reel⇄Post
+      chip, zero special-casing needed). Published for real (`POST /api/v1/posts` → 201,
+      `type:"REEL"`), confirmed via `GET`, deleted via `DELETE` → follow-up `GET` 404; the local
+      recording file is deleted after upload (confirmed empty cache dir), no crash throughout.
+      **Still open**: location, on-device transcription (iOS's dedicated `AudioPostComposerView`
+      with `EdgeTranscriptionService` — a materially larger, separately-scoped feature, not
+      attempted here), per-post language override, durable-outbox queueing for offline
+      resilience (media upload itself has no offline-retry path yet either, unlike the story
+      composer's — the whole Feed publish isn't durable yet, so this is consistent, not a new
+      gap) — each a separately-scoped follow-up.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
@@ -4965,7 +4985,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + the initial `Array(repeating:0,count:15)`), `WaveformInterpolator.interpolate`
       (levels→`barCount` linear-blend strip, ports `UniversalComposerBar.interpolatedLevel`,
       whole strip in one pass). +28 tests. The `MediaRecorder`/`AudioRecord` capture + the
-      Compose `Canvas` that paints the strip remain app-side glue (pending); this same core
+      Compose `Canvas` that paints the strip remain app-side glue (pending as a standalone,
+      reusable "universal recorder" abstraction — concrete instances now exist and are shared
+      between the chat composer's voice pill and the Feed post composer's audio-attachment pill,
+      `chat-voice-recording-capture` + `feed-composer-voice-capture`, both driving the same
+      `:core:model`/`:sdk-ui` `VoiceRecordingSession`/`VoiceRecordingPill`); this same core
       also underpins the audio-message-player waveform (line 2111).
 - [ ] Full-screen audio editor (waveform, trim/crop, word-level transcription, language picker)
 - [ ] On-device speech-to-text transcription of recordings
