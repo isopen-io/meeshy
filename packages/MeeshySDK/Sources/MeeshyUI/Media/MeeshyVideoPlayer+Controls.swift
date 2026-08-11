@@ -81,39 +81,66 @@ internal struct _InlineOverlayControls: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - Top Bar (expand + speed)
+    // MARK: - Top Bar (plein écran + PiP + AirPlay + vitesse)
     //
-    // Cluster centrée horizontalement (au lieu de deux ancres opposées
-    // top-leading/top-trailing) — parité visuelle avec le pattern
-    // TikTok/Reels d'un petit groupe de contrôles flottant centré en haut
-    // du canvas vidéo. Les deux boutons restent inchangés (icônes, taps,
-    // style) ; seul le positionnement change.
+    // Lifting Liquid Glass 2026-08-11 (§ B) : un unique `AdaptiveGlassContainer`
+    // regroupe jusqu'à 4 boutons circulaires 28×28 (taille INCHANGÉE — c'est la
+    // taille inline réelle, pas celle du plein écran 36×36). Budget :
+    // 4 × 28 + 3 × 10 = 142pt, tient sur iPhone SE. Le PiP est MASQUÉ (pas
+    // désactivé) hors support device — cf. `showsPipButton`. Cluster centrée
+    // horizontalement via `.frame(maxWidth: .infinity)`, comme avant.
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            if controls.contains(.expand), let onExpand {
-                Button {
-                    onExpand()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+        AdaptiveGlassContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                if controls.contains(.expand), let onExpand {
+                    Button {
+                        onExpand()
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
                 }
-            }
-            if controls.contains(.speed) {
-                Button {
-                    manager.cycleSpeed()
-                    HapticFeedback.light()
-                } label: {
-                    Text(manager.playbackSpeed.label)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(accent))
+                if Self.showsPipButton(controls: controls, isPipSupported: AVPictureInPictureController.isPictureInPictureSupported()) {
+                    Button {
+                        if manager.isPipActive {
+                            manager.stopPip()
+                        } else {
+                            manager.startPip()
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: manager.isPipActive ? "pip.exit" : "pip.enter")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
+                    .accessibilityLabel(manager.isPipActive
+                        ? String(localized: "media.video.pip.exit", defaultValue: "Quitter le Picture in Picture", bundle: .module)
+                        : String(localized: "media.video.pip.enter", defaultValue: "Picture in Picture", bundle: .module))
+                }
+                if controls.contains(.airplay) {
+                    AirPlayRoutePicker(tintColor: .white)
+                        .frame(width: 28, height: 28)
+                        .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
+                }
+                if controls.contains(.speed) {
+                    Button {
+                        manager.cycleSpeed()
+                        HapticFeedback.light()
+                    } label: {
+                        Text(manager.playbackSpeed.label)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .adaptiveGlass(in: Capsule())
+                    }
                 }
             }
         }
