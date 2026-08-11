@@ -12,6 +12,7 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
 import { useAuthStore } from '@/stores/auth-store';
 import { useI18n } from '@/hooks/useI18n';
+import { reportService } from '@/services/report.service';
 
 /**
  * Immersive single-story viewer (`/story/:id`).
@@ -75,6 +76,17 @@ export default function StoryPage() {
     [toastCtx, t]
   );
 
+  const handleReport = useCallback(
+    (storyId: string) => {
+      if (!window.confirm(t('reportConfirm', 'Report this story?'))) return;
+      reportService
+        .reportStory(storyId, 'inappropriate', '')
+        .then(() => toastCtx.addToast(t('reported', 'Story reported'), 'success'))
+        .catch(() => toastCtx.addToast(t('reportError', "Couldn't report the story"), 'error'));
+    },
+    [toastCtx, t]
+  );
+
   if (stories.length > 0) {
     return (
       <StoryViewer
@@ -86,6 +98,7 @@ export default function StoryPage() {
         onView={(id) => recordView(id)}
         onReply={handleReply}
         onDelete={handleDelete}
+        onReport={handleReport}
         targetCommentId={targetCommentId}
         targetParentCommentId={targetParentCommentId}
       />

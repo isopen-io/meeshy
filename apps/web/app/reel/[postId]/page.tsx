@@ -23,6 +23,7 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
 import { copyToClipboard } from '@/lib/clipboard';
+import { reportService } from '@/services/report.service';
 
 const LIKE_EMOJI = '❤️';
 
@@ -169,6 +170,15 @@ export default function ReelPage() {
     if (current) router.push(`/feeds/post/${current.id}`);
   }, [current, router]);
 
+  const onReport = useCallback(() => {
+    if (!current) return;
+    if (!window.confirm(t('reportConfirm', 'Report this reel?'))) return;
+    reportService
+      .reportPost(current.id, 'inappropriate', '')
+      .then(() => toastCtx.addToast(t('reported', 'Reel reported'), 'success'))
+      .catch(() => toastCtx.addToast(t('reportError', "Couldn't report the reel"), 'error'));
+  }, [current, toastCtx, t]);
+
   if (current) {
     return (
       <ReelPlayer
@@ -188,6 +198,7 @@ export default function ReelPage() {
         onComment={onComment}
         onShare={onShare}
         onBookmark={onBookmark}
+        onReport={onReport}
       />
     );
   }

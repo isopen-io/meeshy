@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import HashtagPage from '@/app/hashtag/[tag]/page';
@@ -17,6 +17,18 @@ jest.mock('@/services/posts.service', () => ({
     getPostsByHashtag: (...args: unknown[]) => mockGetPostsByHashtag(...args),
     getTrendingHashtags: (...args: unknown[]) => mockGetTrendingHashtags(...args),
   },
+}));
+
+const mockReportPost = jest.fn();
+jest.mock('@/services/report.service', () => ({
+  reportService: {
+    reportPost: (...args: unknown[]) => mockReportPost(...args),
+  },
+}));
+
+const mockAddToast = jest.fn();
+jest.mock('@/components/v2', () => ({
+  useToast: () => ({ addToast: mockAddToast }),
 }));
 
 jest.mock('@/hooks/use-i18n', () => ({
@@ -127,5 +139,23 @@ describe('HashtagPage', () => {
     await waitFor(() =>
       expect(screen.getByText('No posts with this hashtag yet')).toBeInTheDocument(),
     );
+  });
+
+  it('wires PostCard onReport to reportService.reportPost, gated by confirm', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    mockReportPost.mockResolvedValue({});
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('post.menu')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('post.menu'));
+
+    const reportButton = await screen.findByText('Report');
+    await act(async () => {
+      fireEvent.click(reportButton);
+    });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(mockReportPost).toHaveBeenCalledWith('post-1', 'inappropriate', ''));
+    confirmSpy.mockRestore();
   });
 });

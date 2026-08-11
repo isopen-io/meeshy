@@ -35,6 +35,7 @@ import { Skeleton } from '@/components/v2/Skeleton';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService, recordAnonymousView } from '@/services/posts.service';
+import { reportService } from '@/services/report.service';
 import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
 import { isHeartLikedByMe } from '@/lib/reactions';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -190,6 +191,14 @@ export default function PostDetailPage() {
     );
   };
 
+  const handleReportPost = () => {
+    if (!window.confirm('Report this post?')) return;
+    reportService
+      .reportPost(post.id, 'inappropriate', '')
+      .then(() => showToast('Post reported', 'success'))
+      .catch(() => showToast("Couldn't report the post.", 'error'));
+  };
+
   const handleQuote = (content: string) => {
     repostMutation.mutate(
       { postId: post.id, data: { content, isQuote: true } },
@@ -248,6 +257,7 @@ export default function PostDetailPage() {
             onRepost={() => setRepostModalOpen(true)}
             onEdit={isAuthor ? handleEdit : undefined}
             onDelete={isAuthor ? handleDeletePost : undefined}
+            onReport={isAuthor ? undefined : handleReportPost}
             onTranslate={() => translateMutation.mutate({ postId: post.id, targetLanguage: userLanguage })}
             onSubmitComment={(content, parentId) =>
               createCommentMutation.mutate({ postId: post.id, content, parentId })

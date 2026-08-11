@@ -31,6 +31,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
 import { copyToClipboard } from '@/lib/clipboard';
 import { isHeartLikedByMe } from '@/lib/reactions';
+import { reportService } from '@/services/report.service';
 
 function isReelLiked(post: Post): boolean {
   return isHeartLikedByMe(post);
@@ -152,6 +153,15 @@ export function ReelsFeedScreen() {
     if (current) setShowComments(true);
   }, [current]);
 
+  const onReport = useCallback(() => {
+    if (!current) return;
+    if (!window.confirm(t('report.confirm', 'Report this reel?'))) return;
+    reportService
+      .reportPost(current.id, 'inappropriate', '')
+      .then(() => toastCtx.addToast(t('report.success', 'Reel reported'), 'success'))
+      .catch(() => toastCtx.addToast(t('report.error', "Couldn't report the reel"), 'error'));
+  }, [current, toastCtx, t]);
+
   const content = useMemo(() => {
     if (current) {
       return (
@@ -173,6 +183,7 @@ export function ReelsFeedScreen() {
           onComment={onComment}
           onShare={onShare}
           onBookmark={onBookmark}
+          onReport={onReport}
         />
       );
     }
@@ -210,7 +221,7 @@ export function ReelsFeedScreen() {
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, reelsQuery, t]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, reelsQuery, t]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">
