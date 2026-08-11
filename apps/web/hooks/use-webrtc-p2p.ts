@@ -673,10 +673,21 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
    * let handleToggleVideo (VideoCallInterface) flip controls.videoEnabled to
    * true and tell the peer video is enabled, while no camera track was ever
    * acquired — a UI/media desync with nothing to recover it automatically.
+   *
+   * The peer list is read TWICE: once before `getUserMedia()` (fail fast,
+   * without prompting for camera permission, when nobody is connected yet)
+   * and again right after it resolves, immediately before distributing the
+   * track (Vague 97). `getUserMedia()` can take human-scale time (the
+   * permission prompt), and a peer joining an ALREADY-active group call
+   * during that window is an ordinary sequence, not adversarial timing. A
+   * stale pre-await snapshot used to permanently exclude that peer: its
+   * video transceiver stays recvonly forever, with no later event ever
+   * re-triggering enableVideoSend for it. If the second read comes back
+   * empty (every peer left while the prompt was pending), the just-acquired
+   * camera is released instead of leaking a live, unattached capture.
    */
   const enableVideo = useCallback(async (): Promise<void> => {
-    const services = Array.from(webrtcServicesRef.current.values());
-    if (services.length === 0) {
+    if (webrtcServicesRef.current.size === 0) {
       throw new Error('NO_PEER_CONNECTION');
     }
     const cam = await navigator.mediaDevices.getUserMedia({
@@ -689,6 +700,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     });
     const baseTrack = cam.getVideoTracks()[0];
     if (!baseTrack) return;
+    const services = Array.from(webrtcServicesRef.current.values());
+    if (services.length === 0) {
+      cam.getTracks().forEach((track) => track.stop());
+      throw new Error('NO_PEER_CONNECTION');
+    }
     await Promise.all(
       services.map((service, index) =>
         service.enableVideoSend(index === 0 ? baseTrack : baseTrack.clone())
@@ -710,11 +726,15 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
    * `localStream` held only one video track — an assumption that breaks the
    * moment a group call has clones in flight, silently orphaning a live
    * camera capture on every switch beyond the first.
+   *
+   * Same double-read-around-getUserMedia() as enableVideo() (Vague 97): a
+   * peer joining WHILE the flip's camera prompt is pending is excluded from
+   * the initial pre-await snapshot, so the peer list is re-read right after
+   * `getUserMedia()` resolves, immediately before distributing the track.
    */
   const switchCamera = useCallback(
     async (facingMode: 'user' | 'environment'): Promise<void> => {
-      const services = Array.from(webrtcServicesRef.current.values());
-      if (services.length === 0) {
+      if (webrtcServicesRef.current.size === 0) {
         throw new Error('NO_PEER_CONNECTION');
       }
       const cam = await navigator.mediaDevices.getUserMedia({
@@ -723,6 +743,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       });
       const baseTrack = cam.getVideoTracks()[0];
       if (!baseTrack) return;
+      const services = Array.from(webrtcServicesRef.current.values());
+      if (services.length === 0) {
+        cam.getTracks().forEach((track) => track.stop());
+        throw new Error('NO_PEER_CONNECTION');
+      }
       await Promise.all(
         services.map((service, index) =>
           service.switchVideoSendTrack(index === 0 ? baseTrack : baseTrack.clone())

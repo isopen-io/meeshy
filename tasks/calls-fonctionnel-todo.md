@@ -6254,3 +6254,72 @@ candidat unique, vérifié ensuite ligne à ligne directement dans le code coura
   `removeParticipant()` ne nettoie pas `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-
   régression) ; toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; delta de comptage
   `tsc --noEmit` (1190 vs. 1657 legacy, Vague 95) toujours non investigué.
+
+## Vague 97 — `enableVideo()`/`switchCamera()` snapshotted the connected-peer list BEFORE awaiting `getUserMedia()`, silently excluding any peer that joined during the camera-permission prompt (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` n'a remonté aucune PR ouverte de cette routine — la Vague 96 (#2790,
+`addLocalMedia` clone ownership) était déjà mergée sur `main`. Un premier `git status` a montré la
+branche locale en retard d'un commit sur `origin/main` (le fetch initial du sandbox précédait le merge
+de la Vague 96 de quelques minutes) — `git fetch origin main` + `git reset --hard origin/main` avant tout
+travail, aucun commit local antérieur perdu. Aucune section « Vague 96 » n'existait encore dans ce
+fichier au moment du premier `grep` (juste avant le fetch) : fausse alerte, le fetch l'a fait apparaître.
+Toolchains iOS (`xcodebuild`/`swift`) et Android (gradle présent, aucun SDK) toujours hors d'atteinte.
+Audit dédié (lecture directe de `webrtc-service.ts`, `use-webrtc-p2p.ts`, `call-store.ts`, mandaté avec
+la liste complète des Vagues 57-96 pour éviter toute redite) a remonté un candidat unique.
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/use-webrtc-p2p.ts`) : `enableVideo()`
+  (audio→vidéo mid-call) et `switchCamera()` (flip caméra, Vague 95) partagent le même schéma —
+  `const services = Array.from(webrtcServicesRef.current.values())` capturé **AVANT**
+  `await navigator.mediaDevices.getUserMedia(...)`, puis réutilisé APRÈS pour distribuer la piste
+  (`Promise.all(services.map(...))`). `getUserMedia()` déclenche l'invite de permission caméra du
+  navigateur — un délai à échelle humaine, potentiellement plusieurs secondes, pas un timing adverse.
+  Un pair rejoignant l'appel de groupe PENDANT cette fenêtre (`createOffer`/`handleOffer`, qui alimente
+  `webrtcServicesRef.current` de façon quasi synchrone) n'apparaît jamais dans le tableau `services` déjà
+  figé : `enableVideoSend`/`switchVideoSendTrack` ne sont jamais appelés pour lui. Pour `enableVideo()`,
+  la conséquence est totale et permanente — le transceiver vidéo de ce pair reste `recvonly` pour le
+  reste de l'appel, aucun évènement ultérieur ne re-déclenchant l'envoi, alors que
+  `controls.videoEnabled` (UI) et les AUTRES pairs voient bien la vidéo active : désync silencieux entre
+  ce que l'utilisateur croit envoyer et ce que ce pair reçoit réellement. Séquence atteignable sans
+  timing adverse : appel de groupe déjà actif (audio), l'utilisateur local active sa caméra (invite de
+  permission affichée) pendant qu'un troisième participant rejoint la conversation — un enchaînement
+  ordinaire sur une conversation de groupe active. `switchCamera()` partage le même défaut structurel
+  (impact moindre : le pair exclu continue de recevoir l'ANCIENNE caméra plutôt qu'aucune vidéo, mais
+  reste corrigé pour cohérence — même schéma dupliqué ligne pour ligne, précédent direct de la Vague 92
+  qui avait déjà unifié deux handlers partageant un seul défaut).
+- **Fix** : dans les deux fonctions, le tableau `services` est désormais lu à DEUX reprises — une
+  première fois (juste `.size === 0`, sans matérialiser le tableau) AVANT `getUserMedia()` pour échouer
+  vite sans déclencher l'invite caméra quand personne n'est encore connecté (comportement Vague 86
+  préservé, testé), puis une seconde fois juste APRÈS que `getUserMedia()` se résout, immédiatement avant
+  la distribution de la piste — capturant ainsi tout pair arrivé entre-temps. Edge case symétrique
+  couvert : si le second relevé revient vide (tous les pairs sont partis pendant l'attente), la caméra
+  tout juste acquise est libérée (`cam.getTracks().forEach(t => t.stop())`) avant de rejeter avec
+  `NO_PEER_CONNECTION` — plutôt que de laisser une capture caméra vivante et non rattachée fuir en
+  silence, même philosophie anti-fuite que les Vagues 85/93/94/95/96. Un seul fichier de production
+  modifié (`use-webrtc-p2p.ts`, +33/-4 lignes dont commentaires).
+- **Tests** (TDD, RED confirmé par exécution avant fix) : 3 nouveaux tests dans `use-webrtc-p2p.test.tsx`
+  — (1) `enableVideo` : un second pair rejoint (`createOffer`) pendant qu'une promesse `getUserMedia`
+  contrôlée manuellement reste en attente ; une fois résolue, `enableVideoSend` est appelé pour les DEUX
+  pairs (le premier avec la piste littérale, le second avec un `.clone()`) ; (2) `enableVideo` : tous les
+  pairs partent (`removeParticipant`) pendant la même attente ; une fois résolue, la piste caméra acquise
+  voit `stop()` appelé et la promesse rejette, `enableVideoSend` jamais appelé ; (3) `switchCamera` :
+  même scénario que (1) transposé à `switchVideoSendTrack`. Les 3 RED confirmés par exécution
+  (`bunx jest` — 2 échouaient sur le compte d'appels attendu, 1 sur une promesse résolue au lieu de
+  rejetée) avant le fix, GREEN après (49/49 tests du fichier, +3 net).
+- **Vérification** : `use-webrtc-p2p.test.tsx` (49 tests, +3 net) vert. Sweep complet
+  `video-call|use-webrtc|use-call|orchestrator|call-store|adaptive-degradation|audio-effect|webrtc-service`
+  — **51 suites / 745 tests verts** (+3 net vs. la Vague 96), aucune régression. Prérequis CLAUDE.md
+  rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts` (racine), bun
+  1.3.11 local vs. 1.3.14 attendu par CI (écart déjà documenté, non résolu ce cycle). `npx tsc --noEmit`
+  sur `apps/web` : **1190 erreurs avant et après le diff** (`git stash`/`stash pop`, comparaison
+  directe — seul le bruit npm notice différait entre les deux sorties), zéro nouvelle erreur, zéro sur
+  `use-webrtc-p2p.ts`. Diff strictement scopé à 2 fichiers web (aucun fichier gateway touché) — suite
+  gateway non rejouée ce cycle, hors du diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié en dehors
+  de celui traité ce cycle) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+  (Vague 84, nécessite confirmation on-device) ; `removeParticipant()` ne nettoie pas
+  `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-régression) ; toolchains iOS/Android
+  toujours hors d'atteinte dans ce sandbox ; delta de comptage `tsc --noEmit` (1190 vs. 1657 legacy,
+  Vague 95) toujours non investigué.
