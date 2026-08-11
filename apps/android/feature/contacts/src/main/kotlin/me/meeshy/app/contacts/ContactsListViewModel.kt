@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.statusForUser
@@ -83,6 +84,7 @@ class ContactsListViewModel @Inject constructor(
     private val friendshipCache: FriendshipCache,
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
+    private val messageSocketManager: MessageSocketManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
@@ -92,6 +94,7 @@ class ContactsListViewModel @Inject constructor(
 
     init {
         observeFriendshipCache()
+        observePresence()
         load()
     }
 
@@ -172,6 +175,26 @@ class ContactsListViewModel @Inject constructor(
     private fun observeFriendshipCache() {
         viewModelScope.launch {
             friendshipCache.version.drop(1).collect { onFriendshipCacheChanged() }
+        }
+    }
+
+    /**
+     * Overlays live `user:status`/`presence:snapshot` frames onto the roster's
+     * `isOnline`/`lastActiveAt` fields (see [PresenceOverlay]) — without this,
+     * a friend going online/offline never paints on this screen until the user
+     * leaves and re-enters it (the socket flows are hot with no replay, so this
+     * must be collecting before an event fires to see it — started in [init]).
+     */
+    private fun observePresence() {
+        viewModelScope.launch {
+            messageSocketManager.userStatus.collect { event ->
+                _state.update { it.copy(friends = PresenceOverlay.applyStatus(it.friends, event)) }
+            }
+        }
+        viewModelScope.launch {
+            messageSocketManager.presenceSnapshot.collect { snapshot ->
+                _state.update { it.copy(friends = PresenceOverlay.applySnapshot(it.friends, snapshot)) }
+            }
         }
     }
 
