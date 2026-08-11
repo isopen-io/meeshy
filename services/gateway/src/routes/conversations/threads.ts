@@ -8,6 +8,7 @@ import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -125,6 +126,29 @@ function hoistThreadMessageLocation<T extends Record<string, unknown>>(message: 
   return hoisted;
 }
 
+/**
+ * `threadMessageSelect` rapporte `translations` sous sa forme de STOCKAGE — une
+ * carte Mongo indexée par langue — alors que toutes les autres routes de
+ * messages servent le tableau au format API. Le fil renvoyait le résultat
+ * Prisma verbatim, et son schéma de réponse (`additionalProperties: true`) le
+ * laissait passer sans broncher : pas de 500 comme sur `pinned-messages`, mais
+ * une charge que le client ne sait pas lire. `APIMessage.init(from:)` décode ce
+ * tableau avec `try` et non `try?` (SDK iOS) — un message de fil serait
+ * indécodable EN ENTIER, pas seulement privé de ses traductions.
+ */
+function serializeThreadMessage<T extends Record<string, unknown>>(message: T): T {
+  return {
+    ...message,
+    translations: transformTranslationsToArray(
+      message.id as string,
+      message.translations as Record<string, MessageTranslationJSON> | null
+    ),
+  };
+}
+
+const formatThreadMessage = <T extends Record<string, unknown>>(message: T): T =>
+  hoistThreadMessageLocation(serializeThreadMessage(message));
+
 export function registerThreadsRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -192,8 +216,8 @@ export function registerThreadsRoutes(
       const replies = await collectThreadReplies(prisma, conversationId, messageId);
 
       return sendSuccess(reply, {
-        parent: hoistThreadMessageLocation(parent as unknown as Record<string, unknown>),
-        replies: replies.map((m) => hoistThreadMessageLocation(m as unknown as Record<string, unknown>)),
+        parent: formatThreadMessage(parent as unknown as Record<string, unknown>),
+        replies: replies.map((m) => formatThreadMessage(m as unknown as Record<string, unknown>)),
         totalCount: replies.length
       });
     } catch (error) {

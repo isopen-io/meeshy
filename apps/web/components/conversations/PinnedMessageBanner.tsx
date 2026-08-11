@@ -1,28 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Pin, X } from 'lucide-react';
+import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
 import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useI18n } from '@/hooks/useI18n';
+import { useUser } from '@/stores/auth-store';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
+
+type PinnedMessageTranslation = {
+  targetLanguage: string;
+  translatedContent: string;
+  isEncrypted?: boolean;
+};
 
 interface PinnedMessage {
   id: string;
   content: string;
-  originalContent: string;
+  originalLanguage?: string | null;
   pinnedAt: string;
   pinnedBy: string;
+  translations?: PinnedMessageTranslation[] | null;
   sender: {
     id: string;
-    username: string;
-  };
-}
-
-interface PinnedMessagesResponse {
-  messages: PinnedMessage[];
+    username?: string | null;
+    displayName?: string | null;
+  } | null;
 }
 
 interface PinnedMessageBannerProps {
@@ -30,15 +37,51 @@ interface PinnedMessageBannerProps {
   onNavigateToMessage: (id: string) => void;
 }
 
+/**
+ * Aplati le tableau de traductions au format API en carte `langue → texte`,
+ * la seule forme que consomme `resolveLastMessagePreview` (source de vérité
+ * partagée du Prisme, jumelle de `MeeshyConversation.resolvedLastMessagePreview`
+ * côté iOS).
+ *
+ * Une traduction CHIFFRÉE est écartée : son `translatedContent` est un
+ * cryptogramme, la clé de déchiffrement ne transite pas par ce chemin, et
+ * l'afficher mettrait du base64 dans la bannière. Même exclusion que le helper
+ * d'aperçu REST (`buildLastMessagePreviewTranslations`) et que le résolveur
+ * socket iOS — un client ne rend jamais un cryptogramme, quelle que soit la
+ * générosité du serveur. Sans traduction lisible, `resolveLastMessagePreview`
+ * rend l'original, ce que la règle #1 du Prisme prescrit.
+ */
+function translationsByLanguage(
+  translations: PinnedMessage['translations']
+): Record<string, string> | null {
+  if (!Array.isArray(translations) || translations.length === 0) return null;
+
+  return translations.reduce<Record<string, string>>((acc, translation) => {
+    if (
+      typeof translation?.targetLanguage === 'string'
+      && typeof translation.translatedContent === 'string'
+      && translation.isEncrypted !== true
+    ) {
+      acc[translation.targetLanguage] = translation.translatedContent;
+    }
+    return acc;
+  }, {});
+}
+
 export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: PinnedMessageBannerProps) {
   const { t } = useI18n('conversations');
   const [dismissed, setDismissed] = useState(false);
   const queryClient = useQueryClient();
+  const currentUser = useUser();
 
   const { data } = useQuery({
     queryKey: ['pinned-messages', conversationId],
     queryFn: async () => {
-      const response = await apiService.get<PinnedMessagesResponse>(
+      // `sendSuccess` répond `{ success, data: [...] }` : la liste EST `data`.
+      // Le composant lisait `data.messages[0]`, une clé qui n'existe sur aucune
+      // route de ce dépôt — la bannière ne s'affichait donc jamais, même sur un
+      // 200 parfaitement valide.
+      const response = await apiService.get<PinnedMessage[]>(
         `/conversations/${conversationId}/pinned-messages`,
         { limit: 1 }
       );
@@ -64,11 +107,30 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
     };
   }, [conversationId, queryClient]);
 
-  const pinnedMessage = data?.messages?.[0];
+  // Prisme Linguistique — `getUserLanguagePreferences` est le seul point
+  // d'entrée autorisé côté web (il délègue à `resolveUserLanguagesOrdered` ET
+  // injecte la `deviceLocale` en 4e priorité, cf. apps/web/CLAUDE.md).
+  const preferredLanguages = useMemo(
+    () => (currentUser ? getUserLanguagePreferences(currentUser) : []),
+    [currentUser]
+  );
+
+  const pinnedMessage = Array.isArray(data) ? data[0] : undefined;
+
+  const displayContent = useMemo(
+    () =>
+      resolveLastMessagePreview({
+        preview: pinnedMessage?.content,
+        translations: translationsByLanguage(pinnedMessage?.translations),
+        originalLanguage: pinnedMessage?.originalLanguage,
+        preferredLanguages,
+      }),
+    [pinnedMessage?.content, pinnedMessage?.translations, pinnedMessage?.originalLanguage, preferredLanguages]
+  );
 
   if (!pinnedMessage || dismissed) return null;
 
-  const displayContent = pinnedMessage.content || pinnedMessage.originalContent;
+  const senderLabel = pinnedMessage.sender?.username ?? pinnedMessage.sender?.displayName ?? '';
 
   return (
     <AnimatePresence>
@@ -102,7 +164,7 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
               'hover:underline focus:outline-none focus-visible:underline'
             )}
           >
-            <span className="font-medium">{pinnedMessage.sender.username}: </span>
+            {senderLabel && <span className="font-medium">{senderLabel}: </span>}
             <span>{displayContent}</span>
           </button>
 
