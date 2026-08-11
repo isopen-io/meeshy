@@ -13,7 +13,7 @@ enum CallBannerContrast {
     /// contenu de la bannière d'appel. Calibrée pour que TOUS les éléments de
     /// `FloatingCallPillView` passent leur seuil WCAG contre LES DEUX arrêts
     /// du dégradé — voir `CallBannerContrastTests.test_scrimCalibration_*`.
-    nonisolated static let scrimOpacity: Double = 0.382
+    nonisolated static let scrimOpacity: Double = 0.40
 
     /// Ratio de contraste WCAG entre deux couleurs (formule sRGB relative
     /// luminance standard). Symétrique — l'ordre des arguments n'importe pas.
@@ -33,7 +33,7 @@ enum CallBannerContrast {
     nonisolated static func scrimmed(_ background: Color, scrimOpacity: Double) -> Color {
         let ui = UIColor(background)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        guard ui.getRed(&r, green: &g, blue: &b, alpha: &a) else { return background }
         let factor = 1 - scrimOpacity
         return Color(red: r * factor, green: g * factor, blue: b * factor)
     }
