@@ -1,5 +1,78 @@
 # Progress — state & what to do next
 
+> On 2026-08-11 **two-factor authentication was restored** (slice `settings-two-factor-auth`,
+> feature-parity §L — a RE-PROUVER find during a broad re-sweep of `feature-parity.md`'s ~140
+> unchecked boxes, per the orchestrator's explicit "the Feed composer is quasi-bouclé, re-balaie
+> largement" guidance). **The finding**: `SettingsScreen.kt`'s 2FA row was removed the day before
+> (commit `761164959`, "2FA : ligne retiree — aucune route gateway n'existe") — but that claim was
+> factually wrong. `services/gateway/src/routes/two-factor.ts` + `TwoFactorService.ts` register
+> real, tested, live endpoints under `auth/2fa` (`status`/`setup`/`enable`/`disable`/`verify`/
+> `backup-codes`, present since a much older commit `c44ded3d5`, long before the removal), and iOS
+> already ships this exact flow end to end (`TwoFactorViewModel`/`TwoFactorSetupView`/
+> `TwoFactorService` in `packages/MeeshySDK`). This is the Android port. **Shipped (production, all
+> `apps/android`)**: `TwoFactorCode` (`:core:model`, pure TOTP/backup-code format validation
+> mirroring the gateway's `two-factor-schemas.ts` zod rules: exactly 6 digits for
+> enable/backup-codes, 6-8 alphanumeric for disable) + `TwoFactorQrDataUrl` (`:core:model`, pure
+> base64-payload extraction from the setup QR `data:image/png;base64,...` URL — kept independent
+> of `Base64.decode`/`BitmapFactory`, which stay screen-side glue). `AuthApi`/`AuthRepository` gain
+> the 6 `auth/2fa` endpoints (mirrors the existing `auth/sessions` pattern verbatim). New
+> `TwoFactorViewModel` (`:feature:settings`) drives a `TwoFactorStage` state machine — `STATUS` →
+> `SETUP` (QR + secret + TOTP confirm) → `BACKUP_CODES`, plus `DISABLE` (password + code) and
+> `REGENERATE_CODES` — each failure mapped to a fixed per-action `TwoFactorErrorKind` (mirrors
+> iOS's own fixed localized strings rather than parsing the server message). `TwoFactorScreen` is
+> pure Compose glue. Settings row restored (reused an orphaned-since-yesterday
+> `settings_two_factor` string resource), wired through new `Routes.TWO_FACTOR`. **+33 tests** (13
+> `TwoFactorCodeTest`, 7 `TwoFactorQrDataUrlTest`, 20 `TwoFactorViewModelTest` — status load,
+> setup→enable→backup-codes happy path, backup-code regeneration, disable, the malformed-code/
+> missing-password local gates, the `confirmSetup` double-tap guard, and the per-action failure→
+> error-kind mapping). Also updated the four call-sites of `AuthApi`'s fake test double
+> (`AuthRepositoryTest`, `SessionRepositoryTest`, `AuthViewModelTest`, `RegistrationViewModelTest`)
+> to implement the 5 new interface methods so the interface change stayed compile-clean everywhere.
+> **Mutation-proven**: dropping `isValidTotp`'s length check fails **exactly** the 3
+> boundary-length tests (10 others green); dropping `confirmSetup`'s stage/gate check fails
+> **exactly** the malformed-code and in-flight-guard tests (18 others green). Both applied via a
+> scratch `cp`-backed edit (never `git checkout --`), restored via `cp`. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching the prior slice's
+> count — no build-graph regression). Reviewer **PASS** (diff `apps/android` only, confirmed via
+> `git diff --stat origin/main` — no other files touched; SDK purity — the two pure validators live
+> in `:core:model`, all orchestration/state-machine/Android-framework glue [Base64 decode, Bitmap
+> decode] stays app-side in `:feature:settings`; SSOT — reuses `AuthRepository`/`NetworkResult`/
+> `apiCall`/`apiCallUnit`, no reimplementation; no coverage floor lowered; no tautological tests).
+> **Full on-device verification against the live gateway** (`meeshy_pixel8`, real `atabeth` account
+> — the same shared account used across this whole routine, NOT a disposable test account):
+> installed the fresh build (`:app:installDebug` — `./meeshy.sh check` alone does not install),
+> relaunched, session auto-restored. Every tap resolved via `uiautomator dump` + a grepped
+> `bounds=`/clickable-ancestor attribute. Navigated Settings → Privacy & Security → **Two-factor
+> auth** (row correctly positioned between Change password and Active sessions, exactly as coded):
+> confirmed **Disabled** status rendered from a real `GET https://gate.meeshy.me/api/v1/auth/2fa/
+> status` (`200`, 97ms, `adb logcat`). Tapped **Set up two-factor authentication**: a real `POST
+> .../auth/2fa/setup` (`200`, 154ms) returned a genuine secret + QR data URL, and the screen
+> rendered an actual scannable QR code image (decoded via `TwoFactorQrDataUrl.base64Payload` →
+> `Base64.decode` → `BitmapFactory` on a REAL server payload, not a synthetic fixture) plus the
+> manual-entry secret text; the **Activate** button correctly rendered disabled/greyed (empty code
+> input → `canConfirmCode` gate false). **Deliberately stopped here** rather than completing the
+> enable flow: computing a valid live TOTP code from the secret was possible, but actually calling
+> `/enable` would have toggled real 2FA on this shared, password-unknown-to-this-session account —
+> an unacceptable risk of locking every future run of this routine (both lanes use this account)
+> out of it. Verified the safe exit path instead: tapped the back arrow, confirmed `cancel()` fired
+> **zero** network calls (`adb logcat` filtered on `2fa` — empty since the setup call), returned to
+> `STATUS` showing **Disabled** again — proving `setup()` is non-destructive/idempotent and the
+> account was left in the exact state it started in. `adb logcat` checked across the whole session
+> for `FATAL EXCEPTION`/`AndroidRuntime` crashes — none. Emulator left on the Settings screen
+> afterward (not mid-flow). **Also fixed two stale `feature-parity.md` checkboxes discovered while
+> re-proving this item**: "Active device sessions" was already fully shipped (`761164959`,
+> 2026-08-10) but never checked off — confirmed still live on-device this run, now checked.
+> **Next slice candidates (not attempted this run)**: "Change email / phone (two-step
+> verification)" — the wire-level plumbing already exists (`UserApi.changeEmail`/`verifyEmailChange`/
+> `resendEmailChangeVerification`/`changePhone`/`verifyPhoneChange`, `UserRequests.kt` models) but
+> **no UI screen consumes it anywhere** — a genuine gap, right-sized for a dedicated slice (iOS's
+> `SecurityView` has the reference flow inline); on-device transcription for the Feed audio
+> attachment (still the standing candidate, needs its own foundation); a shared `:sdk-ui`
+> `LanguagePickerDialog` (3 near-identical picker UIs now exist); map/search/reverse-geocoding for
+> the location attachment; widgets/PiP — per the orchestrator's guidance this remains a documented,
+> real gap needing a planning pass, not a re-grep (last re-confirmed zero-hit iteration 44/45, not
+> re-checked again this run per the standing guidance to stop bare re-grepping it).
+
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
 > Archived 2026-08-10 (routine iteration 30, hygiene pass — pure archiving increment, no

@@ -99,6 +99,7 @@ fun SettingsScreen(
     onOpenStarred: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
+    onOpenTwoFactor: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
     onOpenMediaCache: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
@@ -294,8 +295,16 @@ fun SettingsScreen(
                     detail = null,
                     onClick = onOpenChangePassword,
                 )
-                // 2FA retire : aucune route gateway n'existe encore — une ligne
-                // cliquable inerte promettait une fonctionnalite fantome.
+                // 2FA restaure (2026-08-11) : le gateway a bien des routes reelles et
+                // testees (services/gateway/src/routes/two-factor.ts, TwoFactorService)
+                // depuis un commit anterieur au retrait — l'hypothese "aucune route
+                // gateway" etait incorrecte. iOS livre deja ce flux (TwoFactorViewModel/
+                // TwoFactorSetupView) ; TwoFactorScreen en est le port Android.
+                SettingsRow(
+                    label = stringResource(R.string.settings_two_factor),
+                    detail = null,
+                    onClick = onOpenTwoFactor,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(
                     label = stringResource(R.string.settings_active_sessions),

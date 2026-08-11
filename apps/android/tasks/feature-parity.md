@@ -4626,8 +4626,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ReportRepository 5, ReportUserViewModel 8). EN/FR/ES/PT strings. Surpasses iOS (correct wire token +
       testable UDF + retryable error state).
 - [ ] Change email / phone (two-step verification)
-- [ ] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable
-- [ ] Active device sessions: list, revoke one, revoke all others
+- [x] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable — `settings-two-factor-auth` (2026-08-11)
+- [x] Active device sessions: list, revoke one, revoke all others — shipped `761164959` (2026-08-10, `ActiveSessionsScreen`/`ActiveSessionsViewModel`), confirmed still live on-device 2026-08-11
 - [ ] Voice-cloning onboarding wizard (consent → 18+ age gate → record ≥3 samples → process)
 - [ ] Voice-profile management (status, cloning toggle, sample add/list/delete, GDPR delete-all)
 
