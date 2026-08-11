@@ -47,25 +47,57 @@ public actor MediaSessionCoordinator {
     }
 
     private var activationCount = 0
+
+    /// Backing lock for `callActive`, mirroring `CallManager.isCallActiveFlag`
+    /// (`CallManager.swift`, `_isCallActiveLock`) — the same read-from-any-
+    /// thread / write-from-MainActor shape, guarded the same way. A prior
+    /// revision of this property used `nonisolated(unsafe)` on a bare `Bool`
+    /// and claimed "same pattern as `CallManager.isCallActiveFlag`", but
+    /// `CallManager`'s flag has always been lock-guarded — the claim was
+    /// aspirational, not actual, and left this one true data race: a torn
+    /// read is not guaranteed impossible by the language for a `Bool` written
+    /// on the MainActor thread and read concurrently from this actor's own
+    /// serial executor (`request`/`release`/`deactivateForBackground`).
+    private nonisolated let _callActiveLock = OSAllocatedUnfairLock(initialState: false)
     /// Mirror of the app's VoIP call state, pushed via `setCallActive(_:)`.
     /// While `true`, the coordinator must NOT reconfigure or tear down the
     /// shared `AVAudioSession`: the call owns it as `.playAndRecord/.voiceChat`
     /// (via RTCAudioSession) and switching the category to `.playback` mid-call
-    /// mutes the microphone. `nonisolated(unsafe)` (same pattern as
-    /// `CallManager.isCallActiveFlag`) so the `@MainActor` call layer can push
-    /// the flag SYNCHRONOUSLY from `callState.didSet` — avoiding a `Task`-hop
-    /// whose reordering across rapid call start/end could leave the flag stuck
-    /// `true` (→ session never reconfigured again → post-call audio broken). A
-    /// lone `Bool` write (MainActor) / read (actor executor) needs no further
-    /// synchronization. Default `false` ⇒ behavior identical to before this seam.
-    nonisolated(unsafe) private var callActive = false
+    /// mutes the microphone. `nonisolated` computed property backed by
+    /// `_callActiveLock` so the `@MainActor` call layer can push the flag
+    /// SYNCHRONOUSLY from `callState.didSet` — avoiding a `Task`-hop whose
+    /// reordering across rapid call start/end could leave the flag stuck
+    /// `true` (→ session never reconfigured again → post-call audio broken) —
+    /// while concurrent reads from the actor's own executor never observe a
+    /// torn write. Default `false` ⇒ behavior identical to before this seam.
+    private nonisolated var callActive: Bool {
+        get { _callActiveLock.withLock { $0 } }
+        set { _callActiveLock.withLock { $0 = newValue } }
+    }
     private var observersInstalled = false
     nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
 
+    /// Backing lock for `emit(_:)`. `PassthroughSubject.send(_:)` is not
+    /// documented thread-safe for concurrent callers — `emit(_:)` is invoked
+    /// both synchronously from the MainActor (`setCallActive`) and from this
+    /// actor's own serial executor (`forward(_:)`, reached via `Task` off a
+    /// system-notification callback), two distinct execution contexts that
+    /// can genuinely overlap (e.g. a call ending at the same instant a route
+    /// change fires). Serializing `send(_:)` itself — not the whole event
+    /// pipeline — keeps both call sites synchronous.
+    private nonisolated let _eventsLock = OSAllocatedUnfairLock(initialState: ())
+
     /// Non-isolated Combine subject so observers can subscribe from any
-    /// context without hopping into the actor; the subject itself is
-    /// thread-safe.
+    /// context without hopping into the actor. Only ever published to via
+    /// `emit(_:)`, which serializes concurrent senders with `_eventsLock` —
+    /// do not call `events.send(_:)` directly from a new call site.
     public nonisolated(unsafe) let events = PassthroughSubject<Event, Never>()
+
+    /// Single, lock-serialized entry point for publishing on `events`. See
+    /// `_eventsLock`.
+    private nonisolated func emit(_ event: Event) {
+        _eventsLock.withLock { _ in events.send(event) }
+    }
 
     #if DEBUG
     /// Test seam: increments `deactivateCount` from callers that want to
@@ -93,8 +125,15 @@ public actor MediaSessionCoordinator {
     /// without a `Task` hop (no reorder risk). SDK stays call-layer-agnostic:
     /// the app wires this from `CallManager`.
     public nonisolated func setCallActive(_ active: Bool) {
-        let wasActive = callActive
-        callActive = active
+        // Read-and-write in one lock transaction rather than two separate
+        // `callActive` accesses, so the wasActive/active comparison below
+        // always reflects THIS call's own transition, never a torn view
+        // spliced with a concurrent write.
+        let wasActive = _callActiveLock.withLock { current -> Bool in
+            let old = current
+            current = active
+            return old
+        }
         // On the true→false edge, broadcast an explicit resume signal. The system
         // interruption-ended notification is NOT reliably posted for in-process
         // WebRTC/RTCAudioSession call teardown, so SDK media that gated itself off
@@ -102,7 +141,7 @@ public actor MediaSessionCoordinator {
         // until the next slide/page change. Emitted AFTER `callActive = false` so
         // any observer that re-checks `isCallActive` sees the cleared state.
         if wasActive && !active {
-            events.send(.callEndedShouldResume)
+            emit(.callEndedShouldResume)
         }
     }
 
@@ -265,7 +304,7 @@ public actor MediaSessionCoordinator {
     private func forward(_ event: Event?) {
         guard let event else { return }
         logger.info("Audio session event: \(String(describing: event))")
-        events.send(event)
+        emit(event)
     }
 
     private nonisolated static func parseInterruption(_ notification: Notification) -> Event? {
