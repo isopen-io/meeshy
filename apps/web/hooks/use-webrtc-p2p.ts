@@ -54,6 +54,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new');
+  // Real mid-call stall signal, derived from stalledPeersRef — unlike
+  // connectionState (an RTCPeerConnectionState, which never carries the
+  // string 'reconnecting'), this is what callers (e.g. call:analytics'
+  // reconnectionCount) must observe to detect an actual reconnect.
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   // Store WebRTC services per participant
   const webrtcServicesRef = useRef<Map<string, WebRTCService>>(new Map());
@@ -255,13 +260,19 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
             if (state === 'connected' || state === 'completed') {
               connectedPeersRef.current.add(participantId);
-              if (stalledPeersRef.current.delete(participantId) && userId) {
-                // Le restart mené par webrtc-service a abouti — le serveur
-                // repasse l'appel `active`.
-                meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTED, {
-                  callId,
-                  participantId: userId,
-                });
+              const wasStalled = stalledPeersRef.current.delete(participantId);
+              if (wasStalled) {
+                if (stalledPeersRef.current.size === 0) {
+                  setIsReconnecting(false);
+                }
+                if (userId) {
+                  // Le restart mené par webrtc-service a abouti — le serveur
+                  // repasse l'appel `active`.
+                  meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTED, {
+                    callId,
+                    participantId: userId,
+                  });
+                }
               }
             } else if (state === 'disconnected' || state === 'failed') {
               // Stall MID-CALL seulement : le serveur suspend son cleanup et
@@ -274,6 +285,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
                 !stalledPeersRef.current.has(participantId)
               ) {
                 stalledPeersRef.current.add(participantId);
+                setIsReconnecting(true);
                 reconnectAttemptRef.current = Math.min(reconnectAttemptRef.current + 1, 10);
                 meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTING, {
                   callId,
@@ -797,6 +809,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     remoteDescriptionSetRef.current.clear();
     connectedPeersRef.current.clear();
     stalledPeersRef.current.clear();
+    setIsReconnecting(false);
     negotiationIdsRef.current.clear();
     reconnectAttemptRef.current = 0;
 
@@ -973,6 +986,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   return {
     connectionState,
     iceConnectionState,
+    isReconnecting,
     initializeLocalStream,
     ensureLocalStream,
     createOffer,
