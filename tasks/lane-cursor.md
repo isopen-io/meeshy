@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=3 last_run=settings-two-factor-auth
+lane=ANDROID android_streak=4 last_run=settings-account-contact-change
