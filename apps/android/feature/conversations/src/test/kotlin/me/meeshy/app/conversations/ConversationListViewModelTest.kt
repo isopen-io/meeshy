@@ -26,7 +26,10 @@ import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
@@ -90,6 +93,11 @@ class ConversationListViewModelTest {
 
     private val workManager: WorkManager = mockk(relaxed = true)
 
+    private fun messageRepository(recent: List<LocalMessage> = emptyList()): MessageRepository =
+        mockk<MessageRepository> {
+            coEvery { recentMessages(any(), any()) } returns recent
+        }
+
     private fun categoryRepo(
         categories: List<me.meeshy.sdk.model.CategoryOption> = emptyList(),
     ): CategoryRepository = mockk<CategoryRepository> {
@@ -111,8 +119,9 @@ class ConversationListViewModelTest {
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
         session: SessionRepository = session(),
+        messageRepo: MessageRepository = messageRepository(),
     ) = ConversationListViewModel(
-        repo, socket, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, connection, session,
     )
 
@@ -766,6 +775,75 @@ class ConversationListViewModelTest {
 
         assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c1")
         coVerify(exactly = 0) { repo.refresh() }
+    }
+
+    @Test
+    fun load_preview_messages_populates_the_preview_for_that_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val recent = listOf(LocalMessage(message = ApiMessage(id = "m1", conversationId = "c1", content = "hi")))
+        val vm = viewModel(repo, messageRepo = messageRepository(recent))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")).isNull()
+
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")).isEqualTo(recent)
+    }
+
+    @Test
+    fun load_preview_messages_never_queries_the_repository_twice_for_the_same_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = messageRepository(emptyList())
+        val vm = viewModel(repo, messageRepo = messageRepo)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { messageRepo.recentMessages("c1", any()) }
+    }
+
+    @Test
+    fun load_preview_messages_does_not_re_query_while_a_load_is_already_in_flight() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = mockk<MessageRepository>()
+        coEvery { messageRepo.recentMessages(any(), any()) } coAnswers {
+            kotlinx.coroutines.delay(1_000)
+            emptyList()
+        }
+        val vm = viewModel(repo, messageRepo = messageRepo)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { messageRepo.recentMessages("c1", any()) }
+    }
+
+    @Test
+    fun load_preview_messages_for_different_conversations_are_independent() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")), ageMillis = 0)),
+        )
+        val messageRepo = mockk<MessageRepository>()
+        coEvery { messageRepo.recentMessages("c1", any()) } returns
+            listOf(LocalMessage(message = ApiMessage(id = "a", conversationId = "c1")))
+        coEvery { messageRepo.recentMessages("c2", any()) } returns
+            listOf(LocalMessage(message = ApiMessage(id = "b", conversationId = "c2")))
+        val vm = viewModel(repo, messageRepo = messageRepo)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        vm.loadPreviewMessages("c2")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")?.single()?.message?.id).isEqualTo("a")
+        assertThat(vm.state.value.previewFor("c2")?.single()?.message?.id).isEqualTo("b")
     }
 
     @Test

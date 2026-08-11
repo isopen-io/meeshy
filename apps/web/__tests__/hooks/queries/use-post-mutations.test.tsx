@@ -1165,3 +1165,127 @@ describe('useLikePostMutation - socket ack error (no error message → default)'
     expect(result.current.error?.message).toBe('Failed to add reaction');
   });
 });
+
+// =============================================================================
+// useBookmarkPostMutation - detail cache invalidation
+// =============================================================================
+
+describe('useBookmarkPostMutation - detail cache invalidation', () => {
+  it('invalidates post detail query on success', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    qc.setQueryData(['posts', 'detail', 'post-1'], mockPost);
+    mockBookmarkPost.mockResolvedValue({ success: true, data: { bookmarked: true } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useBookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['posts', 'detail', 'post-1'] })
+    );
+  });
+});
+
+// =============================================================================
+// useUnbookmarkPostMutation - detail cache invalidation
+// =============================================================================
+
+describe('useUnbookmarkPostMutation - detail cache invalidation', () => {
+  it('invalidates post detail query on success', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    qc.setQueryData(['posts', 'detail', 'post-1'], mockPost);
+    mockUnbookmarkPost.mockResolvedValue({ success: true, data: { bookmarked: false } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUnbookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['posts', 'detail', 'post-1'] })
+    );
+  });
+});
+
+// =============================================================================
+// useCreatePostMutation - optimistic media (media-only publish no longer
+// flashes an empty card while the server round-trips)
+// =============================================================================
+
+describe('useCreatePostMutation - optimistic media', () => {
+  const mockMedia = [{
+    id: 'media-1',
+    mimeType: 'audio/webm',
+    fileUrl: 'blob:http://localhost/temp-audio',
+    order: 0,
+  }];
+
+  it('includes the optimistic media placeholder on the prepended post', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    let resolveCreate: (v: unknown) => void;
+    mockCreatePost.mockImplementation(() => new Promise((r) => { resolveCreate = r; }));
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ type: 'POST', visibility: 'PUBLIC', mediaIds: ['media-1'], optimisticMedia: mockMedia });
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { media?: typeof mockMedia }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].media).toEqual(mockMedia);
+    });
+
+    await act(async () => {
+      resolveCreate!({ success: true, data: { ...mockPost, id: 'real-1', media: mockMedia } });
+    });
+  });
+
+  it('does not forward optimisticMedia to postsService.createPost', async () => {
+    const qc = createQueryClient();
+    mockCreatePost.mockResolvedValue({ success: true, data: { ...mockPost, id: 'new-2' } });
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ type: 'POST', visibility: 'PUBLIC', mediaIds: ['media-1'], optimisticMedia: mockMedia });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockCreatePost).toHaveBeenCalledWith({ type: 'POST', visibility: 'PUBLIC', mediaIds: ['media-1'] });
+  });
+
+  it('omits media on the optimistic post when optimisticMedia is not provided', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    let resolveCreate: (v: unknown) => void;
+    mockCreatePost.mockImplementation(() => new Promise((r) => { resolveCreate = r; }));
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ content: 'Text only' });
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { media?: unknown }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].media).toBeUndefined();
+    });
+
+    await act(async () => {
+      resolveCreate!({ success: true, data: { ...mockPost, id: 'real-2' } });
+    });
+  });
+});

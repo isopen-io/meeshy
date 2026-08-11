@@ -64,6 +64,7 @@ export interface PostDetailProps {
   onRepost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  onReport?: () => void;
   onTranslate?: () => void;
   onSubmitComment?: (content: string, parentId?: string) => void;
   onLoadMoreComments?: () => void;
@@ -104,6 +105,7 @@ function PostDetail({
   onRepost,
   onDelete,
   onEdit,
+  onReport,
   onTranslate,
   onSubmitComment,
   onLoadMoreComments,
@@ -173,6 +175,16 @@ function PostDetail({
                     </svg>
                   </button>
                 )}
+              </div>
+            )}
+
+            {!isAuthor && onReport && (
+              <div className="flex gap-1">
+                <button onClick={onReport} className="p-2 text-[var(--gp-text-muted)] hover:text-red-500" aria-label="Report post">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18M3 4h13l-2 4 2 4H3" />
+                  </svg>
+                </button>
               </div>
             )}
           </div>

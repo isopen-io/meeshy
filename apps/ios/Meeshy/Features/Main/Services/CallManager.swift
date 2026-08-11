@@ -1111,7 +1111,7 @@ final class CallManager: ObservableObject {
             callController.request(transaction) { [weak self] error in
                 if let error {
                     Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
-                    Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+                    Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed("CallKit error")) }
                 } else {
                     let update = CXCallUpdate()
                     update.remoteHandle = CXHandle(type: .generic, value: userId)
@@ -1656,7 +1656,7 @@ final class CallManager: ObservableObject {
                     // also reports `.failed` back to CallKit, matching every
                     // other failure path in this file (see failCall's doc
                     // comment) instead of leaving Recents with a stranded entry.
-                    Task { @MainActor in self?.failCall("CallKit error") }
+                    Task { @MainActor [weak self] in self?.failCall("CallKit error") }
                 }
             }
         }
