@@ -140,7 +140,7 @@ describe('PostCard enhanced features', () => {
 
   describe('audio media tile (Task 4, point 0bis)', () => {
     it('renders an identifiable audio tile with duration instead of an empty grey square', () => {
-      const media = [{ id: 'm-1', mimeType: 'audio/webm', fileUrl: 'https://example.com/clip.webm', duration: 75 }];
+      const media = [{ id: 'm-1', mimeType: 'audio/webm', fileUrl: 'https://example.com/clip.webm', duration: 75000 }];
       render(<PostCard {...baseProps} media={media} />);
       expect(screen.getByTestId('post-card-audio-tile')).toBeInTheDocument();
       expect(screen.getByText('1:15')).toBeInTheDocument();
