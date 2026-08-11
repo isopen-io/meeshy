@@ -18,12 +18,34 @@ import {
   VolumeX,
   Play,
   Flag,
+  Repeat2,
+  Download,
 } from 'lucide-react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function authorName(post: Post): string {
   return post.author?.displayName ?? post.author?.username ?? 'Meeshy';
+}
+
+/**
+ * Same `<a download>` DOM pattern as the chat lightboxes
+ * (ImageLightbox/VideoLightbox `handleDownload`) — a browser-native save,
+ * no service call.
+ */
+function triggerMediaDownload(url: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadFileName(media: { id: string; mimeType: string; alt?: string | null }): string {
+  const ext = media.mimeType.split('/')[1]?.split(';')[0];
+  return ext ? `${media.alt || media.id}.${ext}` : media.alt || media.id;
 }
 
 /**
@@ -103,6 +125,8 @@ export interface ReelPlayerProps {
   onShare: () => void;
   onBookmark: () => void;
   onReport?: () => void;
+  onRepost?: () => void;
+  onDownload?: (mediaId: string) => void;
 }
 
 /**
@@ -130,6 +154,8 @@ export function ReelPlayer({
   onShare,
   onBookmark,
   onReport,
+  onRepost,
+  onDownload,
 }: ReelPlayerProps) {
   const { t } = useI18n('reel');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -138,6 +164,7 @@ export function ReelPlayer({
 
   const video = firstVideo(reel);
   const image = firstImage(reel);
+  const downloadTarget = video ?? image;
   const name = authorName(reel);
   const caption = resolveCaption(reel, userLanguage);
 
@@ -318,6 +345,23 @@ export function ReelPlayer({
           <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={(e) => { e.stopPropagation(); onBookmark(); }}>
             <Bookmark className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} />
           </RailButton>
+          {onRepost && (
+            <RailButton label={t('player.repost', 'Repost')} onClick={(e) => { e.stopPropagation(); onRepost(); }}>
+              <Repeat2 className="h-6 w-6" />
+            </RailButton>
+          )}
+          {onDownload && downloadTarget && (
+            <RailButton
+              label={t('player.download', 'Download')}
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerMediaDownload(downloadTarget.fileUrl, downloadFileName(downloadTarget));
+                onDownload(downloadTarget.id);
+              }}
+            >
+              <Download className="h-6 w-6" />
+            </RailButton>
+          )}
           {onReport && (
             <RailButton label={t('player.report', 'Report')} onClick={(e) => { e.stopPropagation(); onReport(); }}>
               <Flag className="h-6 w-6" />

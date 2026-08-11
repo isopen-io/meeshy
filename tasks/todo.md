@@ -427,7 +427,34 @@ Les deux moitiés sont faites : la liste (et l'écran admin) comptent désormais
 actifs en base, et les quatre événements d'appartenance portent un `memberCount` **absolu** que
 le web POSE au lieu de l'additionner. Reste la moitié iOS, instruite juste au-dessus.
 
-## 2. Chercher les autres événements surchargés
+## 2. Le balayage des événements surchargés est FAIT — et il est CLOS
+
+*Exécuté à la fin du cycle 71, avec le critère mécanique que le défaut de ce cycle a fourni :
+un `SERVER_EVENTS.X` émis à la fois par `socket.emit` (self-only) et par une diffusion
+(`io.to(...)` / `emitToConversationParticipants`). 12 événements self-only croisés avec tous les
+émetteurs de diffusion. **Trois intersections, aucun nouveau défaut de la classe du cycle 71.**
+
+- `CONVERSATION_JOINED` — le défaut de ce cycle, corrigé.
+- `CONVERSATION_UNREAD_UPDATED` — **résultat négatif, et il vaut d'être écrit** : ses quatre
+  émetteurs « de diffusion » adressent tous `ROOMS.user(...)`, une room PERSONNELLE. Le fait porté
+  est donc le même des deux côtés — « votre compteur non-lu pour cette conversation » — seule
+  l'adresse change (ce socket-ci vs tous les appareils de la personne). Le `io.to(ROOMS.user(...))`
+  est même le meilleur des deux : il couvre le multi-appareil. Rien à faire.
+- `MESSAGE_TRANSLATION` — **même FAIT des deux côtés** (« voici la traduction du message X en
+  langue Y » : une traduction n'est pas propre à un destinataire), donc pas le défaut du cycle 71.
+  Mais **deux FORMES de payload sous un même nom** : `MeeshySocketIOManager:1342` émet
+  `{messageId, translatedText, targetLanguage, confidenceScore}` (réponse à une demande à la
+  volée, cache chaud) là où `:1509` diffuse `translationData`, qui porte un tableau
+  `translations: [...]`. Chaque client doit donc décoder deux formes pour un seul événement.
+  Défaut de contrat mineur, sans conséquence d'état observée — à traiter pour lui-même, pas
+  comme une urgence.
+
+**Ne pas refaire ce balayage.** S'il faut le rejouer après une évolution :
+`grep -rhoE "socket\.emit\(SERVER_EVENTS\.[A-Z_]+" services/gateway/src` croisé avec les
+émetteurs `.to(` — attention aux parenthèses imbriquées (`io.to(ROOMS.conversation(id))`), qu'un
+`[^)]*` naïf manque.
+
+## 3. Ancienne formulation, conservée pour mémoire — chercher les autres événements surchargés
 
 `conversation:joined` et `conversation:left` sont traités — les deux sont **clos**. Le critère de
 recherche se réutilise tel quel et n'a PAS été appliqué au-delà de ces deux-là : **un

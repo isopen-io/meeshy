@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
+import { formatDuration } from '@/utils/audio-formatters';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -27,7 +28,7 @@ export interface PostCardProps {
   isPinned?: boolean;
   reactionSummary?: Record<string, number>;
   userReaction?: string;
-  media?: readonly { id: string; mimeType: string; fileUrl: string; thumbnailUrl?: string | null; alt?: string | null }[];
+  media?: readonly { id: string; mimeType: string; fileUrl: string; thumbnailUrl?: string | null; alt?: string | null; duration?: number | null }[];
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -39,11 +40,33 @@ export interface PostCardProps {
   onPin?: () => void;
   onReport?: () => void;
   onTranslate?: () => void;
+  onDownloadMedia?: (mediaId: string) => void;
   onClick?: () => void;
   className?: string;
 }
 
 const REACTION_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDD25', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83D\uDC4F'];
+
+/**
+ * Same `<a download>` DOM pattern as the chat lightboxes
+ * (ImageLightbox/VideoLightbox `handleDownload`) \u2014 a browser-native save,
+ * no service call. `onDownloadMedia` (if provided) fires the best-effort
+ * analytics ping owned by the parent screen (which knows the postId).
+ */
+function triggerMediaDownload(url: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadFileName(media: { id: string; mimeType: string; alt?: string | null }): string {
+  const ext = media.mimeType.split('/')[1]?.split(';')[0];
+  return ext ? `${media.alt || media.id}.${ext}` : media.alt || media.id;
+}
 
 function PostCard({
   author,
@@ -72,6 +95,7 @@ function PostCard({
   onPin,
   onReport,
   onTranslate,
+  onDownloadMedia,
   onClick,
   className,
 }: PostCardProps) {
@@ -262,7 +286,23 @@ function PostCard({
             style={{ gridTemplateColumns: media.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}
           >
             {media.slice(0, 4).map((m, i) => (
-              <div key={m.id} className="relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
+              <div key={m.id} className="group relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
+                {onDownloadMedia && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
+                      onDownloadMedia(m.id);
+                    }}
+                    className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    aria-label={t('post.download', 'Download')}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
+                )}
                 {m.mimeType.startsWith('image/') && (
                   <img
                     src={buildAttachmentUrl(m.thumbnailUrl ?? m.fileUrl) ?? undefined}
@@ -273,6 +313,21 @@ function PostCard({
                 )}
                 {m.mimeType.startsWith('video/') && (
                   <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} className="w-full h-full object-cover" muted />
+                )}
+                {m.mimeType.startsWith('audio/') && (
+                  <div
+                    data-testid="post-card-audio-tile"
+                    className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-[var(--gp-terracotta)]"
+                  >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {typeof m.duration === 'number' && (
+                      <span className="text-xs font-medium text-[var(--gp-text-secondary)]">
+                        {formatDuration(m.duration)}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

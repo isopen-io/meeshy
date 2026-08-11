@@ -10,7 +10,7 @@ import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
-import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
 
 export interface PostPublishPayload {
   content: string;
@@ -18,6 +18,14 @@ export interface PostPublishPayload {
   visibility: PostVisibility;
   visibilityUserIds?: string[];
   mediaIds?: string[];
+  /**
+   * Client-only echo of the already-uploaded media (id/mimeType/fileUrl are
+   * known before the post exists server-side), built from `uploadedAttachments`.
+   * Consumed by `useCreatePostMutation` to seed the optimistic post's `media`
+   * so a media-only publish never flashes an empty card — never sent to the
+   * wire (the mutation strips it before calling `postsService.createPost`).
+   */
+  optimisticMedia?: readonly PostMedia[];
 }
 
 export interface PostComposerProps {
@@ -188,6 +196,15 @@ function PostComposer({
         ? visibilityUserIds
         : undefined,
       mediaIds: hasMedia ? mediaIds : undefined,
+      optimisticMedia: hasMedia
+        ? uploadedAttachments.map((att, order) => ({
+            id: att.id,
+            mimeType: att.mimeType,
+            fileUrl: att.fileUrl,
+            thumbnailUrl: att.thumbnailUrl,
+            order,
+          }))
+        : undefined,
     });
 
     setContent('');
