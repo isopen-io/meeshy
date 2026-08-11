@@ -2027,7 +2027,27 @@ class ConversationListViewModel: ObservableObject {
         ) { [weak self] notification in
             guard let cid = notification.object as? String else { return }
             Task { @MainActor [weak self] in
-                self?.clearUnreadLocally(cid)
+                guard let self else { return }
+                // Corrige le `ConversationStore` (RAM, tiers) AVANT d'effacer la
+                // pastille affichée : ce store n'apprend autrement jamais qu'une
+                // conversation vient d'être lue par CE chemin (ouverture,
+                // quick-action push, widget — tous postent `.conversationMarkedRead`,
+                // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
+                // prochaine republication — déclenchée par N'IMPORTE QUELLE
+                // mutation sur N'IMPORTE QUELLE AUTRE conversation, `commit()`
+                // republiant tout le snapshot — regreffait sinon un `unreadCount`
+                // périmé sur cette ligne pourtant déjà lue : le badge persistait
+                // indéfiniment jusqu'au prochain `reloadFromCache()` (bug user
+                // 2026-08-11). `applyReadReceipt` est LOCAL (jamais de réseau,
+                // contrairement à `.markAsRead` — cf. `shouldDispatchListMarkAsRead` :
+                // cet endpoint liste poste un mark-read « sans corps » auquel le
+                // gateway retombe sur un repli par fenêtre temporelle, déclarant
+                // lus des messages jamais montrés) et monotone sur `lastReadAt`
+                // (inoffensif si un accusé plus récent est déjà en place).
+                await self.store.applyReadReceipt(
+                    ReadStatusEvent(conversationId: cid, unreadCount: 0, lastReadAt: Date())
+                )
+                self.clearUnreadLocally(cid)
             }
         }
     }
