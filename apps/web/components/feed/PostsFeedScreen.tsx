@@ -430,6 +430,10 @@ export function PostsFeedScreen() {
     [translateMutation, userLanguage],
   );
 
+  const handleDownloadMedia = useCallback((postId: string, mediaId: string) => {
+    postsService.recordMediaDownloads(postId, [mediaId], 'feed');
+  }, []);
+
   const handleDeletePost = useCallback(
     (postId: string) => {
       deletePostMutation.mutate(postId, {
@@ -761,6 +765,7 @@ export function PostsFeedScreen() {
                     onDelete={() => handleDeletePost(post.id)}
                     onPin={() => handlePinPost(post.id, post.isPinned)}
                     onReport={() => handleReportPost(post.id)}
+                    onDownloadMedia={(mediaId) => handleDownloadMedia(post.id, mediaId)}
                     onClick={() => {
                       if (post.type === 'REEL') {
                         router.push(`/reel/${post.id}`);

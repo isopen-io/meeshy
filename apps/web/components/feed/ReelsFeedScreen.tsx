@@ -202,6 +202,13 @@ export function ReelsFeedScreen() {
     [current, repostMutation, toastCtx, t],
   );
 
+  const onDownload = useCallback(
+    (mediaId: string) => {
+      if (current) postsService.recordMediaDownloads(current.id, [mediaId], 'reel');
+    },
+    [current],
+  );
+
   const content = useMemo(() => {
     if (current) {
       return (
@@ -225,6 +232,7 @@ export function ReelsFeedScreen() {
           onBookmark={onBookmark}
           onReport={onReport}
           onRepost={onRepost}
+          onDownload={onDownload}
         />
       );
     }
@@ -262,7 +270,7 @@ export function ReelsFeedScreen() {
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, reelsQuery, t]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, onDownload, reelsQuery, t]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">

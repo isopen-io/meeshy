@@ -281,6 +281,30 @@ describe('postsService', () => {
     });
   });
 
+  describe('recordMediaDownloads', () => {
+    it('calls POST /posts/:postId/downloads with mediaIds and default surface detail', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 1 } });
+      await postsService.recordMediaDownloads('post-1', ['media-1']);
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1'], surface: 'detail' });
+    });
+
+    it('forwards an explicit surface', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 2 } });
+      await postsService.recordMediaDownloads('post-1', ['media-1', 'media-2'], 'feed');
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1', 'media-2'], surface: 'feed' });
+    });
+
+    it('is a no-op when mediaIds is empty (never hits the network)', async () => {
+      await postsService.recordMediaDownloads('post-1', []);
+      expect(mockApi.post).not.toHaveBeenCalled();
+    });
+
+    it('never throws — best-effort analytics must not break the download UX', async () => {
+      mockApi.post.mockRejectedValue(new Error('network down'));
+      await expect(postsService.recordMediaDownloads('post-1', ['media-1'])).resolves.toBeUndefined();
+    });
+  });
+
   // ── Comments ──────────────────────────────────────────────────────────
 
   describe('getComments', () => {

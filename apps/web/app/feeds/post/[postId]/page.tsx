@@ -260,6 +260,7 @@ export default function PostDetailPage() {
             onDelete={isAuthor ? handleDeletePost : undefined}
             onReport={isAuthor ? undefined : handleReportPost}
             onTranslate={() => translateMutation.mutate({ postId: post.id, targetLanguage: userLanguage })}
+            onDownloadMedia={(mediaId) => postsService.recordMediaDownloads(post.id, [mediaId], 'detail')}
             onSubmitComment={(content, parentId) =>
               createCommentMutation.mutate({ postId: post.id, content, parentId })
             }

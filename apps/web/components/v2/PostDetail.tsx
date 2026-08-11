@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
-import { Repeat2 } from 'lucide-react';
+import { Download, Repeat2 } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
@@ -38,6 +38,26 @@ function postTranslationsToItems(translations: unknown): TranslationItem[] {
 
 const formatCount = formatCompactNumber;
 
+/**
+ * Same `<a download>` DOM pattern as the chat lightboxes
+ * (ImageLightbox/VideoLightbox `handleDownload`) — a browser-native save,
+ * no service call.
+ */
+function triggerMediaDownload(url: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadFileName(media: { id: string; mimeType: string; alt?: string | null }): string {
+  const ext = media.mimeType.split('/')[1]?.split(';')[0];
+  return ext ? `${media.alt || media.id}.${ext}` : media.alt || media.id;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -65,6 +85,7 @@ export interface PostDetailProps {
   onDelete?: () => void;
   onEdit?: () => void;
   onReport?: () => void;
+  onDownloadMedia?: (mediaId: string) => void;
   onTranslate?: () => void;
   onSubmitComment?: (content: string, parentId?: string) => void;
   onLoadMoreComments?: () => void;
@@ -106,6 +127,7 @@ function PostDetail({
   onDelete,
   onEdit,
   onReport,
+  onDownloadMedia,
   onTranslate,
   onSubmitComment,
   onLoadMoreComments,
@@ -225,7 +247,21 @@ function PostDetail({
           {post.media && post.media.length > 0 && (
             <div className="mb-4 grid gap-2" style={{ gridTemplateColumns: post.media.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}>
               {post.media.map((m) => (
-                <div key={m.id} className="rounded-xl overflow-hidden bg-[var(--gp-parchment)]">
+                <div key={m.id} className="group relative rounded-xl overflow-hidden bg-[var(--gp-parchment)]">
+                  {onDownloadMedia && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
+                        onDownloadMedia(m.id);
+                      }}
+                      className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                      aria-label="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  )}
                   {m.mimeType.startsWith('image/') && (
                     <img src={buildAttachmentUrl(m.fileUrl) ?? undefined} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
                   )}

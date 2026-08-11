@@ -96,6 +96,12 @@ export type ImpressionSource =
  * consumes a slot — the gateway groups them and increments by the count. */
 const IMPRESSION_BATCH_LIMIT = 50;
 
+/**
+ * Surface a media download originates from. Mirrors the gateway's
+ * `DOWNLOAD_SURFACES` (`services/gateway/src/routes/posts/types.ts`).
+ */
+export type DownloadSurface = 'feed' | 'detail' | 'reel';
+
 export interface FeedFilters {
   readonly cursor?: string;
   readonly limit?: number;
@@ -329,6 +335,24 @@ export const postsService = {
 
   async recordImpression(postId: string, source: ImpressionSource = 'detail'): Promise<void> {
     await apiService.post(`/posts/${postId}/impression`, { source });
+  },
+
+  // ── Downloads ────────────────────────────────────────────────────────────
+  // Best-effort analytics ping for "Save media" (PostCard/PostDetail/ReelPlayer,
+  // lightbox `<a download>` pattern) — never throws, a failed ping must not
+  // block the download the browser already triggered.
+
+  async recordMediaDownloads(
+    postId: string,
+    mediaIds: readonly string[],
+    surface: DownloadSurface = 'detail',
+  ): Promise<void> {
+    if (mediaIds.length === 0) return;
+    try {
+      await apiService.post(`/posts/${postId}/downloads`, { mediaIds, surface });
+    } catch {
+      // fire-and-forget : ne jamais bloquer le téléchargement
+    }
   },
 
   // ── Translation ─────────────────────────────────────────────────────────

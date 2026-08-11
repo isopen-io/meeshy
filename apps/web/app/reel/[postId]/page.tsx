@@ -219,6 +219,13 @@ export default function ReelPage() {
     [current, repostMutation, toastCtx, t],
   );
 
+  const onDownload = useCallback(
+    (mediaId: string) => {
+      if (current) postsService.recordMediaDownloads(current.id, [mediaId], 'reel');
+    },
+    [current],
+  );
+
   if (current) {
     return (
       <>
@@ -241,6 +248,7 @@ export default function ReelPage() {
           onBookmark={onBookmark}
           onReport={onReport}
           onRepost={onRepost}
+          onDownload={onDownload}
         />
         {repostModalOpen && (
           <RepostModal
