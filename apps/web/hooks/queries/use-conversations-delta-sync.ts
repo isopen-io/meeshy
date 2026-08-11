@@ -133,6 +133,7 @@ export function useConversationsDeltaSync(enabled: boolean): void {
           // et entrerait en double au `fetchNextPage` suivant.
           const hasMore = Boolean(old.pages[old.pages.length - 1]?.pagination?.hasMore);
           const merge = mergeConversationDelta(existing, conversations, {
+            hasMore,
             openConversationId,
             hasMore,
           });

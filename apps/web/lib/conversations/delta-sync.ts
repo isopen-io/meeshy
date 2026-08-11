@@ -81,6 +81,14 @@ export type ConversationDeltaMerge = {
 
 export type ConversationDeltaMergeOptions = {
   /**
+   * `true` s'il reste des pages non chargées derrière la fenêtre courante
+   * (`hasMore` de la dernière page). Par défaut `false` : sans information, on
+   * insère — ne rien insérer perdrait une ligne, l'insérer au pire la duplique
+   * jusqu'au prochain montage.
+   */
+  readonly hasMore?: boolean;
+
+  /**
    * Conversation ouverte à l'écran, dont la pastille est forcée à zéro — la
    * SEULE exception à l'upsert intégral.
    *
@@ -111,21 +119,12 @@ export type ConversationDeltaMergeOptions = {
    * rallume une seconde après un reconnect se répare tout seul au
    * `conversation:unread-updated` qui suit ; un mark-as-unread perdu, non.
    *
-   * Fermer proprement le reste demande de faire voyager la frontière de lecture
-   * jusqu'au modèle web — chantier de contrat, pas garde de fusion.
+   * Pour toute conversation NON ouverte, le non-lu du delta écrase toujours le
+   * non-lu local sans réconciliation (voir la borne ci-dessus) — fermer
+   * proprement le reste demande de faire voyager la frontière de lecture
+   * jusqu'au modèle web, chantier de contrat, pas garde de fusion.
    */
   readonly openConversationId?: string | null;
-  /**
-   * `true` s'il reste des pages non chargées derrière la fenêtre courante
-   * (`hasMore` de la dernière page).
-   *
-   * Une conversation INCONNUE du cache et plus ancienne que la dernière ligne
-   * chargée vit dans une page non encore lue : l'insérer ici la ferait
-   * apparaître DEUX FOIS au prochain `fetchNextPage`, qui la rapportera à sa
-   * place réelle. Par défaut `false` : sans information, on insère — perdre une
-   * ligne serait pire que la dupliquer jusqu'au prochain montage.
-   */
-  readonly hasMore?: boolean;
 };
 
 /**
@@ -139,9 +138,10 @@ export type ConversationDeltaMergeOptions = {
  * les caches dérivés ; un retrait n'est JAMAIS écarté, quelle que soit sa place.
  *
  * Une conversation INCONNUE du cache et plus ancienne que la fenêtre chargée est
- * écartée tant qu'il reste des pages (`hasMore`) : elle vit dans une page non
- * encore lue, et l'insérer la dupliquerait au prochain `fetchNextPage`. Une
- * inconnue récente, elle, appartient bien à la fenêtre et entre normalement.
+ * écartée tant qu'il reste des pages : elle vit dans une page non encore lue, et
+ * l'insérer ici la ferait apparaître DEUX FOIS au prochain `fetchNextPage`, qui
+ * la rapportera à sa place réelle. Une inconnue récente, elle, appartient bien à
+ * la fenêtre et entre normalement.
  *
  * Le résultat est re-trié par `lastMessageAt` décroissant — l'ordre du serveur,
  * pour que les frontières de pages reconstruites gardent un sens.
