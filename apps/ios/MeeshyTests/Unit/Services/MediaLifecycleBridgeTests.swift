@@ -65,4 +65,25 @@ final class MediaLifecycleBridgeTests: XCTestCase {
         // `deactivateForBackground()`'s internal (post-guard) increment counts.
         XCTAssertEqual(probe.deactivateCount, 1)
     }
+
+    func test_prepareForBackground_pausedQueueWithContext_keepsSessionAndPlayers() async {
+        let engine = MockAudioPlaybackEngine()
+        let coordinator = ConversationAudioCoordinator(engine: engine)
+        coordinator.test_setActiveContext(attachmentId: "paused-att")
+        ConversationAudioCoordinator.testSetShared(coordinator)
+        defer { ConversationAudioCoordinator.testResetShared() }
+
+        let stopProbe = PlaybackCoordinatorStopAllProbe()
+        PlaybackCoordinator.shared.testStopAllProbe = stopProbe
+        defer { PlaybackCoordinator.shared.testStopAllProbe = nil }
+        let sessionProbe = MediaSessionCoordinatorTestProbe()
+        MediaSessionCoordinator.shared.testProbe = sessionProbe
+        defer { MediaSessionCoordinator.shared.testProbe = nil }
+
+        await MediaLifecycleBridge.shared.prepareForBackground()
+
+        XCTAssertEqual(stopProbe.stopAllCount, 0,
+            "Une file en pause (activeContext non-nil) doit survivre au background — la carte permet la reprise depuis le lock screen")
+        XCTAssertEqual(sessionProbe.deactivateCount, 0)
+    }
 }

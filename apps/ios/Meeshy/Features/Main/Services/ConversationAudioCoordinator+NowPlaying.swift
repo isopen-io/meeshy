@@ -90,13 +90,20 @@ extension ConversationAudioCoordinator {
             return
         }
         let totalDuration = duration > 0 ? duration : Double(context.durationMs) / 1000.0
+        let position = queuePosition
         let info: [String: Any] = [
-            MPMediaItemPropertyTitle: context.senderName,
+            MPMediaItemPropertyTitle: Self.nowPlayingTitle(
+                conversationName: context.conversationName,
+                receivedAt: context.receivedAt
+            ),
+            MPMediaItemPropertyArtist: context.senderName,
             MPMediaItemPropertyAlbumTitle: context.conversationName,
             MPMediaItemPropertyPlaybackDuration: totalDuration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Float(speed.rawValue) : 0.0,
-            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+            MPNowPlayingInfoPropertyPlaybackQueueCount: position.count,
+            MPNowPlayingInfoPropertyPlaybackQueueIndex: position.index
         ]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 

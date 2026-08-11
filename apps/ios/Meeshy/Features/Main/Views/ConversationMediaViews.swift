@@ -755,7 +755,11 @@ struct AudioMediaView: View, Equatable {
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
-                allAudioItems: allAudioItems.map(AudioFullscreenSource.init(from:)),
+                // Wrapper explicite requis : `init(from:)` porte désormais des
+                // paramètres additionnels par défaut (conversationId /
+                // nowPlayingContextName / queueTailProvider — coordinator
+                // fusion), ce que la référence de fonction nue ne résout plus.
+                allAudioItems: allAudioItems.map { AudioFullscreenSource(from: $0) },
                 startAttachmentId: attachment.id,
                 contactColor: contactColor,
                 mentionDisplayNames: mentionDisplayNames,

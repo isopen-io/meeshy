@@ -1989,7 +1989,7 @@ class ConversationViewModel: ObservableObject {
     func playAudio(attachmentId: String) {
         guard let (message, attachment) = findAudioAttachment(id: attachmentId),
               attachment.type == .audio,
-              let currentUserId = authManager.currentUser?.id else { return }
+              authManager.currentUser?.id != nil else { return }
 
         let current = QueuedAudio(
             attachmentId: attachment.id,
@@ -2002,18 +2002,25 @@ class ConversationViewModel: ObservableObject {
             receivedAt: message.createdAt
         )
 
-        let tail = AudioQueueBuilder.build(
-            from: messages,
-            startingAfterAttachmentId: attachment.id,
-            currentUserId: currentUserId,
-            listenedAttachmentIds: listenedAttachmentIds
-        )
+        let tail = audioQueueTail(after: attachment.id)
 
         audioCoordinator.play(
             current: current,
             tail: tail,
             conversationName: currentConversationName,
             conversationArtworkURL: currentConversationArtworkURL
+        )
+    }
+
+    /// File des vocaux non écoutés strictement APRÈS `attachmentId` — partagée
+    /// entre `playAudio` et le plein écran (`AudioFullscreenSource.queueTailProvider`).
+    func audioQueueTail(after attachmentId: String) -> [QueuedAudio] {
+        guard let currentUserId = authManager.currentUser?.id else { return [] }
+        return AudioQueueBuilder.build(
+            from: messages,
+            startingAfterAttachmentId: attachmentId,
+            currentUserId: currentUserId,
+            listenedAttachmentIds: listenedAttachmentIds
         )
     }
 
