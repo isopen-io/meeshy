@@ -11,17 +11,21 @@ private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", cat
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///
 /// The container no longer crashes the app when the on-disk database
-/// cannot be opened — corrupted SQLite files are quarantined, an empty
-/// database is recreated, and as a last resort an in-memory pool is
-/// used so the user lands in the app (in degraded mode) instead of a
-/// crash loop. This struct records what happened so the host app can
-/// surface the issue to the user and to Crashlytics.
+/// cannot be opened — corrupted SQLite files are quarantined and
+/// recreated, inaccessible paths fall back to Application Support
+/// (entitlement-less builds: the app-group container resolves but the
+/// sandbox denies access, seen on iOS-on-Mac build 1750, 2026-08-11),
+/// and as a last resort a unique temp-file pool is used so the user
+/// lands in the app (in degraded mode) instead of a crash loop. This
+/// struct records what happened so the host app can surface the issue
+/// to the user and to Crashlytics.
 struct DatabaseInitDiagnostics: Sendable, Equatable {
     var firstAttemptError: String?
     var recoveryAttempted: Bool = false
     var recoveredFromCorruption: Bool = false
     var quarantinedFilePath: String?
-    var fellBackToInMemory: Bool = false
+    var fellBackToSecondaryPath: Bool = false
+    var fellBackToEphemeralStorage: Bool = false
 }
 
 @MainActor
@@ -46,7 +50,7 @@ final class DependencyContainer {
 
     /// Snapshot of how the database came up. Surfaced to ``AppDelegate``
     /// (which forwards the non-empty case to Crashlytics) and to the
-    /// RecoveryView when ``fellBackToInMemory`` is true.
+    /// RecoveryView when ``fellBackToEphemeralStorage`` is true.
     let initDiagnostics: DatabaseInitDiagnostics
 
     private init() {
@@ -56,6 +60,7 @@ final class DependencyContainer {
         var diagnostics = DatabaseInitDiagnostics()
         let pool = Self.openWithRecovery(
             dbPath: dbPath,
+            fallbackPath: Self.databasePath(groupContainer: nil),
             config: config,
             diagnostics: &diagnostics
         )
@@ -114,11 +119,11 @@ final class DependencyContainer {
             await Self.persist(mutation, into: persistence)
         }
 
-        // Skip the auto-vacuum tune when we're on the in-memory fallback —
-        // there's no on-disk file to vacuum and the next launch will retry
+        // Skip the auto-vacuum tune when we're on the ephemeral fallback —
+        // the temp file dies with this launch and the next boot will retry
         // against the real path anyway.
         let autoVacuumKey = "meeshy.db.autoVacuumOneShotDone"
-        if !diagnostics.fellBackToInMemory,
+        if !diagnostics.fellBackToEphemeralStorage,
            !UserDefaults.standard.bool(forKey: autoVacuumKey) {
             let pool = self.dbPool
             Task.detached(priority: .background) {
@@ -276,16 +281,27 @@ final class DependencyContainer {
     // MARK: - Recovery (P1.5 — no more fatalError on DB init)
 
     /// Open the on-disk database with one-shot recovery: if the first
-    /// `DatabasePool(path:)` throws (typically `SQLITE_CORRUPT`), the
-    /// offending file is moved aside with its WAL/SHM siblings, then a
-    /// fresh database is opened at the same path. Only when even that
-    /// fails do we fall back to an in-memory pool so the user lands in
-    /// the app instead of into a crash loop.
+    /// `DatabasePool(path:)` throws with a corruption-shaped error
+    /// (typically `SQLITE_CORRUPT`), the offending file is moved aside
+    /// with its WAL/SHM siblings, then a fresh database is opened at the
+    /// same path. Access-denied errors skip the quarantine entirely — an
+    /// unreadable file is not a corrupt one, and renaming or deleting it
+    /// would destroy data a correctly-signed build could still read
+    /// (iOS-on-Mac build 1750: the sandbox denies the app-group container
+    /// when the binary lost its entitlement, `SQLITE_AUTH`).
     ///
-    /// Internal access for ``DependencyContainerRecoveryTests`` to drive
-    /// the corrupted-file path against tmp directories.
+    /// When the primary path is unusable, `fallbackPath` (Application
+    /// Support in production) gets the same open-then-recover treatment.
+    /// The last resort is a unique temp-file pool — NEVER `:memory:`,
+    /// which a `DatabasePool` cannot honor (WAL requires a real file:
+    /// "could not activate WAL Mode at path: :memory:"), so that old
+    /// "fallback" trapped unconditionally and boot-looped the app.
+    ///
+    /// Internal access for ``DependencyContainerTests`` to drive the
+    /// corrupted-file and denied-path flows against tmp directories.
     static func openWithRecovery(
         dbPath: String,
+        fallbackPath: @autoclosure () -> String? = nil,
         config: Configuration,
         fileManager: FileManager = .default,
         clock: () -> Date = Date.init,
@@ -296,38 +312,85 @@ final class DependencyContainer {
         } catch {
             containerLogger.fault("Database open failed at \(dbPath, privacy: .public): \(error.localizedDescription, privacy: .public) — attempting recovery")
             diagnostics.firstAttemptError = error.localizedDescription
-            diagnostics.recoveryAttempted = true
+            if let pool = reopenReplacingCorruptFile(
+                at: dbPath, after: error, config: config,
+                fileManager: fileManager, clock: clock, diagnostics: &diagnostics
+            ) {
+                return pool
+            }
+        }
 
-            let quarantined = quarantineCorruptDatabase(
-                at: dbPath,
-                fileManager: fileManager,
-                clock: clock
-            )
-            diagnostics.quarantinedFilePath = quarantined
-
+        if let secondary = fallbackPath(), secondary != dbPath {
+            diagnostics.fellBackToSecondaryPath = true
             do {
-                let pool = try DatabasePool(path: dbPath, configuration: config)
-                diagnostics.recoveredFromCorruption = true
-                containerLogger.info("Database recovered with a fresh file at \(dbPath, privacy: .public)")
+                let pool = try DatabasePool(path: secondary, configuration: config)
+                containerLogger.info("Database opened at fallback path \(secondary, privacy: .public)")
                 return pool
             } catch {
-                containerLogger.fault("Database recovery failed at \(dbPath, privacy: .public): \(error.localizedDescription, privacy: .public) — falling back to in-memory pool")
-                diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | recovery: \(error.localizedDescription)"
-                diagnostics.fellBackToInMemory = true
-                // `:memory:` cannot fail under normal operation — DatabasePool
-                // does not throw for ephemeral in-process storage. If it
-                // somehow does, the runtime is so broken that no recovery
-                // makes sense; surface a meaningful crash carrying the real
-                // GRDB error rather than the original opaque
-                // "Failed to initialize database" message.
-                do {
-                    return try DatabasePool(path: ":memory:", configuration: config)
-                } catch {
-                    containerLogger.fault("In-memory DatabasePool init failed: \(error.localizedDescription, privacy: .public)")
-                    preconditionFailure("In-memory DatabasePool unavailable: \(error)")
+                containerLogger.fault("Fallback database open failed at \(secondary, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | fallback: \(error.localizedDescription)"
+                if let pool = reopenReplacingCorruptFile(
+                    at: secondary, after: error, config: config,
+                    fileManager: fileManager, clock: clock, diagnostics: &diagnostics
+                ) {
+                    return pool
                 }
             }
         }
+
+        diagnostics.fellBackToEphemeralStorage = true
+        let ephemeralPath = fileManager.temporaryDirectory
+            .appendingPathComponent("meeshy_messages_ephemeral_\(UUID().uuidString).sqlite")
+            .path
+        containerLogger.fault("All database paths unusable — falling back to an ephemeral pool at \(ephemeralPath, privacy: .public)")
+        do {
+            return try DatabasePool(path: ephemeralPath, configuration: config)
+        } catch {
+            containerLogger.fault("Ephemeral DatabasePool init failed: \(error.localizedDescription, privacy: .public)")
+            preconditionFailure("Ephemeral DatabasePool unavailable: \(error)")
+        }
+    }
+
+    /// Quarantine-then-reopen, reserved for corruption-shaped failures.
+    /// Returns `nil` when the error is access-shaped or when the fresh
+    /// open still fails — the caller moves on to the next fallback tier.
+    private static func reopenReplacingCorruptFile(
+        at path: String,
+        after error: Error,
+        config: Configuration,
+        fileManager: FileManager,
+        clock: () -> Date,
+        diagnostics: inout DatabaseInitDiagnostics
+    ) -> DatabasePool? {
+        guard !isAccessDenied(error) else {
+            containerLogger.fault("Access denied at \(path, privacy: .public) — leaving the file untouched (unreadable ≠ corrupt)")
+            return nil
+        }
+        diagnostics.recoveryAttempted = true
+        diagnostics.quarantinedFilePath = quarantineCorruptDatabase(
+            at: path,
+            fileManager: fileManager,
+            clock: clock
+        )
+        do {
+            let pool = try DatabasePool(path: path, configuration: config)
+            diagnostics.recoveredFromCorruption = true
+            containerLogger.info("Database recovered with a fresh file at \(path, privacy: .public)")
+            return pool
+        } catch {
+            containerLogger.fault("Database recovery failed at \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | recovery: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    private static func isAccessDenied(_ error: Error) -> Bool {
+        guard let dbError = error as? DatabaseError else { return false }
+        let code = dbError.resultCode
+        return code == .SQLITE_AUTH
+            || code == .SQLITE_PERM
+            || code == .SQLITE_CANTOPEN
+            || code == .SQLITE_READONLY
     }
 
     /// Move the suspected-corrupt SQLite file (plus its WAL / SHM siblings)

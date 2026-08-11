@@ -221,7 +221,21 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       userId: TARGET_ID,
       displayName: 'Target User',
       joinedAt: expect.any(String),
+      memberCount: expect.any(Number),
     });
+  });
+
+  // Le compteur ne devient convergent que si le payload porte un TOTAL : un
+  // client qui incrémente ne se rattrape jamais d'un événement manqué (hors
+  // room, hors ligne, trou de reconnexion), et les deux clients persistent la
+  // dérive — cache disque iOS, `staleTime: Infinity` côté web.
+  it('porte l\'effectif ABSOLU, arrivant COMPRIS', async () => {
+    await addTarget();
+
+    const joined = emitted.find((e) => e.event === 'conversation:participant-joined')!;
+    // Quatre membres actifs. L'éventail en écarte l'arrivant — il n'en est pas
+    // moins membre, et c'est l'effectif qui compte, pas l'audience.
+    expect(joined.payload.memberCount).toBe(4);
   });
 
   it('laisse conversation:joined intact sur la seule room du fil', async () => {

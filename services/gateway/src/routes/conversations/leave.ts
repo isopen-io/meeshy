@@ -98,6 +98,12 @@ export function registerLeaveRoutes(
             userId,
             displayName: participant.displayName,
             leftAt: now.toISOString(),
+            // Compte ABSOLU, gratuit — `remaining` est déjà chargé pour nommer
+            // les rooms. Un client qui soustrait 1 ne converge pas : l'événement
+            // manqué (hors ligne, trou de reconnexion) laisse une dérive que
+            // rien ne rattrape, et que les deux clients PERSISTENT (cache disque
+            // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
+            memberCount: remaining.length,
           },
         })
 

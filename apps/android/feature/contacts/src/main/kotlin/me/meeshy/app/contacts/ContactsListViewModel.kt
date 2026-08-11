@@ -9,15 +9,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
+import me.meeshy.sdk.status.statusForUser
 import javax.inject.Inject
 
 data class ContactsListUiState(
@@ -26,6 +31,7 @@ data class ContactsListUiState(
     val query: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    val moodStatuses: List<StatusEntry> = emptyList(),
 ) {
     /** The friend list after the active [filter] and search [query] are applied. */
     val visibleFriends: List<FriendRequestUser> get() = ContactList.visible(friends, filter, query)
@@ -43,6 +49,16 @@ data class ContactsListUiState(
     /** True on a settled load whose roster is genuinely empty (cold, no error). */
     val isEmpty: Boolean
         get() = friends.isEmpty() && !isLoading && errorMessage == null
+
+    /**
+     * The live mood emoji for [userId], or `null` when they have none live right
+     * now — port of iOS `statusViewModel.statusForUser(userId:)?.moodEmoji`
+     * (`ContactsListTab.swift`). Best-effort decoration, not primary content:
+     * whatever the shared [StatusBarCache] already holds for the FRIENDS bar at
+     * load time, never a dedicated fetch of its own.
+     */
+    fun moodEmojiFor(userId: String): String? =
+        moodStatuses.statusForUser(userId)?.moodEmoji?.takeIf { it.isNotBlank() }
 }
 
 /**
@@ -66,6 +82,7 @@ class ContactsListViewModel @Inject constructor(
     private val friendListRepository: FriendListRepository,
     private val friendshipCache: FriendshipCache,
     private val sessionRepository: SessionRepository,
+    private val statusBarCache: StatusBarCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
@@ -85,9 +102,26 @@ class ContactsListViewModel @Inject constructor(
     fun dismissError() = _state.update { it.copy(errorMessage = null) }
 
     fun load() {
+        paintMoodStatusesFromCache()
         viewModelScope.launch {
             paintFromCache()
             revalidate()
+        }
+    }
+
+    /**
+     * Best-effort read of whatever the shared FRIENDS statuses bar already has
+     * cached (L1 `StatusBarCache`, populated whenever Feed's status bar has
+     * loaded) — synchronous, no network call of its own. Freshness does not
+     * matter for a decorative avatar badge, so [valueOrNull] collapses
+     * Fresh/Stale/Syncing uniformly (mirrors the `CategoryRepository` precedent);
+     * a cold [me.meeshy.sdk.cache.CacheResult.Empty] just means no badges yet,
+     * exactly like iOS before its own status bar has ever loaded.
+     */
+    private fun paintMoodStatusesFromCache() {
+        val statuses = statusBarCache.load(StatusFeedMode.FRIENDS).valueOrNull.orEmpty()
+        if (statuses != _state.value.moodStatuses) {
+            _state.update { it.copy(moodStatuses = statuses) }
         }
     }
 

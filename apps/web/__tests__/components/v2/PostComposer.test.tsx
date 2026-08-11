@@ -241,18 +241,19 @@ describe('PostComposer — media wiring (Task 1)', () => {
     expect(mockHandleRemoveFile).toHaveBeenCalledWith(0);
   });
 
-  // Important #1 (review fix) — useAttachmentUpload enforces maxAttachments
-  // against `selectedFiles.length + uploadedAttachments.length`, but
-  // selectedFiles is never trimmed after a successful upload while
-  // uploadedAttachments grows alongside it: after N successful uploads both
-  // arrays hold N, so the hook counts 2N. Passing MEDIA_LIMIT (10) as-is
-  // would silently cap real uploads at 5. See PostComposer.mediaCapDoubleCount.test.tsx
-  // for the sequential-selection regression test that reproduces this.
-  it('doubles maxAttachments passed to the upload hook to offset its own selectedFiles+uploadedAttachments double-count', () => {
+  // Task 7, point 2 (review fix) — useAttachmentUpload used to enforce
+  // maxAttachments against `selectedFiles.length + uploadedAttachments.length`,
+  // double-counting once uploads settled since selectedFiles was never
+  // trimmed on success. Now that the hook counts selectedFiles alone as the
+  // single source of truth, PostComposer passes MEDIA_LIMIT as-is (no more
+  // `* 2` headroom workaround). See PostComposer.mediaCapDoubleCount.test.tsx
+  // for the sequential-selection regression test proving the fixed hook lets
+  // exactly MEDIA_LIMIT uploads through.
+  it('passes MEDIA_LIMIT as-is to the upload hook (no double-count workaround)', () => {
     render(<PostComposer onPublish={jest.fn()} />);
 
     expect(mockUseAttachmentUpload).toHaveBeenCalledWith(
-      expect.objectContaining({ maxAttachments: 20 }),
+      expect.objectContaining({ maxAttachments: 10 }),
     );
   });
 

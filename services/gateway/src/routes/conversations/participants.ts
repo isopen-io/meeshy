@@ -420,6 +420,17 @@ export function registerParticipantsRoutes(
             userId,
             displayName: addedMemberFields.displayName,
             joinedAt: joinedAt.toISOString(),
+            // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
+            // rattrape jamais d'un événement manqué (hors ligne, trou de
+            // reconnexion), et les deux clients PERSISTENT la dérive (cache
+            // disque iOS, `staleTime: Infinity` web). Un total se rattrape au
+            // suivant.
+            //
+            // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il
+            // est actif depuis l'écriture juste au-dessus, donc il compte, mais
+            // il ne figure pas dans `audience`. Une seconde requête ne rendrait
+            // rien de plus.
+            memberCount: audience.length + 1,
           },
         });
       }
@@ -620,7 +631,10 @@ export function registerParticipantsRoutes(
               conversationId,
               userId,
               displayName: removedParticipant?.displayName ?? '',
-              leftAt: leftAt.toISOString()
+              leftAt: leftAt.toISOString(),
+              // Compte ABSOLU — `remaining` est déjà chargé pour nommer les
+              // rooms, et un delta ne rattrape jamais un événement manqué.
+              memberCount: remaining.length
             }
           });
 

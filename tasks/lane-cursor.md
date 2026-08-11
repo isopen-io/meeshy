@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=5 last_run=conversation-hardpress-preview
+lane=ANDROID android_streak=1 last_run=contacts-mood-emoji-presence
