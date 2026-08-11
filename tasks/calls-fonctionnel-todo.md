@@ -6323,3 +6323,81 @@ la liste complète des Vagues 57-96 pour éviter toute redite) a remonté un can
   `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-régression) ; toolchains iOS/Android
   toujours hors d'atteinte dans ce sandbox ; delta de comptage `tsc --noEmit` (1190 vs. 1657 legacy,
   Vague 95) toujours non investigué.
+
+## Vague 98 — `useCallAnalyticsReporter`'s reconnection counter could never increment: it compared a real `RTCPeerConnectionState` against the unreachable literal `'reconnecting'` (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+`list_pull_requests` a remonté une PR ouverte de cette routine (#2796, Vague 97 — snapshot des pairs
+avant `getUserMedia()`), CI 15/15 verte contre un `main` vieux de plusieurs commits ; rebasée localement
+sur `origin/main` (merge sans conflit), sweep complet + `tsc --noEmit` rejoués (51 suites/745 tests,
+1657 erreurs pré-existantes identiques avant/après), poussée, CI verte à nouveau (15/15), mergée. Audit
+dédié (agent Explore, lecture seule, périmètre web+gateway, mandaté avec la liste complète des Vagues
+9-97 pour éviter toute redite) a remonté un candidat unique, vérifié ensuite ligne à ligne directement
+dans le code courant plutôt que pris tel quel.
+
+- **Root cause confirmée par lecture directe** : `useCallAnalyticsReporter` (`use-call-analytics-reporter.ts`)
+  détectait un stall mid-call avec `connectionState === 'reconnecting' && prevStateRef.current !== 'reconnecting'`.
+  Son unique appelant (`VideoCallInterface.tsx`) lui passe le `connectionState` renvoyé par `useWebRTCP2P()`
+  (`use-webrtc-p2p.ts`), typé `RTCPeerConnectionState` et alimenté EXCLUSIVEMENT par
+  `RTCPeerConnection.connectionState` natif (`webrtc-service.ts`, `onconnectionstatechange`). Le type
+  `RTCPeerConnectionState` du spec W3C vaut `'closed' | 'connected' | 'connecting' | 'disconnected' |
+  'failed' | 'new'` — **`'reconnecting'` n'en fait pas partie**, et un grep complet du dépôt confirme
+  qu'aucun code n'assigne jamais ce littéral à cette variable précise. `markReconnecting` était donc du
+  code mort : sur un blip réseau ordinaire (WiFi↔cellulaire, micro-coupure) — exactement le cas que le
+  grace timer ICE et `restartIce()` de `webrtc-service.ts` existent pour absorber, et que
+  `use-webrtc-p2p.ts` suit déjà en interne via `stalledPeersRef` pour émettre `call:reconnecting`/
+  `call:reconnected` au serveur — le check `=== 'reconnecting'` ne matchait jamais. Le payload
+  `call:analytics` envoyé à la fin de CHAQUE appel web rapportait `reconnectionCount: 0`, y compris pour
+  des appels ayant réellement stall/récupéré, aveuglant silencieusement le dashboard de fiabilité sur
+  l'un de ses deux indicateurs phares (l'autre étant la distribution de qualité). Effet de bord découvert
+  en traçant le signal réel : le test existant du fichier (`use-call-analytics-reporter.test.tsx`)
+  ré-armait artificiellement `connectionState: 'reconnecting'` — une forme que la production ne produit
+  JAMAIS — même défaut de fixture que la Leçon 95 (`lessons.md`) : la suite était verte et décrivait
+  fidèlement un monde où le défaut n'existe pas.
+- **Fix** : `use-webrtc-p2p.ts` expose désormais un état réel `isReconnecting` (nouveau `useState`),
+  dérivé du même `stalledPeersRef` qui pilote déjà `call:reconnecting`/`call:reconnected` — `true` posé au
+  moment où un pair rejoint `stalledPeersRef` (stall mid-call détecté), `false` reposé quand
+  `stalledPeersRef` redevient vide (tous les pairs stallés ont récupéré) ou à `cleanup()`. Aucune
+  renégociation ni changement de la logique d'émission socket existante — uniquement l'ajout du miroir
+  d'état React manquant sur un signal déjà calculé. `VideoCallInterface.tsx` relaie `isReconnecting` à
+  `useCallAnalyticsReporter`, qui compare désormais `isReconnecting` (transition false→true) au lieu de
+  `connectionState === 'reconnecting'` pour appeler `markReconnecting` — `connectionState === 'connected'`
+  reste inchangé pour `markConnected` (cette valeur-là EST un `RTCPeerConnectionState` réel). Trois
+  fichiers de production modifiés : `use-webrtc-p2p.ts` (+20/-8), `use-call-analytics-reporter.ts`
+  (+14/-6), `VideoCallInterface.tsx` (+2/-2, fils de props uniquement).
+- **Tests** (TDD, RED confirmé avant fix — les 2 assertions `isReconnecting` échouaient avec `undefined`
+  reçu, aucune régression annexe) :
+  - `use-webrtc-p2p.test.tsx` — 2 nouveaux tests dans le describe `TURN credential refresh` existant
+    (`isReconnecting` bascule à `true` pendant un stall mid-call puis `false` à la reconnexion ; reste
+    `false` pour un flottement ICE pré-connexion, même garde que les tests `call:reconnecting` voisins).
+    `driveIce` (helper partagé) retourne désormais `result` pour permettre ces assertions d'état sans
+    dupliquer le montage.
+  - `use-call-analytics-reporter.test.tsx` — fixture `baseProps` porte désormais `isReconnecting: false`
+    par défaut ; le test « accumulates a reconnection » réécrit pour piloter `isReconnecting` (transitions
+    booléennes réelles) au lieu du littéral `connectionState: 'reconnecting'` inatteignable en production
+    (corrige le défaut de fixture de type Leçon 95 découvert au passage) ; nouveau test couvrant la
+    non-double-comptabilisation quand `isReconnecting` reste `true` sur plusieurs re-renders consécutifs.
+  GREEN après implémentation.
+- **Vérification** : `use-webrtc-p2p.test.tsx` + `use-call-analytics-reporter.test.tsx` — **58/58 verts**
+  (55 préexistants + 3 neufs). Sweep complet `video-call|use-webrtc|use-call|orchestrator|call-store|
+  adaptive-degradation|audio-effect|webrtc-service` — **51 suites / 748 tests verts** (+3 net vs. Vague
+  97), aucune régression. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun
+  install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client && bun run
+  build` sans erreur. `npx tsc --noEmit` sur `apps/web` : **1657 erreurs avant et après le diff** (`git
+  stash`/`stash pop`, comparaison ligne à ligne des deux sorties complètes sur les 3 fichiers touchés) —
+  décalages de NUMÉRO DE LIGNE uniquement sur `use-call-analytics-reporter.ts`/`VideoCallInterface.tsx`
+  (erreurs préexistantes sans rapport : `CALL_ANALYTICS` absent du type `CLIENT_EVENTS` généré dans ce
+  sandbox, `TS2571`/`TS18046` sur des sites `unknown` non liés à ce diff), zéro nouvelle erreur, zéro sur
+  `use-webrtc-p2p.ts` lui-même. Diff strictement scopé à `apps/web` (aucun fichier gateway touché) — suite
+  gateway non rejouée ce cycle, hors du diff.
+- **Reste ouvert** (reconduit, aucun nouveau candidat web/gateway à haute confiance identifié ce cycle
+  hors celui traité) : dead code / god-object `CallManager.swift` iOS (~5770 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague
+  84, nécessite confirmation on-device) ; `removeParticipant()` ne nettoie pas
+  `connectedPeersRef`/`stalledPeersRef` (Vague 91, réévaluée non-régression) ; `call-store.ts`'s
+  `setReconnecting(attempt)`/`isReconnecting` reste un signal mort, jamais invoqué par le flux d'appel
+  (constaté pendant cet audit, hors périmètre — surface store distincte de celle corrigée ici) ;
+  toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; `CALL_ANALYTICS` absent du type
+  généré `CLIENT_EVENTS` dans ce sandbox (préexistant, cause probable : génération de types partagés
+  obsolète localement, non investigué).

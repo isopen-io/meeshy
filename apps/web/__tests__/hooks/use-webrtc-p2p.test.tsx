@@ -995,6 +995,7 @@ describe('useWebRTCP2P', () => {
       act(() => {
         for (const state of states) lastCallOptions.onIceConnectionStateChange(state);
       });
+      return result;
     };
 
     it('émet call:reconnecting une seule fois par stall mid-call', async () => {
@@ -1028,6 +1029,25 @@ describe('useWebRTCP2P', () => {
           event === CLIENT_EVENTS.CALL_RECONNECTING || event === CLIENT_EVENTS.CALL_RECONNECTED
       );
       expect(reconnectEvents).toHaveLength(0);
+    });
+
+    // Vague 98: `isReconnecting` is the real stall signal exposed to callers
+    // (e.g. call:analytics' reconnectionCount) — the connectionState value
+    // it replaces never actually carries the string 'reconnecting'.
+    it('expose isReconnecting=true pendant un stall mid-call, false une fois reconnecté', async () => {
+      const result = await driveIce(['connected', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(true);
+
+      act(() => {
+        const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+        lastCallOptions.onIceConnectionStateChange('connected');
+      });
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
+    it('isReconnecting reste false pour un flottement ICE pré-connexion', async () => {
+      const result = await driveIce(['checking', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(false);
     });
 
     it('chaque cycle de stall porte une tentative incrémentée', async () => {
