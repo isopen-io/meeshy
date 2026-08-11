@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
@@ -12,6 +12,16 @@ import { TranslationToggle } from './TranslationToggle';
 import type { TranslationItem } from './TranslationToggle';
 import { getLanguageName } from './flags';
 import { PostContentText } from './PostContentText';
+import type { Post } from '@meeshy/shared/types/post';
+
+type PostCardMedia = {
+  id: string;
+  mimeType: string;
+  fileUrl: string;
+  thumbnailUrl?: string | null;
+  alt?: string | null;
+  duration?: number | null;
+};
 
 export interface PostCardProps {
   author: { name: string; avatar?: string; emoji?: string };
@@ -28,7 +38,9 @@ export interface PostCardProps {
   isPinned?: boolean;
   reactionSummary?: Record<string, number>;
   userReaction?: string;
-  media?: readonly { id: string; mimeType: string; fileUrl: string; thumbnailUrl?: string | null; alt?: string | null; duration?: number | null }[];
+  media?: readonly PostCardMedia[];
+  /** Original post being reposted — renders the "Reposted from @handle" banner + nested card. */
+  repostOf?: Post['repostOf'];
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -41,6 +53,10 @@ export interface PostCardProps {
   onReport?: () => void;
   onTranslate?: () => void;
   onDownloadMedia?: (mediaId: string) => void;
+  /** Media download inside the nested `repostOf` card — targets the ORIGINAL's media. */
+  onDownloadRepostMedia?: (mediaId: string) => void;
+  /** Tap on the repost banner or nested card — navigates to the ORIGINAL post. */
+  onTapRepost?: (repostId: string) => void;
   onClick?: () => void;
   className?: string;
 }
@@ -68,6 +84,86 @@ function downloadFileName(media: { id: string; mimeType: string; alt?: string | 
   return ext ? `${media.alt || media.id}.${ext}` : media.alt || media.id;
 }
 
+/**
+ * Same shape as `postToTranslations` (PostsFeedScreen/hashtag page host
+ * helpers) applied to `repostOf.translations` — the Prisme resolution for
+ * the nested card reuses the exact same `TranslationToggle` mechanism as the
+ * outer post, never `translations.first`.
+ */
+function repostTranslationItems(translations: unknown): TranslationItem[] {
+  if (!translations || typeof translations !== 'object') return [];
+  return Object.entries(translations as Record<string, { text?: string }>)
+    .filter(([, v]) => v && typeof v.text === 'string')
+    .map(([lang, v]) => ({ languageCode: lang, languageName: lang.toUpperCase(), content: v.text! }));
+}
+
+/**
+ * Single tile renderer shared by the outer media grid and the nested
+ * `repostOf` grid (image / video / audio, optional download button) — kept
+ * as one implementation so the two never drift.
+ */
+function PostMediaTile({
+  media,
+  index,
+  onDownload,
+  downloadLabel,
+  t,
+  testIdPrefix = 'post-card',
+}: {
+  media: PostCardMedia;
+  index: number;
+  onDownload?: (media: PostCardMedia) => void;
+  downloadLabel: string;
+  t: (key: string, paramsOrFallback?: Record<string, unknown> | string) => string;
+  testIdPrefix?: string;
+}) {
+  return (
+    <div className="group relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
+      {onDownload && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload(media);
+          }}
+          className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          aria-label={downloadLabel}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </button>
+      )}
+      {media.mimeType.startsWith('image/') && (
+        <img
+          src={buildAttachmentUrl(media.thumbnailUrl ?? media.fileUrl) ?? undefined}
+          alt={media.alt ?? t('post.imageAlt', { index: String(index + 1) })}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      )}
+      {media.mimeType.startsWith('video/') && (
+        <video src={buildAttachmentUrl(media.fileUrl) ?? undefined} className="w-full h-full object-cover" muted />
+      )}
+      {media.mimeType.startsWith('audio/') && (
+        <div
+          data-testid={`${testIdPrefix}-audio-tile`}
+          className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-[var(--gp-terracotta)]"
+        >
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          {typeof media.duration === 'number' && (
+            <span className="text-xs font-medium text-[var(--gp-text-secondary)]">
+              {formatDuration(media.duration)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PostCard({
   author,
   lang,
@@ -84,6 +180,7 @@ function PostCard({
   reactionSummary,
   userReaction,
   media,
+  repostOf,
   onLike,
   onComment,
   onShare,
@@ -96,6 +193,8 @@ function PostCard({
   onReport,
   onTranslate,
   onDownloadMedia,
+  onDownloadRepostMedia,
+  onTapRepost,
   onClick,
   className,
 }: PostCardProps) {
@@ -153,6 +252,31 @@ function PostCard({
   const clickableProps = onClick
     ? { role: 'button' as const, tabIndex: 0, onClick, onKeyDown: handleCardKeyDown }
     : {};
+
+  const handleTapRepost = useCallback(() => {
+    if (repostOf?.id) onTapRepost?.(repostOf.id);
+  }, [repostOf?.id, onTapRepost]);
+
+  const repostClickableProps = onTapRepost && repostOf?.id
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: (e: React.MouseEvent) => { e.stopPropagation(); handleTapRepost(); },
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTapRepost(); }
+        },
+      }
+    : {};
+
+  const repostTranslations = useMemo(() => repostTranslationItems(repostOf?.translations), [repostOf?.translations]);
+  const repostMedia = repostOf?.media;
+  const hasRepostMedia = repostMedia && repostMedia.length > 0;
+  const handleDownloadRepostMedia = onDownloadRepostMedia
+    ? (m: PostCardMedia) => {
+        triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
+        onDownloadRepostMedia(m.id);
+      }
+    : undefined;
 
   const hasTranslations = translations && translations.length > 0;
   const hasReactions = reactionSummary && Object.keys(reactionSummary).length > 0;
@@ -286,51 +410,116 @@ function PostCard({
             style={{ gridTemplateColumns: media.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}
           >
             {media.slice(0, 4).map((m, i) => (
-              <div key={m.id} className="group relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
-                {onDownloadMedia && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
-                      onDownloadMedia(m.id);
-                    }}
-                    className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                    aria-label={t('post.download', 'Download')}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                  </button>
-                )}
-                {m.mimeType.startsWith('image/') && (
-                  <img
-                    src={buildAttachmentUrl(m.thumbnailUrl ?? m.fileUrl) ?? undefined}
-                    alt={m.alt ?? t('post.imageAlt', { index: String(i + 1) })}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                )}
-                {m.mimeType.startsWith('video/') && (
-                  <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} className="w-full h-full object-cover" muted />
-                )}
-                {m.mimeType.startsWith('audio/') && (
-                  <div
-                    data-testid="post-card-audio-tile"
-                    className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-[var(--gp-terracotta)]"
-                  >
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {typeof m.duration === 'number' && (
-                      <span className="text-xs font-medium text-[var(--gp-text-secondary)]">
-                        {formatDuration(m.duration)}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
+              <PostMediaTile
+                key={m.id}
+                media={m}
+                index={i}
+                downloadLabel={t('post.download', 'Download')}
+                t={t}
+                onDownload={
+                  onDownloadMedia
+                    ? (mm) => {
+                        triggerMediaDownload(buildAttachmentUrl(mm.fileUrl) ?? mm.fileUrl, downloadFileName(mm));
+                        onDownloadMedia(mm.id);
+                      }
+                    : undefined
+                }
+              />
             ))}
+          </div>
+        )}
+
+        {/* Repost — banner + nested original card */}
+        {repostOf && (
+          <div
+            data-testid="post-card-repost-block"
+            className={cn(
+              'mb-3 rounded-xl border border-[var(--gp-border)] p-3',
+              onTapRepost && repostOf.id && 'cursor-pointer',
+            )}
+            {...repostClickableProps}
+          >
+            <div className="flex items-center gap-1.5 mb-2 text-xs text-[var(--gp-text-muted)]">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}</span>
+            </div>
+
+            <div className="flex items-center gap-2 mb-1.5">
+              <Avatar name={repostOf.author?.username ?? '?'} src={repostOf.author?.avatar ?? undefined} size="sm" />
+              <span className="text-sm font-medium text-[var(--gp-text-primary)]">
+                {repostOf.author?.displayName ?? repostOf.author?.username ?? '?'}
+              </span>
+            </div>
+
+            {repostOf.content && (
+              repostTranslations.length > 0 ? (
+                // `inline` (not `block`) — the `block` variant renders its own
+                // resolved-content paragraph unconditionally regardless of
+                // `showContent`, which would double the text alongside
+                // PostContentText below. `inline` respects `showContent` and
+                // is the same combination CommentItem/StatusBar/StoryViewer
+                // already use for single-render translated text.
+                <div className="mb-2">
+                  <TranslationToggle
+                    originalContent={repostOf.content}
+                    originalLanguage={repostOf.originalLanguage ?? 'unknown'}
+                    originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
+                    translations={repostTranslations}
+                    userLanguage={userLanguage}
+                    variant="inline"
+                  />
+                </div>
+              ) : (
+                <div className="mb-2">
+                  <PostContentText content={repostOf.content} className="text-sm text-[var(--gp-text-secondary)]" />
+                </div>
+              )
+            )}
+
+            {hasRepostMedia && repostMedia && (
+              <div
+                className="mb-2 grid gap-1 rounded-lg overflow-hidden"
+                style={{ gridTemplateColumns: repostMedia.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}
+              >
+                {repostMedia.slice(0, 4).map((m, i) => (
+                  <PostMediaTile
+                    key={m.id}
+                    media={m}
+                    index={i}
+                    downloadLabel={t('post.repost.download', 'Download original media')}
+                    t={t}
+                    testIdPrefix="post-card-repost"
+                    onDownload={handleDownloadRepostMedia}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 text-xs text-[var(--gp-text-muted)]">
+              <span className="inline-flex items-center gap-1" data-testid="repost-like-count">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {repostOf.likeCount ?? 0}
+              </span>
+              <span className="inline-flex items-center gap-1" data-testid="repost-comment-count">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {repostOf.commentCount ?? 0}
+              </span>
+              {typeof repostOf.viewCount === 'number' && (
+                <span className="inline-flex items-center gap-1" data-testid="repost-view-count">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {repostOf.viewCount}
+                </span>
+              )}
+            </div>
           </div>
         )}
 
