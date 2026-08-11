@@ -2819,7 +2819,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       inbound server truth); `ChatViewModel` collects the flow, conversation-scoped. +37 tests
       (18 `AttachmentAudioTranslationMergeTest`, 2 `AudioTranslationEventTest` decode-contract, 8
       `BubbleContentBuilderTest`, 4 repo, 2 VM, +3 wiring). Diff = `apps/android` only.
-- [ ] Ad-hoc blocking text translation
+- [x] Ad-hoc blocking text translation — **stale checkbox, RE-PROUVEN 2026-08-11**: already fully
+      shipped. iOS's own `/translate-blocking` on-demand mechanism (`MessageLanguageDetailView.
+      translateTo`, `TranslationService.shared.translate(messageId:)` — passing `messageId` routes
+      the gateway into its "retranslation" branch, which persists AND broadcasts via
+      `message:translation`) has a direct Android counterpart:
+      `ChatViewModel.onExplorerRetranslate(messageId, code)` → `requestOnDemandTranslation` →
+      `MessageRepository.requestTranslation(messageId, targetLanguage)` — a real, synchronous
+      (`suspend fun`) REST call (`translationApi.translate(...)`) that persists the result,
+      exactly mirroring the "blocking" semantics. Wired from `MessageDetailExplorer`'s per-language
+      retranslate affordance in the same long-press → "Explore languages" sheet root `CLAUDE.md`
+      documents as the sole translation-exploration entry point. Fully tested: 7
+      `MessageRepositoryTest` cases (success, translator failure, unknown/deleted message, blank
+      target, blank result ignored, idempotent-on-match) + ~10 `ChatViewModelTest` cases (success,
+      failure, in-flight double-tap guard, unknown-message no-op, blank-target no-op). No code
+      change needed this run — just the checkbox.
 - [x] Source-language stamping from in-app prefs (NEVER device locale) — **done**
       (slice `chat-compose-language-detection`, 2026-07-10): `ChatViewModel.send()` stamped
       `originalLanguage = user.systemLanguage ?: "fr"` — doubly wrong: it ignored the Prisme
