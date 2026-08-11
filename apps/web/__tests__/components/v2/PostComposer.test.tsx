@@ -56,19 +56,28 @@ let mockAttachmentState: MockAttachmentState = {
   uploadProgress: {},
 };
 
-jest.mock('@/hooks/composer/useAttachmentUpload', () => ({
-  useAttachmentUpload: () => ({
-    selectedFiles: mockAttachmentState.selectedFiles,
-    uploadedAttachments: mockAttachmentState.uploadedAttachments,
-    isUploading: mockAttachmentState.isUploading,
-    uploadProgress: mockAttachmentState.uploadProgress,
-    handleFilesSelected: mockHandleFilesSelected,
-    handleRemoveFile: mockHandleRemoveFile,
-    clearAttachments: mockClearAttachments,
-  }),
+// Spy-wrapped so tests can assert on the exact options PostComposer passes
+// to the hook (notably `maxAttachments` — see the double-count regression
+// tests below), while still returning the externally-controlled state.
+const mockUseAttachmentUpload = jest.fn((_opts: { token?: string; maxAttachments?: number }) => ({
+  selectedFiles: mockAttachmentState.selectedFiles,
+  uploadedAttachments: mockAttachmentState.uploadedAttachments,
+  isUploading: mockAttachmentState.isUploading,
+  uploadProgress: mockAttachmentState.uploadProgress,
+  handleFilesSelected: mockHandleFilesSelected,
+  handleRemoveFile: mockHandleRemoveFile,
+  clearAttachments: mockClearAttachments,
 }));
 
-global.URL.createObjectURL = jest.fn().mockReturnValue('blob:mock-url');
+jest.mock('@/hooks/composer/useAttachmentUpload', () => ({
+  useAttachmentUpload: (opts: { token?: string; maxAttachments?: number }) => mockUseAttachmentUpload(opts),
+}));
+
+// Distinct return values per call (not a fixed string) so the revoke tests
+// below can verify the exact URL created for a given File is the one revoked.
+let objectUrlCounter = 0;
+global.URL.createObjectURL = jest.fn(() => `blob:mock-url-${objectUrlCounter++}`);
+global.URL.revokeObjectURL = jest.fn();
 
 function makeFile(name: string, type: string, size = 1024): File {
   return new File([new ArrayBuffer(size)], name, { type });
@@ -97,6 +106,7 @@ function expandComposer() {
 describe('PostComposer — media wiring (Task 1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    objectUrlCounter = 0;
     mockAttachmentState = {
       selectedFiles: [],
       uploadedAttachments: [],
@@ -229,5 +239,94 @@ describe('PostComposer — media wiring (Task 1)', () => {
     fireEvent.click(screen.getByLabelText('delete'));
 
     expect(mockHandleRemoveFile).toHaveBeenCalledWith(0);
+  });
+
+  // Important #1 (review fix) — useAttachmentUpload enforces maxAttachments
+  // against `selectedFiles.length + uploadedAttachments.length`, but
+  // selectedFiles is never trimmed after a successful upload while
+  // uploadedAttachments grows alongside it: after N successful uploads both
+  // arrays hold N, so the hook counts 2N. Passing MEDIA_LIMIT (10) as-is
+  // would silently cap real uploads at 5. See PostComposer.mediaCapDoubleCount.test.tsx
+  // for the sequential-selection regression test that reproduces this.
+  it('doubles maxAttachments passed to the upload hook to offset its own selectedFiles+uploadedAttachments double-count', () => {
+    render(<PostComposer onPublish={jest.fn()} />);
+
+    expect(mockUseAttachmentUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ maxAttachments: 20 }),
+    );
+  });
+
+  it('sets a cap-reached message and still uploads the files that fit when more are selected than remain', () => {
+    mockAttachmentState.selectedFiles = Array.from({ length: 8 }, (_, i) => makeFile(`img-${i}.png`, 'image/png'));
+    const { container } = render(<PostComposer onPublish={jest.fn()} />);
+    expandComposer();
+
+    const imageInput = container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+    const extra = [makeFile('a.png', 'image/png'), makeFile('b.png', 'image/png'), makeFile('c.png', 'image/png')];
+    fireEvent.change(imageInput, { target: { files: extra } });
+
+    expect(mockHandleFilesSelected).toHaveBeenCalledWith(extra.slice(0, 2));
+    expect(screen.getByTestId('post-composer-media-error')).toHaveTextContent('Only 2 added');
+  });
+
+  it('clears the inline media error once a tile is removed', () => {
+    mockAttachmentState.selectedFiles = [makeFile('existing.png', 'image/png')];
+    mockValidateFiles.mockReturnValue({ valid: false, errors: ['huge.png: File too large. Max size: 25 MB'] });
+    const { container } = render(<PostComposer onPublish={jest.fn()} />);
+    expandComposer();
+
+    const imageInput = container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+    fireEvent.change(imageInput, { target: { files: [makeFile('huge.png', 'image/png')] } });
+    expect(screen.getByTestId('post-composer-media-error')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('delete'));
+
+    expect(screen.queryByTestId('post-composer-media-error')).not.toBeInTheDocument();
+  });
+
+  // Important #2 (review fix) — URL.createObjectURL was called inline in the
+  // render body with no memoization or revocation: every keystroke in the
+  // caption re-rendered the preview list and minted a fresh blob URL per
+  // image tile, leaking one File reference per keystroke.
+  it('creates an object URL for an image preview only once across re-renders (typing does not leak blobs)', () => {
+    mockAttachmentState.selectedFiles = [makeFile('cat.png', 'image/png')];
+    render(<PostComposer onPublish={jest.fn()} />);
+    expandComposer();
+
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText('postComposer.contentLabel'), { target: { value: 'H' } });
+    fireEvent.change(screen.getByLabelText('postComposer.contentLabel'), { target: { value: 'He' } });
+    fireEvent.change(screen.getByLabelText('postComposer.contentLabel'), { target: { value: 'Hel' } });
+
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes the object URL for a tile that drops out of selectedFiles', () => {
+    const fileA = makeFile('a.png', 'image/png');
+    const fileB = makeFile('b.png', 'image/png');
+    mockAttachmentState.selectedFiles = [fileA, fileB];
+    const { rerender } = render(<PostComposer onPublish={jest.fn()} />);
+    expandComposer();
+
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    const revokedUrl = (URL.createObjectURL as jest.Mock).mock.results[0].value;
+
+    mockAttachmentState.selectedFiles = [fileB];
+    rerender(<PostComposer onPublish={jest.fn()} />);
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(revokedUrl);
+  });
+
+  it('revokes every cached object URL on unmount', () => {
+    mockAttachmentState.selectedFiles = [makeFile('a.png', 'image/png'), makeFile('b.png', 'image/png')];
+    const { unmount } = render(<PostComposer onPublish={jest.fn()} />);
+    expandComposer();
+
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+
+    unmount();
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
   });
 });

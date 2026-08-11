@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
@@ -79,11 +79,51 @@ function PostComposer({
     clearAttachments,
   } = useAttachmentUpload({
     token: authToken ?? undefined,
-    maxAttachments: MEDIA_LIMIT,
+    // useAttachmentUpload counts `selectedFiles.length + uploadedAttachments.length`
+    // against maxAttachments (useAttachmentUpload.ts:280-281), but selectedFiles is
+    // never trimmed after a successful upload while uploadedAttachments grows
+    // alongside it (:332, :359) — after N successful uploads both arrays hold N,
+    // so the hook counts 2N. Double the ceiling here for headroom; MEDIA_LIMIT
+    // stays the single client-facing cap via `mediaLimitReached` below.
+    maxAttachments: MEDIA_LIMIT * 2,
   });
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
   const uploadPercentage = uploadProgress[0] ?? 0;
+
+  // Blob URLs for image previews, memoized per File identity so retyping the
+  // caption (re-render on every keystroke) never mints a new object URL —
+  // only revoked (in the effect below) once a file actually drops out of
+  // selectedFiles, on clear/publish, or on unmount.
+  const objectUrlCacheRef = useRef<Map<File, string>>(new Map());
+
+  const getPreviewUrl = (file: File): string => {
+    const cache = objectUrlCacheRef.current;
+    const existing = cache.get(file);
+    if (existing) return existing;
+    const url = URL.createObjectURL(file);
+    cache.set(file, url);
+    return url;
+  };
+
+  useEffect(() => {
+    const cache = objectUrlCacheRef.current;
+    const stillSelected = new Set(selectedFiles);
+    cache.forEach((url, file) => {
+      if (!stillSelected.has(file)) {
+        URL.revokeObjectURL(url);
+        cache.delete(file);
+      }
+    });
+  }, [selectedFiles]);
+
+  useEffect(() => {
+    const cache = objectUrlCacheRef.current;
+    return () => {
+      cache.forEach((url) => URL.revokeObjectURL(url));
+      cache.clear();
+    };
+  }, []);
 
   const handleMediaSelect = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -94,7 +134,8 @@ function PostComposer({
       return;
     }
 
-    const filesToAdd = Array.from(files).slice(0, available);
+    const requested = Array.from(files);
+    const filesToAdd = requested.slice(0, available);
     // Pré-validation avec le même service que le hook (taille/type), pour
     // afficher le message spécifique DANS le composer plutôt que de laisser
     // le hook émettre un toast générique.
@@ -104,9 +145,18 @@ function PostComposer({
       return;
     }
 
-    setMediaError(null);
+    setMediaError(
+      filesToAdd.length < requested.length
+        ? `You can attach up to ${MEDIA_LIMIT} media files. Only ${filesToAdd.length} added.`
+        : null,
+    );
     handleFilesSelected(filesToAdd);
   }, [selectedFiles.length, handleFilesSelected]);
+
+  const handleRemoveMedia = useCallback((index: number) => {
+    handleRemoveFile(index);
+    setMediaError(null);
+  }, [handleRemoveFile]);
 
   const handlePublish = useCallback(() => {
     const trimmed = content.trim();
@@ -193,7 +243,7 @@ function PostComposer({
                   >
                     {isImageFile(file) ? (
                       <img
-                        src={URL.createObjectURL(file)}
+                        src={getPreviewUrl(file)}
                         alt={file.name}
                         className="h-16 w-16 object-cover"
                       />
@@ -212,7 +262,7 @@ function PostComposer({
                     )}
                     <button
                       type="button"
-                      onClick={() => handleRemoveFile(index)}
+                      onClick={() => handleRemoveMedia(index)}
                       className={cn(
                         'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full',
                         'bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100',
