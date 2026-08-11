@@ -35,6 +35,7 @@ import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
+import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
   participantUserRooms,
@@ -1819,7 +1820,11 @@ export class MeeshySocketIOManager {
    * default). Pure trimming is
    * delegated to `filterMessagePayloadForLanguages` (unit-tested).
    */
-  private _emitMessageNewByLanguage(room: string, payload: Record<string, any>): void {
+  private _emitMessageNewByLanguage(
+    room: string,
+    payload: Record<string, any>,
+    opts: { excludeUserId?: string } = {}
+  ): void {
     // `adapter.rooms` + `connectedUsers`/`socketToUser` only see THIS node's
     // sockets. On a multi-node deployment (the 100k+ msg/s topology runs the
     // Socket.IO Redis adapter) a recipient on another gateway node is never
@@ -1831,10 +1836,17 @@ export class MeeshySocketIOManager {
     // (unfiltered) message:new; local sockets get exactly one trimmed copy. On a
     // single node every room socket is local, so the except-set covers the whole
     // room and this broadcast reaches nobody — behavior unchanged.
+    //
+    // `excludeUserId` retire en plus la room personnelle de l'expéditeur : elle
+    // reçoit le payload cid-aware par une émission séparée, et une copie
+    // cid-strippée ici lui en ferait recevoir deux (miroir exact de
+    // `MessageHandler._emitMessageNewByLanguage`).
     const localSocketIds = this.io.sockets.adapter.rooms.get(room);
+    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
+    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
     const remoteEmitter: ReturnType<SocketIOServer['to']> = this.io
       .to(room)
-      .except(localSocketIds ? [...localSocketIds] : []);
+      .except(exceptForRemote);
     remoteEmitter.emit(SERVER_EVENTS.MESSAGE_NEW, payload);
 
     if (!localSocketIds || localSocketIds.size === 0) return;
@@ -1853,6 +1865,7 @@ export class MeeshySocketIOManager {
     const groups = groupSocketsByLanguage({
       socketIds: localSocketIds,
       originalLanguage,
+      excludeUserId: opts.excludeUserId,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
@@ -2033,6 +2046,13 @@ export class MeeshySocketIOManager {
         createdAt: message.createdAt || new Date(),
         updatedAt: message.updatedAt || new Date(),
         validatedMentions: message.validatedMentions ?? [],
+        // Phase 4 §6.2 — le `clientMessageId` doit voyager jusqu'aux appareils
+        // de l'EXPÉDITEUR, et à eux seuls. Il est retiré du payload des pairs
+        // par `stripClientMessageId` juste avant l'émission (même helper, même
+        // règle que le chemin socket et que les routes de lien). Sans lui, la
+        // ligne optimiste ne peut être promue que par la réponse HTTP — voir le
+        // commentaire du split d'émission plus bas.
+        clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
         translations: messageTranslations,
         sender: senderParticipant ? {
           id: senderParticipant.id,
@@ -2102,6 +2122,36 @@ export class MeeshySocketIOManager {
 
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
       const room = ROOMS.conversation(normalizedId);
+
+      // Phase 4 §6.2 — split en DEUX payloads, à l'identique du chemin socket
+      // (`MessageHandler.broadcastNewMessage`) et des deux routes de lien :
+      //
+      //   - `senderPayload` (rooms personnelles de l'expéditeur, tous appareils)
+      //     GARDE `clientMessageId`, seul moyen pour une ligne optimiste d'être
+      //     promue à `.sent` par le fil temps réel.
+      //   - `broadcastPayload` (tous les autres) le RETIRE : un pair n'a pas à
+      //     apprendre l'espace d'ids optimistes de l'expéditeur.
+      //
+      // Ce chemin est celui de TOUT envoi REST — donc, côté iOS, de tout envoi
+      // non éligible au socket-first : pièce jointe, DM chiffré, vue-unique,
+      // éphémère, message à effets (`socketFirstEligible`, ConversationViewModel).
+      // Il n'avait ni l'une ni l'autre moitié du contrat : le cid n'était pas
+      // dans le payload du tout. La réponse HTTP restait alors la SEULE voie de
+      // promotion — et quand elle se perd (app mise en fond, réseau coupé,
+      // crash), le renvoi de l'outbox porte le même `clientMessageId`, la route
+      // le déduplique et NE REBROADCASTE PAS (garde `!isDuplicate`,
+      // routes/conversations/messages.ts). La bulle restait donc bloquée en
+      // `.sending` alors que le message était bel et bien stocké et distribué.
+      // Pas de cast en `Record<string, unknown>` : `stripClientMessageId` est
+      // générique et préservant (cycle 7), donc les deux payloads gardent le
+      // type du littéral et l'emit typé `message:new` reste vérifié.
+      const senderPayload = messagePayload;
+      const broadcastPayload = stripClientMessageId(messagePayload);
+      // `Participant.userId` — null pour un invité de lien partagé, qui n'a
+      // aucune `ROOMS.user(User.id)` à adresser (son unique room personnelle est
+      // nommée d'après son `Participant.id`, et elle est dans la conversation).
+      const senderUserId = senderParticipant?.userId ?? null;
+
       // 1. Broadcast vers tous les clients de la conversation.
       //
       // Bandwidth sprint Phase B1 — per-language filtered broadcast.
@@ -2109,16 +2159,31 @@ export class MeeshySocketIOManager {
       // and sends a trimmed payload once per distinct language. Original content preserved.
       // Opt-in (OFF by default): enable explicitly with SOCKET_LANG_FILTER=true once
       // validated in staging (measured savings + multi-device + Prisme fallback check).
-      if (process.env.SOCKET_LANG_FILTER === 'true') {
-        this._emitMessageNewByLanguage(room, messagePayload);
+      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
+
+      if (senderUserId) {
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
+        } else {
+          this.io
+            .to(room)
+            .except(ROOMS.user(senderUserId))
+            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
+        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+      } else if (langFilterOn) {
+        this._emitMessageNewByLanguage(room, broadcastPayload);
       } else {
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
 
-      // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
+      // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
+      // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit
+      // pouvoir réconcilier. Aucun appelant de production ne passe `senderSocket`
+      // aujourd'hui (les deux sites, `broadcastMessage` et le retour ZMQ, l'omettent) —
+      // la branche reste pour les appelants de test et une éventuelle réutilisation.
       if (senderSocket) {
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-      } else {
+        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       }
 
       // 2b. Emit mention:created to each mentioned user's personal room.
@@ -2224,11 +2289,15 @@ export class MeeshySocketIOManager {
             // Le drain (`_drainPendingMessages`) EST câblé : il s'exécute sur
             // connexion (post-auth, post-room-join) — voir l'appel ~ligne 521.
             // Le destinataire reconnecté rejoue donc ces messages au prochain login.
+            // Le rejeu porte le corps DESTINATAIRE (cid-strippé), identique à
+            // l'émission live — même règle que `enqueueOfflineLinkMessage` : un
+            // rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
+            // espace d'ids optimistes dans celui d'un autre utilisateur.
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
                 conversationId: normalizedId,
-                payload: messagePayload as Record<string, unknown>,
+                payload: broadcastPayload as Record<string, unknown>,
                 enqueuedAt: new Date().toISOString(),
               }).catch(err => logger.warn('Failed to enqueue message for offline user', { userId: roomTarget, error: err }));
             }

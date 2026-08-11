@@ -1,7 +1,11 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.ComposerLanguage
+import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.MediaKindClassifier
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 
 /**
@@ -11,14 +15,19 @@ import me.meeshy.sdk.model.UploadedMedia
  * already-uploaded photo/video attachments (the "photo/caméra d'abord" fast-follow
  * to the text-only first sub-slice) and [type] the resolved wire post type
  * (`"POST"`/`"REEL"` — see [FeedComposerDraft.postType]/[ReelComposition]). Camera
- * capture, file, location and audio attachments plus the per-post language override
- * remain a documented, deferred follow-up.
+ * capture and generic-file attachments now upload through the same [mediaIds]
+ * projection (see [UploadedMedia.hasThumbnailPreview]); [location] carries the
+ * device-captured [SharedPlace] attachment (mirrors iOS `pendingPlace`); [language]
+ * carries the author's source-language choice (mirrors iOS `composerLanguage`,
+ * always sent — see [FeedComposerDraft.language]).
  */
 data class FeedPostPublishRequest(
     val content: String,
     val visibility: String,
     val mediaIds: List<String> = emptyList(),
     val type: String = PostType.POST.name,
+    val location: SharedPlace? = null,
+    val language: String = ComposerLanguage.DEFAULT,
 )
 
 /**
@@ -48,6 +57,13 @@ enum class FeedPostVisibility(val wire: String) {
  * - the **visibility** choice (Public/Friends/Private, defaulting Public),
  * - the **attached media** ([media]): already-uploaded items, capped at
  *   [MAX_MEDIA] (parity with the story composer's own ≤10 rule),
+ * - the **attached location** ([location]): at most one device-captured [SharedPlace]
+ *   (mirror of iOS's single `pendingPlace` — a post carries zero or one location, never
+ *   a list),
+ * - the **composed-in language** ([language]): the author's source-language choice
+ *   (mirror of iOS's `composerLanguage` `@State`, defaulting to [ComposerLanguage.DEFAULT]
+ *   and overridable via a manual picker — the Feed composer does not auto-detect it from
+ *   the typed text, exactly like iOS's own `FeedComposerSheet`),
  * - the **reel classification** ([postType]): [ReelComposition.defaultType]
  *   applied to the attached media's MIME types/durations — a qualifying
  *   composition (video/audio ≥3s, or ≥2 images) defaults to `REEL` unless the
@@ -67,6 +83,8 @@ data class FeedComposerDraft(
     val visibility: FeedPostVisibility = FeedPostVisibility.PUBLIC,
     val media: List<UploadedMedia> = emptyList(),
     val forcePlainPost: Boolean = false,
+    val location: SharedPlace? = null,
+    val language: String = ComposerLanguage.DEFAULT,
 ) {
     /** The post body actually published — whitespace-stripped. */
     val trimmedContent: String get() = text.trim()
@@ -125,6 +143,24 @@ data class FeedComposerDraft(
      */
     fun withForcePlainPost(value: Boolean): FeedComposerDraft = copy(forcePlainPost = value)
 
+    /**
+     * Attaches (or replaces) the device-captured [place] — a post carries at most one
+     * location, so a second capture overwrites the first rather than accumulating like
+     * [media] does. Does not affect [canPublish]: a location alone (with no text and no
+     * media) mirrors iOS, where `pendingPlace` is not itself part of the publish gate.
+     */
+    fun withLocation(place: SharedPlace): FeedComposerDraft = copy(location = place)
+
+    /** Removes the attached location, if any. Inert on a draft with none. */
+    fun withoutLocation(): FeedComposerDraft = copy(location = null)
+
+    /**
+     * Overrides the source [language] the post is composed in (mirrors iOS's manual
+     * flag-picker changing `composerLanguage`) — replaces rather than accumulates, since
+     * a post has exactly one source language, never a list.
+     */
+    fun withLanguage(code: String): FeedComposerDraft = copy(language = code)
+
     /** The payload to publish, or `null` when the draft is not yet publishable (see [canPublish]). */
     fun publishRequest(): FeedPostPublishRequest? {
         if (!canPublish) return null
@@ -133,6 +169,8 @@ data class FeedComposerDraft(
             visibility = visibility.wire,
             mediaIds = mediaIds,
             type = postType.name,
+            location = location,
+            language = language,
         )
     }
 
@@ -141,3 +179,19 @@ data class FeedComposerDraft(
         const val MAX_MEDIA: Int = 10
     }
 }
+
+/**
+ * Whether this attachment's [UploadedMedia.mimeType] renders as an image/video
+ * thumbnail (every gallery-pick, camera-photo and camera-video path always
+ * produces one) versus a generic file icon (the file-attachment tile, whose
+ * documents/other MIME types the gateway still happily attaches — see
+ * [ReelComposition]'s own doc comment: "Documents and every other kind never
+ * qualify" as a reel, already anticipating this). Reuses [MediaKindClassifier]
+ * (the SSOT for MIME→kind, originally built for the auto-download gate) rather
+ * than re-sniffing MIME prefixes here — a `null`/[MediaKind.AUDIO]/
+ * [MediaKind.AUDIO_TRANSLATION] classification falls back to the generic icon
+ * exactly like an unrecognised MIME type does, since the composer has no audio
+ * preview surface yet either.
+ */
+val UploadedMedia.hasThumbnailPreview: Boolean
+    get() = MediaKindClassifier.fromMimeType(mimeType) in setOf(MediaKind.IMAGE, MediaKind.VIDEO)

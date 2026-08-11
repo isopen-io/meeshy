@@ -73,9 +73,9 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    concernait que la copie VIVANTE sur `ConversationViewModel`, jamais cette copie morte sur le store —
    les deux M2 sont donc indépendants, pas séquentiels comme la note précédente le laissait supposer.
    Branche `claude/apps/ios/debt-state-store-dead-loading-booleans`.
-4. **[EN COURS — 2 sous-tranches livrées, triage exhaustif app-side terminé 2026-08-10 : ZÉRO site
-   mécanique restant sous `apps/ios/Meeshy/`]** Swift Concurrency Migration — `DispatchQueue.main.async`
-   restants → `@MainActor`/async-await structuré.
+4. **[FERMÉ — substantiellement traité, run #6 IOS_DETTE 2026-08-10 (cf. journal ci-dessous) — retiré
+   du backlog actif]** Swift Concurrency Migration — `DispatchQueue.main.async` restants →
+   `@MainActor`/async-await structuré.
    **Livré (run #2, 2026-08-10)** : `DiscoverTab.swift` (`SMSComposerView.Coordinator.messageComposeViewController`, un
    callback `nonisolated` de `MFMessageComposeViewControllerDelegate`) migré vers
    `Task { @MainActor in }` — PR #2709, mergé (`44d8d2d92`).
@@ -136,6 +136,14 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    Reprendre cet item nécessite soit (a) une étude dédiée de la classe « escape SwiftUI » avec
    vérification manuelle sur device des warnings runtime, soit (b) accepter de fermer l'item comme
    substantiellement traité (2/2 sites mécaniques nus migrés) et le retirer du backlog actif.
+   **Décision (run #6, 2026-08-10)** : option (b) retenue — voir journal ci-dessous pour l'analyse
+   complète des 9 sites restants (4 fichiers) qui a confirmé, site par site (pas par bloc), qu'aucun
+   n'est vérifiable par le seul triplet build+test local ; option (a) nécessiterait une session de
+   navigation interactive simulateur dédiée (login démo, ouvrir une conversation ET déclencher le
+   flux « signaler une story » ET le focus composer story ET l'animation de la liste de
+   conversations), hors périmètre d'un incrément de routine unique. Item retiré du backlog actif ;
+   les 9 sites restent en l'état, candidats à une future passe dédiée (hors routine), pas à un
+   prochain run mécanique.
 5. **[OUVERT — trop large / prérequis manquant]** Modern Date Parsers — consolider vers
    `Date.ParseStrategy` avec repli. Au 2026-08-09 : **20 fichiers** utilisent `DateFormatter()`
    directement (`apps/ios/Meeshy` + `packages/MeeshySDK/Sources`), et **0 usage** de
@@ -539,3 +547,155 @@ n'est plus un « prochain call site à migrer » mais une décision dédiée sur
 indéfiniment pour ce seul lecteur). Items 4/5/6 inchangés depuis le run #3 (mêmes blocages). Le
 backlog reste à réapprovisionner activement si items 3/4/5 finissent par se clore complètement — pas
 encore le cas ce run (grep de réapprovisionnement fait, rien de neuf trouvé).
+
+### (run #5 IOS_DETTE manquant de ce journal) — item 3 M2 soldé, branche `claude/apps/ios/debt-state-store-dead-loading-booleans`
+
+Un run IOS_DETTE ultérieur (visible dans `git log --grep lane-cursor` : commit `74841be5c`
+`chore(tasks): lane-cursor -> IOS_DETTE streak 0 (state-store-dead-loading-booleans)`, corrigé
+ensuite en `ANDROID streak 0` par `eaa77fd31` pour respecter la règle d'alternance) a soldé le
+reste de l'item 3 (suppression des 4 booléens morts de `ConversationStateStore`) — voir le texte
+détaillé déjà inséré dans le Backlog ci-dessus (« M2 étudié et conclu (run #29, 2026-08-10) »). Ce
+run n'a jamais reçu sa propre entrée de journal ici — seule la section Backlog a été mise à jour
+inline par ce run-là. Noté ici pour la traçabilité de la numérotation des runs (le run documenté
+plus bas se nomme donc « run #6 » de la lane, pas « run #5 »), sans reconstituer le détail
+PR/vérification de ce run passé faute d'avoir été son exécutant.
+
+### 2026-08-10 — Run #6 (6e itération réelle de la lane IOS_DETTE — aucune ligne de code livrée, item fermé sur preuve)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5 last_run=feed-composer-file-attachment`
+— règle d'alternance (streak ≥ 5) déclenchée, bascule vers `IOS_DETTE`. Scan de reprise (Étape 0
+point 5) : `git branch -r --list 'origin/claude/apps/*'` → uniquement des branches `android/*` +
+`origin/claude/apps/ios/inline-video-top-controls` (PR #2767, **déjà mergée** —
+`gh pr view 2767 --json state,mergedAt` → `MERGED` le 2026-08-10T17:27:32Z, hors mandat de ce run
+comme précisé dans le prompt de lancement, non touchée). `gh pr list --state open` = vide (aucune
+PR android/ios ouverte). Pas de run interrompu à terminer.
+
+**RE-PROUVÉ l'intégralité du backlog contre le code réel avant de choisir** :
+- Item 1 (`#file`/`#filePath`) : inchangé, FAIT.
+- Item 2 (ConversationRow singleton) : inchangé, ÉCARTÉ.
+- Item 3 (ConversationLoadingPhase) : `grep -n "isLoadingInitial\|isLoadingOlder\|isLoadingNewer\|isRevalidating" apps/ios/Meeshy/Features/Main/ViewModels/Conversation/ConversationStateStore.swift`
+  → **zéro résultat**, confirmant que le run #5 (non journalisé, cf. entrée ci-dessus) a bien retiré
+  les 4 booléens morts. Item 3 confirmé **FAIT** dans son intégralité (M1 + M2 app-side + M2 store).
+- Item 4 (`DispatchQueue.main.async`) : `grep -rl "DispatchQueue\.main\.async" apps/ios/Meeshy --include="*.swift" | wc -l`
+  → 54 fichiers (stable depuis le run #4, aucun nouveau site mécanique nu apparu). Plutôt que de
+  ré-échantillonner, relu individuellement les 9 sites de la classe « escape SwiftUI documentée »
+  identifiée par le triage exhaustif du run #3 (4 fichiers : `ConversationViewModel.swift:1105`,
+  `StoryViewerView+Content.swift` ×3 dont le composer-focus ligne 2124, `StoryViewerView+Sidebar.swift`
+  ×2, `ConversationListView+Overlays.swift` ×3) pour vérifier si un sous-ensemble serait en fait
+  bas-risque et migrable sans étude device :
+  - `ConversationViewModel.swift:1105` : lu le commentaire complet (lignes 1098-1104) — c'est le
+    handler `messageStore.messagesDidChange.sink`, qui se déclenche à **CHAQUE** mutation de message
+    (envoi, réception, édition, suppression, réaction) — le site le PLUS chaud des 9. Le commentaire
+    documente explicitement pourquoi `DispatchQueue.main.async` (pas `Task { @MainActor in }`) est
+    nécessaire : garantir que la mutation `@Published self.messages` atterrit sur une itération de
+    runloop FRAÎCHE, après la fin de l'évaluation du body SwiftUI en cours. Le risque documenté —
+    un warning runtime « Publishing changes from within view updates », invisible à `meeshy.sh test`
+    — est réel et le blast radius (chaque message de l'app) est maximal. Confirmé **NE PAS toucher**
+    sans étude dédiée.
+  - `StoryViewerView+Sidebar.swift:1162,1167` (dismiss du sheet « signaler » + haptique après un
+    `Task { do { try await reportStory(...) } catch {...} }`) : tenté de trancher par lecture seule
+    de la signature — `reportStory` est une closure typée `(_ storyId: String, _ reportType: String,
+    _ reason: String?) async throws -> Void` **sans annotation `@MainActor`** dans sa signature
+    (`StoryViewerView.swift:1455` l'implémente en appelant `ReportService.shared.reportStory(...)`,
+    dont l'isolation d'acteur n'est pas visible depuis ce fichier). Sans lire `ReportService` en
+    entier, impossible d'affirmer avec certitude sur quel acteur le code reprend après le `await` —
+    exactement le type d'ambiguïté qui a fait échouer l'analyse statique documentée par le run #3.
+    Bas trafic (flux de signalement, rare) et blast radius faible, mais **le principe reste le
+    même : la preuve manquante est un fait runtime, pas un fait de code source** — une analyse
+    statique approfondie ne peut pas la produire avec certitude, seule une vérification interactive
+    (lancer le flux sur simulateur, observer la console avant/après migration) le peut. Non tentée
+    ce run (voir Décision).
+  - `StoryViewerView+Content.swift` (3 sites dont le composer-focus ligne 2124) et
+    `ConversationListView+Overlays.swift` (3 sites, chorégraphie d'animation biphasée + marche de
+    hiérarchie de superviews) : re-lus les commentaires déjà cités par le run #3 — rationale de
+    timing/cycle de rendu toujours présente et non triviale à re-dériver par lecture seule.
+- Item 5 (Date.ParseStrategy) : recompté — `DateFormatter()` toujours 20 fichiers,
+  `grep -rl "ParseStrategy"` → 0. Inchangé, toujours **OUVERT** (bloqué faute de socle de
+  consolidation à étendre).
+- Item 6 (`@Observable`) : recompté — `grep -rl ": ObservableObject"` → 119 fichiers,
+  `grep -rln "@Observable"` → 0 en code réel. Inchangé, toujours **BLOQUÉ** par le plancher iOS
+  16.0+ documenté dans `apps/ios/CLAUDE.md`.
+- **Réapprovisionnement du backlog** (grep prescrit) : `print(` sous `apps/ios/Meeshy` → 0 site ;
+  `#file\b` sous `apps/ios/MeeshyTests` + `packages/MeeshySDK/Tests` → 0 violation réelle (seule
+  occurrence = le guard de régression lui-même) ; `.system(size:` → 80 fichiers, tous des tailles
+  d'icônes/emoji décoratives déjà classées fixes-par-conception (Finding #3 du rapport qualité,
+  « Resolved ») lors d'un run antérieur. Élargi au-delà du grep prescrit par prudence (dernières
+  entrées de `tasks/lessons.md` : les 12 dernières leçons (89-93) appartiennent toutes à la
+  « routine messaging »/« routine calling-feature », sans rapport avec `apps/ios`/`packages/MeeshySDK`
+  — aucun candidat) ; scan `// TODO`/`// FIXME` dans le Swift app+SDK → 4 occurrences, toutes hors
+  périmètre debt : 1 explicitement marquée « hors périmètre » dans son propre commentaire
+  (`StoryPublishQueue.swift:224`, brancher `retryDelays` changerait le comportement de reprise), 2
+  sont des marqueurs de phase de feature Story non livrée (`StoryComposerViewModel+Elements.swift:334`,
+  `StoryGlassBackdropLayer.swift:28` — pas de la dette, une feature en cours), 1 est une note de
+  suivi macOS/Xcode nécessitant une décision d'architecture (`LiveActivityBridge.swift:28`). Aucun
+  nouveau candidat mécanique/borné trouvé.
+
+**Décision : aucun item ne passe le filtre de sûreté ce run.** Item 4 fermé (option (b) du run #3,
+cf. Backlog ci-dessus — 9 sites restants nécessitent une vérification runtime interactive que ce
+run n'a pas les moyens de mener correctement en un seul incrément, et une migration sans cette
+preuve serait précisément le genre de correctif à l'aveugle interdit par la règle RE-PROUVER).
+Items 5/6 confirmés bloqués pour les mêmes raisons que les runs précédents (décision de conception/
+produit non tranchée). Backlog actif désormais **vide** de tout item mécanique sûr — items 5 et 6
+restent les deux seules entrées, toutes deux en attente d'une décision utilisateur (cf. §Blocked
+ci-dessous), et l'item 4 devient un candidat pour une **future passe dédiée hors routine** (pas un
+prochain run mécanique) s'il est repris.
+
+**Vérification** : aucune (aucun code applicatif touché — seule cette mise à jour de fichier de
+suivi). Pas de branche `claude/apps/ios/*` créée (rien à committer sous `apps/ios/` ou
+`packages/MeeshySDK/`), pas de PR, pas de CI.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-item4-closed-backlog-exhausted`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`, cf. §Choix de
+  la lane — même commit que cette mise à jour de `tasks/ios-debt-routine-progress.md`, les deux
+  fichiers vivant hors `apps/android/`/`apps/ios/`).
+
+## Blocked (décisions produit/architecture en attente, hors mandat autonome)
+
+- **Item 5 — Modern Date Parsers** : nécessite une décision de conception (l'API `Date.ParseStrategy`
+  unifiée n'existe pas encore dans le repo ; 20 sites `DateFormatter()` à faire converger vers un
+  socle à concevoir).
+- **Item 6 — Observation Macro (`@Observable`)** : nécessite une décision produit — soit relever le
+  plancher de déploiement iOS 16.0+ → iOS 17.0+ (`apps/ios/CLAUDE.md`), soit accepter un split
+  d'implémentation `ObservableObject`/`@Observable` par version d'OS dans les ViewModels partagés.
+- **Item 4 (résidu, hors backlog actif) — 9 sites « escape SwiftUI »** : migrables uniquement après
+  une session dédiée de vérification interactive sur simulateur/device (login démo, déclencher
+  chaque flux concerné, observer la console avant/après pour le warning SwiftUI « Publishing changes
+  from within view updates »). Ce n'est pas une décision produit à proprement parler mais dépasse le
+  périmètre d'un incrément mécanique de routine — à traiter comme un chantier ponctuel si repris.
+
+**Note pour le run suivant qui reprend la lane IOS_DETTE** : le backlog mécanique est épuisé. Avant
+de re-proposer les items 5/6 tels quels, vérifier si une décision utilisateur est arrivée entre
+temps (sinon les re-confirmer bloqués comme ce run l'a fait). Si le backlog reste vide au run
+suivant, envisager une repasse complète de `apps/ios/CURRENT_QUALITY_REVIEW.md` (peut avoir été
+mis à jour) et/ou un audit plus large (au-delà des 4 grep prescrits) pour identifier de nouvelles
+catégories de dette, sur le modèle de l'angle mort catégoriel documenté pour la lane Android
+(§Choix de la lane du prompt de routine).
+
+## Run — 2026-08-11 (élargissement de l'audit, backlog reconstitué)
+
+Suite à la note ci-dessus : relecture complète de `apps/ios/CURRENT_QUALITY_REVIEW.md` (au-delà des
+4 grep prescrits) — a révélé une catégorie de dette non couverte par le backlog original : **API
+dépréciée `NavigationView`** (soft-dépréciée iOS 16+ au profit de `NavigationStack`, plancher de
+déploiement du SDK). Grep exhaustif sous `packages/MeeshySDK/Sources/MeeshyUI/` :
+
+**Livré** : migration de 5 sites (`VoiceProfileWizardView`, `VoiceProfileManageView`,
+`UnifiedPostComposer`, `CodeViewerView`, `DocumentViewerView`) — chacun instanciait
+`NavigationView { <une seule vue enfant> }`. Aucun n'exploite le mode master/detail iPad
+(`NavigationView` ne bascule en `.doubleColumn` que si DEUX vues enfants distinctes sont fournies),
+donc remplacement comportementalement identique par `NavigationStack { ... }` — mêmes
+`.navigationTitle`/`.toolbar`, aucun changement visuel iPhone/iPad.
+
+Garde de régression `NavigationViewDeprecatedAPISourceGuardTests` (4 tests : garde réelle + 2
+méta-tests de contrôle positif/négatif + garde anti-faux-positif sur `NavigationViewModel`) —
+balaie tout `Sources/MeeshyUI/` récursivement, pas une liste de fichiers nommés, pour attraper toute
+réintroduction future par copier-coller.
+
+**Vérifications** : `xcodebuild build -scheme MeeshySDK-Package` vert, `xcodebuild test
+-only-testing:MeeshyUITests/NavigationViewDeprecatedAPISourceGuardTests` → 4/4 tests verts (dont la
+garde principale qui a réellement scanné les fichiers du repo, pas un mock).
+
+Cette entrée documente le fait que le backlog mécanique n'était PAS réellement épuisé — il était
+seulement épuisé des items déjà identifiés par le grep original. Un audit élargi (relecture intégrale
+du document source, pas juste les motifs déjà connus) a trouvé une nouvelle catégorie en un seul
+passage. Prochain run IOS_DETTE : appliquer la même discipline d'élargissement avant de conclure à
+un backlog vide.

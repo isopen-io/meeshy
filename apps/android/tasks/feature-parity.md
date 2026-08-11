@@ -2292,19 +2292,121 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       interactive preview — `BubbleContent` does not yet carry a playable video attachment, so there is nothing to drive
       there yet (audio/voice-note is the dominant overlay case and is now interactive).
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
-- [~] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
+- [x] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
       **logic + pill UI done** (slice `chat-voice-recording-pill`, 2026-07-15, +29 tests). Pure
       `:feature:chat` `VoiceRecordingSession` SSOT: `Idle`/`Recording` phases, `start`/`tick`/`meter`/
       `cancel`/`stop` transitions, `canSend` min-duration gate (`>= 0.5s`, iOS `minimumSendableDuration`
       parity), `formattedElapsed` (`m:ss`, iOS `formatDuration`), `recordingDotOpacity(reduceMotion)`
       blink (iOS `dotOpacity`), and a `VoiceRecordingStop(session, outcome)` result
       (`Completed(duration, levels)` / `TooShort` / `Inactive`). Composes the existing `:core:model`
-      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer. Wired real
-      (`ChatComposer`, exempt glue): blank-composer `Mic` button starts, a 100 ms `LaunchedEffect` ticks
-      the timer, the `VoiceRecordingPill` (X cancel / animated waveform / blinking dot + timer / stop /
-      send, stop+send gated by `canSend`) replaces the input row while recording. **Pending follow-up:**
-      real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
-      (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
+      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer.
+      **Real `MediaRecorder` capture + send pipeline done** (slice `chat-voice-recording-capture`,
+      2026-08-10): the `Mic` tap now requests `RECORD_AUDIO` (mirrors `feature:calls`'
+      `CallPermissions`/`withMediaPermissions` pattern) and starts a real `MediaRecorder`
+      (`MPEG_4`/`AAC`, `voice_<millis>.m4a` via the new pure `VoiceRecordingFile` builder,
+      mirrors `:feature:feed`'s `CameraCaptureFile`) writing into `cacheDir/voice`. The 100 ms
+      `LaunchedEffect` tick loop now also polls `MediaRecorder.maxAmplitude` and feeds it through
+      a new pure `:core:model` `MicAmplitudeDecibels.toDecibels` (linear PCM → dB, Android has no
+      direct dB-metering API unlike iOS `AVAudioRecorder.averagePower`) into
+      `VoiceRecordingSession.meter()` — the waveform strip (`VoiceRecordingPill`'s
+      `RecordingWaveform`) now renders `session.levels` directly (`animateFloatAsState` per bar)
+      instead of the old synthetic `rememberInfiniteTransition` placeholder. Stop and Send both
+      finalise the take (no staging tray exists anywhere in this composer — every other
+      attachment kind sends immediately on pick too) and, when `canSend` (`Completed` outcome),
+      hand the real file bytes to the **existing, unmodified** `onPickFile`/
+      `ChatViewModel.sendFileAttachment` chain — zero VM/pipeline changes, since
+      `AttachmentMessageType.forMime("audio/mp4")` already resolves to `"audio"` and
+      `ComposerSendGate` already gates it on `canSendAudios`, exactly the Mic button's own
+      visibility gate. +10 tests (`MicAmplitudeDecibelsTest`: silence floor, defensive negative
+      amplitude, full/half-scale dB, monotonicity, above-reference-amplitude safety;
+      `VoiceRecordingFileTest`: naming determinism/uniqueness, mirrors `CameraCaptureFileTest`).
+      **Mutation-proven**: hardcoding `toDecibels` to always return `FLOOR_DB` fails **exactly**
+      the 4 discriminating tests (monotonicity, full-scale, half-scale, above-reference) — the 2
+      silence-floor tests (already expecting `FLOOR_DB`) correctly stay green; reverted via a
+      scratch `cp`-backed edit (never `git checkout --`), re-confirmed green. **Gate**:
+      `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks). Reviewer **PASS**
+      (diff `apps/android` only — 2 new files [`MicAmplitudeDecibels.kt`, `VoiceRecordingFile.kt`]
+      + 2 new test files, `VoiceRecordingPill.kt`/`ChatScreen.kt` edited; SDK purity — the dB
+      conversion is a stateless `:core:model` transform reusable by any future recorder, the
+      "when to request permission / how to wire the mic" product decision stays app-side in
+      `:feature:chat`; SSOT — `AttachmentMessageType`/`ComposerSendGate`/`MimeTypeResolver` all
+      reused verbatim, zero new classification logic; no coverage floor lowered; no tautological
+      tests). **Verified end-to-end on-device against the live gateway** (`meeshy_pixel8`,
+      already-authenticated session): tapped the real Mic button (`uiautomator dump` exact
+      bounds, not estimated screenshot coordinates), confirmed Android's system mic-in-use
+      indicator appeared (genuine hardware capture, not simulated), recorded ~24s, confirmed via
+      `run-as` a real, growing `voice_<millis>.m4a` file in `cacheDir/voice` (67 KB mid-recording).
+      Tapped Send: `adb logcat` confirmed a real `POST /api/v1/attachments/upload` (multipart,
+      `Content-Type: audio/mp4`, 89706-byte body) returning 200 with the gateway's own
+      **independent server-side audio probe** of the uploaded file —
+      `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — definitive
+      proof the recorded bytes are genuine playable AAC audio, not silence-shaped garbage.
+      **Investigation dead-end, NOT a bug in this diff**: the resulting message stayed
+      locally-pending (clock icon, never reached the server) after the attachment upload
+      succeeded — traced to the **pre-existing** two-stage `OutboxFlushWorker` dependency chain
+      (`SEND_MESSAGE`'s `dependsOn` the upload's cmid; `messageLanes` — computed once at the
+      START of `doWork()` — files require a SEPARATE later flush pass once the media graft lands,
+      not a re-check within the same pass) — confirmed pre-existing and unrelated to this diff
+      because **other, older test messages already sitting in this exact conversation's local
+      outbox from unrelated prior verification sessions** (`flip-test-verify`,
+      `ime-verify-flip-c3`, plain text, no attachment dependency at all) show the **identical**
+      stuck-pending symptom; a fresh text message sent in the same conversation during this
+      verification also stuck pending. This diff never touches `OutboxFlushWorker`/
+      `MessageRepository`/the outbox drain code — the capture-to-pipeline handoff this slice owns
+      is proven correct by the server's own independent audio probe; the outbox's
+      wake-only-once-per-mutation reliability gap (same family as the iOS
+      `reference_persistent_queue_must_not_wake_only_on_a_network_edge` finding) is a separate,
+      pre-existing, cross-cutting issue affecting every chat attachment send, not scoped to this
+      slice — flagged below as a new backlog candidate rather than fixed here. Test artifacts
+      (the recorded file, the two verification-only messages) left as-is since they never reached
+      the server (nothing to delete server-side).
+      **Follow-up (2026-08-11, slice `outbox-message-lane-discovery`) — RE-PROUVEN, and the real
+      root cause was more severe than the "same-run redrain" framing above assumed.** Reading
+      `OutboxFlushWorker.doWork()` closely: `messageLanes` was discovered via
+      `outboxRepository.deliverable(OutboxLanes.forMessage(""))` — an **exact-match** query
+      (`OutboxDao.deliverableForLane`: `WHERE lane = :lane`) against the literal lane string
+      `"message:"` (empty conversation id). No real row is ever enqueued with a blank
+      conversation id, so this call **always returned an empty list** — the entire "drain
+      per-conversation message lanes" loop was **dead code in production**, for every build that
+      has ever shipped this discovery mechanism. `SEND_MESSAGE`/`EDIT_MESSAGE`/`DELETE_MESSAGE`
+      were never attempted at all (not "delayed one pass" — never even reaching `drainLane`),
+      which is the exact, complete explanation for `flip-test-verify`/`ime-verify-flip-c3`
+      staying pending forever with zero dependency at all. **Proven empirically, not just by
+      static reading**: a new Robolectric test (`OutboxRepositoryTest`, real in-memory Room DB)
+      enqueues a `SEND_MESSAGE` on `OutboxLanes.forMessage("c1")` and asserts
+      `deliverable(OutboxLanes.forMessage(""))` returns empty — RED against the old call
+      pattern's intent, pinned as a permanent regression guard. **Fix**: new
+      `OutboxDao.activeMessageLanes()` (`SELECT lane ... WHERE lane LIKE 'message:%' AND state !=
+      'EXHAUSTED' GROUP BY lane ORDER BY MIN(createdAt) ASC`, `core:database`) +
+      `OutboxRepository.activeMessageLanes()` wrapper (`sdk-core`) — a real distinct-lane
+      discovery query — replaces the broken call in `OutboxFlushWorker.doWork()`. 4 new tests
+      (discovers a lane with a pending send; discovers every distinct lane without duplicating a
+      lane holding 2 rows, oldest-lane-first; omits a lane whose only row is `EXHAUSTED`; empty
+      when the queue holds only shared-lane rows) plus the regression-pin test. **The
+      already-existing "same-run" retry design was correct and needed no separate fix once
+      discovery works**: `OutboxFlushPlan.outcome` already returns `FlushOutcome.RETRY` (→
+      `Result.retry()` → WorkManager's own `EXPONENTIAL, 10s` backoff) whenever a lane stops on a
+      still-blocked dependency — the doc comment on that file already describes exactly this
+      "prerequisite delivered later in the same pass, next pass picks it up" design. It simply
+      never fired for message lanes because they were never visited. **Verified**:
+      `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970 tasks, zero failures). **On-device
+      against the live gateway** (`meeshy_pixel8`, already-authenticated session): sent a fresh
+      plain-text message in the SAME polluted conversation from the investigation above —
+      `adb logcat` now shows `OutboxFlush lane=message:68f3808baf186ffd9583b0fa ...` for the
+      **first time ever** (this log line structurally could not have appeared before the fix);
+      `flip-test-verify` (previously an inert clock icon for weeks) was actually attempted for the
+      first time and transitioned to `Not sent — tap to retry` (a stale-schema payload decode
+      failure now correctly surfaced instead of silently rotting); a fresh message in a second,
+      clean conversation triggered a real `POST https://gate.meeshy.me/api/v1/conversations/
+      6a712c3acd1fb95d11b8fc6d/messages` (confirmed via OkHttp request/response logging). **New,
+      separate, out-of-lane finding — NOT fixed here (gateway code, violates diff purity)**: that
+      POST (and the equivalent one for the first conversation) currently returns `400
+      {"error":"Internal Server Error"}` in production; reproduced with a bare `curl` using the
+      same bearer token (ruling out any Android-side request-shape cause) while a `GET` on the
+      same conversation's messages returns `200` normally — i.e. **creating a new message via the
+      REST API currently appears broken in production**, independent of platform. Flagged for a
+      dedicated gateway-side investigation; not a regression from this diff (this diff contains no
+      gateway changes and the failure reproduces identically via `curl`).
 - [◐] Attachment ladder (emoji, file, location, camera, photo library, voice) — **file + photo-library picker done**
       (slice `chat-attachment-file-picker`, 2026-07-16): the composer now carries an attach button
       (`Icons.Filled.AttachFile`) launching the system document/photo picker (`GetContent("*/*")`); the pick is
@@ -3335,10 +3437,159 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       system-delegated tiles (photo, video) where iOS has one custom AVFoundation screen with an
       in-app photo/video toggle — functionally equivalent capture capability, different
       interaction shape; no `CAMERA` runtime permission needed on Android either way (the system
-      camera app owns it). **Still open**: files, location, audio+transcription, per-post language
-      override, durable-outbox queueing for offline resilience (media upload itself has no offline-retry
-      path yet either, unlike the story composer's — the whole Feed publish isn't durable yet, so this is
-      consistent, not a new gap) — each a separately-scoped follow-up.
+      camera app owns it). **Generic file attachment now done too** (slice
+      `feed-composer-file-attachment`, 2026-08-10 — the standing "files, location, audio,
+      per-post language" candidate's smallest, lowest-risk sub-slice, decomposed and picked
+      first): a fifth attach tile ([Icons.Filled.AttachFile]) mirrors iOS's `doc.fill` button —
+      [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the author pick ANY
+      document from the system picker, dispatched through the **exact same** `dispatchPicked`
+      pipeline every other tile already uses. **Re-proved the upload path was MIME-agnostic
+      before writing any code, rather than assuming it**: read `getAttachmentType`
+      (`packages/shared/types/attachment.ts`) and `UploadProcessor.validateFile`
+      (`services/gateway/src/services/attachments/UploadProcessor.ts`) end to end — arbitrary
+      MIME types are classified (image/audio/video/text/code/document) and only size-limited,
+      never type-rejected, so the existing `post`-context TUS pipeline needed zero changes.
+      Unlike `PickMultipleVisualMedia`, `OpenMultipleDocuments` has no `maxItems<=1` crash
+      constraint, so there is no picker-mode routing to do — `dispatchPicked` already caps to
+      `draft.remainingMediaSlots` and surfaces the limit message on overflow. The one genuinely
+      new rendering decision — a picked document has no image/video thumbnail — lives in a new
+      pure `UploadedMedia.hasThumbnailPreview` extension (`FeedComposerDraft.kt`), reusing the
+      already-tested `MediaKindClassifier` (`:core:model`, the SSOT for MIME→kind originally
+      built for the auto-download gate) rather than re-sniffing MIME prefixes: `IMAGE`/`VIDEO`
+      preview as a thumbnail, everything else (a document, `AUDIO`/`AUDIO_TRANSLATION`, an
+      unclassifiable/blank MIME type) falls back to a generic `InsertDriveFile` icon tile.
+      `ReelComposition`'s own doc comment ("documents and every other kind never qualify")
+      already anticipated this — confirmed no change needed there. +5 tests
+      (`FeedComposerDraftTest`: image/video preview, document/audio/blank-mime fallback).
+      Mutation-proof: hardcoding `hasThumbnailPreview` to always `true` fails **exactly** the 3
+      discriminating fallback tests, the other 37 (including every pre-existing test in the
+      file) stay green; reverted via `cp`-backed scratch edit, never `git checkout --`, re-run
+      green before continuing. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+      (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures).
+      Reviewer **PASS** (diff `apps/android` only — 2 production files, 4 locale `strings.xml`
+      [en/fr/es/pt, `feed_composer_attach_file` carries zero format specifiers], 1 test file;
+      SDK purity — the rendering rule lives in `:feature:feed`, reuses the `:core:model`
+      classifier rather than duplicating it; SSOT honoured; no coverage floor lowered).
+      **Full on-device verification against the live gateway**: pushed a real non-media file to
+      the emulator's Downloads, tapped the new tile, confirmed via `uiautomator dump` bounds
+      the system DocumentsUI picker opened and the picked file rendered as a generic file-icon
+      tile (screenshot-confirmed, not a broken/blank thumbnail) with the same remove-X overlay
+      every other tile has. `adb logcat` confirmed two independent real TUS round-trips for two
+      different non-media MIME types (`text/plain` and `text/xml`, both `uploadcontext=post`).
+      Published the resulting post for real (`POST /api/v1/posts` → success, `media` array
+      populated); `GET /api/v1/posts/:id` confirmed the persisted attachment plus Prisme
+      translations generated; the test post was deleted afterward (`DELETE` →
+      `{"deleted":true}`, confirmed gone via a follow-up 404). Emulator left idle at the home
+      screen afterward, pushed test file removed. **Deliberate, documented scope cut**: no
+      filename/size label on the file tile yet — `UploadedMedia` (`:core:model`) doesn't carry
+      the original filename the gateway's TUS response discards on this path, unlike iOS's
+      `MessageAttachment.fileName`; adding it is a separately-scoped follow-up touching the wire
+      model, not a rendering-only change. **Audio attachment now done too** (slice
+      `feed-composer-voice-capture`, 2026-08-10 — unblocked by the chat composer's real
+      `MediaRecorder` capture landing the same day, `chat-voice-recording-capture`): a sixth
+      attach tile (`Icons.Filled.Mic`) records in-app via the exact same `VoiceRecordingSession`/
+      `VoiceRecordingPill`/`VoiceRecordingFile`/`MicAmplitudeDecibels` stack chat uses — moved to
+      `:core:model`/`:sdk-ui` this slice (no behaviour change to chat) specifically so both
+      composers share one state machine instead of two drifting copies. While recording, the
+      pill replaces the attach-tiles row (same UX shape as chat swapping its input row); Stop/
+      Send hands the take to `dispatchItems` (a new shared upload tail extracted from
+      `dispatchPicked`) as one more `audio/mp4` `MediaUploadItem` — no gateway/pipeline change
+      needed, reusing the already-tested generic-icon fallback (`hasThumbnailPreview`'s `AUDIO`
+      case). On-device verification against the live gateway: real mic capture (system
+      indicator, growing `cacheDir/voice/*.m4a` file), real TUS `POST`+`PATCH` round-trip
+      (`filetype=audio/mp4`, `uploadcontext=post`), gateway's own audio probe confirming genuine
+      AAC (`duration:15741,codec:"MPEG-4/AAC"`) — composed cleanly with the existing
+      `ReelComposition` duration-floor rule (the ≥3s clip correctly triggered the Reel⇄Post
+      chip, zero special-casing needed). Published for real (`POST /api/v1/posts` → 201,
+      `type:"REEL"`), confirmed via `GET`, deleted via `DELETE` → follow-up `GET` 404; the local
+      recording file is deleted after upload (confirmed empty cache dir), no crash throughout.
+      **Location attachment now done too** (slice `feed-composer-location-attachment`,
+      2026-08-11 — the smallest, lowest-risk sub-slice of the standing candidate, deliberately
+      scoped narrower than iOS's map-based `LocationPickerView`): a seventh attach tile
+      ([Icons.Filled.LocationOn]) mirrors iOS's `location.fill` button, requesting
+      `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` then capturing one fresh fix straight from
+      `android.location.LocationManager` (GPS preferred, network fallback — no Play Services
+      dependency added). New pure `SharedPlace` (`:core:model`, mirrors the gateway's
+      `{latitude, longitude, name, address, category}` and iOS's `SharedPlace` field-for-field)
+      threaded through `CreatePostRequest.location` → `PostRepository.create(location:)` →
+      `FeedViewModel.publishPost(location:)`. The attached place renders as its own removable
+      chip (raw coordinates via the new `formattedCoordinates()`, `Locale.ROOT`-pinned).
+      **Per-post language override now done too** (slice `feed-composer-language-override`,
+      2026-08-11 — the last unshipped item of this candidate besides on-device transcription):
+      a compact flag pill under the header (port of iOS's `ComposerLanguageFlag` button; the
+      collapsed pill shows ONLY the flag, matching iOS's own 2026-07-30 directive) opens a
+      search-filtered picker dialog (`ComposerLanguagePickerDialog`, a plain `AlertDialog` —
+      mirrors `SettingsScreen`'s own `RegionalLanguageDialog` shape rather than nesting a second
+      `ModalBottomSheet`, an established anti-pattern this codebase avoids) reusing the
+      already-tested `LanguageStepSelection.pickerLanguages`/`.filter` pure core the registration
+      wizard's language step already established — no re-implementation of the catalogue/filter
+      rule. New pure `ComposerLanguage` (`:core:model`, port of iOS `ComposerModels.swift`'s
+      `DefaultComposerLanguage.resolve()`/`ComposerLanguageFlag.label(for:)`): `DEFAULT` reuses
+      `LanguageResolver.FALLBACK_LANGUAGE` ("fr", SSOT — no second hardcoded literal), `flag(code)`
+      the catalogue flag or an uppercased raw-code fallback. **RE-PROUVEN before coding**: iOS's
+      own `FeedComposerSheet.composerLanguage` does NOT auto-detect from the typed text either
+      (confirmed by reading `FeedView+Attachments.swift` — the live-typing detector only wires
+      into `UniversalComposerBar`/messages, via `ComposeLanguageDetector` on Android's chat
+      composer) — it starts at a hardcoded `"fr"` and only a manual picker changes it, so this
+      slice mirrors that exactly rather than reusing chat's auto-detection. Also re-confirmed no
+      shared cross-feature language-picker UI component exists yet outside the registration
+      inline menu: the pure catalogue/filter core (`LanguageStepSelection`, `:core:model`) IS
+      reusable and was reused verbatim, but the Composable picker UI itself is now duplicated a
+      third time (registration's inline grid, Settings' `RegionalLanguageDialog`, this dialog) —
+      flagged as a legitimate `:sdk-ui` promotion candidate for a future iOS-dette-style pass, not
+      done here (stays feature-local per the SDK-purity convention of duplicating small UI glue
+      until 3+ call sites force a shared abstraction, and to keep this slice's diff scoped to
+      `:feature:feed`/`:core:model` alone). `FeedComposerDraft` gained `language` (defaults to
+      `ComposerLanguage.DEFAULT`) + `withLanguage(code)` (replaces, mirrors `withLocation`); the
+      choice is always forwarded on publish (`FeedPostPublishRequest.language` → `FeedViewModel.
+      publishPost(language:)` → `PostRepository.create(originalLanguage:)`, an already-existing,
+      previously-dead wire field — mirrors iOS always sending `originalLanguage: composerLanguage`,
+      never omitting it). +12 new tests (5 `ComposerLanguageTest`: default value, known-code flag,
+      case-insensitive match, unknown-code uppercase fallback, blank-code empty-string fallback; 5
+      `FeedComposerDraftTest`: default language, override, replace-not-accumulate, publish request
+      carries default, publish request carries override; 2 `FeedViewModelTest`: no-override
+      forwards `null` verbatim, override forwards verbatim). **Mutation-proven**, three axes:
+      hardcoding `publishRequest().language` to always `ComposerLanguage.DEFAULT` fails **exactly**
+      the "carries the author's chosen language override" test (54 others green); dropping the
+      uppercase fallback in `ComposerLanguage.flag` fails **exactly** the unknown-code test (4
+      others green); hardcoding `FeedViewModel.publishPost`'s repository call to `originalLanguage
+      = null` fails **exactly** the "forwards the author's chosen language override" test (58
+      others green) — each reverted via a scratch `cp`-backed edit, never `git checkout --`,
+      re-confirmed green. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970
+      tasks, matching every prior slice — no build-graph regression). Reviewer **PASS** (diff
+      `apps/android` only — 2 new `:core:model` files, 4 `:feature:feed` production files edited
+      [+1 UI file gaining 2 new Composables], 4 locale `strings.xml` [en/fr/es/pt, 3 new keys each,
+      one carrying a `%1$s` format spec used only as a content-description string, not rendered
+      literally], 2 test files edited; SDK purity — `ComposerLanguage`/`LanguageStepSelection`
+      stay the stateless building blocks, the picker dialog + pill are ordinary `:feature:feed` UI
+      glue over them; SSOT — `LanguageResolver.FALLBACK_LANGUAGE`/`LanguageStepSelection`/
+      `LanguageData` all reused verbatim, zero re-implementation; no coverage floor lowered; no
+      tautological tests). **Full on-device verification against the live gateway**
+      (`meeshy_pixel8`): repeated the itération-precedent's own corrected lesson — every tap
+      resolved via `uiautomator dump` + a grepped `bounds="[x1,y1][x2,y2]"` attribute, including
+      catching and correcting a first attempt that reused a screenshot-estimated Publish
+      coordinate (missed entirely, sheet stayed open) before switching to the dump-derived bounds.
+      Tapped the new flag pill (`content-desc="Francais"` confirmed the default), the picker
+      dialog opened showing all 6 catalogue languages with French pre-selected via `RadioButton`,
+      selected "Deutsch" — dialog closed, pill updated to the German flag
+      (`content-desc="Deutsch"` confirmed via a fresh dump), typed text, tapped the
+      dump-verified Publish bounds: `adb logcat` confirmed the real request body
+      `{"content":"TestLanguageOverride_de2","originalLanguage":"de"}` and the gateway's `201`
+      response echoed `"originalLanguage":"de"` on the persisted post — proving the full
+      composer-to-gateway pipeline round-trips the override correctly end to end, not just at the
+      unit-test level. Deleted the test post via `curl DELETE /api/v1/posts/:id` (confirmed gone
+      via a follow-up `GET` → 404). `adb logcat` checked across the whole session for `FATAL
+      EXCEPTION`/`AndroidRuntime` app crashes — none. Emulator left idle on the Feed screen
+      afterward (composer closed, not mid-flow). **Still open**: no map UI, no search, no
+      reverse-geocoded name/address for the location attachment (each a separately-scoped, heavier
+      follow-up — the map picker alone needs a Maps SDK dependency this slice deliberately
+      avoided), on-device transcription (iOS's dedicated `AudioPostComposerView` with
+      `EdgeTranscriptionService` — a materially larger, separately-scoped feature), durable-outbox
+      queueing for offline resilience (media upload itself has no offline-retry path yet either,
+      unlike the story composer's — the whole Feed publish isn't durable yet, so this is
+      consistent, not a new gap) — each a separately-scoped follow-up. With this slice, the Feed
+      post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
+      exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
@@ -4375,8 +4626,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ReportRepository 5, ReportUserViewModel 8). EN/FR/ES/PT strings. Surpasses iOS (correct wire token +
       testable UDF + retryable error state).
 - [ ] Change email / phone (two-step verification)
-- [ ] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable
-- [ ] Active device sessions: list, revoke one, revoke all others
+- [x] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable — `settings-two-factor-auth` (2026-08-11)
+- [x] Active device sessions: list, revoke one, revoke all others — shipped `761164959` (2026-08-10, `ActiveSessionsScreen`/`ActiveSessionsViewModel`), confirmed still live on-device 2026-08-11
 - [ ] Voice-cloning onboarding wizard (consent → 18+ age gate → record ≥3 samples → process)
 - [ ] Voice-profile management (status, cloning toggle, sample add/list/delete, GDPR delete-all)
 
@@ -4862,7 +5113,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + the initial `Array(repeating:0,count:15)`), `WaveformInterpolator.interpolate`
       (levels→`barCount` linear-blend strip, ports `UniversalComposerBar.interpolatedLevel`,
       whole strip in one pass). +28 tests. The `MediaRecorder`/`AudioRecord` capture + the
-      Compose `Canvas` that paints the strip remain app-side glue (pending); this same core
+      Compose `Canvas` that paints the strip remain app-side glue (pending as a standalone,
+      reusable "universal recorder" abstraction — concrete instances now exist and are shared
+      between the chat composer's voice pill and the Feed post composer's audio-attachment pill,
+      `chat-voice-recording-capture` + `feed-composer-voice-capture`, both driving the same
+      `:core:model`/`:sdk-ui` `VoiceRecordingSession`/`VoiceRecordingPill`); this same core
       also underpins the audio-message-player waveform (line 2111).
 - [ ] Full-screen audio editor (waveform, trim/crop, word-level transcription, language picker)
 - [ ] On-device speech-to-text transcription of recordings
@@ -4951,10 +5206,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Crash-safe boot recovery for in-flight queue items + orphaned audio files
 - [~] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance —
       **non-resumable TUS client done** (slice `story-media-tus-upload`, 2026-08-10, §E): `TusApi`/
-      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`
-      (single-shot only — one `PATCH` of the whole file at offset 0, no chunking, no checkpoint
-      store, does NOT survive app kill mid-upload). Message-retention cleanup / DB maintenance
-      still not started.
+      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`.
+      **Chunked upload within a single session done** (slice `tus-chunked-upload-core`, 2026-08-10):
+      `TusUploadRepository.upload` now splits the body into bounded PATCH calls (`TusChunkPlan`,
+      pure chunk-boundary math, `:core:model`) of at most `DEFAULT_CHUNK_SIZE_BYTES` (10 MB, matches
+      iOS `TusUploadManager.chunkSize`) instead of one monolithic PATCH — every chunk but the last
+      goes through the new `TusApi.uploadChunk`/`patchChunk` (typed `Response<Unit>`, since the
+      gateway's `@tus/server` returns a bare `204 No Content` for any non-final PATCH per the
+      tus.io protocol), only the last chunk still goes through `uploadData` (the only PATCH whose
+      response actually carries the `onUploadFinish` JSON body). A body no larger than one chunk
+      (the common case today — compressed images) still makes exactly one PATCH, byte-identical to
+      before. **Room-backed checkpoint, resume-within-retries done** (slice
+      `tus-upload-checkpoint-resume`, 2026-08-11): new `tus_upload_checkpoint` table
+      (`:core:database`, `TusUploadCheckpointEntity`/`Dao`) + pure `TusCheckpointKey`/
+      `TusResumePlanner` (`:core:model`) decide, on every `upload()` call, whether to resume an
+      existing session (skip `createUpload` entirely, PATCH only the chunks past the last
+      *confirmed* offset) or start fresh — deliberately conservative: a checkpoint with zero
+      confirmed progress (no intermediate chunk ever acknowledged) always starts fresh rather than
+      trust an unconfirmed/possibly-stale session, so only genuinely large multi-chunk uploads that
+      failed partway through ever benefit. The row is written after every acknowledged
+      intermediate chunk and defensively cleared on completion (harmless no-op when absent). **Does
+      NOT yet survive an app kill**: `MediaUploadItem.bytes` is still fully resident in memory for
+      the call's lifetime, so a killed process loses the source bytes regardless of the persisted
+      offset — that needs the lazy file-source read + a boot-time recovery scan (the existing
+      "Crash-safe boot recovery for in-flight queue items" bullet above), still NOT done, along
+      with 409 HEAD-recovery and a dedicated `WorkManager` foreground chain. Those remain the next
+      sub-slices. Message-retention cleanup / DB maintenance still not started.
 - [ ] Background conversation sync + message prefetch (backoff + jitter)
 - [ ] Encrypted local storage (AES-GCM Room / EncryptedSharedPreferences) + per-user namespacing + logout wipe
 - [ ] E2EE message encryption/decryption (libsignal, batched, fail-closed)

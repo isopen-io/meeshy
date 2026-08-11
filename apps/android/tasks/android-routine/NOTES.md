@@ -1125,3 +1125,451 @@ Append-only log of gotchas and decisions that save time next run.
   `clickable="false"` on the node you found by content-desc; check that its bounds sit inside a
   clickable ancestor's bounds (usually true for any icon-button pattern in this codebase) rather
   than hunting for a `clickable="true"` node with the same content-desc.
+
+## Slice `feed-composer-file-attachment` (2026-08-10)
+- **A literal `*/*` inside a `/** ... */` KDoc block comment prematurely closes it** — Kotlin's
+  block-comment terminator is the plain two-character sequence `*/`, and the doc engine doesn't
+  know a Markdown-style "any MIME type" phrasing was intended. Writing
+  `[ActivityResultContracts.OpenMultipleDocuments] (`*/*`) lets the author pick...` inside a KDoc
+  produced a wall of `Expecting a top level declaration` errors starting exactly at the line
+  containing the literal, because everything after the accidental `*/` was now parsed as top-level
+  code. The fix is to never spell out the literal MIME wildcard inside a doc comment — write "any
+  MIME type" or similar prose instead. Caught immediately by the compiler (not silent), but the
+  error location (line 124, the START of the doc comment's *closing* delimiter search, not line
+  105 where the literal actually sat) took a moment to trace back to the real cause — the
+  `Expecting a top level declaration` cascade begins wherever the NEXT real top-level construct
+  starts, not at the premature `*/` itself.
+- **`ActivityResultContracts.OpenMultipleDocuments()` has no `maxItems<=1`-style construction-time
+  crash constraint, unlike `PickMultipleVisualMedia`** — so a file-attach tile needs no picker-mode
+  routing (`FeedMediaPickMode`-equivalent) of its own; the existing `dispatchPicked` cap on
+  `draft.remainingMediaSlots` (already there for the gallery/camera tiles) is sufficient. Confirmed
+  by reading the contract's own Javadoc/behaviour rather than assuming parity with the visual-media
+  picker's crash-avoidance shape — the two contracts are superficially similar (`ActivityResult
+  Contracts.OpenMultipleDocuments`/`PickMultipleVisualMedia` both return `List<Uri>`) but have
+  different construction-time constraints, so "how the sibling tile handles this" isn't
+  automatically true of a new one without checking.
+- **A generic MIME→kind classifier built for one feature (auto-download gating) is often exactly
+  the right SSOT for an unrelated feature's rendering decision (composer thumbnail-vs-icon)** —
+  `MediaKindClassifier.fromMimeType` (`:core:model`, originally for `MediaAutoDownloadDecider`)
+  already encodes "is this image/video/audio, or something else" with the exact same `null` =
+  "unclassifiable" semantics the composer needed for "does this attachment get a real thumbnail or
+  a generic file icon". Reusing it outright (rather than writing a second, narrower MIME-prefix
+  check local to the composer) kept the two decisions from ever being able to drift on which MIME
+  types count as "media" vs "file" — worth searching the existing `:core:model` surface for a
+  general-purpose classifier before writing a feature-local one, even when the two call sites'
+  *purpose* looks unrelated at first glance.
+- **A system document picker's "Recent" list can reorder its top entries between two separate
+  openings of the SAME picker in the SAME on-device verification pass, even with no new file
+  pushed in between** — a second `OpenMultipleDocuments()` launch (after the first attempt's
+  picked file was lost to an accidental `KEYCODE_BACK` dismissing the composer's `ModalBottomSheet`
+  before publishing) tapped the exact same `uiautomator`-measured coordinate as the first attempt,
+  but DocumentsUI's Recent adapter had resorted and a different pre-existing file
+  (`window_dump7.xml`, a leftover artifact from an earlier routine iteration's own on-device
+  verification) ended up at that position instead of the intentionally-pushed `meeshy_test_doc.txt`.
+  Not a bug in the composer code — the real TUS/publish/GET/DELETE round-trip still fully proved the
+  feature end-to-end, just with a different (equally valid, also non-media) MIME type than planned.
+  Lesson: re-dump immediately before EVERY tap in a multi-step system-picker flow, even a repeat of
+  a step already done once in the same verification pass — never assume the second pass's list
+  order matches the first's.
+- **`ModalBottomSheet`'s system back-gesture/`KEYCODE_BACK` dismisses the sheet and discards its
+  `remember`-scoped state (picked-but-not-yet-published attachments) with no confirmation** —
+  pressing back mid-verification (intending to check current app state) silently lost the picked
+  file attachment and required reopening the composer and re-picking from scratch. When scripting
+  a multi-step on-device flow that ends in "tap Publish", avoid any exploratory `KEYCODE_BACK`
+  between attaching and publishing — dump/screenshot without navigating away instead.
+
+## Slice `tus-chunked-upload-core` (2026-08-10)
+- **A real `@tus/server` mount already speaks chunked/multi-PATCH uploads server-side — a client
+  that only ever sends one PATCH isn't hitting a server limitation, it's just not using the
+  protocol it already has.** Before assuming chunking needed gateway-side work, reading
+  `services/gateway/src/routes/uploads/tus-handler.ts` end to end showed `onUploadCreate`/
+  `onUploadFinish` are the only two hooks the gateway customizes — the PATCH-per-chunk mechanics
+  themselves are the stock `@tus/server` library behaviour, standards-compliant and already
+  working for any client that sends bounded PATCHes. The entire gap was client-side: `TusApi.
+  uploadData` always sent the whole file in one PATCH at offset 0.
+- **A stdlib TUS server's response shape genuinely DIFFERS between a non-final and the final PATCH
+  of a multi-chunk upload — a single Retrofit method typed for one shape breaks on the other.** Per
+  the tus.io protocol, every PATCH that doesn't reach the upload's declared length gets a bare `204
+  No Content` (headers only, no body); only the PATCH that completes the upload triggers the
+  gateway's `onUploadFinish` hook, which is the ONLY place a JSON body (`{success, data:
+  {attachment}}`) is ever written (confirmed by reading the hook's own `status_code: 200` branch).
+  A single `TusApi.uploadData: ApiResponse<TusUploadFinishData>` method used for every chunk would
+  either throw on decoding an empty 204 body (RED, not silently wrong) or work by pure accident
+  today only because single-shot mode always sends the final byte in the one and only PATCH. Fix:
+  two Retrofit methods with different return shapes — `uploadChunk: Response<Unit>` for every
+  non-final chunk (empty-body-friendly, mirrors the pre-existing `createUpload`), `uploadData:
+  ApiResponse<TusUploadFinishData>` unchanged, called only for the genuinely-final chunk.
+- **`retrofit2.Response<T>` cannot cross a Gradle module boundary where `retrofit` is an
+  `implementation` (not `api`) dependency — this repo already has the fix pattern, follow it
+  rather than promoting the dependency.** `:sdk-core` calling `tusApi.uploadChunk(...)` directly (a
+  method returning `Response<Unit>`) failed to compile with "Cannot access class
+  'retrofit2.Response' — check your module classpath", because `:core:network` deliberately keeps
+  retrofit `implementation`-scoped (its own `createSession` doc comment already explains why:
+  callers should only ever see `NetworkResult`/`ApiError`). The existing `TusApi.createSession`
+  extension function is the established fix — wrap the raw `Response`-returning call in a
+  same-module extension (`TusApi.patchChunk`) that folds it into `NetworkResult<Unit>` before it
+  ever reaches `:sdk-core`. Mirroring an existing sibling wrapper caught this before it became a
+  real investigation — the first compile error already named the exact same shape of problem
+  `createSession`'s doc comment was written to prevent.
+- **A `Long` constructor parameter on an `@Inject constructor` class would need its own Dagger/Hilt
+  qualifier binding — a plain default-valued constructor field is NOT free DI-wise, unlike a
+  default-valued FUNCTION parameter.** Wanted `chunkSizeBytes` overridable by tests without
+  allocating megabytes of fixture bytes for every test. Putting it on the constructor (`chunkSizeBytes:
+  Long = DEFAULT_CHUNK_SIZE_BYTES`) would compile, but Dagger's generated factory calls the
+  constructor by resolving a binding for EVERY parameter type regardless of Kotlin default values —
+  an unqualified `Long` binding doesn't exist in the graph and injection would fail at runtime, not
+  compile time. Kept the constructor untouched (`TusApi` only) and added `chunkSizeBytes` as a
+  trailing default-valued parameter on the public `upload()` FUNCTION instead — ordinary callers are
+  unaffected (defaulted, same call sites work verbatim), tests pass a small value directly, Dagger
+  never sees the new parameter at all since function calls aren't its concern.
+- **A mutation that inverts a single `if` branch condition central to request routing can fail the
+  majority of a test file, not just the "targeted" tests — that's a signal of strong coverage, not
+  an over-broad mutation to discount.** Flipping `TusUploadRepository`'s `if (!range.isFinal)` to
+  `if (range.isFinal)` failed 11 of 17 `TusUploadRepositoryTest` cases (every path whose PATCH
+  routing depends on final-vs-intermediate, including every pre-existing single-chunk test — a
+  single-chunk upload's one range IS final, so the mutated code now routed it through `uploadChunk`
+  instead of `uploadData`). The 6 survivors were exclusively the `createUpload`-failure paths that
+  return before the chunk loop even starts. Worth explicitly checking WHICH tests survive a broad
+  mutation (do they make sense as untouched by this code path?) rather than treating "many
+  failures" alone as noise to dismiss.
+
+## Slice `chat-voice-recording-capture` (2026-08-10)
+- **Two remote branches touched in the prior 24h that look like interrupted routine runs can
+  instead be a concurrent session's LOST RACE — diff against the actual merge commit before
+  assuming either interruption or duplication needs graft/adoption.** `git branch -r` found
+  `claude/apps/android/feed-composer-media-attachments` (last commit 20 min BEFORE
+  `dd151eac4`/#2759 merged the identical slice) and `claude/apps/ios/inline-video-top-controls`
+  (last commit ~2h BEFORE `7f49bf904`/#2767 merged the identical change). `git diff <merged-sha>
+  <stale-branch>` on both came back **completely empty** — byte-for-byte identical content, not a
+  partial/half-duplicate needing the "graft the delta" treatment. The correct action for a
+  confirmed-identical stale branch is simple deletion (`git push origin --delete`), not the
+  stale-routine-PR playbook (which assumes a genuine delta to port).
+- **`MediaRecorder.getMaxAmplitude()` has no Android equivalent of iOS's direct
+  `AVAudioRecorder.averagePower(forChannel:)` dB reading — the linear-PCM-to-dB conversion is
+  genuinely new client-side math, not a port, even though the pure normalizer it feeds
+  (`AudioLevelNormalizer`) already existed and was already a faithful iOS port.** Worth writing a
+  doc comment that says so explicitly (`MicAmplitudeDecibels`'s), since the instinct on this
+  routine is usually "find the iOS source and port it" — here there was nothing on the iOS side
+  to port for this specific conversion, only for the normalizer downstream of it.
+- **A Compose sub-composable's own doc comment can be the single most reliable signal that a
+  "done" checklist item is actually half-wired.** `VoiceRecordingPill`'s `RecordingWaveform` doc
+  comment literally said "Until live microphone metering is wired... the bars breathe on
+  staggered infinite transitions" — i.e. the component's author had already left a note
+  explaining its own synthetic-fallback nature. `feature-parity.md` still marked the parent item
+  `[~]` (partial) with the same "pending follow-up" wording, so the two sources agreed, but the
+  waveform's specific mechanism (still fully synthetic, `session.levels` never read at all) only
+  became clear from reading the composable's own comment, not the checklist line.
+- **A generic "deliver these bytes as a file attachment" callback (`onPickFile`/
+  `sendFileAttachment`) already wired for one picker is very often the exact right pipeline for a
+  DIFFERENT capture mechanism producing the same shape of payload — reuse before assuming a new
+  VM method is needed.** The voice pill's Stop/Send needed zero new `ChatViewModel` surface: the
+  file-attachment picker's `(bytes, fileName, mimeType) -> Unit` callback, `AttachmentMessageType
+  .forMime` (already resolves `audio/mp4` → `"audio"`), and `ComposerSendGate` (already gates
+  `AUDIO` on `canSendAudios`, the same flag that already hid/showed the Mic button) all existed
+  and composed correctly with zero modification — the only genuinely new code was the capture
+  itself (permission, `MediaRecorder`, dB conversion, waveform rendering).
+- **The gateway's own independent server-side media probe (returned in the upload response) is a
+  stronger verification signal than anything client-observable for "is this a REAL recording, not
+  silence-shaped garbage."** The `POST /attachments/upload` response for the recorded `.m4a`
+  carried `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — the
+  gateway independently decoded and probed the uploaded bytes server-side, which is definitive
+  proof of a genuine, well-formed AAC container (a corrupt/truncated/all-zero recording would
+  either fail to probe or report `duration:0`), stronger than checking the local file's byte size
+  alone (a non-empty file could still be malformed).
+- **A message stuck permanently "pending" (clock icon, never reaches the server) after its
+  attachment upload succeeds is not automatically a bug in the code that produced the
+  attachment — check whether OTHER, unrelated, OLDER messages in the same conversation show the
+  identical symptom before concluding the new diff broke delivery.** After Send, the voice
+  message's `POST /attachments/upload` returned 200 (gateway-probed valid audio) but the message
+  itself never appeared server-side even after a cold app restart and a follow-up flush trigger.
+  Tracing `OutboxFlushWorker.doWork()` found the real cause: `messageLanes` (per-conversation
+  `SEND_MESSAGE` rows whose `dependsOn` is already satisfied) is computed ONCE at the START of
+  the function, before the `media` lane (later in the same pass) delivers and grafts the
+  attachment's real id — so a message that depends on an upload landing in the SAME flush pass
+  needs a SEPARATE, later trigger to actually drain, not a re-check within the same `doWork()`
+  call. Confirmed this is pre-existing and unrelated to this diff (not a red herring) by finding
+  that OTHER, plain-text test messages from unrelated PRIOR verification sessions
+  (`flip-test-verify`, `ime-verify-flip-c3` — no attachment dependency at all) were ALREADY stuck
+  pending in the same conversation's local outbox before this run even started, and a fresh
+  plain-text message sent during this run's own verification got stuck the identical way. Same
+  family as `reference_persistent_queue_must_not_wake_only_on_a_network_edge` (iOS) — a
+  persistent queue whose only redrain trigger is a single in-process event silently stalls once
+  that event's timing loses a race with the dependency it's waiting on. Flagged as a new backlog
+  candidate (`feature-parity.md` §Q) rather than fixed in this slice — it's a cross-cutting
+  `OutboxFlushWorker` reliability gap affecting every dependent chat attachment send, well beyond
+  "wire the voice recorder."
+
+## Slice `feed-composer-voice-capture` (2026-08-10)
+- **A feature-module-private state machine landing in one composer is a live candidate to check
+  for cross-composer reuse before its NEXT sibling composer needs the same capability — a
+  Gradle module-dependency check (`grep project(":..." apps/*/build.gradle.kts`), not an
+  assumption, decides whether it can be imported as-is or needs promoting first.** Chat's
+  `VoiceRecordingSession`/`VoiceRecordingFile`/`VoiceRecordingPill` (landed
+  `chat-voice-recording-capture`, same day) lived in `:feature:chat`, module-private — and
+  `:feature:feed` has no dependency on `:feature:chat` (confirmed via `build.gradle.kts`, both
+  only depend on `:sdk-core`/`:sdk-ui`), so this composer literally could not `import` them
+  without first moving them. `MicAmplitudeDecibels`, by contrast, was ALREADY in `:core:model`
+  and reachable transitively via `:sdk-core`'s `api(project(":core:model"))` — no move needed.
+  The move itself was mechanical and safe: same file content, same tests, only the `package`
+  line and two import sites (`ChatScreen.kt`) changed — `./apps/android/meeshy.sh check` stayed
+  green throughout, and the two relocated test files (`VoiceRecordingSessionTest`,
+  `VoiceRecordingFileTest`) needed zero test-body changes.
+- **A pure state machine with no chat-specific dependency is worth promoting to `:core:model`/
+  `:sdk-ui`; the Android-runtime glue that drives it (permission request, `MediaRecorder`
+  construction, tick-loop wiring) is worth duplicating per composer rather than sharing.** This
+  mirrors the codebase's own existing precedent (`readMediaUploadItem` deliberately duplicated
+  from `StoryComposerScreen`'s equivalent) — I/O glue has no further pure decision to extract,
+  so a second small copy is cheaper and safer than inventing a shared-glue abstraction two
+  call sites don't yet justify. `VoiceRecordingSession`'s own doc comment already explained why
+  it stayed a pure value type independent of any specific composer; that pre-existing design
+  choice is exactly what made the split (share the pure part, duplicate the glue) clean.
+- **Don't trust `ContentResolver.getType()` to MIME-sniff a freshly-`FileProvider`-wrapped `.m4a`
+  recording — build the `MediaUploadItem` with an explicit MIME instead, matching how the
+  ORIGINAL implementation (chat) already does it.** This composer's existing `dispatchPicked`
+  path reads MIME via `ContentResolver.getType(uri)` for picked/captured Uris, which works fine
+  for gallery/camera picks. But `ChatScreen`'s own voice-recording code deliberately hardcodes
+  `"audio/mp4"` rather than relying on resolver sniffing for the identical `.m4a` file shape —
+  a signal worth reading as "MIME-sniffing an `.m4a` via `ContentResolver` is not reliable
+  across Android versions/OEMs" before copying the Uri-based path for the new mic tile. Refactored
+  `dispatchPicked` into a shared `dispatchItems(items: List<MediaUploadItem>)` tail instead, so
+  the recorder hands off pre-built bytes+explicit-MIME directly, bypassing the sniffing step
+  entirely — avoided a real, easy-to-miss correctness bug rather than fixing one after the fact.
+- **A `ModalBottomSheet` composer holding a live `MediaRecorder` needs an explicit
+  `DisposableEffect` release — chat's own composer (anchored to a screen) gets away without one,
+  but a modal sheet dismissible via the system back gesture at any time (already documented:
+  `feed-composer-file-attachment`'s own on-device verification) cannot.** Without it, backing out
+  mid-recording would discard the `remember`-scoped `MediaRecorder` reference with no explicit
+  `.stop()`/`.release()` call — the native recording session's fate then depends on GC
+  finalisation timing, not a deterministic release, meaning a live microphone (and an open file
+  handle) could keep running past the point the user believes they've left the screen. Worth
+  treating a picker/session/resource-holding `remember` inside ANY dismissible sheet as needing
+  its own disposal audit, not just composers anchored to a stable screen.
+- **A newly-attached media item's server-probed duration composing with an UNRELATED,
+  already-shipped feature (here: `ReelComposition`'s reel-classification floor) is a strong,
+  free integration signal — worth calling out explicitly in verification notes rather than
+  treating it as an unrelated aside.** The ~15.7s recorded voice clip correctly triggered the
+  Feed composer's existing Réel⇄Post toggle chip (same rule that already fires for a qualifying
+  video), with zero new code written to make that happen — confirms the new attachment type
+  slots cleanly into `FeedComposerDraft.qualifiesAsReel`'s existing `mediaKinds()` projection
+  rather than needing its own special case, the same kind of "reuse proves itself correct"
+  signal noted for `feed-composer-video-capture`'s reel auto-classification.
+
+## Slice `outbox-message-lane-discovery` (2026-08-11)
+- **A Room DAO method named `deliverableForLane(lane: String)` binding an EXACT-match `WHERE
+  lane = :lane` can be called with a value that was never meant to be a real lane — and the
+  compiler cannot catch it.** `OutboxFlushWorker.doWork()` called
+  `outboxRepository.deliverable(OutboxLanes.forMessage(""))` to "discover" which dynamic
+  per-conversation message lanes needed draining. `OutboxLanes.forMessage("")` innocently
+  evaluates to the literal string `"message:"` — a syntactically valid `String`, so nothing
+  about the call looks wrong at a glance, and it type-checks perfectly. But no row is EVER
+  enqueued with a blank conversation id (every real call site passes a real id), so the exact-
+  match query behind `deliverable()` could never return anything for that input. The entire
+  "drain per-conversation message lanes" loop was silently dead code — `SEND_MESSAGE`/
+  `EDIT_MESSAGE`/`DELETE_MESSAGE` were never drained by `OutboxFlushWorker` at all, in any build
+  that has shipped this discovery mechanism. Lesson: when a "discovery" call reuses a
+  single-item lookup function (`deliverableForLane`, built for "give me lane X's rows") with a
+  deliberately-empty/placeholder argument to try to get "everything under this lane family"
+  behavior, that's a strong signal the lookup function's semantics (exact match) don't actually
+  support the caller's intent (prefix/family match) — the fix needed a genuinely different query
+  (`LIKE 'message:%' GROUP BY lane`), not a cleverer argument to the existing one.
+- **A message "stuck pending forever with a clock icon, even for a plain-text message with zero
+  dependencies" is strong direct evidence the DISCOVERY of its lane never ran at all — not
+  merely evidence of a same-pass dependency-timing race.** The previous iteration's own
+  on-device verification found `flip-test-verify`/`ime-verify-flip-c3` (plain text, no
+  attachment, no `dependsOn`) stuck pending and attributed it to the `OutboxFlushWorker`
+  same-pass graft-timing gap (a real, but narrower, issue that only explains attachment-
+  dependent sends). A `dependsOn`-free row has `DependencyVerdict.SATISFIED` immediately, so the
+  ONLY way it never drains on the very first `drainLane` call on its lane is if that lane is
+  never visited in the first place — which is exactly what the exact-match discovery bug caused.
+  When a "same-run timing" theory doesn't actually explain a **zero-dependency** row exhibiting
+  the identical symptom, treat that as a signal the theory is incomplete, not as an unrelated
+  data point to set aside.
+- **`OutboxFlushPlan.outcome`'s `FlushOutcome.RETRY`-on-blocked-dependency design was already
+  correct for the "prerequisite delivers later in the same pass" case — no additional same-pass
+  redrain loop was needed once lane discovery was fixed.** Before writing a fix, it's worth
+  reading the *existing* retry/backoff design's own doc comments closely: this file's already
+  explained (2026-07 era) that a lane stopping on `stoppedOnBlockedDependency` triggers
+  `Result.retry()`, which WorkManager reschedules via its own `EXPONENTIAL, 10s` backoff — the
+  next pass either delivers the now-satisfied dependent or cascade-exhausts it. That mechanism
+  simply never fired for ANY message lane because message lanes were never drained at all
+  (previous note). Fixing the root cause (discovery) made the already-correct retry design work
+  for the first time, rather than needing a second, parallel same-pass-redrain mechanism layered
+  on top — worth checking whether an adjacent "this looks incomplete" mechanism is actually
+  already complete and just unreachable, before building a second one next to it.
+- **A live-gateway on-device verification can surface a genuine, currently-active, unrelated
+  PRODUCTION incident — reproduce it with a bare `curl` before concluding the diff under test
+  caused it.** After the fix, a real `POST /conversations/:id/messages` finally reached
+  `gate.meeshy.me` (proving the Android-side discovery fix works) but the gateway responded `400
+  {"error":"Internal Server Error"}` for every attempt, in two different conversations. Before
+  writing this off as "my fix is broken" or silently ignoring it, replaying the exact same
+  request with `curl` (same bearer token, same body shape) reproduced the identical 400 outside
+  the app entirely — and a `GET` on the same conversation's messages returned a normal `200` —
+  proving the failure is server-side and platform-independent, not a symptom of anything in this
+  diff (which contains zero gateway changes). Flagged as a new, separate, urgent backlog item
+  rather than investigated further, since gateway code is out of this lane's diff-purity bounds
+  — but the `curl` reproduction step is what turns "my fix might be broken" into "found a live,
+  unrelated production bug" with confidence, in under a minute.
+
+## Slice `tus-upload-checkpoint-resume` (2026-08-11)
+- **`adb shell run-as <pkg> sqlite3 …` round-trips are too slow and jittery to catch a
+  sub-2-second transient DB row live via a polling loop.** Tried twice to observe the
+  intermediate `tus_upload_checkpoint` row that exists only between the first chunk's PATCH
+  success and the final chunk's PATCH success (a ~2.3 s window for a 17.9 MB two-chunk upload).
+  Each `adb shell "run-as … sqlite3 …"` invocation spawns a fresh `run-as` + `sqlite3` process
+  pair, and the actual per-call latency was inconsistent enough (sometimes ~50 ms, sometimes
+  much more once a background `logcat` stream was also running) that a 20-40-iteration polling
+  loop's *effective* wall-clock coverage was hard to predict in advance — both attempts either
+  finished measuring before the write happened or only started after it was already gone. Do
+  not treat "polled N times, saw nothing" as proof the write never happened when the window is
+  this narrow relative to per-call overhead — either give the polling loop a much wider,
+  deliberately-overlapping window (start before the earliest plausible write time, run well past
+  the latest plausible one) or drop the live-polling approach entirely.
+- **Pre/post DB state + a full logcat request/response trace + mutation-proven unit tests
+  together substitute for a live transient-state capture, and are cheaper to obtain reliably.**
+  For this slice, confirming (a) the checkpoint table is empty *after* a successful multi-chunk
+  upload (proves the delete-on-completion path executed against the real on-device Room DB, not
+  a mock), (b) the exact `POST 201 → PATCH 204 → PATCH 200` sequence in `adb logcat` (proves the
+  real chunk-then-finish shape reached the live gateway unchanged), and (c) a mutation test that
+  fails exactly the "resume" branch's own unit tests when the decision is hardcoded to `Fresh`
+  (proves the decision logic itself), together closes the same loop that watching the live write
+  would have — without needing to win a timing race against `adb`'s own overhead.
+- **A noise-source (`geq=random(1)*255:…`) `ffmpeg` clip is a cheap, reliable way to synthesize a
+  real, playable, large (multi-chunk-triggering) test video on demand.** A `testsrc`/`nullsrc`
+  pattern compresses far too well under h264 (a 20 s clip landed at ~1 MB) to reliably exceed a
+  10 MB chunk boundary; feeding `geq` per-pixel randomness into the video filter graph produces
+  genuinely incompressible frames, so a ~1.6 s clip at 960×540/`crf 18` reliably lands at ~18 MB
+  — enough for a real two-chunk TUS PATCH sequence without waiting on a multi-minute encode.
+- **The system Android photo/media picker's "Add (N)" button lives in a different package
+  (`com.google.android.providers.media.module`) with its own `uiautomator` node tree** — grep the
+  dump for the visible button text (`text="Add"`) rather than assuming the composer's own
+  attach-tile bounds convention (content-desc-first) carries over; the clickable node is a
+  sibling `android.widget.Button` with a `resource-id` in that package's namespace, not the
+  app's.
+
+## Slice `feed-composer-location-attachment` (2026-08-11)
+- **A single visually-estimated tap coordinate broke the routine's own hard rule mid-verification
+  — caught and corrected, but worth restating precisely why the rule exists.** After reading the
+  "Publish" button's approximate on-screen position from a screenshot and computing a tap
+  coordinate by eye, the tap landed nowhere near the button (the composer sheet didn't dismiss,
+  no request fired) — the screenshot viewer displays the 1080×2400 PNG scaled to 900 px wide, and
+  every coordinate read off it needs the stated 1.2× multiplier back to device pixels, a step
+  that's easy to silently skip when eyeballing a position rather than reading a bounds attribute.
+  Every OTHER tap in this same verification session used `uiautomator dump` + a grepped `bounds="
+  [x1,y1][x2,y2]"` attribute (already in real device pixels, no scaling needed) and landed
+  correctly on the first try. Re-confirms the standing rule in absolute terms: there is no
+  "close enough" visual estimate that's actually reliable once a screenshot's display scale
+  enters the picture — the dump-and-grep step is not optional even for "obvious" targets.
+- **A `String.format("%.Nf", …)` call with no explicit `Locale` is a live production bug waiting
+  for a comma-decimal device locale (`fr_FR`, `de_DE`, …), not a theoretical one.** Kotlin's
+  `String.format` without a `Locale` argument defaults to the JVM's current default locale, which
+  on a real device tracks the user's system language — a French or German device would silently
+  render `"48,86"` instead of `"48.86"` for a value the gateway's `parseSharedPlace` treats as a
+  `Double` on the wire. `Locale.ROOT` (not `Locale.US`, which has its own regional quirks over
+  the JDK versions) pins the format regardless of device locale. Proven, not assumed: a dedicated
+  test temporarily calls `Locale.setDefault(Locale.FRANCE)`, asserts the output is still
+  dot-separated, then restores the original default in a `finally` block so no other test in the
+  suite observes a changed JVM-wide default — this is the kind of gotcha that a CI running in a
+  single fixed locale (typically `en_US`) will never catch on its own, so the test has to force
+  the adversarial locale itself rather than rely on the ambient one.
+- **A full port of an iOS map-based picker (search, "my position", `CLGeocoder` reverse-geocoding)
+  is a multi-part epic requiring a new Maps SDK dependency with its own API-key provisioning — not
+  a slice an unattended routine run should attempt whole.** Confirmed by reading iOS's
+  `LocationPickerView.swift` end to end (879 lines) before writing any Android code: the map UI
+  alone needs `com.google.android.gms:play-services-maps`/Maps Compose plus a provisioned API key
+  outside this routine's reach, on top of the picker's own state machine (search debounce,
+  precision degrading, coarse-name fallback). The right-sized first sub-slice instead captured
+  the device's raw coordinate via the plain Android SDK's `android.location.LocationManager` (no
+  new Gradle dependency at all) and shipped a genuinely valuable, wire-compatible "attach my
+  location" capability — deferring map/search/geocoding as explicitly-scoped, heavier follow-ups
+  rather than either attempting the whole epic in one run or silently skipping the candidate
+  again.
+- **`LocationManager.requestLocationUpdates` wrapped in `suspendCancellableCoroutine` +
+  `withTimeoutOrNull` is a clean, dependency-free way to get "one fresh fix or a timeout" without
+  Play Services** — the coroutine resumes on the listener's first `onLocationChanged` callback
+  (which also unregisters itself via `removeUpdates(this)`), and `continuation.invokeOnCancellation
+  { removeUpdates(listener) }` covers the timeout/cancellation path so the listener never leaks
+  past the call's lifetime either way.
+
+## Slice `feed-composer-language-override` (2026-08-11)
+- **The exact screenshot-estimated-tap mistake this file already documents once (previous
+  slice's own note) recurred mid-verification, on the identical "Publish" button, within the
+  same run.** After confirming the language-picker dialog worked correctly via dump-derived
+  bounds, the very next tap (Publish, after typing text) was read off a *displayed* screenshot
+  coordinate without reapplying the 1.2x scale-to-device-pixel correction — the tap silently
+  landed nowhere near the button and the composer sheet stayed open with no request fired. Caught
+  by checking the resulting screenshot (composer still open) rather than assuming success, then
+  corrected by dumping `uiautomator` fresh and reading the real `bounds="[874,1360][1006,1414]"`
+  for "Publish" — center `(940,1387)`, not the eyeballed `(783,1156)` from the scaled screenshot.
+  Confirms the standing rule needs restating even more bluntly: **every single tap in a
+  verification session needs its own fresh bounds lookup, including ones that feel "the same
+  button I already located a few steps ago"** — a sheet can re-render (draft reset on reopen,
+  keyboard IME changing layout, a dialog closing) and shift coordinates between two visually
+  similar-looking moments, and muscle-memory-reusing an earlier screenshot-derived guess is just
+  as unreliable as never having read a bounds attribute at all.
+- **A wire request parameter that has existed on a `Repository`/`ApiRequest` DTO for a long time
+  can still be entirely dead for one specific call site.** `PostRepository.create(originalLanguage
+  ...)` and `CreatePostRequest.originalLanguage` both already existed (used by other flows), but
+  `FeedViewModel.publishPost` never threaded a value into that parameter — every Feed post ever
+  published from this composer silently sent `originalLanguage: null`. No production change was
+  needed in `PostRepository`/`PostApi` at all; the gap was entirely in the two callers above it
+  (`FeedComposerDraft` never carried a language field, `FeedViewModel.publishPost` never had a
+  parameter to forward). Worth grepping the full call chain of an "already-wired" field before
+  assuming a gap needs wire-model changes — sometimes only the composer-side plumbing is missing.
+- **Giving a ViewModel-level pass-through parameter a `null` default (not the app's own real
+  default) is what keeps every pre-existing test green when threading a new field through an
+  established, heavily-tested method.** `FeedComposerDraft.language` defaults to
+  `ComposerLanguage.DEFAULT` ("fr", matching iOS's own composer always having *some* language
+  selected) — but `FeedViewModel.publishPost(language: String? = null)` deliberately defaults to
+  `null`, not `"fr"`, even though the real composer always supplies a non-null value. Defaulting
+  the ViewModel param to `"fr"` would have silently changed the `originalLanguage` argument
+  every existing `publishPost(content=.., visibility=..)` test call implicitly sends to
+  `repository.create(...)` — MockK's `coEvery`/`coVerify` match on the exact argument values a
+  call site passes (defaults included), so every pre-existing stub omitting `originalLanguage`
+  (implicitly `null`) would have stopped matching and gone red, with zero relation to the actual
+  new behavior under test. Mirrors the established `location: SharedPlace? = null` precedent from
+  the prior slice — an additive, nullable pass-through parameter is the only shape that adds new
+  forwarding capability without silently mutating the default behavior every untouched caller
+  relies on.
+
+## Slice `settings-two-factor-auth` (2026-08-11)
+- **A commit message's stated reason for removing a feature is a claim, not a fact — re-verify it
+  against the actual backend before trusting it, even when the commit is barely a day old.**
+  `761164959` (2026-08-10) removed the 2FA settings row with the message "aucune route gateway
+  n'existe" (no gateway route exists). `grep`ping `services/gateway/src/routes/two-factor.ts` +
+  `TwoFactorService.ts` + `route-registration.ts` showed six real, tested, live endpoints under
+  `auth/2fa`, registered since a much OLDER commit (`c44ded3d5`) — the removal's premise was wrong
+  from the moment it was written, not a regression that happened later. A same-day-old commit
+  message is not inherently more trustworthy than an old one; both are claims about the codebase
+  that the codebase itself can confirm or refute in under a minute.
+- **`./apps/android/meeshy.sh check` (`assembleDebug` + `testDebugUnitTest`) does NOT install the
+  APK — a fresh `:app:installDebug` is a separate, required step before on-device verification can
+  see new code.** Tapped the newly-restored Settings row on the emulator and it wasn't there;
+  the emulator was still running whatever build was last installed (from a prior, unrelated
+  slice). `adb shell pm list packages`/screen state can look identical whether or not the running
+  APK matches the current worktree — always `installDebug` explicitly before any on-device
+  verification pass, never assume `check`'s green result means the emulator is running that code.
+- **Kotlin block comments nest (unlike Java/C) — a literal `/*` sequence inside a KDoc comment's
+  prose (not a code fence) silently opens a SECOND comment that the doc's own closing `*/` then
+  closes, leaving the outer one unclosed until EOF.** Writing `` `/auth/2fa/*` `` (a glob-style
+  path in backticks) inside a `/** ... */` doc comment produced `kspDebugKotlin: Unclosed comment`
+  pointing at the LAST line of the file, nowhere near the actual typo — because Kotlin's nested-
+  comment support means the "closing" `*/` at the end of that KDoc block actually closed the
+  accidental nested comment opened by `2fa/*`, and the real outer comment kept consuming the rest
+  of the file. When "Unclosed comment" points at EOF, grep every doc comment for a literal `/*`
+  substring (not just missing `*/`) — the bug is almost certainly an accidental nested-open, not a
+  missing close.
+- **A security-toggle feature (2FA) exercised against the routine's own shared, long-lived test
+  account needs an explicit stop-point BEFORE the state-changing call, not just "verify it works
+  end to end."** The account (`atabeth`) is reused across every verification run this routine has
+  ever done, by both the Android and iOS lanes — and this session does not know its password
+  (needed by the `disable` endpoint's `DisableBodySchema`, which requires it unconditionally).
+  Computing a valid live TOTP code from the real `POST auth/2fa/setup` secret and calling `/enable`
+  was technically straightforward, but would have left the account's real login flow behind 2FA
+  with no password-holder in this session able to complete a subsequent disable — a real risk of
+  locking every future run of this routine out of the account it depends on. Verified the read-only
+  and non-destructive parts instead (`GET status`, `POST setup`, and that `cancel()` fires zero
+  network calls and leaves the account's real status unchanged) and stopped there. When a
+  verification pass would need to flip a real, hard-to-reverse account-level flag on a SHARED
+  fixture the session doesn't fully control (no known password, no dedicated disposable account),
+  the safety-first move is to verify up to but not including that flip, not to "complete the loop"
+  for its own sake.

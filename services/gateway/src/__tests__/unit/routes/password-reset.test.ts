@@ -92,16 +92,33 @@ function makePrisma(overrides: Record<string, any> = {}) {
 
 async function buildApp(opts: {
   prisma?: any;
+  socketIOHandler?: unknown;
 } = {}): Promise<FastifyInstance> {
-  const { prisma = makePrisma() } = opts;
+  const { prisma = makePrisma(), socketIOHandler } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
   app.decorate('redis', null);
+  if (socketIOHandler) (app as any).socketIOHandler = socketIOHandler;
 
   await passwordResetRoutes(app);
   await app.ready();
   return app;
+}
+
+/**
+ * A Socket.IO stand-in exposing only what the route reaches through:
+ * `socketIOHandler.getManager().getIO().in(room).fetchSockets()`.
+ */
+function makeSocketIOHandler(sockets: Array<{ emit: any; disconnect: any }>) {
+  const rooms: string[] = [];
+  const io = {
+    in: (room: string) => {
+      rooms.push(room);
+      return { fetchSockets: async () => sockets };
+    },
+  };
+  return { rooms, handler: { getManager: () => ({ getIO: () => io }) } };
 }
 
 // ─── POST /forgot-password ────────────────────────────────────────────────────
@@ -165,6 +182,83 @@ describe('POST /reset-password — success', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('POST /reset-password — live sockets', () => {
+  it('closes every live socket of the user whose password was just reset', async () => {
+    mockCompletePasswordReset.mockResolvedValue({
+      success: true,
+      message: 'Password reset',
+      userId: 'usr-reset',
+    });
+    const emitted: Array<{ event: string; payload: any }> = [];
+    const closed: boolean[] = [];
+    const socket = {
+      emit: (event: string, payload: unknown) => emitted.push({ event, payload }),
+      disconnect: (close?: boolean) => closed.push(close === true),
+    };
+    const { rooms, handler } = makeSocketIOHandler([socket, { ...socket }]);
+
+    const app = await buildApp({ socketIOHandler: handler });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/reset-password',
+      payload: {
+        token: 'reset-token-abc',
+        newPassword: 'NewP@ssword123',
+        confirmPassword: 'NewP@ssword123',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(rooms).toEqual(['user:usr-reset']);
+    expect(closed).toEqual([true, true]);
+    expect(emitted.map((e) => e.event)).toEqual(['auth:session-revoked', 'auth:session-revoked']);
+    expect(emitted[0].payload.reason).toBe('password_changed');
+    mockCompletePasswordReset.mockResolvedValue({ success: true, message: 'Password reset' });
+    await app.close();
+  });
+
+  it('never leaks the reset user id to the caller', async () => {
+    mockCompletePasswordReset.mockResolvedValue({
+      success: true,
+      message: 'Password reset',
+      userId: 'usr-reset',
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/reset-password',
+      payload: {
+        token: 'reset-token-abc',
+        newPassword: 'NewP@ssword123',
+        confirmPassword: 'NewP@ssword123',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('usr-reset');
+    mockCompletePasswordReset.mockResolvedValue({ success: true, message: 'Password reset' });
+    await app.close();
+  });
+
+  it('does not touch any socket when the reset itself failed', async () => {
+    mockCompletePasswordReset.mockResolvedValue({ success: false, error: 'Invalid token' });
+    const { rooms, handler } = makeSocketIOHandler([]);
+    const app = await buildApp({ socketIOHandler: handler });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/reset-password',
+      payload: {
+        token: 'reset-token-abc',
+        newPassword: 'NewP@ssword123',
+        confirmPassword: 'NewP@ssword123',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(rooms).toEqual([]);
+    mockCompletePasswordReset.mockResolvedValue({ success: true, message: 'Password reset' });
     await app.close();
   });
 });

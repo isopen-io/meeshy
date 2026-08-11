@@ -54,6 +54,16 @@ class AuthRepositoryTest {
             availabilityCalls += Triple(username, email, phoneNumber)
             return availabilityResponse
         }
+        override suspend fun getTwoFactorStatus() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorStatusInfo>(success = false)
+        override suspend fun beginTwoFactorSetup() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorSetupInfo>(success = false)
+        override suspend fun enableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+        override suspend fun disableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorDisableRequest) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
     }
 
     private fun session() = AuthSession(

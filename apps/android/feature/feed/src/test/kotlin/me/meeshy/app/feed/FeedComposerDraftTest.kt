@@ -1,7 +1,9 @@
 package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import org.junit.Test
 
@@ -330,5 +332,134 @@ class FeedComposerDraftTest {
 
         assertThat(request).isNotNull()
         assertThat(request!!.type).isEqualTo("POST")
+    }
+
+    // --- file attachments: thumbnail-vs-generic-icon rendering decision ----
+
+    @Test
+    fun `an image attachment previews as a thumbnail`() {
+        assertThat(media("m1", mimeType = "image/jpeg").hasThumbnailPreview).isTrue()
+    }
+
+    @Test
+    fun `a video attachment previews as a thumbnail`() {
+        assertThat(media("m1", mimeType = "video/mp4").hasThumbnailPreview).isTrue()
+    }
+
+    @Test
+    fun `a document attachment falls back to a generic file icon`() {
+        assertThat(media("m1", mimeType = "application/pdf").hasThumbnailPreview).isFalse()
+    }
+
+    @Test
+    fun `an audio attachment falls back to a generic file icon in the composer`() {
+        assertThat(media("m1", mimeType = "audio/mpeg").hasThumbnailPreview).isFalse()
+    }
+
+    @Test
+    fun `a blank mime type falls back to a generic file icon`() {
+        assertThat(media("m1", mimeType = "").hasThumbnailPreview).isFalse()
+    }
+
+    // --- location attachment ------------------------------------------------
+
+    private fun place(latitude: Double = 48.8566, longitude: Double = 2.3522) =
+        SharedPlace(latitude = latitude, longitude = longitude)
+
+    @Test
+    fun `a fresh draft has no attached location`() {
+        assertThat(FeedComposerDraft().location).isNull()
+    }
+
+    @Test
+    fun `withLocation attaches the place`() {
+        val draft = FeedComposerDraft().withLocation(place())
+
+        assertThat(draft.location).isEqualTo(place())
+    }
+
+    @Test
+    fun `withLocation replaces a previously-attached place rather than accumulating`() {
+        val first = place(latitude = 1.0, longitude = 1.0)
+        val second = place(latitude = 2.0, longitude = 2.0)
+
+        val draft = FeedComposerDraft().withLocation(first).withLocation(second)
+
+        assertThat(draft.location).isEqualTo(second)
+    }
+
+    @Test
+    fun `withoutLocation clears an attached place`() {
+        val draft = FeedComposerDraft().withLocation(place()).withoutLocation()
+
+        assertThat(draft.location).isNull()
+    }
+
+    @Test
+    fun `withoutLocation on a draft with no location is inert`() {
+        val draft = FeedComposerDraft().withoutLocation()
+
+        assertThat(draft.location).isNull()
+    }
+
+    @Test
+    fun `an attached location alone does not unlock publishing — mirrors iOS pendingPlace`() {
+        val draft = FeedComposerDraft().withLocation(place())
+
+        assertThat(draft.canPublish).isFalse()
+        assertThat(draft.publishRequest()).isNull()
+    }
+
+    @Test
+    fun `a publish request carries the attached location alongside text`() {
+        val request = FeedComposerDraft().withText("hello").withLocation(place()).publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.location).isEqualTo(place())
+    }
+
+    @Test
+    fun `a publish request with no attached location carries a null location`() {
+        val request = FeedComposerDraft().withText("hello").publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.location).isNull()
+    }
+
+    // --- per-post language override -----------------------------------------
+
+    @Test
+    fun `a fresh draft's language defaults to ComposerLanguage-DEFAULT`() {
+        assertThat(FeedComposerDraft().language).isEqualTo(ComposerLanguage.DEFAULT)
+    }
+
+    @Test
+    fun `withLanguage overrides the composer language`() {
+        val draft = FeedComposerDraft().withLanguage("es")
+
+        assertThat(draft.language).isEqualTo("es")
+    }
+
+    @Test
+    fun `withLanguage replaces a previous choice rather than accumulating`() {
+        val draft = FeedComposerDraft().withLanguage("es").withLanguage("de")
+
+        assertThat(draft.language).isEqualTo("de")
+    }
+
+    @Test
+    fun `a publish request carries the default language when the author never overrides it`() {
+        val request = FeedComposerDraft().withText("hello").publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.language).isEqualTo(ComposerLanguage.DEFAULT)
+    }
+
+    @Test
+    fun `a publish request carries the author's chosen language override`() {
+        val request = FeedComposerDraft().withText("hello").withLanguage("ja").publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.language).isEqualTo("ja")
     }
 }

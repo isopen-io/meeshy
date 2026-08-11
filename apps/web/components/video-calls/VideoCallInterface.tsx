@@ -85,7 +85,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier, removeParticipant } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTier, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -132,7 +132,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
   // reliability dashboard blind to web calls.
-  useCallAnalyticsReporter({ callId, connectionState, qualityStats, isVideo: controls.videoEnabled });
+  useCallAnalyticsReporter({ callId, connectionState, isReconnecting, qualityStats, isVideo: controls.videoEnabled });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -426,7 +426,6 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const handleSwitchCamera = async () => {
     if (cameraSwitchInFlightRef.current || videoToggleInFlightRef.current) return;
     cameraSwitchInFlightRef.current = true;
-    let newStream: MediaStream | null = null;
     try {
       if (!localStream) return;
 
@@ -437,36 +436,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       const currentFacingMode = (constraints as unknown).facingMode || 'user';
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
-      newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newFacingMode },
-        audio: false,
-      });
-
-      const newVideoTrack = newStream.getVideoTracks()[0];
-
-      // MDN warns the outgoing track must not be stopped until replaceTrack()
-      // resolves on every sender — the peer connection may still be reading
-      // from it. Await all replacements first; a rejection propagates to the
-      // catch block below and the old track is left untouched.
-      const replacements = Array.from(useCallStore.getState().peerConnections.values())
-        .map(pc => pc.getSenders().find(s => s.track?.kind === 'video'))
-        .filter((sender): sender is RTCRtpSender => Boolean(sender))
-        .map(sender => sender.replaceTrack(newVideoTrack));
-      await Promise.all(replacements);
-
-      videoTrack.stop();
-      localStream.removeTrack(videoTrack);
-      localStream.addTrack(newVideoTrack);
-      newStream = null; // ownership transferred to localStream — catch must not stop it
+      // Track acquisition + per-peer replaceTrack/stop sequencing lives in
+      // switchCamera() (use-webrtc-p2p.ts), which mirrors enableVideo()'s
+      // "one real track + N clones" ownership model — giving the first peer
+      // the literal camera track and every other peer a `.clone()` — so a
+      // group call's per-peer WebRTCService bookkeeping stays accurate.
+      await switchCamera(newFacingMode);
 
       toast.success(t('calls.toasts.cameraSwitched'));
     } catch (error) {
-      // getUserMedia can succeed while a later step (e.g. replaceTrack on a
-      // closing sender) rejects. An un-stopped newly-acquired track leaves the
-      // other-facing camera hardware capturing with nothing consuming it —
-      // no other cleanup path (call-store reset included) ever learns about a
-      // stream that was never attached to localStream.
-      newStream?.getVideoTracks().forEach((track) => track.stop());
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
       toast.error(t('calls.toasts.cameraSwitchFailed'));
     } finally {

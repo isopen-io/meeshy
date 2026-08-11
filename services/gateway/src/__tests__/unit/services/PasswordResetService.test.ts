@@ -950,6 +950,24 @@ describe('PasswordResetService', () => {
 
         expect(result.success).toBe(true);
       });
+
+      // The transaction above invalidates EVERY session of this user. The caller
+      // is the only place that can cut their live sockets, and it can only do so
+      // if it is told whose sessions were just revoked.
+      it('should report the user whose sessions it just invalidated', async () => {
+        mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
+        mockBcryptCompare.mockResolvedValue(false);
+        mockPrisma.user.findUnique.mockResolvedValue({
+          lockedUntil: null,
+          lastLoginDevice: null,
+          lastLoginIp: null
+        });
+
+        const result = await service.completePasswordReset(validResetCompletion);
+
+        expect(result.success).toBe(true);
+        expect(result.userId).toBe(mockUser.id);
+      });
     });
 
     describe('Anomaly Detection', () => {

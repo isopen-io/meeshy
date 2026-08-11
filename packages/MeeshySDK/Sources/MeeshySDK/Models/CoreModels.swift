@@ -130,8 +130,12 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     ///   chemin du démarrage à froid, celui où la ligne n'avait AUCUNE
     ///   traduction disponible et retombait toujours sur le texte de
     ///   l'expéditeur.
-    /// - Socket — `ConversationSyncEngine.previewTranslations(from:)` dérive la
-    ///   même carte du `message:new` reçu, via `LastMessageFacet`.
+    /// - Socket — `ConversationSyncEngine.previewTranslations(from:viewerLanguages:)`
+    ///   dérive la même carte du `message:new` reçu, via `LastMessageFacet`, en
+    ///   appliquant les MÊMES quatre exclusions que le gateway (hors prisme,
+    ///   langue d'origine, traduction chiffrée, texte inexploitable) et le même
+    ///   plafond d'aperçu. Sans cette parité, le texte de la ligne dépendrait du
+    ///   transport qui l'a apportée.
     ///
     /// `nil` reste un état normal (aucune traduction vers une langue du prisme,
     /// ou message déjà dans cette langue) : la liste affiche alors

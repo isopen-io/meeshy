@@ -169,7 +169,7 @@ public struct UnifiedPostComposer: View {
     internal var isPublishingForTests: Bool { isPublishing }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 contentArea
                 Spacer()
