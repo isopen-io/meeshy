@@ -89,6 +89,8 @@
     <string name="stories_composer_filter_vivid">Vivid</string>
     <string name="stories_composer_filter_fade">Fade</string>
     <string name="stories_composer_filter_chrome">Chrome</string>
+    <string name="stories_action_react">React</string>
+    <string name="stories_action_translations">Translations</string>
 
     <!-- Story options -->
     <string name="stories_options">Story options</string>
