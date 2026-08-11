@@ -117,10 +117,11 @@ final class ConversationStoreUserUpdatedTests: XCTestCase {
     /// Dans un groupe, la ligne porte l'identité du GROUPE. Repeindre son
     /// titre avec le nom d'un membre serait pire que le défaut d'origine.
     func test_merging_groupConversation_isNeverTouched() throws {
-        var group = directConv()
-        group = MeeshyConversation(
-            id: group.id, identifier: group.identifier, type: .group, title: "Les copains",
-            lastMessageAt: group.lastMessageAt, createdAt: group.createdAt, updatedAt: group.updatedAt,
+        let group = MeeshyConversation(
+            id: "conv-g", identifier: "conv-g", type: .group, title: "Les copains",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
             participantUserId: "u-1", participantUsername: "alice"
         )
         let merged = ConversationStore.merging(
