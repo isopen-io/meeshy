@@ -26,15 +26,21 @@ import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.StarredMessages
+import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -67,6 +73,8 @@ class ConversationListViewModelTest {
     private fun socketManager(
         conversationDeleted: MutableSharedFlow<ConversationDeletedSocketEvent> = MutableSharedFlow(),
         participantLeft: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
+        userStatus: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
+        presenceSnapshot: MutableSharedFlow<PresenceSnapshotEvent> = MutableSharedFlow(),
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { unreadUpdated } returns MutableSharedFlow()
@@ -74,6 +82,8 @@ class ConversationListViewModelTest {
             every { conversationUpdated } returns MutableSharedFlow()
             every { this@mockk.conversationDeleted } returns conversationDeleted
             every { this@mockk.participantLeft } returns participantLeft
+            every { this@mockk.userStatus } returns userStatus
+            every { this@mockk.presenceSnapshot } returns presenceSnapshot
         }
 
     private fun connectionSocket(
@@ -89,6 +99,11 @@ class ConversationListViewModelTest {
     }
 
     private val workManager: WorkManager = mockk(relaxed = true)
+
+    private fun messageRepository(recent: List<LocalMessage> = emptyList()): MessageRepository =
+        mockk<MessageRepository> {
+            coEvery { recentMessages(any(), any()) } returns recent
+        }
 
     private fun categoryRepo(
         categories: List<me.meeshy.sdk.model.CategoryOption> = emptyList(),
@@ -111,10 +126,102 @@ class ConversationListViewModelTest {
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
         session: SessionRepository = session(),
+        messageRepo: MessageRepository = messageRepository(),
     ) = ConversationListViewModel(
-        repo, socket, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, connection, session,
     )
+
+    private fun direct(id: String, otherId: String = "other") = ApiConversation(
+        id = id,
+        type = "direct",
+        participants = listOf(
+            ApiParticipant(id = "p-me", userId = "me", displayName = "Me"),
+            ApiParticipant(id = "p-other", userId = otherId, displayName = "Contact"),
+        ),
+    )
+
+    @Test
+    fun a_live_user_status_event_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
+        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow))
+        advanceUntilIdle()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
+    }
+
+    @Test
+    fun a_presence_snapshot_populates_every_user_in_one_pass() = runTest(dispatcher) {
+        val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, socket = socketManager(presenceSnapshot = presenceSnapshotFlow))
+        advanceUntilIdle()
+
+        presenceSnapshotFlow.emit(
+            PresenceSnapshotEvent(
+                users = listOf(
+                    UserStatusEvent(userId = "u1", isOnline = true),
+                    UserStatusEvent(userId = "u2", isOnline = false),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceByUserId.keys).containsExactly("u1", "u2")
+    }
+
+    @Test
+    fun presenceStateFor_resolves_the_other_participants_live_presence() = runTest(dispatcher) {
+        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val conversation = direct(id = "c1", otherId = "other")
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)),
+        )
+        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
+        advanceUntilIdle()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L))
+            .isEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
+    }
+
+    @Test
+    fun presenceStateFor_is_null_for_a_group_conversation() = runTest(dispatcher) {
+        val group = ApiConversation(
+            id = "c2",
+            type = "group",
+            title = "Team",
+            participants = listOf(
+                ApiParticipant(id = "p-me", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p-other", userId = "other", displayName = "Contact"),
+            ),
+        )
+        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(group), ageMillis = 0)))
+        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
+        advanceUntilIdle()
+
+        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceStateFor(group, nowEpochMillis = 0L)).isNull()
+    }
+
+    @Test
+    fun presenceStateFor_is_null_when_nothing_has_arrived_for_the_other_participant_yet() = runTest(dispatcher) {
+        val conversation = direct(id = "c3", otherId = "other")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)))
+        val vm = viewModel(repo, session = session("me"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L)).isNull()
+    }
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -554,6 +661,62 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun create_category_and_assign_creates_then_assigns_the_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.setCategoryOptimistic("c1", "new-id") } returns true
+        val categoryRepository = categoryRepo()
+        val created = me.meeshy.sdk.model.CategoryOption(id = "new-id", name = "Errands", order = 3)
+        coEvery { categoryRepository.create("Errands") } returns
+            me.meeshy.sdk.net.NetworkResult.Success(created)
+        val vm = viewModel(repo, categoryRepository = categoryRepository)
+        advanceUntilIdle()
+
+        vm.createCategoryAndAssign("c1", "Errands")
+        advanceUntilIdle()
+
+        coVerify { categoryRepository.create("Errands") }
+        coVerify { repo.setCategoryOptimistic("c1", "new-id") }
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun create_category_and_assign_surfaces_the_error_and_never_assigns_on_failure() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        val categoryRepository = categoryRepo()
+        coEvery { categoryRepository.create("Errands") } returns
+            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "duplicate name"))
+        val vm = viewModel(repo, categoryRepository = categoryRepository)
+        advanceUntilIdle()
+
+        vm.createCategoryAndAssign("c1", "Errands")
+        advanceUntilIdle()
+
+        coVerify { categoryRepository.create("Errands") }
+        coVerify(exactly = 0) { repo.setCategoryOptimistic(any(), any()) }
+        assertThat(vm.state.value.errorMessage).isEqualTo("duplicate name")
+    }
+
+    @Test
+    fun create_category_and_assign_is_inert_on_a_blank_name() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        val categoryRepository = categoryRepo()
+        val vm = viewModel(repo, categoryRepository = categoryRepository)
+        advanceUntilIdle()
+
+        vm.createCategoryAndAssign("c1", "   ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { categoryRepository.create(any()) }
+        coVerify(exactly = 0) { repo.setCategoryOptimistic(any(), any()) }
+    }
+
+    @Test
     fun toggle_pin_unpins_an_already_pinned_conversation() = runTest(dispatcher) {
         val pinned = ApiConversation(
             id = "c1",
@@ -602,6 +765,37 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         vm.markRead("c1")
+        advanceUntilIdle()
+
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun mark_unread_calls_the_repository_and_schedules_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.markUnreadOptimistic("c1") }
+        verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun mark_unread_no_op_does_not_schedule_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns false
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
         advanceUntilIdle()
 
         verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
@@ -679,6 +873,75 @@ class ConversationListViewModelTest {
 
         assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c1")
         coVerify(exactly = 0) { repo.refresh() }
+    }
+
+    @Test
+    fun load_preview_messages_populates_the_preview_for_that_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val recent = listOf(LocalMessage(message = ApiMessage(id = "m1", conversationId = "c1", content = "hi")))
+        val vm = viewModel(repo, messageRepo = messageRepository(recent))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")).isNull()
+
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")).isEqualTo(recent)
+    }
+
+    @Test
+    fun load_preview_messages_never_queries_the_repository_twice_for_the_same_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = messageRepository(emptyList())
+        val vm = viewModel(repo, messageRepo = messageRepo)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { messageRepo.recentMessages("c1", any()) }
+    }
+
+    @Test
+    fun load_preview_messages_does_not_re_query_while_a_load_is_already_in_flight() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = mockk<MessageRepository>()
+        coEvery { messageRepo.recentMessages(any(), any()) } coAnswers {
+            kotlinx.coroutines.delay(1_000)
+            emptyList()
+        }
+        val vm = viewModel(repo, messageRepo = messageRepo)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { messageRepo.recentMessages("c1", any()) }
+    }
+
+    @Test
+    fun load_preview_messages_for_different_conversations_are_independent() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")), ageMillis = 0)),
+        )
+        val messageRepo = mockk<MessageRepository>()
+        coEvery { messageRepo.recentMessages("c1", any()) } returns
+            listOf(LocalMessage(message = ApiMessage(id = "a", conversationId = "c1")))
+        coEvery { messageRepo.recentMessages("c2", any()) } returns
+            listOf(LocalMessage(message = ApiMessage(id = "b", conversationId = "c2")))
+        val vm = viewModel(repo, messageRepo = messageRepo)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        vm.loadPreviewMessages("c2")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")?.single()?.message?.id).isEqualTo("a")
+        assertThat(vm.state.value.previewFor("c2")?.single()?.message?.id).isEqualTo("b")
     }
 
     @Test

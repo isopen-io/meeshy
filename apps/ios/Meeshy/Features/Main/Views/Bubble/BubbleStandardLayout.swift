@@ -102,6 +102,13 @@ struct BubbleStandardLayout: View {
     /// unchanged.
     let onPlayAudio: ((String) -> Void)?
     let onScrollToMessage: ((String) -> Void)?
+    /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
+    /// tels quels jusqu'à `AudioMediaView.conversationName` /
+    /// `.audioQueueTailProvider` (single-track ET carousel), pour que le
+    /// plein écran audio ouvert SANS lecture déjà active porte la même
+    /// carte Now Playing / avance auto que le chemin `playAudio` existant.
+    let conversationName: String?
+    let audioQueueTailProvider: ((String) -> [QueuedAudio])?
 
     // MARK: - Bindings (state owned by ThemedMessageBubble wrapper)
 
@@ -813,6 +820,8 @@ struct BubbleStandardLayout: View {
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
                     onPlayAudio: onPlayAudio,
+                    conversationName: conversationName,
+                    audioQueueTailProvider: audioQueueTailProvider,
                     parentIsMe: content.isMe,
                     voiceConsentMissing: voiceConsentMissing,
                     onTapConsentNotice: onTapConsentNotice
@@ -1175,8 +1184,14 @@ struct BubbleStandardLayout: View {
         content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
     }
 
+    /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
+    /// contrastait qu'à 2.98:1 sur le fond clair de l'app.
     private var mentionTint: Color {
-        MeeshyColors.indigo400 // distinct des liens URL
+        MeeshyColors.mentionColor(isDark: theme.mode.isDark)
+    }
+
+    private var hashtagTint: Color {
+        MeeshyColors.hashtagColor(isDark: theme.mode.isDark)
     }
 
     @ViewBuilder
@@ -1187,6 +1202,7 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
+            hashtagTint: hashtagTint,
             linkTint: linkTint,
             trackedLinks: content.text?.trackedLinks ?? [:]
         )
@@ -1204,6 +1220,7 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
+                hashtagTint: hashtagTint,
                 linkTint: linkTint,
                 trackedLinks: content.text?.trackedLinks ?? [:]
             )
@@ -1333,6 +1350,8 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
+                conversationName: conversationName,
+                audioQueueTailProvider: audioQueueTailProvider,
                 embedsCaptionInWidget: embedsCaption,
                 voiceConsentMissing: voiceConsentMissing,
                 onTapConsentNotice: onTapConsentNotice

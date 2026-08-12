@@ -23,6 +23,7 @@
     <string name="conversations_preview_you">Vous</string>
     <string name="conversations_preview_draft_prefix">Brouillon : </string>
     <string name="conversations_preview_sender_format">%1$s : %2$s</string>
+    <string name="conversations_preview_loading">Chargement…</string>
     <string name="conversations_search">Rechercher</string>
     <string name="conversations_search_hint">Rechercher des conversations</string>
     <string name="conversations_search_close">Fermer la recherche</string>
@@ -43,7 +44,10 @@
     <string name="conversations_action_archive">Archiver</string>
     <string name="conversations_action_unarchive">Désarchiver</string>
     <string name="conversations_action_mark_read">Marquer comme lu</string>
+    <string name="conversations_action_mark_unread">Marquer comme non lu</string>
     <string name="conversations_action_move_to_category">Déplacer vers une catégorie</string>
+    <string name="conversations_category_search_hint">Rechercher ou créer une catégorie…</string>
+    <string name="conversations_action_create_category">Créer « %1$s »</string>
     <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
     <string name="conversations_action_more">Plus d\'actions</string>
     <string name="conversations_badge_pinned">Épinglée</string>
@@ -130,4 +134,35 @@
     <string name="share_link_detail_cancel">Annuler</string>
     <string name="share_link_detail_not_found">Ce lien n\'est plus disponible.</string>
     <string name="share_link_detail_dismiss">Ignorer</string>
+
+    <!-- Search bar trailing icons -->
+    <string name="conversations_open_dashboard">Tableau de bord</string>
+    <string name="conversations_open_global_search">Recherche globale</string>
+
+    <!-- Global search screen -->
+    <string name="global_search_back">Retour</string>
+    <string name="global_search_hint">Rechercher partout…</string>
+    <string name="global_search_searching">Recherche en cours…</string>
+    <string name="global_search_empty_title">Rechercher dans Meeshy</string>
+    <string name="global_search_empty_subtitle">Messages, conversations, utilisateurs</string>
+    <string name="global_search_no_results">Aucun résultat</string>
+    <string name="global_search_no_results_hint">Essayez avec d\'autres termes</string>
+    <string name="global_search_tab_messages">Messages</string>
+    <string name="global_search_tab_conversations">Conversations</string>
+    <string name="global_search_tab_users">Utilisateurs</string>
+    <string name="global_search_members">%1$d membres</string>
+    <string name="global_search_online">En ligne</string>
+
+    <!-- Dashboard screen -->
+    <string name="dashboard_title">Tableau de bord</string>
+    <string name="dashboard_unread">Messages non lus</string>
+    <string name="dashboard_recent">Conversations récentes</string>
+    <string name="dashboard_quick_actions">Actions rapides</string>
+    <string name="dashboard_action_new_conversation">Nouvelle conversation</string>
+    <string name="dashboard_action_search">Recherche globale</string>
+    <string name="dashboard_action_share_links">Liens de partage</string>
+    <string name="dashboard_action_contacts">Contacts</string>
+    <string name="global_search_recent_title">Recherches récentes</string>
+    <string name="global_search_recent_clear">Effacer</string>
+    <string name="global_search_recent_remove">Supprimer</string>
 </resources>

@@ -9,16 +9,92 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
+import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
+import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
+import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
+import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
-  messageSenderSchema,
+  sendLinkMessageResponseSchema,
   SendMessageInput
 } from './types';
+import type { SharedPlace } from '../../services/location/sharedPlace';
+import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
+
+/**
+ * Corps d'un message de lien de partage, construit UNE fois par envoi.
+ *
+ * Les deux routes servent le même message par deux tuyaux — l'événement socket
+ * `link:message:new` pour les autres participants, la réponse 201 pour l'auteur.
+ * Deux littéraux jumeaux les faisaient diverger en silence : le cycle 7 a ajouté
+ * `conversationId`/`senderId` au seul littéral socket, laissant l'auteur sans
+ * moyen de router son propre message. Un objet unique rend la divergence
+ * impossible à écrire.
+ *
+ * Ce que la fonction rend est le payload de l'AUTEUR : il porte le
+ * `clientMessageId`, seule clé qui relie le message serveur à la ligne
+ * optimiste que l'auteur affiche déjà. Le payload des pairs s'en déduit par
+ * `stripClientMessageId` — même règle, même helper que le chemin nominal
+ * (Phase 4 §6.2, cf. MessageHandler) : le cid revient à son auteur, jamais à
+ * un tiers, qui n'a pas à connaître l'espace d'ids de sa file d'attente.
+ *
+ * `sender` reste le `Participant` chargé par Prisma : c'est ce que les clients
+ * reçoivent déjà du chemin socket, et `linkMessageSchema` décrit cette forme.
+ */
+function buildLinkMessagePayload(params: {
+  message: {
+    id: string;
+    content: string;
+    originalLanguage: string;
+    messageType: string;
+    clientMessageId?: string | null;
+    isEdited: boolean;
+    editedAt: Date | null;
+    deletedAt: Date | null;
+    replyToId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    sender?: unknown;
+  };
+  conversationId: string;
+  senderId: string;
+  place: SharedPlace | null;
+  /**
+   * Les usernames retenus par la validation de mentions. Le web surligne
+   * DEPUIS ce champ (`use-message-display`) : absent du payload, un `@alice`
+   * reconnu par le serveur reste du texte brut chez tous ses lecteurs.
+   */
+  validatedMentions: readonly string[];
+}) {
+  const { message, conversationId, senderId, place, validatedMentions } = params;
+  return {
+    id: message.id,
+    ...(message.clientMessageId ? { clientMessageId: message.clientMessageId } : {}),
+    // Seul routage dont dispose le destinataire : Socket.IO ne transporte pas
+    // le nom de la room côté réception, donc un message sans `conversationId`
+    // est indélivrable — le client ne sait pas dans quelle conversation
+    // l'insérer. Même valeur que la room.
+    conversationId,
+    senderId,
+    content: message.content,
+    originalLanguage: message.originalLanguage,
+    messageType: message.messageType,
+    isEdited: message.isEdited,
+    editedAt: message.editedAt,
+    deletedAt: message.deletedAt,
+    replyToId: message.replyToId,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    sender: message.sender,
+    validatedMentions: [...validatedMentions],
+    ...(place ? { location: place } : {})
+  };
+}
 
 export async function registerMessageRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -59,28 +135,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       response: {
         201: {
           description: 'Message sent successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                messageId: { type: 'string', description: 'Created message ID' },
-                message: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    content: { type: 'string' },
-                    originalLanguage: { type: 'string' },
-                    messageType: { type: 'string' },
-                    createdAt: { type: 'string', format: 'date-time' },
-                    sender: { type: 'null' },
-                    anonymousSender: { type: 'object', description: 'Anonymous sender information' }
-                  }
-                }
-              }
-            }
-          }
+          ...sendLinkMessageResponseSchema
         },
         400: {
           description: 'Bad request - invalid data',
@@ -215,7 +270,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null,
+          ...LIVE_MESSAGE_MARK,
           ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
@@ -252,43 +307,95 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // même contrat que le chemin nominal (messages.ts / MessageHandler).
       const place = sharedPlaceFromMetadata(message.metadata);
 
-      // Émettre l'événement WebSocket
-      const socketIOManager = fastify.socketIOHandler.getManager();
-      if (socketIOManager) {
-        socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: {
-            id: message.id,
-            content: message.content,
-            originalLanguage: message.originalLanguage,
-            messageType: message.messageType,
-            isEdited: message.isEdited,
-            editedAt: message.editedAt,
-            deletedAt: message.deletedAt,
-            replyToId: message.replyToId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-            sender: message.sender,
-            ...(place ? { location: place } : {})
-          }
-        });
-      }
+      // Ce que ce message doit à ceux qu'il NOMME : une ligne `Mention`, un
+      // `Message.validatedMentions` à jour et le lot d'ids que l'éventail
+      // ci-dessous transforme en notification de mention. Ce chemin contournant
+      // `MessageProcessor`, rien d'autre ne le fera. Attendu — et non
+      // fire-and-forget — parce que ses DEUX sorties partent avec le message :
+      // les usernames dans le payload, les ids dans l'éventail. L'unité
+      // court-circuite d'elle-même un contenu sans `@`, qui ne coûte donc
+      // aucune requête.
+      const mentions = await resolveMessageMentions({
+        prisma: fastify.prisma,
+        mentionService: fastify.mentionService,
+        message: {
+          id: message.id,
+          conversationId: participantShareLink.conversationId,
+          senderId: anonymousParticipant.id
+        },
+        content: message.content,
+        onError: (err) => logError(fastify.log, 'Link message mention resolution failed:', err)
+      });
+
+      const payload = buildLinkMessagePayload({
+        message,
+        conversationId: participantShareLink.conversationId,
+        senderId: anonymousParticipant.id,
+        place,
+        validatedMentions: mentions.validatedUsernames
+      });
+
+      // Ce que ce message doit à sa conversation — bump de `lastMessageAt`,
+      // poussée au translator, statistiques de langue. Ce chemin CONTOURNE
+      // `MessagingService.handleMessage`, donc rien d'autre ne les exécutera :
+      // sans cet appel, le message reste en langue originale à vie (Prisme
+      // Linguistique éteint) et la conversation ne remonte jamais dans la liste
+      // triée serveur. L'avancement du curseur de lecture de l'auteur est le
+      // seul effet du chemin nominal délibérément absent — cf. le docstring de
+      // `runMessagePostSaveEffects`.
+      runMessagePostSaveEffects({
+        prisma: fastify.prisma,
+        translationService: fastify.translationService,
+        message: {
+          id: message.id,
+          conversationId: participantShareLink.conversationId,
+          senderId: anonymousParticipant.id,
+          // Un anonyme n'a pas d'utilisateur : les compteurs le créditent sous
+          // son `Participant.id`, exactement comme le fait `recompute()`.
+          senderUserId: null,
+          attachmentMimeTypes: [],
+          content: message.content,
+          messageType: message.messageType,
+          replyToId: message.replyToId
+        },
+        originalLanguage,
+        onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
+      });
+
+      // Ce que ce message doit à ses destinataires quand ils ne REGARDENT pas :
+      // la notification. La room, la file hors ligne et la pastille ne parlent
+      // qu'à un client ouvert ; un destinataire qui n'a pas l'application au
+      // premier plan n'apprend l'existence du message que par un push APNs/FCM.
+      // Ce chemin contournant `MessageProcessor`, rien d'autre ne l'enverra.
+      // Fire-and-forget avec `.catch` explicite : un push raté ne doit ni
+      // allonger le 201 ni le transformer en 500, et une promesse rejetée sans
+      // handler tue le processus sous Node 22 (`--unhandled-rejections=throw`).
+      void notifyMessageRecipients({
+        prisma: fastify.prisma,
+        notificationService: fastify.notificationService,
+        message,
+        senderParticipantId: anonymousParticipant.id,
+        conversationId: participantShareLink.conversationId,
+        processedContent: message.content,
+        validatedMentionUserIds: mentions.validatedUserIds,
+        onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
+      }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
+
+      // Émettre vers les DEUX audiences (room live + file hors ligne) — voir
+      // `broadcastLinkMessage`. Même raison : rien d'autre ne rejouera ce
+      // message à un participant déconnecté.
+      await broadcastLinkMessage({
+        manager: fastify.socketIOHandler.getManager(),
+        conversationId: participantShareLink.conversationId,
+        senderParticipantId: anonymousParticipant.id,
+        messageId: message.id,
+        payload: { message: stripClientMessageId(payload) },
+        onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
+      });
 
       return sendSuccess(reply, {
         messageId: message.id,
-        message: {
-          id: message.id,
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          messageType: message.messageType,
-          isEdited: message.isEdited,
-          editedAt: message.editedAt,
-          deletedAt: message.deletedAt,
-          replyToId: message.replyToId,
-          createdAt: message.createdAt,
-          updatedAt: message.updatedAt,
-          sender: message.sender,
-          ...(place ? { location: place } : {})
-        }
+        message: payload
       }, { statusCode: 201 });
 
     } catch (error) {
@@ -322,28 +429,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       response: {
         201: {
           description: 'Message sent successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                messageId: { type: 'string', description: 'Created message ID' },
-                message: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    content: { type: 'string' },
-                    originalLanguage: { type: 'string' },
-                    messageType: { type: 'string' },
-                    createdAt: { type: 'string', format: 'date-time' },
-                    sender: { ...messageSenderSchema },
-                    anonymousSender: { type: 'null' }
-                  }
-                }
-              }
-            }
-          }
+          ...sendLinkMessageResponseSchema
         },
         400: {
           description: 'Bad request - invalid data',
@@ -480,7 +566,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null,
+          ...LIVE_MESSAGE_MARK,
           ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
@@ -517,43 +603,83 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Lieu partagé : hisser `metadata.location` en top-level `location`.
       const place = sharedPlaceFromMetadata(message.metadata);
 
-      // Émettre l'événement WebSocket
-      const socketIOManager = fastify.socketIOHandler.getManager();
-      if (socketIOManager) {
-        socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: {
-            id: message.id,
-            content: message.content,
-            originalLanguage: message.originalLanguage,
-            messageType: message.messageType,
-            isEdited: message.isEdited,
-            editedAt: message.editedAt,
-            deletedAt: message.deletedAt,
-            replyToId: message.replyToId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-            sender: message.sender,
-            ...(place ? { location: place } : {})
-          }
-        });
-      }
+      // Mêmes trois effets de mention que le jumeau anonyme, par le même point
+      // d'appel unique : deux routes qui écrivent dans la même conversation ne
+      // peuvent pas en honorer des sous-ensembles différents.
+      const mentions = await resolveMessageMentions({
+        prisma: fastify.prisma,
+        mentionService: fastify.mentionService,
+        message: {
+          id: message.id,
+          conversationId: shareLink.conversationId,
+          senderId: participant.id
+        },
+        content: message.content,
+        onError: (err) => logError(fastify.log, 'Link message mention resolution failed:', err)
+      });
+
+      const payload = buildLinkMessagePayload({
+        message,
+        conversationId: shareLink.conversationId,
+        senderId: participant.id,
+        place,
+        validatedMentions: mentions.validatedUsernames
+      });
+
+      // Mêmes obligations post-commit que le jumeau anonyme, par le même point
+      // d'appel unique : deux routes qui écrivent dans la même conversation ne
+      // peuvent pas en honorer des sous-ensembles différents.
+      runMessagePostSaveEffects({
+        prisma: fastify.prisma,
+        translationService: fastify.translationService,
+        message: {
+          id: message.id,
+          conversationId: shareLink.conversationId,
+          senderId: participant.id,
+          // `participant` peut être SYNTHÉTIQUE (`{ id: userId }`) pour la
+          // conversation globale `meeshy` : nommer l'utilisateur explicitement
+          // est la seule façon de créditer la même clé que `recompute()`, qui
+          // lit `sender.userId` en base.
+          senderUserId: userId,
+          attachmentMimeTypes: [],
+          content: message.content,
+          messageType: message.messageType,
+          replyToId: message.replyToId
+        },
+        originalLanguage,
+        onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
+      });
+
+      // Même éventail de notifications que le jumeau anonyme, pour la même
+      // raison : ce chemin contourne `MessageProcessor`, donc rien d'autre
+      // n'enverra le moindre push à un destinataire qui ne regarde pas.
+      void notifyMessageRecipients({
+        prisma: fastify.prisma,
+        notificationService: fastify.notificationService,
+        message,
+        senderParticipantId: participant.id,
+        conversationId: shareLink.conversationId,
+        processedContent: message.content,
+        validatedMentionUserIds: mentions.validatedUserIds,
+        onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
+      }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
+
+      // Même diffuseur unique que le jumeau anonyme : les deux routes servent la
+      // même conversation aux mêmes participants, une seule des deux couvrant
+      // les pairs déconnectés serait exactement l'asymétrie que ce point unique
+      // rend inécrivable.
+      await broadcastLinkMessage({
+        manager: fastify.socketIOHandler.getManager(),
+        conversationId: shareLink.conversationId,
+        senderParticipantId: participant.id,
+        messageId: message.id,
+        payload: { message: stripClientMessageId(payload) },
+        onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
+      });
 
       return sendSuccess(reply, {
         messageId: message.id,
-        message: {
-          id: message.id,
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          messageType: message.messageType,
-          isEdited: message.isEdited,
-          editedAt: message.editedAt,
-          deletedAt: message.deletedAt,
-          replyToId: message.replyToId,
-          createdAt: message.createdAt,
-          updatedAt: message.updatedAt,
-          sender: message.sender,
-          ...(place ? { location: place } : {})
-        }
+        message: payload
       }, { statusCode: 201 });
 
     } catch (error) {

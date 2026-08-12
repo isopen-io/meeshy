@@ -280,6 +280,33 @@ const noEmoji = (val: string | undefined) => {
   return !containsEmoji(val);
 };
 
+const HTTP_PROTOCOLS = new Set(['http:', 'https:']);
+
+/**
+ * Vérifie qu'une valeur est une URL web navigable (http/https uniquement).
+ *
+ * `z.url()` et `new URL()` se contentent de PARSER : `javascript:alert(1)`,
+ * `data:text/html,...` et `file:///etc/passwd` passent tous les deux. Toute
+ * destination qu'un utilisateur fournit et qu'un autre finira par ouvrir doit
+ * donc être contrainte sur le schéma, sans quoi le lien devient un vecteur
+ * d'exécution de script sur notre origine.
+ *
+ * Source de vérité pour la règle « URL sortante sûre » côté TypeScript.
+ */
+export function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  try {
+    return HTTP_PROTOCOLS.has(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Schéma Zod réutilisable pour une destination web fournie par un utilisateur.
+ */
+export const httpUrlSchema = z.string().refine(isHttpUrl, 'URL invalide : http(s) uniquement');
+
 // =============================================================================
 // USER UPDATE SCHEMAS (for routes)
 // =============================================================================

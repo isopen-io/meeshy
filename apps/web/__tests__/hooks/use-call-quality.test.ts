@@ -683,6 +683,31 @@ describe('useCallQuality', () => {
       expect(result.current.qualityStats?.bitrate.audio).toBe(32); // NOT 864 (cumulative)
     });
 
+    it('computes packet loss as a per-interval rate, not the cumulative-since-start ratio', async () => {
+      // `packetsLost`/`packetsReceived` are cumulative RTCStats counters, same
+      // as `bytesReceived` above. A long healthy stretch (10000 received, 0
+      // lost) followed by a burst of 50 lost / 50 received in ONE interval is
+      // 50% loss RIGHT NOW — but averaged against the whole call's history it
+      // dilutes to ~0.5%, which reads as 'excellent' while the link is
+      // actively failing. Mirrors the bitrate delta fix directly above.
+      const mockPC = makeSequentialPeerConnection([
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 1000, timestamp: 1000, packetsLost: 0, packetsReceived: 10000 }]),
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 2000, timestamp: 2000, packetsLost: 50, packetsReceived: 10050 }]),
+      ]);
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+
+      // Δlost = 50, Δreceived = 50 → 50% loss THIS interval — NOT ~0.5%
+      // (50 / 10100 cumulative).
+      expect(result.current.qualityStats?.packetLoss).toBe(50);
+      expect(result.current.qualityStats?.level).toBe('poor');
+    });
+
     it('reports the worst (max) jitter across inbound streams, not the last iterated', async () => {
       // audio jitter 40ms iterated BEFORE video jitter 3ms. Last-write-wins
       // would report 3ms (video, iterated last) and mask the jittery audio

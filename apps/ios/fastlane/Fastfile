@@ -39,13 +39,71 @@ platform :ios do
   # CI: GitHub Actions injects DEMO_USER / DEMO_PASSWORD as secrets (see
   # .github/workflows/ios-release.yml).
   # Either way, the `release` lane refuses to ship a build without them.
+  #
+  # SECOND ACCOUNT — why it exists (rejection 1.0.3 / build 1269, 2026-08-04).
+  # App Review rejected twice under Guideline 2.5.4: "unable to locate any VoIP
+  # services" and "unable to locate any features that require persistent audio".
+  # Both features DO exist (PushKit + CallKit in VoIPPushManager,
+  # MPNowPlayingInfoCenter + MPRemoteCommandCenter in
+  # ConversationAudioCoordinator+NowPlaying). The reviewer simply could not
+  # reach them: a call needs TWO accounts, and only one demo account was ever
+  # provided — nobody can call themselves. Shipping a second account is the
+  # actual fix; removing the background modes would break background call audio
+  # and lock-screen voice-message playback for every user.
   def app_review_credentials
+    second_user = ENV["DEMO_USER_2"]
+    second_password = ENV["DEMO_PASSWORD_2"]
+
+    if second_user.to_s.strip.empty? || second_password.to_s.strip.empty?
+      UI.important(
+        "DEMO_USER_2 / DEMO_PASSWORD_2 are not set. App Review will receive a " \
+        "single account and will NOT be able to place a call — that is exactly " \
+        "what got build 1269 rejected under Guideline 2.5.4. See SECRETS.md."
+      )
+    end
+
     {
       demo_user: require_env("DEMO_USER"),
       demo_password: require_env("DEMO_PASSWORD"),
-      notes: ENV["DEMO_REVIEW_NOTES"] ||
-             "Use these credentials to log in and test all features: messaging, social feed, stories, voice/video calls, and translation."
+      notes: ENV["DEMO_REVIEW_NOTES"] || default_review_notes(second_user, second_password)
     }
+  end
+
+  # Step-by-step notes that let a reviewer reach VoIP and background audio.
+  # Apple asks for a screen recording on a physical device for both; attach them
+  # in the App Review Information "Notes" field in App Store Connect.
+  def default_review_notes(second_user, second_password)
+    second_account = if second_user.to_s.strip.empty?
+      "A second account is required to receive a call. Please contact us if the one below is missing."
+    else
+      "SECOND ACCOUNT (for the call test): #{second_user} / #{second_password}"
+    end
+
+    <<~NOTES
+      #{second_account}
+
+      VOIP / CALLKIT (UIBackgroundModes "voip")
+      A call needs two accounts: one to place it, one to receive it.
+      1. Sign in on device A with the first account, on device B with the second.
+      2. On device A, open the Contacts tab, select the second account, tap the
+         phone or video icon.
+      3. Device B rings through CallKit — the native full-screen incoming-call UI
+         appears even when the app is backgrounded or force-quit. It is delivered
+         by a PushKit VoIP push and reported with CXProvider.reportNewIncomingCall.
+      4. Answer, then press Home on device B: audio keeps flowing, which is what
+         the "audio" background mode is used for during a call.
+
+      PERSISTENT AUDIO (UIBackgroundModes "audio")
+      1. Open any conversation and tap the microphone to record a short voice
+         message, or open an existing one.
+      2. Tap play, then press Home to go to the Home Screen.
+      3. Playback continues, and the Now Playing widget appears on the Lock
+         Screen and in Control Center with play/pause and scrub controls
+         (MPNowPlayingInfoCenter + MPRemoteCommandCenter).
+      4. The same applies to audio stories and reels in the social feed.
+
+      Neither background mode is used for keep-alive purposes.
+    NOTES
   end
 
   # ========================================
@@ -174,6 +232,12 @@ platform :ios do
       skip_build_archive: true,
       export_options: "./fastlane/ExportOptions.plist"
     )
+
+    # Gate sur le PRODUIT, pas sur le câblage. Le strip ci-dessus n'a aucun
+    # signal propre : quand il ne tourne pas, tout réussit et le rejet
+    # ITMS-90035 revient par courriel d'Apple des heures plus tard. Cette
+    # vérification échoue ici, avant l'upload.
+    sh("../ci_scripts/verify_embedded_signatures.sh ../build/Meeshy.ipa")
   end
 
 

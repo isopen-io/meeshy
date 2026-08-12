@@ -46,6 +46,22 @@ extension StoryCanvasUIView {
             )
         }
 
+        applyAudioMixerVolumes(at: time)
+    }
+
+    /// Pousse les volumes du MODÈLE (clips audio fg + bg) dans le
+    /// `ReaderAudioMixer`, résolus à l'instant `time`.
+    ///
+    /// Deux appelants :
+    /// - `applyVolumeAutomation` (tick 60 Hz du reader, mode `.play`) ;
+    /// - `rebuildLayers` en `.edit` (éditeur sonore) — le reconfigure du mixer
+    ///   est gaté sur la COMPOSITION (`slideAudioRevision`), donc un mute /
+    ///   changement de volume seul ne le franchit pas, et l'`.edit` n'a pas de
+    ///   display-link : sans cette poussée au rebuild, la boucle du composer
+    ///   continuait de jouer une piste que l'auteur venait de couper.
+    func applyAudioMixerVolumes(at time: Float) {
+        let effects = slide.effects
+
         // Clips audio d'avant-plan — jamais atténués : l'atténuation vise la
         // piste des VIDÉOS, qui est ce qui couvre la musique.
         for audio in effects.resolvedForegroundAudioPlayers {

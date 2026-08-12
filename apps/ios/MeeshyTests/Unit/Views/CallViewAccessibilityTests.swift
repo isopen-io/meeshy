@@ -270,6 +270,55 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    // MARK: - Mute / speaker / camera-flip accessibility hints (audit fix)
+
+    func test_muteButton_hasAccessibilityHint() throws {
+        // Audit fix: unlike the video-pause button in the same controlButtonsRow
+        // (which passes a hint because its consequence isn't obvious), mute and
+        // speaker were the two outliers with no `hint:` argument at all.
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.toggleMute()") else {
+            XCTFail("CallView must wire the mute toggle action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -700, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("call.control.mute.hint"),
+            "The mute callControlButton call must pass hint: call.control.mute.hint so VoiceOver " +
+            "users know muting affects what the other party hears, not just their own label."
+        )
+    }
+
+    func test_speakerButton_hasAccessibilityHint() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.toggleSpeaker()") else {
+            XCTFail("CallView must wire the speaker toggle action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -700, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("call.control.speaker.hint"),
+            "The speaker callControlButton call must pass hint: call.control.speaker.hint."
+        )
+    }
+
+    func test_flipCameraButton_hasAccessibilityHint() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.switchCamera()") else {
+            XCTFail("CallView must wire the camera-flip action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("call.control.flipCamera.hint"),
+            "The camera-flip pipFrameButton call must pass hint: call.control.flipCamera.hint — " +
+            "its sibling pipFrameButton (filters) already does, so the omission wasn't deliberate."
+        )
+    }
+
     // MARK: - Effects toggle button accessibility
 
     func test_effectsToggleButton_hasAccessibilityHint() throws {
@@ -298,6 +347,30 @@ final class CallViewAccessibilityTests: XCTestCase {
             searchStart = labelRange.upperBound
         }
         XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
+    }
+
+    // MARK: - hasActiveEffects — advanced filters without a colorimetry preset
+
+    func test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone() throws {
+        // Regression guard — `hasActiveEffects` used to read `config.isEnabled`
+        // alone. `isEnabled` is only ever set true by picking a colorimetry
+        // preset; a user who enables background blur or skin smoothing
+        // WITHOUT ever picking a preset left `isEnabled` false, so the
+        // "Filtres" toolbar glyph never lit up even though a filter was
+        // silently active (VideoFilterPipeline.process has the same fix).
+        let source = try callViewSource()
+        guard let range = source.range(of: "private var hasActiveEffects: Bool {") else {
+            XCTFail("CallView must declare hasActiveEffects")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let block = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            block.contains("hasAdvancedFilters"),
+            "hasActiveEffects must also check config.hasAdvancedFilters, not just " +
+            "config.isEnabled, or it misses background blur/skin smoothing enabled " +
+            "without a colorimetry preset."
+        )
     }
 
     // MARK: - End call button accessibility

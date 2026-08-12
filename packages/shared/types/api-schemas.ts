@@ -583,6 +583,31 @@ export const messageAttachmentMinimalSchema = {
 } as const;
 
 /**
+ * Lieu partagé — forme de réponse UNIQUE, miroir exact de `SharedPlace`
+ * (services/gateway/src/services/location/sharedPlace.ts) tel que
+ * `parseSharedPlace` le produit et que le serveur seul écrit dans
+ * `metadata.location`.
+ *
+ * Source unique parce que fast-json-stringify TRONQUE en silence tout champ
+ * qu'un schéma de réponse ne déclare pas : une surface qui recopie la forme
+ * de travers (ou l'omet) perd la position sans aucun signal. Toute réponse
+ * hissant `location` doit épandre CE schéma, en ne surchargeant que
+ * `description`.
+ */
+export const sharedPlaceResponseSchema = {
+  type: 'object',
+  nullable: true,
+  description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location, validé serveur ; null si absent',
+  properties: {
+    latitude: { type: 'number' },
+    longitude: { type: 'number' },
+    name: { type: 'string', nullable: true },
+    address: { type: 'string', nullable: true },
+    category: { type: 'string', nullable: true }
+  }
+} as const;
+
+/**
  * Message schema for API responses
  * Aligned with schema.prisma Message model
  */
@@ -613,6 +638,21 @@ export const messageSchema = {
       enum: ['user', 'system', 'ads', 'app', 'agent', 'authority'],
       description: 'Source/origin of the message'
     },
+    metadata: {
+      type: 'object',
+      nullable: true,
+      // `additionalProperties: true` — sans lui, fast-json-stringify strippe
+      // SILENCIEUSEMENT le contenu de metadata à la sérialisation de la
+      // réponse (même piège que le schéma inline de `GET /messages/:messageId`
+      // et que `messageMinimalSchema`). Les routes construisent bien
+      // `metadata: message.metadata`, mais le client ne recevait rien : la
+      // bulle système d'appel restait bloquée sur `kind: 'call-live'`
+      // ("Appel en cours / Toucher pour rejoindre") pour toujours, la
+      // transition vers `kind: 'call'` (édition du MÊME message côté gateway)
+      // n'atteignant jamais l'app.
+      additionalProperties: true,
+      description: 'Structured per-type payload (call-summary facts, postReplyTo, location…) — forme libre'
+    },
 
     // State
     isEdited: { type: 'boolean', description: 'Message has been edited' },
@@ -640,16 +680,8 @@ export const messageSchema = {
       }
     },
     location: {
-      type: 'object',
-      nullable: true,
-      description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.',
-      properties: {
-        latitude: { type: 'number' },
-        longitude: { type: 'number' },
-        name: { type: 'string', nullable: true },
-        address: { type: 'string', nullable: true },
-        category: { type: 'string', nullable: true }
-      }
+      ...sharedPlaceResponseSchema,
+      description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.'
     },
     replyTo: {
       type: 'object',
@@ -833,16 +865,8 @@ export const messageMinimalSchema = {
     // Absent du schéma = tronqué en silence par fast-json-stringify, cf.
     // le commentaire de `cursorPagination` plus bas dans ce fichier.
     location: {
-      type: 'object',
-      nullable: true,
-      description: 'Lieu partagé (aperçu de conversation) — validé serveur, null si absent',
-      properties: {
-        latitude: { type: 'number' },
-        longitude: { type: 'number' },
-        name: { type: 'string', nullable: true },
-        address: { type: 'string', nullable: true },
-        category: { type: 'string', nullable: true }
-      }
+      ...sharedPlaceResponseSchema,
+      description: 'Lieu partagé (aperçu de conversation) — validé serveur, null si absent'
     },
     // Sender info (required for ConversationList.tsx getSenderName())
     sender: { ...userMinimalSchema, nullable: true, description: 'Sender user info' },
@@ -1260,6 +1284,25 @@ export const conversationMinimalSchema = {
     memberCount: { type: 'number', description: 'Member count' },
     lastMessage: { ...messageMinimalSchema, nullable: true, description: 'Last message' },
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
+    // Prisme Linguistique de la ligne de liste. Sans ces deux déclarations,
+    // fast-json-stringify les retirerait silencieusement du payload (même piège
+    // que `_count` et `location` plus haut) et l'aperçu resterait dans la langue
+    // de l'expéditeur alors que le serveur l'a bel et bien traduit.
+    // `lastMessageTranslations` est une carte `{ langue: aperçu tronqué }`
+    // restreinte aux langues du LECTEUR : clés dynamiques, d'où
+    // `additionalProperties`.
+    lastMessageOriginalLanguage: {
+      type: 'string',
+      nullable: true,
+      description: "Langue d'origine du dernier message (le contenu de `lastMessage.content`)"
+    },
+    lastMessageTranslations: {
+      type: 'object',
+      nullable: true,
+      additionalProperties: { type: 'string' },
+      description:
+        "Aperçus traduits du dernier message, restreints aux langues du prisme du lecteur — `{ langue: texte tronqué }`. null si aucune traduction utile (le client affiche alors l'original)."
+    },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread count' },
     members: {
@@ -2165,7 +2208,7 @@ export const callSessionSchema = {
     },
     status: {
       type: 'string',
-      enum: ['ringing', 'active', 'ended', 'missed', 'rejected', 'failed'],
+      enum: ['initiated', 'ringing', 'connecting', 'active', 'reconnecting', 'ended', 'missed', 'rejected', 'failed'],
       description: 'Call status'
     },
 

@@ -30,6 +30,10 @@ public struct LastMessageFacet: Sendable {
     public let expiresAt: Date?
     public let translations: [String: String]?
     public let originalLanguage: String?
+    /// Position du message (message géolocalisé). Membre de la facette pour la
+    /// même raison que les autres : écrite à part, une pastille du message
+    /// PRÉCÉDENT survivrait au texte tout neuf qui la remplace.
+    public let location: SharedPlace?
 
     public init(
         id: String?,
@@ -42,7 +46,8 @@ public struct LastMessageFacet: Sendable {
         isViewOnce: Bool = false,
         expiresAt: Date? = nil,
         translations: [String: String]? = nil,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        location: SharedPlace? = nil
     ) {
         self.id = id
         self.preview = preview
@@ -55,6 +60,7 @@ public struct LastMessageFacet: Sendable {
         self.expiresAt = expiresAt
         self.translations = (translations?.isEmpty ?? true) ? nil : translations
         self.originalLanguage = originalLanguage
+        self.location = location
     }
 
     /// Facette complète dérivée d'un message reçu ou envoyé — le chemin normal.
@@ -63,7 +69,12 @@ public struct LastMessageFacet: Sendable {
     ///   les messages sans texte (photo, vocal), où l'appelant fournit le libellé
     ///   média localisé plutôt qu'une ligne vide.
     /// - Parameter translations: `[langue: contenu]` déjà résolues, pour que le
-    ///   Prisme s'applique à la ligne sans attendre la synchro suivante.
+    ///   Prisme s'applique à la ligne sans attendre la synchro suivante. Le
+    ///   chemin REST n'en dépend plus : `GET /conversations` expédie désormais
+    ///   `lastMessageTranslations`, déjà restreint aux langues du prisme du
+    ///   lecteur, que `APIConversation.toConversation` pose directement sur la
+    ///   ligne. Ce paramètre reste la source du chemin SOCKET, où les
+    ///   traductions arrivent avec (ou après) le `message:new`.
     /// - Parameters id, at: identité SERVEUR, quand elle diffère de celle de la
     ///   ligne locale — à l'accusé d'envoi, le message optimiste porte encore son
     ///   `cid_…` et l'horodatage de l'appareil.
@@ -85,7 +96,8 @@ public struct LastMessageFacet: Sendable {
             isViewOnce: message.isViewOnce,
             expiresAt: message.expiresAt,
             translations: translations,
-            originalLanguage: message.originalLanguage
+            originalLanguage: message.originalLanguage,
+            location: message.location
         )
     }
 
@@ -97,12 +109,14 @@ public struct LastMessageFacet: Sendable {
     /// message PRÉCÉDENT afficherait un auteur faux, une pièce jointe fantôme ou
     /// « Vue unique » sur un texte neuf. Une ligne momentanément dépouillée est
     /// corrigée au prochain sync ; une ligne fausse ne l'est pas.
-    public static func bumped(at date: Date, id: String? = nil, preview: String? = nil) -> LastMessageFacet {
+    public static func bumped(at date: Date, id: String? = nil, preview: String? = nil,
+                              location: SharedPlace? = nil) -> LastMessageFacet {
         LastMessageFacet(
             id: id,
             preview: preview?.meeshyPreviewTruncated,
             senderName: nil,
-            at: date
+            at: date,
+            location: location
         )
     }
 }
@@ -122,5 +136,6 @@ public extension MeeshyConversation {
         lastMessageExpiresAt = facet.expiresAt
         lastMessageTranslations = facet.translations
         lastMessageOriginalLanguage = facet.originalLanguage
+        lastMessageLocation = facet.location
     }
 }

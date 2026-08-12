@@ -62,6 +62,7 @@ extension Route {
         case .communityLinks: return "CommunityLinks"
         case .dataExport: return "DataExport"
         case .postDetail: return "PostDetail"
+        case .hashtagResults: return "HashtagResults"
         case .bookmarks: return "Bookmarks"
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"

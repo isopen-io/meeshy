@@ -45,11 +45,17 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// résolve le texte/audio dans la langue préférée du viewer. Optionnelle pour
     /// rester rétro-compatible avec les rows persistés avant ce champ (→ `nil`).
     public let originalLanguage: String?
+    /// Brouillon (`StoryDraftStore`) dont cette publication est issue. Le
+    /// brouillon SURVIT au hand-off (gelé, `pendingPublishAt`) : seul le
+    /// SUCCÈS serveur le supprime, l'échec PERMANENT le ramène éditable avec
+    /// son erreur. Optionnel pour rester rétro-compatible avec les items
+    /// persistés avant ce champ (→ `nil`, chemin de reprise MANUELLE inchangé).
+    public let draftId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
-        case originalLanguage
+        case originalLanguage, draftId
     }
 
     public init(
@@ -59,7 +65,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         mediaReferences: [StoryMediaReference] = [],
         tempStoryId: String? = nil,
         visibilityUserIds: [String]? = nil,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        draftId: String? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -73,6 +80,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.lastError = nil
         self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage
+        self.draftId = draftId
     }
 
     public init(from decoder: Decoder) throws {
@@ -88,6 +96,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         self.visibilityUserIds = try container.decodeIfPresent([String].self, forKey: .visibilityUserIds)
         self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
+        self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
     }
 }
 
@@ -144,14 +153,19 @@ public struct StoryPublishSuccess: Sendable {
     public let tempStoryId: String
     /// Server-assigned post id for the newly published story.
     public let publishedStoryId: String
+    /// Brouillon d'origine de l'item publié — le succès serveur confirmé est
+    /// le SEUL événement qui autorise sa suppression. `nil` = item legacy.
+    public let draftId: String?
 
     /// Init public : ces payloads franchissent la frontière de module (les
     /// consommateurs s'y abonnent et doivent pouvoir en fabriquer un pour
     /// exercer leur propre réaction à une disposition de queue).
-    public init(queueId: String, tempStoryId: String, publishedStoryId: String) {
+    public init(queueId: String, tempStoryId: String, publishedStoryId: String,
+                draftId: String? = nil) {
         self.queueId = queueId
         self.tempStoryId = tempStoryId
         self.publishedStoryId = publishedStoryId
+        self.draftId = draftId
     }
 }
 
@@ -171,12 +185,17 @@ public struct StoryPublishFailure: Sendable {
     public let queueId: String
     public let tempStoryId: String
     public let reason: StoryPublishFailureReason
+    /// Brouillon d'origine de l'item échoué — un échec PERMANENT le ramène
+    /// éditable, avec son erreur. `nil` = item legacy (reprise manuelle).
+    public let draftId: String?
 
     /// Init public : même raison que `StoryPublishSuccess`.
-    public init(queueId: String, tempStoryId: String, reason: StoryPublishFailureReason) {
+    public init(queueId: String, tempStoryId: String, reason: StoryPublishFailureReason,
+                draftId: String? = nil) {
         self.queueId = queueId
         self.tempStoryId = tempStoryId
         self.reason = reason
+        self.draftId = draftId
     }
 }
 
@@ -301,7 +320,8 @@ public actor StoryPublishQueue {
             publishFailed.send(StoryPublishFailure(
                 queueId: dropped.id,
                 tempStoryId: dropped.tempStoryId,
-                reason: .maxRetriesReached
+                reason: .maxRetriesReached,
+                draftId: dropped.draftId
             ))
         }
         items.append(item)
@@ -490,7 +510,8 @@ public actor StoryPublishQueue {
                 failurePayloads.append(StoryPublishFailure(
                     queueId: item.id,
                     tempStoryId: item.tempStoryId,
-                    reason: .missingLocalMedia(elementIds: missing.map(\.elementId))
+                    reason: .missingLocalMedia(elementIds: missing.map(\.elementId)),
+                    draftId: item.draftId
                 ))
                 consecutiveRetryableFailures = 0
                 continue
@@ -502,7 +523,8 @@ public actor StoryPublishQueue {
                 successPayloads.append(StoryPublishSuccess(
                     queueId: item.id,
                     tempStoryId: item.tempStoryId,
-                    publishedStoryId: publishedId
+                    publishedStoryId: publishedId,
+                    draftId: item.draftId
                 ))
                 consecutiveRetryableFailures = 0
             } catch is StoryPublishUnrecoverableError {
@@ -510,7 +532,8 @@ public actor StoryPublishQueue {
                 failurePayloads.append(StoryPublishFailure(
                     queueId: item.id,
                     tempStoryId: item.tempStoryId,
-                    reason: .unrecoverable(message: "Server rejected the story (validation, expiry, or visibility constraint)")
+                    reason: .unrecoverable(message: "Server rejected the story (validation, expiry, or visibility constraint)"),
+                    draftId: item.draftId
                 ))
                 consecutiveRetryableFailures = 0
             } catch {
@@ -528,7 +551,8 @@ public actor StoryPublishQueue {
                         failurePayloads.append(StoryPublishFailure(
                             queueId: item.id,
                             tempStoryId: item.tempStoryId,
-                            reason: .maxRetriesReached
+                            reason: .maxRetriesReached,
+                            draftId: item.draftId
                         ))
                     }
                 }

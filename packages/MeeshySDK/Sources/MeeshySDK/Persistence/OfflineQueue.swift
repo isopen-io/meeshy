@@ -545,6 +545,12 @@ public actor OfflineQueue {
     public static let shared = OfflineQueue()
 
     public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
+    /// outbox-04 — émis en fin de CHAQUE enqueue qui écrit durablement une
+    /// nouvelle row `.pending` (jamais sur un no-op de coalescing/dédup ni sur
+    /// un échec). `OutboxRetryScheduler.startObservingMutationEnqueued` s'y
+    /// abonne au boot (débounce ~250 ms) pour déclencher un flush immédiat
+    /// sans câbler `flushNow()` dans chaque ViewModel.
+    public nonisolated let mutationEnqueued = SendablePassthrough<Void>()
     /// Wave 1 Task 3.6 — unified terminal-failure signal. `OutboxFlusher`
     /// emits here when a record hits `maxAttempts`, and `OutboxDispatcher`
     /// emits here when it raises a permanent rejection (404/410/409 conflict
@@ -1060,6 +1066,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
@@ -1135,13 +1142,14 @@ public actor OfflineQueue {
 
         do {
             try await pool.write { db in
+                var finalPayload: Data = encoded
                 if shouldCoalesce {
-                    // Latest-state-wins kinds (e.g. `markAsRead`): drop every
-                    // earlier `.pending` / `.failed` row for the same anchor
-                    // before writing the new one. The newer payload always
-                    // supersedes (reading up to msg N also covers 1..N-1) —
-                    // so letting them pile up burns bandwidth and inflates
-                    // the SyncPill rotation with 17 duplicates for 4 convs.
+                    // Latest-state-wins kinds (e.g. `markStoryViewed`): drop
+                    // every earlier `.pending` / `.failed` row for the same
+                    // anchor. `.markAsRead` est l'exception (outbox-05) : ses
+                    // messageIds sont des REÇUS de lecture exacte, pas un état
+                    // à jeter — ils sont fusionnés (union) dans le payload
+                    // survivant avant la suppression des rows périmées.
                     let stale: [OutboxRecord] = try OutboxRecord
                         .filter(Column("kind") == kind.rawValue)
                         .filter(Column("conversationId") == anchor)
@@ -1149,6 +1157,12 @@ public actor OfflineQueue {
                             .contains(Column("status")))
                         .fetchAll(db)
                     if !stale.isEmpty {
+                        if kind == .markAsRead {
+                            finalPayload = Self.mergeMarkAsReadPayloads(
+                                newest: encoded,
+                                stale: stale.map(\.payload)
+                            )
+                        }
                         let staleIds = stale.map(\.id)
                         try OutboxRecord
                             .filter(staleIds.contains(Column("id")))
@@ -1161,7 +1175,7 @@ public actor OfflineQueue {
                     conversationId: anchor,
                     messageLocalId: nil,
                     clientMessageId: cmid,
-                    payload: encoded,
+                    payload: finalPayload,
                     status: .pending,
                     createdAt: now
                 ).insert(db)
@@ -1173,6 +1187,7 @@ public actor OfflineQueue {
 
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
         return outboxId
     }
 
@@ -1183,11 +1198,12 @@ public actor OfflineQueue {
     /// latest one alone is equivalent to applying every intermediate one
     /// in sequence.
     ///
-    /// Currently includes only `.markAsRead`: reading up to message N
-    /// implicitly marks 1..N-1 as well, so a busy group conversation that
-    /// fires `markAsRead` on every inbound message can collapse 17 stacked
-    /// rows into a single one carrying the highest `upToMessageId` with
-    /// no observable difference server-side. Other latest-state kinds
+    /// Currently includes only `.markAsRead`: le curseur de lecture n'avance
+    /// que vers l'avant, si bien qu'une conversation de groupe animée qui
+    /// déclenche `markAsRead` à chaque message entrant peut réduire 17 rows
+    /// empilées à une seule — les identifiants lus des rows périmées étant
+    /// fusionnés dans la survivante par `mergeMarkAsReadPayloads`, aucune
+    /// lecture n'est perdue au passage. Other latest-state kinds
     /// (profile / settings / conversation updates) might be added later,
     /// but each needs a case-by-case audit to confirm intermediate states
     /// can be safely dropped.
@@ -1204,6 +1220,43 @@ public actor OfflineQueue {
         default:
             return false
         }
+    }
+
+    /// outbox-05 — fusionne le payload `.markAsRead` entrant avec toutes les
+    /// rows périmées qu'il remplace, au lieu de jeter leurs `messageIds`
+    /// (reçus de lecture exacte). Décodage tolérant : une row legacy
+    /// indécodable est ignorée, jamais un enqueue planté.
+    private static func mergeMarkAsReadPayloads(newest: Data, stale: [Data]) -> Data {
+        let decoder = JSONDecoder()
+        guard let newestPayload = try? decoder.decode(MarkAsReadPayload.self, from: newest) else {
+            return newest
+        }
+        let staleDecoded = stale.compactMap { try? decoder.decode(MarkAsReadPayload.self, from: $0) }
+
+        let informed = (staleDecoded.map(\.messageIds) + [newestPayload.messageIds]).compactMap { $0 }
+        let mergedMessageIds: [String]?
+        if informed.isEmpty {
+            mergedMessageIds = nil
+        } else {
+            var seen = Set<String>()
+            mergedMessageIds = informed.flatMap { $0 }.filter { seen.insert($0).inserted }
+        }
+
+        var mergedLanguages: [String: String] = [:]
+        for languages in staleDecoded.map(\.messageLanguages) + [newestPayload.messageLanguages] {
+            guard let languages else { continue }
+            mergedLanguages.merge(languages, uniquingKeysWith: { _, new in new })
+        }
+
+        let merged = MarkAsReadPayload(
+            clientMutationId: newestPayload.clientMutationId,
+            conversationId: newestPayload.conversationId,
+            messageIds: mergedMessageIds,
+            language: newestPayload.language,
+            messageLanguages: mergedLanguages.isEmpty ? nil : mergedLanguages,
+            caughtUpToMessageId: newestPayload.caughtUpToMessageId
+        )
+        return (try? JSONEncoder().encode(merged)) ?? newest
     }
 
     /// Reads the top-level `clientMutationId` field from a JSON-encoded
@@ -1439,6 +1492,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued \(sourceAudioURLs.count) audio track(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
 
         return EnqueueAudiosResult(outboxId: outboxId, localAudioPaths: relativePaths)
     }
@@ -1577,6 +1631,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
 
         return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
     }
@@ -1820,6 +1875,7 @@ public actor OfflineQueue {
             throw OfflineQueueError.writeFailed(underlying: error)
         }
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     /// Persists a `deleteMessage` request. If a pending `sendMessage` or
@@ -1954,6 +2010,7 @@ public actor OfflineQueue {
         // dedup catches the duplicate but the optimistic row would flicker.
         items.removeAll { $0.clientMessageId == clientMessageId }
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     public func dequeue(_ itemId: String) async {
@@ -2196,6 +2253,7 @@ public actor OfflineQueue {
         switch outcome {
         case .inserted:
             logger.info("Enqueued reaction \(action.rawValue, privacy: .public) \(emoji, privacy: .public) for message \(messageId, privacy: .public)")
+            mutationEnqueued.send(())
         case .droppedNew(let matched):
             // Surface the duplicate as a drop so optimistic UI can reconcile
             // (e.g. if the caller had already painted a "pending" badge for

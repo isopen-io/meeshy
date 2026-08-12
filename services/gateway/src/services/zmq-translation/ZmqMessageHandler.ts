@@ -235,16 +235,13 @@ export class ZmqMessageHandler extends EventEmitter {
       return;
     }
 
-    // Marquer ce task comme traité
-    this.processedResults.add(resultKey);
-
-    // Nettoyer les anciens résultats (garder seulement les 1000 derniers)
-    if (this.processedResults.size > 1000) {
-      const firstKey = this.processedResults.values().next().value;
-      this.processedResults.delete(firstKey);
-    }
-
-    // VALIDATION COMPLÈTE
+    // VALIDATION COMPLÈTE — AVANT de consommer le slot de déduplication. Une
+    // frame malformée (result absent/sans messageId) ne doit PAS marquer
+    // `resultKey` comme traité : ZMQ SUB est at-least-once et un retry du
+    // translator réutilise le même taskId, donc stamper le slot ici ferait
+    // dropper la re-livraison VALIDE par le guard `has(resultKey)` ci-dessus —
+    // le destinataire resterait bloqué sur l'original non traduit (violation
+    // du Prisme). Seul un événement accepté consomme le slot.
     if (!event.result) {
       logger.error(`❌ Message sans résultat`);
       return;
@@ -253,6 +250,15 @@ export class ZmqMessageHandler extends EventEmitter {
     if (!event.result.messageId) {
       logger.error(`❌ Message sans messageId`);
       return;
+    }
+
+    // Marquer ce task comme traité (uniquement après validation réussie)
+    this.processedResults.add(resultKey);
+
+    // Nettoyer les anciens résultats (garder seulement les 1000 derniers)
+    if (this.processedResults.size > 1000) {
+      const firstKey = this.processedResults.values().next().value;
+      this.processedResults.delete(firstKey);
     }
 
     this.stats.translationCompleted++;

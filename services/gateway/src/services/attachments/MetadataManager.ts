@@ -827,6 +827,18 @@ export class MetadataManager {
         metadata.videoCodec = 'unknown';
         metadata.bitrate = 0;
       }
+
+      // ffprobe reste la source autoritative quand il réussit ; on ne retombe
+      // sur la durée fournie par le client (ms, déjà extraite côté hook —
+      // useAttachmentUpload.ts) que si ffprobe a échoué OU n'a rapporté
+      // aucune durée exploitable (0, ex: fichier sans piste vidéo). Miroir
+      // du fallback déjà en place pour l'audio (:781-784).
+      if (!(metadata.duration && metadata.duration > 0) &&
+          typeof providedMetadata?.duration === 'number' &&
+          providedMetadata.duration > 0) {
+        logger.info('⚠️ [MetadataManager] Video duration unavailable from ffprobe, using client-provided duration as fallback');
+        metadata.duration = Math.round(providedMetadata.duration);
+      }
     }
 
     if (attachmentType === 'document' && mimeType === 'application/pdf') {

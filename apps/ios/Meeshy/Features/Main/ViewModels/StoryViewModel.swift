@@ -16,12 +16,11 @@ import MeeshyUI
 /// the author's own stories — instant, no backend, no baked upload. Other viewers
 /// keep the server thumbnail until Phase 2 (baked cover upload) ships.
 enum StoryCoverThumbnail {
-    /// Pixel size of the cached cover — 9:16, crisp enough for the tray ring avatar.
-    static let renderSize = CGSize(width: 270, height: 480)
+    /// Delegates to the SDK scheme (`StoryCoverCacheKey`) — shared with the draft
+    /// autosave hook, which lives SDK-side and cannot see this app-side type.
+    static let renderSize = StoryCoverCacheKey.renderSize
 
-    /// Disk-cache key (in `CacheCoordinator.thumbnails`) for a story's local cover.
-    /// Synthetic scheme so it never collides with a media-URL cache entry.
-    static func cacheKey(storyId: String) -> String { "story-cover:\(storyId)" }
+    static func cacheKey(storyId: String) -> String { StoryCoverCacheKey.key(for: storyId) }
 
     /// Tray cover resolution order: locally-rendered composite (captures every layer)
     /// → server thumbnail → raw media URL (image only — `CachedAvatarImage` cannot
@@ -110,9 +109,26 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// (Partager button stayed hidden on PUBLIC stories until this).
     static let storiesCacheKey = "recent_tray_v2"
 
+    /// Taille de page demandée au tray. `GET /posts/feed/stories` plafonne
+    /// `limit` à 50 côté serveur : annoncer davantage ne rend pas une ligne de
+    /// plus et désarme le repli heuristique (leçon du cycle 79, où un
+    /// `limit=500` face à un plafond de 100 avait rendu la garde inatteignable).
+    static let trayPageLimit = 50
+
+    /// Plafond de pages drainées en une passe — 300 stories, très au-delà d'un
+    /// cercle réel. Il borne le coût d'une fenêtre anormale et, surtout, d'un
+    /// serveur qui annoncerait `hasMore` à tort : sans lui, la boucle ne
+    /// s'arrêterait jamais.
+    static let maxTrayPagesPerPass = 6
+
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var showStoryComposer = false
+    /// Brouillon à reprendre, consommé par le cover racine du composer
+    /// (`StoryComposerCover`). Posé AVANT `showStoryComposer = true` pour que
+    /// le composer s'ouvre SUR ce brouillon et autosauvegarde sous son id —
+    /// sans adoption, il écrirait sous un id neuf et dupliquerait le brouillon.
+    var pendingDraftId: String?
     /// C5 — file LOCALE des publications en cours. Ordre = ordre des taps
     /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
     /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
@@ -137,19 +153,27 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private let socialSocket: SocialSocketProviding
     private let api: APIClientProviding
     private let visibilityStore: StoryVisibilityPreferenceStore
+    /// Cycle de vie de publication du brouillon (directive 2026-08-02) :
+    /// succès online (`launchUploadTask`), annulation (`cancelUpload`) et
+    /// édition (`runStoryUpdate`) y écrivent. Propriété injectable — même
+    /// raison que les autres dépendances de ce VM — pour que les tests
+    /// n'exercent jamais le singleton `.shared` (base réelle du sandbox app).
+    private let draftStore: StoryDraftStore
 
     init(
         storyService: StoryServiceProviding = StoryService.shared,
         postService: PostServiceProviding = PostService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         api: APIClientProviding = APIClient.shared,
-        visibilityStore: StoryVisibilityPreferenceStore = .init()
+        visibilityStore: StoryVisibilityPreferenceStore = .init(),
+        draftStore: StoryDraftStore = .shared
     ) {
         self.storyService = storyService
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
         self.visibilityStore = visibilityStore
+        self.draftStore = draftStore
         observeReconnectionForRetry()
         observeQueueDispositions()
     }
@@ -200,7 +224,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ///
     /// Decodes the queued payload, materializes the local media files, and
     /// drives the shared `runStoryUpload` pipeline to completion. Headless:
-    /// no UI mutations on `activeUpload` so the queue path can run from
+    /// no UI mutations on `activeUploads` so the queue path can run from
     /// cold start without ghost banners. Returns the server-assigned post
     /// id of the LAST published slide (the one the queue uses to reconcile
     /// the optimistic `pending_<uuid>` row).
@@ -292,7 +316,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// banner remains available; this just removes the friction of having
     /// to tap retry yourself when the network comes back.
     ///
-    /// Note: this only handles uploads still in `activeUpload` (process is
+    /// Note: this only handles uploads still in `activeUploads` (process is
     /// alive). Cross-restart resume is the StoryPublishQueue scope (V2).
     private func observeReconnectionForRetry() {
         MessageSocketManager.shared.$isConnected
@@ -305,7 +329,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 Task { @MainActor in
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    try? await Task.sleep(for: .seconds(2))
                     // TOUTES les entrées en échec repartent — la file les
                     // sérialise (une seule monte à la fois) et la revendication
                     // atomique empêche toute course avec le drain de queue.
@@ -329,6 +353,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// un kill le laisse en queue → repris au boot.
         var queueId: String?
         var queueTempStoryId: String?
+        /// Brouillon d'origine (directive 2026-08-02) : gelé au hand-off, il
+        /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
+        /// dégèle, l'échec permanent le ramène éditable avec son erreur.
+        var draftId: String?
         /// E5 — le VM détient-il la revendication de son item en queue ?
         /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
         /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
@@ -423,6 +451,78 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         isLoading = false
     }
 
+    /// Résultat d'une passe de tray, pages recollées.
+    struct DrainedStoryPages {
+        let posts: [APIPost]
+        let deletedStoryIds: Set<String>
+        /// Le serveur a plafonné ses tombstones : des disparitions manquent, et
+        /// elles n'ont AUCUN curseur de reprise.
+        let tombstonesTruncated: Bool
+    }
+
+    enum StoryTrayPageError: Error {
+        /// Une page a répondu `success: false` — indiscernable d'une panne, donc
+        /// traitée comme telle plutôt que recollée en silence.
+        case unsuccessfulPage
+    }
+
+    /// Suit `pagination.nextCursor` tant que le serveur annonce `hasMore`.
+    ///
+    /// La page est FILTRÉE par `updatedAt` mais ORDONNÉE par `(createdAt, id)`,
+    /// et son curseur porte sur ce même couple : paginer parcourt donc la
+    /// fenêtre EXACTEMENT, sans saut ni doublon. C'est ce qui distingue ce cas
+    /// de celui des conversations (cycle 79), où escalader vers un fetch complet
+    /// était le seul recours — ici le fetch complet emprunte la MÊME route
+    /// plafonnée à 50 : il ne rattraperait rien.
+    ///
+    /// Avant ce drain, `hasMore`/`nextCursor` n'avaient AUCUN lecteur dans tout
+    /// le dépôt : le tray était silencieusement coupé à 50 stories pour tout le
+    /// monde, delta comme fetch complet.
+    private func drainStoryPages(updatedSince: Date?) async throws -> DrainedStoryPages {
+        var posts: [APIPost] = []
+        var deletedStoryIds = Set<String>()
+        var tombstonesTruncated = false
+        var cursor: String?
+
+        for _ in 0..<Self.maxTrayPagesPerPass {
+            let response = try await storyService.list(
+                cursor: cursor,
+                limit: Self.trayPageLimit,
+                updatedSince: updatedSince
+            )
+            guard response.success else { throw StoryTrayPageError.unsuccessfulPage }
+
+            posts.append(contentsOf: response.data)
+            deletedStoryIds.formUnion(response.meta?.deletedStoryIds ?? [])
+            // Les tombstones voyagent page par page : la troncature vue sur
+            // N'IMPORTE laquelle vaut pour la passe entière.
+            tombstonesTruncated = tombstonesTruncated || (response.meta?.deletedStoryIdsTruncated ?? false)
+
+            // Un `nextCursor` vide avec `hasMore: true` serait une page suivante
+            // qu'on ne sait pas demander : on s'arrête plutôt que de rejouer la
+            // même page indéfiniment.
+            guard response.pagination?.hasMore == true,
+                  let next = response.pagination?.nextCursor,
+                  !next.isEmpty else {
+                return DrainedStoryPages(
+                    posts: posts,
+                    deletedStoryIds: deletedStoryIds,
+                    tombstonesTruncated: tombstonesTruncated
+                )
+            }
+            cursor = next
+        }
+
+        Logger.messages.error(
+            "[StoryVM] Tray drain stopped at the \(Self.maxTrayPagesPerPass, privacy: .public)-page cap while the server still announced more"
+        )
+        return DrainedStoryPages(
+            posts: posts,
+            deletedStoryIds: deletedStoryIds,
+            tombstonesTruncated: tombstonesTruncated
+        )
+    }
+
     func fetchStoriesFromNetwork(deltaSince: Date? = nil) async {
         // R8 inc.1 — refetch silencieux DELTA : quand le cache fournit un
         // curseur (max updatedAt), on ne demande que les stories créées ou
@@ -432,9 +532,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // historique ci-dessous (résilience > économie).
         if let deltaSince {
             do {
-                let response = try await storyService.list(cursor: nil, limit: 50, updatedSince: deltaSince)
-                if response.success {
-                    let deltaGroups = response.data.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+                let drained = try await drainStoryPages(updatedSince: deltaSince)
+                // Tombstones plafonnés : la purge qu'on tient est INCOMPLÈTE, et
+                // aucun curseur ne permet de réclamer la suite. Le seul geste qui
+                // fasse sortir les fantômes restants est le remplacement du tray
+                // par un fetch complet — on tombe donc volontairement dessus au
+                // lieu de fusionner une couverture qu'on sait trouée. C'est
+                // l'inverse du geste de la page tronquée juste au-dessus, qui se
+                // rattrape, elle, en paginant.
+                if drained.tombstonesTruncated {
+                    Logger.messages.error("[StoryVM] Server truncated its story tombstones — escalating to a full tray fetch")
+                } else {
+                    let deltaGroups = drained.posts.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
                     if !deltaGroups.isEmpty {
                         insertOrMergeStoryGroups(deltaGroups, replacingExisting: true)
                     }
@@ -444,7 +553,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     // une suppression survenue app fermée ou hors-ligne. Appelé
                     // même sur un delta vide : une réponse sans aucune story
                     // peut très bien ne porter QUE des disparitions.
-                    purgeDeadStories(deletedIds: Set(response.meta?.deletedStoryIds ?? []))
+                    purgeDeadStories(deletedIds: drained.deletedStoryIds)
                     if !deltaGroups.isEmpty {
                         prefetchAllStoryMedia(storyGroups)
                         renderMissingReceiverCovers()
@@ -463,62 +572,64 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let pendingBeforeFetch = currentPendingStoryItems()
 
         do {
-            let response = try await storyService.list(cursor: nil, limit: 50)
+            // Drainé lui aussi : ce chemin est celui qui REMPLACE le tray, donc
+            // une page tronquée n'y laisse pas seulement un trou — elle EFFACE
+            // les stories coupées de l'état affiché, et le cache qu'on sauve
+            // juste après grave la troncature.
+            let drained = try await drainStoryPages(updatedSince: nil)
 
-            if response.success {
-                var groups = response.data.toStoryGroups()
+            var groups = drained.posts.toStoryGroups()
 
-                // Preserve locally-viewed state for stories the API hasn't synced yet.
-                // Garde raffinée : une édition de CONTENU postérieure à la vue
-                // locale (reset d'engagement serveur) fait céder la monotonie —
-                // sauf pour ses PROPRES stories, dont l'état « vu » est
-                // client-only par construction (recordView exclut l'auteur).
-                let locallyViewed = buildLocallyViewedMap()
-                let selfId = AuthManager.shared.currentUser?.id
-                if !locallyViewed.isEmpty {
-                    groups = groups.map { group in
-                        let isOwnGroup = group.id == selfId
-                        let merged = group.stories.map { story in
-                            guard !story.isViewed, let viewedAt = locallyViewed[story.id] else { return story }
-                            guard isOwnGroup || Self.shouldKeepLocalViewed(
-                                localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
-                                contentEditedAt: story.contentEditedAt
-                            ) else { return story }
-                            var copy = story; copy.isViewed = true; return copy
-                        }
-                        return group.with(stories: merged)
+            // Preserve locally-viewed state for stories the API hasn't synced yet.
+            // Garde raffinée : une édition de CONTENU postérieure à la vue
+            // locale (reset d'engagement serveur) fait céder la monotonie —
+            // sauf pour ses PROPRES stories, dont l'état « vu » est
+            // client-only par construction (recordView exclut l'auteur).
+            let locallyViewed = buildLocallyViewedMap()
+            let selfId = AuthManager.shared.currentUser?.id
+            if !locallyViewed.isEmpty {
+                groups = groups.map { group in
+                    let isOwnGroup = group.id == selfId
+                    let merged = group.stories.map { story in
+                        guard !story.isViewed, let viewedAt = locallyViewed[story.id] else { return story }
+                        guard isOwnGroup || Self.shouldKeepLocalViewed(
+                            localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
+                            contentEditedAt: story.contentEditedAt
+                        ) else { return story }
+                        var copy = story; copy.isViewed = true; return copy
                     }
+                    return group.with(stories: merged)
                 }
-
-                storyGroups = groups
-
-                // Ré-injecte les stories optimistes hors-ligne encore en attente
-                // (le serveur ne les renvoie pas). Dédupliqué par id : si le
-                // serveur a déjà la version publiée, elle a un autre id et la
-                // réconciliation a déjà retiré le pending — pas de doublon.
-                if !pendingBeforeFetch.isEmpty, let user = AuthManager.shared.currentUser {
-                    let authorName = user.displayName ?? user.username
-                    for item in pendingBeforeFetch {
-                        insertOrAppendStoryItem(
-                            item,
-                            authorId: user.id,
-                            authorName: authorName,
-                            authorAvatar: user.avatar
-                        )
-                    }
-                }
-
-                // Tri unifié (ma story d'abord > non-vues > récence), identique au
-                // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
-                // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
-                // au chargement réseau/cold-start — incohérent avec le tri appliqué
-                // par les events socket (2026-06-01). On sauve la version triée pour
-                // que les chemins .fresh/.stale servent déjà le bon ordre.
-                sortStoryGroupsInPlace()
-                try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
-                prefetchAllStoryMedia(storyGroups)
-                renderMissingReceiverCovers()
             }
+
+            storyGroups = groups
+
+            // Ré-injecte les stories optimistes hors-ligne encore en attente
+            // (le serveur ne les renvoie pas). Dédupliqué par id : si le
+            // serveur a déjà la version publiée, elle a un autre id et la
+            // réconciliation a déjà retiré le pending — pas de doublon.
+            if !pendingBeforeFetch.isEmpty, let user = AuthManager.shared.currentUser {
+                let authorName = user.displayName ?? user.username
+                for item in pendingBeforeFetch {
+                    insertOrAppendStoryItem(
+                        item,
+                        authorId: user.id,
+                        authorName: authorName,
+                        authorAvatar: user.avatar
+                    )
+                }
+            }
+
+            // Tri unifié (ma story d'abord > non-vues > récence), identique au
+            // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
+            // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
+            // au chargement réseau/cold-start — incohérent avec le tri appliqué
+            // par les events socket (2026-06-01). On sauve la version triée pour
+            // que les chemins .fresh/.stale servent déjà le bon ordre.
+            sortStoryGroupsInPlace()
+            try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+            prefetchAllStoryMedia(storyGroups)
+            renderMissingReceiverCovers()
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
         }
@@ -1163,7 +1274,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) {
         // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
         // depuis `updateStoryInBackground` : changer l'audience d'une story
@@ -1185,7 +1297,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedAudioURLs: loadedAudioURLs,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
-                    visibilityUserIds: visibilityUserIds
+                    visibilityUserIds: visibilityUserIds,
+                    draftId: draftId
                 )
             }
             showStoryComposer = false
@@ -1199,6 +1312,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let upload = StoryUploadState(
             id: UUID().uuidString,
             thumbnailImage: thumbnail,
+            draftId: draftId,
             progress: 0,
             phase: .preparing,
             authorId: user?.id ?? "",
@@ -1240,7 +1354,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 loadedAudioURLs: loadedAudioURLs,
                 originalLanguage: originalLanguage,
                 visibility: visibility,
-                visibilityUserIds: visibilityUserIds
+                visibilityUserIds: visibilityUserIds,
+                draftId: draftId
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
@@ -1342,7 +1457,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             slides: slides,
@@ -1352,7 +1468,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            draftId: draftId
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1400,7 +1517,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String? = nil,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        draftId: String? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1469,7 +1587,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             mediaReferences: mediaReferences,
             tempStoryId: tempStoryId,
             visibilityUserIds: visibilityUserIds,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            draftId: draftId
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)
@@ -1518,10 +1637,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
             // Cover composite local (même rendu que le chemin online) → cache
             // thumbnails. Le tray résout ce cover en priorité pour l'auteur.
-            if let cover = StorySlideRenderer.renderComposite(
+            if let cover = StoryStaticSnapshot.render(
                 slide: slide,
-                bgImage: slideImages[slide.id],
                 loadedImages: loadedImages,
+                bgImage: slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
                 Task {
@@ -1547,6 +1666,105 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 authorAvatar: user.avatar
             )
         }
+    }
+
+    // MARK: - Reprise d'un échec de publication (spec 2026-08-01, incrément 5)
+
+    /// Seam injectable (tests) : retrait d'un item de l'historique d'échecs.
+    /// Le chemin réel traverse `StoryPublishService` (queue actor singleton +
+    /// rafraîchissement du `failedItems` publié) — un état global qu'une
+    /// suite de tests ne doit pas muter.
+    var failedItemDiscarder: (StoryPublishQueueItem) async -> Void = { item in
+        await StoryPublishService.shared.discard(item)
+    }
+
+    /// Ouvre le composer de CRÉATION sur un brouillon existant. L'ORDRE est
+    /// l'invariant : `pendingDraftId` est posé AVANT `showStoryComposer`,
+    /// sinon `StoryComposerCover` construit un VM vierge qui autosauvegarde
+    /// sous un id neuf et duplique le brouillon. Seul écrivain app-side de
+    /// `pendingDraftId` (le cover le remet à `nil` au dismiss).
+    func openComposer(resumingDraftId draftId: String) {
+        pendingDraftId = draftId
+        showStoryComposer = true
+    }
+
+    /// Convertit un échec de publication en brouillon ÉDITABLE (« Reprendre »).
+    /// Ordre STRICT — le travail n'est jamais perdu entre deux états :
+    ///   1. décode `slidesPayload` et résout les fichiers de `mediaReferences` ;
+    ///   2. écrit un brouillon NEUF (slides + copies des médias via
+    ///      `saveMedia(draftId:)` → `meeshy_draft_media/<id>/`) puis VÉRIFIE la
+    ///      persistance en relisant le store ;
+    ///   3. seulement ensuite, retire l'item de file et son placeholder
+    ///      optimiste.
+    /// Toute défaillance avant (3) laisse l'item de file INTACT et retourne
+    /// `nil` (le brouillon partiel éventuel est effacé). La présentation du
+    /// composer reste à la charge de l'appelant (la sheet « Mes stories »
+    /// route par son followUp différé → `openComposer(resumingDraftId:)`).
+    func resumeFailedItem(
+        _ item: StoryPublishQueueItem,
+        draftStore: StoryDraftStore = .shared
+    ) async -> String? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let slides = try? decoder.decode([StorySlide].self, from: item.slidesPayload),
+              !slides.isEmpty else {
+            Logger.stories.error(
+                "resumeFailedItem: slidesPayload indécodable ou vide pour \(item.id, privacy: .public)")
+            showResumeFailureToast()
+            return nil
+        }
+
+        guard let media = try? loadMediaFromReferences(item.mediaReferences) else {
+            Logger.stories.error(
+                "resumeFailedItem: média manquant/illisible pour \(item.id, privacy: .public) — item conservé")
+            showResumeFailureToast()
+            return nil
+        }
+
+        // `loadMediaFromReferences` (le MÊME validateur que le chemin de
+        // publication de la file) déprefixe les fonds en `slideImages` —
+        // `saveMedia` attend les clés d'ORIGINE, on re-préfixe.
+        let images = media.slideImages.reduce(into: media.loadedImages) { acc, entry in
+            acc["slide-bg-\(entry.key)"] = entry.value
+        }
+
+        let draftId = UUID().uuidString
+        draftStore.save(draftId: draftId,
+                        slides: slides,
+                        visibility: item.visibility,
+                        visibilityUserIds: item.visibilityUserIds ?? [],
+                        originalLanguage: item.originalLanguage)
+        draftStore.saveMedia(
+            draftId: draftId,
+            images: images,
+            videoURLs: media.loadedVideoURLs,
+            audioURLs: media.loadedAudioURLs
+        )
+
+        // `save`/`saveMedia` sont best-effort (elles loggent au lieu de
+        // throw) : on RELIT le store avant de toucher à l'item de file. Une
+        // copie manquante = brouillon effacé + item conservé, jamais l'inverse.
+        let persistedIds = Set(draftStore.loadMediaReferences(draftId: draftId).map(\.elementId))
+        let expectedIds = Set(item.mediaReferences.map(\.elementId))
+        guard draftStore.listDrafts().contains(where: { $0.id == draftId }),
+              expectedIds.isSubset(of: persistedIds) else {
+            draftStore.delete(draftId: draftId)
+            Logger.stories.error(
+                "resumeFailedItem: persistance du brouillon incomplète pour \(item.id, privacy: .public) — item conservé")
+            showResumeFailureToast()
+            return nil
+        }
+
+        await failedItemDiscarder(item)
+        removeOptimisticStories(tempStoryId: item.tempStoryId)
+        return draftId
+    }
+
+    private func showResumeFailureToast() {
+        FeedbackToastManager.shared.showError(String(
+            localized: "story.mine.failed.resume.error",
+            defaultValue: "Impossible de reprendre cette story",
+            bundle: .main))
     }
 
     /// Retire toutes les stories optimistes d'un `tempStoryId` (ids préfixés
@@ -1620,13 +1838,34 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.cleanupUploadTempFiles(upload)
                 // E5 — l'upload online a abouti : retirer l'intent write-ahead
                 // (queue + dossier médias), sinon le boot suivant re-publierait.
+                //
+                // Le retrait de l'intent est AWAITÉ, pas détaché : détaché, il
+                // courait contre la fin de cette tâche et contre la déclaration
+                // de succès à l'UI juste en dessous. Perdre cette course laisse
+                // l'intent au drain de boot, qui RE-PUBLIE une story déjà en
+                // ligne. Même geste que le chemin de drain hors-ligne
+                // (`executeQueuedPublish`), qui l'awaite déjà.
+                //
+                // Le ménage disque, lui, reste détaché : `removeOfflineQueue-
+                // MediaDirectory` est de l'IO synchrone `nonisolated`, et cette
+                // tâche est isolée MainActor. Aucun boot ne dépend de ce dossier
+                // une fois l'intent parti.
                 let finished = self.activeUploads.first(where: { $0.id == id })
                 if let queueId = finished?.queueId {
                     let tempId = finished?.queueTempStoryId
-                    Task.detached {
-                        await StoryPublishQueue.shared.dequeue(queueId)
-                        if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
+                    await StoryPublishQueue.shared.dequeue(queueId)
+                    if let tempId {
+                        Task.detached { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
+                }
+                // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul
+                // événement qui efface le brouillon gelé au hand-off. Ce
+                // chemin (upload online, piloté par `launchUploadTask`) ne
+                // passe pas par `publishSucceeded` (silencieux, cf. `dequeue`) :
+                // c'est donc ici, et pas dans `StoryPublishService`, que ce
+                // succès-là doit être consommé.
+                if let draftId = finished?.draftId {
+                    self.draftStore.delete(draftId: draftId)
                 }
                 self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
@@ -1694,7 +1933,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
-    ///       callbacks to drive the `activeUpload` banner and tray prepend.
+    ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
     ///   2. `executeQueuedPublish` (queue flow) — passes no-op callbacks since
     ///       there is no banner to update on cold-start replay.
     ///
@@ -1830,9 +2069,19 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = audioObjects[i]
                     guard let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] else {
-                        os.Logger.storyAudio.error(
-                            "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
-                        )
+                        // Son EMPRUNTÉ à la bibliothèque : aucun fichier local à
+                        // uploader, c'est ATTENDU — le clip reste servi par son
+                        // `mediaURL` serveur (repli du reader), `postMediaId`
+                        // vide par contrat. Ne pas crier au média perdu.
+                        if obj.soundId != nil, obj.mediaURL?.isEmpty == false {
+                            os.Logger.storyAudio.info(
+                                "publish audio borrowed from library audioId=\(obj.id, privacy: .public) soundId=\(obj.soundId ?? "", privacy: .public) — served by mediaURL, nothing to upload"
+                            )
+                        } else {
+                            os.Logger.storyAudio.error(
+                                "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
+                            )
+                        }
                         continue
                     }
                     let result = try await uploader.uploadFile(
@@ -1885,10 +2134,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // background's poster frame (it.26) — and cache it under the published
             // story id. The tray prefers it so the author instantly sees their fully
             // composed story, instead of the server thumbnail (raw bg, no overlays).
-            if let cover = StorySlideRenderer.renderComposite(
+            if let cover = StoryStaticSnapshot.render(
                 slide: slide,
-                bgImage: upload.slideImages[slide.id],
                 loadedImages: upload.loadedImages,
+                bgImage: upload.slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
                 await CacheCoordinator.shared.thumbnails.store(
@@ -1938,7 +2187,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) -> Bool {
         guard let slide = slides.first else { return false }
         if NetworkMonitor.shared.isOffline {
@@ -1952,7 +2202,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 edit: edit, slide: slide, slideImages: slideImages,
                 loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
                 loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
-                visibility: visibility, visibilityUserIds: visibilityUserIds
+                visibility: visibility, visibilityUserIds: visibilityUserIds,
+                draftId: draftId
             )
         }
         return true
@@ -1971,7 +2222,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String?,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        draftId: String? = nil
     ) async {
         do {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -2101,10 +2353,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // composition a changé) + remplacement de l'item dans le groupe.
             var editedSlide = slide
             editedSlide.effects = updatedEffects
-            if let cover = StorySlideRenderer.renderComposite(
+            if let cover = StoryStaticSnapshot.render(
                 slide: editedSlide,
-                bgImage: slideImages[slide.id],
                 loadedImages: loadedImages,
+                bgImage: slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
                 await CacheCoordinator.shared.thumbnails.store(
@@ -2121,10 +2373,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(String(
                 localized: "story.edit.success", defaultValue: "Story mise à jour", bundle: .main))
+            // Directive 2026-08-02 : succès serveur CONFIRMÉ — le brouillon
+            // d'édition (gelé par `freezeCurrentDraftForPublish` au hand-off)
+            // n'a plus de raison d'être : la story qu'il modifiait est à jour.
+            if let draftId {
+                draftStore.delete(draftId: draftId)
+            }
         } catch {
             Logger.messages.error("[StoryVM] Story update failed: \(error.localizedDescription)")
             FeedbackToastManager.shared.showError(String(
                 localized: "story.edit.error", defaultValue: "Échec de la mise à jour de la story", bundle: .main))
+            // Échec PERMANENT (l'édition ne passe pas par la file de retry) :
+            // le brouillon revient éditable, avec son erreur affichable —
+            // sinon il resterait gelé à vie, invisible des reprises.
+            if let draftId {
+                draftStore.recordPublishFailure(draftId: draftId, message: error.localizedDescription)
+            }
         }
     }
 
@@ -2195,12 +2459,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         )
     }
 
-    /// Retry en 1 tap de l'entrée mise en avant par les surfaces d'avatar.
-    func retryUpload() {
-        guard let id = activeUpload?.id else { return }
-        retryUpload(id: id)
-    }
-
     func retryUpload(id: String) {
         guard let upload = activeUploads.first(where: { $0.id == id }),
               case .failed(let previousError) = upload.phase else { return }
@@ -2242,15 +2500,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
-    /// Annulation de l'entrée mise en avant par les surfaces d'avatar.
-    func cancelUpload() {
-        guard let id = activeUpload?.id else { return }
-        cancelUpload(id: id)
-    }
-
     func cancelUpload(id: String) {
         guard let upload = activeUploads.first(where: { $0.id == id }) else { return }
         cleanupUploadTempFiles(upload)
+        // Annulation EXPLICITE d'une publication en attente : dégèle le
+        // brouillon (retire `pendingPublishAt`) sans lui fabriquer d'erreur —
+        // il n'y a pas eu d'échec, l'utilisateur a juste changé d'avis. Il
+        // redevient visible/éditable dans les reprises.
+        if let draftId = upload.draftId {
+            draftStore.clearPendingPublish(draftId: draftId)
+        }
         // Delete any slides that were committed before the user cancelled —
         // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
         // visible to friends as orphan stories that don't fit any slideshow.
@@ -2408,6 +2667,33 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return true
     }
 
+    /// R4 inc.2b — le chemin notification (`StoryNotificationTargetViewModel.load()`)
+    /// a DÉJÀ fetché ce post en réseau et l'a mis en cache dans
+    /// `storyService.cachedPost(id:)` (même singleton `StoryService.shared`
+    /// en production) quelques millisecondes avant que ce viewer ne se
+    /// monte. `ensureStoryLoaded` a un contrat cache-first VOLONTAIRE — il
+    /// ne refetch jamais un postId déjà présent dans le tray (voir
+    /// `test_ensureStoryLoaded_storyAlreadyInTray_skipsNetwork`) — donc un
+    /// tray qui contient DÉJÀ ce post (compteurs périmés, ex: `commentCount`)
+    /// n'était jamais rafraîchi par ce chemin, et un bouton dont
+    /// l'apparition dépend de ce compteur (rail d'actions du viewer, voir
+    /// `StoryActionRailPlan.showsComments`) restait manquant pour toute la
+    /// lecture du slide. Cette méthode ne fait AUCUN réseau : elle relit
+    /// uniquement le cache SDK déjà chaud et fusionne via
+    /// `insertOrMergeStoryGroups(replacingExisting: true)` (même mécanisme
+    /// que le delta-sync R8 inc.1) — no-op silencieux si rien n'est en
+    /// cache (chemin normal, sans notification).
+    func refreshFromCachedPostIfAvailable(postId: String) {
+        guard let cached = storyService.cachedPost(id: postId) else { return }
+        let groups = [cached].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+            .compactMap { group -> StoryGroup? in
+                let alive = group.stories.filter { !$0.isExpired() }
+                return alive.isEmpty ? nil : group.with(stories: alive)
+            }
+        guard !groups.isEmpty else { return }
+        insertOrMergeStoryGroups(groups, replacingExisting: true)
+    }
+
     /// Set dédié aux sinks socket (le `cancellables` partagé porte aussi le
     /// sink de reconnexion posé à l'init) — garde d'idempotence resettable,
     /// même idiome que `FeedViewModel.subscribeToSocketEvents`.
@@ -2418,6 +2704,21 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // sinks — les handlers à delta ±1 (`applyPostReactionDelta`,
         // `applyStoryReactionDelta`) compteraient alors double.
         guard socketCancellables.isEmpty else { return }
+
+        // rts-02 — rattrapage du tray au reconnect social : des stories ont pu
+        // être créées ou supprimées pendant la coupure. Le curseur se calcule
+        // au moment de l'ÉVÉNEMENT (pas à l'armement) — insertOrMergeStoryGroups,
+        // la garde isViewed monotone, les tombstones et le fallback full sur
+        // échec du delta garantissent déjà l'idempotence côté
+        // fetchStoriesFromNetwork.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self, !self.isLoading else { return }
+                Task { await self.fetchStoriesFromNetwork(deltaSince: Self.deltaSince(for: self.storyGroups)) }
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in

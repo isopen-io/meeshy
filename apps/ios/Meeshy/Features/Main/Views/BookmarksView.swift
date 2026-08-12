@@ -105,7 +105,7 @@ struct BookmarksView: View {
                         Color.clear
                             .frame(height: 1)
                             .onAppear {
-                                Task { await viewModel.loadBookmarks() }
+                                Task { await viewModel.loadMore() }
                             }
                     }
                 }

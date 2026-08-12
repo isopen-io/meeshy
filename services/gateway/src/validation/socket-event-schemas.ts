@@ -59,6 +59,18 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // Effets de message — parité avec SocketMessageSendSchema (path texte) et la
+  // route REST POST /messages. Sans ces champs, `z.object` strip un
+  // `isViewOnce` / `isBlurred` / `expiresAt` envoyé avec une photo sur le path
+  // PRINCIPAL d'envoi de pièces jointes, dégradant silencieusement le média en
+  // attachement normal non éphémère (une photo « view-once » reste rouvrable
+  // indéfiniment). `MessageProcessor.saveMessage` recompose le bitfield
+  // `effectFlags` depuis ces champs bruts.
+  isBlurred: z.boolean().optional(),
+  expiresAt: z.string().optional(),
+  effectFlags: z.number().int().optional(),
+  isViewOnce: z.boolean().optional(),
+  maxViewOnceCount: z.number().int().optional(),
   // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
   location: z.unknown().optional(),
 });

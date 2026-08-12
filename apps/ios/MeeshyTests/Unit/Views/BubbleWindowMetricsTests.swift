@@ -36,10 +36,7 @@ final class BubbleWindowMetricsTests: XCTestCase {
     /// name the deprecated API to explain why it is banned here, and a guard that
     /// trips on its own rationale is a guard nobody keeps.
     private func codeLines(_ source: String) -> String {
-        source
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
+        AppSourceGuard.stripComments(source)
     }
 
     private static let deviceLayout = "Meeshy/Core/DeviceLayout.swift"

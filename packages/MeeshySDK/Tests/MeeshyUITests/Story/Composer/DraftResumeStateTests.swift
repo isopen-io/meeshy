@@ -56,14 +56,12 @@ final class DraftResumeStateTests: XCTestCase {
     // MARK: - Gate d'écrasement du brouillon en magasin
 
     private func mayOverwrite(
-        isEditingExistingStory: Bool = false,
         draftResume: DraftResumeState = DraftResumeState(),
         isAutosaveSuspended: Bool = false,
         composerHasContent: Bool = true,
         didHandOffPublish: Bool = false
     ) -> Bool {
         StoryComposerView.mayOverwriteStoredDraft(
-            isEditingExistingStory: isEditingExistingStory,
             draftResume: draftResume,
             isAutosaveSuspended: isAutosaveSuspended,
             composerHasContent: composerHasContent,
@@ -133,12 +131,16 @@ final class DraftResumeStateTests: XCTestCase {
         XCTAssertTrue(mayOverwrite())
     }
 
-    func test_autosave_whileEditingAPublishedStory_neverWrites() {
-        XCTAssertTrue(
-            !mayOverwrite(isEditingExistingStory: true),
-            "Un brouillon semé depuis une session d'édition serait restauré comme une NOUVELLE story."
-        )
-    }
+    // INVERSION CONSCIENTE (directive user 2026-08-02, point c) : l'ancien
+    // terme `isEditingExistingStory` fermait l'autosave en édition — « un
+    // brouillon semé depuis une session d'édition serait restauré comme une
+    // NOUVELLE story ». Cette prémisse est caduque : le brouillon porte
+    // désormais `editingPostId` (persisté par `persistDraft`/l'autosave), et
+    // sa réouverture rouvre le mode ÉDITION. Une story mise en édition
+    // revient donc en brouillon, comme tout travail en cours. Le terme a été
+    // RETIRÉ de la signature — la garde de source
+    // `StoryComposerPublishGateTests.test_theAutosaveGateNoLongerShutsOffForEditSessions`
+    // interdit sa réintroduction.
 
     func test_autosave_onAnEmptyComposer_writesNothing() {
         XCTAssertFalse(mayOverwrite(composerHasContent: false))

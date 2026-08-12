@@ -64,6 +64,17 @@ class ConversationRepository @Inject constructor(
             row?.let { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
         }
 
+    /**
+     * Local-only cached conversations — a plain Room read with **no** network
+     * revalidation. Powers the home-screen widget (`:app` `UnreadCountWidget`),
+     * which must render from whatever is already cached (possibly offline, no
+     * connectivity guarantee at widget-refresh time) rather than block on a
+     * fetch. An empty/never-synced cache resolves to an empty list, never a
+     * fabricated placeholder.
+     */
+    fun cachedConversations(): Flow<List<ApiConversation>> =
+        cacheSource.observe().map { it ?: emptyList() }
+
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
@@ -117,6 +128,48 @@ class ConversationRepository @Inject constructor(
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
+                lane = OutboxLanes.READ_RECEIPT,
+                targetId = id,
+                payload = "{}",
+            ),
+        )
+        return true
+    }
+
+    /**
+     * Optimistic mark-as-unread (context-menu counterpart to [markReadOptimistic],
+     * parity iOS `ConversationStore.markConversationUnreadLocally` + `.markAsUnread`
+     * dispatch): the server stays authoritative on the exact count, so locally this
+     * only hints `unreadCount = 1` (the badge appears at once) — never a no-op-to-
+     * no-op write. No-op (returns false) when the conversation is unknown or already
+     * unread (nothing to flip; the context menu only ever offers this action on an
+     * already-read row). Shares the `READ_RECEIPT` outbox lane with [markReadOptimistic]
+     * (both drain in the same FIFO), and its [OutboxKind.MARK_UNREAD] kind coalesces
+     * against a pending [OutboxKind.READ_RECEIPT] as opposite terminal states
+     * ([OutboxCoalescer] `terminalToggle`) rather than iOS's simpler always-replace
+     * shared coalescing key — a quick read→unread undo cancels both mutations locally
+     * instead of round-tripping a redundant "mark unread" the server would just
+     * no-op anyway (same idempotent-terminal-state shape already used for
+     * block/unblock and pin/unpin).
+     */
+    suspend fun markUnreadOptimistic(id: String): Boolean {
+        val updated = database.withTransaction {
+            val row = conversationDao.find(id) ?: return@withTransaction false
+            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+            if (conversation.unreadCount > 0) return@withTransaction false
+            conversationDao.upsertAll(
+                listOf(
+                    row.copy(
+                        payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 1)),
+                    ),
+                ),
+            )
+            true
+        }
+        if (!updated) return false
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.MARK_UNREAD,
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
                 payload = "{}",

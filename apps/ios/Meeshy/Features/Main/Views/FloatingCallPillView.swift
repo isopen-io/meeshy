@@ -257,6 +257,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isMuted
             ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
             : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+        .accessibilityHint(String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main))
         .callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
@@ -278,6 +279,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isSpeaker
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+        .accessibilityHint(String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main))
         .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
@@ -367,6 +369,7 @@ struct FloatingCallPillView: View {
             // longer active, matching CallBubbleView's own display guard.
             guard callManager.callState.isActive else { return }
             callManager.displayMode = .bubble
+            callManager.bubbleSizeTier = .circle
             pillDragOffset = 0
         }
     }
@@ -383,9 +386,6 @@ struct FloatingCallPillView: View {
     // MARK: - Formatting
 
     private var formattedDuration: String {
-        let totalSeconds = Int(callManager.callDuration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        callManager.formattedDuration
     }
 }

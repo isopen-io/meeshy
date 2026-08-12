@@ -193,6 +193,7 @@ class ChatViewModelTest {
         anonymousSession: AnonymousSessionContext? = null,
         showReadReceipts: Boolean = true,
         offline: Boolean = false,
+        initialDraftArg: String? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -218,7 +219,12 @@ class ChatViewModelTest {
         val networkMonitor = InMemoryNetworkConditionMonitor(
             initial = if (offline) NetworkCondition.OFFLINE else NetworkCondition.WIFI,
         )
-        val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
+        val handle = SavedStateHandle(
+            buildMap {
+                put(ChatViewModel.CONVERSATION_ID_ARG, "c1")
+                if (initialDraftArg != null) put(ChatViewModel.DRAFT_ARG, initialDraftArg)
+            },
+        )
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
         val locallyHidden = InMemoryLocallyHiddenMessagesStore(hidden)
@@ -3099,6 +3105,53 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.draft).isEqualTo("re: salut")
         assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+    }
+
+    @Test
+    fun a_draft_nav_argument_seeds_the_composer_immediately() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "Thanks!")
+
+        assertThat(h.vm.state.value.draft).isEqualTo("Thanks!")
+    }
+
+    @Test
+    fun a_draft_nav_argument_takes_priority_over_a_stale_persisted_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            initialDraftArg = "Thanks!",
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "old draft")),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("Thanks!")
+    }
+
+    @Test
+    fun a_blank_draft_nav_argument_never_blocks_the_persisted_draft_restore() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            initialDraftArg = "",
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "old draft")),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("old draft")
+    }
+
+    @Test
+    fun a_percent_encoded_draft_nav_argument_is_decoded() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "Call%20me%20back")
+
+        assertThat(h.vm.state.value.draft).isEqualTo("Call me back")
+    }
+
+    @Test
+    fun a_malformed_percent_sequence_falls_back_to_the_raw_draft_text_instead_of_crashing() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "100% ready!")
+
+        assertThat(h.vm.state.value.draft).isEqualTo("100% ready!")
     }
 
     @Test

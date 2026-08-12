@@ -28,6 +28,7 @@ struct BubbleExpandableText: View, Equatable {
     let mentionDisplayNames: [String: String]
     let highlightTerm: String?
     let mentionTint: Color
+    let hashtagTint: Color
     let linkTint: Color
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
@@ -44,6 +45,7 @@ struct BubbleExpandableText: View, Equatable {
         lhs.mentionDisplayNames == rhs.mentionDisplayNames &&
         lhs.highlightTerm == rhs.highlightTerm &&
         lhs.mentionTint == rhs.mentionTint &&
+        lhs.hashtagTint == rhs.hashtagTint &&
         lhs.linkTint == rhs.linkTint &&
         lhs.trackedLinks == rhs.trackedLinks
     }
@@ -55,7 +57,7 @@ struct BubbleExpandableText: View, Equatable {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.truncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
                     // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
@@ -109,7 +111,7 @@ struct BubbleExpandableText: View, Equatable {
             // bouton. Le dépliage est à sens unique — le chevron "V" a rempli
             // son rôle et disparaît (spec : « déplier uniquement et disparaître,
             // pas de repli »). `isExpanded` reste local à la sous-vue.
-            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
                 // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le

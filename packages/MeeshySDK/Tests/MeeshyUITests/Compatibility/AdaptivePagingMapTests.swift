@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 import MapKit
 import CoreLocation
+@testable import MeeshySDK
 @testable import MeeshyUI
 
 /// Tests for the Session 4 `Compatibility/` wrappers (paging + MapKit).
@@ -184,5 +185,37 @@ final class AdaptivePagingMapTests: XCTestCase {
 
         let elsewhere = PinItem(coordinate: CLLocationCoordinate2D(latitude: 45.75, longitude: 4.85))
         XCTAssertNotEqual(a.id, elsewhere.id, "Deux points distincts doivent rester distinguables.")
+    }
+}
+
+/// `AdaptiveInteractiveMap` doit pouvoir se construire SANS les contrôles
+/// système et dans un style donné. Le picker de lieu en dépend : le
+/// `MapUserLocationButton` de `mapControls` se rend en haut-trailing, sous la
+/// barre de recherche flottante, où il est inatteignable.
+@MainActor
+final class AdaptiveInteractiveMapStyleTests: XCTestCase {
+
+    func test_init_acceptePasDeControlesEtUnStyle() {
+        let map = AdaptiveInteractiveMap(
+            target: nil,
+            annotationCoordinate: nil,
+            style: .hybrid,
+            defaultControls: false,
+            onRegionChange: { _ in }
+        ) { EmptyView() }
+
+        XCTAssertNotNil(map.body)
+    }
+
+    func test_init_conserveSesDefautsPourLesAppelantsExistants() {
+        // Signature historique, sans `style:` ni `defaultControls:` — les
+        // autres appelants du SDK et de l'app doivent continuer à compiler.
+        let map = AdaptiveInteractiveMap(
+            target: nil,
+            annotationCoordinate: nil,
+            onRegionChange: { _ in }
+        ) { EmptyView() }
+
+        XCTAssertNotNil(map.body)
     }
 }

@@ -102,8 +102,15 @@ describe('routes /sounds', () => {
     const res = await (await buildApp({ sound: { findMany } }, 'user-abc'))
       .inject({ method: 'GET', url: '/sounds/mine' });
     expect(res.statusCode).toBe(200);
+    // Forme isSet-safe : `mutedAt: null` seul ne matche PAS un champ ABSENT
+    // en Prisma-Mongo, et aucun chemin de création ne pose `mutedAt` — le
+    // filtre nu rendait « Mes sons » vide dès le premier upload (prod
+    // 2026-08-02). Cf. NOT_MUTED_WHERE dans soundFormats.ts.
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ uploaderId: 'user-abc', mutedAt: null }),
+      where: expect.objectContaining({
+        uploaderId: 'user-abc',
+        AND: [{ OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] }],
+      }),
     }));
   });
 

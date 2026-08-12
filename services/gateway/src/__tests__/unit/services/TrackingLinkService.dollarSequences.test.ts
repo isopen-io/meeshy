@@ -128,5 +128,18 @@ describe('TrackingLinkService — content integrity with $-sequences', () => {
       // On error the [[...]] wrapper is stripped and the raw URL restored verbatim.
       expect(processedContent).toBe('https://x.com/?q=$&a$$b');
     });
+
+    it('restores an angle-bracketed URL verbatim when it contains $ and minting fails', async () => {
+      // Même repli, autre syntaxe : `<url>` a son propre `catch` (ÉTAPE 3) et
+      // sa propre réinjection de l'URL comme *replacement*.
+      prisma.trackingLink.create.mockRejectedValueOnce(new Error('db down'));
+      const content = '<https://x.com/pay?amt=$5&ref=$&x>';
+      const { processedContent } = await service.processExplicitLinksInContent({
+        content,
+        conversationId: 'c1',
+      });
+
+      expect(processedContent).toBe('https://x.com/pay?amt=$5&ref=$&x');
+    });
   });
 });

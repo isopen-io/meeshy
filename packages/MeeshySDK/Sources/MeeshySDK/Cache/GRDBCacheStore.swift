@@ -17,7 +17,18 @@ public enum GRDBCacheError: Error, Sendable {
     case encryptionFailed
 }
 
-public actor GRDBCacheStore<Key, Value>: MutableCacheStore
+/// cache-01 — contrat minimal partagé par les 27 stores GRDB pour que
+/// flushAll/evictUnderMemoryPressure/dirtyCountForTest itèrent une LISTE
+/// unique au lieu d'énumérations divergentes (l'oubli du store notifications
+/// perdait l'état « lu » au kill).
+protocol GRDBDirtyFlushing: Sendable {
+    func flushDirtyKeys(deadline: Date?) async
+    func flushDirtyKeys() async
+    func evictL1() async
+    func dirtyKeyCount() async -> Int
+}
+
+public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     where Key: Hashable & Sendable & CustomStringConvertible,
           Value: CacheIdentifiable & Codable
 {
@@ -78,6 +89,23 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         touchKey(key)
     }
 
+    /// stores-08 — persistance d'une MUTATION LOCALE : mêmes écritures que
+    /// save() mais `lastFetchedAt` est PRÉSERVÉ (contrat de flushKeyToL2 :
+    /// seul un vrai fetch réseau fait avancer l'horloge SWR). Sans ça, un
+    /// like/commentaire local rendait la clé faussement .fresh et supprimait
+    /// la revalidation au cold start.
+    public func savePreservingFreshness(_ items: [Value], for key: Key) async throws {
+        let trimmed: [Value]
+        if let max = policy.maxItemCount, items.count > max {
+            trimmed = Array(items.suffix(max))
+        } else {
+            trimmed = items
+        }
+        let preservedAt = try writeToL2PreservingFreshness(trimmed, for: namespacedKey(key.description))
+        memoryCache[key] = L1Entry(items: trimmed, loadedAt: preservedAt)
+        touchKey(key)
+    }
+
     public func load(for key: Key) async -> CacheResult<[Value]> {
         if let l1 = memoryCache[key] {
             let age = Date().timeIntervalSince(l1.loadedAt)
@@ -90,6 +118,10 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 touchKey(key)
                 return .stale(l1.items, age: age)
             case .expired:
+                // cache-05 — même primitive que touchKey/evictL1 : une
+                // mutation locale encore dans la fenêtre debounce serait
+                // perdue si l'entrée franchit son TTL au load suivant.
+                flushDirtyKeyForEviction(key)
                 memoryCache.removeValue(forKey: key)
                 removeFromAccessOrder(key)
             }
@@ -181,8 +213,10 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         // `upsert` / `upsertPatch`). NO `maxItemCount` trim here — `update`
         // preserves the full set; callers like the conversation list keep it
         // newest-first, where a `suffix` trim would drop the newest entries.
-        guard let l2items = readFromL2(for: namespacedKey(key.description))?.items else { return }
-        let entry = L1Entry(items: mutate(l2items), loadedAt: Date())
+        // stores-08 — reprendre le lastFetchedAt L2 : fabriquer loadedAt=now
+        // ici rendait la clé faussement .fresh après une éviction L1.
+        guard let l2 = readFromL2(for: namespacedKey(key.description)) else { return }
+        let entry = L1Entry(items: mutate(l2.items), loadedAt: l2.lastFetchedAt)
         memoryCache[key] = entry
         touchKey(key)
         markDirty(key)
@@ -536,6 +570,55 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    /// stores-08 — miroir de writeToL2 qui ne fait PAS avancer lastFetchedAt
+    /// (préservé depuis la métadonnée existante ; repli sur now pour une clé
+    /// neuve). Curseur de pagination préservé lui aussi.
+    private nonisolated func writeToL2PreservingFreshness(_ items: [Value], for keyStr: String) throws -> Date {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let encrypt = encrypted
+        let encryption = self.encryption
+        let namespace = self.namespace
+        let logger = self.logger
+        do {
+            return try db.write { db in
+                try CacheEntry.filter(Column("key") == keyStr).deleteAll(db)
+                let now = Date()
+                for item in items {
+                    let json = try encoder.encode(item)
+                    let data: Data
+                    if encrypt {
+                        guard let encryptedData = encryption.encrypt(json) else {
+                            logger.error("Encryption failed for store \(namespace, privacy: .public), refusing to persist")
+                            throw GRDBCacheError.encryptionFailed
+                        }
+                        data = encryptedData
+                    } else {
+                        data = json
+                    }
+                    let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
+                    try entry.save(db)
+                }
+                let existingMeta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
+                let preservedAt = existingMeta?.lastFetchedAt ?? now
+                let meta = DBCacheMetadata(
+                    key: keyStr,
+                    nextCursor: existingMeta?.nextCursor,
+                    hasMore: existingMeta?.hasMore ?? false,
+                    totalCount: items.count,
+                    lastFetchedAt: preservedAt
+                )
+                try meta.save(db)
+                return preservedAt
+            }
+        } catch let cacheError as GRDBCacheError {
+            throw cacheError
+        } catch {
+            self.logger.error("Failed to persist (preserving freshness) to L2 for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
     private nonisolated func readFromL2(for keyStr: String) -> (items: [Value], lastFetchedAt: Date)? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -792,6 +875,23 @@ extension GRDBCacheStore where Key == String {
         let keys = Set(l1Keys).union(l2KeysHolding(itemId: itemId))
         for key in keys {
             await upsertPatch(for: key, itemId: itemId, mutate: mutate)
+        }
+    }
+
+    /// Retire l'item `itemId` de **toutes** les clés qui le contiennent, en
+    /// mémoire comme en base — le pendant destructif de `patchEverywhere`.
+    ///
+    /// Un `post:deleted` reçu pendant que seul le feed est ouvert laissait le
+    /// post fantôme sous sa clé détail et sous `bookmarks` : le prochain cold
+    /// start le ressortait. Même balayage L1 ∪ L2, même préservation de la
+    /// fraîcheur (`update` reprend le `lastFetchedAt` persistant).
+    public func removeEverywhere(itemId: String) async {
+        let l1Keys = loadedKeys().filter { key in
+            memoryCache[key]?.items.contains(where: { $0.id == itemId }) ?? false
+        }
+        let keys = Set(l1Keys).union(l2KeysHolding(itemId: itemId))
+        for key in keys {
+            await update(for: key) { items in items.filter { $0.id != itemId } }
         }
     }
 }

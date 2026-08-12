@@ -213,6 +213,15 @@ jobs:
             -authenticationKeyIssuerID "$ANDP_ISSUER_ID" \
             -allowProvisioningUpdates
 
+      # Gate sur le PRODUIT. Le strip ci-dessus n'a aucun signal propre : s'il
+      # est retiré ou s'il échoue à couvrir un nouveau framework embarqué, tout
+      # le workflow reste vert et le rejet ITMS-90035 n'arrive qu'après l'upload.
+      - name: Verify embedded framework signatures (ITMS-90035)
+        run: |
+          set -euo pipefail
+          cd apps/ios
+          ./ci_scripts/verify_embedded_signatures.sh build/Meeshy.ipa
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v7
         with:

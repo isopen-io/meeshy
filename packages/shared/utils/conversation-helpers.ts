@@ -136,6 +136,87 @@ export function resolveUserLanguagesOrdered(
 }
 
 /**
+ * Applique le Prisme Linguistique à l'aperçu du dernier message d'une ligne de
+ * liste de conversations.
+ *
+ * Jumeau TypeScript de
+ * `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift`). Les deux
+ * plateformes rendent la même ligne depuis la même charge REST — la carte
+ * `lastMessageTranslations` et `lastMessageOriginalLanguage` posées par
+ * `GET /conversations`. Toute divergence de résolution ferait afficher deux
+ * textes différents pour un même compte selon le client.
+ *
+ * Le prisme est ORDONNÉ, et la langue d'origine y concourt **à son propre
+ * rang** — jamais comme court-circuit global. On descend les langues du lecteur
+ * dans l'ordre ; la première qui est servie gagne, qu'elle le soit par une
+ * traduction ou parce que le message est déjà écrit dedans :
+ *
+ *   pour chaque langue L du prisme, dans l'ordre :
+ *     L est la langue d'origine  ⇒ l'aperçu brut (le message EST en L)
+ *     une traduction existe en L ⇒ cette traduction
+ *   aucune ⇒ l'aperçu brut
+ *
+ * **Pourquoi le rang, et pas « la langue d'origine est quelque part dans le
+ * prisme ⇒ l'original »** — cette seconde formulation (celle que portait iOS,
+ * et le premier jet de ce jumeau) rétrograde silencieusement la langue PRIMAIRE
+ * du lecteur dès que la langue d'origine apparaît plus bas dans son prisme.
+ * C'est exactement le cas décrit par `CLAUDE.md` : « un utilisateur francophone
+ * avec un iPhone en anglais voit TOUJOURS ses messages en français (priorité 1) ;
+ * la locale anglaise n'intervient que si aucune traduction française n'est
+ * disponible ». Prisme `['fr', 'en']`, message anglais, traduction française
+ * disponible : la formulation par appartenance rend « Hello », la formulation
+ * par rang rend « Bonjour ». Seule la seconde respecte la règle produit, et
+ * c'est aussi ce que fait déjà le chemin du CORPS des messages
+ * (`use-message-translations`, qui compare la langue d'origine à la SEULE
+ * langue de tête). La ligne de liste était la dernière à en diverger.
+ *
+ * **Règle critique du Prisme (#3) : ne JAMAIS retomber sur une traduction
+ * quelconque.** L'absence de traduction vers une langue du lecteur signifie que
+ * le contenu est déjà dans cette langue, ou qu'aucune traduction n'a été
+ * produite — servir une troisième langue serait pire que l'original.
+ *
+ * Les clés de la carte comme les langues du lecteur sont comparées en
+ * minuscules : iOS minuscule ses clés au décodage, le web consomme la charge
+ * telle quelle, et la normalisation doit donc vivre ici pour que les deux
+ * plateformes restent d'accord.
+ *
+ * `preferredLanguages` doit être ordonnée — c'est la sortie de
+ * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
+ */
+export function resolveLastMessagePreview(params: {
+  preview: string | null | undefined;
+  translations?: Readonly<Record<string, string>> | null;
+  originalLanguage?: string | null;
+  preferredLanguages: readonly string[];
+}): string | null | undefined {
+  const { preview, translations, originalLanguage, preferredLanguages } = params;
+
+  if (!translations || typeof translations !== 'object') return preview;
+
+  const preferred = preferredLanguages
+    .filter((lang): lang is string => typeof lang === 'string' && lang.trim() !== '')
+    .map((lang) => lang.toLowerCase());
+  if (preferred.length === 0) return preview;
+
+  const original = originalLanguage?.toLowerCase();
+
+  const byLowercasedKey = new Map<string, string>();
+  for (const [lang, text] of Object.entries(translations)) {
+    if (typeof text !== 'string' || text.trim() === '') continue;
+    byLowercasedKey.set(lang.toLowerCase(), text);
+  }
+
+  for (const lang of preferred) {
+    if (original && lang === original) return preview;
+    const translated = byLowercasedKey.get(lang);
+    if (translated !== undefined) return translated;
+  }
+
+  return preview;
+}
+
+/**
  * Génère un identifiant unique pour une conversation
  * Format: mshy_<titre_sanitisé>-YYYYMMDDHHMMSS ou mshy_<unique_id>-YYYYMMDDHHMMSS si pas de titre
  */
@@ -244,28 +325,39 @@ export function isValidMongoId(id: string): boolean {
 }
 
 /**
- * Calcule si un message peut encore être modifié (1 heure max pour users normaux)
+ * Calcule si un message peut encore être modifié (SSOT de la fenêtre d'édition).
+ *
+ * Parité stricte avec les chemins autoritaires qui, aujourd'hui, réimplémentent
+ * la même règle chacun de leur côté :
+ *  - socket : `MessageHandler.handleMessageEdit` (`EDIT_WINDOW_MS = 24h`)
+ *  - REST   : `routes/conversations/messages-advanced.ts` (`twentyFourHoursInMs`)
+ *  - web    : `hooks/use-message-interactions` (`twentyFourHoursInMs`)
+ *
+ * Un utilisateur normal dispose de 24 heures ; le contournement de la fenêtre
+ * est un privilège de rôle GLOBAL (MODERATOR/ADMIN/BIGBOSS), jamais un rôle de
+ * conversation (admin/moderator/member) — comparé en majuscules car la DB peut
+ * stocker le rôle en minuscules. Un `createdAt` invalide (Date → NaN) ne bloque
+ * jamais : `NaN > window` est faux, exactement comme les trois sites ci-dessus.
  */
 export function canEditMessage(
   createdAt: Date | string,
   userRole: string = 'USER'
 ): { canEdit: boolean; reason?: string } {
-  // Admins et BIGBOSS peuvent toujours modifier (case-insensitive — DB may store lowercase)
-  if (['ADMIN', 'BIGBOSS', 'MODERATOR', 'CREATOR'].includes(userRole.toUpperCase())) {
+  if (['MODERATOR', 'ADMIN', 'BIGBOSS'].includes(userRole.toUpperCase())) {
     return { canEdit: true };
   }
-  
+
   const messageDate = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
   const messageAge = Date.now() - messageDate.getTime();
-  const oneHourInMs = 60 * 60 * 1000;
-  
-  if (messageAge > oneHourInMs) {
+  const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  if (messageAge > EDIT_WINDOW_MS) {
     return {
       canEdit: false,
       reason: 'MESSAGE_TOO_OLD',
     };
   }
-  
+
   return { canEdit: true };
 }
 

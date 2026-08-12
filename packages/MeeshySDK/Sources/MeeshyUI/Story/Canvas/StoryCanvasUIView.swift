@@ -564,6 +564,28 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Y (coordonnées ÉCRAN) du bord INFÉRIEUR du bouton « Terminé », posé sous
+    /// l'encoche. Symétrique de `inlineEditFloorGlobalY` : les deux bornent la
+    /// ZONE d'édition, dans laquelle le bloc édité se centre (spec 2026-08-01).
+    ///
+    /// `.greatestFiniteMagnitude` (défaut) = aucune zone connue : le texte reste
+    /// centré sur le canvas et grandit librement, comportement d'origine.
+    public var inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude {
+        didSet {
+            guard oldValue != inlineEditCeilingGlobalY, inlineEditingTextId != nil else { return }
+            reapplyInlineEditingIfNeeded()
+        }
+    }
+
+    /// Ombrage posé sur TOUT le canvas pendant l'édition d'un texte en place :
+    /// les autres textes et éléments reculent, le texte édité — dont les
+    /// glyphes sont peints par `inlineEditor`, une sous-VUE donc au-dessus de
+    /// cette calque — reste net (directive user 2026-08-01).
+    ///
+    /// Une `CALayer` nue n'intercepte aucun toucher : le tap « ailleurs » qui
+    /// sort de l'édition continue d'atteindre le canvas.
+    let inlineEditScrimLayer = CALayer()
+
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
 
@@ -613,6 +635,15 @@ public final class StoryCanvasUIView: UIView {
         rootLayer.addSublayer(itemsContainer)
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
+        // `insertSublayer(_:above:)` plutôt qu'un `addSublayer` : l'ordre doit
+        // rester déterministe quel que soit le moment où `inlineEditor` devient
+        // sous-vue (première ouverture, ré-ouverture, bascule texte A → B), sa
+        // calque étant alors ajoutée en fin de liste, donc au-dessus du scrim.
+        inlineEditScrimLayer.backgroundColor = UIColor.black
+            .withAlphaComponent(Self.inlineEditScrimAlpha).cgColor
+        inlineEditScrimLayer.opacity = 0
+        inlineEditScrimLayer.isHidden = true
+        layer.insertSublayer(inlineEditScrimLayer, above: rootLayer)
         // `.clear` au lieu de `.black` : pendant les transitions (1st mount,
         // drop d'un élément foreground qui déclenche `slide.didSet → rebuildLayers`,
         // lancement preview / viewer avec un canvas fraîchement instancié)

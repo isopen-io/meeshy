@@ -80,8 +80,17 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
+    participant: {
+      count: jest.fn(),
+    },
     userPreferences: {
       findUnique: jest.fn(),
+    },
+    // Les notifications d'appartenance passent par le mute par conversation
+    // (cf. `mutedRecipients.ts`) : sans ce modèle, la lecture lève au lieu de
+    // rendre « personne n'a coupé le son ».
+    userConversationPreferences: {
+      findMany: jest.fn(),
     },
   };
 
@@ -122,6 +131,7 @@ jest.mock('../../../services/CacheStore', () => ({
 
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 describe('NotificationService — New Methods', () => {
   let service: NotificationService;
@@ -133,6 +143,8 @@ describe('NotificationService — New Methods', () => {
     jest.useFakeTimers();
 
     prisma = new PrismaClient();
+    prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+    prisma.participant.count.mockResolvedValue(0);
     service = new NotificationService(prisma);
 
     mockIO = {
@@ -843,6 +855,69 @@ describe('NotificationService — New Methods', () => {
         recipientUserId: 'u1', callerId: 'caller-2', conversationId: 'c1', callSessionId: 's2', callType: 'audio',
       });
       expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ==============================================
+  // Immediate high-priority email — presence room
+  // ==============================================
+  // The offline gate MUST query the room every registered socket actually
+  // joins (`ROOMS.user(id)` === `user:${id}`, per AuthHandler). A presence
+  // check on the BARE user id resolves an always-empty room, wrongly marking
+  // every online user "offline" and spamming them with immediate emails
+  // (mentions, missed calls, security alerts) once per category per 5 min.
+  describe('immediate high-priority email — presence check targets ROOMS.user', () => {
+    let mockEmail: any;
+    const onlineSocket = { id: 'socket-online-1' };
+
+    beforeEach(() => {
+      // Throttle never blocks, so the ONLY thing suppressing the email is the
+      // presence gate — isolating the room-targeting behavior under test.
+      mockSetnx.mockResolvedValue(true);
+
+      mockEmail = {
+        sendSecurityAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendNotificationEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendLoginAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+      };
+
+      // Online recipient: a live socket sits in `ROOMS.user('u1')`. The room
+      // named by the bare id (`'u1'`) is empty — a bare-id presence check would
+      // see zero sockets and misfire the "offline" email path.
+      const onlineIO = {
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
+        in: jest.fn((room: string) => ({
+          fetchSockets: jest
+            .fn()
+            .mockResolvedValue(room === ROOMS.user('u1') ? [onlineSocket] : []),
+        })),
+      };
+      service.setSocketIO(onlineIO as any, new Map());
+      service.setEmailService(mockEmail as any);
+
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'u', displayName: 'U', avatar: null, email: 'u@example.com', systemLanguage: 'fr',
+      });
+      prisma.conversation.findUnique.mockResolvedValue({ title: 'C', type: 'GROUP' });
+      prisma.userPreferences.findUnique.mockResolvedValue(null);
+      prisma.notification.create.mockResolvedValue(mockNotification('missed_call'));
+    });
+
+    it('does NOT send an immediate social email when the recipient is online', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      expect(mockEmail.sendNotificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('queries the ROOMS.user room, not the bare user id', async () => {
+      const onlineIO = (service as any).io;
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      expect(onlineIO.in).toHaveBeenCalledWith(ROOMS.user('u1'));
+      expect(onlineIO.in).not.toHaveBeenCalledWith('u1');
     });
   });
 });

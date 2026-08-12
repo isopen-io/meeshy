@@ -56,7 +56,14 @@ final class StoryComposerExitDialogSourceGuardTests: XCTestCase {
         }
     }
 
-    func test_saveButton_stillHiddenWhenEditing() throws {
+    /// INVERSION CONSCIENTE (directive user 2026-08-02, point c) : une story
+    /// mise en ÉDITION revient en brouillon — « Sauvegarder » s'offre donc
+    /// AUSSI en édition (le brouillon porte `editingPostId` et rouvre le mode
+    /// édition à la reprise). L'ancienne garde exigeait
+    /// `if !isEditingExistingStory` devant le bouton ; elle interdit désormais
+    /// sa réintroduction, et vérifie que la SEULE condition restante est la
+    /// règle de sortie partagée (`exitPrompt.offersSave`).
+    func test_saveButton_offeredInEditModeToo() throws {
         let code = try Self.strippedSource()
         let lines = code.components(separatedBy: "\n")
         let block = Self.dialogBlock(lines: lines, anchor: Self.anchor)
@@ -65,11 +72,13 @@ final class StoryComposerExitDialogSourceGuardTests: XCTestCase {
             XCTFail("Bouton Sauvegarder introuvable dans le bloc")
             return
         }
-        let guardPresent = block[..<saveIndex].contains { $0.contains("if !isEditingExistingStory") }
-
+        XCTAssertFalse(
+            block[..<saveIndex].contains { $0.contains("!isEditingExistingStory") },
+            "L'édition a droit à « Sauvegarder » : le brouillon d'édition porte editingPostId et rouvre le mode édition"
+        )
         XCTAssertTrue(
-            guardPresent,
-            "Le bouton Sauvegarder doit rester derrière `if !isEditingExistingStory`"
+            block[..<saveIndex].contains { $0.contains("exitPrompt.offersSave") },
+            "La seule condition du bouton reste la règle de sortie partagée"
         )
     }
 

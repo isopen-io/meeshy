@@ -40,13 +40,11 @@ final class FriendRequestListTouchTargetTests: XCTestCase {
         try String(contentsOf: Self.appRoot.appendingPathComponent(Self.view), encoding: .utf8)
     }
 
-    /// Production source with comment-only lines dropped, so asserting the
-    /// *absence* of a value is not defeated by a comment that documents it.
+    /// Production source with comments dropped, so asserting the *absence* of
+    /// a value is not defeated by a comment that documents it. Shared stripper:
+    /// the old prefix-only filter let a TRAILING comment defeat the assertion.
     private func code() throws -> String {
-        try readSource()
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
+        AppSourceGuard.stripComments(try readSource())
     }
 
     private func occurrences(of needle: String, in haystack: String) -> Int {
@@ -78,23 +76,28 @@ final class FriendRequestListTouchTargetTests: XCTestCase {
     /// alignment keeps the glyph exactly where it was and grows the hit region
     /// right and down instead.
     ///
-    /// The slice is taken from **comment-stripped** source for two reasons: the
-    /// explanatory comment between the glyph and its frame would otherwise push
-    /// the frame outside the window, and a comment naming `frame(width: 44…)`
-    /// must not be able to satisfy the assertion. Measured distances after the
-    /// anchor: frame at 132 chars, `contentShape` at 203 — a 260 char window
-    /// leaves headroom without reaching the next control.
+    /// The slice is taken from **comment-stripped** source: a comment naming
+    /// `frame(width: 44…)` must not be able to satisfy the assertion. The
+    /// region is then WHITESPACE-NORMALISED before matching — the shared
+    /// stripper keeps line structure (a stripped comment leaves its
+    /// indentation), so raw char distances depend on how much prose sat
+    /// between the glyph and its frame; that is exactly the fixed-window rot
+    /// this guard once fell to (window 260, real offsets 216/287 under the
+    /// shared stripper). Normalising makes the assertion depend on the CODE,
+    /// not the commentary volume; 400 chars bounds the search region without
+    /// reaching the next control.
     func test_backControl_reachesTheTouchTargetFloorWithoutMovingTheGlyph() throws {
         let source = try code()
-        let region = try slice(after: "Image(systemName: \"chevron.backward\")", window: 260, in: source)
+        let region = try slice(after: "Image(systemName: \"chevron.backward\")", window: 400, in: source)
+        let normalized = region.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
 
         XCTAssertTrue(
-            region.contains("frame(width: 44, height: 44, alignment: .leading)"),
+            normalized.contains("frame(width: 44, height: 44, alignment: .leading)"),
             "The back control is the screen's only exit and had no frame at all (~17 pt). It must " +
             "reach 44x44, leading-aligned so the chevron does not move."
         )
         XCTAssertTrue(
-            region.contains("contentShape"),
+            normalized.contains("contentShape"),
             "Without contentShape the transparent area between the glyph and the 44 pt edge does " +
             "not reliably participate in hit-testing, so the enlarged frame buys nothing."
         )

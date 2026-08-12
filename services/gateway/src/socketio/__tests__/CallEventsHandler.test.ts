@@ -2439,6 +2439,60 @@ describe('CallEventsHandler', () => {
         callerId: USER_ID,
       }));
     });
+
+    it('does not create duplicate notifications when called twice for the same call (double-fire race)', async () => {
+      // Simulates two independent terminal paths racing for the same callId —
+      // e.g. the ringing-timeout handler winning the atomic status transition
+      // and calling handleMissedCall, followed moments later by call:leave
+      // observing the already-committed 'missed' status and firing again.
+      const callSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        initiatorId: USER_ID,
+        metadata: { type: 'audio' },
+        initiator: { id: USER_ID, username: 'test', displayName: 'Test', avatar: null },
+        conversation: { id: CONV_ID, identifier: 'c1' },
+      };
+      const { handler } = buildHandler({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(callSession), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      mockCallServiceGetUnrespondedParticipants.mockResolvedValue(['user-a']);
+      const ns = { createMissedCallNotification: jest.fn<any>().mockResolvedValue(undefined) };
+      handler.setNotificationService(ns as any);
+
+      await handler.createMissedCallNotifications(CALL_ID);
+      await handler.createMissedCallNotifications(CALL_ID);
+
+      expect(ns.createMissedCallNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('still notifies a DIFFERENT call after another call was already deduped (isolation)', async () => {
+      const OTHER_CALL_ID = '507f191e810c19729de860ed';
+      const makeSession = (id: string) => ({
+        id,
+        conversationId: CONV_ID,
+        initiatorId: USER_ID,
+        metadata: { type: 'audio' },
+        initiator: { id: USER_ID, username: 'test', displayName: 'Test', avatar: null },
+        conversation: { id: CONV_ID, identifier: 'c1' },
+      });
+      const findUnique = jest.fn<any>()
+        .mockResolvedValueOnce(makeSession(CALL_ID))
+        .mockResolvedValueOnce(makeSession(CALL_ID))
+        .mockResolvedValueOnce(makeSession(OTHER_CALL_ID));
+      const { handler } = buildHandler({
+        callSession: { findUnique, findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      mockCallServiceGetUnrespondedParticipants.mockResolvedValue(['user-a']);
+      const ns = { createMissedCallNotification: jest.fn<any>().mockResolvedValue(undefined) };
+      handler.setNotificationService(ns as any);
+
+      await handler.createMissedCallNotifications(CALL_ID);
+      await handler.createMissedCallNotifications(CALL_ID); // deduped, same callId
+      await handler.createMissedCallNotifications(OTHER_CALL_ID); // distinct callId, not deduped
+
+      expect(ns.createMissedCallNotification).toHaveBeenCalledTimes(2);
+    });
   });
 
   // ── postCallSummary (via call:end path) ───────────────────────────────────
@@ -4326,11 +4380,18 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).not.toHaveBeenCalled();
     });
 
-    it('returns early when validation fails', async () => {
+    it('emits CALL_EVENTS.ERROR with VALIDATION_ERROR when validation fails', async () => {
       const { socket } = setupWithSocket();
-      mockValidateSocketEvent.mockReturnValue({ success: false });
+      mockValidateSocketEvent.mockReturnValue({ success: false, error: 'Invalid analytics payload' });
       await socket._trigger('call:analytics', { callId: 'bad' });
-      expect(socket.emit).not.toHaveBeenCalled();
+      // Continuous-improvement audit fix — this handler used to silently drop
+      // malformed payloads (`if (!validation.success) return;`), unlike every
+      // other call handler. It must now emit the same VALIDATION_ERROR shape
+      // as call:initiate/join/signal/end/toggle-audio/toggle-video.
+      expect(socket.emit).toHaveBeenCalledWith(
+        'call:error',
+        expect.objectContaining({ code: 'VALIDATION_ERROR', callId: 'bad' })
+      );
     });
 
     it('does not emit any socket event on success (fire-and-forget)', async () => {

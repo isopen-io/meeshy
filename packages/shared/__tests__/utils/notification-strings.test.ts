@@ -5,6 +5,7 @@ import {
   normalizeNotificationLanguage,
   notificationString,
   buildNotificationDisplay,
+  formatFileSizeI18n,
 } from '../../utils/notification-strings.js';
 
 describe('normalizeNotificationLanguage', () => {
@@ -237,3 +238,24 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
       .toBe('En réponse à votre commentaire');
   });
 });
+
+describe('formatFileSizeI18n — unités d’octets localisées', () => {
+  it('garde la notation octet française (o / Ko / Mo)', () => {
+    expect(formatFileSizeI18n('fr', 512)).toBe('512 o');
+    expect(formatFileSizeI18n('fr', 500_000)).toBe('488 Ko');
+    // Bascule sur la valeur ARRONDIE au bord du mébioctet (jamais « 1024 Ko »).
+    expect(formatFileSizeI18n('fr', 1_048_500)).toBe('1.0 Mo');
+  });
+  it('localise B / KB / MB pour les langues non françaises', () => {
+    expect(formatFileSizeI18n('en', 512)).toBe('512 B');
+    expect(formatFileSizeI18n('en', 500_000)).toBe('488 KB');
+    expect(formatFileSizeI18n('en', 15_000_000)).toBe('14.3 MB');
+    expect(formatFileSizeI18n('de', 500_000)).toBe('488 KB');
+  });
+  it('normalise les variantes régionales avant de choisir l’unité', () => {
+    expect(formatFileSizeI18n('fr-FR', 500_000)).toBe('488 Ko');
+    expect(formatFileSizeI18n('en-US', 500_000)).toBe('488 KB');
+    // Langue inconnue → repli fr (parité normalizeNotificationLanguage).
+    expect(formatFileSizeI18n('ja', 500_000)).toBe('488 Ko');
+  });
+})

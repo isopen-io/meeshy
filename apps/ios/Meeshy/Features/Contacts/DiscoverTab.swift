@@ -407,7 +407,7 @@ struct SMSComposerView: UIViewControllerRepresentable {
     @MainActor
     class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
         nonisolated func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 controller.dismiss(animated: true)
             }
         }

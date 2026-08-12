@@ -272,6 +272,40 @@ extension TimelineViewModel {
         applySetClipProperty(cmd)
     }
 
+    /// Mute UN-BOUTON depuis la timeline (pistes vidéo et audio). Persisté via
+    /// `volume` (0 = muet — la même convention que le composer, le reader et
+    /// l'export) et undoable : la commande `.volume` maintient le mémento de
+    /// restauration, donc mute → unmute rend le niveau quitté, pas 1.0 forcé.
+    /// No-op pour image / texte / sticker — rien à couper.
+    public func toggleClipMute(id: String) {
+        guard let kind = clipKind(forId: id) else { return }
+        // La SÉMANTIQUE du toggle vit dans le modèle (`StoryVolumeCarrying
+        // .toggleMute()`) : on la rejoue sur une COPIE pour dériver old/new,
+        // puis la commande `.volume` (undoable) applique la transition — son
+        // apply repasse par le mémento, donc modèle et historique restent
+        // cohérents.
+        let oldVolume: Float
+        let newVolume: Float
+        switch kind {
+        case .video:
+            guard let media = project.mediaObjects.first(where: { $0.id == id }),
+                  media.kind == .video else { return }
+            var probe = media
+            probe.toggleMute()
+            oldVolume = media.volume; newVolume = probe.volume
+        case .audio:
+            guard let audio = project.audioPlayerObjects.first(where: { $0.id == id }) else { return }
+            var probe = audio
+            probe.toggleMute()
+            oldVolume = audio.volume; newVolume = probe.volume
+        case .image, .text, .sticker:
+            return
+        }
+        let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
+                                         property: .volume(old: oldVolume, new: newVolume))
+        applySetClipProperty(cmd)
+    }
+
     public func setClipFadeIn(id: String, fadeIn: Float) {
         guard let kind = clipKind(forId: id) else { return }
         let oldFadeIn: Double?

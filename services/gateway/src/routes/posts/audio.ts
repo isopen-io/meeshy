@@ -14,8 +14,10 @@ import {
   EXT_TO_MIME,
   servableExtension,
   staticFileUrl,
+  NOT_MUTED_WHERE,
 } from '../../services/posts/soundFormats';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { parseWaveformField } from '../../services/posts/waveformSamples';
 
 /** Borne MÉMOIRE, pas une limite de durée : `toBuffer()` matérialise tout. */
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -82,6 +84,13 @@ export function registerStoryAudioRoutes(
     // Aucun plafond de durée (directive produit 2026-07-30).
     const duration = isNaN(durationRaw) ? 0 : durationRaw;
 
+    // Forme d'onde calculee par le client. La decoder ici imposerait ffmpeg
+    // dans le conteneur gateway pour une donnee purement decorative, que le
+    // client possede deja pour l'afficher. Un champ malforme est IGNORE,
+    // jamais une cause de rejet : on ne fait pas echouer l'envoi d'un fichier
+    // sur un ornement.
+    const waveform = parseWaveformField((data.fields['waveform'] as { value?: unknown } | undefined)?.value);
+
     let buffer: Buffer;
     try {
       buffer = await data.toBuffer();
@@ -119,6 +128,14 @@ export function registerStoryAudioRoutes(
         fileUrl: staticFileUrl(filename),
         title,
         duration,
+        // `duration` (secondes) est DÉPRÉCIÉ mais reste écrit pour les
+        // lecteurs existants ; `durationMs` est ce que sert le DTO. Ne
+        // l'écrire qu'ici et pas là rendait la durée nulle côté client :
+        // le composer créait une piste SANS fenêtre temporelle et la story
+        // retombait sur ses 6 s de texte au lieu de durer tout l'audio
+        // (constaté en prod le 2026-08-02 sur « Meeshy Go », 90 s → 6 s).
+        durationMs: duration > 0 ? duration * 1000 : null,
+        waveform,
         isPublic,
         contentHash,
       },
@@ -140,16 +157,21 @@ export function registerStoryAudioRoutes(
 
     const { q, limit } = parsed.data;
     // `mutedAt` retire de la DÉCOUVERTE en plus d'arrêter la diffusion.
-    const where: any = { isPublic: true, mutedAt: null };
+    // Composé en AND : le prédicat porte son propre OR, et la recherche
+    // ci-dessous en ajoute un second — deux clés `OR` au même niveau,
+    // la seconde écraserait la première.
+    const where: any = { isPublic: true, AND: [NOT_MUTED_WHERE] };
     if (q) {
       // Titre OU pseudo de l'uploadeur. Un son CAPTURÉ naît sans titre — le
       // libellé « Son original » est composé par le client dans sa langue —
       // donc chercher le titre seul rendrait introuvable tout ce que la
       // bibliothèque produit d'elle-même.
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { uploader: { username: { contains: q, mode: 'insensitive' } } },
-      ];
+      where.AND.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { uploader: { username: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
     }
 
     const audios = await prisma.sound.findMany({

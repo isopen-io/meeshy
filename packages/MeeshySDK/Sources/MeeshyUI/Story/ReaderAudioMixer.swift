@@ -286,6 +286,19 @@ public final class ReaderAudioMixer {
         entries[audioId]?.isUserMuted ?? false
     }
 
+    /// Volume CIBLE d'un clip d'avant-plan tel que le mixer le tient (avant
+    /// mute global / per-piste). Miroir de `AudioMixer.intendedVolume(for:)` —
+    /// seam d'observation : c'est ce qui permet de prouver qu'un mute d'auteur
+    /// (`volume = 0` dans le modèle) atteint réellement le moteur.
+    public func intendedVolume(for audioId: String) -> Float? {
+        entries[audioId]?.targetVolume
+    }
+
+    /// Volume cible du slot de fond (nil si aucun fond configuré).
+    public func intendedBackgroundVolume() -> Float? {
+        backgroundEntry?.targetVolume
+    }
+
     private func effectiveVolume(for entry: Entry) -> Float {
         (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
     }

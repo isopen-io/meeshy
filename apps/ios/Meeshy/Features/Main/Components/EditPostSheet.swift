@@ -26,11 +26,28 @@ struct EditablePostMedia: Identifiable, Equatable {
     let id: String
     let kind: Kind
     let previewURL: URL?
+    /// Durée serveur-autoritaire (ms), quand connue — alimente le plancher de
+    /// 3s de `ReelComposition` pour les vidéos/audios. `nil` pour les images
+    /// et documents (jamais soumis à cette condition).
+    let durationMs: Int?
 
-    init(id: String, kind: Kind, previewURL: URL?) {
+    /// Pont vers le moteur de classification SDK (`ReelComposition`), pour que
+    /// la sheet évalue la règle produit (video >=3s || audio >=3s || >= 2
+    /// images) sur la même échelle de types que les composers.
+    var feedMediaType: FeedMediaType {
+        switch kind {
+        case .image: return .image
+        case .video: return .video
+        case .audio: return .audio
+        case .document: return .document
+        }
+    }
+
+    init(id: String, kind: Kind, previewURL: URL?, durationMs: Int? = nil) {
         self.id = id
         self.kind = kind
         self.previewURL = previewURL
+        self.durationMs = durationMs
     }
 
     init(_ media: FeedMedia) {
@@ -43,6 +60,7 @@ struct EditablePostMedia: Identifiable, Equatable {
         }
         let raw = media.thumbnailUrl ?? media.url
         self.previewURL = raw.flatMap { MeeshyConfig.resolveMediaURL($0) }
+        self.durationMs = media.duration
     }
 }
 
@@ -53,11 +71,9 @@ struct EditPostSheet: View {
     let originalContent: String
     var originalLanguage: String? = nil
     var originalType: String? = nil
-    /// The post carries media → switching to REEL is allowed (a reel needs
-    /// something to show on the immersive surface).
-    var canBeReel: Bool = false
     /// Attached media shown with a remove control. Removing here sends the ids
-    /// in `removeMediaIds`; the gateway detaches them.
+    /// in `removeMediaIds`; the gateway detaches them. C'est aussi la source de
+    /// la règle de composition REEL (`remainingQualifiesAsReel`).
     var media: [EditablePostMedia] = []
     /// Position actuellement attachée au post (`FeedPost.location`) — affichée
     /// dans la sheet avec « retirer » / « changer » (picker).
@@ -88,10 +104,21 @@ struct EditPostSheet: View {
 
     private var normalizedOriginalType: String { (originalType ?? "POST").uppercased() }
 
-    /// Only meaningful when not a repost and the post can actually be a reel
-    /// (carries media) or already is one (allowing the reverse switch).
+    /// Règle produit 2026-08-02 + directive durée minimale, évaluée sur la
+    /// composition APRÈS retraits : un REEL exige une vidéo (>=3s), un audio
+    /// (>=3s), ou au moins deux images.
+    private var remainingQualifiesAsReel: Bool {
+        ReelComposition.qualifiesAsReel(
+            mediaKinds: media.filter { !removedMediaIds.contains($0.id) }
+                .map { (kind: $0.feedMediaType, durationMs: $0.durationMs) }
+        )
+    }
+
+    /// Only meaningful when not a repost and either the remaining composition
+    /// qualifies as a reel, or the post already IS one (the picker then shows
+    /// the imposed switch back to POST when media removal de-qualifies it).
     private var showTypePicker: Bool {
-        !isRepost && (canBeReel || normalizedOriginalType == "REEL")
+        !isRepost && (remainingQualifiesAsReel || normalizedOriginalType == "REEL")
     }
 
     private var contentChanged: Bool {
@@ -211,7 +238,13 @@ struct EditPostSheet: View {
         .onAppear {
             draftContent = originalContent
             selectedLanguage = originalLanguage ?? ""
-            selectedType = normalizedOriginalType
+            // Corpus hérité (E11) : un REEL existant dont la composition ne
+            // qualifie plus (ex. une seule image) est rebasculé sur POST dès
+            // l'ouverture — le picker l'affiche, et la sauvegarde envoie le
+            // changement de type (le gateway refuse un REEL non qualifiant).
+            selectedType = (normalizedOriginalType == "REEL" && !remainingQualifiesAsReel)
+                ? "POST"
+                : normalizedOriginalType
             // Defer focus slightly so the keyboard rises after the sheet
             // present animation settles — otherwise the appearance jolts.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -264,7 +297,13 @@ struct EditPostSheet: View {
             if showTypePicker {
                 Picker(String(localized: "feed.post.edit.type", defaultValue: "Type", bundle: .main), selection: $selectedType) {
                     Text(String(localized: "feed.post.edit.type.post", defaultValue: "Post", bundle: .main)).tag("POST")
-                    Text(String(localized: "feed.post.edit.type.reel", defaultValue: "Réel", bundle: .main)).tag("REEL")
+                    // L'option Réel n'est offerte que si la composition
+                    // restante qualifie — `toggleRemove` a déjà rebasculé la
+                    // sélection sur POST quand un retrait dé-qualifie, donc la
+                    // sélection ne pointe jamais sur un tag absent.
+                    if remainingQualifiesAsReel {
+                        Text(String(localized: "feed.post.edit.type.reel", defaultValue: "Réel", bundle: .main)).tag("REEL")
+                    }
                 }
                 .pickerStyle(.segmented)
                 .disabled(isSaving)
@@ -343,7 +382,6 @@ struct EditPostSheet: View {
     @ViewBuilder
     private func mediaThumbnail(_ item: EditablePostMedia) -> some View {
         let removed = removedMediaIds.contains(item.id)
-        let blockRemoval = selectedType == "REEL" && !removed && remainingMediaCount <= 1
         ZStack(alignment: .topTrailing) {
             Group {
                 if let url = item.previewURL, item.kind == .image || item.kind == .video {
@@ -387,7 +425,7 @@ struct EditPostSheet: View {
             }
             .buttonStyle(.plain)
             .offset(x: 6, y: -6)
-            .disabled(blockRemoval || isSaving)
+            .disabled(isSaving)
             .accessibilityLabel(removed
                 ? String(localized: "feed.post.edit.media.restore.a11y", defaultValue: "Restaurer le média", bundle: .main)
                 : String(localized: "feed.post.edit.media.remove.a11y", defaultValue: "Retirer le média", bundle: .main))
@@ -428,10 +466,18 @@ struct EditPostSheet: View {
     private func toggleRemove(_ id: String) {
         if removedMediaIds.contains(id) {
             removedMediaIds.remove(id)
+            // Restaurer un média peut re-qualifier la composition : l'option
+            // Réel réapparaît, mais on n'y rebascule PAS automatiquement —
+            // repasser en REEL reste un choix explicite de l'auteur.
         } else {
-            // A reel must keep at least one media — block removing the last one.
-            if selectedType == "REEL" && remainingMediaCount <= 1 { return }
             removedMediaIds.insert(id)
+            // Règle produit 2026-08-02 : on PEUT retirer un média d'un REEL
+            // tant que la composition reste qualifiante (video || audio ||
+            // >= 2 images). Sinon le retrait est permis mais IMPOSE le passage
+            // en POST — le gateway rejette (422) un REEL non qualifiant.
+            if selectedType == "REEL" && !remainingQualifiesAsReel {
+                selectedType = "POST"
+            }
         }
     }
 

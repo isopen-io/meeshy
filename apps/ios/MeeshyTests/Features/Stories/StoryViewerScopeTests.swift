@@ -61,3 +61,44 @@ final class StoryViewerScopeTests: XCTestCase {
         XCTAssertEqual(scope.currentIndex, 0)
     }
 }
+
+// MARK: - StoryViewerContainer.isGroupReadyToPresent (Fix A — bouton commentaires manquant sur entrée notification)
+
+/// `StoryViewerContainer.body` bascule sur `StoryViewerView` dès que
+/// `viewModel.groupIndex(forUserId:)` existe — y compris à la TOUTE
+/// PREMIÈRE évaluation, AVANT que `.task(id:)` n'ait eu la moindre chance
+/// de tourner (une `Task` non structurée créée par `.task` ne s'exécute
+/// jamais de façon synchrone avec le rendu qui l'a déclenchée). Ce verrou
+/// pur garantit que, sur une entrée notification (`postId` connu), le
+/// premier montage de `StoryViewerView` — et donc le tout premier
+/// `.onAppear` de `StoryActionSidebarView`, qui gèle son rail d'actions une
+/// fois pour toutes — voit toujours des données déjà fusionnées avec le
+/// cache frais (voir `StoryViewModel.refreshFromCachedPostIfAvailable`).
+final class StoryViewerContainerReadinessTests: XCTestCase {
+
+    func test_isGroupReadyToPresent_groupMissing_neverReady() {
+        XCTAssertFalse(StoryViewerContainer.isGroupReadyToPresent(
+            groupExists: false, postId: nil, freshnessCheckedPostId: nil))
+        XCTAssertFalse(StoryViewerContainer.isGroupReadyToPresent(
+            groupExists: false, postId: "p1", freshnessCheckedPostId: "p1"))
+    }
+
+    func test_isGroupReadyToPresent_noPostId_readyAsSoonAsGroupExists() {
+        XCTAssertTrue(StoryViewerContainer.isGroupReadyToPresent(
+            groupExists: true, postId: nil, freshnessCheckedPostId: nil),
+            "Non-notification entry points (tray tap, profile, feed…) must keep the instant cache-first fast path")
+    }
+
+    func test_isGroupReadyToPresent_notificationPostId_blocksUntilThatExactPostIdIsFreshnessChecked() {
+        XCTAssertFalse(StoryViewerContainer.isGroupReadyToPresent(
+            groupExists: true, postId: "p1", freshnessCheckedPostId: nil),
+            "The author's group can already sit in the tray (a different story) while THIS post hasn't been freshness-checked yet")
+        XCTAssertFalse(StoryViewerContainer.isGroupReadyToPresent(
+            groupExists: true, postId: "p1", freshnessCheckedPostId: "some-other-post"))
+    }
+
+    func test_isGroupReadyToPresent_notificationPostId_readyOnceThatExactPostIdIsFreshnessChecked() {
+        XCTAssertTrue(StoryViewerContainer.isGroupReadyToPresent(
+            groupExists: true, postId: "p1", freshnessCheckedPostId: "p1"))
+    }
+}

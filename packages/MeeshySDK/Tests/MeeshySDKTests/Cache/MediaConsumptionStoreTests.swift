@@ -124,3 +124,18 @@ final class MediaConsumptionStoreTests: XCTestCase {
         XCTAssertEqual(store.fraction(for: "a\(cap)"), 0.5)
     }
 }
+
+/// media-08 — purge de logout.
+extension MediaConsumptionStoreTests {
+
+    func test_purgeAll_removesPersistedAndInMemoryEntries() {
+        let store = makeStore()
+        store.record(fraction: 0.7, complete: false, for: "a1")
+        store.record(fraction: 1.0, complete: true, for: "a2")
+
+        store.purgeAll()
+
+        XCTAssertNil(store.consumption(for: "a1"), "la RAM doit être vidée (singleton process-lifetime)")
+        XCTAssertNil(store.consumption(for: "a2"))
+    }
+}

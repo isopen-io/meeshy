@@ -54,11 +54,21 @@ export const VALID_AUTO_DOWNLOAD = ['wifi', 'always', 'never'] as const;
 
 // ========== CONVERSATION PREFERENCES DEFAULTS ==========
 
+/**
+ * Every user-settable column of `UserConversationPreferences`, so that
+ * spreading this constant produces a COMPLETE default snapshot — both for the
+ * "no stored row" GET response and for the reset performed by
+ * `DELETE /user-preferences/conversations/:id`. `version` is excluded on
+ * purpose: it is protocol state (monotonic broadcast sequence), not a user
+ * preference, and a reset must never roll it back.
+ */
 export interface ConversationPreferencesDefaults {
   isPinned: boolean;
   isMuted: boolean;
+  mentionsOnly: boolean;
   isArchived: boolean;
   deletedForUserAt: Date | null;
+  clearHistoryBefore: Date | null;
   tags: string[];
   categoryId: string | null;
   orderInCategory: number | null;
@@ -69,8 +79,10 @@ export interface ConversationPreferencesDefaults {
 export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults = {
   isPinned: false,
   isMuted: false,
+  mentionsOnly: false,
   isArchived: false,
   deletedForUserAt: null,
+  clearHistoryBefore: null,
   tags: [],
   categoryId: null,
   orderInCategory: null,

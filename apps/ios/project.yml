@@ -78,14 +78,36 @@ settings:
   # --strategy max-build` et écrit ICI **et** dans le pbxproj — les deux, sinon
   # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
-  CURRENT_PROJECT_VERSION: "1265"
+  # 1743 = dernier build présent sur App Store Connect, VALID (run Xcode Cloud
+  # 1743 du 2026-08-04, vérifié via `andp status me.meeshy.app 1743`). Xcode
+  # Cloud numérote avec son propre compteur (CI_BUILD_NUMBER), très au-dessus de
+  # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
+  # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
+  # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
+  CURRENT_PROJECT_VERSION: "1749"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
   # été renommé plutôt que recréé — description et captures sont conservées.
   # Laisser 1.0.0 ici ferait produire par tout build local un CFBundleShortVersionString
   # en désaccord avec la version qui attend le binaire.
-  MARKETING_VERSION: "1.0.2"
+  #
+  # 1.0.4 le 2026-08-04 : la 1.0.3 (build 1269) a été rejetée sur deux points
+  # Guideline 2.5.4 — VoIP et audio déclarés dans UIBackgroundModes sans que le
+  # reviewer ait pu localiser les fonctionnalités correspondantes. Les deux
+  # existent (PushKit/CallKit dans VoIPPushManager, MPNowPlayingInfoCenter dans
+  # ConversationAudioCoordinator+NowPlaying) : la correction est côté notes de
+  # review et captures vidéo, PAS côté code — voir DEMO_REVIEW_NOTES dans
+  # fastlane/Fastfile.
+  #
+  # RAPPEL : `ci_post_clone.sh` ne lance PAS xcodegen, donc Xcode Cloud build le
+  # pbxproj COMMITTÉ. Toute modification de MARKETING_VERSION ici doit être
+  # répercutée dans les deux `MARKETING_VERSION` du pbxproj, sinon le binaire
+  # livré garde l'ancienne version pendant que ce fichier annonce la nouvelle.
+  # (Ne vaut QUE pour la version commerciale : le build number, lui, est imposé
+  # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
+  # CURRENT_PROJECT_VERSION ci-dessus.)
+  MARKETING_VERSION: "1.0.4"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
@@ -155,14 +177,37 @@ targets:
         product: FirebaseCrashlytics
       - package: Firebase
         product: FirebasePerformance
-    # Target-level scheme so `xcodegen generate` emits a shared "Meeshy"
-    # scheme wired to run the MeeshyTests bundle. CI invokes this via
-    # `xcodebuild -scheme Meeshy -only-testing:MeeshyTests`. A top-level
-    # `scheme:` key is NOT valid XcodeGen and is silently ignored, which
-    # would drop the shared scheme on regeneration.
-    scheme:
-      testTargets:
-        - MeeshyTests
+    # Correctif ITMS-90035 à la SOURCE — voir ci_scripts/fix_codeless_framework_identifiers.sh.
+    #
+    # Xcode injecte un binaire « stub » dans les frameworks sans code
+    # (FirebaseAnalytics, GoogleAdsOnDeviceConversion, GoogleAppMeasurement,
+    # GoogleAppMeasurementIdentitySupport) et le signe ad hoc sous l'identifier
+    # du fichier temporaire qui le porte : « arm64-apple ». Xcode Distribution
+    # lit cet identifier pour bâtir le designated requirement qu'il impose à
+    # l'export, pendant que le bundle est signé sous son vrai identifier — le
+    # code ne satisfait donc pas son propre requirement, et App Store Connect
+    # rejette (ITMS-90035). C'est ce qui a fait échouer le build Xcode Cloud 1742.
+    #
+    # C'est une BUILD PHASE, pas un hook post-archive, et c'est essentiel :
+    # `ci_post_xcodebuild.sh` s'exécute APRÈS les exports sur Xcode Cloud, donc
+    # trop tard. Ici, la correction a lieu pendant le build, avant tout export —
+    # c'est ce qui rend la distribution App Store depuis Xcode Cloud possible.
+    # `script:` et non `path:` — ce dernier RECOPIE le contenu du fichier dans le
+    # pbxproj (4 273 caractères inlinés, vérifié), si bien qu'éditer le script
+    # sans régénérer laisserait Xcode exécuter l'ancienne version. Ici le pbxproj
+    # ne porte qu'un appel : le fichier reste la source unique.
+    postBuildScripts:
+      - name: Fix codeless framework signature identifiers (ITMS-90035)
+        script: '"${SRCROOT}/ci_scripts/fix_codeless_framework_identifiers.sh"'
+        basedOnDependencyAnalysis: false
+
+    # Le scheme partagé "Meeshy" est déclaré dans la section `schemes:` en bas de
+    # ce fichier, PAS ici. La clé `scheme:` d'un target (TargetScheme) n'expose
+    # que le câblage des cibles de test — elle n'a pas de sous-clé `archive`, et
+    # une `archive.postActions` posée dessous est SILENCIEUSEMENT IGNORÉE
+    # (vérifié sur XcodeGen 2.44.1 : le scheme régénéré sortait avec un
+    # `<ArchiveAction>` vide). Or la post-action d'archive est le garde-fou
+    # ITMS-90035 — la perdre casse la distribution sans casser le build.
 
   MeeshyWidgets:
     type: app-extension
@@ -292,3 +337,57 @@ targets:
       TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy"
     dependencies:
       - target: Meeshy
+
+# Scheme partagé "Meeshy" — reproduit à l'identique ce que la clé `scheme:` du
+# target générait (build de Meeshy pour toutes les actions, TestAction câblée sur
+# MeeshyTests, Debug pour run/test/analyze, Release pour profile/archive), PLUS
+# la post-action d'archive que TargetScheme ne sait pas porter.
+#
+# CI invoque ce scheme via `xcodebuild -scheme Meeshy -only-testing:MeeshyTests`.
+schemes:
+  Meeshy:
+    build:
+      parallelizeBuild: true
+      buildImplicitDependencies: true
+      targets:
+        Meeshy: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MeeshyTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+      revealArchiveInOrganizer: true
+      # Garde-fou ITMS-90035 (« Invalid Signature — Code failed to satisfy
+      # specified code requirement(s) ») sur les XCFrameworks binaires
+      # Google/Firebase embarqués : FirebaseAnalytics, GoogleAppMeasurement,
+      # GoogleAppMeasurementIdentitySupport, GoogleAdsOnDeviceConversion.
+      #
+      # À l'action `archive`, la signature automatique signe les frameworks
+      # embarqués avec « Apple Development » (vérifié dans le log gym :
+      # `codesign --force --sign <Apple Development> --preserve-metadata=…` →
+      # « replacing existing signature »), puis `-exportArchive` les re-signe en
+      # Distribution. Ce remplacement laisse des métadonnées résiduelles que
+      # l'analyseur d'App Store Connect refuse. Le script retire les signatures
+      # ENTRE archive et export, pour que la re-signature soit une opération
+      # fraîche sur un bundle nu.
+      #
+      # CETTE DÉCLARATION N'EST PAS DÉCORATIVE. Elle a existé dans le scheme
+      # committé (commit eb3c47309, 2026-05-18) puis a disparu quand la migration
+      # XcodeGen a régénéré le scheme sans que project.yml — devenu source de
+      # vérité — ne la porte. Tout archivage depuis Xcode GUI a produit des
+      # binaires rejetés à partir de là, sans qu'aucun signal local ne le dise
+      # (le build, lui, réussissait). Garde : ArchiveSignatureStripGuardTests.
+      postActions:
+        - name: Strip embedded framework signatures (ITMS-90035)
+          settingsTarget: Meeshy
+          script: |
+            export CI_XCODEBUILD_ACTION=archive
+            export CI_ARCHIVE_PATH="${ARCHIVE_PATH}"
+            "${PROJECT_DIR}/ci_scripts/ci_post_xcodebuild.sh"

@@ -910,11 +910,12 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // and restartCapturerIfStopped.
         let source = try p2pClientSource()
 
-        guard let fnRange = source.range(of: "func switchCamera() async throws {") else {
+        // Corps équilibré, pas une fenêtre de 1 500 caractères : la fonction a
+        // grossi et la vérification post-`startCapture` en est sortie, faisant
+        // rougir la garde sur du code correct.
+        guard let fnBody = DeclarationBodyScanner.body(containing: "func switchCamera() async throws", in: source) else {
             XCTFail("switchCamera not found in P2PWebRTCClient.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
             fnBody.contains("let generation = sessionGeneration"),
@@ -2207,7 +2208,7 @@ final class CallManagerMuteStateTests: XCTestCase {
     /// mute indicator. Without it, the remote UI always thinks our mic is live.
     func test_toggleMute_emitsCallToggleAudio() throws {
         let source = try callManagerSource()
-        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+        guard let toggleMuteRange = source.range(of: "func toggleMute(reportToCallKit: Bool = true) {") else {
             XCTFail("toggleMute() not found in CallManager.swift"); return
         }
         // Find the closing brace of toggleMute by scanning forward.
@@ -2227,7 +2228,7 @@ final class CallManagerMuteStateTests: XCTestCase {
     /// means muted, enabled=true means live microphone.
     func test_toggleMute_emitsAudioEnabled_asInverseOfIsMuted() throws {
         let source = try callManagerSource()
-        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+        guard let toggleMuteRange = source.range(of: "func toggleMute(reportToCallKit: Bool = true) {") else {
             XCTFail("toggleMute() not found"); return
         }
         let afterToggleMute = String(source[toggleMuteRange.upperBound...])
@@ -2240,6 +2241,32 @@ final class CallManagerMuteStateTests: XCTestCase {
             "emitCallToggleAudio in toggleMute() must pass `enabled: !isMuted` — " +
             "the gateway's `enabled` field means 'audio is on', which is the logical " +
             "inverse of the local isMuted flag")
+    }
+
+    /// `CXSetMutedCallAction` (Watch/lock-screen/CarPlay mute) must sync local
+    /// state via `toggleMute(reportToCallKit: false)`, NOT the bare
+    /// `toggleMute()` — CallKit is the source of this change, so its own
+    /// state already matches; resubmitting a fresh `CXSetMutedCallAction`
+    /// transaction back to CallKit from inside its own delegate callback
+    /// would be an avoidable no-op round-trip.
+    func test_cxSetMutedCallActionHandler_doesNotResubmitToCallKit() throws {
+        let source = try callManagerSource()
+        guard let handlerRange = source.range(of: "func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction)") else {
+            XCTFail("CXSetMutedCallAction delegate handler not found in CallManager.swift"); return
+        }
+        let afterHandler = String(source[handlerRange.upperBound...])
+        guard let nextFuncRange = afterHandler.range(of: "\n    func ") else {
+            XCTFail("Could not isolate CXSetMutedCallAction handler body"); return
+        }
+        let body = String(afterHandler[..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("toggleMute(reportToCallKit: false)"),
+            "CXSetMutedCallAction handler must call toggleMute(reportToCallKit: false) " +
+            "to avoid resubmitting a redundant CXSetMutedCallAction transaction to CallKit")
+        XCTAssertFalse(
+            body.contains("manager.toggleMute()"),
+            "CXSetMutedCallAction handler must not call bare toggleMute() — it would " +
+            "report the change back to CallKit as if it originated locally")
     }
 
     /// socket.didReconnect must re-sync audio mute state. On reconnect the gateway
@@ -4084,16 +4111,19 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
             XCTFail("private init not found in CallManager.swift")
             return
         }
-        // Borné sur la fin réelle de l'init, pas sur un nombre de caractères : la
-        // fenêtre de 3 500 avait été franchie par la croissance du corps (3 649
-        // caractères), et ce test était rouge sur main sans qu'aucun code soit
-        // fautif — un faux négatif qui masquait l'invariant qu'il prétend garder.
-        let afterInit = String(source[initRange.upperBound...])
-        guard let initEnd = afterInit.range(of: "\n    }")?.lowerBound else {
-            XCTFail("Could not find private init boundary")
-            return
-        }
-        let initBody = String(afterInit[..<initEnd])
+        // Slice up to the next member declaration instead of a fixed character
+        // window — a fixed window rots as the init body grows (it already did:
+        // the CallKit icon block pushed the call past the old 3 500-char cut).
+        let endIdx = [
+            source.range(of: "\n    func ", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        // Strip comment lines so a commented-out call cannot satisfy the guard.
+        let initBody = source[initRange.lowerBound ..< endIdx]
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
 
         XCTAssertTrue(
             initBody.contains("startMediaServicesResetMonitoring()"),

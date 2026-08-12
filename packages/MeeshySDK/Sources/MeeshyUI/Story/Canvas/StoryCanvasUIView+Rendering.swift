@@ -223,6 +223,15 @@ extension StoryCanvasUIView {
         // Composer live preview : (re)démarre la lecture/boucle des vidéos en
         // `.edit` sur des layers fraîchement reconstruits. No-op hors composer.
         applyEditPlayback()
+        // Éditeur sonore : re-stampe les volumes du MODÈLE sur le mixer déjà
+        // configuré. Le reconfigure est gaté sur la composition
+        // (`slideAudioRevision`) et l'`.edit` n'a pas de display-link — sans
+        // cette poussée, muter une piste (chip canvas, panneau Son, timeline)
+        // laissait la boucle du composer jouer l'ancien niveau. Idempotent :
+        // le mixer ignore une écriture identique.
+        if mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive {
+            applyAudioMixerVolumes(at: Float(currentTime.seconds))
+        }
     }
 
     /// Trace un cadre autour des médias foreground (images / vidéos non-bg).

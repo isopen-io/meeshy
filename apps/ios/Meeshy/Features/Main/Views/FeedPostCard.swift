@@ -80,6 +80,9 @@ struct FeedPostCard: View {
     @State private var isTextExpanded = false
     /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
     @State private var fullscreenPlace: BubbleFullscreenPlace?
+    /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
+    /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
@@ -267,6 +270,12 @@ struct FeedPostCard: View {
     /// Teinte des liens cliquables dans le corps du post.
     private var postLinkTint: Color { Color(hex: accentColor) }
 
+    /// Les entités inline gardent l'identité produit (indigo thématisé), jamais
+    /// la couleur de l'auteur : avant, faute de `mentionColor:`, la mention
+    /// héritait du `.tint()` d'accent — donc une teinte différente par post.
+    private var mentionTint: Color { MeeshyColors.mentionColor(isDark: theme.mode.isDark) }
+    private var hashtagTint: Color { MeeshyColors.hashtagColor(isDark: theme.mode.isDark) }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -295,7 +304,7 @@ struct FeedPostCard: View {
                     if isLocationOnlyPost {
                         EmptyView()
                     } else if isTextExpanded {
-                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -312,7 +321,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -556,6 +565,27 @@ struct FeedPostCard: View {
             )
         }
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
+        .mediaSaveFlow(mediaSaveCoordinator)
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
+    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
+    /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
+    private func requestSaveMedia() {
+        guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     // MARK: - Author Header
@@ -678,6 +708,14 @@ struct FeedPostCard: View {
             Spacer()
 
             Menu {
+                if let onTapPost {
+                    Button {
+                        onTapPost(post)
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+                    }
+                }
                 Button {
                     UIPasteboard.general.string = post.content
                     HapticFeedback.success()
@@ -691,10 +729,19 @@ struct FeedPostCard: View {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
-                    onBookmark?(post.id)
-                    HapticFeedback.light()
+                    if post.primaryReelDisplayMedia != nil {
+                        requestSaveMedia()
+                    } else {
+                        onBookmark?(post.id)
+                        HapticFeedback.light()
+                    }
                 } label: {
-                    Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+                    Label(
+                        post.primaryReelDisplayMedia != nil
+                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
+                    )
                 }
                 if onPin != nil {
                     Button {
@@ -1177,6 +1224,7 @@ struct FeedPostCard: View {
                         CommentMediaView(
                             media: media,
                             accentColor: accentColor,
+                            commentId: comment.id,
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,

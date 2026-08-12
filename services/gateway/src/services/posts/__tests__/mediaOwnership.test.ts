@@ -3,10 +3,51 @@ import {
   uploaderIdFromFilePath,
   claimableMediaWhere,
   describeClaimShortfall,
+  isPostMediaUploadContext,
+  postMediaUploaderOrNull,
 } from '../mediaOwnership';
 
 const OWNER = '507f1f77bcf86cd799439011';
 const OTHER = '507f1f77bcf86cd799439012';
+
+describe('isPostMediaUploadContext', () => {
+  it('reconnait_les_quatre_contextes_de_post_media', () => {
+    for (const context of ['post', 'story', 'status', 'comment']) {
+      expect(isPostMediaUploadContext(context)).toBe(true);
+    }
+  });
+
+  it('refuse_les_contextes_message_et_inconnus', () => {
+    // Les pièces jointes de MESSAGE (participants anonymes compris) ne passent
+    // pas par PostMedia — elles ne sont jamais concernées par le rejet.
+    expect(isPostMediaUploadContext('message')).toBe(false);
+    expect(isPostMediaUploadContext(undefined)).toBe(false);
+    expect(isPostMediaUploadContext(null)).toBe(false);
+    expect(isPostMediaUploadContext('')).toBe(false);
+    expect(isPostMediaUploadContext('POST')).toBe(false);
+  });
+});
+
+describe('postMediaUploaderOrNull', () => {
+  it('rend_lidentifiant_dun_utilisateur_enregistre', () => {
+    expect(postMediaUploaderOrNull({ userId: OWNER, isAnonymous: false })).toBe(OWNER);
+  });
+
+  it('rend_null_pour_une_session_anonyme_MEME_si_le_jeton_a_la_forme_dun_objectid', () => {
+    // Un jeton de session qui matcherait par hasard /^[a-f0-9]{24}$/ ne doit
+    // JAMAIS devenir un propriétaire : l'égalité stricte du claim comparerait
+    // alors un jeton à un id utilisateur — au mieux irréclamable, au pire un
+    // alias involontaire d'un vrai compte.
+    expect(postMediaUploaderOrNull({ userId: OWNER, isAnonymous: true })).toBeNull();
+    expect(postMediaUploaderOrNull({ userId: 'sess_abc', isAnonymous: true })).toBeNull();
+  });
+
+  it('rend_null_pour_le_repli_anonymous_et_les_identites_invalides', () => {
+    expect(postMediaUploaderOrNull({ userId: 'anonymous', isAnonymous: false })).toBeNull();
+    expect(postMediaUploaderOrNull({ userId: null, isAnonymous: false })).toBeNull();
+    expect(postMediaUploaderOrNull({ userId: undefined, isAnonymous: false })).toBeNull();
+  });
+});
 
 describe('uploaderIdOrNull', () => {
   it('accepte_un_identifiant_utilisateur', () => {

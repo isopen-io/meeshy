@@ -1,5 +1,556 @@
 # @meeshy/shared
 
+## 1.10.2
+
+### Patch Changes
+
+- ac3c088: L'enrichissement d'une pièce jointe (transcription, audio traduit) atteint enfin les lecteurs qui ne sont pas dans le fil
+
+  `message:attachment-updated` — le delta émis quand Whisper finit de transcrire une note
+  vocale, puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — n'était diffusé
+  que dans la room `conversation:<id>`. Deux audiences le perdaient :
+
+  - **Le lecteur resté sur la liste de conversations.** iOS ne rejoint une room de
+    conversation qu'à l'OUVERTURE du fil : au lancement de l'app, un lecteur sur la liste
+    n'est dans aucune room de conversation. Son SDK applique pourtant ce delta sans regarder
+    quel fil est ouvert (`ConversationSyncEngine.handleAttachmentUpdated` patche le message
+    en cache de n'importe quelle conversation) — la room personnelle n'est donc pas une
+    audience plus large pour le principe, c'est l'endroit où l'écriture atterrit vraiment.
+  - **Le lecteur hors ligne.** Le `message:new` mis en file à l'ENVOI porte la pièce jointe
+    telle qu'elle était alors : sans transcription, sans audio traduit, les deux arrivant une
+    à deux secondes plus tard. Sans rejeu de l'enrichissement, la copie rejouée à la
+    reconnexion reste définitivement celle-là.
+
+  Même classe de défaut que l'aperçu de liste qui ne se retraduisait jamais : le Prisme
+  (« il s'applique à TOUT le contenu, transcriptions audio comprises ») dépendait de la
+  ROUTE du lecteur — avoir le fil ouvert au moment où Whisper a fini — et non de ses
+  préférences de langue.
+
+  L'émission chaîne désormais la room de conversation et les rooms personnelles de tous les
+  participants (une seule copie par socket, `emitToConversationParticipants`), et met
+  l'enrichissement en file pour les participants hors ligne sous le nouveau
+  `eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` à la
+  reconnexion. La clé de dédup est l'id de la PIÈCE JOINTE : l'identité par défaut
+  `(messageId, eventType)` ferait superséder l'enrichissement de la première pièce jointe
+  par celui de la seconde sur un message à deux audios. Le payload n'est pas filtré par
+  langue du destinataire — les clients REMPLACENT la carte de traductions de la pièce
+  jointe, donc un sous-ensemble par lecteur effacerait les langues déjà en cache.
+
+  Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+  d'avant), jamais vers le silence.
+
+## 1.10.1
+
+### Patch Changes
+
+- 70a0e04: user:updated — les composants du nom voyagent en groupe, et iOS applique enfin l'événement
+
+  La gateway diffusait `user:updated` à tous les contacts depuis des mois ; le web
+  l'appliquait, iOS n'avait aucun listener. Un interlocuteur qui changeait d'avatar
+  ou de nom restait figé sur la ligne de liste, l'en-tête et le sélecteur de
+  transfert jusqu'au prochain refetch complet.
+
+  Le payload envoie désormais les quatre composants du nom ensemble
+  (`displayName`, `firstName`, `lastName`, `username`) dès que l'un change : un
+  delta partiel est irrecomposable chez un client qui ne stocke que le nom déjà
+  composé. `null` y signifie EFFACÉ, seule façon de faire retomber le nom sur le
+  composant suivant.
+
+## 1.10.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.9.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.8.13
+
+### Patch Changes
+
+- fcc82a6: Le web applique enfin le Prisme Linguistique à la ligne de liste, et la langue
+  d'origine cesse de rétrograder la langue primaire du lecteur.
+
+  Le cycle précédent a mis `lastMessageTranslations` et `lastMessageOriginalLanguage`
+  sur le fil de `GET /conversations`. Le web n'en voyait rien : le type `Conversation`
+  ne déclarait pas ces champs, `transformConversationData` — un objet construit à la
+  main — les jetait, et `formatLastMessage` rendait `lastMessage.content` brut. Quatre
+  couches, aucune donnée. Un lecteur francophone lisait « Hello » dans sa sidebar et
+  « Bonjour » une fois le fil ouvert, alors que la traduction était déjà arrivée.
+
+  `resolveLastMessagePreview` (`@meeshy/shared`) devient le jumeau TypeScript de
+  `MeeshyConversation.resolvedLastMessagePreview`, et la chaîne web est câblée de
+  bout en bout : type → transformer → résolveur → ligne.
+
+  **Correctif de règle, sur les deux plateformes.** Le résolveur iOS court-circuitait
+  dès que la langue d'origine apparaissait _quelque part_ dans le prisme du lecteur.
+  Cette formulation par appartenance rétrograde silencieusement la langue PRIMAIRE
+  dès que la langue d'origine occupe un rang inférieur — précisément ce que produit
+  la locale appareil, entrée en 4e priorité. Prisme `['fr', 'en']`, message anglais,
+  traduction française disponible : elle rendait « Hello ». `CLAUDE.md` dit l'inverse
+  noir sur blanc — « un utilisateur francophone avec un iPhone en anglais voit
+  TOUJOURS ses messages en français (priorité 1) » — et le chemin du CORPS des
+  messages appliquait déjà la bonne règle en ne comparant qu'à la langue de tête.
+
+  Le prisme est désormais parcouru par RANG : la langue d'origine y concourt à sa
+  place, et la première langue servie gagne — par traduction, ou parce que le message
+  est déjà écrit dedans. La règle #3 est inchangée : jamais de repli sur une
+  traduction quelconque.
+
+## 1.8.12
+
+### Patch Changes
+
+- 6df3fac: Un message envoyé par lien de partage n'arrivait en temps réel sur aucun client mobile.
+
+  `link:message:new` n'a jamais eu qu'un seul auditeur : le web. iOS
+  (`MeeshySDK/Sockets/MessageSocketManager.swift`) et Android
+  (`sdk-core/socket/MessageSocketManager.kt`) n'enregistrent qu'un listener de création,
+  `message:new`. Or l'envoi par lien est le **seul** transport d'envoi dont dispose un participant
+  anonyme : un invité qui écrivait dans une conversation partagée n'apparaissait donc chez aucun
+  membre iOS ou Android — ni en direct par la room, ni au reconnect par la file hors ligne, qui
+  rejouait ce même event unique. Le message ne surgissait qu'au prochain refetch complet, que rien
+  ne déclenchait.
+
+  Les deux diffuseurs — la room live (`broadcastLinkMessage`) et le rejeu hors ligne
+  (`MeeshySocketIOManager._drainPendingMessages`) — passent désormais par un seul point d'appel
+  public, `linkMessageEmissions`, qui met les **deux** events sur le fil, chacun dans sa forme :
+  `link:message:new` garde son enveloppe `{ message }`, `message:new` transporte le message
+  lui-même. Rejouer l'enveloppe sous `message:new` aurait donné aux clients mobiles un payload sans
+  `conversationId` au premier niveau, donc non routable.
+
+  Additif, jamais substitutif : le web continue de recevoir l'event qu'il écoute déjà. Les deux
+  copies portent le même `id` et les deux gestionnaires web dédupent dessus, donc le second arrivé
+  est un no-op quel que soit l'ordre ; la pastille de non-lus ne se déduit d'aucun des deux (valeur
+  absolue de `conversation:unread-updated`), il n'y a rien à double-compter.
+
+## 1.8.11
+
+### Patch Changes
+
+- f2c0708: Le Prisme Linguistique s'applique enfin à l'aperçu de la liste de conversations.
+
+  `GET /conversations` ne transportait ni les traductions du dernier message ni sa
+  langue d'origine : la ligne de liste restait dans la langue de l'expéditeur pour
+  tout le monde, à chaque démarrage à froid. Le résolveur client existait pourtant
+  (`MeeshyConversation.resolvedLastMessagePreview`), et sa documentation attendait
+  explicitement ce câblage serveur.
+
+  La réponse porte désormais, au niveau conversation, `lastMessageOriginalLanguage`
+  et `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte aux
+  langues du prisme du LECTEUR (`resolveUserLanguagesOrdered`), tronquée au même
+  plafond que `lastMessage.content`, débarrassée des traductions chiffrées et de la
+  langue d'origine (qui EST déjà `lastMessage.content`). `null` quand il ne reste
+  rien, pour que le client retombe sur l'original — règle #3 du Prisme.
+
+  Coût nul côté base : `Message.translations` est une colonne JSON du même
+  document, pas une relation.
+
+## 1.8.10
+
+### Patch Changes
+
+- a7427af: Supprimer un commentaire annonce enfin le fil qu'il emporte — ses réponses restaient à l'écran, et rien ne les en enlevait jamais.
+
+  `PostCommentService.deleteComment` soft-delete le SOUS-ARBRE ENTIER depuis le cycle qui a corrigé
+  l'invariant de `commentCount` : la cible et tous ses descendants, sur la même liste d'ids, et le
+  retrait des notifications porte déjà sur cette même liste. Mais cette liste mourait dans la méthode —
+  la valeur de retour ne disait que `{ success: true }`.
+
+  Son seul appelant, la route `DELETE /posts/:postId/comments/:commentId`, n'avait donc rien d'autre à
+  annoncer que la cible : `broadcastCommentDeleted` partait avec le seul `commentId`. Chez tout client
+  qui avait déplié les réponses du commentaire supprimé, ces réponses restaient affichées — des lignes
+  que le serveur venait de retirer.
+
+  **Et aucun rechargement ne les enlevait.** `getComments` filtre `parentId: null` : le parent
+  supprimé n'est plus rendu, donc `getReplies` n'est plus jamais appelé pour ses réponses. Le fil ne
+  se nettoyait qu'au rechargement complet de la page. Le compteur, lui, était juste depuis le début —
+  il voyage en ABSOLU (`commentCount`), donc l'écran affichait « 3 commentaires » au-dessus de quatre
+  lignes visibles.
+
+  **Le correctif tient en une liste qui remonte.** `deleteComment` rend désormais
+  `deletedCommentIds` — exactement la liste qu'il a soft-deletée, jamais une seconde dérivation (après
+  le soft-delete, la reconstruire demanderait de relire des lignes que `NOT_DELETED` masque
+  désormais). La route la place dans le payload, et le web en purge tous ses caches de commentaires
+  d'un coup, réponses comprises.
+
+  Le web était le SEUL client à montrer ce défaut. iOS (`repliesMap[id] = nil` +
+  `expandedThreads.remove(id)`) et Android (`CommentRepliesState.removedThread`) compensaient déjà,
+  chacun par sa propre traversée locale — deux re-dérivations indépendantes d'une liste que le serveur
+  connaissait et taisait. `deletedCommentIds` les rend caduques : c'est le gain de fond, au-delà du
+  défaut visible sur le web.
+
+  `CommentDeletedEventData.deletedCommentIds` est **optionnel** pour rester additif : iOS et Android
+  gardent le comportement d'avant sans changer une ligne. Un client qui le lit se replie sur
+  `[commentId]` quand il est absent — c'est le cas du rejeu idempotent (`onDuplicate`), qui ne rend
+  qu'un `{ id }` parce que la suppression a déjà eu lieu et que son sous-arbre n'est plus
+  reconstructible par une lecture vivante. Le repli reproduit exactement le comportement d'avant ce
+  correctif ; une liste vide, elle, ferait survivre la cible elle-même à l'écran.
+
+## 1.8.9
+
+### Patch Changes
+
+- 2218e08: La famille est complète : toute notification qui DÉSIGNE un message hérite de son échéance.
+
+  Le lot précédent a branché les trois producteurs que l'éventail d'un message appelle — message
+  régulier, réponse, mention — et a laissé en backlog les deux autres ancrés sur un
+  `context.messageId`. Les voici, et l'un des deux n'existait pas vraiment.
+
+  **La réaction.** `createReactionNotification` lisait déjà le message pour en tirer l'extrait
+  (`select: { content: true }`) : `expiresAt` voyage dans la même lecture, aucune requête ajoutée. Une
+  réaction à un message éphémère ouvrait sinon, après expiration, un message absent.
+
+  **La mention ajoutée par ÉDITION.** `reconcileEditedMentions` est le second appelant de
+  `createMentionNotificationsBatch` — le paramètre existait depuis le lot précédent, personne ne le
+  lui passait. Les deux transports REST chargent déjà le message par `include` (donc `expiresAt` est
+  là) ; le transport socket ajoute un champ à un `select` qu'il émettait déjà. Aucune requête ajoutée
+  là non plus.
+
+  **La traduction prête n'était pas un producteur.** `createTranslationReadyNotification` n'avait
+  AUCUN appelant de production — un test était sa seule invocation dans tout le dépôt. Il n'a jamais
+  écrit une ligne, et aucun client n'a jamais reçu ce type. Retiré. `NotificationTypeEnum.TRANSLATION_READY`
+  reste déclaré (le SDK iOS le décode) mais porte désormais la mention explicite qu'aucun producteur
+  ne l'émet — la leçon du lot précédent : une valeur déclarée n'est pas une fonctionnalité, et sans
+  cette note l'énumération redonnerait à tout audit un cinquième cas à instruire.
+
+  L'énumération est vérifiable et fait partie de la revue : quatre méthodes `create*` posent un
+  `context.messageId`, les quatre estampillent l'échéance.
+
+- 7c2fb34: Une notification ne survit plus au message éphémère qu'elle annonce.
+
+  `createMessageNotification` refuse déjà de créer une notification pour un message DÉJÀ expiré. Rien
+  ne disait ce qu'il advient de celle qui est créée AVANT l'expiration : le message éphémère disparaît
+  quelques minutes plus tard, la ligne reste. Elle ne montre rien (l'extrait d'un message protégé est
+  déjà un libellé générique), elle ne mène nulle part (`action: view_message` ouvre un message absent),
+  et son badge non lu ne peut plus être décrémenté par une lecture — on ne lit pas ce qui n'est plus là.
+
+  `Notification.expiresAt` existait pour exactement ça, depuis l'origine du modèle, et le type partagé
+  le publie jusqu'aux clients (`state.expiresAt`, `isNotificationExpired`). Aucun producteur ne
+  l'écrivait, aucune lecture ne l'honorait : les deux moitiés d'une même règle, mortes chacune de son
+  côté. Ce lot les rebranche.
+
+  **Producteur.** La notification hérite de l'échéance du message qu'elle désigne — message régulier,
+  réponse et mention. Le chemin `new_message` la prend de sa propre relecture VIVANTE (celle de la
+  garde d'admission : aucune lecture ajoutée) ; la réponse et les mentions la reçoivent de l'éventail,
+  qui la tient déjà, plutôt que de la relire une fois par destinataire. Les deux sources ne peuvent pas
+  diverger : `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite.
+
+  **Lectures.** Un filtre à la lecture, et non un balayage : contrairement au rappel, la péremption
+  n'est pas un événement — personne ne passe à l'instant T, et un balayage périodique laisserait
+  toujours une fenêtre. Le filtre est exact à la milliseconde et ne coûte aucune écriture. Les sept
+  lectures qui répondent à la même question — liste REST et son total, compte non-lus REST, les deux
+  compteurs poussés par socket, le badge embarqué dans le push, le digest e-mail — la posent désormais
+  par une seule unité, `visibleNotificationsWhere`. `emitCountsUpdate` portait déjà en commentaire la
+  trace d'une divergence passée entre le prédicat du badge et celui de la liste ; sept copies l'auraient
+  rejouée.
+
+  **Index.** `Notification[userId, isRead]` devient `[userId, isRead, expiresAt]` — un remplacement, pas
+  un index de plus : l'ancienne clé est un préfixe de la nouvelle. Sans `expiresAt` dans l'index, le
+  filtre force un fetch de document par candidat sur un compteur qui tourne à CHAQUE notification créée,
+  donc une fois par destinataire de chaque message ; avec, les deux branches du OU restent des plages
+  d'index et le compte reste couvert. Migration `010_notification_expiry_index.js` pour les bases
+  existantes (idempotente, crée avant de supprimer).
+
+  Ce que ce lot ne fait pas : la ligne expirée reste en base (elle ne porte aucune copie du contenu), et
+  un badge déjà affiché ne se corrige qu'au prochain recalcul — cohérence à terme, pas immédiate.
+
+- e4ada9e: Débannir quelqu'un qui était parti de lui-même le faisait rentrer.
+
+  `PATCH …/participants/:userId/ban` cherche sa cible **sans filtrer `isActive`**, et c'est
+  délibéré : bannir un ancien membre est précisément ce qui l'empêche de revenir par un lien de
+  partage, `resolveConversationEntry` refusant toute entrée sur `bannedAt`. Cette capacité n'est pas
+  retirée. Mais les deux moitiés du geste écrivaient sans condition —
+  `ban: { bannedAt: now, isActive: false, leftAt: now }`,
+  `unban: { bannedAt: null, isActive: true, leftAt: null }` — et composées sur un ancien membre,
+  elles font autre chose que ce que leurs noms annoncent.
+
+  **Bannir effaçait le départ.** `leftAt` était réécrit à l'instant du bannissement alors qu'il datait
+  un départ volontaire vieux de plusieurs mois. L'information n'était pas remplacée par une
+  meilleure : elle était perdue, et c'est elle qui aurait permis au débannissement de savoir quoi
+  rendre.
+
+  **Débannir faisait entrer.** `{ isActive: true, leftAt: null }` sur une personne que le bannissement
+  n'avait pas sortie — parce qu'elle était déjà dehors — n'annule rien : ça CRÉE une appartenance. Le
+  débannissement devenait une **quatrième porte d'entrée** dans la conversation, la seule qui
+  n'obéisse pas à `resolveConversationEntry`, qui ne redonne ni rang ni permissions de nouvel arrivant
+  (l'ancien `admin` retrouvait son rang dans une ligne périmée — l'inverse exact de ce que la
+  leçon 89 exige), et qui rebranchait de force les sockets de quelqu'un qui était parti seul.
+
+  La décision vit désormais dans une unité pure, `services/conversations/conversationBanState.ts` :
+  un bannissement ne retire une appartenance que s'il en trouve une ; un débannissement ne rend que ce
+  que le bannissement a pris. Il lève l'interdiction dans tous les cas — sinon « débannir » ne lèverait
+  rien, et toutes les portes continueraient de refuser. Savoir laquelle des deux histoires s'est
+  produite ne demande aucun champ nouveau : le bannissement laisse la trace dans la ligne
+  (`leftAt === bannedAt` ⟺ c'est lui qui a mis fin à l'appartenance), et l'égalité est **exacte par
+  construction**, les deux champs recevant le même objet `Date`. Les lignes écrites avant ce cycle
+  portent toutes cette égalité, donc conservent à l'identique le comportement qu'elles ont toujours eu :
+  aucune réparation de base n'est nécessaire.
+
+  **Le débannissement n'oubliait pas la ligne mise en cache.** `participant-lookup-cache` mémorise
+  `isActive` 30 s pour éviter une lecture par message envoyé ; le bannissement l'invalide, le
+  débannissement ne le faisait pas. Pendant une demi-minute, la personne réintégrée restait
+  `isActive: false` pour le chemin d'envoi et chacun de ses messages était refusé sans qu'aucune ligne
+  en base ne le justifie.
+
+  **Les compteurs de membres des clients suivaient l'événement, pas le fait.**
+  `conversation:participant-banned` et `conversation:participant-unbanned` portent maintenant
+  `membershipEnded` / `membershipRestored`. Web (`use-socket-cache-sync`) et iOS
+  (`ConversationListViewModel`) décrémentaient et incrémentaient sans condition : bannir un ancien
+  membre faisait dériver le compteur vers le bas, durablement côté iOS où la valeur fausse est
+  persistée dans le cache local. Les deux champs sont optionnels et leur absence se lit comme `true` —
+  un serveur antérieur à ce contrat ne bannissait qu'en retirant. Android expose bien les deux
+  événements mais n'en dérive aucun effectif : rien à corriger de ce côté.
+
+## 1.8.8
+
+### Patch Changes
+
+- 36911f8: `build-info` nomme son miroir Python et corrige la portée qu'il s'attribuait.
+
+  L'en-tête du helper décrivait un seul Dockerfile et un seul stage `runner`, et annonçait des valeurs
+  exposées par `/health` et `/info`. Trois écarts avec le dépôt : les Dockerfiles sont ceux des trois
+  services — le translator en deux variantes (`Dockerfile`, `Dockerfile.py310`) —, les stages
+  d'exécution ne portent pas tous le même nom, et seul `/health` expose ces champs.
+
+  Surtout, le contrat était muet sur le fait que le translator, écrit en Python, porte un miroir de ce
+  helper : `services/translator/src/utils/build_info.py`. Les deux fichiers doivent garder des noms de
+  champs identiques pour que les `/health` des trois services se comparent sans traduction — une
+  contrainte qu'aucun test ne rattrape et que rien n'énonçait. Elle est désormais écrite là où on la
+  lit avant de modifier le type.
+
+## 1.8.7
+
+### Patch Changes
+
+- 5647020: Un message envoyé par lien de partage atteint désormais les participants hors ligne.
+
+  `POST /links/:identifier/messages` et son jumeau authentifié `/messages/auth` créaient le
+  message puis l'annonçaient par une seule ligne :
+  `io.to(conversation:<id>).emit(LINK_MESSAGE_NEW)`. Cette room ne contient que les sockets
+  **connectées**. Aucun des deux chemins n'enfilait quoi que ce soit dans
+  `RedisDeliveryQueue`, donc un participant hors ligne à cet instant ne recevait rien à la
+  reconnexion — `_drainPendingMessages` n'avait rien à rejouer, et le client web ne refetch
+  pas (`staleTime: Infinity`). Le message n'apparaissait qu'au prochain refetch complet et
+  sans rapport de la conversation.
+
+  C'est la classe d'événement la plus grave à laquelle ce trou pouvait rester ouvert : pas un
+  compteur de réactions périmé mais un **message entier**, sur le seul transport d'envoi dont
+  dispose un participant anonyme.
+
+  Correctif : un diffuseur unique `broadcastLinkMessage` nommant les **deux** audiences
+  (room live + file hors ligne) par lequel passent les deux routes, un nouvel `eventType`
+  `'link-message'` rejoué en `link:message:new` par le drain, et — pour que la prochaine
+  famille d'événements soit un appel plutôt qu'une sixième copie — une implémentation unique
+  de la troisième audience (`offlineParticipantQueue`) à laquelle délèguent désormais les
+  cinq fan-out jusqu'ici recopiés dans `MessageHandler`, `MeeshySocketIOManager`,
+  `reactionOfflineQueue` et `AttachmentReactionHandler`.
+
+## 1.8.6
+
+### Patch Changes
+
+- 49a661d: Echo the clientMessageId back to a share-link message's author, and withhold it from its peers
+
+  The share-link send routes persist the `clientMessageId` the client sends
+  (`message.create` writes it) but never gave it back. Neither the 201 body nor
+  the `link:message:new` payload carried it, so an author had no way to tie the
+  server's message to the optimistic row already on screen: reconciliation by cid
+  is impossible when the cid never comes back, and the message renders twice.
+
+  The nominal `message:send` path settled this contract already (Phase 4 §6.2) and
+  splits it in two: the sender's payload keeps the cid so the by-cid promotion can
+  run; the peers' broadcast is stripped of it so a third party never learns the
+  sender's optimistic-id space. The share-link routes now follow the same rule
+  through the same helper — `buildLinkMessagePayload` builds the author's payload,
+  `stripClientMessageId` derives the peers'.
+
+  Consequently the 201 body and the socket payload are no longer byte-identical;
+  they are equal modulo `clientMessageId`, which is what the response-contract
+  test now asserts. `stripClientMessageId` became generic and type-preserving:
+  returning `Record<string, unknown>` re-widened every typed payload passing
+  through it, which is exactly what broke the typed `link:message:new` emit whose
+  contract requires `id`/`conversationId`/`senderId`.
+
+  Also declares `clientMessageId` in `sendMessageBodySchema`. Both routes read it
+  and the Zod schema requires it, but the published request contract omitted its
+  only mandatory field. Declared without `required`, so Zod stays the single
+  validator and the error body for a missing cid is unchanged.
+
+- 9b5921f: `link:message:new` now carries the routing keys its consumers need
+
+  Socket.IO does not transport the room name to the receiving side, so the payload
+  is the only routing a client has. `LinkMessageNewEventData.message` was typed
+  `Record<string, unknown>` — a shape that expressed no contract at all — and the
+  gateway built it without `conversationId` or `senderId`. Both are now required by
+  the type and emitted by both share-link routes.
+
+- 94e7074: Add `sharedPlaceResponseSchema` as the single response shape for a shared place
+
+  A shared place was described inline by each response schema that hoists
+  `metadata.location`. Because fast-json-stringify truncates any undeclared
+  property without a signal, a surface that copies the shape slightly wrong — or
+  forgets it — loses the position with nothing to show for it. That is precisely
+  what happened to both share-link send routes.
+
+  The two existing copies in `api-schemas.ts` now spread this constant (overriding
+  only `description`), and the share-link message schema uses it too.
+
+## 1.8.5
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - dedupe missed-call notifications across racing terminal paths
+  - dead call:check-active replay + web listener leak on unmount (#2574)
+  - presence check for immediate high-priority email must target ROOMS.user, not the bare user id
+  - corrige ITMS-90035 a la source — identifier des stubs de frameworks sans code
+  - colore mentions et hashtags de façon adaptative light/dark dans posts/commentaires/reels/moods
+  - accepte [beta] {beta} et guillemets en plus de (beta)
+  - unifie l'affichage de la progression audio (waveform, pourcentage, minuteur)
+  - synchronise le badge non-lu de la conversation au chargement initial
+  - le push APNs n'écrase plus la facette liste posée par le socket message:new
+  - repli sur l'identité locale quand un écho socket omet l'enveloppe expéditeur
+  - hasLocalVideoTrack survives a survival downgrade, camera-switch mirroring desync on failure
+  - un retry de transcription n'ecrase plus une transcription livree
+  - drop translations completing after a message is soft-deleted (#2566)
+  - drop translations completing after a message is soft-deleted
+  - transcription-segment guard used literal 'ended' instead of CALL_TERMINAL_STATUSES (#2564)
+  - guard call:ended against a stale/unrelated callId (#2562)
+  - synchronisation fiable des non-lus — gateway + web + iOS (#2560)
+  - guard against stale transcription callbacks and redundant CallKit mute round-trip (#2559)
+  - résout l'auteur du DM immédiatement au bump temps réel
+  - résout 8 warnings Xcode Cloud (concurrence, code mort, dépréciation)
+  - résout 3/4 warnings Xcode Cloud sur StoryExporter
+  - résout 2 warnings Xcode Cloud (fullSync, switch exhaustif)
+  - résout les warnings de concurrence sur ExtractionBox
+  - propage draftId au chemin de publication en ligne
+  - normalize source language sent to translator (Prisme parity)
+  - fan out disconnectUser/sendToUser/isUserInConversationRoom across all devices
+  - ajoute la clé hashtag.results.empty au catalogue (7 langues)
+  - fusionne ancienneté et « Republier » sur une ligne de pied
+  - sync own message reactions across devices via reactor userId
+  - reduce deprecated ISO 639-1 aliases (iw/in/ji) to canonical codes
+  - route friend-request read-marking through NotificationService (multi-device bell sync)
+  - déclare metadata dans messageSchema — la bulle d'appel restait figée sur "en cours"
+  - traduction audio cassee en prod — TTS opus + echec silencieux (#2565)
+  - align canEditMessage SSOT with the real 24h edit window
+
 ## 1.8.4
 
 ### Patch Changes

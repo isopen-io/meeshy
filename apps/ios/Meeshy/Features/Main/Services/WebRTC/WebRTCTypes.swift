@@ -933,6 +933,17 @@ enum CallDisplayMode: Sendable {
 /// mis à jour au relâchement du drag de repositionnement.
 enum BubbleHorizontalEdge: Sendable { case leading, trailing }
 
+/// Palier de taille du PiP quand la bulle est repliée (`.bubble` displayMode)
+/// — cercle par défaut, agrandi par pincement jusqu'à `.large`. Ordre des
+/// cas = ordre d'agrandissement, `rawValue` sert directement d'axe de
+/// progression continue dans `CallBubbleGestureResolver`.
+enum CallBubbleSizeTier: Int, Sendable, CaseIterable {
+    case circle = 0
+    case small = 1
+    case medium = 2
+    case large = 3
+}
+
 // MARK: - Quality Thresholds
 
 /// Pure namespace of immutable configuration constants. Declared `nonisolated`

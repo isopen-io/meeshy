@@ -138,26 +138,13 @@ struct StatusBubbleOverlay: View {
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    audioPlayerRow(urlString: audioUrl)
-                    Text(status.timeAgo)
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let content = status.content, !content.isEmpty {
-                        Text(content)
-                            .font(MeeshyFont.relative(13))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 4)
-                    Text(status.timeAgo)
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
+                audioPlayerRow(urlString: audioUrl)
+            } else if let content = status.content, !content.isEmpty {
+                Text(content)
+                    .font(MeeshyFont.relative(13))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // "via @username" for republished statuses
@@ -167,20 +154,35 @@ struct StatusBubbleOverlay: View {
                     .foregroundColor(theme.textMuted)
             }
 
-            // Republish button (only for other users' statuses)
             if onRepublish != nil {
                 Divider().opacity(0.3)
-                Button {
-                    dismiss()
-                    onRepublish?(status)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(11))
-                        Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .medium))
+            }
+
+            // Ancienneté + « Republier » (autres statuts uniquement) sur une seule ligne
+            // basse séparée par un point médian — libère toute la largeur de la bulle
+            // pour le texte de l'humeur au lieu de le partager avec le timestamp.
+            HStack(spacing: 4) {
+                Text(status.timeAgo)
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                if onRepublish != nil {
+                    Text("·")
+                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+
+                    Button {
+                        dismiss()
+                        onRepublish?(status)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.2.squarepath")
+                                .font(MeeshyFont.relative(11))
+                            Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
+                                .font(MeeshyFont.relative(12, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.indigo400)
                     }
-                    .foregroundColor(MeeshyColors.indigo400)
                 }
             }
         }

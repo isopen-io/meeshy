@@ -301,6 +301,23 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Socket.IO Real-Time Updates
 
+    /// Applique un delta de reaction sur un resume par emoji. Un compte qui
+    /// retombe a zero perd sa cle : le laisser a 0 afficherait une pastille
+    /// vide, et le resume ne descend jamais sous zero meme si un
+    /// `status:unreacted` arrive sans son `status:reacted` (reconnexion).
+    static func applyingReaction(
+        emoji: String, delta: Int, to summary: [String: Int]?
+    ) -> [String: Int] {
+        var updated = summary ?? [:]
+        let next = (updated[emoji] ?? 0) + delta
+        if next > 0 {
+            updated[emoji] = next
+        } else {
+            updated.removeValue(forKey: emoji)
+        }
+        return updated
+    }
+
     func subscribeToSocketEvents() {
         guard cancellables.isEmpty else { return }
 
@@ -311,6 +328,7 @@ class StatusViewModel: ObservableObject {
                 if let entry = apiPost.toStatusEntry() {
                     if !self.statuses.contains(where: { $0.id == entry.id }) {
                         self.statuses.insert(entry, at: 0)
+                        self.persistSnapshot()
                     }
                 }
             }
@@ -319,7 +337,9 @@ class StatusViewModel: ObservableObject {
         socialSocket.statusDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] statusId in
-                self?.statuses.removeAll { $0.id == statusId }
+                guard let self, self.statuses.contains(where: { $0.id == statusId }) else { return }
+                self.statuses.removeAll { $0.id == statusId }
+                self.persistSnapshot()
             }
             .store(in: &cancellables)
 
@@ -330,6 +350,7 @@ class StatusViewModel: ObservableObject {
                 if let entry = apiPost.toStatusEntry(),
                    let index = self.statuses.firstIndex(where: { $0.id == entry.id }) {
                     self.statuses[index] = entry
+                    self.persistSnapshot()
                 }
             }
             .store(in: &cancellables)
@@ -342,13 +363,38 @@ class StatusViewModel: ObservableObject {
         socialSocket.statusReacted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
-                guard let self, payload.userId != self.authManager.currentUser?.id,
-                      let index = self.statuses.firstIndex(where: { $0.id == payload.statusId }) else { return }
-                var summary = self.statuses[index].reactionSummary ?? [:]
-                summary[payload.emoji, default: 0] += 1
-                self.statuses[index].reactionSummary = summary
+                self?.applyReactionDelta(statusId: payload.statusId, emoji: payload.emoji,
+                                         userId: payload.userId, delta: 1)
             }
             .store(in: &cancellables)
+
+        // Symetrique : `status:unreacted` etait publie par le SDK sans AUCUN
+        // abonne, donc un retrait de reaction ne se voyait qu'apres un
+        // rechargement REST — et jamais hors-ligne.
+        socialSocket.statusUnreacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.applyReactionDelta(statusId: payload.statusId, emoji: payload.emoji,
+                                         userId: payload.userId, delta: -1)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applyReactionDelta(statusId: String, emoji: String, userId: String, delta: Int) {
+        guard userId != authManager.currentUser?.id,
+              let index = statuses.firstIndex(where: { $0.id == statusId }) else { return }
+        statuses[index].reactionSummary = Self.applyingReaction(
+            emoji: emoji, delta: delta, to: statuses[index].reactionSummary
+        )
+        persistSnapshot()
+    }
+
+    /// Toute mutation temps reel de `statuses` doit atteindre le disque : les
+    /// quatre sinks ne muteraient que le tableau `@Published`, si bien qu'un
+    /// mood cree, supprime ou reagi pendant la session disparaissait au
+    /// prochain demarrage a froid (le cache gardait l'instantane REST).
+    private func persistSnapshot() {
+        Task { await saveCacheSnapshot() }
     }
 
     // MARK: - React to Status

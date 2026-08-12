@@ -248,3 +248,35 @@ private final class InMemoryKeychainStore: KeychainStoring, @unchecked Sendable 
         load(forKey: key, account: account)
     }
 }
+
+/// startup-03 — l'invalidation de session serveur émet `sessionInvalidated`
+/// AVANT le flip `isAuthenticated` (le hook outbox doit pouvoir armer son
+/// flag avant que la purge ne se déclenche).
+extension AuthManagerRefreshTests {
+
+    func test_refreshSession_authFailure_emitsSessionInvalidatedBeforeAuthFlip() async {
+        let user = MeeshyUser(
+            id: "user-inv", username: "inv", email: "inv@test.com",
+            role: "USER", systemLanguage: "fr",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z"
+        )
+        AuthManager.shared.applySession(token: "tok-inv", sessionToken: "sess", user: user)
+
+        var emitCount = 0
+        var wasStillAuthenticatedAtEmit: Bool?
+        let cancellable = AuthManager.shared.sessionInvalidated.sink { _ in
+            emitCount += 1
+            wasStillAuthenticatedAtEmit = AuthManager.shared.isAuthenticated
+        }
+        mockAuthService.errorToThrow = MeeshyError.auth(.sessionExpired)
+
+        _ = try? await AuthManager.shared.refreshSession(force: true)
+
+        XCTAssertEqual(emitCount, 1, "requireReauthentication doit émettre sessionInvalidated exactement une fois")
+        XCTAssertEqual(wasStillAuthenticatedAtEmit, true,
+                       "le signal doit partir AVANT le flip isAuthenticated=false, sinon le hook de purge ne peut pas armer son flag à temps")
+        cancellable.cancel()
+    }
+
+}

@@ -53,6 +53,7 @@ import {
   PasswordResetRequest,
   PasswordResetCompletion
 } from '../../../services/PasswordResetService';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 // Mock Prisma Client
 const mockPrisma = {
@@ -476,21 +477,46 @@ describe('PasswordResetService', () => {
         mockRedis.setnx.mockResolvedValue(true);
       });
 
-      it('should revoke existing tokens before creating new one', async () => {
+      /**
+       * La clause de révocation, appliquée à des DOCUMENTS.
+       *
+       * `passwordResetToken.create` ne renseigne jamais `usedAt` : la colonne est
+       * ABSENTE du document de tout jeton encore vierge — c'est-à-dire de tous
+       * ceux que cette révocation existe pour atteindre. Comparer la clause à sa
+       * propre copie ne peut pas le voir ; l'appliquer à des lignes, oui.
+       */
+      it('révoque le jeton en attente, dont la colonne usedAt est ABSENTE', async () => {
         await service.requestPasswordReset(validResetRequest);
 
-        expect(mockPrisma.passwordResetToken.updateMany).toHaveBeenCalledWith({
-          where: {
-            userId: mockUser.id,
-            usedAt: null,
-            isRevoked: false,
-            expiresAt: { gt: expect.any(Date) }
-          },
-          data: {
-            isRevoked: true,
-            revokedReason: 'NEW_REQUEST'
-          }
-        });
+        const { where, data } = (mockPrisma.passwordResetToken.updateMany as jest.Mock<any>).mock.calls[0][0];
+        const pendingToken = {
+          userId: mockUser.id,
+          isRevoked: false,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+        };
+
+        expect(matchesMongoWhere(pendingToken, where)).toBe(true);
+        expect(data).toEqual({ isRevoked: true, revokedReason: 'NEW_REQUEST' });
+      });
+
+      it('épargne un jeton déjà consommé, déjà révoqué, périmé, ou d\'un autre compte', async () => {
+        await service.requestPasswordReset(validResetRequest);
+
+        const { where } = (mockPrisma.passwordResetToken.updateMany as jest.Mock<any>).mock.calls[0][0];
+        const stillValid = new Date(Date.now() + 10 * 60 * 1000);
+
+        expect(matchesMongoWhere(
+          { userId: mockUser.id, isRevoked: false, expiresAt: stillValid, usedAt: new Date() }, where
+        )).toBe(false);
+        expect(matchesMongoWhere(
+          { userId: mockUser.id, isRevoked: true, expiresAt: stillValid }, where
+        )).toBe(false);
+        expect(matchesMongoWhere(
+          { userId: mockUser.id, isRevoked: false, expiresAt: new Date(Date.now() - 1000) }, where
+        )).toBe(false);
+        expect(matchesMongoWhere(
+          { userId: 'someone-else', isRevoked: false, expiresAt: stillValid }, where
+        )).toBe(false);
       });
 
       it('should create password reset token with correct data', async () => {
@@ -923,6 +949,24 @@ describe('PasswordResetService', () => {
         const result = await service.completePasswordReset(validResetCompletion);
 
         expect(result.success).toBe(true);
+      });
+
+      // The transaction above invalidates EVERY session of this user. The caller
+      // is the only place that can cut their live sockets, and it can only do so
+      // if it is told whose sessions were just revoked.
+      it('should report the user whose sessions it just invalidated', async () => {
+        mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
+        mockBcryptCompare.mockResolvedValue(false);
+        mockPrisma.user.findUnique.mockResolvedValue({
+          lockedUntil: null,
+          lastLoginDevice: null,
+          lastLoginIp: null
+        });
+
+        const result = await service.completePasswordReset(validResetCompletion);
+
+        expect(result.success).toBe(true);
+        expect(result.userId).toBe(mockUser.id);
       });
     });
 

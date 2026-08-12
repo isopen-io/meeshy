@@ -30,7 +30,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { canUserViewPost } from '../../services/posts/postVisibility.js';
+import { canUserViewPost, resolveInteractionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
@@ -169,8 +169,27 @@ export class PostReactionHandler {
         return;
       }
 
+      // Réagir est une INTERACTION : même verdict que `post:join`, mais celui-ci
+      // ne gardait que l'abonnement à la room. Une réaction n'a pas besoin de la
+      // room — connaître le `postId` suffisait à en poser une sur un post
+      // restreint, à peser dans ses agrégats et à notifier son auteur.
+      // Refus indistinct d'un post inexistant : ne pas faire de l'ACK un oracle.
+      //
+      // Repost simple → racine (tâche 9) : `resolveInteractionTarget` est le
+      // POINT UNIQUE de cette redirection, partagé avec le chemin REST
+      // (`routes/posts/interactions.ts`) — un repost `isQuote:false` n'a pas
+      // de vie sociale propre, la réaction se pose sur sa RACINE
+      // (`originalRepostOfId ?? repostOfId`). Une citation garde sa cible.
+      const target = await resolveInteractionTarget(this.prisma, validated.postId, userId);
+      if (!target) {
+        this.logger.warn('[PostReactionHandler] post:reaction-add denied (visibility)', { userId, postId: validated.postId });
+        if (callback) callback({ success: false, error: 'Post not found' });
+        return;
+      }
+      const targetPostId = target.id;
+
       const reaction = await this.postReactionService.addReaction({
-        postId: validated.postId,
+        postId: targetPostId,
         userId,
         emoji: validated.emoji,
       });
@@ -185,7 +204,7 @@ export class PostReactionHandler {
       }
 
       const updateEvent = await this.postReactionService.createUpdateEvent(
-        validated.postId,
+        targetPostId,
         validated.emoji,
         'add',
         userId
@@ -214,10 +233,10 @@ export class PostReactionHandler {
         return;
       }
 
-      this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent)
-        .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: validated.postId }));
+      this.broadcastReactionChange(targetPostId, validated.emoji, 'add', userId, updateEvent)
+        .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: targetPostId }));
       // _createPostReactionNotification handles errors internally; void to be explicit.
-      void this._createPostReactionNotification(validated.postId, validated.emoji, userId);
+      void this._createPostReactionNotification(targetPostId, validated.emoji, userId);
     } catch (error: unknown) {
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -275,8 +294,21 @@ export class PostReactionHandler {
         return;
       }
 
+      // Retirer reste une interaction avec le post — même garde et même
+      // redirection repost simple → racine que la pose
+      // (`resolveInteractionTarget`), pour que ni l'ACL ni la cible ne
+      // dépendent du sens du geste : retirer via un repost DIFFÉRENT de
+      // celui qui a servi à poser retire bien la même réaction sur la racine.
+      const target = await resolveInteractionTarget(this.prisma, validated.postId, userId);
+      if (!target) {
+        this.logger.warn('[PostReactionHandler] post:reaction-remove denied (visibility)', { userId, postId: validated.postId });
+        if (callback) callback({ success: false, error: 'Post not found' });
+        return;
+      }
+      const targetPostId = target.id;
+
       const removed = await this.postReactionService.removeReaction({
-        postId: validated.postId,
+        postId: targetPostId,
         userId,
         emoji: validated.emoji,
       });
@@ -292,7 +324,7 @@ export class PostReactionHandler {
       }
 
       const updateEvent = await this.postReactionService.createUpdateEvent(
-        validated.postId,
+        targetPostId,
         validated.emoji,
         'remove',
         userId
@@ -306,8 +338,8 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      this.broadcastReactionChange(validated.postId, validated.emoji, 'remove', userId, updateEvent)
-        .catch(err => this.logger.error('post reaction:remove broadcast failed', err, { postId: validated.postId }));
+      this.broadcastReactionChange(targetPostId, validated.emoji, 'remove', userId, updateEvent)
+        .catch(err => this.logger.error('post reaction:remove broadcast failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
       this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

@@ -455,6 +455,12 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
       const callSession = await callService.endCall(callId, userId, endParticipantId);
+      // Parité socket call:end — invalide le cache de session `call:signal`
+      // (TTL 2s) immédiatement après l'écriture de `leftAt`, comme tous les
+      // handlers socket (call:end/call:leave/call:force-leave). Sans ceci,
+      // un `call:signal` reçu dans la fenêtre TTL relaie encore de l'ICE/SDP
+      // pour un appel déjà terminé côté REST.
+      callService.invalidateSignalCache(callId);
       // Contrairement au handler socket `call:end`, cette route REST ne poste
       // pas le call-summary elle-même : sans ceci la bulle « Appel … en cours »
       // resterait orpheline. Fire-and-forget + idempotent (cf. finalizeCallSummary).
@@ -797,6 +803,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         userId: participantId,
         participantId: leaveParticipantId,
       });
+      // Parité socket call:leave — invalide le cache de session `call:signal`
+      // (TTL 2s), inconditionnellement comme le handler socket (un leave de
+      // groupe qui ne termine pas l'appel écrit quand même `leftAt` pour le
+      // partant — voir le commentaire sur invalidateSignalCache).
+      callService.invalidateSignalCache(callId);
       // Idem que la route end : la route REST leave ne poste pas le summary.
       // No-op si l'appel de groupe continue (createCallSummaryMessage se garde
       // sur le statut terminal), finalise la bulle si l'appel s'est terminé.

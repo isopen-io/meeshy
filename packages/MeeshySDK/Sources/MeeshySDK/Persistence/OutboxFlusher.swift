@@ -205,24 +205,35 @@ public actor OutboxFlusher {
             // envoi) n'est plus jamais rejouée : le message ne part pas.
             outboxFlusherLog.error("Stale-inflight reclaim failed, rows may stay stuck: \(error.localizedDescription, privacy: .public)")
         }
-        let pending: [OutboxRecord]
-        do {
-            pending = try await pool.read { db in
-                try OutboxRecord
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .filter(Column("nextAttemptAt") <= now)
-                    .order(Column("createdAt").asc)
-                    .limit(50)
-                    .fetchAll(db)
+        // outbox-06 — paginer jusqu'à épuisement du backlog échu : une seule
+        // page de 50 laissait les rows 51+ `.pending` échues, invisibles
+        // d'`earliestDeferred` (qui ne regarde que le futur) → timer annulé,
+        // backlog gelé jusqu'au prochain front réseau. `now` reste FIGÉ sur
+        // toute la passe (pas d'aspiration de rows devenues éligibles en
+        // cours de route) ; la borne de 20 passes (1000 rows) est une garde
+        // anti-pathologie, pas une garantie zéro-stall à toute échelle.
+        var pending: [OutboxRecord] = []
+        var pass = 0
+        repeat {
+            do {
+                pending = try await pool.read { db in
+                    try OutboxRecord
+                        .filter(Column("status") == OutboxStatus.pending.rawValue)
+                        .filter(Column("nextAttemptAt") <= now)
+                        .order(Column("createdAt").asc)
+                        .limit(50)
+                        .fetchAll(db)
+                }
+            } catch {
+                outboxFlusherLog.error("Pending batch read failed — outbox not drained this pass: \(error.localizedDescription, privacy: .public)")
+                pending = []
             }
-        } catch {
-            outboxFlusherLog.error("Pending batch read failed — outbox not drained this pass: \(error.localizedDescription, privacy: .public)")
-            pending = []
-        }
 
-        for record in pending {
-            await processRecord(record)
-        }
+            for record in pending {
+                await processRecord(record)
+            }
+            pass += 1
+        } while pending.count == 50 && pass < 20
 
         let earliestDeferred: OutboxRecord?
         do {

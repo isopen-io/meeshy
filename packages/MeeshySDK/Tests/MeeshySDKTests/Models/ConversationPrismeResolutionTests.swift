@@ -138,3 +138,91 @@ final class ConversationPrismeResolutionTests: XCTestCase {
         )
     }
 }
+
+/// Cycle 61 — le prisme est ORDONNÉ, et la langue d'origine y concourt à son
+/// propre RANG.
+///
+/// La règle précédente court-circuitait dès que la langue d'origine
+/// apparaissait *quelque part* dans le prisme du lecteur, ce qui rétrogradait
+/// sa langue PRIMAIRE. `CLAUDE.md` dit l'inverse noir sur blanc : « un
+/// utilisateur francophone avec un iPhone en anglais voit TOUJOURS ses messages
+/// en français (priorité 1) ; la locale anglaise n'intervient que si aucune
+/// traduction française n'est disponible ». La locale appareil entre en 4e
+/// priorité — elle ne supplante jamais une préférence in-app.
+///
+/// Jumeau strict de `resolve-last-message-preview.test.ts`
+/// (`packages/shared/__tests__/utils/`) : les deux plateformes rendent la même
+/// ligne depuis la même charge REST.
+final class ConversationPrismeRankOrderTests: XCTestCase {
+
+    private func makeConversation(
+        lastMessagePreview: String? = nil,
+        lastMessageOriginalLanguage: String? = nil,
+        lastMessageTranslations: [String: String]? = nil
+    ) -> MeeshyConversation {
+        var c = MeeshyConversation(
+            id: "conv1",
+            identifier: "conv1",
+            type: .direct,
+            lastMessagePreview: lastMessagePreview
+        )
+        c.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        c.lastMessageTranslations = lastMessageTranslations
+        return c
+    }
+
+    /// Le cas de `CLAUDE.md`, littéralement : francophone, téléphone en anglais.
+    func test_resolvedPreview_frenchReaderEnglishDeviceLocale_getsFrenchNotOriginal() {
+        let conv = makeConversation(
+            lastMessagePreview: "Hello everyone",
+            lastMessageOriginalLanguage: "en",
+            lastMessageTranslations: ["fr": "Bonjour à tous"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["fr", "en"]),
+            "Bonjour à tous"
+        )
+    }
+
+    /// Même lecteur, aucune traduction française : la locale appareil sert
+    /// enfin — et ce qu'elle sert est l'aperçu brut, qui EST l'anglais attendu.
+    func test_resolvedPreview_deviceLocaleServesOnlyWhenInAppLanguageHasNothing() {
+        let conv = makeConversation(
+            lastMessagePreview: "Hello everyone",
+            lastMessageOriginalLanguage: "en",
+            lastMessageTranslations: ["es": "Hola a todos"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["fr", "en"]),
+            "Hello everyone"
+        )
+    }
+
+    /// La langue primaire l'emporte sur un original écrit dans une langue
+    /// secondaire du lecteur.
+    func test_resolvedPreview_primaryLanguageBeatsOriginalRankedLower() {
+        let conv = makeConversation(
+            lastMessagePreview: "Bonjour",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: ["de": "Guten Tag"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["de", "fr"]),
+            "Guten Tag"
+        )
+    }
+
+    /// Symétrique : quand le rang 1 EST la langue d'origine, on s'arrête là et
+    /// on ne sert pas la traduction du rang 2.
+    func test_resolvedPreview_originalAtTopRank_stopsBeforeLowerRankedTranslation() {
+        let conv = makeConversation(
+            lastMessagePreview: "Guten Tag",
+            lastMessageOriginalLanguage: "de",
+            lastMessageTranslations: ["fr": "Bonjour"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["de", "fr"]),
+            "Guten Tag"
+        )
+    }
+}

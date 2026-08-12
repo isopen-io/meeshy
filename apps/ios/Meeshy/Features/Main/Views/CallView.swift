@@ -1249,7 +1249,8 @@ struct CallView: View {
                         HStack(spacing: 8) {
                             pipFrameButton(
                                 icon: "arrow.triangle.2.circlepath.camera.fill",
-                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main),
+                                hint: String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main)
                             ) {
                                 callManager.switchCamera()
                             }
@@ -1519,8 +1520,12 @@ struct CallView: View {
 
     private var hasActiveEffects: Bool {
         // Voice effects are no longer settable from the UI (dead pipeline,
-        // entry removed) — only video filters light this up.
-        callManager.videoFilters.config.isEnabled
+        // entry removed) — only video filters light this up. `isEnabled`
+        // alone misses background blur/skin smoothing enabled without ever
+        // picking a colorimetry preset — same root cause as the pipeline's
+        // own gate (VideoFilterPipeline.process), mirrored here.
+        let config = callManager.videoFilters.config
+        return config.isEnabled || config.hasAdvancedFilters
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
@@ -1553,6 +1558,7 @@ struct CallView: View {
                 isActive: callManager.isMuted,
                 caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
                 label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main),
+                hint: String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main),
                 isToggle: true
             ) {
                 callManager.toggleMute()
@@ -1568,6 +1574,7 @@ struct CallView: View {
                     isActive: callManager.isSpeaker,
                     caption: String(localized: "call.control.speaker.caption", defaultValue: "Son", bundle: .main),
                     label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main),
+                    hint: String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main),
                     isToggle: true
                 ) {
                     callManager.toggleSpeaker()

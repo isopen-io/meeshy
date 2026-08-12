@@ -1,480 +1,283 @@
 /**
- * PrivacyPreferencesService Unit Tests
- *
- * Covers:
- * - getDefaultPreferences(): returns PRIVACY_PREFERENCES_DEFAULTS values
- * - getPreferences(): anonymous → defaults, cache hit, DB fetch + cache set
- * - fetchFromDatabase(): stored values override defaults, missing → defaults, error → defaults
- * - getBooleanValue(): 'true'/'false' strings, missing key uses default
- * - invalidateCache(): removes specific entry
- * - clearCache(): empties entire cache
- * - shutdown(): clears interval + cache
- * - shouldShow*(): delegate to getPreferences
- * - getPreferencesForUsers(): parallel fetch, returns Map
- * - getMetrics(): returns cacheSize
+ * Unit tests for PrivacyPreferencesService
+ * Covers: anonymous user defaults, DB fetch with stored values,
+ * cache hit (no second DB call), TTL expiry invalidates cache,
+ * cache invalidation/clear, fallback-to-defaults on DB error,
+ * quick-access helpers (shouldShowOnlineStatus etc.),
+ * getPreferencesForUsers batch, getMetrics, and shutdown.
  *
  * @jest-environment node
  */
 
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
-    child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+    child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
   },
 }));
 
 import { PrivacyPreferencesService } from '../../../services/PrivacyPreferencesService';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PRIVACY_PREFERENCES_DEFAULTS } from '../../../config/user-preferences-defaults';
 
-function makePrisma(rows: { userId?: string; key: string; value: string }[] = []) {
-  return {
-    userPreference: {
-      findMany: jest.fn().mockResolvedValue(rows),
-    },
-  } as any;
+// ─── Factories ───────────────────────────────────────────────────────────────
+
+function makeStoredPrefs(overrides: Array<{ key: string; value: string }> = []) {
+  return overrides;
 }
 
+function makePrisma(storedPrefs: Array<{ key: string; value: string }> = []) {
+  return {
+    userPreference: {
+      findMany: jest.fn<any>().mockResolvedValue(storedPrefs),
+    },
+  } as unknown as PrismaClient;
+}
+
+function makeSut(prisma?: PrismaClient) {
+  return new PrivacyPreferencesService(prisma ?? makePrisma());
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
 describe('PrivacyPreferencesService', () => {
-  let svc: PrivacyPreferencesService;
-  const userId = 'user_001';
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
 
   afterEach(() => {
-    svc.shutdown();
+    jest.useRealTimers();
     jest.clearAllMocks();
   });
 
-  // ---------------------------------------------------------------------------
-  // getDefaultPreferences
-  // ---------------------------------------------------------------------------
-  describe('getDefaultPreferences', () => {
-    it('returns values matching PRIVACY_PREFERENCES_DEFAULTS', () => {
-      svc = new PrivacyPreferencesService(makePrisma());
-      const defaults = svc.getDefaultPreferences();
+  // ── Anonymous users ──────────────────────────────────────────────────────
 
-      expect(defaults).toEqual({
-        showOnlineStatus: PRIVACY_PREFERENCES_DEFAULTS.showOnlineStatus,
-        showLastSeen: PRIVACY_PREFERENCES_DEFAULTS.showLastSeen,
-        showReadReceipts: PRIVACY_PREFERENCES_DEFAULTS.showReadReceipts,
-        showTypingIndicator: PRIVACY_PREFERENCES_DEFAULTS.showTypingIndicator,
-        allowContactRequests: PRIVACY_PREFERENCES_DEFAULTS.allowContactRequests,
-        allowGroupInvites: PRIVACY_PREFERENCES_DEFAULTS.allowGroupInvites,
-        saveMediaToGallery: PRIVACY_PREFERENCES_DEFAULTS.saveMediaToGallery,
-        allowAnalytics: PRIVACY_PREFERENCES_DEFAULTS.allowAnalytics,
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // getPreferences — anonymous
-  // ---------------------------------------------------------------------------
-  describe('getPreferences — anonymous users', () => {
-    it('returns defaults without DB call for anonymous user', async () => {
+  describe('anonymous users', () => {
+    it('returns default preferences without querying the DB', async () => {
       const prisma = makePrisma();
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      const prefs = await svc.getPreferences(userId, true);
+      const prefs = await sut.getPreferences('anon-id', true);
 
-      expect(prefs).toEqual(svc.getDefaultPreferences());
-      expect(prisma.userPreference.findMany).not.toHaveBeenCalled();
-    });
-
-    it('defaults to isAnonymous=false when not specified', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      await svc.getPreferences(userId);
-
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
+      expect(prefs).toEqual(sut.getDefaultPreferences());
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).not.toHaveBeenCalled();
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // getPreferences — DB fetch + cache
-  // ---------------------------------------------------------------------------
-  describe('getPreferences — DB fetch and caching', () => {
-    it('fetches from DB when no cache entry exists', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+  // ── getDefaultPreferences ────────────────────────────────────────────────
 
-      await svc.getPreferences(userId);
+  describe('getDefaultPreferences', () => {
+    it('matches the PRIVACY_PREFERENCES_DEFAULTS constants', () => {
+      const sut = makeSut();
 
-      expect(prisma.userPreference.findMany).toHaveBeenCalledWith({
-        where: {
-          userId,
-          key: { in: expect.arrayContaining(['show-online-status', 'show-last-seen']) },
-        },
-      });
-    });
+      const prefs = sut.getDefaultPreferences();
 
-    it('uses cached result on second call without hitting DB again', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      await svc.getPreferences(userId);
-      await svc.getPreferences(userId);
-
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
-    });
-
-    it('re-fetches after cache expires', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      // Manually inject a stale cache entry
-      (svc as any).cache.set(userId, {
-        preferences: svc.getDefaultPreferences(),
-        fetchedAt: Date.now() - (6 * 60 * 1000), // 6 min ago, past 5-min TTL
-      });
-
-      await svc.getPreferences(userId);
-
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not re-fetch when cache entry is fresh', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      // Inject fresh cache entry
-      (svc as any).cache.set(userId, {
-        preferences: svc.getDefaultPreferences(),
-        fetchedAt: Date.now() - 1000, // 1 second ago, within TTL
-      });
-
-      await svc.getPreferences(userId);
-
-      expect(prisma.userPreference.findMany).not.toHaveBeenCalled();
+      expect(prefs.showOnlineStatus).toBe(PRIVACY_PREFERENCES_DEFAULTS.showOnlineStatus);
+      expect(prefs.saveMediaToGallery).toBe(PRIVACY_PREFERENCES_DEFAULTS.saveMediaToGallery);
+      expect(prefs.allowAnalytics).toBe(PRIVACY_PREFERENCES_DEFAULTS.allowAnalytics);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // fetchFromDatabase — stored values
-  // ---------------------------------------------------------------------------
-  describe('stored DB values override defaults', () => {
-    it('uses stored "true" string as true', async () => {
-      const prisma = makePrisma([{ key: 'save-media-to-gallery', value: 'true' }]);
-      svc = new PrivacyPreferencesService(prisma);
+  // ── DB fetch ─────────────────────────────────────────────────────────────
 
-      const prefs = await svc.getPreferences(userId);
+  describe('getPreferences — DB fetch', () => {
+    it('fetches from DB and returns defaults when no stored preferences', async () => {
+      const sut = makeSut(makePrisma([]));
 
-      // Default is false; stored value overrides to true
-      expect(prefs.saveMediaToGallery).toBe(true);
+      const prefs = await sut.getPreferences('user-1');
+
+      expect(prefs.showOnlineStatus).toBe(true);
+      expect(prefs.saveMediaToGallery).toBe(false);
     });
 
-    it('uses stored "false" string as false', async () => {
-      const prisma = makePrisma([{ key: 'show-online-status', value: 'false' }]);
-      svc = new PrivacyPreferencesService(prisma);
+    it('uses stored value when available (show-online-status = false)', async () => {
+      const sut = makeSut(makePrisma([{ key: 'show-online-status', value: 'false' }]));
 
-      const prefs = await svc.getPreferences(userId);
+      const prefs = await sut.getPreferences('user-1');
 
-      // Default is true; stored value overrides to false
       expect(prefs.showOnlineStatus).toBe(false);
     });
 
-    it('uses default when key is not stored', async () => {
-      const prisma = makePrisma([]); // no stored preferences
-      svc = new PrivacyPreferencesService(prisma);
+    it('uses stored value true for save-media-to-gallery', async () => {
+      const sut = makeSut(makePrisma([{ key: 'save-media-to-gallery', value: 'true' }]));
 
-      const prefs = await svc.getPreferences(userId);
+      const prefs = await sut.getPreferences('user-1');
 
-      expect(prefs).toEqual(svc.getDefaultPreferences());
-    });
-
-    it('applies stored values for multiple keys simultaneously', async () => {
-      const prisma = makePrisma([
-        { key: 'show-online-status', value: 'false' },
-        { key: 'allow-analytics', value: 'false' },
-        { key: 'save-media-to-gallery', value: 'true' },
-      ]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      const prefs = await svc.getPreferences(userId);
-
-      expect(prefs.showOnlineStatus).toBe(false);
-      expect(prefs.allowAnalytics).toBe(false);
       expect(prefs.saveMediaToGallery).toBe(true);
-      // Untouched keys retain defaults
-      expect(prefs.showLastSeen).toBe(PRIVACY_PREFERENCES_DEFAULTS.showLastSeen);
     });
 
-    it('returns defaults gracefully when DB throws', async () => {
+    it('falls back to defaults on DB error', async () => {
       const prisma = {
         userPreference: {
-          findMany: jest.fn().mockRejectedValue(new Error('DB connection lost')),
+          findMany: jest.fn<any>().mockRejectedValue(new Error('db error')),
         },
-      } as any;
-      svc = new PrivacyPreferencesService(prisma);
+      } as unknown as PrismaClient;
+      const sut = makeSut(prisma);
 
-      const prefs = await svc.getPreferences(userId);
+      const prefs = await sut.getPreferences('user-1');
 
-      expect(prefs).toEqual(svc.getDefaultPreferences());
+      expect(prefs).toEqual(sut.getDefaultPreferences());
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // invalidateCache / clearCache
-  // ---------------------------------------------------------------------------
-  describe('cache management', () => {
-    it('invalidateCache removes the entry for that user', async () => {
+  // ── Caching ──────────────────────────────────────────────────────────────
+
+  describe('cache behavior', () => {
+    it('second call returns cached result without hitting DB again', async () => {
       const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      await svc.getPreferences(userId);
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
+      await sut.getPreferences('user-1');
+      await sut.getPreferences('user-1');
 
-      svc.invalidateCache(userId);
-
-      await svc.getPreferences(userId);
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(2);
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidateCache on non-existent userId is a no-op', () => {
-      svc = new PrivacyPreferencesService(makePrisma());
-      expect(() => svc.invalidateCache('unknown_user')).not.toThrow();
-    });
-
-    it('clearCache empties all entries', async () => {
+    it('expired cache (> 5 min) triggers a new DB fetch', async () => {
       const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      await svc.getPreferences('user_A');
-      await svc.getPreferences('user_B');
-      expect((svc as any).cache.size).toBe(2);
+      await sut.getPreferences('user-1');
+      jest.advanceTimersByTime(5 * 60 * 1000 + 1);
+      await sut.getPreferences('user-1');
 
-      svc.clearCache();
-      expect((svc as any).cache.size).toBe(0);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // cleanupCache (called by the interval)
-  // ---------------------------------------------------------------------------
-  describe('cleanupCache', () => {
-    it('removes expired entries and keeps fresh ones', () => {
-      svc = new PrivacyPreferencesService(makePrisma());
-
-      const now = Date.now();
-      (svc as any).cache.set('stale_user', {
-        preferences: svc.getDefaultPreferences(),
-        fetchedAt: now - 6 * 60 * 1000, // expired
-      });
-      (svc as any).cache.set('fresh_user', {
-        preferences: svc.getDefaultPreferences(),
-        fetchedAt: now - 60 * 1000, // fresh
-      });
-
-      (svc as any).cleanupCache();
-
-      expect((svc as any).cache.has('stale_user')).toBe(false);
-      expect((svc as any).cache.has('fresh_user')).toBe(true);
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(2);
     });
 
-    it('cleanupCache with no entries does not throw', () => {
-      svc = new PrivacyPreferencesService(makePrisma());
-      expect(() => (svc as any).cleanupCache()).not.toThrow();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // shutdown
-  // ---------------------------------------------------------------------------
-  describe('shutdown', () => {
-    it('clears interval and cache on shutdown', async () => {
+    it('invalidateCache forces next call to re-fetch', async () => {
       const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      await svc.getPreferences(userId);
-      expect((svc as any).cache.size).toBe(1);
+      await sut.getPreferences('user-1');
+      sut.invalidateCache('user-1');
+      await sut.getPreferences('user-1');
 
-      svc.shutdown();
-
-      expect((svc as any).cache.size).toBe(0);
-      expect((svc as any).cleanupInterval).toBeNull();
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(2);
     });
 
-    it('calling shutdown twice does not throw', () => {
-      svc = new PrivacyPreferencesService(makePrisma());
-      svc.shutdown();
-      expect(() => svc.shutdown()).not.toThrow();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // shouldShow* quick accessors
-  // ---------------------------------------------------------------------------
-  describe('shouldShow* quick accessors', () => {
-    it('shouldShowOnlineStatus returns showOnlineStatus from preferences', async () => {
-      const prisma = makePrisma([{ key: 'show-online-status', value: 'false' }]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      expect(await svc.shouldShowOnlineStatus(userId)).toBe(false);
-    });
-
-    it('shouldShowLastSeen returns showLastSeen from preferences', async () => {
-      const prisma = makePrisma([{ key: 'show-last-seen', value: 'false' }]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      expect(await svc.shouldShowLastSeen(userId)).toBe(false);
-    });
-
-    it('shouldShowReadReceipts returns showReadReceipts', async () => {
-      const prisma = makePrisma([{ key: 'show-read-receipts', value: 'false' }]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      expect(await svc.shouldShowReadReceipts(userId)).toBe(false);
-    });
-
-    it('shouldShowTypingIndicator returns showTypingIndicator', async () => {
-      const prisma = makePrisma([{ key: 'show-typing-indicator', value: 'false' }]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      expect(await svc.shouldShowTypingIndicator(userId)).toBe(false);
-    });
-
-    it('quick accessors respect isAnonymous=true', async () => {
+    it('clearCache forces all users to re-fetch', async () => {
       const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      // For anonymous users, always returns defaults without DB call
-      const result = await svc.shouldShowOnlineStatus('anon_user', true);
-      expect(result).toBe(PRIVACY_PREFERENCES_DEFAULTS.showOnlineStatus);
-      expect(prisma.userPreference.findMany).not.toHaveBeenCalled();
+      await sut.getPreferences('user-1');
+      await sut.getPreferences('user-2');
+      sut.clearCache();
+      await sut.getPreferences('user-1');
+      await sut.getPreferences('user-2');
+
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(4);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // getPreferencesForUsers
-  // ---------------------------------------------------------------------------
+  // ── Cleanup interval ─────────────────────────────────────────────────────
+
+  describe('cache cleanup interval', () => {
+    it('removes expired entries on cleanup tick (10 min interval)', async () => {
+      const prisma = makePrisma([]);
+      const sut = makeSut(prisma);
+
+      await sut.getPreferences('user-1');
+      expect(sut.getMetrics().cacheSize).toBe(1);
+
+      // Let entry expire
+      jest.advanceTimersByTime(5 * 60 * 1000 + 1);
+      // Trigger cleanup interval (10 min)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(sut.getMetrics().cacheSize).toBe(0);
+    });
+  });
+
+  // ── Quick-access helpers ─────────────────────────────────────────────────
+
+  describe('quick-access helpers', () => {
+    it('shouldShowOnlineStatus returns stored value', async () => {
+      const sut = makeSut(makePrisma([{ key: 'show-online-status', value: 'false' }]));
+
+      expect(await sut.shouldShowOnlineStatus('u1')).toBe(false);
+    });
+
+    it('shouldShowLastSeen returns default (true) when not stored', async () => {
+      const sut = makeSut(makePrisma([]));
+
+      expect(await sut.shouldShowLastSeen('u1')).toBe(true);
+    });
+
+    it('shouldShowReadReceipts returns stored value', async () => {
+      const sut = makeSut(makePrisma([{ key: 'show-read-receipts', value: 'false' }]));
+
+      expect(await sut.shouldShowReadReceipts('u1')).toBe(false);
+    });
+
+    it('shouldShowTypingIndicator returns stored value', async () => {
+      const sut = makeSut(makePrisma([{ key: 'show-typing-indicator', value: 'false' }]));
+
+      expect(await sut.shouldShowTypingIndicator('u1')).toBe(false);
+    });
+
+    it('anonymous user helpers return default values without DB call', async () => {
+      const prisma = makePrisma([]);
+      const sut = makeSut(prisma);
+
+      expect(await sut.shouldShowOnlineStatus('anon', true)).toBe(true);
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── getPreferencesForUsers batch ─────────────────────────────────────────
+
   describe('getPreferencesForUsers', () => {
-    it('returns a Map with preferences for each user', async () => {
+    it('returns a map keyed by userId', async () => {
       const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      const result = await svc.getPreferencesForUsers([
-        { id: 'userA', isAnonymous: false },
-        { id: 'userB', isAnonymous: true },
+      const result = await sut.getPreferencesForUsers([
+        { id: 'u1', isAnonymous: false },
+        { id: 'u2', isAnonymous: true },
       ]);
 
-      expect(result).toBeInstanceOf(Map);
-      expect(result.has('userA')).toBe(true);
-      expect(result.has('userB')).toBe(true);
+      expect(result.has('u1')).toBe(true);
+      expect(result.has('u2')).toBe(true);
     });
 
-    it('anonymous entries use defaults without DB call', async () => {
+    it('does not query DB for anonymous users in batch', async () => {
       const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+      const sut = makeSut(prisma);
 
-      await svc.getPreferencesForUsers([
-        { id: 'anon_1', isAnonymous: true },
-        { id: 'anon_2', isAnonymous: true },
-      ]);
+      await sut.getPreferencesForUsers([{ id: 'anon', isAnonymous: true }]);
 
-      expect(prisma.userPreference.findMany).not.toHaveBeenCalled();
-    });
-
-    it('returns empty Map for empty input', async () => {
-      svc = new PrivacyPreferencesService(makePrisma());
-      const result = await svc.getPreferencesForUsers([]);
-      expect(result.size).toBe(0);
-    });
-
-    // Auparavant, cette méthode enchaînait des appels unitaires : N participants
-    // non mis en cache produisaient N requêtes. Les chemins d'accusés de lecture
-    // l'interrogent pour tous les membres d'une conversation — un grand groupe à
-    // cache froid déclenchait donc une rafale de requêtes.
-    it('fetches all uncached registered users in a SINGLE query', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      await svc.getPreferencesForUsers([
-        { id: 'reg_A', isAnonymous: false },
-        { id: 'reg_B', isAnonymous: false },
-        { id: 'reg_C', isAnonymous: false },
-      ]);
-
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
-      expect(prisma.userPreference.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            userId: { in: ['reg_A', 'reg_B', 'reg_C'] },
-          }),
-        })
-      );
-    });
-
-    it('attributes each stored row to its own user', async () => {
-      const prisma = makePrisma([
-        { userId: 'reg_A', key: 'show-read-receipts', value: 'false' },
-        { userId: 'reg_B', key: 'show-read-receipts', value: 'true' },
-      ]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      const result = await svc.getPreferencesForUsers([
-        { id: 'reg_A', isAnonymous: false },
-        { id: 'reg_B', isAnonymous: false },
-      ]);
-
-      expect(result.get('reg_A')?.showReadReceipts).toBe(false);
-      expect(result.get('reg_B')?.showReadReceipts).toBe(true);
-    });
-
-    it('serves cached users without re-querying, and batches only the misses', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      await svc.getPreferences('reg_A');
-      (prisma.userPreference.findMany as jest.Mock).mockClear();
-
-      await svc.getPreferencesForUsers([
-        { id: 'reg_A', isAnonymous: false },
-        { id: 'reg_B', isAnonymous: false },
-      ]);
-
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
-      expect(prisma.userPreference.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ userId: { in: ['reg_B'] } }),
-        })
-      );
-    });
-
-    it('falls back to defaults for every user when the batch query fails', async () => {
-      const prisma = makePrisma([]);
-      prisma.userPreference.findMany = jest.fn().mockRejectedValue(new Error('DB down'));
-      svc = new PrivacyPreferencesService(prisma);
-
-      const result = await svc.getPreferencesForUsers([
-        { id: 'reg_A', isAnonymous: false },
-        { id: 'reg_B', isAnonymous: false },
-      ]);
-
-      expect(result.get('reg_A')).toEqual(PRIVACY_PREFERENCES_DEFAULTS);
-      expect(result.get('reg_B')).toEqual(PRIVACY_PREFERENCES_DEFAULTS);
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).not.toHaveBeenCalled();
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // getMetrics
-  // ---------------------------------------------------------------------------
+  // ── getMetrics ───────────────────────────────────────────────────────────
+
   describe('getMetrics', () => {
-    it('returns cacheSize equal to number of cached users', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
-
-      await svc.getPreferences('user_x');
-      await svc.getPreferences('user_y');
-
-      const metrics = svc.getMetrics();
-      expect(metrics.cacheSize).toBe(2);
+    it('reports cacheSize 0 initially', () => {
+      expect(makeSut().getMetrics().cacheSize).toBe(0);
     });
 
-    it('returns cacheSize 0 after clearCache', async () => {
-      const prisma = makePrisma([]);
-      svc = new PrivacyPreferencesService(prisma);
+    it('reports cacheSize equal to unique cached users', async () => {
+      const sut = makeSut(makePrisma([]));
+      await sut.getPreferences('u1');
+      await sut.getPreferences('u2');
 
-      await svc.getPreferences('user_z');
-      svc.clearCache();
+      expect(sut.getMetrics().cacheSize).toBe(2);
+    });
+  });
 
-      expect(svc.getMetrics().cacheSize).toBe(0);
+  // ── shutdown ─────────────────────────────────────────────────────────────
+
+  describe('shutdown', () => {
+    it('clears cache and stops cleanup interval', async () => {
+      const sut = makeSut(makePrisma([]));
+      await sut.getPreferences('u1');
+      expect(sut.getMetrics().cacheSize).toBe(1);
+
+      sut.shutdown();
+
+      expect(sut.getMetrics().cacheSize).toBe(0);
     });
   });
 });

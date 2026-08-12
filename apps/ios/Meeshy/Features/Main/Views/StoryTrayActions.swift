@@ -17,7 +17,7 @@ import MeeshyUI
 /// désormais la story (alignement Instagram) ; la gestion reste accessible par
 /// appui long.
 nonisolated enum MyStoryAvatarAction: Equatable {
-    case viewMyStory
+    case manageStories
     case createStory
 }
 
@@ -56,19 +56,36 @@ nonisolated enum StoryTrayCopy {
 }
 
 nonisolated enum StoryTrayActionResolver {
-    static func avatarTap(hasMyStory: Bool) -> MyStoryAvatarAction {
-        hasMyStory ? .viewMyStory : .createStory
+    /// SUPERSESSION 2026-08-02 (directive user) : le tap sur l'avatar « Moi »
+    /// ouvre la LISTE « Mes stories » — c'est elle qui porte les onglets
+    /// Publiées / Brouillons, inaccessibles quand le tap lançait la lecture
+    /// directe (direction du 2026-07-31, elle-même une supersession du
+    /// 2026-07-14). La lecture directe reste offerte par « Voir ma story »
+    /// au menu contextuel.
+    ///
+    /// Parité 2026-08-10 : un utilisateur SANS story active mais avec un
+    /// historique entièrement expiré (`hasAnyStory`) tapait droit sur le
+    /// composer — aucun chemin ne menait plus vers ses stories passées une
+    /// fois toutes expirées. `hasMyStory` (au moins une story ACTIVE) reste
+    /// prioritaire ; à défaut, `hasAnyStory` (au moins une story, active ou
+    /// non) route vers la même liste de gestion plutôt que de forcer la
+    /// création.
+    static func avatarTap(hasMyStory: Bool, hasAnyStory: Bool) -> MyStoryAvatarAction {
+        if hasMyStory { return .manageStories }
+        if hasAnyStory { return .manageStories }
+        return .createStory
     }
 
     /// Le libellé VoiceOver DÉCRIT la destination réelle. Il annonçait
     /// « Changer mon mood » alors que le tap ouvrait le composer : la même
-    /// fonction pure sert désormais au routage et à l'annonce, les deux ne
-    /// peuvent plus diverger.
-    static func avatarAccessibilityLabel(hasMyStory: Bool) -> String {
-        switch avatarTap(hasMyStory: hasMyStory) {
-        case .viewMyStory:  return StoryTrayCopy.viewMyStory
-        case .createStory:  return StoryTrayCopy.createStory
-        }
+    /// règle sert désormais au routage et à l'annonce, les deux ne peuvent
+    /// plus diverger. Trois branches explicites (miroir d'`avatarTap`) plutôt
+    /// qu'un switch sur son résultat à deux cas : les deux premières
+    /// pourront un jour porter un libellé distinct sans réordonner la logique.
+    static func avatarAccessibilityLabel(hasMyStory: Bool, hasAnyStory: Bool) -> String {
+        if hasMyStory { return StoryTrayCopy.manageStories }
+        if hasAnyStory { return StoryTrayCopy.manageStories }
+        return StoryTrayCopy.createStory
     }
 }
 
@@ -101,6 +118,7 @@ nonisolated enum MyStoriesFollowUp {
     case openViewer(postId: String)
     case createStory
     case editStory(StoryItem)
+    case resumeDraft(draftId: String)
 }
 
 // MARK: - Présentation ROOT-LEVEL du composer de création
@@ -141,11 +159,23 @@ struct StoryComposerCover: ViewModifier {
     /// lui rend la main à la fermeture, sans démonter la session d'édition.
     @State private var previewAssets: StoryPreviewAssets?
 
+    /// VM du composer de création. Adopte le brouillon à reprendre quand il y
+    /// en a un : sans cette adoption, le composer s'autosauvegarderait sous un
+    /// id neuf et le brouillon repris resterait intact à côté, en double.
+    private func makeComposerViewModel() -> StoryComposerViewModel {
+        let composer = StoryComposerViewModel()
+        if let draftId = viewModel.pendingDraftId { composer.adoptDraft(id: draftId) }
+        return composer
+    }
+
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $viewModel.showStoryComposer) {
+        content.fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
+            viewModel.pendingDraftId = nil
+        }) {
             StoryComposerView(
+                viewModel: makeComposerViewModel(),
                 initialVisibility: viewModel.lastComposerVisibility,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -154,7 +184,8 @@ struct StoryComposerCover: ViewModifier {
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
                         visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
+                        visibilityUserIds: visibilityUserIds,
+                        draftId: draftId
                     )
                     // La création accepte TOUJOURS : hors-ligne, la story part
                     // en file d'attente au lieu de rester dans le composer.
@@ -264,6 +295,10 @@ extension View {
                 },
                 onEditStory: { story in
                     followUp.wrappedValue.schedule(.editStory(story))
+                    isPresented.wrappedValue = false
+                },
+                onResumeDraft: { draftId in
+                    followUp.wrappedValue.schedule(.resumeDraft(draftId: draftId))
                     isPresented.wrappedValue = false
                 }
             )

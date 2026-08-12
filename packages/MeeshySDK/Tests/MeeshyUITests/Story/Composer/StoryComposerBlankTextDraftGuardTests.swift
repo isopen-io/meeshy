@@ -8,18 +8,18 @@ import XCTest
 /// `startTextCompositionOnBlankCanvas` → `addText(text: "")` → la règle
 /// `slideHasContent` comptait les `textObjects` SANS regarder leur texte →
 /// `composerHasContent` devenait vrai → `mayOverwriteStoredDraft` ouvrait la
-/// porte → l'autosave débouncé (2,5 s) écrasait le SLOT UNIQUE de
-/// `StoryDraftStore` avec une slide vide → `exitTextEditingMode` supprimait
-/// ensuite le texte fantôme, ne laissant même pas la trace de ce qui avait
-/// remplacé le brouillon. Perte silencieuse, sur le geste que S5 promeut
-/// comme affordance PRINCIPALE de la page blanche.
+/// porte → l'autosave débouncé (2,5 s) écrasait le brouillon en magasin avec
+/// une slide vide → `exitTextEditingMode` supprimait ensuite le texte
+/// fantôme, ne laissant même pas la trace de ce qui avait remplacé le
+/// brouillon. Perte silencieuse, sur le geste que S5 promeut comme affordance
+/// PRINCIPALE de la page blanche.
 ///
-/// Le test rejoue la séquence complète contre un vrai `StoryDraftStore` et un
-/// vrai `StoryComposerViewModel`. L'autosave lui-même n'est pas déclenché par
-/// un timer (ce serait du sommeil et de la flakiness) : on évalue le gate
-/// EXACTEMENT comme `autosaveDraftAfterMutation` le fait — `guard
-/// mayOverwriteStoredDraft else { return }` — puis on écrit si, et seulement
-/// si, il autorise l'écriture.
+/// Multi-brouillons (spec 2026-08-01) : chaque brouillon vit sous son id, et
+/// la session du composer autosauvegarde sous LE SIEN — le brouillon d'une
+/// session précédente n'est donc plus un « slot unique » à écraser, mais il
+/// reste protégé par les mêmes gates, évalués ici EXACTEMENT comme
+/// `autosaveDraftAfterMutation` le fait — `guard mayOverwriteStoredDraft else
+/// { return }` — puis on écrit si, et seulement si, il autorise l'écriture.
 @MainActor
 final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
 
@@ -42,13 +42,12 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
     }
 
     /// Reproduit le gate de `autosaveDraftAfterMutation` sur l'état vivant
-    /// simulé : mêmes cinq termes, même fonction pure.
+    /// simulé : mêmes quatre termes, même fonction pure.
     private func autosaveWouldWrite(
         draftResume: DraftResumeState,
         slides: [StorySlide]
     ) -> Bool {
         StoryComposerView.mayOverwriteStoredDraft(
-            isEditingExistingStory: false,
             draftResume: draftResume,
             isAutosaveSuspended: false,
             composerHasContent: StoryComposerView.composerHasContent(
@@ -63,14 +62,16 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
     }
 
     func test_tappingTheBlankCanvasAndLeavingTheEditorEmpty_keepsTheStoredDraftIntact() throws {
-        // 1. Un vrai brouillon dort en magasin.
+        // 1. Un vrai brouillon d'une session précédente dort en magasin,
+        //    sous SON id.
         let store = makeStore()
         var yesterday = StorySlide()
         yesterday.content = "Le brouillon de la veille"
-        store.save(slides: [yesterday], visibility: "FRIENDS")
+        store.save(draftId: "veille", slides: [yesterday], visibility: "FRIENDS")
 
-        // 2. Ouverture du composer : le bandeau de reprise est proposé.
-        let stored = try XCTUnwrap(store.load())
+        // 2. Ouverture du composer : ce brouillon est restaurable, l'offre de
+        //    reprise est posée.
+        let stored = try XCTUnwrap(store.load(draftId: "veille"))
         XCTAssertTrue(
             StoryComposerView.shouldOfferDraftResume(slides: stored.slides, slideImageIds: []),
             "Sans offre, il n'y a rien à protéger — le scénario ne testerait rien."
@@ -95,10 +96,12 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
             """
             Un `StoryTextObject` au texte vide est une COQUILLE posée par \
             `addText()` pour donner une cible à l'éditeur — pas du contenu. \
-            Le compter ouvrait l'autosave sur le slot unique du magasin.
+            Le compter ouvrait l'autosave sur le magasin de brouillons.
             """
         )
-        if wouldWrite { store.save(slides: viewModel.slides, visibility: "PUBLIC") }
+        if wouldWrite {
+            store.save(draftId: viewModel.draftId, slides: viewModel.slides, visibility: "PUBLIC")
+        }
 
         // 6. L'utilisateur referme l'éditeur sans avoir rien saisi : le texte
         //    fantôme est supprimé et la page redevient blanche.
@@ -107,7 +110,7 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
 
         // 7. Le brouillon d'origine est intact, et reproposé à l'ouverture
         //    suivante.
-        let reloaded = try XCTUnwrap(store.load())
+        let reloaded = try XCTUnwrap(store.load(draftId: "veille"))
         XCTAssertEqual(reloaded.slides.count, 1)
         XCTAssertEqual(reloaded.slides.first?.content, "Le brouillon de la veille")
         XCTAssertEqual(reloaded.visibility, "FRIENDS")
@@ -123,9 +126,9 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
     /// Le bandeau de reprise n'est plus modal (S5) : le X du header est visible
     /// et tappable dès l'ouverture, ce qui n'était pas le cas quand un voile
     /// plein écran interceptait les taps. `handleDismiss()` tombait alors dans
-    /// `clearAllDrafts()` — sans alerte, sans annonce — parce que le composer
-    /// vierge ne porte aucun contenu. Le brouillon PROMIS quelques secondes plus
-    /// tôt disparaissait, et la réouverture ne proposait plus rien.
+    /// une purge totale du magasin — sans alerte, sans annonce — parce que le
+    /// composer vierge ne porte aucun contenu. Le brouillon PROMIS quelques
+    /// secondes plus tôt disparaissait, et la réouverture ne proposait plus rien.
     ///
     /// L'invariant écrit dans `DraftResumeState` (« Ranger n'est pas jeter ») ne
     /// vaut que si la SORTIE le respecte aussi : seul un brouillon FANTÔME —
@@ -135,7 +138,7 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
         let defaults = makeDefaults()
         var yesterday = StorySlide()
         yesterday.content = "Le brouillon de la veille"
-        store.save(slides: [yesterday], visibility: "FRIENDS")
+        store.save(draftId: "veille", slides: [yesterday], visibility: "FRIENDS")
 
         // Ouverture, bandeau proposé, puis rangé par un tap sur le canvas.
         var draftResume = DraftResumeState()
@@ -164,7 +167,7 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
 
         XCTAssertFalse(purged, "Un brouillon restaurable n'est pas un fantôme : rien à purger.")
         let reloaded = try XCTUnwrap(
-            store.load(),
+            store.load(draftId: "veille"),
             "Le brouillon de la veille a été détruit par une simple fermeture."
         )
         XCTAssertEqual(reloaded.slides.first?.content, "Le brouillon de la veille")
@@ -184,12 +187,13 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
         let defaults = makeDefaults()
         var phantom = StorySlide()
         phantom.effects.background = "FFB3C1"
-        store.save(slides: [phantom], visibility: "PUBLIC")
+        store.save(draftId: "fantome", slides: [phantom], visibility: "PUBLIC")
 
         let purged = StoryComposerView.clearPhantomDrafts(store: store, defaults: defaults)
 
         XCTAssertTrue(purged, "Le fond seul ne compte pas comme contenu (arbitrage S2).")
-        XCTAssertNil(store.load(), "Un fantôme laissé en place ressusciterait à chaque ouverture.")
+        XCTAssertNil(store.load(draftId: "fantome"),
+                     "Un fantôme laissé en place ressusciterait à chaque ouverture.")
     }
 
     /// Le magasin legacy `UserDefaults` porte la même promesse : `checkForDraft()`
@@ -216,7 +220,7 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
     // MARK: - Gardes de source
 
     /// La règle ne vaut que si la SORTIE l'emprunte. `handleDismiss()` appelait
-    /// `clearAllDrafts()` en direct, sans la moindre connaissance de l'offre de
+    /// une purge totale en direct, sans la moindre connaissance de l'offre de
     /// reprise (`grep draftResume` : zéro occurrence dans le fichier).
     func test_handleDismiss_neverPurgesTheStoreUnconditionally() throws {
         let code = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
@@ -224,10 +228,10 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
             ComposerSourceGuard.functionBody(named: "func handleDismiss()", in: code))
 
         XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "clearAllDrafts()", in: body), 0,
+            ComposerSourceGuard.occurrences(of: ".clear()", in: body), 0,
             """
             Fermer le composer n'est pas un discard explicite : seul « Quitter » \
-            (`cancelAndDismiss`) et « Recommencer » jettent le magasin.
+            (`cancelAndDismiss`) et « Recommencer » jettent un brouillon.
             """
         )
         XCTAssertEqual(

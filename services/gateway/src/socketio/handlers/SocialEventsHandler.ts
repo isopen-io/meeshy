@@ -169,10 +169,26 @@ export class SocialEventsHandler {
     await socket.leave(room);
   }
 
+  /**
+   * L'ÉNUMÉRATEUR d'audience du temps réel : « à qui pousser cet événement ? »,
+   * par dépliage du graphe de l'auteur. Ce n'est pas un test d'admission — pour
+   * juger un utilisateur ARBITRAIRE, voir `filterPostConsumers` /
+   * `canUserConsumePost` (leçon du cycle 28).
+   *
+   * `visibility` et `visibilityUserIds` sont REQUIS. Ils portaient un défaut
+   * `'PUBLIC'` / `[]` que huit méthodes de diffusion propageaient : un appelant
+   * qui les omettait diffusait un post `PRIVATE` à tous les amis de l'auteur, ou
+   * un `EXCEPT` sans sa liste noire, sans que rien ne le signale. Aucun appelant
+   * ne les omettait — c'est justement pourquoi le défaut ne coûte rien à retirer
+   * et tout à garder.
+   *
+   * Une visibilité INCONNUE retombe sur les amis (`default:`), jamais sur une
+   * ouverture plus large : même politique que `filterPostConsumers`.
+   */
   private async getVisibilityFilteredRecipients(
     authorId: string,
-    visibility: string,
-    visibilityUserIds: string[] = []
+    visibility: string | null | undefined,
+    visibilityUserIds: string[]
   ): Promise<string[]> {
     if (visibility === 'COMMUNITY') {
       return getCommunityCoMemberIds(this.prisma, authorId);
@@ -204,7 +220,7 @@ export class SocialEventsHandler {
     // NOT be fanned out (full body) to friends outside the allowed set.
     const recipients = await this.getVisibilityFilteredRecipients(
       authorId,
-      (post.visibility as string) ?? 'PUBLIC',
+      post.visibility as string | undefined,
       (post.visibilityUserIds as string[] | undefined) ?? [],
     );
     logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} recipients=${recipients.length}`);
@@ -216,22 +232,30 @@ export class SocialEventsHandler {
   async broadcastPostUpdated(post: Post, authorId: string): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(
       authorId,
-      (post.visibility as string) ?? 'PUBLIC',
+      post.visibility as string | undefined,
       (post.visibilityUserIds as string[] | undefined) ?? [],
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_UPDATED, { post });
+    // Feed rooms filtrées par visibilité + post room, UN SEUL emit dédoublonné
+    // (miroir broadcastPostLiked). Caveat assumé : si l'édition RESTREINT la
+    // visibilité, les membres déjà joints à la post room reçoivent encore
+    // cette update — même sémantique que comment:added, pas d'éviction de room.
+    this.emitToFeedsAndPostRoom(recipients, authorId, post.id, SERVER_EVENTS.POST_UPDATED, { post });
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
+    // Sur-diffusion sûre (payload id-only) : la post room reçoit aussi la
+    // suppression, sinon un viewer non-ami resté sur le détail/reel d'un post
+    // supprimé ne le sait jamais. `post:join` est gaté par visibilité côté
+    // serveur (PostReactionHandler) et io.to([...]) dédoublonne.
     const friendIds = await this.getFriendIds(authorId);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
+    this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
   }
 
   async broadcastPostLiked(
     data: PostLikedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     // Feed rooms (amis filtrés par visibilité + auteur) ET post room (détail /
@@ -242,8 +266,8 @@ export class SocialEventsHandler {
   async broadcastPostUnliked(
     data: PostUnlikedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data);
@@ -254,7 +278,7 @@ export class SocialEventsHandler {
     const repost = data.repost as Post | undefined;
     const recipients = await this.getVisibilityFilteredRecipients(
       authorId,
-      (repost?.visibility as string) ?? 'PUBLIC',
+      repost?.visibility as string | undefined,
       (repost?.visibilityUserIds as string[] | undefined) ?? [],
     );
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
@@ -352,7 +376,7 @@ export class SocialEventsHandler {
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, { status });
   }
 
-  async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string = 'PUBLIC', visibilityUserIds: string[] = []): Promise<void> {
+  async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string | null | undefined, visibilityUserIds: string[]): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_DELETED, { statusId, authorId });
   }
@@ -407,8 +431,8 @@ export class SocialEventsHandler {
   async broadcastCommentAdded(
     data: CommentAddedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
@@ -418,8 +442,8 @@ export class SocialEventsHandler {
   async broadcastCommentDeleted(
     data: CommentDeletedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
@@ -443,8 +467,8 @@ export class SocialEventsHandler {
   async broadcastPostTranslationUpdated(
     data: PostTranslationUpdatedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     this.emitToFriends(recipients, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
@@ -453,8 +477,8 @@ export class SocialEventsHandler {
   async broadcastCommentTranslationUpdated(
     data: CommentTranslationUpdatedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
@@ -470,8 +494,8 @@ export class SocialEventsHandler {
   async broadcastCommentMediaUpdated(
     data: CommentMediaUpdatedEventData,
     postAuthorId: string,
-    visibility: string = 'PUBLIC',
-    visibilityUserIds: string[] = [],
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);

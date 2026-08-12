@@ -665,7 +665,7 @@ struct CameraPreviewLayer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             context.coordinator.previewLayer?.frame = uiView.bounds
         }
     }
