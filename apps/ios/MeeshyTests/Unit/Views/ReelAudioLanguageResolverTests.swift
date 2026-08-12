@@ -66,6 +66,31 @@ final class ReelAudioLanguageResolverTests: XCTestCase {
         )
         XCTAssertEqual(result, "fr")
     }
+
+    // MARK: - Rank-based resolution (Prisme rule #3, 2026-08-10)
+
+    func test_preferredAudioLanguage_translationOutranksOriginal_returnsHigherRankLanguage() {
+        // Prisme ["en", "fr"], original "fr", "en" TTS available: "en" must
+        // win because it occupies rank 0 — the original must NEVER
+        // short-circuit ahead of the rank loop.
+        let result = ReelAudioLanguageResolver.preferredAudioLanguage(
+            original: "fr",
+            preferredLanguages: ["en", "fr"],
+            availableLanguages: ["en"]
+        )
+        XCTAssertEqual(result, "en")
+    }
+
+    func test_preferredAudioLanguage_originalOutranksTranslation_returnsNil() {
+        // Prisme ["fr", "en"], original "fr": the original wins because it
+        // occupies rank 0, even though an "en" TTS translation also exists.
+        let result = ReelAudioLanguageResolver.preferredAudioLanguage(
+            original: "fr",
+            preferredLanguages: ["fr", "en"],
+            availableLanguages: ["en"]
+        )
+        XCTAssertNil(result)
+    }
 }
 
 /// Covers the P2 audit fix: `finalizeReelSession` used to read the shared video
