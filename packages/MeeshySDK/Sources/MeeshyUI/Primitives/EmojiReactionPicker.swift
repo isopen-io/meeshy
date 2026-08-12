@@ -54,6 +54,17 @@ public struct EmojiCategory: Identifiable, Sendable {
     ]
 }
 
+/// Cadres des tuiles d'une barre scrubbable, indexés par position (le « + »
+/// terminal porte l'index `count`). Publiés dans le coordinateSpace nommé
+/// fourni par l'appelant via `scrubFrameSpace` — le SDK reste agnostique :
+/// il publie des cadres, l'app décide quoi en faire (hit-testing du scrub).
+public struct ScrubTileFramesKey: PreferenceKey {
+    public static let defaultValue: [Int: CGRect] = [:]
+    public static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 public struct EmojiReactionPicker: View {
     public var quickEmojis: [String]
     public enum Style { case dark, light }
@@ -69,6 +80,12 @@ public struct EmojiReactionPicker: View {
     public var onDismiss: (() -> Void)?
     /// When nil, the "+" expand button is hidden.
     public var onExpandFullPicker: (() -> Void)?
+    /// Index de la tuile survolée par le scrub (piloté par l'app) — ×1.35 rebond.
+    public var highlightedIndex: Int?
+    /// Nom du coordinateSpace dans lequel publier les cadres des tuiles.
+    public var scrubFrameSpace: String?
+    /// Reçoit les cadres publiés (index → cadre, « + » inclus).
+    public var onTileFrames: (([Int: CGRect]) -> Void)?
 
     @State private var reactedEmoji: String?
     /// Pilote l'entree en vague sinusoidale des tuiles : `false` au montage,
@@ -83,12 +100,18 @@ public struct EmojiReactionPicker: View {
         scrollable: Bool = false,
         onReact: ((String) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
-        onExpandFullPicker: (() -> Void)? = nil
+        onExpandFullPicker: (() -> Void)? = nil,
+        highlightedIndex: Int? = nil,
+        scrubFrameSpace: String? = nil,
+        onTileFrames: (([Int: CGRect]) -> Void)? = nil
     ) {
         self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
         self.scrollable = scrollable
         self.onReact = onReact; self.onDismiss = onDismiss
         self.onExpandFullPicker = onExpandFullPicker
+        self.highlightedIndex = highlightedIndex
+        self.scrubFrameSpace = scrubFrameSpace
+        self.onTileFrames = onTileFrames
     }
 
     public var body: some View {
@@ -106,6 +129,9 @@ public struct EmojiReactionPicker: View {
             guard !hasEntered else { return }
             hasEntered = true
         }
+        .onPreferenceChange(ScrubTileFramesKey.self) { frames in
+            onTileFrames?(frames)
+        }
     }
 
     private var emojiList: some View {
@@ -116,8 +142,10 @@ public struct EmojiReactionPicker: View {
                 } label: {
                     Text(emoji)
                         .font(.system(size: (reactedEmoji == emoji ? 28 : 22) * scale))
-                        .scaleEffect(reactedEmoji == emoji ? 1.3 : 1.0)
+                        .scaleEffect(tileScale(for: index, reactedTo: emoji))
                         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
+                        .background(tileFrameReader(index: index))
                 }
                 // Entree en vague sinusoidale : la tuile `index` apparait
                 // apres celles a sa gauche, en suivant une courbe d'ease
@@ -142,6 +170,9 @@ public struct EmojiReactionPicker: View {
                         .font(.system(size: 14 * scale, weight: .bold))
                         .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
                 }
+                .scaleEffect(highlightedIndex == quickEmojis.count ? 1.35 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
+                .background(tileFrameReader(index: quickEmojis.count))
             }
             // La tuile "+" cloture la vague — son index est place juste
             // apres le dernier emoji pour qu'elle arrive en derniere.
@@ -198,6 +229,23 @@ public struct EmojiReactionPicker: View {
         }
         onReact?(emoji)
     }
+
+    private func tileScale(for index: Int, reactedTo emoji: String) -> CGFloat {
+        if highlightedIndex == index { return 1.35 }
+        return reactedEmoji == emoji ? 1.3 : 1.0
+    }
+
+    @ViewBuilder
+    private func tileFrameReader(index: Int) -> some View {
+        if let scrubFrameSpace {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ScrubTileFramesKey.self,
+                    value: [index: proxy.frame(in: .named(scrubFrameSpace))]
+                )
+            }
+        }
+    }
 }
 
 // MARK: - Quick-reaction capsule chrome (Liquid Glass on iOS 26)
@@ -240,6 +288,17 @@ private struct QuickReactionStripChrome: ViewModifier {
                 .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
         }
+    }
+}
+
+public extension View {
+    /// Applique le chrome flottant de la barre de quick-réaction (la capsule
+    /// Liquid Glass sur iOS 26, voile de matière avant) — pour qu'une autre bande
+    /// horizontale compacte (p. ex. la barre rapide de langues de la story) ait
+    /// EXACTEMENT la même pilule que la barre de réaction. Un seul point de vérité
+    /// pour ce chrome, partagé au lieu d'être dupliqué.
+    func quickReactionStripChrome(style: EmojiReactionPicker.Style) -> some View {
+        modifier(QuickReactionStripChrome(style: style))
     }
 }
 
@@ -452,6 +511,94 @@ public struct EmojiFullPickerSheet: View {
     private func dismiss() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight(for: containerHeight) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
+    }
+}
+
+/// Picker de réactions CATÉGORISÉ présenté en `.sheet` — titre « Reactions »,
+/// onglets `EmojiCategory` (Reactions / Visages / Gestes / Cœurs / Animaux /
+/// Objets) + grille. VOLONTAIREMENT sans bouton « Close » ni champ de recherche
+/// (contrairement au picker clavier standard) et chrome Liquid Glass
+/// (`adaptiveGlass`). Réutilise le tableau `EmojiCategory` (SSOT des catégories),
+/// partagé avec `EmojiFullPickerSheet` / `EmojiKeyboardPanel`. Pensé pour un
+/// `.sheet(item:)` avec `presentationDetents` fournis par l'appelant.
+public struct CategorizedEmojiPickerSheet: View {
+    public enum Style { case dark, light }
+    public var style: Style
+    public var onReact: ((String) -> Void)?
+
+    @State private var selectedCategory = 0
+    @State private var reactedEmoji: String?
+
+    public init(style: Style = .dark, onReact: ((String) -> Void)? = nil) {
+        self.style = style; self.onReact = onReact
+    }
+
+    public var body: some View {
+        VStack(spacing: 10) {
+            // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
+            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(style == .dark ? .white.opacity(0.85) : .primary)
+                .padding(.top, 16)
+                .padding(.bottom, 2)
+            categoryTabs
+            emojiGrid
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Chrome Liquid Glass (iOS 26) / material avant — la feuille translucide
+        // (`adaptiveSheetGlassBackground`) laisse le verre échantillonner le fond.
+        .adaptiveGlass(in: Rectangle())
+        .adaptiveSheetGlassBackground()
+    }
+
+    private var categoryTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Text(category.icon).font(.system(size: 20))
+                            Text(category.name)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(selectedCategory == index
+                                    ? (style == .dark ? .white : MeeshyColors.brandPrimary)
+                                    : (style == .dark ? .white.opacity(0.5) : .gray))
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(selectedCategory == index
+                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                    : Color.clear)
+                        )
+                    }
+                }
+            }.padding(.horizontal, 12)
+        }.padding(.bottom, 4)
+    }
+
+    private var emojiGrid: some View {
+        let category = EmojiCategory.all[selectedCategory]
+        return ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
+                ForEach(category.emojis, id: \.self) { emoji in
+                    Button { selectEmoji(emoji) } label: {
+                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                            .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
+                            .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
+                    }
+                }
+            }.padding(.horizontal, 10).padding(.vertical, 8)
+        }
+    }
+
+    private func selectEmoji(_ emoji: String) {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { reactedEmoji = nil } }
+        onReact?(emoji)
     }
 }
 

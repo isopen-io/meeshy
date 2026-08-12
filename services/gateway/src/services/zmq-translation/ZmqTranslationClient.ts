@@ -64,6 +64,12 @@ const ZMQ_MAX_RETRIES = _zmqTolerance.maxRetries;
 // worker pool et saturerait le CPU → un seul tir, deadman long, pas de retry.
 const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = _zmqTolerance.voiceTranslateDeadmanMs;
 
+// Rétention des taskId de transcription déjà livrés (anti-doublon tardif).
+// Quelques minutes suffisent : au-delà, plus aucune réponse n'est attendue.
+const SETTLED_TRANSCRIPTION_TTL_MS = 10 * 60_000;
+// Borne dure : la map absorbe des doublons, elle n'archive pas.
+const SETTLED_TRANSCRIPTION_MAX = 1_000;
+
 // Circuit breaker : ouvre après N erreurs consécutives.
 const CB_FAILURE_THRESHOLD = _zmqTolerance.cbFailureThreshold;
 // Reste ouvert ce délai avant auto-reset.
@@ -86,6 +92,21 @@ export class ZmqTranslationClient extends EventEmitter {
 
   // Retry counts per taskId (cleaned up on completion or final timeout)
   private retryCount: Map<string, number> = new Map();
+
+  // Transcriptions déjà livrées, par taskId → date de livraison.
+  //
+  // Incident prod 2026-08-04 : Whisper a mis 42 s sur une note vocale de 19 s
+  // alors que le timeout par tentative était de 30 s. Le gateway a re-poussé le
+  // MÊME taskId ; la première passe a réussi et diffusé `transcription:ready`,
+  // puis la seconde a échoué sur le fichier temporaire que la première venait
+  // de nettoyer et a diffusé `audio:transcription-failed` 140 ms plus tard —
+  // effaçant une transcription parfaitement valide côté client.
+  //
+  // Garde volontairement limitée à la transcription : côté audio, une erreur
+  // publiée APRÈS un résultat vide est au contraire le signal légitime que
+  // toutes les langues ont échoué (cf. `_report_total_translation_failure`
+  // côté translator) — l'y appliquer rétablirait l'échec silencieux.
+  private settledTranscriptions: Map<string, number> = new Map();
 
   // Circuit breaker state
   private cbConsecutiveErrors: number = 0;
@@ -230,6 +251,43 @@ export class ZmqTranslationClient extends EventEmitter {
   }
 
   /**
+   * Mémorise qu'une transcription a été livrée pour ce taskId.
+   *
+   * Purge à l'écriture (par âge puis par taille) : la map ne vit que pour
+   * absorber les doublons proches d'une même requête, jamais pour l'historique.
+   */
+  private _markTranscriptionSettled(taskId: string): void {
+    if (!taskId) return;
+
+    const now = Date.now();
+    for (const [id, settledAt] of this.settledTranscriptions) {
+      if (now - settledAt > SETTLED_TRANSCRIPTION_TTL_MS) {
+        this.settledTranscriptions.delete(id);
+      }
+    }
+
+    this.settledTranscriptions.set(taskId, now);
+
+    while (this.settledTranscriptions.size > SETTLED_TRANSCRIPTION_MAX) {
+      const oldest = this.settledTranscriptions.keys().next().value;
+      if (oldest === undefined) break;
+      this.settledTranscriptions.delete(oldest);
+    }
+  }
+
+  /** Une transcription a-t-elle déjà été livrée pour ce taskId ? */
+  private _isTranscriptionSettled(taskId: string): boolean {
+    if (!taskId) return false;
+    const settledAt = this.settledTranscriptions.get(taskId);
+    if (settledAt === undefined) return false;
+    if (Date.now() - settledAt > SETTLED_TRANSCRIPTION_TTL_MS) {
+      this.settledTranscriptions.delete(taskId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Configure le forwarding des événements du handler vers le client
    */
   private setupEventForwarding(): void {
@@ -320,12 +378,19 @@ export class ZmqTranslationClient extends EventEmitter {
     this.messageHandler.on('transcriptionCompleted', (event) => {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
+      this._markTranscriptionSettled(event.taskId);
       this.emit('transcriptionCompleted', event);
     });
 
     this.messageHandler.on('transcriptionError', (event) => {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
+      if (this._isTranscriptionSettled(event.taskId)) {
+        logger.warn(
+          `⚠️ transcription_error ignoré pour taskId=${event.taskId} : la transcription a déjà été livrée`
+        );
+        return;
+      }
       this.emit('transcriptionError', event);
     });
 
@@ -498,6 +563,17 @@ export class ZmqTranslationClient extends EventEmitter {
 
   /**
    * Envoie une requête de processing audio
+   *
+   * Pipeline long (Whisper + NLLB + Chatterbox, plusieurs minutes) : aucun
+   * retry n'est armé, comme pour `sendTranscriptionOnlyRequest`.
+   *
+   * Prod incident 2026-08-06 : le timeout par défaut (30 s, retry activé)
+   * était systématiquement dépassé par le pipeline complet. Le gateway
+   * re-poussait le MÊME taskId toutes les 30 s (jusqu'à 5 tentatives),
+   * dupliquant le job dans le worker pool ML — la contention GPU qui en
+   * résultait faisait à son tour dépasser le watchdog de synthèse TTS
+   * (180 s), aboutissant à un échec total et répété du même message
+   * ('translation_failed') toutes les ~3 minutes, indéfiniment.
    */
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
     if (this._cbIsOpen()) {
@@ -513,7 +589,8 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendAudioProcessRequest(request, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      { retryEnabled: false, timeoutMs: ZMQ_VOICE_TRANSLATE_DEADMAN_MS }
     );
     return taskId;
   }
@@ -534,7 +611,13 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendTranscriptionOnlyRequest(request, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      // Whisper dépasse couramment les 30 s (42 s pour une note de 19 s en
+      // prod). Re-pousser le même taskId dupliquait le job : la seconde passe
+      // mourait sur le fichier temporaire nettoyé par la première et son erreur
+      // écrasait une transcription déjà livrée. Même remède que les pipelines
+      // voix longs — un seul tir, deadman long, pas de retry.
+      { retryEnabled: false, timeoutMs: ZMQ_VOICE_TRANSLATE_DEADMAN_MS }
     );
     return taskId;
   }

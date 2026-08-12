@@ -5,10 +5,55 @@
       "comment" : "Push body fallback for an audio-only message when the gateway body is empty (E2EE caption).",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 رسالة صوتية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Sprachnachricht"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "🎵 Message vocal"
+          }
+        }
+      ,
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Mensaje de voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Message vocal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Messaggio vocale"
+          }
+        }
+      ,
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Mensagem de voz"
+          }
+        }
+      ,
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 语音消息"
           }
         }
       }
@@ -44,6 +89,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Message chiffré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio crittografato"
           }
         },
         "pt" : {
@@ -93,6 +144,12 @@
             "value" : "Message masqué"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio nascosto"
+          }
+        },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
@@ -138,6 +195,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Message éphémère"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio visualizzabile una volta"
           }
         },
         "pt" : {

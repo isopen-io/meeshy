@@ -1,167 +1,43 @@
 /**
- * Utilities pour la gestion des langues
+ * Utilities pour la gestion des langues.
+ *
+ * Adaptateurs fins au-dessus de la SSOT partagée `packages/shared/utils/languages.ts`
+ * (`getLanguageInfo`, `isSupportedLanguage`, `getSupportedLanguageCodes`). Les cartes
+ * locales `LANGUAGE_NAMES` / `LANGUAGE_FLAGS` — qui avaient divergé de la SSOT
+ * (l'anglais rendait 🇺🇸 au lieu du 🇬🇧 canonique, et 60+ langues supportées, dont
+ * les codes africains ISO 639-3 `bas`/`ewo`/`dua`, retombaient sur le globe) — ont
+ * été supprimées. Même convergence que `components/v2/flags.ts`.
+ *
+ * Les signatures exportées sont préservées : `getLanguageDisplayName` rend le nom
+ * natif (`Français`, `中文`) et `getLanguageFlag` le drapeau canonique, avec les
+ * fallbacks historiques (français par défaut sur entrée vide, globe sur langue
+ * inconnue). La normalisation `.toLowerCase().trim()` est assurée par la SSOT.
  */
-
-// Mapping des codes de langue vers les noms d'affichage
-const LANGUAGE_NAMES: Record<string, string> = {
-  'fr': 'Français',
-  'en': 'English',
-  'es': 'Español',
-  'de': 'Deutsch',
-  'it': 'Italiano',
-  'pt': 'Português',
-  'ru': 'Русский',
-  'zh': '中文',
-  'ja': '日本語',
-  'ko': '한국어',
-  'ar': 'العربية',
-  'hi': 'हिन्दी',
-  'tr': 'Türkçe',
-  'pl': 'Polski',
-  'nl': 'Nederlands',
-  'sv': 'Svenska',
-  'da': 'Dansk',
-  'no': 'Norsk',
-  'fi': 'Suomi',
-  'cs': 'Čeština',
-  'sk': 'Slovenčina',
-  'hu': 'Magyar',
-  'ro': 'Română',
-  'bg': 'Български',
-  'hr': 'Hrvatski',
-  'sr': 'Српски',
-  'sl': 'Slovenščina',
-  'et': 'Eesti',
-  'lv': 'Latviešu',
-  'lt': 'Lietuvių',
-  'uk': 'Українська',
-  'he': 'עברית',
-  'th': 'ไทย',
-  'vi': 'Tiếng Việt',
-  'id': 'Bahasa Indonesia',
-  'ms': 'Bahasa Melayu',
-  'tl': 'Filipino',
-  'sw': 'Kiswahili',
-  'am': 'አማርኛ',
-  'bn': 'বাংলা',
-  'ur': 'اردو',
-  'fa': 'فارسی',
-  'ta': 'தமிழ்',
-  'te': 'తెలుగు',
-  'ml': 'മലയാളം',
-  'kn': 'ಕನ್ನಡ',
-  'gu': 'ગુજરાતી',
-  'pa': 'ਪੰਜਾਬੀ',
-  'mr': 'मराठी',
-  'ne': 'नेपाली',
-  'si': 'සිංහල',
-  'my': 'မြန်မာ',
-  'km': 'ខ្មែរ',
-  'lo': 'ລາວ',
-  'ka': 'ქართული',
-  'hy': 'Հայերեն',
-  'az': 'Azərbaycan',
-  'kk': 'Қазақ',
-  'ky': 'Кыргыз',
-  'uz': 'Oʻzbek',
-  'tg': 'Тоҷикӣ',
-  'mn': 'Монгол'
-};
-
-// Mapping des codes de langue vers les drapeaux emoji
-const LANGUAGE_FLAGS: Record<string, string> = {
-  'fr': '🇫🇷',
-  'en': '🇺🇸',
-  'es': '🇪🇸',
-  'de': '🇩🇪',
-  'it': '🇮🇹',
-  'pt': '🇵🇹',
-  'ru': '🇷🇺',
-  'zh': '🇨🇳',
-  'ja': '🇯🇵',
-  'ko': '🇰🇷',
-  'ar': '🇸🇦',
-  'hi': '🇮🇳',
-  'tr': '🇹🇷',
-  'pl': '🇵🇱',
-  'nl': '🇳🇱',
-  'sv': '🇸🇪',
-  'da': '🇩🇰',
-  'no': '🇳🇴',
-  'fi': '🇫🇮',
-  'cs': '🇨🇿',
-  'sk': '🇸🇰',
-  'hu': '🇭🇺',
-  'ro': '🇷🇴',
-  'bg': '🇧🇬',
-  'hr': '🇭🇷',
-  'sr': '🇷🇸',
-  'sl': '🇸🇮',
-  'et': '🇪🇪',
-  'lv': '🇱🇻',
-  'lt': '🇱🇹',
-  'uk': '🇺🇦',
-  'he': '🇮🇱',
-  'th': '🇹🇭',
-  'vi': '🇻🇳',
-  'id': '🇮🇩',
-  'ms': '🇲🇾',
-  'tl': '🇵🇭',
-  'sw': '🇰🇪',
-  'am': '🇪🇹',
-  'bn': '🇧🇩',
-  'ur': '🇵🇰',
-  'fa': '🇮🇷',
-  'ta': '🇮🇳',
-  'te': '🇮🇳',
-  'ml': '🇮🇳',
-  'kn': '🇮🇳',
-  'gu': '🇮🇳',
-  'pa': '🇮🇳',
-  'mr': '🇮🇳',
-  'ne': '🇳🇵',
-  'si': '🇱🇰',
-  'my': '🇲🇲',
-  'km': '🇰🇭',
-  'lo': '🇱🇦',
-  'ka': '🇬🇪',
-  'hy': '🇦🇲',
-  'az': '🇦🇿',
-  'kk': '🇰🇿',
-  'ky': '🇰🇬',
-  'uz': '🇺🇿',
-  'tg': '🇹🇯',
-  'mn': '🇲🇳'
-};
+import {
+  getLanguageInfo as getSharedLanguageInfo,
+  getSupportedLanguageCodes,
+  isSupportedLanguage as isSharedSupportedLanguage,
+} from '@meeshy/shared/utils/languages';
 
 /**
- * Obtient le nom d'affichage d'une langue à partir de son code.
- *
- * Normalise `.toLowerCase().trim()` avant lookup — parité stricte avec la SSOT
- * `getLanguageInfo` de `packages/shared/utils/languages.ts`. Les préférences
- * in-app sont persistées verbatim (un `systemLanguage: 'EN'` stocké est un cas
- * réel, cf. `conversation-helpers.ts`), donc sans normalisation un code
- * non-lowercase retombait à tort sur le fallback code brut.
+ * Obtient le nom d'affichage (natif) d'une langue à partir de son code.
  */
 export function getLanguageDisplayName(languageCode: string | null | undefined): string {
   if (!languageCode) return 'Français'; // Valeur par défaut
-  const code = languageCode.toLowerCase().trim();
-  return LANGUAGE_NAMES[code] || code.toUpperCase();
+  const info = getSharedLanguageInfo(languageCode);
+  return info.nativeName ?? info.name;
 }
 
 /**
- * Obtient le drapeau emoji d'une langue à partir de son code.
- *
- * Même normalisation `.toLowerCase().trim()` que {@link getLanguageDisplayName}
- * et que la SSOT shared : un `'EN'` stocké doit rendre 🇺🇸, pas le globe 🌐.
+ * Obtient le drapeau emoji canonique d'une langue à partir de son code.
  */
 export function getLanguageFlag(languageCode: string | null | undefined): string {
   if (!languageCode) return '🇫🇷'; // Drapeau français par défaut
-  return LANGUAGE_FLAGS[languageCode.toLowerCase().trim()] || '🌐';
+  return getSharedLanguageInfo(languageCode).flag;
 }
 
 /**
- * Obtient les informations complètes d'une langue
+ * Obtient les informations d'affichage complètes d'une langue
  */
 export function getLanguageInfo(languageCode: string) {
   return {
@@ -173,18 +49,17 @@ export function getLanguageInfo(languageCode: string) {
 
 /**
  * Vérifie si un code de langue est supporté
- * @deprecated Use SUPPORTED_LANGUAGES from @shared/types or language-detection.ts instead
+ * @deprecated Use isSupportedLanguage / SUPPORTED_LANGUAGES from @meeshy/shared instead
  */
 export function isSupportedLanguage(languageCode: string): boolean {
-  if (!languageCode) return false;
-  return languageCode.toLowerCase().trim() in LANGUAGE_NAMES;
+  return isSharedSupportedLanguage(languageCode);
 }
 
 /**
  * Obtient la liste de toutes les langues supportées
  */
 export function getAllSupportedLanguages() {
-  return Object.keys(LANGUAGE_NAMES).map(code => getLanguageInfo(code));
+  return getSupportedLanguageCodes().map(code => getLanguageInfo(code));
 }
 
 /**
@@ -192,7 +67,7 @@ export function getAllSupportedLanguages() {
  */
 export function searchLanguages(query: string) {
   const lowerQuery = query.toLowerCase();
-  return getAllSupportedLanguages().filter(lang => 
+  return getAllSupportedLanguages().filter(lang =>
     lang.code.toLowerCase().includes(lowerQuery) ||
     lang.name.toLowerCase().includes(lowerQuery)
   );

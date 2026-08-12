@@ -13,6 +13,7 @@ const t = (key: string) =>
   ({
     'status.online': 'En ligne',
     'status.away': 'Absent',
+    'status.idle': 'Inactif',
     'status.offline': 'Hors ligne',
   }[key] ?? key);
 
@@ -64,13 +65,13 @@ describe('UserPresenceBadge', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    // Au-dela de 30min (offline) : le badge disparait entierement.
+    // Au-dela de 5min (offline) : le badge disparait entierement.
     expect(screen.queryByText('Hors ligne')).not.toBeInTheDocument();
     expect(screen.queryByText('En ligne')).not.toBeInTheDocument();
   });
 
-  it('recomputes relative status decay on the store tick', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+  it('recomputes relative status decay on the store tick (away à 2min)', () => {
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
       useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() })]);
     });
@@ -82,12 +83,23 @@ describe('UserPresenceBadge', () => {
       const state = useUserStore.getState();
       const user = state.usersMap.get('user-1');
       if (user) {
-        (user as { lastActiveAt?: Date }).lastActiveAt = sixMinutesAgo;
+        (user as { lastActiveAt?: Date }).lastActiveAt = twoMinutesAgo;
       }
       state.triggerStatusTick();
     });
 
     expect(screen.getByText('Absent')).toBeInTheDocument();
+  });
+
+  it('shows the grey idle badge (« Inactif ») between 3 and 5 minutes', () => {
+    const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000);
+    act(() => {
+      useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: false, lastActiveAt: fourMinutesAgo })]);
+    });
+
+    render(<UserPresenceBadge userId="user-1" t={t} />);
+
+    expect(screen.getByText('Inactif')).toBeInTheDocument();
   });
 
   it('falls back to the provided user when the store does not know the user yet', () => {

@@ -203,7 +203,14 @@ struct FloatingCallPillView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(pillStatus.isConnected ? formattedDuration : pillStatus.label)
+        // When connected the line otherwise reads to VoiceOver as a bare
+        // "02:34" with no hint it is the call duration. Name what the readout
+        // measures via the label and expose the running time as the value;
+        // pre-connection states keep their spoken status ("Sonnerie…").
+        .accessibilityLabel(pillStatus.isConnected
+            ? String(localized: "a11y.call.pill.duration", defaultValue: "Dur\u{00E9}e d'appel", bundle: .main)
+            : pillStatus.label)
+        .accessibilityValue(pillStatus.isConnected ? formattedDuration : "")
         .accessibilityAddTraits(.updatesFrequently)
     }
 
@@ -250,6 +257,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isMuted
             ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
             : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+        .accessibilityHint(String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main))
         .callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
@@ -271,6 +279,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isSpeaker
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+        .accessibilityHint(String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main))
         .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
@@ -360,6 +369,7 @@ struct FloatingCallPillView: View {
             // longer active, matching CallBubbleView's own display guard.
             guard callManager.callState.isActive else { return }
             callManager.displayMode = .bubble
+            callManager.bubbleSizeTier = .circle
             pillDragOffset = 0
         }
     }
@@ -376,9 +386,6 @@ struct FloatingCallPillView: View {
     // MARK: - Formatting
 
     private var formattedDuration: String {
-        let totalSeconds = Int(callManager.callDuration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        callManager.formattedDuration
     }
 }

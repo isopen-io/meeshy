@@ -118,6 +118,12 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // État pour afficher/masquer le bouton "Scroll to bottom"
   const [showScrollButton, setShowScrollButton] = useState(false);
 
+  // Messages reçus pendant que l'utilisateur consulte l'historique (aucun
+  // auto-scroll déclenché) — affichés en pastille sur le bouton de retour au
+  // récent. Sans cet indicateur, un message arrivant en pleine lecture
+  // d'historique était totalement silencieux.
+  const [unseenWhileAwayCount, setUnseenWhileAwayCount] = useState(0);
+
   // Fonction pour scroller vers le bas
   const scrollToBottom = useCallback((smooth = true) => {
     const container = scrollAreaRef.current;
@@ -165,7 +171,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       shouldShowButton = distanceFromBottom > 200; // Afficher si plus de 200px du bas
     }
     setShowScrollButton(shouldShowButton);
-    
+    if (!shouldShowButton) setUnseenWhileAwayCount(0);
+
     // Vérifier si l'utilisateur est proche du bas (auto-scroll)
     const isNearBottom = distanceFromBottom < 100;
     isAutoScrollingRef.current = isNearBottom;
@@ -234,9 +241,13 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
       // Mettre à jour l'affichage du bouton selon la position
       if (scrollDirection === 'down') {
-        setShowScrollButton(scrollTop > 200);
+        const show = scrollTop > 200;
+        setShowScrollButton(show);
+        if (!show) setUnseenWhileAwayCount(0);
       } else {
-        setShowScrollButton(distanceFromBottom > 200);
+        const show = distanceFromBottom > 200;
+        setShowScrollButton(show);
+        if (!show) setUnseenWhileAwayCount(0);
       }
     }
   }, [messages.length, scrollContainerRef, scrollDirection]);
@@ -245,6 +256,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   useEffect(() => {
     isFirstLoadRef.current = true;
     previousMessageCountRef.current = 0;
+    setUnseenWhileAwayCount(0);
   }, [conversationId]);
 
   // Premier chargement - toujours scroller au dernier message
@@ -355,10 +367,13 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           }
         } else {
           // Pour les messages reçus, scroller seulement si l'utilisateur est proche du bas/haut
+          const arrivedCount = Math.max(1, currentCount - previousCount);
           if (scrollDirection === 'down') {
             const container = scrollAreaRef.current;
             if (container && container.scrollTop < 300) {
               scrollToTop(true);
+            } else {
+              setUnseenWhileAwayCount((c) => c + arrivedCount);
             }
           } else {
             const container = scrollAreaRef.current;
@@ -368,6 +383,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               const userIsAtBottom = distanceFromBottom < 150;
               if (userIsAtBottom) {
                 scrollToBottom(true);
+              } else {
+                setUnseenWhileAwayCount((c) => c + arrivedCount);
               }
             }
           }
@@ -382,6 +399,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
   // Choisir l'action du bouton selon la direction
   const handleScrollButtonClick = useCallback(() => {
+    setUnseenWhileAwayCount(0);
     if (scrollButtonDirection === 'up') {
       // BubbleStream: messages récents EN HAUT → remonter vers le haut
       scrollToTop(true);
@@ -521,13 +539,25 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               "transition-[color,background-color,opacity] duration-300 ease-in-out",
               "animate-in slide-in-from-bottom-5"
             )}
-            aria-label={scrollButtonDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'}
+            aria-label={
+              unseenWhileAwayCount > 0
+                ? `${unseenWhileAwayCount} ${t('newMessagesWhileAway')}`
+                : scrollButtonDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'
+            }
             title={scrollButtonDirection === 'up' ? 'Remonter vers les messages récents' : 'Aller au bas de la conversation'}
           >
             {scrollButtonDirection === 'up' ? (
               <ArrowUp className="h-3 w-3 text-gray-900 dark:text-gray-100" />
             ) : (
               <ArrowDown className="h-3 w-3 text-gray-900 dark:text-gray-100" />
+            )}
+            {unseenWhileAwayCount > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold leading-4 text-center shadow"
+              >
+                {unseenWhileAwayCount > 99 ? '99+' : unseenWhileAwayCount}
+              </span>
             )}
           </Button>
         ) : null;

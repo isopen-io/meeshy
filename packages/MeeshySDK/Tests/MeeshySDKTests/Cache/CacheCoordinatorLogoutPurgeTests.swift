@@ -85,3 +85,22 @@ final class CacheCoordinatorLogoutPurgeTests: XCTestCase {
         }
     }
 }
+
+/// cache-07 — le mapping username→displayName du compte sortant ne doit pas
+/// survivre au reset (résidu cross-compte en RAM, zéro appelant de clear()).
+extension CacheCoordinatorLogoutPurgeTests {
+
+    func test_reset_userDisplayNameCachePopulated_clearsAllMappings() async throws {
+        let db = try makeDB()
+        let c = makeCoordinator(db: db)
+        UserDisplayNameCache.shared.clear()
+        UserDisplayNameCache.shared.track(username: "alice", displayName: "Alice Wonderland")
+
+        await c.reset()
+
+        XCTAssertNil(
+            UserDisplayNameCache.shared.displayName(for: "alice"),
+            "UserDisplayNameCache doit être vidé par reset() (logout/switch) — résidu cross-compte sinon"
+        )
+    }
+}

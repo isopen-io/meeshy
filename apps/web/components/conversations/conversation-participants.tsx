@@ -14,6 +14,7 @@ type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkI
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
+import { getUserDisplayName } from '@/utils/user-display-name';
 
 interface ConversationParticipantsProps {
   conversationId: string;
@@ -55,7 +56,7 @@ export function ConversationParticipants({
   const getUserById = useUserStore(state => state.getUserById);
   const _tick = useUserStatusTick();
 
-  // Listes actifs (vert : online + recent) / inactifs via getUserStatus (temps reel)
+  // Listes actifs (dot rendu : online + away + idle, < 5min) / hors ligne via getUserStatus (temps reel)
   const onlineAll = participants.filter(p => {
     const storeUser = p.userId ? getUserById(p.userId) : undefined;
     return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
@@ -108,7 +109,7 @@ export function ConversationParticipants({
         conversationId,
         type: 'user' as const,
         userId: currentUser.id,
-        displayName: currentUser.displayName || `${currentUser.firstName} ${currentUser.lastName}`,
+        displayName: getUserDisplayName(currentUser),
         avatar: currentUser.avatar,
         role: MemberRole.MEMBER as string,
         language: currentUser.systemLanguage || 'fr',

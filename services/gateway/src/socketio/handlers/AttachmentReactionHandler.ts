@@ -12,6 +12,7 @@ import type { SocketUser } from '../utils/socket-helpers';
 import { AttachmentReactionService } from '../../services/AttachmentReactionService';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
@@ -205,27 +206,16 @@ export class AttachmentReactionHandler {
     data: { attachmentId: string; messageId: string; emoji: string },
     payload: Record<string, unknown>,
   ): Promise<void> {
-    if (!this.deliveryQueue) return;
-    try {
-      const participants = await this.deps.prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true },
-      });
-      const dedupKey = `${data.attachmentId}:${actorParticipantId ?? 'unknown'}:${data.emoji}`;
-      for (const p of participants) {
-        const queueKey = p.userId ?? p.id;
-        if (p.id === actorParticipantId || this.deps.connectedUsers.has(queueKey)) continue;
-        this.deliveryQueue.enqueue(queueKey, {
-          messageId: data.messageId,
-          conversationId,
-          payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-          dedupKey,
-        }).catch((err) => logger.warn('Failed to enqueue offline attachment reaction event', { userId: queueKey, eventType, error: err }));
+    await enqueueForOfflineParticipants(
+      { deliveryQueue: this.deliveryQueue, prisma: this.deps.prisma, connectedUsers: this.deps.connectedUsers },
+      {
+        conversationId,
+        actorParticipantId,
+        eventType,
+        messageId: data.messageId,
+        payload,
+        dedupKey: `${data.attachmentId}:${actorParticipantId ?? 'unknown'}:${data.emoji}`,
       }
-    } catch (err) {
-      logger.warn('Failed to fetch participants for offline attachment reaction enqueue', { conversationId, eventType, error: err });
-    }
+    );
   }
 }

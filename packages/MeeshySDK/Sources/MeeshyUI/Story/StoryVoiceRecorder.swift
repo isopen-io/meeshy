@@ -12,6 +12,12 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     /// Hands back the recorded file together with the language the user tagged
     /// it with, so the downstream audio editor (transcription) opens pre-set.
     public var onRecordComplete: (URL, String) -> Void
+    /// Portes vers les autres sources d'audio (import Fichiers, bibliothèque de
+    /// sons), rendues en chips sous le header. `nil` = pas de chip — le
+    /// recorder reste un pur enregistreur pour les call sites qui n'offrent
+    /// pas ces flux. Closures opaques : le composant ignore ce qu'elles ouvrent.
+    var onImportAudioFile: (() -> Void)?
+    var onOpenSoundLibrary: (() -> Void)?
 
     // `@StateObject` (et non `@ObservedObject`) : le call site (sheet +Media)
     // crée le recorder inline via l'init de convenance — en observed, chaque
@@ -26,17 +32,18 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     /// `nil` = no cap (the previous hardcoded 1-minute limit is removed). A
     /// caller may still opt into a ceiling.
-    private let maxDuration: TimeInterval?
 
     @Environment(\.colorScheme) private var colorScheme
 
     public init(recorder: @autoclosure @escaping () -> Recorder,
                 preferredLanguage: String = "fr",
-                maxDuration: TimeInterval? = nil,
+                onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self._recorder = StateObject(wrappedValue: recorder())
         self._selectedLanguage = State(initialValue: preferredLanguage)
-        self.maxDuration = maxDuration
+        self.onImportAudioFile = onImportAudioFile
+        self.onOpenSoundLibrary = onOpenSoundLibrary
         self.onRecordComplete = onRecordComplete
     }
 
@@ -72,6 +79,14 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 Spacer()
             }
             .padding(.bottom, 12)
+
+            if !recorder.isRecording {
+                StoryVoiceRecorderSourceChips(
+                    onImportAudioFile: onImportAudioFile,
+                    onOpenSoundLibrary: onOpenSoundLibrary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 8)
+            }
 
             VStack(spacing: 20) {
                 if let error = errorMessage {
@@ -144,7 +159,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 recorder.cancelRecording()
             }
         }
-        .onChange(of: recorder.isRecording) { isRecording in
+        .adaptiveOnChange(of: recorder.isRecording) { _, isRecording in
             if !isRecording {
                 stopRecording()
             }
@@ -153,10 +168,10 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     // MARK: - Recording time label
 
+    /// Temps écoulé, sans « / plafond » : l'enregistrement n'a plus de limite
+    /// de durée (directive produit 2026-07-26).
     private var recordingTimeLabel: String {
-        let elapsed = formatTime(recorder.duration)
-        guard let maxDuration else { return elapsed }
-        return "\(elapsed) / \(formatTime(maxDuration))"
+        formatTime(recorder.duration)
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -247,20 +262,20 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         guard !recorder.isRecording else { return }
         hasCompleted = false
 
-        // `requestRecordPermission` rappelle sur la queue
-        // `com.avaudiosession.tccserver`. Sous `defaultIsolation(MainActor)`
-        // (MeeshyUI), le closure littéral fourni hérite lui-même de
-        // `@MainActor` ; son prologue (`swift_task_isCurrentExecutorImpl`)
-        // vérifie l'exécuteur À L'ENTRÉE — sur la queue TCC — et trappe
-        // (`EXC_BREAKPOINT`) AVANT même qu'un `Task { @MainActor in }` interne
-        // ne s'exécute (crash 1re demande de permission micro story, 2026-06-15).
-        // On isole donc la demande dans un helper `nonisolated` : son callback
-        // ne fait que `resume` la continuation (aucun check d'acteur), puis on
-        // traite le résultat sur le MainActor via `await`.
+        // La demande passe par `DevicePermissions` (SDK core), dont le callback
+        // est confiné dans un helper `nonisolated` : le système rappelle sur la
+        // queue TCC, et sous `defaultIsolation(MainActor)` (MeeshyUI) un closure
+        // littéral y hériterait de `@MainActor` — son prologue
+        // (`swift_task_isCurrentExecutorImpl`) vérifie l'exécuteur À L'ENTRÉE et
+        // trappe (`EXC_BREAKPOINT`) AVANT même qu'un `Task { @MainActor in }`
+        // interne ne s'exécute (crash 1re demande de permission micro story,
+        // 2026-06-15). Le résultat est consommé ici sur le MainActor via `await`.
         Task { @MainActor in
-            let granted = await AVAudioSession.requestMicrophonePermission()
-            guard granted else {
-                errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+            let state = await DevicePermissions.requestMicrophone()
+            guard state.isUsable else {
+                errorMessage = state.needsSettingsRedirect
+                    ? String(localized: "audio.recorder.micDeniedSettings", defaultValue: "Micro refus\u{00E9} \u{2014} autorisez-le dans R\u{00E9}glages", bundle: .module)
+                    : String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
                 return
             }
             errorMessage = nil
@@ -268,13 +283,6 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
             recorder.startRecording()
             HapticFeedback.medium()
 
-            phaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                Task { @MainActor in
-                    if let maxDuration, recorder.duration >= maxDuration {
-                        stopRecording()
-                    }
-                }
-            }
         }
     }
 
@@ -303,15 +311,54 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     }
 }
 
+// MARK: - Source chips (Fichiers / Bibliothèque)
+
+/// Rangée d'accès aux sources d'audio alternatives, montée par le recorder
+/// hors enregistrement. Chaque chip n'existe que si SA closure est fournie ;
+/// sans aucune closure la rangée n'a aucune surface (absence structurelle) —
+/// les call sites qui ne passent rien rendent le recorder à l'identique.
+struct StoryVoiceRecorderSourceChips: View {
+    var onImportAudioFile: (() -> Void)?
+    var onOpenSoundLibrary: (() -> Void)?
+
+    var body: some View {
+        if onImportAudioFile != nil || onOpenSoundLibrary != nil {
+            HStack(spacing: 8) {
+                if let onImportAudioFile {
+                    chip(icon: "folder.fill",
+                         text: String(localized: "story.voiceRecorder.fromFiles", defaultValue: "Fichiers", bundle: .module),
+                         action: onImportAudioFile)
+                }
+                if let onOpenSoundLibrary {
+                    chip(icon: "music.note.list",
+                         text: String(localized: "story.voiceRecorder.fromLibrary", defaultValue: "Bibliothèque", bundle: .module),
+                         action: onOpenSoundLibrary)
+                }
+            }
+        }
+    }
+
+    private func chip(icon: String, text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            MediaPillLabel(icon: icon, text: text)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Backward-compatible convenience init (uses DefaultSDKAudioRecorder)
 
 extension StoryVoiceRecorder where Recorder == DefaultSDKAudioRecorder {
     public init(preferredLanguage: String = "fr",
-                maxDuration: TimeInterval? = nil,
+                onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self.init(recorder: DefaultSDKAudioRecorder(),
                   preferredLanguage: preferredLanguage,
-                  maxDuration: maxDuration,
+                  onImportAudioFile: onImportAudioFile,
+                  onOpenSoundLibrary: onOpenSoundLibrary,
                   onRecordComplete: onRecordComplete)
     }
 }

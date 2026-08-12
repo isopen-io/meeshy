@@ -5,7 +5,7 @@
  *   GET    /user-preferences/conversations/:conversationId - get single (stored vs default)
  *   GET    /user-preferences/conversations               - list all (paginated)
  *   PUT    /user-preferences/conversations/:conversationId - upsert (all fields, partial, empty)
- *   DELETE /user-preferences/conversations/:conversationId - delete (found / P2025 / 500)
+ *   DELETE /user-preferences/conversations/:conversationId - reset in place (found / P2025 / 500)
  *   POST   /user-preferences/reorder                      - batch reorder conversations
  *
  * @jest-environment node
@@ -67,11 +67,15 @@ type PrismaOpts = {
   findManyResult?: typeof STORED_PREF[];
   countResult?: number;
   upsertResult?: typeof STORED_PREF;
-  deleteError?: Error | null;
+  resetError?: Error | null;
   findManyError?: Error | null;
   findUniqueError?: Error | null;
   upsertError?: Error | null;
-  updateManyError?: Error | null;
+  /** Conversations the user is an active participant of; `null` = all of them. */
+  participantIds?: string[] | null;
+  participantsError?: Error | null;
+  /** Categories the user owns; `null` = all of them. */
+  ownedCategoryIds?: string[] | null;
 };
 
 function makePrisma({
@@ -79,13 +83,45 @@ function makePrisma({
   findManyResult = [STORED_PREF],
   countResult = 1,
   upsertResult = STORED_PREF,
-  deleteError = null,
+  resetError = null,
   findManyError = null,
   findUniqueError = null,
   upsertError = null,
-  updateManyError = null,
+  participantIds = null,
+  participantsError = null,
+  ownedCategoryIds = null,
 }: PrismaOpts = {}) {
   return {
+    // Every preference write upserts, so both the single PUT and the batch
+    // reorder scope themselves to the conversations the user is actually in —
+    // an unscoped upsert would let any caller mint preference rows against
+    // arbitrary conversation ids. `findFirst` answers the single write,
+    // `findMany` the batch.
+    participant: {
+      findFirst: participantsError
+        ? jest.fn<() => Promise<unknown>>().mockRejectedValue(participantsError)
+        : jest.fn(async ({ where }: { where: { conversationId?: string } }) =>
+            participantIds === null || participantIds.includes(where?.conversationId as string)
+              ? { id: `participant-${where?.conversationId}` }
+              : null
+          ),
+      findMany: participantsError
+        ? jest.fn<() => Promise<unknown>>().mockRejectedValue(participantsError)
+        : jest.fn(async ({ where }: { where: { conversationId?: { in?: string[] } } }) =>
+            (where?.conversationId?.in ?? [])
+              .filter((id) => participantIds === null || participantIds.includes(id))
+              .map((conversationId) => ({ conversationId }))
+          ),
+    },
+    // Category ownership is checked before `categoryId` is attached, since the
+    // row carries the joined category back to the caller. `null` = all of them.
+    userConversationCategory: {
+      findFirst: jest.fn(async ({ where }: { where: { id?: string } }) =>
+        ownedCategoryIds === null || ownedCategoryIds.includes(where?.id as string)
+          ? { id: where?.id }
+          : null
+      ),
+    },
     userConversationPreferences: {
       findUnique: findUniqueError
         ? jest.fn().mockRejectedValue(findUniqueError)
@@ -97,12 +133,12 @@ function makePrisma({
       upsert: upsertError
         ? jest.fn().mockRejectedValue(upsertError)
         : jest.fn().mockResolvedValue(upsertResult),
-      delete: deleteError
-        ? jest.fn().mockRejectedValue(deleteError)
-        : jest.fn().mockResolvedValue(undefined),
-      updateMany: updateManyError
-        ? jest.fn().mockRejectedValue(updateManyError)
-        : jest.fn().mockResolvedValue({ count: 1 }),
+      // The reset (DELETE route) is an in-place `update`: it restores the
+      // preference columns to their defaults and increments the monotonic
+      // `version` in one atomic write, so the sequence survives the reset.
+      update: resetError
+        ? jest.fn().mockRejectedValue(resetError)
+        : jest.fn().mockResolvedValue({ version: (findUniqueResult?.version ?? 0) + 1 }),
     },
   };
 }
@@ -336,7 +372,7 @@ describe('DELETE /user-preferences/conversations/:conversationId', () => {
     expect(body.data.message).toMatch(/deleted/i);
   });
 
-  it('reads existing version before deletion to compute resetVersion', async () => {
+  it('resets every preference column in place and advances the version, keeping the row', async () => {
     const prisma = makePrisma();
     const appCustom = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     appCustom.decorate('prisma', prisma as unknown);
@@ -349,56 +385,38 @@ describe('DELETE /user-preferences/conversations/:conversationId', () => {
     await appCustom.ready();
 
     await appCustom.inject({ method: 'DELETE', url: `/user-preferences/conversations/${CONV_ID}`, headers: AUTH });
-    expect((prisma.userConversationPreferences.findUnique as ReturnType<typeof jest.fn>).mock.calls).toHaveLength(1);
-    expect((prisma.userConversationPreferences.delete as ReturnType<typeof jest.fn>).mock.calls).toHaveLength(1);
-    await appCustom.close();
-  });
 
-  it('uses version+1 as reset version when prefs exist', async () => {
-    const storedWithVersion = { ...STORED_PREF, version: 7 };
-    const prisma = makePrisma({ findUniqueResult: storedWithVersion });
-    const appCustom = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-    appCustom.decorate('prisma', prisma as unknown);
-    appCustom.decorate('authenticate', async (req: FastifyRequest) => {
-      (req as unknown as Record<string, unknown>).authContext = {
-        isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID },
-      };
+    const updateCall = (prisma.userConversationPreferences.update as ReturnType<typeof jest.fn>).mock
+      .calls[0]?.[0] as { data?: Record<string, unknown> };
+    // The row survives the reset: `version` is the monotonic broadcast
+    // sequence clients gate on, and dropping the row restarts it at 1.
+    expect(updateCall?.data).toMatchObject({
+      isPinned: false,
+      isMuted: false,
+      mentionsOnly: false,
+      isArchived: false,
+      tags: [],
+      categoryId: null,
+      orderInCategory: null,
+      customName: null,
+      reaction: null,
+      deletedForUserAt: null,
+      clearHistoryBefore: null,
+      version: { increment: 1 },
     });
-    await appCustom.register(conversationPreferencesRoutes);
-    await appCustom.ready();
-
-    const res = await appCustom.inject({ method: 'DELETE', url: `/user-preferences/conversations/${CONV_ID}`, headers: AUTH });
-    expect(res.statusCode).toBe(200);
-    await appCustom.close();
-  });
-
-  it('returns 0+1=1 as reset version when prefs do not exist (findUnique returns null)', async () => {
-    const prisma = makePrisma({ findUniqueResult: null });
-    const appCustom = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-    appCustom.decorate('prisma', prisma as unknown);
-    appCustom.decorate('authenticate', async (req: FastifyRequest) => {
-      (req as unknown as Record<string, unknown>).authContext = {
-        isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID },
-      };
-    });
-    await appCustom.register(conversationPreferencesRoutes);
-    await appCustom.ready();
-
-    const res = await appCustom.inject({ method: 'DELETE', url: `/user-preferences/conversations/${CONV_ID}`, headers: AUTH });
-    expect(res.statusCode).toBe(200);
     await appCustom.close();
   });
 
   it('returns 404 when preferences not found (Prisma P2025)', async () => {
     const err = Object.assign(new Error('not found'), { code: 'P2025' });
-    const appNF = await buildApp({ deleteError: err });
+    const appNF = await buildApp({ resetError: err });
     const res = await appNF.inject({ method: 'DELETE', url: `/user-preferences/conversations/${CONV_ID}`, headers: AUTH });
     expect(res.statusCode).toBe(404);
     await appNF.close();
   });
 
   it('returns 500 on generic db error', async () => {
-    const appErr = await buildApp({ deleteError: new Error('db crash') });
+    const appErr = await buildApp({ resetError: new Error('db crash') });
     const res = await appErr.inject({ method: 'DELETE', url: `/user-preferences/conversations/${CONV_ID}`, headers: AUTH });
     expect(res.statusCode).toBe(500);
     await appErr.close();
@@ -437,7 +455,7 @@ describe('POST /user-preferences/reorder', () => {
     expect(body.data.message).toMatch(/reorder/i);
   });
 
-  it('updates each conversation independently via updateMany', async () => {
+  it('upserts each conversation independently, scoped to the caller', async () => {
     const prisma = makePrisma();
     const appCustom = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     appCustom.decorate('prisma', prisma as unknown);
@@ -455,10 +473,11 @@ describe('POST /user-preferences/reorder', () => {
       headers: AUTH,
       payload: { updates: [{ conversationId: CONV_ID, orderInCategory: 2 }] },
     });
-    const updateManyCalls = (prisma.userConversationPreferences.updateMany as ReturnType<typeof jest.fn>).mock.calls;
-    expect(updateManyCalls).toHaveLength(1);
-    expect(updateManyCalls[0][0].where.userId).toBe(USER_ID);
-    expect(updateManyCalls[0][0].data.orderInCategory).toBe(2);
+    const upsertCalls = (prisma.userConversationPreferences.upsert as ReturnType<typeof jest.fn>).mock.calls;
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0][0].where.userId_conversationId).toEqual({ userId: USER_ID, conversationId: CONV_ID });
+    expect(upsertCalls[0][0].update.orderInCategory).toBe(2);
+    expect(upsertCalls[0][0].create.orderInCategory).toBe(2);
     await appCustom.close();
   });
 
@@ -485,7 +504,7 @@ describe('POST /user-preferences/reorder', () => {
   });
 
   it('returns 500 on db error', async () => {
-    const appErr = await buildApp({ updateManyError: new Error('db crash') });
+    const appErr = await buildApp({ participantsError: new Error('db crash') });
     const res = await appErr.inject({
       method: 'POST',
       url: '/user-preferences/reorder',

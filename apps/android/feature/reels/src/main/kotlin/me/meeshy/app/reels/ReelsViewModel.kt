@@ -42,4 +42,43 @@ class ReelsViewModel @Inject constructor(
             }
         }
     }
+
+    /** Like optimiste : bascule locale immediate, rollback si le reseau refuse. */
+    fun toggleLike(reelId: String) {
+        val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
+        updateReel(reelId) {
+            it.copy(
+                isLiked = !before.isLiked,
+                likeCount = (before.likeCount + if (before.isLiked) -1 else 1).coerceAtLeast(0),
+            )
+        }
+        viewModelScope.launch {
+            val result = if (before.isLiked) postRepository.unlike(reelId) else postRepository.like(reelId)
+            if (result is NetworkResult.Failure) {
+                updateReel(reelId) { it.copy(isLiked = before.isLiked, likeCount = before.likeCount) }
+            }
+        }
+    }
+
+    /** Repost simple : compteur optimiste, rollback si echec. */
+    fun repost(reelId: String) {
+        val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
+        updateReel(reelId) { it.copy(repostCount = before.repostCount + 1) }
+        viewModelScope.launch {
+            if (postRepository.repost(reelId) is NetworkResult.Failure) {
+                updateReel(reelId) { it.copy(repostCount = before.repostCount) }
+            }
+        }
+    }
+
+    /** Comptabilise un partage — l'intent systeme est parti sans attendre le reseau. */
+    fun recordShare(reelId: String) {
+        viewModelScope.launch { postRepository.share(reelId) }
+    }
+
+    private fun updateReel(reelId: String, transform: (ReelPresentation) -> ReelPresentation) {
+        _state.update { state ->
+            state.copy(reels = state.reels.map { if (it.id == reelId) transform(it) else it })
+        }
+    }
 }

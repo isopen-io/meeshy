@@ -16,9 +16,17 @@ import os
 final class NSEPendingPostConsumer {
     static let shared = NSEPendingPostConsumer()
 
-    private static let appGroupId = "group.me.meeshy.apps"
-    private static let pendingDirName = "nse_pending_posts"
+    private nonisolated static let appGroupId = "group.me.meeshy.apps"
+    private nonisolated static let pendingDirName = "nse_pending_posts"
     private let logger = Logger(subsystem: "me.meeshy.app", category: "nse-post-consumer")
+
+    /// Dossier de staging App Group — exposé pour le wipe de logout
+    /// (appgroup-01), miroir de `SharePendingSendConsumer.directoryURL()`.
+    nonisolated static func directoryURL() -> URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
+            .appendingPathComponent(pendingDirName, isDirectory: true)
+    }
 
     private init() {}
 
@@ -48,10 +56,12 @@ final class NSEPendingPostConsumer {
         let fm = FileManager.default
         var merged = 0
         for item in pending {
-            guard let apiPost = try? decoder.decode(APIPost.self, from: item.data) else {
+            guard let apiPost = decoder.decodeOrLog(APIPost.self, from: item.data,
+                                                    field: "NSE staged post",
+                                                    logger: Logger.nsePosts) else {
                 // Corrupt/undecodable payload — it will never decode, so drop it
                 // instead of re-reading it every launch.
-                try? fm.removeItem(at: item.url)
+                fm.removeItemLogging(at: item.url, context: "undecodable staged post", logger: Logger.nsePosts)
                 continue
             }
             let feedPost = apiPost.toFeedPost(preferredLanguages: langs)
@@ -78,7 +88,7 @@ final class NSEPendingPostConsumer {
                 // Only drop the prefetch file once the post is safely cached, so a
                 // transient save failure leaves it on disk to retry next launch
                 // instead of silently losing the post.
-                try? fm.removeItem(at: item.url)
+                fm.removeItemLogging(at: item.url, context: "merged staged post", logger: Logger.nsePosts)
                 merged += 1
             } catch {
                 logger.error("Failed to seed NSE post \(apiPost.id): \(error.localizedDescription)")
@@ -109,7 +119,12 @@ final class NSEPendingPostConsumer {
         guard !feedComments.isEmpty else { return }
         let cacheKey = "post-\(apiPost.id)"
         if case .empty = await CacheCoordinator.shared.comments.load(for: cacheKey) {
-            try? await CacheCoordinator.shared.comments.save(feedComments, for: cacheKey)
+            do {
+                try await CacheCoordinator.shared.comments.save(feedComments, for: cacheKey)
+            } catch {
+                // Les commentaires seront rechargés depuis le réseau à l'ouverture.
+                Logger.nsePosts.error("Prefetched comments not cached: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -123,7 +138,11 @@ final class NSEPendingPostConsumer {
     ) async {
         for comment in apiComments {
             if let record = CommentRecord(from: comment, postId: postId) {
-                try? await persistence.insertComment(record)
+                do {
+                    try await persistence.insertComment(record)
+                } catch {
+                    Logger.nsePosts.error("Prefetched comment \(comment.id, privacy: .public) not persisted: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
@@ -149,4 +168,10 @@ final class NSEPendingPostConsumer {
         }
         return results
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let nsePosts = Logger(subsystem: "me.meeshy.app", category: "nse-posts")
 }

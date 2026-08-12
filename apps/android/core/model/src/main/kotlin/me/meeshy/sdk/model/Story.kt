@@ -306,6 +306,7 @@ data class StorySlide(
 @Serializable
 enum class PostType {
     @SerialName("POST") POST,
+    @SerialName("REEL") REEL,
     @SerialName("STORY") STORY,
     @SerialName("STATUS") STATUS,
 }

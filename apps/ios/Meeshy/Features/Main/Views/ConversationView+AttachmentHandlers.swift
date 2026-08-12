@@ -1,8 +1,8 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import UIKit
 import PhotosUI
 import AVFoundation
-import CoreLocation
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -20,6 +20,19 @@ extension ConversationView {
         alreadyPrompted: Bool
     ) -> Bool {
         hasAudio && consentMissing && !alreadyPrompted
+    }
+
+    /// Read a local attachment's bytes off the MainActor. `Data(contentsOf:)`
+    /// is a synchronous read; a multi-attachment send (dozens of MB of video)
+    /// previously read every file inline on the MainActor — either while
+    /// building the optimistic-send plan or inside the upload loop's `Task`
+    /// (which inherits MainActor isolation by default) — freezing the UI for
+    /// the whole read duration. Hops to a detached background Task — the
+    /// same technique previously implemented in `AttachmentSendService.swift`
+    /// (removed as dead code, 0 call sites) but never applied to this, the
+    /// actually-live send path.
+    nonisolated static func readAttachmentFileBytes(_ url: URL) async -> Data? {
+        await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
     }
 
     // MARK: - Recording Functions
@@ -60,7 +73,13 @@ extension ConversationView {
             return
         }
         let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else {
+        // Lieu capturé AVANT toute remise à zéro d'état : il n'est remis à nil
+        // QU'AU SUCCÈS de l'envoi qui le porte — un échec laisse la tuile en
+        // place pour réessayer sans re-choisir son lieu (lot 2, spec 2026-07-30).
+        let place = composerState.pendingPlace
+        // Garde partagé avec `ConversationViewModel.sendMessage` : un message
+        // « lieu seul » est un envoi valide.
+        guard SendEligibility.canSend(text: text, attachmentIds: composerState.pendingAttachments.map(\.id), location: place) else {
             Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
             return
         }
@@ -109,7 +128,14 @@ extension ConversationView {
             viewModel.stopTypingEmission()
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
-            Task { await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang) }
+            Task {
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang, location: place)
+                // Succès (ACK ou mise en file durable) : le lieu est parti, la
+                // tuile disparaît. Échec : la tuile reste pour un nouvel essai.
+                if ok, place != nil {
+                    withAnimation { composerState.pendingPlace = nil }
+                }
+            }
             return
         }
 
@@ -141,13 +167,21 @@ extension ConversationView {
             let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
                 guard let fileURL = mediaFiles[att.id] else { return nil }
                 let isImage = att.mimeType.hasPrefix("image/")
-                if isImage, let data = try? Data(contentsOf: fileURL), let image = UIImage(data: data) {
+                if isImage {
                     // Seed in-memory NSCache + on-disk image cache so the
                     // optimistic bubble keeps the picture across navigation
                     // until the server `message:new` reconciliation lands.
-                    DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
+                    // The read hops off the MainActor (readAttachmentFileBytes)
+                    // — this compactMap runs synchronously on the tap-Send
+                    // call stack, so a raw `Data(contentsOf:)` here froze the
+                    // UI for the whole read of every selected photo/video.
                     let persistKey = fileURL.absoluteString
-                    Task { await CacheCoordinator.shared.images.save(data, for: persistKey) }
+                    Task {
+                        guard let data = await ConversationView.readAttachmentFileBytes(fileURL),
+                              let image = UIImage(data: data) else { return }
+                        DiskCacheStore.cacheImageForPreview(image, key: persistKey)
+                        await CacheCoordinator.shared.images.save(data, for: persistKey)
+                    }
                 }
                 // A video/audio file:// URL cannot be decoded as a still — seed
                 // a ThumbHash from the generated thumbnail so the bubble shows a
@@ -321,7 +355,12 @@ extension ConversationView {
                     await uploader.setExpectedBatch(totalFiles: uploadableAttachments.count, totalBytes: plannedBytes)
                     for att in send.group.attachments {
                         guard let fileURL = mediaFiles[att.id] else { continue }
-                        let fileData = try? Data(contentsOf: fileURL)
+                        // Off-MainActor read: this `Task` inherits the
+                        // MainActor isolation of `sendMessageWithAttachments`
+                        // (project default actor isolation), so a raw
+                        // `Data(contentsOf:)` here froze the UI for the
+                        // duration of every large video/photo read on send.
+                        let fileData = await ConversationView.readAttachmentFileBytes(fileURL)
                         let thumbHash = thumbnails[att.id]?.toThumbHash()
                         let mime = send.group.kind == .audio ? "audio/mp4" : att.mimeType
                         let result = try await uploader.uploadFile(
@@ -431,14 +470,33 @@ extension ConversationView {
             }
 
             // Send text group last (preserves original planner ordering intent).
+            // Le lieu voyage avec le message texte (envoyé en dernier, comme la
+            // tuile l'annonce dans le composer) ; sans texte, il part comme
+            // message « lieu seul » après les médias. Dans les deux cas
+            // `pendingPlace` n'est remis à nil QU'AU SUCCÈS de l'envoi qui le
+            // porte — un échec laisse la tuile pour réessayer.
             if let textGroup = plan.first(where: { $0.kind == .text }) {
                 let ok = await viewModel.sendMessage(
                     content: textGroup.text ?? "",
                     replyToId: textGroup.carriesReply ? replyId : nil,
                     storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
                     storyReplyReference: textGroup.carriesReply ? storyRef : nil,
-                    originalLanguage: lang
+                    originalLanguage: lang,
+                    location: place
                 )
+                if ok, place != nil {
+                    withAnimation { composerState.pendingPlace = nil }
+                }
+                anySuccess = anySuccess || ok
+            } else if place != nil {
+                let ok = await viewModel.sendMessage(
+                    content: "",
+                    originalLanguage: lang,
+                    location: place
+                )
+                if ok {
+                    withAnimation { composerState.pendingPlace = nil }
+                }
                 anySuccess = anySuccess || ok
             }
 
@@ -497,6 +555,7 @@ extension ConversationView {
     func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
+            var importedAny = false
             for url in urls {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -505,24 +564,31 @@ extension ConversationView {
                 let fileSize = getFileSize(url)
                 let mimeType = mimeTypeForURL(url)
 
-                // Copy to temp directory (security-scoped resource expires)
+                // Copy to temp directory (security-scoped resource expires).
+                // A silent `try?` here previously let a failed copy through:
+                // the attachment was added to the composer pointing at a
+                // tempURL that never existed, only failing at the very end
+                // of the send pipeline with no diagnosable cause. Skip this
+                // file and surface the failure instead of adding a phantom
+                // attachment.
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
-                try? FileManager.default.copyItem(at: url, to: tempURL)
+                do {
+                    try FileManager.default.copyItem(at: url, to: tempURL)
+                } catch {
+                    Logger.messages.error("File import copy failed for \(fileName, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    FeedbackToastManager.shared.showError("Échec de l'import de \(fileName)")
+                    continue
+                }
 
-                let attachmentId = UUID().uuidString
-                let attachment = MessageAttachment(
-                    id: attachmentId,
+                appendPendingFileAttachment(
+                    tempURL: tempURL,
                     fileName: fileName,
-                    originalName: fileName,
                     mimeType: mimeType,
-                    fileSize: fileSize,
-                    fileUrl: tempURL.absoluteString,
-                    thumbnailColor: MeeshyColors.infoHex
+                    fileSize: fileSize
                 )
-                composerState.pendingMediaFiles[attachmentId] = tempURL
-                composerState.pendingAttachments.append(attachment)
+                importedAny = true
             }
-            HapticFeedback.light()
+            if importedAny { HapticFeedback.light() }
         case .failure:
             composerState.actionAlert = "Erreur lors de l'import"
         }
@@ -542,18 +608,154 @@ extension ConversationView {
         return size
     }
 
+    // MARK: - Ingestion par dépôt & collage (UniversalComposerBar.onIngest)
+
+    /// Ajoute au tiroir une pièce jointe « fichier » dont la copie temporaire
+    /// existe DÉJÀ dans notre conteneur. Cœur commun entre l'importateur de
+    /// documents (`handleFileImport`) et l'ingestion par dépôt / collage
+    /// (`handleComposerIngest`) : une seule voie vers `pendingAttachments` /
+    /// `pendingMediaFiles`, pas de variante qui divergerait.
+    func appendPendingFileAttachment(tempURL: URL, fileName: String, mimeType: String, fileSize: Int) {
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(
+            id: attachmentId,
+            fileName: fileName,
+            originalName: fileName,
+            mimeType: mimeType,
+            fileSize: fileSize,
+            fileUrl: tempURL.absoluteString,
+            thumbnailColor: MeeshyColors.infoHex
+        )
+        composerState.pendingMediaFiles[attachmentId] = tempURL
+        composerState.pendingAttachments.append(attachment)
+    }
+
+    /// Contenu déposé ou collé dans la bande du composer (rappel `onIngest`
+    /// de `UniversalComposerBar`). Chaque `.file` pointe un fichier DÉJÀ
+    /// copié dans notre conteneur : cette surface en devient propriétaire
+    /// (les pipelines réutilisés le consomment, ou on le supprime).
+    ///
+    /// Réutiliser exactement les pipelines existants est délibéré : toute
+    /// nouvelle voie d'ingestion contournerait l'amorçage du cache de
+    /// vignettes, la bulle optimiste et le magasin de brouillons durable —
+    /// trois choses qui ne se voient pas casser.
+    func handleComposerIngest(_ items: [ComposerIngest]) {
+        var textParts: [String] = []
+        var ingestedAny = false
+
+        for item in items {
+            switch item {
+            case .text(let snippet):
+                textParts.append(snippet)
+            case .file(let url, let name, let mime):
+                ingestedAny = true
+                switch ComposerIngestRouter.route(mime: mime) {
+                case .image:
+                    ingestImageFile(at: url, name: name)
+                case .video:
+                    let prep = AttachmentPreparationService.shared.prepareVideo(
+                        sourceURL: url,
+                        deleteSourceAfterCompression: true,
+                        context: .message,
+                        accentColor: accentColor
+                    )
+                    trackPreparation(prep)
+                case .audio, .file:
+                    appendPendingFileAttachment(
+                        tempURL: url,
+                        fileName: name,
+                        mimeType: mime,
+                        fileSize: getFileSize(url)
+                    )
+                }
+            }
+        }
+
+        // Plusieurs `.text` d'un même dépôt : concaténés par un saut de
+        // ligne, dans l'ordre, en UNE SEULE insertion — pas N insertions
+        // successives, qui feraient N fois le tour de l'analyseur de langue
+        // et de la détection de collage.
+        if !textParts.isEmpty {
+            insertComposerText(textParts.joined(separator: "\n"))
+            ingestedAny = true
+        }
+
+        if ingestedAny { HapticFeedback.light() }
+    }
+
+    /// Image déposée / collée : octets lus hors du main, puis remise au
+    /// pipeline de préparation standard (tuile éditable + compression +
+    /// suivi), exactement comme une capture caméra.
+    private func ingestImageFile(at url: URL, name: String) {
+        Task { @MainActor in
+            let data = await ConversationView.readAttachmentFileBytes(url)
+            // Le fichier nous appartient ; une fois les octets en mémoire
+            // (ou le décodage refusé), la copie disque ne sert plus.
+            try? FileManager.default.removeItem(at: url)
+            guard let data, let image = UIImage(data: data) else {
+                // Pas de tuile fantôme : on refuse et on le dit.
+                Logger.messages.error("Ingestion image impossible (lecture ou décodage) pour \(name, privacy: .public)")
+                ComposerIngestFeedback.showFailure(names: [name])
+                return
+            }
+            let prep = AttachmentPreparationService.shared.prepareImage(
+                image,
+                context: .message,
+                accentColor: accentColor
+            )
+            trackPreparation(prep)
+        }
+    }
+
+    /// Insère du texte déposé / collé dans le champ de saisie : à la position
+    /// du curseur quand le champ a le focus (le premier répondant est alors
+    /// le champ du composer — `insertText` insère au curseur ou remplace la
+    /// sélection, et la synchro de binding de la barre répercute la valeur),
+    /// sinon à la fin du texte courant.
+    private func insertComposerText(_ snippet: String) {
+        if isTyping, let field = Self.currentKeyInputResponder() {
+            field.insertText(snippet)
+            return
+        }
+        composerText.text += snippet
+    }
+
+    /// Premier répondant de la scène active s'il accepte la saisie clavier.
+    ///
+    /// La scène passe par `DeviceLayout.activeWindowScene`, jamais par un
+    /// parcours de `connectedScenes` fait ici : cet ensemble n'est pas
+    /// ordonné, et sous Split View / Slide Over / Stage Manager la scène qui
+    /// en sort est régulièrement une scène d'ARRIÈRE-PLAN. Insérer le texte
+    /// déposé dans le champ d'une autre fenêtre serait invisible à
+    /// l'utilisateur.
+    private static func currentKeyInputResponder() -> (UIView & UIKeyInput)? {
+        guard let scene = DeviceLayout.activeWindowScene else { return nil }
+        for window in scene.windows {
+            if let responder = firstResponderKeyInput(in: window) { return responder }
+        }
+        return nil
+    }
+
+    private static func firstResponderKeyInput(in view: UIView) -> (UIView & UIKeyInput)? {
+        if view.isFirstResponder { return view as? (UIView & UIKeyInput) }
+        for subview in view.subviews {
+            if let found = firstResponderKeyInput(in: subview) { return found }
+        }
+        return nil
+    }
+
     func addCurrentLocation() {
         composerState.showLocationPicker = true
     }
 
-    func handleLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
-        let attachment = MessageAttachment.location(
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            color: MeeshyColors.successHex
-        )
+    /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
+    /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
+    /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29). Le lieu
+    /// reste en attente jusqu'au prochain envoi : `sendMessageWithAttachments`
+    /// le capture et le passe aux trois transports (lot 2, spec 2026-07-30).
+    func handleLocationSelection(_ place: SharedPlace) {
         withAnimation {
-            composerState.pendingAttachments.append(attachment)
+            composerState.pendingPlace = place
         }
         HapticFeedback.light()
     }

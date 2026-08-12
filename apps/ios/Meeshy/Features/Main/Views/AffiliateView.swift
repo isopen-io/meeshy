@@ -5,6 +5,13 @@ import MeeshySDK
 
 struct AffiliateView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -38,9 +45,9 @@ struct AffiliateView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
@@ -193,7 +200,7 @@ struct AffiliateView: View {
                 .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Creez un lien pour inviter vos amis", bundle: .main))
+            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
                 .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
         }
@@ -244,29 +251,7 @@ struct AffiliateView: View {
             }
             .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
 
-            // Partager
-            Button {
-                guard let link = token.affiliateLink, let url = URL(string: link) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = scene.windows.first,
-                   let root = window.rootViewController {
-                    var topVC = root
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    // iPad: UIActivityViewController needs a popover anchor or -present crashes.
-                    if let popover = av.popoverPresentationController {
-                        popover.sourceView = topVC.view
-                        popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                        popover.permittedArrowDirections = []
-                    }
-                    topVC.present(av, animated: true)
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(MeeshyFont.relative(16))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main))
+            shareTokenButton(token)
 
             Button {
                 Task { await viewModel.deleteToken(token) }
@@ -279,6 +264,38 @@ struct AffiliateView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    /// Native share: `ShareLink` gives the activity sheet, the iPad popover
+    /// anchor and top-VC presentation for free — no manual
+    /// `UIActivityViewController` / window-hierarchy traversal (doctrine:
+    /// prefer first-party SwiftUI over UIKit, cf. `CommunityLinkDetailView`).
+    /// The hand-rolled path it replaces resolved its presenter from
+    /// `connectedScenes.first`; `connectedScenes` is an *unordered* `Set`, so
+    /// under iPad multitasking / Stage Manager it could target a background
+    /// scene and present the sheet on a window nobody can see.
+    @ViewBuilder
+    private func shareTokenButton(_ token: AffiliateToken) -> some View {
+        let shareLabel = String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main)
+        if let link = token.affiliateLink, let url = URL(string: link) {
+            ShareLink(item: url) {
+                shareTokenGlyph
+            }
+            .accessibilityLabel(shareLabel)
+        } else {
+            // No usable link: the old Button stayed tappable and silently did
+            // nothing. Dim it and hide it from VoiceOver instead of offering a
+            // dead control.
+            shareTokenGlyph
+                .opacity(0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var shareTokenGlyph: some View {
+        Image(systemName: "square.and.arrow.up")
+            .font(MeeshyFont.relative(16))
+            .foregroundColor(Color(hex: accentColor))
     }
 }
 

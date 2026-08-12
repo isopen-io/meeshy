@@ -10,6 +10,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService, NotificationDigestEmailData } from '../services/EmailService';
 import { MagicLinkService } from '../services/MagicLinkService';
+import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
@@ -124,9 +125,11 @@ export class NotificationDigestJob {
     try {
       logger.info('[NotificationDigestJob] Starting digest run...');
 
-      // Find distinct userIds with unread notifications
+      // Find distinct userIds with unread notifications. Une ligne expirée ne
+      // relance personne : le contenu qu'elle annonçait n'existe plus, et
+      // l'e-mail ramènerait l'utilisateur sur une inbox qui ne la montre pas.
       const unreadNotifs = await this.prisma.notification.findMany({
-        where: { isRead: false },
+        where: visibleNotificationsWhere({ unreadOnly: true }),
         select: { userId: true, delivery: true },
       });
 
@@ -198,7 +201,7 @@ export class NotificationDigestJob {
 
     // Get recent unread notifications not yet emailed
     const allUnread = await this.prisma.notification.findMany({
-      where: { userId, isRead: false },
+      where: visibleNotificationsWhere({ userId, unreadOnly: true }),
       orderBy: { createdAt: 'desc' },
       select: { id: true, context: true, createdAt: true, delivery: true },
     });
@@ -206,8 +209,6 @@ export class NotificationDigestJob {
     // Filter out already emailed in app code
     const pending = allUnread.filter(n => isNotYetEmailed(n.delivery));
     if (pending.length === 0) return false;
-
-    const pendingIds = pending.map(n => n.id);
 
     const frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
     const lang = user.systemLanguage || 'en';
@@ -234,13 +235,23 @@ export class NotificationDigestJob {
     const result = await this.emailService.sendNotificationDigestEmail(digestData);
 
     if (result.success) {
-      // Mark these specific notifications as emailed
-      await this.prisma.notification.updateMany({
-        where: { id: { in: pendingIds } },
-        data: {
-          delivery: { emailSent: true, emailSentAt: new Date().toISOString(), pushSent: false },
-        },
-      });
+      // Mark these specific notifications as emailed, PRESERVING each
+      // document's existing delivery state (pushSent is flipped by the push
+      // pipeline — a blanket write would reset it to false and corrupt the
+      // multi-channel tracking).
+      const emailSentAt = new Date().toISOString();
+      await Promise.all(pending.map(n =>
+        this.prisma.notification.update({
+          where: { id: n.id },
+          data: {
+            delivery: {
+              ...((n.delivery ?? {}) as Record<string, unknown>),
+              emailSent: true,
+              emailSentAt,
+            },
+          },
+        })
+      ));
       return true;
     }
 

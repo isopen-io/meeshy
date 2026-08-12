@@ -178,6 +178,13 @@ struct MessageViewsDetailView: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // The count is shown visually and the active filter is otherwise
+        // signalled by color alone — surface both to VoiceOver (explicit label
+        // carries the count, .isSelected carries the active state) so no
+        // information is lost to non-sighted users (HIG: never rely on color to
+        // convey state). Mirrors MessageReactionsDetailView.reactionFilterCapsule.
+        .accessibilityLabel(count.map { "\(filter.label), \($0)" } ?? filter.label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -405,23 +412,23 @@ struct MessageViewsDetailView: View {
         switch level {
         case 3:
             icon = "eye.fill"
-            label = "Lu"
+            label = String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
             color = .green
         case 2:
             icon = "checkmark.circle.fill"
-            label = "Distribue"
+            label = String(localized: "bubble.delivery.delivered", defaultValue: "Distribué", bundle: .main)
             color = accent
         case 1:
             icon = "checkmark"
-            label = "Envoye"
+            label = String(localized: "bubble.delivery.sent", defaultValue: "Envoyé", bundle: .main)
             color = accent.opacity(0.7)
         case 0:
             icon = "arrow.up.circle"
-            label = "Envoi..."
+            label = String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
             color = theme.textMuted
         default:
             icon = "exclamationmark.circle"
-            label = "Echec"
+            label = String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
             color = .red
         }
 
@@ -438,6 +445,7 @@ struct MessageViewsDetailView: View {
             Capsule()
                 .fill(color.opacity(0.12))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
@@ -478,7 +486,7 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.receivedBy.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: "Aucune confirmation de distribution", accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "checkmark.circle.fill",
@@ -514,7 +522,7 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.readBy.isEmpty {
-                    emptyStateView(icon: "eye.slash", text: "Personne n'a lu ce message", accent: accent)
+                    emptyStateView(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.fill",
@@ -551,7 +559,7 @@ struct MessageViewsDetailView: View {
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
                 if notSeen.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: "Tout le monde a recu le message", accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a recu le message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.slash.fill",
@@ -597,7 +605,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if audioAttachments.isEmpty {
-                    emptyStateView(icon: "headphones", text: "Aucun audio attache", accent: accent)
+                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attache", bundle: .main), accent: accent)
                 }
             }
         }
@@ -621,7 +629,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if videoAttachments.isEmpty {
-                    emptyStateView(icon: "play.rectangle", text: "Aucune video attachee", accent: accent)
+                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune video attachee", bundle: .main), accent: accent)
                 }
             }
         }
@@ -754,60 +762,80 @@ struct MessageViewsDetailView: View {
                     let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
                     let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
                     let count = isAudio ? user.listenCount : user.watchCount
+                    let fraction = Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration)
 
-                    HStack(spacing: 10) {
-                        MeeshyAvatar(
-                            name: user.username,
-                            context: .userListItem,
-                            accentColor: contactColor,
-                            avatarURL: user.avatar
-                        )
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) {
+                            MeeshyAvatar(
+                                name: user.username,
+                                context: .userListItem,
+                                accentColor: contactColor,
+                                avatarURL: user.avatar
+                            )
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(user.username)
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(user.username)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(theme.textPrimary)
 
-                            if let date = listenDate {
-                                Text(relativeDate(date))
-                                    .font(.caption2)
+                                if let date = listenDate {
+                                    Text(relativeDate(date))
+                                        .font(.caption2)
+                                        .foregroundColor(theme.textMuted)
+                                }
+                            }
+
+                            Spacer()
+
+                            // Play count badge
+                            if let c = count, c > 1 {
+                                Text("\(c)x")
+                                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                                    .foregroundColor(accent.opacity(0.8))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(accent.opacity(0.08))
+                                    )
+                            }
+
+                            // Completion status
+                            if isComplete {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                    Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
+                                        .font(.caption2.weight(.semibold))
+                                }
+                                .foregroundColor(MeeshyColors.success)
+                            } else if let pos = positionMs, pos > 0 {
+                                Text(formatDuration(pos / 1000))
+                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
                                     .foregroundColor(theme.textMuted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                    )
                             }
                         }
 
-                        Spacer()
-
-                        // Play count badge
-                        if let c = count, c > 1 {
-                            Text("\(c)x")
-                                .font(.system(.caption2, design: .monospaced).weight(.bold))
-                                .foregroundColor(accent.opacity(0.8))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule().fill(accent.opacity(0.08))
-                                )
-                        }
-
-                        // Completion status
-                        if isComplete {
-                            HStack(spacing: 3) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.caption2)
-                                Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                    .font(.caption2.weight(.semibold))
+                        // Live playback progress — real-time position pushed via
+                        // `attachment-status:updated` (percentage/playPositionMs)
+                        // lands here through `attachmentStatuses` reload, same as
+                        // the mm:ss chip above.
+                        if !isComplete, fraction > 0 {
+                            HStack(spacing: 6) {
+                                ProgressView(value: fraction)
+                                    .progressViewStyle(.linear)
+                                    .tint(accent)
+                                Text("\(Int((fraction * 100).rounded()))%")
+                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                                    .foregroundColor(theme.textMuted)
+                                    .frame(minWidth: 30, alignment: .trailing)
                             }
-                            .foregroundColor(MeeshyColors.success)
-                        } else if let pos = positionMs, pos > 0 {
-                            Text(formatDuration(pos / 1000))
-                                .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                .foregroundColor(theme.textMuted)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                )
+                            .padding(.leading, 54)
                         }
                     }
                     .padding(.vertical, 4)
@@ -981,6 +1009,17 @@ struct MessageViewsDetailView: View {
 
     private func relativeDate(_ date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
+    }
+
+    /// Fraction (`0...1`) of an attachment consumed by a participant — ported
+    /// from the (now-deleted) `MessageInfoSheet.mediaFraction`. `complete`
+    /// always wins: a media marked complete reads as fully consumed
+    /// regardless of the last reported position (matches the server's own
+    /// `listenedComplete`/`watchedComplete` semantics).
+    static func positionFraction(positionMs: Int?, complete: Bool, durationMs: Int?) -> Double {
+        if complete { return 1 }
+        guard let durationMs, durationMs > 0, let positionMs else { return 0 }
+        return min(1, max(0, Double(positionMs) / Double(durationMs)))
     }
 }
 

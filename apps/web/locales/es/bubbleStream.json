@@ -155,6 +155,7 @@
     },
     "bubble": {
       "forwarded": "Reenviado"
-    }
+    },
+    "newMessagesWhileAway": "mensajes nuevos"
   }
 }

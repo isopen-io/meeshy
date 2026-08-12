@@ -13,6 +13,7 @@ import { CommentList } from './CommentList';
 import { StoryViewersSheet } from './StoryViewersSheet';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
+import { useReactToStoryMutation } from '@/hooks/social/use-stories';
 import { useAuthStore } from '@/stores/auth-store';
 
 // ============================================================================
@@ -61,6 +62,10 @@ export interface StoryMediaObjectData {
   /// W1 inc.2 — timing par élément + keyframes posés par le composer iOS.
   startTime?: number;
   keyframes?: StoryKeyframeData[];
+  /// Fenêtre de SOURCE : où l'on entre dans le fichier. `undefined` ≡ 0.
+  /// À ne pas confondre avec `startTime`, qui dit quand la piste démarre sur
+  /// la timeline.
+  sourceStart?: number;
 }
 
 export interface StoryAudioObjectData {
@@ -71,6 +76,13 @@ export interface StoryAudioObjectData {
   volume: number;
   isBackground?: boolean;
   zIndex?: number;
+  /// Fenêtre TIMELINE : quand la piste joue sur la slide.
+  startTime?: number;
+  duration?: number;
+  loop?: boolean;
+  /// Fenêtre de SOURCE : où l'on entre dans le fichier. `undefined` ≡ 0.
+  sourceStart?: number;
+  intrinsicDuration?: number;
 }
 
 interface StoryData {
@@ -121,8 +133,17 @@ interface StoryViewerProps {
   onView?: (storyId: string) => void;
   onReply?: (storyId: string, text: string) => void;
   onDelete?: (storyId: string) => void;
+  onReport?: (storyId: string) => void;
+  onShare?: (storyId: string) => void;
+  onRepost?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
+  /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
+   *  ouvre automatiquement le panneau et délègue scroll + surlignage (et la
+   *  chasse aux pages) au CommentList. */
+  targetCommentId?: string | null;
+  /** Parent top-level quand `targetCommentId` est une réponse (`?parent=`). */
+  targetParentCommentId?: string | null;
 }
 
 // ============================================================================
@@ -134,6 +155,8 @@ const DEFAULT_STORY_DURATION_MS = 6000;
 /// Reference canvas width the iOS composer authors against (`CanvasGeometry`).
 /// Design-pixel text sizes are projected back to the live canvas relative to it.
 const STORY_DESIGN_WIDTH = 1080;
+
+const REACTION_EMOJIS = ['❤️', '🔥', '😂', '😮', '😢', '👏'];
 
 const FILTER_MAP: Record<string, string> = {
   vintage: 'sepia(0.5) saturate(1.3)',
@@ -347,6 +370,45 @@ function SendIcon() {
   );
 }
 
+function FlagIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M3 3v18M3 4h13l-2 4 2 4H3"
+      />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+      />
+    </svg>
+  );
+}
+
+function RepostIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+  );
+}
+
 // ============================================================================
 // StoryViewer
 // ============================================================================
@@ -360,7 +422,12 @@ function StoryViewer({
   onView,
   onReply,
   onDelete,
+  onReport,
+  onShare,
+  onRepost,
   enableComments = true,
+  targetCommentId,
+  targetParentCommentId,
 }: StoryViewerProps) {
   const { t } = useI18n('common');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -368,6 +435,7 @@ function StoryViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const viewedRef = useRef<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -385,6 +453,7 @@ function StoryViewer({
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
+  const reactToStoryMutation = useReactToStoryMutation();
 
   const story = stories[currentIndex];
 
@@ -601,7 +670,40 @@ function StoryViewer({
     setReplyText('');
     setShowComments(false);
     setShowViewers(false);
+    setShowReactionPicker(false);
+    setIsPaused(false);
   }, [currentIndex]);
+
+  // Mirrors handleOpenComments/handleCloseComments: the picker pauses the
+  // auto-advance timer for the same reason the comments panel does — a
+  // two-tap emoji pick must survive the 6s window instead of being wiped by
+  // the currentIndex-change reset when the timer fires mid-interaction.
+  const handleOpenReactionPicker = useCallback(() => {
+    setShowReactionPicker(true);
+    setIsPaused(true);
+  }, []);
+
+  const handleCloseReactionPicker = useCallback(() => {
+    setShowReactionPicker(false);
+    setIsPaused(false);
+  }, []);
+
+  const handleToggleReactionPicker = useCallback(() => {
+    if (showReactionPicker) {
+      handleCloseReactionPicker();
+    } else {
+      handleOpenReactionPicker();
+    }
+  }, [showReactionPicker, handleOpenReactionPicker, handleCloseReactionPicker]);
+
+  const handleReact = useCallback(
+    (emoji: string) => {
+      if (!currentStoryId) return;
+      reactToStoryMutation.mutate({ storyId: currentStoryId, emoji });
+      handleCloseReactionPicker();
+    },
+    [currentStoryId, reactToStoryMutation, handleCloseReactionPicker],
+  );
 
   // Comments handlers
   const handleOpenComments = useCallback(() => {
@@ -613,6 +715,14 @@ function StoryViewer({
     setShowComments(false);
     setIsPaused(false);
   }, []);
+
+  // Ciblage d'un commentaire depuis une notification : le panneau s'ouvre de
+  // lui-même (timeline en pause, comme un clic sur le bouton commentaires) —
+  // le CommentList fait ensuite la chasse + scroll + surlignage. Déclaré APRÈS
+  // le reset sur changement de story pour gagner l'ordre d'exécution au mount.
+  useEffect(() => {
+    if (enableComments && targetCommentId) handleOpenComments();
+  }, [enableComments, targetCommentId, handleOpenComments]);
 
   // Viewers list (author only) — pause the timeline while it's open, mirroring
   // the comments panel.
@@ -913,6 +1023,42 @@ function StoryViewer({
                 {timeAgo(story.createdAt)}
               </span>
             </div>
+            {onShare && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('share', 'Share')}
+              >
+                <ShareIcon />
+              </button>
+            )}
+            {onRepost && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRepost(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('repost', 'Repost')}
+              >
+                <RepostIcon />
+              </button>
+            )}
+            {onReport && currentUserId && story.authorId && story.authorId !== currentUserId && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReport(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('report', 'Report')}
+              >
+                <FlagIcon />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1047,6 +1193,8 @@ function StoryViewer({
                   onUnlikeComment={handleUnlikeComment}
                   onDeleteComment={handleDeleteComment}
                   onSubmitComment={handleSubmitComment}
+                  targetCommentId={targetCommentId}
+                  targetParentCommentId={targetParentCommentId}
                   className="text-white"
                 />
               </div>
@@ -1070,6 +1218,39 @@ function StoryViewer({
                     </svg>
                   </button>
                 )}
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleReactionPicker();
+                    }}
+                    className="text-white/70 hover:text-white transition-colors"
+                    aria-label={t('react', 'React')}
+                    data-testid="story-reaction-button"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </button>
+
+                  {showReactionPicker && (
+                    <div
+                      data-testid="story-reaction-picker"
+                      className="absolute bottom-full left-0 mb-2 z-30 flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/20"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(emoji)}
+                          className="text-xl p-1 rounded-full transition-transform duration-150 hover:scale-125"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <input
                   ref={inputRef}
                   type="text"

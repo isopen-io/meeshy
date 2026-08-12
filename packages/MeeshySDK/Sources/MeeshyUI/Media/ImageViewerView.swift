@@ -17,10 +17,14 @@ public struct ImageViewerView: View {
     /// existants intacts).
     public var onSaveRequested: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered per-bubble — do not @ObservedObject the ThemeManager
+    // singleton (every published change would re-render every image bubble
+    // in the scroll list). Dark/light comes reactively from the environment
+    // instead (cf. ChatBubble.swift precedent).
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showFullscreen = false
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
 
     private var imageURL: URL? {
@@ -43,7 +47,7 @@ public struct ImageViewerView: View {
         case .messageBubble: return 200
         case .composerAttachment: return 80
         case .feedPost: return 350
-        case .storyOverlay, .fullscreen: return UIScreen.main.bounds.height
+        case .storyOverlay, .fullscreen: return WindowMetrics.windowSize.height
         }
     }
 
@@ -222,7 +226,12 @@ public struct ImageFullscreen: View {
                 }
 
             if let url = imageUrl {
-                CachedAsyncImage(url: url.absoluteString) {
+                // autoLoad: true — a manual tap to open fullscreen is
+                // explicit user intent and must override the ambient network
+                // policy gate (contract §14.1). Without this, Low Data Mode /
+                // Wi-Fi-only leaves the viewer on an infinite spinner even
+                // though the user just asked to see the image.
+                CachedAsyncImage(url: url.absoluteString, autoLoad: true) {
                     ProgressView().tint(.white)
                 }
                 .aspectRatio(contentMode: .fit)
@@ -312,7 +321,9 @@ public struct ImageFullscreen: View {
                             caption,
                             fontSize: 14,
                             color: .white,
-                            mentionColor: Color(hex: "818CF8"),
+                            // Visionneuse plein écran TOUJOURS sombre → variantes dark figées.
+                            mentionColor: MeeshyColors.mentionColor(isDark: true),
+                            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                             accentColor: Color(hex: accentColor),
                             mentionDisplayNames: mentionDisplayNames
                         )
@@ -336,16 +347,11 @@ public struct ImageFullscreen: View {
         guard let attId = attachmentId, let start = viewStartTime else { return }
         let viewedMs = Int(Date().timeIntervalSince(start) * 1000)
         guard viewedMs >= 500 else { return }
-        Task {
-            var body = AttachmentStatusBody(
-                action: "viewed", playPositionMs: 0, durationMs: viewedMs, complete: true
-            )
-            body.wasZoomed = scale > 1.05
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status",
-                body: body
-            )
-        }
+        var body = AttachmentStatusBody(
+            action: "viewed", playPositionMs: 0, durationMs: viewedMs, complete: true
+        )
+        body.wasZoomed = scale > 1.05
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
     }
 
     private func saveToPhotos() {
@@ -359,12 +365,10 @@ public struct ImageFullscreen: View {
             // PhotoLibraryManager gates on add-only authorization (the app's
             // Info.plist carries NSPhotoLibraryAddUsageDescription) so a
             // denied permission resolves to `false` rather than crashing.
-            let saved = await PhotoLibraryManager.shared.saveFromURL(url.absoluteString)
+            let saved = await PhotoLibraryManager.shared.saveFromURL(url.absoluteString, kind: .image)
             if saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
-                let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                    endpoint: "/attachments/\(attId)/status", body: body
-                )
+                AttachmentStatusReporter.report(attachmentId: attId, body: body)
             }
             await MainActor.run {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

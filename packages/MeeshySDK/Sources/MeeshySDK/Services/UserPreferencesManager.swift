@@ -6,6 +6,12 @@ import Combine
 public final class UserPreferencesManager: ObservableObject {
     public static let shared = UserPreferencesManager()
 
+    /// Injected closure to flush the outbox immediately after a preference mutation
+    /// is enqueued. The SDK cannot import app-side OutboxFlushTrigger, so the app
+    /// injects this at boot: `{ Task { await OutboxFlushTrigger.flushNow() } }`.
+    /// If nil, the outbox drains on the next app boot/foreground transition only.
+    public var onSettingsMutationEnqueued: (@Sendable () -> Void)?
+
     // MARK: - Published Preferences
 
     @Published public private(set) var privacy: PrivacyPreferences
@@ -21,14 +27,53 @@ public final class UserPreferencesManager: ObservableObject {
 
     // MARK: - Internals
 
-    private let service = PreferenceService.shared
+    /// Var (not `let`) so `@testable` test targets can substitute a mock
+    /// conforming to `PreferenceServiceProviding` — mirrors the
+    /// `AuthManager.authService` injection seam. Needed for integration
+    /// tests that drive `fetchFromBackend()`/`applyRemote` end-to-end
+    /// without hitting the real network.
+    internal var service: PreferenceServiceProviding = PreferenceService.shared
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private var syncTasks: [PreferenceCategory: Task<Void, Never>] = [:]
     private var cancellables = Set<AnyCancellable>()
 
-    private static let keyPrefix = "meeshy_prefs_"
+    /// Test-only override for the authentication gate used by
+    /// `fetchFromBackend`/`syncCategoryToBackend`/`resetCategory`.
+    /// Production always resolves through the live
+    /// `AuthManager.shared.isAuthenticated`. `internal` (not `private`) so
+    /// `@testable` targets can drive these flows deterministically WITHOUT
+    /// touching the real `AuthManager.shared` singleton — flipping that
+    /// shared instance's `$isAuthenticated` would also fire
+    /// `observeAuth()`'s own `fetchFromBackend()` sink, racing the test's
+    /// explicit call and leaking authenticated state across test files.
+    internal var isAuthenticatedOverride: (() -> Bool)?
+
+    private var isUserAuthenticated: Bool {
+        isAuthenticatedOverride?() ?? AuthManager.shared.isAuthenticated
+    }
+
+    /// Catégories avec une modification locale pas encore confirmée par le
+    /// backend — depuis `scheduleSyncToBackend` (synchrone, avant le
+    /// debounce de 1s) jusqu'à la fin de `syncCategoryToBackend` (PATCH ou
+    /// enqueue outbox terminé). `applyRemote` ("server wins") DOIT les
+    /// ignorer : sans ça, un `fetchFromBackend()` concurrent (foreground,
+    /// login) écrase l'édition locale en attente avec la valeur serveur
+    /// périmée, puis le debounce PATCHe cette même valeur périmée — la
+    /// modification de l'utilisateur disparaît silencieusement. Accès
+    /// `internal` (pas `private`) uniquement pour être observable/réinitialisable
+    /// par les tests `@testable import`.
+    var pendingCategories: Set<PreferenceCategory> = []
+
+    private nonisolated static let keyPrefix = "meeshy_prefs_"
     private static let lastSyncKey = "meeshy_prefs_last_sync"
+    private static let pendingCategoriesKey = "meeshy_prefs_pending_categories"
+    /// Suite App Group partagée avec les extensions (NSE, widgets). La clé
+    /// miroir des préférences de notification est
+    /// `appGroupNotificationPrefsKey` — lue par `NSEPreferencesGate` depuis le
+    /// process de la NSE, donc `nonisolated` (constantes immuables Sendable).
+    public nonisolated static let appGroupSuiteName = "group.me.meeshy.apps"
+    public nonisolated static let appGroupNotificationPrefsKey = keyPrefix + PreferenceCategory.notification.rawValue
     private static let minSyncInterval: TimeInterval = 5 * 60
 
     // MARK: - Init
@@ -44,6 +89,10 @@ public final class UserPreferencesManager: ObservableObject {
 
         if let ts = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date {
             lastSyncDate = ts
+        }
+
+        if let pending = Self.loadPendingCategories() {
+            pendingCategories = pending
         }
 
         observeAuth()
@@ -78,6 +127,9 @@ public final class UserPreferencesManager: ObservableObject {
 
     public func updateNotification(_ transform: (inout UserNotificationPreferences) -> Void) {
         var copy = notification; transform(&copy)
+        // Ré-estampille l'offset UTC du device à chaque écriture (voyage, DST) :
+        // le gateway évalue la fenêtre DND dans l'heure locale utilisateur.
+        copy.dndUtcOffsetMinutes = TimeZone.current.secondsFromGMT() / 60
         guard copy != notification else { return }
         notification = copy
         persist(copy, category: .notification)
@@ -144,19 +196,10 @@ public final class UserPreferencesManager: ObservableObject {
         }
     }
 
-    // MARK: - Convenience: Data-Saving Queries
-
-    public var shouldAutoDownloadMedia: Bool { document.autoDownloadEnabled }
-
-    public func shouldAutoDownload(fileSizeMB: Int = 0) -> Bool {
-        guard document.autoDownloadEnabled else { return false }
-        return fileSizeMB <= 0 || fileSizeMB <= document.autoDownloadMaxSize
-    }
-
     // MARK: - Backend Sync
 
     public func fetchFromBackend() async {
-        guard AuthManager.shared.isAuthenticated else { return }
+        guard isUserAuthenticated else { return }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -200,6 +243,8 @@ public final class UserPreferencesManager: ObservableObject {
 
         syncTasks.values.forEach { $0.cancel() }
         syncTasks.removeAll()
+        pendingCategories.removeAll()
+        persistPendingCategories()
         // NE PAS vider `cancellables` : il ne porte QUE les abonnements
         // process-lifetime posés une seule fois à l'init (`observeAuth` /
         // `observeForeground`). Les vider au premier logout tuait
@@ -210,6 +255,11 @@ public final class UserPreferencesManager: ObservableObject {
             UserDefaults.standard.removeObject(forKey: Self.keyPrefix + category.rawValue)
         }
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
+        UserDefaults.standard.removeObject(forKey: Self.pendingCategoriesKey)
+        // Purge du miroir App Group (privacy) : un user B sur le même device
+        // ne doit pas hériter du gating notifications du user A dans la NSE.
+        UserDefaults(suiteName: Self.appGroupSuiteName)?
+            .removeObject(forKey: Self.appGroupNotificationPrefsKey)
     }
 
     public func resetCategory(_ category: PreferenceCategory) async {
@@ -223,7 +273,7 @@ public final class UserPreferencesManager: ObservableObject {
         case .application: application = .defaults; persist(application, category: .application)
         }
 
-        guard AuthManager.shared.isAuthenticated else { return }
+        guard isUserAuthenticated else { return }
         try? await service.resetPreferences(category: category)
     }
 
@@ -232,6 +282,14 @@ public final class UserPreferencesManager: ObservableObject {
     private func persist<T: Encodable>(_ value: T, category: PreferenceCategory) {
         guard let data = try? encoder.encode(value) else { return }
         UserDefaults.standard.set(data, forKey: Self.keyPrefix + category.rawValue)
+        // Miroir App Group : la NSE (process séparé, app tuée) applique les
+        // préférences de notification au moment de la livraison — sons, badge,
+        // regroupement, DND, toggles par type. Chokepoint unique : couvre les
+        // updates locaux, applyRemote et resetCategory.
+        if category == .notification {
+            UserDefaults(suiteName: Self.appGroupSuiteName)?
+                .set(data, forKey: Self.keyPrefix + category.rawValue)
+        }
     }
 
     private static func load<T: Decodable>(_ category: PreferenceCategory) -> T? {
@@ -239,10 +297,26 @@ public final class UserPreferencesManager: ObservableObject {
         return try? JSONDecoder().decode(T.self, from: data)
     }
 
+    private func persistPendingCategories() {
+        let rawValues = pendingCategories.map(\.rawValue)
+        UserDefaults.standard.set(rawValues, forKey: Self.pendingCategoriesKey)
+    }
+
+    /// `internal` (not `private`) — same rationale as `pendingCategories`:
+    /// tests need to re-run the EXACT reload logic `init()` uses to
+    /// faithfully simulate a relaunch (a private-init singleton cannot be
+    /// re-instantiated from a test target).
+    static func loadPendingCategories() -> Set<PreferenceCategory>? {
+        guard let rawValues = UserDefaults.standard.stringArray(forKey: pendingCategoriesKey) else { return nil }
+        return Set(rawValues.compactMap { PreferenceCategory(rawValue: $0) })
+    }
+
     // MARK: - Private: Debounced Backend Sync
 
     private func scheduleSyncToBackend(_ category: PreferenceCategory) {
         syncTasks[category]?.cancel()
+        pendingCategories.insert(category)
+        persistPendingCategories()
         syncTasks[category] = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard !Task.isCancelled else { return }
@@ -259,7 +333,14 @@ public final class UserPreferencesManager: ObservableObject {
     /// app boot, transient GRDB error) we fall back to the direct PATCH
     /// path so we don't drop preference changes silently.
     private func syncCategoryToBackend(_ category: PreferenceCategory) async {
-        guard AuthManager.shared.isAuthenticated else { return }
+        // Cleared here (not right after the debounce sleep) so the category
+        // stays "pending" — and protected from `applyRemote` server-wins —
+        // for the full round trip, including the network/outbox call below.
+        defer {
+            pendingCategories.remove(category)
+            persistPendingCategories()
+        }
+        guard isUserAuthenticated else { return }
         let cmid = ClientMutationId.generate()
         let body: Data?
         do {
@@ -288,6 +369,7 @@ public final class UserPreferencesManager: ObservableObject {
         )
         do {
             try await OfflineQueue.shared.enqueue(.updateSettings, payload: payload)
+            onSettingsMutationEnqueued?()
         } catch {
             // Fall back to the direct PATCH path — outbox enqueue can
             // fail if the pool was never wired (early-boot UI surfaces
@@ -308,26 +390,50 @@ public final class UserPreferencesManager: ObservableObject {
         }
     }
 
-    // MARK: - Private: Apply Remote (server wins)
+    // MARK: - Private: Apply Remote (server wins — except categories pending local sync)
+
+    /// Pure decision: should `category`'s remote value overwrite the local,
+    /// in-memory state? Categories with an in-flight/debounced local edit
+    /// (`pendingCategories`) keep their local value — "server wins" there
+    /// would silently drop the user's own not-yet-confirmed change and then
+    /// PATCH the (now overwritten) stale value once the debounce fires.
+    /// `nonisolated`: pure Set membership check, no actor-isolated state.
+    nonisolated static func shouldApplyRemote(_ category: PreferenceCategory, pendingCategories: Set<PreferenceCategory>) -> Bool {
+        !pendingCategories.contains(category)
+    }
 
     private func applyRemote(_ remote: UserPreferences) {
         let localExtras = collectLocalExtras()
+        let pending = pendingCategories
 
-        privacy = mergeExtras(remote.privacy, localExtras: localExtras[.privacy])
-        audio = mergeExtras(remote.audio, localExtras: localExtras[.audio])
-        message = mergeExtras(remote.message, localExtras: localExtras[.message])
-        notification = mergeExtras(remote.notification, localExtras: localExtras[.notification])
-        video = mergeExtras(remote.video, localExtras: localExtras[.video])
-        document = mergeExtras(remote.document, localExtras: localExtras[.document])
-        application = mergeExtras(remote.application, localExtras: localExtras[.application])
-
-        persist(privacy, category: .privacy)
-        persist(audio, category: .audio)
-        persist(message, category: .message)
-        persist(notification, category: .notification)
-        persist(video, category: .video)
-        persist(document, category: .document)
-        persist(application, category: .application)
+        if Self.shouldApplyRemote(.privacy, pendingCategories: pending) {
+            privacy = mergeExtras(remote.privacy, localExtras: localExtras[.privacy])
+            persist(privacy, category: .privacy)
+        }
+        if Self.shouldApplyRemote(.audio, pendingCategories: pending) {
+            audio = mergeExtras(remote.audio, localExtras: localExtras[.audio])
+            persist(audio, category: .audio)
+        }
+        if Self.shouldApplyRemote(.message, pendingCategories: pending) {
+            message = mergeExtras(remote.message, localExtras: localExtras[.message])
+            persist(message, category: .message)
+        }
+        if Self.shouldApplyRemote(.notification, pendingCategories: pending) {
+            notification = mergeExtras(remote.notification, localExtras: localExtras[.notification])
+            persist(notification, category: .notification)
+        }
+        if Self.shouldApplyRemote(.video, pendingCategories: pending) {
+            video = mergeExtras(remote.video, localExtras: localExtras[.video])
+            persist(video, category: .video)
+        }
+        if Self.shouldApplyRemote(.document, pendingCategories: pending) {
+            document = mergeExtras(remote.document, localExtras: localExtras[.document])
+            persist(document, category: .document)
+        }
+        if Self.shouldApplyRemote(.application, pendingCategories: pending) {
+            application = mergeExtras(remote.application, localExtras: localExtras[.application])
+            persist(application, category: .application)
+        }
     }
 
     private func collectLocalExtras() -> [PreferenceCategory: [String: CodableValue]] {
@@ -364,6 +470,35 @@ public final class UserPreferencesManager: ObservableObject {
         var merged = remote; merged.extras = localExtras ?? [:]; return merged
     }
 
+    // MARK: - Orphaned Pending Sync Resume (cold boot / gateway delivery)
+
+    /// Re-attempts delivery, WITHOUT the 1s debounce, for every category
+    /// still marked pending from a PREVIOUS process. `scheduleSyncToBackend`'s
+    /// debounce `Task` may never have had the chance to fire before the app
+    /// was killed (the user toggles a preference then immediately
+    /// backgrounds/kills the app) — in that window the new value AND the
+    /// pending flag are already durably persisted synchronously
+    /// (`persist`/`persistPendingCategories`), but NOTHING was ever written
+    /// to the outbox. Without this, such a category would sit "pending"
+    /// forever: permanently blocking `applyRemote` for it (never letting a
+    /// legitimate future remote change apply) while the mutation itself
+    /// never actually reaches the gateway — the originally reported
+    /// symptom ("le PATCH n'a jamais atteint le gateway").
+    ///
+    /// Wired from `observeAuth()`'s became-authenticated transition, which
+    /// is guaranteed-authenticated — unlike calling this from `init()`
+    /// directly, where session restoration may still be in flight and the
+    /// `isUserAuthenticated` guard inside `syncCategoryToBackend` would
+    /// silently clear the pending flag without ever attempting delivery.
+    /// `internal` (not `private`) so tests can invoke it directly to
+    /// simulate a relaunch without re-instantiating the singleton.
+    func resumeOrphanedPendingSyncs(_ categories: Set<PreferenceCategory>) async {
+        for category in categories {
+            syncTasks[category]?.cancel()
+            await syncCategoryToBackend(category)
+        }
+    }
+
     // MARK: - Private: Observers
 
     private func observeAuth() {
@@ -372,7 +507,11 @@ public final class UserPreferencesManager: ObservableObject {
             .removeDuplicates()
             .filter { $0 }
             .sink { [weak self] _ in
-                Task { [weak self] in await self?.fetchFromBackend() }
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.resumeOrphanedPendingSyncs(self.pendingCategories)
+                    await self.fetchFromBackend()
+                }
             }
             .store(in: &cancellables)
     }

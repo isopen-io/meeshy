@@ -23,6 +23,10 @@
   "newPostsOther": "{count} novas publicações",
   "empty": "Ainda não há publicações. Seja o primeiro a compartilhar algo!",
   "unknownAuthor": "Desconhecido",
+  "hashtag": {
+    "empty": "Ainda não há publicações com esta hashtag",
+    "trending": "Tendências"
+  },
   "time": {
     "now": "Agora mesmo",
     "minutes": "Há {count}min",

@@ -98,6 +98,21 @@ public final class StoryBackgroundLayer: CALayer {
         }
     }
 
+    /// Volume du média de fond, dans `0...StoryVolume.maxGain`.
+    ///
+    /// Cette couche forçait `1.0` à l'attache et ne lisait jamais
+    /// `StoryMediaObject.volume` : une vidéo de fond couvrait donc la musique
+    /// quel que soit le réglage de l'auteur, alors même que l'export
+    /// l'appliquait déjà. La valeur est réappliquée à chaque attache, le player
+    /// étant recréé au gré du cache LRU.
+    @MainActor
+    public var volume: Float = 1.0 {
+        didSet {
+            guard oldValue != volume else { return }
+            avPlayer?.volume = volume
+        }
+    }
+
     /// Drapeau levé par le canvas (`StoryCanvasUIView`) en mode `.play` pour
     /// autoriser la lecture du player vidéo de fond. Quand un nouveau player
     /// est attaché alors que le canvas est déjà actif (slide change durant
@@ -793,9 +808,11 @@ extension StoryBackgroundLayer {
         // OU l'autre demande mute, le player démarre silencieux ; le toggle
         // unmute du sidebar passera ensuite par `isMuted.didSet`.
         self.avPlayer?.isMuted = mute || self.isMuted
-        // Volume explicite (l'AVPlayer démarre à 1.0 mais soyons déterministes
-        // pour les paths de re-attach via cache LRU).
-        self.avPlayer?.volume = 1.0
+        // Volume explicite : le player est recréé à chaque re-attache (cache
+        // LRU), il faut donc lui réappliquer la valeur courante de la couche —
+        // et surtout pas un 1.0 codé en dur, qui rendait le réglage de l'auteur
+        // inopérant sur toute vidéo de fond.
+        self.avPlayer?.volume = self.volume
         // Defensive : assurer la catégorie `.playback` avant de jouer. La
         // session est normalement déjà `.playback` (via `StoryMediaCoordinator
         // .activate` sync depuis `onAppear`), mais le re-attach peut intervenir
@@ -983,8 +1000,8 @@ extension StoryBackgroundLayer {
 /// happens implicitly when the layer assigns `contents` and respects
 /// `contentsGravity`. Pre-scaling here would waste CPU and degrade quality on
 /// retina displays.
-enum ThumbHashDecoder {
-    nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
+public enum ThumbHashDecoder {
+    public nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
         guard !hash.isEmpty else { return nil }
         return UIImage.fromThumbHash(hash)
     }

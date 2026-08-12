@@ -51,11 +51,22 @@ data class UnreadUpdateEvent(
     val totalUnread: Int = 0,
 )
 
+/**
+ * Wire contract of `user:status` (and each entry of `presence:snapshot`'s `users`
+ * array, an identical per-user shape) — mirrors the gateway's real payload
+ * (`packages/shared/types/socketio-events.ts` `UserStatusEvent`:
+ * `{userId, username, isOnline, lastActiveAt}`). A prior `status: String`/
+ * `lastSeenAt: String?` shape here matched no field the gateway ever emits, so
+ * every live presence update silently decoded to blank defaults — RE-PROUVEN
+ * against the shared TS type and the gateway's `_broadcastUserStatus` emitter
+ * before fixing (see `NOTES.md`).
+ */
 @Serializable
 data class UserStatusEvent(
     val userId: String,
-    val status: String,
-    val lastSeenAt: String? = null,
+    val username: String = "",
+    val isOnline: Boolean = false,
+    val lastActiveAt: String? = null,
 )
 
 @Serializable
@@ -152,9 +163,16 @@ data class ParticipantRoleUpdatedEvent(
     val role: String,
 )
 
+/**
+ * Wire contract of `presence:snapshot` — mirrors the gateway's real payload
+ * (`PresenceSnapshotEventData`: `{users: [{userId, username, isOnline,
+ * lastActiveAt}]}`), reusing [UserStatusEvent] for each entry since the shape is
+ * identical. A prior flat `onlineUserIds: List<String>` shape matched no field
+ * the gateway ever emits — see [UserStatusEvent]'s own doc comment.
+ */
 @Serializable
 data class PresenceSnapshotEvent(
-    val onlineUserIds: List<String> = emptyList(),
+    val users: List<UserStatusEvent> = emptyList(),
 )
 
 @Serializable

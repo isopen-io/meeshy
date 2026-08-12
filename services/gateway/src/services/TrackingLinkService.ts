@@ -744,11 +744,16 @@ export class TrackingLinkService {
         }
 
         const meeshyShortLink = `m+${token}`;
-        processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+        // Function replacer, not a string: String.prototype.replace interprets
+        // $$, $&, $` and $' in a replacement STRING (regardless of a string vs
+        // regex search), so any $-sequence in the restored URL would be mangled.
+        // A () => value replacer reinstates the text verbatim with identical
+        // first-occurrence semantics (mirror of processLinksInContent).
+        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
       } catch (linkError) {
         logger.error('Error processing [[url]]', { error: linkError });
         // On error, replace with URL without brackets
-        processedContent = processedContent.replace(fullMatch, url);
+        processedContent = processedContent.replace(fullMatch, () => url);
       }
     }
 
@@ -786,17 +791,20 @@ export class TrackingLinkService {
         }
 
         const meeshyShortLink = `m+${token}`;
-        processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
       } catch (linkError) {
         logger.error('Error processing <url>', { error: linkError });
         // On error, replace with URL without angle brackets
-        processedContent = processedContent.replace(fullMatch, url);
+        processedContent = processedContent.replace(fullMatch, () => url);
       }
     }
 
-    // STEP 4: Restore protected markdown links
+    // STEP 4: Restore protected markdown links.
+    // Function replacer: `original` is user text that may contain $&, $$, $` or
+    // $' — a replacement STRING would substitute those and corrupt the link
+    // (e.g. "$&" would leak the __PROTECTED_MD_n__ sentinel back into content).
     for (const { placeholder, original } of protectedItems) {
-      processedContent = processedContent.replace(placeholder, original);
+      processedContent = processedContent.replace(placeholder, () => original);
     }
 
     return { processedContent, trackingLinks };
@@ -873,7 +881,8 @@ export class TrackingLinkService {
         // via metadata.trackingLinks, sans réécriture du contenu).
         if (rewriteToShortLink) {
           const replacement = `m+${trackingLink.token}`;
-          processedContent = processedContent.replace(url, replacement);
+          // Function replacer — same $-substitution guard as processExplicitLinksInContent.
+          processedContent = processedContent.replace(url, () => replacement);
         }
 
       } catch (error) {
