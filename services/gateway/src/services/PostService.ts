@@ -9,7 +9,7 @@ import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
-import { buildPostVisibilityOrFilter } from './posts/postVisibility';
+import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
@@ -607,7 +607,18 @@ export class PostService {
     // repostOfId`), jamais sur le repost lui-même — un repost simple n'a pas
     // de vie sociale propre. Une citation garde son propre état. Bookmark et
     // `isRepostedByMe` restent ceux du post AFFICHÉ, inchangés.
-    const reactionRootId = (!post.isQuote && post.repostOfId)
+    //
+    // EXCLUSION ÉPHÉMÈRE (review task-9, critique #1, miroir de
+    // `resolveRedirectTarget` dans postVisibility.ts) : quand la racine est
+    // une STORY/STATUS, ce repost porte son propre instantané et garde donc
+    // SA PROPRE vie sociale — sinon la lecture (ce flag) et l'écriture
+    // (like/unlike, désormais posés sur le repost lui-même) divergeraient :
+    // « j'ai liké mais ça s'affiche en non-liké ». `post.repostOf.type`
+    // (déjà chargé par `postInclude`) suffit : un repost simple non-citation
+    // a toujours `repostOf` renseigné, et c'est la RACINE elle-même pour la
+    // très large majorité des reposts (chaîne d'un seul niveau).
+    const repostRootIsEphemeral = post.repostOf != null && isEphemeralPostType(post.repostOf.type);
+    const reactionRootId = (!post.isQuote && post.repostOfId && !repostRootIsEphemeral)
       ? (post.originalRepostOfId ?? post.repostOfId)
       : post.id;
 

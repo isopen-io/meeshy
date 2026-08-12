@@ -3,7 +3,7 @@ import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
-import { buildPostVisibilityOrFilter } from './posts/postVisibility';
+import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -996,16 +996,33 @@ export class PostFeedService {
    * chemins »). Deux reposts distincts du même original convergent
    * naturellement sur la même racine, donc affichent la même réaction —
    * même invariant d'idempotence que l'écriture (like/unlike).
+   *
+   * EXCLUSION ÉPHÉMÈRE (review task-9, critique #1, même garde que
+   * `PostService.getPostById` et `resolveRedirectTarget` dans
+   * postVisibility.ts) : quand `repostOf.type` est STORY/STATUS, ce repost
+   * garde SA PROPRE réaction — sinon lecture (ce flag) et écriture
+   * (like/unlike désormais posés sur le repost lui-même) divergeraient.
+   * `repostOf.type` est déjà chargé par `feedPostInclude` (= `postInclude`)
+   * sur les 5 surfaces appelantes — aucune requête supplémentaire.
    */
   private async resolveUserReactionsMap(
     viewerUserId: string,
-    posts: ReadonlyArray<{ id: string; isQuote?: boolean; repostOfId?: string | null; originalRepostOfId?: string | null }>,
+    posts: ReadonlyArray<{
+      id: string;
+      isQuote?: boolean;
+      repostOfId?: string | null;
+      originalRepostOfId?: string | null;
+      repostOf?: { type?: string | null } | null;
+    }>,
   ): Promise<Map<string, string[]>> {
     if (posts.length === 0) return new Map();
 
     const targetIdByPostId = new Map<string, string>();
     for (const post of posts) {
-      const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId);
+      const repostRootIsEphemeral = post.repostOf != null
+        && post.repostOf.type != null
+        && isEphemeralPostType(post.repostOf.type as PostType);
+      const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId) && !repostRootIsEphemeral;
       targetIdByPostId.set(post.id, isSimpleRepost ? (post.originalRepostOfId ?? post.repostOfId!) : post.id);
     }
 
