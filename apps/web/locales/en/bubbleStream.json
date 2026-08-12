@@ -155,6 +155,7 @@
     },
     "bubble": {
       "forwarded": "Forwarded"
-    }
+    },
+    "newMessagesWhileAway": "new messages"
   }
 }

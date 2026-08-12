@@ -1,129 +1,124 @@
-# Iteration 182 — `generateConversationIdentifier` réimplémenté localement (×2) avec normalisation dérivée : perte d'accents/caractères allemands + timestamp non-UTC (SSOT non branchée)
+# Iteration 182 — `normalizeLanguageCode` : troncature aveugle 639-3→639-1 mappe Filipino sur Finnois (collision de préfixe)
 
 ## Protocole (démarrage)
-`main` @ `b158a9b` (derniers merges : #2055 android/status composer, #2052
-StatusBarView, #2050 StatusesViewModel, #2044 web/i18n language codes…).
-Branche `claude/brave-archimedes-1kt3r3` réinitialisée sur `origin/main`. Ce
-cycle prend **182** (l'itération **181** est déjà consignée par la PR ouverte
-#2057 — gateway `deviceLocale` debounce-cache borné — surface disjointe).
+`main` @ `e7b3f22` (derniers merges : #2065/#2063/#2061/#2058/#2055 android/status,
+#2057 gateway/device-locale bounded cache = itér. 181). Branche
+`claude/brave-archimedes-ejush8` sur `origin/main`. Ce cycle prend **182**.
 
 Environnement : Linux, aucune toolchain Swift/Xcode/Android → surface testable =
-TypeScript (gateway/shared). Sélection : revue de la règle SSOT gateway
-(« ALWAYS use `resolveUserLanguage()` … NEVER reimplement locally ») appliquée à
-la génération d'identifiants de conversation — trois copies co-existantes du même
-helper, deux ayant silencieusement dérivé.
+TypeScript (gateway/shared). Les PR iOS ouvertes (#2033→#2064) et la PR gateway
+#2060 (`generateConversationIdentifier`, dans `conversation-helpers.ts`) sont
+pilotées par d'autres sessions et hors périmètre — `conversation-helpers.ts` est
+évité pour ne pas créer de conflit. Point de départ : **revue Priorité 1**
+(fonctionnalités récentes) sur la surface shared TS — le `deviceLocale` (Prisme
+étendu 2026-05-26) alimente `normalizeLanguageCode`, la SSOT de canonisation de
+langue, qui est l'ajout le plus récent et le plus directement testable.
 
 ## Current state
-`generateConversationIdentifier(title)` produit l'`identifier` (slug URL public)
-d'une conversation : `mshy_<titre_slugifié>-YYYYMMDDHHMMSS`. Il existait **quatre**
-sites portant ce nom, dont **la SSOT** :
+`packages/shared/utils/language-normalize.ts` → `normalizeLanguageCode()` canonise
+tout identifier de langue (locale appareil iOS `fil_PH`, `Accept-Language` web,
+prefs in-app) vers un code Meeshy supporté. Un code 3-lettres **sans entrée
+Meeshy directe** était réduit par **troncature aveugle** au préfixe 2-lettres,
+retourné si ce préfixe était lui-même supporté :
 
-- **SSOT** — `packages/shared/utils/conversation-helpers.ts:126` : translittère les
-  caractères allemands (`ö→oe`, `ü→ue`, `ä→ae`, `ß→ss`), décompose puis retire les
-  diacritiques (`NFD` + strip `̀-ͯ` → `é→e`), et bâtit le timestamp avec
-  les méthodes **UTC** (`getUTCFullYear`…) « for consistent identifiers across
-  timezones ».
-- **Délégation correcte (patron cible)** —
-  `routes/conversations/utils/identifier-generator.ts:32` : wrapper `@deprecated`
-  qui appelle simplement la SSOT. Chemin utilisé par `routes/conversations/core.ts:907`.
-- **Copie dérivée #1** — `routes/links/utils/link-helpers.ts:80` :
-  `.toLowerCase().replace(/[^a-z0-9\s-]/g, '')` **sans** map allemand, **sans**
-  `NFD` → les caractères accentués sont **supprimés** ; timestamp bâti en heure
-  **locale** (`getFullYear`…).
-- **Copie dérivée #2** — `services/message-translation/MessageTranslationService.ts:345`
-  (`_generateConversationIdentifier`) : dérive à l'identique.
+```ts
+if (primary.length > 2) {
+  const twoLetter = primary.slice(0, 2);          // 'fil' → 'fi'
+  return SUPPORTED_CODES.has(twoLetter) ? twoLetter : undefined;
+}
+```
+
+Cette heuristique suppose : « si le préfixe 2-lettres est une langue supportée,
+la réduction est correcte ». Vrai pour `eng`→`en`, `fra`→`fr`. **Faux** dès que
+les deux premières lettres d'un code 639-2/639-3 forment PAR HASARD une **autre**
+langue supportée.
 
 ## Problems identified
-1. **Perte de caractères au lieu de translittération (copie #1, chemin share-link
-   réel).** Pour un titre non-ASCII :
-   - `"Café"` → SSOT `mshy_cafe-…` **vs** link-helpers `mshy_caf-…` (le `é` est
-     effacé, le `e` de base est perdu).
-   - `"Münchner Größe"` → SSOT `mshy_muenchner-groesse-…` **vs** link-helpers
-     `mshy_mnchner-gre-…` (`ü`, `ö`, `ß` tous supprimés).
-   Impact direct : toute conversation créée via le flux **lien de partage**
-   (`routes/links/creation.ts:196` et `:224`) reçoit un slug objectivement dégradé
-   — sur un produit explicitement franco/germanophone.
-2. **Identifiant incohérent selon le chemin de création.** Une même conversation
-   intitulée « Café » obtient `mshy_cafe-…` si créée via le flux conversation
-   (SSOT), mais `mshy_caf-…` via le flux lien de partage — deux slugs pour la même
-   intention produit.
-3. **Timestamp dépendant du fuseau (copies #1 & #2).** `getFullYear`/`getHours`
-   locaux au lieu d'UTC : la portion timestamp diverge du chemin conversation et
-   des autres identifiants, contredisant le commentaire explicite de la SSOT.
-4. **Dette / dérive (SSOT non respectée).** La décision produit « comment
-   slugifier un titre de conversation » est réécrite à la main sur 2 sites, en
-   violation de la règle gateway « NEVER reimplement locally » — exactement le
-   patron que `identifier-generator.ts` avait déjà corrigé par délégation.
+1. **Filipino mappé sur Finnois (violation du Prisme).** `normalizeLanguageCode('fil')`
+   → `'fi'` (Finnois). `fil` est le code canonique CLDR/Apple du Filipino
+   (`Locale.current.identifier = "fil_PH"`) ; il n'a **aucune** entrée Meeshy et
+   **aucun** équivalent ISO 639-1. Flux réel : iOS envoie `X-Device-Locale: fil-PH`
+   → `deviceLocaleMiddleware` normalise en `'fi'` → persiste `User.deviceLocale = 'fi'`
+   → le resolver Prisme 4e priorité sert des **traductions finnoises** à un
+   utilisateur philippin. Attendu correct : `undefined` (afficher l'original).
+2. **Suédois mappé sur Swahili.** `normalizeLanguageCode('swe')` (639-2/T du
+   Suédois) → `'sw'` (Swahili) au lieu de `'sv'` (Suédois, supporté). Doublement
+   faux : le code EST réductible, mais vers la mauvaise langue.
+3. **Réductions légitimes rejetées à tort.** `normalizeLanguageCode('spa')` (Espagnol)
+   → `undefined` alors que `es` est supporté — le préfixe `sp` n'étant pas
+   supporté, la troncature échouait au lieu de réduire correctement vers `es`.
 
 ## Root cause
-Lors de l'extraction de la SSOT (`conversation-helpers.generateConversationIdentifier`)
-et du rebranchement de `identifier-generator.ts` en wrapper `@deprecated`, les deux
-autres copies (`link-helpers.ts`, `MessageTranslationService`) n'ont jamais été
-migrées ; elles ont conservé une version antérieure, plus pauvre (avant l'ajout du
-map allemand + `NFD` + UTC), et ont donc dérivé silencieusement.
+La troncature `slice(0, 2)` traite le **préfixe orthographique** comme s'il était
+l'équivalent 639-1 canonique. Or la relation 639-2/639-3 → 639-1 n'est **pas**
+préfixielle : `spa`→`es`, `deu`→`de`, `zho`→`zh`, `swe`→`sv`, et `fil`/`tgl` n'ont
+pas d'équivalent 639-1 du tout. Le seul garde-fou existant (`spa`→`sp` non
+supporté → rejet) fonctionnait par accident et ne couvrait pas les collisions où
+le préfixe EST supporté.
 
 ## Business / Technical impact
-- **UX / partage** : slugs de conversation dégradés (caractères perdus) pour tout
-  titre accentué/allemand créé via lien de partage — le chemin de création le plus
-  public.
-- **Cohérence** : identifiant désormais identique quel que soit le chemin de
-  création ; timestamp UTC homogène.
-- **Dette** : 2 réimplémentations d'une décision produit remplacées par un appel
-  unique à la SSOT (net −30 lignes de production).
+- **UX / traduction (Prisme)** : un utilisateur dont la locale appareil est
+  Filipino (ou tout code à collision de préfixe) reçoit silencieusement des
+  traductions dans une langue sans rapport, exactement le mode d'échec que le
+  Prisme interdit. Aucune erreur, aucun log — dérive invisible.
+- **Cohérence cross-platform** : le bug était **identique** dans le miroir Swift
+  `MeeshyUser.normalizeLanguageCode` (SDK) → même corruption côté iOS natif.
+- **Correctness** : les codes déjà canoniques (`fr`, `en`, `eng`, `fra`, `bas`…)
+  restent strictement inchangés.
 
 ## Risk assessment
-Très faible. Signature inchangée (`(title?: string) => string`). Pour tout titre
-ASCII (cas dominant, ex. `"Conversation <objectId>"` du chemin
-`MessageTranslationService`), la sortie est identique — les 26 tests link-helpers
-existants restent verts sans modification. Le seul changement observable est
-strictement une amélioration (accents translittérés, timestamp UTC). Aucune
-requête Prisma modifiée. Miroir exact d'un patron déjà en production
-(`identifier-generator.ts:32`).
+Très faible. Signature et type de retour inchangés (`string | undefined`).
+La table de réduction est dérivée de l'ensemble supporté (61 langues) et chaque
+cible est **re-validée** contre `SUPPORTED_CODES` avant retour — une langue
+retirée de `languages.ts` retombe automatiquement sur `undefined`. Changements de
+comportement, tous des **corrections** : `fil`→`undefined` (était `fi`),
+`swe`→`sv` (était `sw`), `spa`→`es` (était `undefined`). Aucun test existant ne
+dépendait des valeurs corrompues (vérifié : 0 référence à `spa`/`swe`/`fil` hors
+`language-normalize.test.ts`). 1367 tests shared restent verts.
 
 ## Proposed improvements / Correctif (TDD)
-- **RED** : +3 tests (`link-helpers.test.ts`, module partagé réel — non mocké)
-  démontrant `"Café"` → contient `cafe` (≠ `caf`), `"Münchner Größe"` →
-  `muenchner-groesse`, et parité timestamp UTC. Les 2 premiers échouent sur la
-  copie dérivée.
+- **RED** : +3 tests (`language-normalize.test.ts`) — réduction via map explicite
+  (`spa`→`es`, `deu`/`ger`→`de`, `zho`/`chi`→`zh`), collision de préfixe
+  (`swe`→`sv`, `swa`→`sw`), rejet Filipino (`fil`/`fil-PH`/`tgl`→`undefined`). Le
+  test « rejette 639-3 inconnu » utilise désormais `xyz`/`enx` (le cas `spa` étant
+  devenu une réduction valide).
 - **GREEN** :
-  1. `routes/links/utils/link-helpers.ts` — `generateConversationIdentifier`
-     délègue à `sharedGenerateConversationIdentifier` (mirroir de
-     `identifier-generator.ts:32`).
-  2. `services/message-translation/MessageTranslationService.ts` — suppression du
-     privé `_generateConversationIdentifier` ; le seul appelant utilise l'import
-     partagé `generateConversationIdentifier`.
-  3. Tests : `MessageTranslationService.branches.test.ts` — retrait des 3 tests
-     orphelins du privé supprimé (contrat couvert par la SSOT + tests de
-     délégation) ; les mocks de `conversation-helpers` (branches + audio)
-     exposent désormais `generateConversationIdentifier` pour le chemin de
-     sauvegarde public.
+  1. `ISO_639_3_TO_1` : table EXPLICITE 639-2/639-3 → 639-1 couvrant les 61 langues
+     supportées, variantes /T (terminologie) ET /B (bibliographique) incluses.
+  2. Branche de réduction : `const reduced = ISO_639_3_TO_1[primary]; return reduced
+     && SUPPORTED_CODES.has(reduced) ? reduced : undefined;` — plus aucune troncature.
+  3. Miroir Swift `MeeshyUser.normalizeLanguageCode` : `iso639ReductionMap` statique
+     identique + même garde. Le 3e site (`ConversationLanguagePreferences.normalize`,
+     app iOS) délègue déjà au SDK → corrigé transitivement.
 
 ## Expected benefits
-- Parité stricte du slug quel que soit le chemin de création de conversation.
-- Translittération accents/allemand + timestamp UTC restaurés sur le flux
-  share-link.
-- Une seule source de vérité pour la règle « slugifier un titre de conversation ».
+- Zéro collision de préfixe : toute locale (dont Filipino) résout vers la bonne
+  langue supportée OU vers l'original (`undefined`), jamais vers une langue sans
+  rapport.
+- Réductions 639-2/639-3 légitimes désormais correctes (`spa`→`es`, `deu`→`de`…).
+- Parité cross-platform TS ↔ Swift restaurée sur la SSOT de normalisation.
 
 ## Implementation complexity
-Faible — 2 délégations mécaniques vers un helper testé + toilettage de 2 fichiers
-de test.
+Faible — 1 table + 1 garde à 2 conditions dans un fichier déjà couvert par tests,
+mécaniquement mirroré en Swift.
 
 ## Validation criteria
-- `services/gateway` : suites `link-helpers` + `identifier-generator` +
-  `links/{creation,creation-extended,retrieval}` + `MessageTranslationService.*`
-  + `message-translation*` = **7+5 suites / 478 tests verts** (dont 3 nouveaux).
-- `tsc --noEmit` gateway : **334 → 334** (aucune nouvelle erreur ; baseline
-  environnementale `@meeshy/shared/prisma/client` inchangée, dist non construit
-  dans le conteneur).
+- `packages/shared` : `language-normalize.test.ts` **19/19** verts (nouveaux cas
+  collision/réduction) ; suite complète **1367/1367** verts.
+- `tsc --noEmit` + `tsc build` : **0 erreur**, dist émis.
+- Swift : non compilable dans cet environnement (pas de toolchain) — changement
+  mécanique, garde `supportedCodeSet.contains(reduced)` préserve le comportement
+  pour les cibles absentes du catalogue Swift (`ny`/`om`/`ti`, divergence de
+  catalogue pré-existante hors périmètre).
 
 ## Backlog (candidats consignés pour une itération future)
-- **`validatePagination` (`services/gateway/src/utils/pagination.ts:26`)** :
-  `parseInt('0',10) || defaultLimit` coerce un `limit=0` explicite en `20`.
-  Décider la sémantique voulue (floor 0 vs 1) avant de corriger — analyse dédiée.
-- `looksLikePhoneNumber` (`utils/normalize.ts:21`) : classe tout username
-  purement numérique (≥6 chiffres) comme téléphone — dépend du câblage
-  login-by-identifier, impact à vérifier.
-- F70 (`deepCleanTranslationOutput`, `substring(0,30)` surrogate split),
-  F75 (`generateCommunityIdentifier`) : déjà catalogués, 0 appelant / proba
-  négligeable.
-- `MeeshySocketIOManager.ts:752`, F69 (`sanitizeFileName`, 0 appelant) : inchangés.
+- **Divergence de catalogue TS↔Swift** : `languages.ts` (TS) inclut `ny`/`om`/`ti`
+  absents de `LanguageData.allLanguages` (Swift). Pré-existant, sans lien avec ce
+  correctif ; à traiter dans une itération dédiée (aligner les deux catalogues).
+- `MeeshySocketIOManager.ts:752` — ordre de résolution différent
+  (`username ?? displayName ?? …`, sémantique « présence key ») : hors périmètre,
+  à ne PAS uniformiser sans analyse dédiée.
+- F69 (`sanitizeFileName` overlong sans extension) : latent, 0 appelant.
+- `CommonSchemas.pagination` (shared) : transform `offset` sans cap `maxOffset`
+  contrairement au util gateway qu'il prétend mirrorer — mais schéma **inutilisé**
+  en prod (code mort), non prioritaire.

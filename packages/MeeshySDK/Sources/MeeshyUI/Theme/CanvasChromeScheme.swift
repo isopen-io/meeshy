@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 
 /// Résout le `ColorScheme` à épingler sur le chrome (bulles, FABs, header,
@@ -49,12 +50,57 @@ public enum CanvasChromeScheme {
     /// Point d'équilibre des ratios de contraste WCAG blanc-vs-noir.
     public nonisolated static let darkThreshold = 0.179
 
-    /// Scheme du chrome pour un fond donné. Un fond MÉDIA (image/vidéo)
-    /// force `.dark` : letterbox noir + photos majoritairement sombres, et
-    /// c'est la convention des viewers plein écran. Fond illisible/absent →
-    /// `.dark` (fallback du composer `1A1A2E` est sombre).
-    public nonisolated static func scheme(background: String?, hasMediaBackground: Bool) -> ColorScheme {
-        if hasMediaBackground { return .dark }
+    /// Seuil de bascule pour un fond MÉDIA, volontairement AU-DESSUS de
+    /// l'équilibre WCAG pur : sur une photo, le chrome blanc reste la
+    /// convention plein écran et le verre frosté ajoute du contraste local —
+    /// on ne bascule en `.light` que sur un fond franchement clair (capture
+    /// user 2026-07-20 : capture d'écran BLANCHE posée en Background →
+    /// chrome blanc invisible avec le `.dark` forfaitaire).
+    public nonisolated static let mediaDarkThreshold = 0.35
+
+    /// Luminance relative WCAG moyenne d'un bitmap (média de fond), obtenue
+    /// en le rééchantillonnant en 8×8 sRGB puis en moyennant la luminance
+    /// LINÉARISÉE de chaque pixel. `nil` si le bitmap n'est pas rendable
+    /// (CGImage absent) — l'appelant retombe alors sur la convention `.dark`.
+    public nonisolated static func averageRelativeLuminance(of image: UIImage) -> Double? {
+        guard let cg = image.cgImage else { return nil }
+        let side = 8
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: &pixels, width: side, height: side,
+                                  bitsPerComponent: 8, bytesPerRow: side * 4,
+                                  space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: side, height: side))
+        func lin(_ c: Double) -> Double {
+            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        var total = 0.0
+        for p in stride(from: 0, to: pixels.count, by: 4) {
+            let r = lin(Double(pixels[p]) / 255)
+            let g = lin(Double(pixels[p + 1]) / 255)
+            let b = lin(Double(pixels[p + 2]) / 255)
+            total += 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        return total / Double(side * side)
+    }
+
+    /// Scheme du chrome pour un fond donné. Un fond MÉDIA suit la luminance
+    /// RÉELLE de son bitmap quand elle est connue (`mediaLuminance`) — un
+    /// média clair (capture d'écran blanche) exige un chrome sombre. Sans
+    /// bitmap mesurable (vidéo sans thumbnail, chargement en cours), on garde
+    /// la convention viewer plein écran : `.dark`. Fond couleur : luminance
+    /// WCAG du hex/gradient ; illisible/absent → `.dark` (fallback composer
+    /// `1A1A2E` sombre).
+    public nonisolated static func scheme(background: String?,
+                                          hasMediaBackground: Bool,
+                                          mediaLuminance: Double? = nil) -> ColorScheme {
+        if hasMediaBackground {
+            guard let mediaLuminance else { return .dark }
+            return mediaLuminance < mediaDarkThreshold ? .dark : .light
+        }
         guard let lum = backgroundLuminance(background) else { return .dark }
         return lum < darkThreshold ? .dark : .light
     }

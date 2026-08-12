@@ -1,6 +1,32 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
+
+/// Surfaces de `ReportMessageSheet`, résolues depuis le colorScheme RENDU.
+///
+/// La feuille n'a qu'un seul point de présentation : le rail d'actions de
+/// `StoryViewerView` (`StoryViewerView+Sidebar.swift`). Le `body` du lecteur
+/// porte `.preferredColorScheme(.dark)`, et une `.sheet` présentée depuis cette
+/// hiérarchie en hérite — la feuille se rend donc en SOMBRE pour tout le monde,
+/// quel que soit le thème choisi dans l'app.
+///
+/// `ThemeManager.mode` porte le thème *choisi dans l'app* ; `colorScheme` le
+/// mode *réellement rendu*. Partout ailleurs les deux coïncident, parce que
+/// `MeeshyApp` pilote `.preferredColorScheme(theme.preferredColorScheme)` depuis
+/// cette même préférence : ils ne divergent que sous un override imbriqué,
+/// c'est-à-dire exactement ici. `colorScheme` est donc le signal strictement
+/// meilleur — égal au thème partout, correct en plus sous un forçage.
+///
+/// Se brancher sur `ThemeManager` posait `textPrimary` = `indigo950` (presque
+/// noir) sur le fond système sombre de la feuille : 1,06:1.
+enum ReportSheetPalette {
+    /// Reprend mot pour mot `ThemeManager.inputBackground` — seul jeton de la
+    /// vue que `MeeshyColors` n'expose pas déjà sous forme de `(isDark:)`.
+    static func inputBackground(isDark: Bool) -> Color {
+        isDark ? Color(hex: "16142A") : Color(hex: "F5F3FF")
+    }
+}
 
 struct ReportMessageSheet: View {
     let accentColor: String
@@ -8,7 +34,6 @@ struct ReportMessageSheet: View {
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @State private var selectedType: ReportType? = nil
     @State private var reason = ""
@@ -20,7 +45,7 @@ struct ReportMessageSheet: View {
                 VStack(spacing: 16) {
                     Text(String(localized: "report.message.title", defaultValue: "Why are you reporting this message?", bundle: .main))
                         .font(.callout.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 8)
 
@@ -32,7 +57,7 @@ struct ReportMessageSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(String(localized: "report.message.details.label", defaultValue: "Details (optional)", bundle: .main))
                                 .font(.footnote.weight(.medium))
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
 
                             TextField(String(localized: "report.message.details.placeholder", defaultValue: "Describe the issue...", bundle: .main), text: $reason, axis: .vertical)
                                 .font(.subheadline)
@@ -40,10 +65,10 @@ struct ReportMessageSheet: View {
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(theme.inputBackground)
+                                        .fill(ReportSheetPalette.inputBackground(isDark: isDark))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(theme.textMuted.opacity(0.2), lineWidth: 1)
+                                                .stroke(MeeshyColors.textMuted(isDark: isDark).opacity(0.2), lineWidth: 1)
                                         )
                                 )
                         }
@@ -73,6 +98,12 @@ struct ReportMessageSheet: View {
                                 .fontWeight(.semibold)
                         }
                     }
+                    // Same defect as the detail-sheet submit button: while
+                    // submitting, the label collapses to a bare `ProgressView`,
+                    // leaving a *toolbar* control with no accessible name — the
+                    // hardest kind to identify by touch exploration. Reuses the
+                    // visible key, so voice and screen stay identical.
+                    .accessibilityLabel(String(localized: "report.message.send", defaultValue: "Send", bundle: .main))
                     .disabled(selectedType == nil || isSubmitting)
                 }
             }
@@ -91,17 +122,17 @@ struct ReportMessageSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: type.icon)
                     .font(.callout)
-                    .foregroundColor(isSelected ? accent : theme.textSecondary)
+                    .foregroundColor(isSelected ? accent : MeeshyColors.textSecondary(isDark: isDark))
                     .frame(width: 24)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                     Text(type.description)
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
                         .lineLimit(1)
                 }
 
@@ -119,10 +150,10 @@ struct ReportMessageSheet: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? accent.opacity(0.08) : theme.inputBackground)
+                    .fill(isSelected ? accent.opacity(0.08) : ReportSheetPalette.inputBackground(isDark: isDark))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? accent.opacity(0.3) : theme.textMuted.opacity(0.1), lineWidth: 1)
+                            .stroke(isSelected ? accent.opacity(0.3) : MeeshyColors.textMuted(isDark: isDark).opacity(0.1), lineWidth: 1)
                     )
             )
         }

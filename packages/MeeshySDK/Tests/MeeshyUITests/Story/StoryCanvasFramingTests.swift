@@ -132,8 +132,20 @@ final class StoryCanvasFramingTests: XCTestCase {
         // flottantes sans sheet. (Remplace la spec 2026-06-02 « identique
         // pour tous les outils, dessin inclus ».)
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false, timelineActive: false))
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true, timelineActive: false))
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: false))
+        // Édition texte (user 2026-07-28) : le canvas reste PLEIN ÉCRAN, les
+        // bulles et « Terminé » flottent par-dessus, le clavier recouvre le bas
+        // — assumé, l'attention est sur le texte.
+        //
+        // C'est une sortie anticipée et non un terme de la disjonction : quand
+        // l'éditeur s'ouvre depuis la tuile Texte, `StoryComposerView+Canvas`
+        // appelle `bandStateMachine.tapFAB` puis `tapTile` juste après
+        // `enterTextEditingMode`. La band n'est donc pas `.hidden`, et
+        // `bandPresent` seul relancerait le carding — alors même que la band est
+        // masquée et non-interactive.
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true, timelineActive: false))
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: false))
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: true),
+                       "l'édition texte l'emporte sur toutes les autres raisons")
         // Timeline (2026-07-14) : la timeline force le cadrage exactement
         // comme l'édition de texte — le panneau timeline est présenté via
         // l'override de ComposerControlsLayer pendant que

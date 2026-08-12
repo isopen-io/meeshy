@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -54,21 +55,21 @@ final class ReelsViewModel: ObservableObject {
 
     @Published private(set) var likedIds: Set<String> = []
     @Published private(set) var bookmarkedIds: Set<String> = []
+    /// Réels repartagés durant CETTE session de visionnage — append-only
+    /// (comme `FeedView.postRepostedIds`, un repost ne se défait pas ici).
+    @Published private(set) var repostedIds: Set<String> = []
 
     private var likeDelta: [String: Int] = [:]
     /// Optimistic bookmark-count bump per post id — same role as `likeDelta`.
     /// Purged when the canonical absolute count arrives on `post:bookmarked`.
     private var bookmarkDelta: [String: Int] = [:]
+    private var repostDelta: [String: Int] = [:]
     /// Optimistic comment-count bump per post id (applied on top of the server
     /// count) so the reel's comment counter rises the instant a comment is sent.
     @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
-    /// Reels whose impression (reach) has already been recorded this session —
-    /// one impression per reel per session, mirroring the main feed's
-    /// `recordedImpressionIds`. The reel's TOTAL view (`postOpenCount`) is
-    /// counted separately by the engagement pipeline (full-screen dwell).
-    private var impressionRecordedIds: Set<String> = []
+    private var repostInFlight: Set<String> = []
 
     private var nextCursor: String?
     private var hasMore = true
@@ -87,12 +88,14 @@ final class ReelsViewModel: ObservableObject {
 
     init(
         service: PostServiceProviding = PostService.shared,
-        cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache()
+        cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache(),
+        postDeletedEvents: AnyPublisher<String, Never> = SocialSocketManager.shared.postDeleted.eraseToAnyPublisher()
     ) {
         self.service = service
         self.cache = cache
         subscribeToLikeEvents()
         subscribeToBookmarkEvents()
+        subscribeToPostDeletedEvents(postDeletedEvents)
     }
 
     /// S'abonne à l'événement CANONIQUE absolu `post:liked`/`post:unliked` (le ❤️
@@ -144,6 +147,30 @@ final class ReelsViewModel: ObservableObject {
                 bookmarkDelta[postId] = nil
             }
         }
+    }
+
+    /// S'abonne à `post:deleted` (miroir de `FeedViewModel` : même événement,
+    /// même retrait en direct). Contrairement au like/bookmark, ce flux est
+    /// injecté en paramètre plutôt que lu sur `SocialSocketManager.shared`
+    /// directement — la valeur par défaut couvre l'usage réel, l'injection
+    /// permet aux tests de piloter l'événement sans mocker tout `SocialSocketProviding`.
+    private func subscribeToPostDeletedEvents(_ events: AnyPublisher<String, Never>) {
+        events
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] postId in self?.removeDeletedReel(postId) }
+            .store(in: &cancellables)
+    }
+
+    /// Retire un reel supprimé (temps réel) du pager. Si c'était le reel
+    /// COURANT, `currentId` avance vers celui qui prend sa place à l'index
+    /// (le suivant), ou recule d'un cran s'il n'y a plus rien après lui ;
+    /// `nil` si le pager devient vide (la vue affiche alors l'état vide).
+    private func removeDeletedReel(_ postId: String) {
+        guard let index = reels.firstIndex(where: { $0.id == postId }) else { return }
+        let wasCurrent = currentId == postId
+        reels.remove(at: index)
+        guard wasCurrent else { return }
+        currentId = reels.isEmpty ? nil : reels[min(index, reels.count - 1)].id
     }
 
     /// À appeler quand le viewer se ferme : quitte la post room du réel actif.
@@ -244,7 +271,13 @@ final class ReelsViewModel: ObservableObject {
                 currentId = reels.first?.id
             }
         } catch {
-            hasMore = false
+            // Transient network failures (offline blip, timeout) must NOT
+            // permanently kill pagination: `hasMore` is left untouched (still
+            // `true`) and `nextCursor` is preserved, so the next
+            // `loadMoreIfNeeded` retries the SAME page instead of silently
+            // no-op'ing forever (the guard at the top of this function requires
+            // `hasMore` for a non-reset fetch to even reach the network).
+            Logger.media.error("ReelsViewModel.fetch(reset: \(reset)) failed, keeping cursor for retry: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -259,6 +292,13 @@ final class ReelsViewModel: ObservableObject {
 
     func isLiked(_ id: String) -> Bool { likedIds.contains(id) }
     func isBookmarked(_ id: String) -> Bool { bookmarkedIds.contains(id) }
+    func isReposted(_ id: String) -> Bool { repostedIds.contains(id) }
+
+    /// Repost count including the optimistic bump from a just-fired repost —
+    /// même rôle que `bookmarkCount`.
+    func repostCount(_ post: FeedPost) -> Int {
+        max(0, post.repostCount + (repostDelta[post.id] ?? 0))
+    }
 
     func likeCount(_ post: FeedPost) -> Int {
         max(0, post.likes + (likeDelta[post.id] ?? 0))
@@ -372,6 +412,31 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
+    /// Repartage direct (sans citation), append-only — mirroir de
+    /// `FeedView.togglePostRepost`. Optimiste : `repostedIds`/`repostDelta`
+    /// s'appliquent immédiatement, rollback UNIQUEMENT si l'API échoue (le
+    /// backend n'offre pas d'« un-repost », donc pas de toggle possible).
+    func repost(_ post: FeedPost) {
+        let id = post.id
+        guard !repostInFlight.contains(id) else { return }
+        repostInFlight.insert(id)
+        repostedIds.insert(id)
+        repostDelta[id, default: 0] += 1
+        EngagementTracker.shared.recordAction(.shared, surface: .reels)
+        HapticFeedback.light()
+        Task {
+            defer { repostInFlight.remove(id) }
+            do {
+                _ = try await service.repost(postId: id, targetType: nil, content: nil, isQuote: false, visibility: nil)
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.repost.success", defaultValue: "Repartage", bundle: .main))
+            } catch {
+                repostedIds.remove(id)
+                repostDelta[id, default: 0] -= 1
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
+            }
+        }
+    }
+
     /// Records a share on `post` and mints a **deduplicated** tracking link —
     /// aligned with the feed's `sharePost(_:generateLink:)`. Returns the absolute
     /// `meeshy.me/l/<token>` short URL so the caller can present the system share
@@ -392,14 +457,82 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
-    func recordView(_ id: String) {
-        // Unique view (viewCount, deduped server-side) — saved, not displayed.
-        Task { try? await service.viewPost(postId: id, duration: nil) }
-        // Impression (reach) — the reel appeared on screen. Once per reel per
-        // session. `source: "feed"` bumps impressionCount only (the reel's total
-        // view comes from the engagement pipeline, not from this appearance).
-        if impressionRecordedIds.insert(id).inserted {
-            Task { try? await service.recordImpression(postId: id, source: "feed") }
+    // MARK: - Options « … » (parité avec le menu du feed — FeedViewModel)
+
+    /// Suppression optimiste, avec rollback si l'API échoue. Réutilise
+    /// `removeDeletedReel` (même logique d'avancement du pager que l'événement
+    /// temps réel `post:deleted`) pour ne pas dupliquer la règle d'avancement.
+    func deletePost(_ postId: String) async {
+        guard reels.contains(where: { $0.id == postId }) else { return }
+        let snapshot = reels
+        let snapshotCurrentId = currentId
+        removeDeletedReel(postId)
+        do {
+            try await service.delete(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+        } catch {
+            reels = snapshot
+            currentId = snapshotCurrentId
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
         }
+    }
+
+    func reportPost(_ postId: String) async {
+        do {
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await service.pinPost(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+        }
+    }
+
+    /// Met à jour le texte d'un reel possédé. Miroir de `FeedViewModel.updatePost`
+    /// mais sur `reels` : mutation optimiste immédiate, re-hydratation depuis la
+    /// réponse serveur, rollback sur échec.
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+        guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = reels[idx]
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        switch location {
+        case .set(let place): optimistic.location = place
+        case .remove: optimistic.location = nil
+        case nil: break
+        }
+        reels[idx] = optimistic
+        do {
+            let updated = try await service.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
+                reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            }
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
+        } catch {
+            if let rollbackIdx = reels.firstIndex(where: { $0.id == postId }) {
+                reels[rollbackIdx] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Error editing post", bundle: .main))
+        }
+    }
+
+    func recordView(_ id: String) {
+        // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
+        // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
+        Task { try? await service.viewPost(postId: id, duration: nil) }
+        // Impression (portée) — le réel est apparu à l'écran. Comptée à CHAQUE
+        // apparition : revenir sur un réel déjà vu est une nouvelle impression.
+        // La déduplication de session qui vivait ici plafonnait le compteur à 1
+        // par réel et par lancement d'app.
+        Task { try? await service.recordImpression(postId: id, source: "feed") }
     }
 }

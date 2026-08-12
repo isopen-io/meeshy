@@ -93,7 +93,15 @@
       "videoResumed": "Conexão recuperada — vídeo reativado",
       "connectTimeout": "Não foi possível estabelecer a conexão — chamada encerrada",
       "callFailed": "Falha na conexão da chamada",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "selectConversation": "Selecione uma conversa primeiro",
+      "directOnly": "As chamadas estão disponíveis apenas para conversas diretas",
+      "startFailed": "Não foi possível iniciar a chamada. Tente novamente.",
+      "startingCall": "Iniciando chamada...",
+      "micPermissionDenied": "Acesso à câmera/microfone negado.",
+      "micNotFound": "Nenhuma câmera ou microfone encontrado.",
+      "micAccessFailed": "Falha ao acessar câmera/microfone: {message}",
+      "micAccessFailedGeneric": "Falha ao acessar câmera/microfone"
     },
     "permissions": {
       "title": {

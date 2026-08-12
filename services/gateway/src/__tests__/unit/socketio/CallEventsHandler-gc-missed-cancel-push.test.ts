@@ -95,6 +95,37 @@ describe('CallEventsHandler.sendMissedCallCancellationPushForTerminatedCall', ()
     );
   });
 
+  it('dedupes: a second terminal path for the SAME callId does not re-send the push', async () => {
+    // Mirrors CallEventsHandler-signal-cache-invalidation.test.ts's race: the
+    // ringing-timeout path already broadcast (and pushed) missed via
+    // broadcastCallEnded → sendCallCancellationPushes; the GC tier races in
+    // right after and calls this SAME public wrapper for the SAME callId.
+    // Without a dedup guard, a never-joined member gets two silent
+    // call_cancel pushes for one call.
+    const prisma = makePrisma();
+    const sendToUser = jest.fn<any>().mockResolvedValue(undefined);
+    const handler = new CallEventsHandler(prisma);
+    handler.setPushNotificationService({ sendToUser } as any);
+
+    await handler.sendMissedCallCancellationPushForTerminatedCall(CALL_ID, CONV_ID, 0);
+    await handler.sendMissedCallCancellationPushForTerminatedCall(CALL_ID, CONV_ID, 0);
+
+    expect(sendToUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT dedupe across two DIFFERENT callIds — each gets its own push', async () => {
+    const prisma = makePrisma();
+    const sendToUser = jest.fn<any>().mockResolvedValue(undefined);
+    const handler = new CallEventsHandler(prisma);
+    handler.setPushNotificationService({ sendToUser } as any);
+    const OTHER_CALL_ID = '507f1f77bcf86cd799439099';
+
+    await handler.sendMissedCallCancellationPushForTerminatedCall(CALL_ID, CONV_ID, 0);
+    await handler.sendMissedCallCancellationPushForTerminatedCall(OTHER_CALL_ID, CONV_ID, 0);
+
+    expect(sendToUser).toHaveBeenCalledTimes(2);
+  });
+
   it('excludes the caller (endedEvent has no endedBy, so only joined participants are excluded)', async () => {
     const prisma = makePrisma();
     const sendToUser = jest.fn<any>().mockResolvedValue(undefined);

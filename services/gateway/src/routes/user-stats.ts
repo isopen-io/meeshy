@@ -71,7 +71,10 @@ export async function computeUserStats(
       where: {
         sender: { userId },
         deletedAt: null,
-        NOT: [{ translations: null }],
+        // Json?+Mongo : seule la forme not:{equals:null} passe le moteur Prisma
+        // (null brut, Prisma.JsonNull et isSet sont tous rejetés à l'exécution
+        // — vérifié contre la base réelle ; même forme que admin/dashboard.ts).
+        translations: { not: { equals: null } },
       },
     }),
     prisma.friendRequest.count({

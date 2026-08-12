@@ -266,11 +266,42 @@ export class VoiceCoderProcessor implements AudioEffectProcessor {
     }
   }
 
+  /**
+   * Tracks whether THIS effect is currently part of the active audio graph.
+   * `disconnect()` alone can't be that signal: `rebuildAudioGraph()` calls it
+   * on every processor on EVERY effect toggle (including toggling a
+   * *different* effect), not only when voice-coder itself is turned off. Left
+   * unguarded, the FFT pitch-detection rAF loop kept running indefinitely
+   * after the user toggled voice-coder off — continuous analyser reads +
+   * pitch-detection math with no audible effect, pure CPU/battery waste for
+   * the rest of the call. The hook calls this with the effect's own enabled
+   * state after every rebuild.
+   */
+  setActive(active: boolean): void {
+    if (active) {
+      if (this.animationFrame === null) {
+        this.startPitchDetection();
+      }
+    } else {
+      this.stopPitchDetection();
+    }
+  }
+
   connect(destination: Tone.ToneAudioNode | AudioNode): void {
     this.outputNode.connect(destination as any);
   }
 
   disconnect(): void {
+    // Pure audio-graph teardown — does NOT touch the pitch-detection loop.
+    // setActive() is the sole authority over starting/stopping it (see its
+    // doc comment). rebuildAudioGraph() calls disconnect() on every
+    // processor on every effect toggle, including toggling a *different*
+    // effect while this one stays enabled, immediately followed by
+    // setActive(enabled) for every processor — if disconnect() also stopped
+    // the loop, that unrelated toggle would cancel and instantly reschedule
+    // a fresh rAF chain for a voice-coder that never actually turned off.
+    // Callers that actually mean to stop the background work for good (e.g.
+    // destroy()) call stopPitchDetection() themselves.
     this.outputNode.disconnect();
   }
 
@@ -508,14 +539,18 @@ export class BackSoundProcessor implements AudioEffectProcessor {
         this.player.dispose();
       }
 
-      // Create new player
+      // Create new player. Do NOT chain .toDestination() here — that would
+      // route the background track straight to the local speakers in
+      // addition to the peer-bound mix below, which the user would hear
+      // directly (and, without headphones, have re-captured by their own
+      // mic into a second, echoed copy of the outgoing stream).
       this.player = new Tone.Player({
         url,
         loop: true,
         volume: -10, // Reduce volume to blend better
         fadeIn: 0.5,
         fadeOut: 0.5,
-      }).toDestination();
+      });
 
       // Connect player to gain
       this.player.connect(this.playerGain);

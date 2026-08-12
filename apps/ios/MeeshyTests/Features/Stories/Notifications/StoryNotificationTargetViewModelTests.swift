@@ -109,7 +109,12 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
         XCTAssertEqual(vm.state, .expired)
     }
 
-    func test_load_withoutCache_andNetworkError_emitsExpired() async {
+    /// P2 — a network/offline failure is NOT proof the story is gone. Tapping
+    /// a story notification with no connectivity used to show the same
+    /// "Story expired" empty state (with a "Create a story" CTA) as a
+    /// genuine 404 — a transient network error must surface a retryable
+    /// `.offline` state instead, never fabricate `.expired`.
+    func test_load_withoutCache_andNetworkError_emitsOffline_notExpired() async {
         let mock = MockStoryService()
         mock.cachedPostResult = nil
         mock.fetchPostResult = .failure(URLError(.notConnectedToInternet))
@@ -121,7 +126,48 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
             storyService: mock
         )
         await vm.load()
-        XCTAssertEqual(vm.state, .expired)
+        XCTAssertEqual(vm.state, .offline)
+    }
+
+    /// A 5xx is likewise not a confirmed "not found" — only a genuine 404
+    /// (`APIError.serverError(404, _)`) may claim `.expired`.
+    func test_load_withoutCache_andServerError500_emitsOffline_notExpired() async {
+        let mock = MockStoryService()
+        mock.cachedPostResult = nil
+        mock.fetchPostResult = .failure(APIError.serverError(500, "Internal Server Error"))
+
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1",
+            intent: .reactions,
+            context: makeContext(),
+            storyService: mock
+        )
+        await vm.load()
+        XCTAssertEqual(vm.state, .offline)
+    }
+
+    /// A cache hit already answered the question (active or expired) — a
+    /// subsequent network error revalidating in the background must not
+    /// downgrade that answer to `.offline`.
+    func test_load_cachedActive_thenNetworkError_keepsActiveNotOffline() async {
+        let mock = MockStoryService()
+        let cached = makePost(id: "p1", expiresAt: Date().addingTimeInterval(3600))
+        mock.cachedPostResult = cached
+        mock.fetchPostResult = .failure(URLError(.notConnectedToInternet))
+
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1",
+            intent: .reactions,
+            context: makeContext(),
+            storyService: mock
+        )
+        await vm.load()
+
+        if case .active(let p) = vm.state {
+            XCTAssertEqual(p.id, "p1")
+        } else {
+            XCTFail("Expected .active (cache already answered) got \(vm.state)")
+        }
     }
 
     func test_load_cacheActive_butNetworkReturnsExpired_revalidatesToExpired() async {
@@ -167,7 +213,7 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
 extension StoryNotificationTargetViewModel.LoadState: @retroactive Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
-        case (.loading, .loading), (.expired, .expired):
+        case (.loading, .loading), (.expired, .expired), (.offline, .offline):
             return true
         case (.active(let a), .active(let b)):
             return a.id == b.id

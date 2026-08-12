@@ -5,6 +5,7 @@
 import type { User } from '@/types';
 import { logger } from '@/utils/logger';
 import { AUTH_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/constants/auth';
+import { decodeJwtPayload } from '@/utils/jwt';
 
 // Re-export constants for backward compatibility
 export { AUTH_STORAGE_KEYS, SESSION_STORAGE_KEYS };
@@ -141,13 +142,7 @@ class AuthManager {
   }
 
   decodeJWT(token: string): Record<string, unknown> | null {
-    try {
-      const payload = token.split('.')[1];
-      if (!payload) return null;
-      return JSON.parse(atob(payload));
-    } catch {
-      return null;
-    }
+    return decodeJwtPayload(token);
   }
 
   // ==================== CLEANUP ====================

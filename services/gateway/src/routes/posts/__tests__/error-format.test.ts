@@ -94,11 +94,22 @@ jest.mock('../../../services/notifications/NotificationService', () => ({
   })),
 }));
 
+const PUBLIC_ACL = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
+
 const buildMockPrisma = (): PrismaClient => ({
-  post: { findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
-  postComment: { findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
+  // Audience déclarée PUBLIC — ce fichier porte sur le FORMAT des erreurs, pas
+  // sur le droit de voir. Sans elle, la garde d'audience du fil renverrait son
+  // propre 404 avant que le cas testé ne soit atteint.
+  post: {
+    findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(PUBLIC_ACL),
+  },
+  postComment: {
+    findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: 'post-1', post: PUBLIC_ACL }),
+  },
   postImpression: { create: jest.fn(), createMany: jest.fn() },
-  storyBackgroundAudio: { create: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+  sound: { create: jest.fn(), findMany: jest.fn(), update: jest.fn() },
 } as unknown as PrismaClient);
 
 const buildNoAuthMiddleware = () =>

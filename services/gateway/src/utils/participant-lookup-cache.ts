@@ -5,10 +5,17 @@
  * the common case of an active participant sending several messages in a row.
  *
  * TTL-bounded rather than strictly invalidated everywhere a Participant could
- * change, because most mutation sites (leave/ban/kick/delete-for-me) already
- * call `invalidateParticipantLookup` explicitly — the TTL is a bounded
+ * change, because most mutation sites (leave/ban/unban/kick/delete-for-me)
+ * already call `invalidateParticipantLookup` explicitly — the TTL is a bounded
  * fallback for any path that doesn't. Size + TTL bounding is delegated to the
  * shared `BoundedTtlCache` idiom (see conversation-id-cache / StatusHandler).
+ *
+ * `unban` manquait à cette liste et ne l'appelait pas : pendant les 30 s
+ * suivantes, la personne réintégrée restait `isActive: false` pour le chemin
+ * d'envoi, et chacun de ses messages était refusé sans qu'aucune ligne en base
+ * ne le justifie. Le fallback TTL borne ce genre d'oubli, il ne le rattrape
+ * pas — une demi-minute est très au-delà du délai où quelqu'un qu'on vient de
+ * débannir essaie d'écrire.
  */
 
 import { BoundedTtlCache } from './bounded-cache.js';

@@ -195,4 +195,81 @@ class DeliveryStatusResolverTest {
 
         assertThat(tier).isEqualTo(DeliveryTier.Read)
     }
+
+    // ---- read-receipt reciprocity (showReadReceipts) -----------------------
+    // Port of the iOS `degradeRead` rule: a viewer who has disabled their own
+    // read receipts does not see anyone else's — a resolved Read degrades to
+    // Delivered. The default (true) preserves every legacy caller unchanged.
+
+    @Test
+    fun receipts_default_to_shown_so_a_direct_read_stays_read() {
+        val tier = DeliveryStatusResolver.resolve(
+            deliveredCount = 1,
+            readCount = 1,
+            recipientCount = 1,
+        )
+
+        assertThat(tier).isEqualTo(DeliveryTier.Read)
+    }
+
+    @Test
+    fun hiding_receipts_degrades_a_direct_read_to_delivered() {
+        val tier = DeliveryStatusResolver.resolve(
+            deliveredCount = 1,
+            readCount = 1,
+            recipientCount = 1,
+            showReadReceipts = false,
+        )
+
+        assertThat(tier).isEqualTo(DeliveryTier.Delivered)
+    }
+
+    @Test
+    fun hiding_receipts_degrades_a_group_all_read_to_delivered() {
+        val tier = DeliveryStatusResolver.resolve(
+            deliveredCount = 4,
+            readCount = 4,
+            recipientCount = 4,
+            showReadReceipts = false,
+        )
+
+        assertThat(tier).isEqualTo(DeliveryTier.Delivered)
+    }
+
+    @Test
+    fun hiding_receipts_degrades_a_read_by_all_marker_read_to_delivered() {
+        val tier = DeliveryStatusResolver.resolve(
+            deliveredCount = 0,
+            readCount = 0,
+            recipientCount = 4,
+            readByAllAt = "2026-07-06T10:05:00Z",
+            showReadReceipts = false,
+        )
+
+        assertThat(tier).isEqualTo(DeliveryTier.Delivered)
+    }
+
+    @Test
+    fun hiding_receipts_leaves_a_delivered_tier_untouched() {
+        val tier = DeliveryStatusResolver.resolve(
+            deliveredCount = 4,
+            readCount = 0,
+            recipientCount = 4,
+            showReadReceipts = false,
+        )
+
+        assertThat(tier).isEqualTo(DeliveryTier.Delivered)
+    }
+
+    @Test
+    fun hiding_receipts_leaves_a_sent_tier_untouched() {
+        val tier = DeliveryStatusResolver.resolve(
+            deliveredCount = 0,
+            readCount = 0,
+            recipientCount = 4,
+            showReadReceipts = false,
+        )
+
+        assertThat(tier).isEqualTo(DeliveryTier.Sent)
+    }
 }

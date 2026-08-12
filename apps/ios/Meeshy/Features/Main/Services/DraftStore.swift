@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 /// Per-conversation draft state preserved across kills and navigation so the
 /// user never loses an in-progress message. Mirrors the WhatsApp/iMessage
@@ -166,7 +167,7 @@ final class DraftStore: @unchecked Sendable {
         }
         var stamped = draft
         stamped.updatedAt = Date()
-        guard let data = try? encoder.encode(stamped) else { return }
+        guard let data = encoder.encodeOrLog(stamped, field: "message draft", id: conversationId, logger: Logger.drafts) else { return }
         defaults.set(data, forKey: key(for: conversationId))
         changed.send()
     }
@@ -175,7 +176,7 @@ final class DraftStore: @unchecked Sendable {
         let userKey = key(for: conversationId)
         // 1) Per-user encoded blob (current format)
         if let data = defaults.data(forKey: userKey),
-           let draft = try? decoder.decode(MessageDraft.self, from: data) {
+           let draft = decoder.decodeOrLog(MessageDraft.self, from: data, field: "message draft", logger: Logger.drafts) {
             return draft
         }
         // 2) Q4 migration : legacy key without userId prefix.
@@ -187,7 +188,7 @@ final class DraftStore: @unchecked Sendable {
         let legacy = legacyKey(for: conversationId)
         if legacy != userKey {
             if let data = defaults.data(forKey: legacy),
-               let draft = try? decoder.decode(MessageDraft.self, from: data) {
+               let draft = decoder.decodeOrLog(MessageDraft.self, from: data, field: "message draft", logger: Logger.drafts) {
                 defaults.set(data, forKey: userKey)
                 defaults.removeObject(forKey: legacy)
                 return draft
@@ -195,7 +196,7 @@ final class DraftStore: @unchecked Sendable {
             // Very old legacy : raw string (pré-MessageDraft)
             if let str = defaults.string(forKey: legacy), !str.isEmpty {
                 let migrated = MessageDraft(text: str)
-                if let encoded = try? encoder.encode(migrated) {
+                if let encoded = encoder.encodeOrLog(migrated, field: "migrated draft", logger: Logger.drafts) {
                     defaults.set(encoded, forKey: userKey)
                 }
                 defaults.removeObject(forKey: legacy)
@@ -307,7 +308,7 @@ final class DraftStore: @unchecked Sendable {
         let allKeys = defaults.dictionaryRepresentation().keys
         for k in allKeys where k.hasPrefix(prefix) {
             guard let data = defaults.data(forKey: k),
-                  let draft = try? decoder.decode(MessageDraft.self, from: data) else { continue }
+                  let draft = decoder.decodeOrLog(MessageDraft.self, from: data, field: "message draft", logger: Logger.drafts) else { continue }
             if draft.updatedAt < cutoff {
                 defaults.removeObject(forKey: k)
             }
@@ -330,4 +331,10 @@ final class DraftStore: @unchecked Sendable {
     private func legacyKey(for conversationId: String) -> String {
         "\(prefix)\(conversationId)"
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let drafts = Logger(subsystem: "me.meeshy.app", category: "draft-store")
 }

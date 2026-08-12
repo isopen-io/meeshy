@@ -158,36 +158,48 @@ struct MiniAudioPlayerBar: View {
 
             Spacer(minLength: 4)
 
-            Button(action: { coordinator.togglePlayPause() }) {
-                Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.body.weight(.bold))
-                    .foregroundColor(.primary)
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                coordinator.isPlaying
-                    ? String(localized: "mini_player.pause", defaultValue: "Pause", bundle: .main)
-                    : String(localized: "mini_player.play", defaultValue: "Lecture", bundle: .main)
-            )
+            // Transport controls. `.buttonStyle(.plain)` adds no padding of its
+            // own, so each label's frame IS its tappable region — hence the
+            // 44×44 floor (Apple HIG), matching the floating call pill this bar
+            // mirrors. The glyphs stay font-sized; only the hit area grew.
+            //
+            // spacing: 0 because the 44 pt boxes already separate the glyphs: a
+            // ~14 pt symbol centred in 44 pt leaves ~15 pt each side, so the gap
+            // reads as it did with the old 10 pt spacing around smaller frames.
+            // Keeping both would cost the single-line, truncating track title
+            // another 20 pt of width for no visual gain.
+            HStack(spacing: 0) {
+                Button(action: { coordinator.togglePlayPause() }) {
+                    Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.body.weight(.bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    coordinator.isPlaying
+                        ? String(localized: "mini_player.pause", defaultValue: "Pause", bundle: .main)
+                        : String(localized: "mini_player.play", defaultValue: "Lecture", bundle: .main)
+                )
 
-            Button(action: { coordinator.playNext() }) {
-                Image(systemName: "forward.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "mini_player.next", defaultValue: "Suivant", bundle: .main))
+                Button(action: { coordinator.playNext() }) {
+                    Image(systemName: "forward.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "mini_player.next", defaultValue: "Suivant", bundle: .main))
 
-            Button(action: { coordinator.close() }) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 24, height: 24)
+                Button(action: { coordinator.close() }) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

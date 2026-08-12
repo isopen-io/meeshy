@@ -234,7 +234,9 @@ public struct ConversationSettingsView: View {
         if !viewModel.bannerUrl.isEmpty {
             // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
             // la bannière n'est téléchargée qu'une fois par installation.
-            CachedAsyncImage(url: viewModel.bannerUrl) {
+            // showsStatusOverlays: false — echec silencieux vers le gradient
+            // deja fourni ; pas de bouton retry sur une banniere decorative.
+            CachedAsyncImage(url: viewModel.bannerUrl, showsStatusOverlays: false) {
                 bannerPlaceholder
             }
             .scaledToFill()
@@ -315,8 +317,8 @@ public struct ConversationSettingsView: View {
                         Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Desactive", bundle: .module)).tag(0)
                         Text("10s").tag(10)
                         Text("30s").tag(30)
-                        Text("1min").tag(60)
-                        Text("5min").tag(300)
+                        Text(String(localized: "conversation.settings.slowmode.1min", defaultValue: "1 min", bundle: .module)).tag(60)
+                        Text(String(localized: "conversation.settings.slowmode.5min", defaultValue: "5 min", bundle: .module)).tag(300)
                     }
                     .pickerStyle(.segmented)
                 }
@@ -534,7 +536,7 @@ public struct ConversationSettingsView: View {
                     viewModel.showLeaveConfirm = true
                 } label: {
                     HStack {
-                        Image(systemName: "arrow.right.square.fill")
+                        Image(systemName: "arrow.forward.square.fill")
                         Text(String(localized: "conversation.settings.leave.label", defaultValue: "Quitter la conversation", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))

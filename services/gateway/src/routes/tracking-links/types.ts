@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { httpUrlSchema } from '@meeshy/shared/utils/validation';
 
 /**
  * Helper pour enrichir un TrackingLink avec l'URL complète
@@ -21,7 +22,7 @@ export function enrichTrackingLink(link: TrackingLink, request?: FastifyRequest)
  * Schémas de validation Zod
  */
 export const createTrackingLinkSchema = z.object({
-  originalUrl: z.url('URL invalide'),
+  originalUrl: httpUrlSchema,
   name: z.string().max(32).optional(),
   campaign: z.string().max(100).optional(),
   source: z.string().max(100).optional(),

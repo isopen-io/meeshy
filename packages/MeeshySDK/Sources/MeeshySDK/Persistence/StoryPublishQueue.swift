@@ -21,7 +21,13 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// JSON payload of the [StorySlide] array as produced by the composer.
     /// Decoding is deferred to the publish handler so the queue stays
     /// schema-agnostic if `StorySlide` evolves.
-    public let slidesPayload: Data
+    ///
+    /// `internal(set)` : le SEUL mutateur légitime est
+    /// `StoryPublishQueue.updateSlidesPayload`. Le champ est devenu variable
+    /// pour que le write-ahead parte immédiatement avec les slides BRUTES
+    /// (durabilité) et que l'enrichissement thumbHash le rattrape en aval —
+    /// jamais pour ouvrir une réécriture arbitraire du payload persisté.
+    public internal(set) var slidesPayload: Data
     /// Optional explicit `repostOfId` for stories that are reposts.
     public let repostOfId: String?
     /// References to local media files so we can validate they still exist
@@ -39,11 +45,17 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// résolve le texte/audio dans la langue préférée du viewer. Optionnelle pour
     /// rester rétro-compatible avec les rows persistés avant ce champ (→ `nil`).
     public let originalLanguage: String?
+    /// Brouillon (`StoryDraftStore`) dont cette publication est issue. Le
+    /// brouillon SURVIT au hand-off (gelé, `pendingPublishAt`) : seul le
+    /// SUCCÈS serveur le supprime, l'échec PERMANENT le ramène éditable avec
+    /// son erreur. Optionnel pour rester rétro-compatible avec les items
+    /// persistés avant ce champ (→ `nil`, chemin de reprise MANUELLE inchangé).
+    public let draftId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
-        case originalLanguage
+        case originalLanguage, draftId
     }
 
     public init(
@@ -53,7 +65,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         mediaReferences: [StoryMediaReference] = [],
         tempStoryId: String? = nil,
         visibilityUserIds: [String]? = nil,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        draftId: String? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -67,6 +80,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.lastError = nil
         self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage
+        self.draftId = draftId
     }
 
     public init(from decoder: Decoder) throws {
@@ -82,6 +96,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         self.visibilityUserIds = try container.decodeIfPresent([String].self, forKey: .visibilityUserIds)
         self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
+        self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
     }
 }
 
@@ -138,6 +153,20 @@ public struct StoryPublishSuccess: Sendable {
     public let tempStoryId: String
     /// Server-assigned post id for the newly published story.
     public let publishedStoryId: String
+    /// Brouillon d'origine de l'item publié — le succès serveur confirmé est
+    /// le SEUL événement qui autorise sa suppression. `nil` = item legacy.
+    public let draftId: String?
+
+    /// Init public : ces payloads franchissent la frontière de module (les
+    /// consommateurs s'y abonnent et doivent pouvoir en fabriquer un pour
+    /// exercer leur propre réaction à une disposition de queue).
+    public init(queueId: String, tempStoryId: String, publishedStoryId: String,
+                draftId: String? = nil) {
+        self.queueId = queueId
+        self.tempStoryId = tempStoryId
+        self.publishedStoryId = publishedStoryId
+        self.draftId = draftId
+    }
 }
 
 public enum StoryPublishFailureReason: Sendable, Equatable {
@@ -156,6 +185,18 @@ public struct StoryPublishFailure: Sendable {
     public let queueId: String
     public let tempStoryId: String
     public let reason: StoryPublishFailureReason
+    /// Brouillon d'origine de l'item échoué — un échec PERMANENT le ramène
+    /// éditable, avec son erreur. `nil` = item legacy (reprise manuelle).
+    public let draftId: String?
+
+    /// Init public : même raison que `StoryPublishSuccess`.
+    public init(queueId: String, tempStoryId: String, reason: StoryPublishFailureReason,
+                draftId: String? = nil) {
+        self.queueId = queueId
+        self.tempStoryId = tempStoryId
+        self.reason = reason
+        self.draftId = draftId
+    }
 }
 
 // MARK: - Story Publish Queue
@@ -180,7 +221,27 @@ public actor StoryPublishQueue {
     private static let maxRetries = 5
     /// Exponential backoff schedule (seconds). Index = retryCount before
     /// next attempt. Beyond `maxRetries` the item is failed permanently.
+    /// TODO(lot ultérieur) : DÉCLARÉ MAIS JAMAIS LU — il n'existe aucune porte
+    /// temporelle entre deux passes, les passes sont déclenchées par
+    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`. Le
+    /// brancher transformerait le comportement de reprise (fenêtres de
+    /// plusieurs heures) : hors périmètre, mais ne pas croire qu'il s'applique.
     private static let retryDelays: [TimeInterval] = [30, 120, 600, 3600, 7200]
+    /// Un item fautif ne doit pas geler les suivants ; une panne réseau ne doit
+    /// pas brûler le budget de toute la file. La frontière entre les deux est
+    /// le nombre d'échecs retryables CONSÉCUTIFS. Sans porte temporelle entre
+    /// deux passes (cf. `retryDelays`), un `continue` inconditionnel brûlerait
+    /// 1 tentative sur CHAQUE item à chaque passe : 5 flaps réseau suffiraient
+    /// à envoyer toute la file en échec permanent.
+    private static let maxConsecutiveRetryableFailures = 2
+    /// Une passe ne doit jamais retenir `isProcessing` plus de ~7 s : au-delà,
+    /// un `enqueue` concurrent attendrait le prochain déclencheur alors que le
+    /// réseau va manifestement bien (le jitter inter-items ferait dormir une
+    /// file pleine jusqu'à ~35 s). Le reliquat part dans une passe de suivi
+    /// immédiate. Le budget compte les items réellement TENTÉS : un item
+    /// revendiqué ailleurs est sauté sans délai et ne coûte donc rien — le
+    /// compter ferait boucler la passe à vide sur une file de claims.
+    private static let maxItemsPerSweep = 10
     private static let queueFileName = "story_publish_queue.json"
     /// Cap on the retry-able failure history (`failedItems`). Local media is
     /// preserved for these items (unlike `items`, which drops media on any
@@ -259,7 +320,8 @@ public actor StoryPublishQueue {
             publishFailed.send(StoryPublishFailure(
                 queueId: dropped.id,
                 tempStoryId: dropped.tempStoryId,
-                reason: .maxRetriesReached
+                reason: .maxRetriesReached,
+                draftId: dropped.draftId
             ))
         }
         items.append(item)
@@ -274,19 +336,37 @@ public actor StoryPublishQueue {
         saveToDisk()
     }
 
+    /// Remplace le payload d'un item DÉJÀ persisté, sans toucher à son identité
+    /// (id, tempStoryId, createdAt, retryCount, mediaReferences). Sert au calcul
+    /// EN AVAL des thumbHashes : le write-ahead part immédiatement avec les
+    /// slides brutes, l'enrichissement le rattrape. No-op si l'id est inconnu
+    /// (item déjà drainé/annulé entre-temps) — un kill dans cette fenêtre laisse
+    /// une story sans thumbHash, publiée correctement au drain de boot : seul le
+    /// placeholder flou du lecteur manque (durabilité > cosmétique).
+    public func updateSlidesPayload(_ itemId: String, _ payload: Data) {
+        guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return }
+        items[idx].slidesPayload = payload
+        saveToDisk()
+    }
+
     // MARK: - In-flight marking (E5 write-ahead)
 
-    /// E5 — ids des items dont l'upload est piloté EN CE MOMENT par le chemin
-    /// online de l'UI (write-ahead). VOLATILE à dessein : jamais persisté.
-    /// Pendant la vie du process, `processNext()` saute ces items (pas de
-    /// double publication pendant que l'upload UI tourne) ; après un kill le
-    /// marqueur disparaît et l'item persisté redevient naturellement éligible
-    /// au drain de boot — la sémantique « inflight orphelin → pending » sans
-    /// champ persisté ni migration de format.
+    /// E5 — ids des items REVENDIQUÉS en ce moment par l'un des deux
+    /// producteurs : le chemin online de l'UI (write-ahead) ou le balayage de
+    /// fond `processNext()`. Ce n'est plus un marqueur « posé par l'UI » mais un
+    /// verrou d'exclusion PARTAGÉ — la seule barrière contre la double
+    /// publication d'un même item persisté. VOLATILE à dessein : jamais
+    /// persisté ; après un kill le marqueur disparaît et l'item redevient
+    /// naturellement éligible au drain de boot — la sémantique « inflight
+    /// orphelin → pending » sans champ persisté ni migration de format.
     private var inFlightIds: Set<String> = []
 
-    public func markInFlight(_ itemId: String) {
-        inFlightIds.insert(itemId)
+    /// Revendication ATOMIQUE : `false` = un autre producteur (drain de fond ou
+    /// chemin online) publie déjà cet item. L'appelant DOIT lire ce retour —
+    /// c'est la seule barrière contre la double publication.
+    @discardableResult
+    public func markInFlight(_ itemId: String) -> Bool {
+        inFlightIds.insert(itemId).inserted
     }
 
     public func clearInFlight(_ itemId: String) {
@@ -392,16 +472,34 @@ public actor StoryPublishQueue {
         var permanentFailureIds: [String] = []
         var successIds: [String] = []
 
-        for (index, item) in items.enumerated() {
-            // E5 — un item write-ahead dont l'upload online est en cours dans
-            // CE process ne doit pas être double-publié par le drain.
-            if inFlightIds.contains(item.id) { continue }
+        // Un item fautif ne gèle plus le balayage (`continue`), mais deux
+        // échecs retryables d'affilée signent une panne réseau : on arrête là
+        // plutôt que de brûler le budget de retry de toute la file.
+        var consecutiveRetryableFailures = 0
+        // Vrai quand la passe s'est arrêtée sur le CAP DE TAILLE (et non sur
+        // une panne) : le reliquat mérite alors une passe de suivi immédiate.
+        var didHitSweepCap = false
+        // Items réellement TENTÉS dans cette passe (les sauts n'en sont pas).
+        var attemptedInSweep = 0
+
+        for item in items {
+            guard attemptedInSweep < Self.maxItemsPerSweep else {
+                didHitSweepCap = true
+                break
+            }
+            // E5 — revendication ATOMIQUE : un item déjà détenu par l'autre
+            // producteur (upload online write-ahead) n'est pas double-publié.
+            // Posée AVANT le contrôle des médias, avec son `defer` juste après,
+            // pour qu'aucune sortie d'itération ne laisse l'item revendiqué.
+            guard markInFlight(item.id) else { continue }
+            defer { clearInFlight(item.id) }
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
-            if index > 0 {
+            if attemptedInSweep > 0 {
                 let jitter = UInt64(Double.random(in: 200...700) * 1_000_000)
                 try? await Task.sleep(nanoseconds: jitter)
             }
+            attemptedInSweep += 1
 
             // Hash-check : every referenced local media must still exist.
             let missing = item.mediaReferences.filter {
@@ -412,8 +510,10 @@ public actor StoryPublishQueue {
                 failurePayloads.append(StoryPublishFailure(
                     queueId: item.id,
                     tempStoryId: item.tempStoryId,
-                    reason: .missingLocalMedia(elementIds: missing.map(\.elementId))
+                    reason: .missingLocalMedia(elementIds: missing.map(\.elementId)),
+                    draftId: item.draftId
                 ))
+                consecutiveRetryableFailures = 0
                 continue
             }
 
@@ -423,19 +523,25 @@ public actor StoryPublishQueue {
                 successPayloads.append(StoryPublishSuccess(
                     queueId: item.id,
                     tempStoryId: item.tempStoryId,
-                    publishedStoryId: publishedId
+                    publishedStoryId: publishedId,
+                    draftId: item.draftId
                 ))
+                consecutiveRetryableFailures = 0
             } catch is StoryPublishUnrecoverableError {
                 permanentFailureIds.append(item.id)
                 failurePayloads.append(StoryPublishFailure(
                     queueId: item.id,
                     tempStoryId: item.tempStoryId,
-                    reason: .unrecoverable(message: "Server rejected the story (validation, expiry, or visibility constraint)")
+                    reason: .unrecoverable(message: "Server rejected the story (validation, expiry, or visibility constraint)"),
+                    draftId: item.draftId
                 ))
+                consecutiveRetryableFailures = 0
             } catch {
-                // Retryable failure : bump retryCount and stop processing the
-                // queue (the next reconnect or scheduled retry will pick up
-                // where we left off).
+                // Échec retryable : on charge le budget de CET item puis on
+                // poursuit sur les suivants — ils sont indépendants et
+                // potentiellement publiables. Seule une SÉRIE d'échecs
+                // (cf. `maxConsecutiveRetryableFailures`) fait conclure à une
+                // panne réseau et arrête la passe.
                 if let idx = items.firstIndex(where: { $0.id == item.id }) {
                     items[idx].retryCount += 1
                     items[idx].lastError = error.localizedDescription
@@ -445,11 +551,14 @@ public actor StoryPublishQueue {
                         failurePayloads.append(StoryPublishFailure(
                             queueId: item.id,
                             tempStoryId: item.tempStoryId,
-                            reason: .maxRetriesReached
+                            reason: .maxRetriesReached,
+                            draftId: item.draftId
                         ))
                     }
                 }
-                break
+                consecutiveRetryableFailures += 1
+                guard consecutiveRetryableFailures < Self.maxConsecutiveRetryableFailures else { break }
+                continue
             }
         }
 
@@ -491,6 +600,17 @@ public actor StoryPublishQueue {
         if !successIds.isEmpty || !permanentFailureIds.isEmpty {
             logger.info("Processed: \(successIds.count) succeeded, \(permanentFailureIds.count) permanently failed, \(self.items.count) still pending")
         }
+
+        // Passe de suivi : la précédente s'est arrêtée sur le cap de TAILLE, pas
+        // sur une panne. `isProcessing` est relâché par le `defer` avant que
+        // cette Task ne s'exécute, donc le reliquat repart aussitôt. Le cap ne
+        // se déclenche que si dix items ont été TENTÉS — une passe qui n'a fait
+        // que sauter des claims ne se re-programme donc jamais (sinon elle
+        // boucherait l'acteur en boucle serrée, sans jitter, jusqu'à ce qu'une
+        // revendication se libère).
+        if didHitSweepCap, !items.isEmpty {
+            Task { await self.processNext() }
+        }
     }
 
     /// Appends a permanently-failed item to the retry-able history, dropping
@@ -514,13 +634,14 @@ public actor StoryPublishQueue {
         var parents: Set<URL> = []
         for ref in item.mediaReferences {
             let url = URL(fileURLWithPath: ref.localFilePath)
-            try? fm.removeItem(at: url)
+            FileManager.default.removeItemLogging(at: url, context: "story media cleanup")
             parents.insert(url.deletingLastPathComponent())
         }
         for parent in parents {
-            if let contents = try? fm.contentsOfDirectory(atPath: parent.path), contents.isEmpty {
-                try? fm.removeItem(at: parent)
-            }
+            // Répertoire déjà disparu = rien à réclamer.
+            guard let contents = try? fm.contentsOfDirectory(atPath: parent.path) else { continue }
+            guard contents.isEmpty else { continue }
+            FileManager.default.removeItemLogging(atPath: parent.path, context: "story empty media dir")
         }
     }
 
@@ -549,7 +670,12 @@ public actor StoryPublishQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }
@@ -558,7 +684,12 @@ public actor StoryPublishQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.failedQueueFileName)
     }
@@ -634,6 +765,14 @@ extension StoryPublishQueue {
     /// `discardFailedItem`/the cap without driving a real publish failure.
     func _testSetFailedItems(_ items: [StoryPublishQueueItem]) {
         self.failedItems = items
+    }
+
+    /// Clears any publish handler left over by a previous test. The queue is a
+    /// singleton actor, so a throwing handler leaked from an earlier test lets
+    /// `retryFailedItem`'s fire-and-forget drain re-fail the item concurrently
+    /// with the current test's assertions.
+    func _testResetPublishHandler() {
+        onPublish = nil
     }
 }
 #endif

@@ -41,59 +41,112 @@ public struct StoryTimelineView: View {
         public let kind: Kind
         public let clipIds: [String]
         public enum Kind: Equatable {
-            case video, audio, text, image
+            case video, audio, text, image, sticker
             case bgVideo, bgAudio, bgImage
+
+            /// Vrai pour les pistes de la section FOND — dérivé du flag
+            /// `isBackground` RÉEL des objets, jamais d'une position d'index.
+            public var isBackgroundSection: Bool {
+                switch self {
+                case .bgVideo, .bgAudio, .bgImage: return true
+                case .video, .audio, .text, .image, .sticker: return false
+                }
+            }
         }
         public var isEmpty: Bool { clipIds.isEmpty }
         public func containsClipId(_ id: String) -> Bool { clipIds.contains(id) }
     }
 
+    /// Partition sectionnée du projet (retour user 2026-07-20 : « placer les
+    /// pistes par section : BG → IMAGE/SON/VIDÉO puis FG → IMAGES/SONS/
+    /// VIDÉOS/TEXTE puis le listing »). Le fond est déterminé par le flag
+    /// `isBackground` de CHAQUE objet — l'ancien « premier de chaque type =
+    /// bg » étiquetait fond des clips qui n'en étaient pas.
+    private struct SectionedProject {
+        let bgImages: [StoryMediaObject]
+        let bgAudios: [StoryAudioPlayerObject]
+        let bgVideos: [StoryMediaObject]
+        let fgImages: [StoryMediaObject]
+        let fgAudios: [StoryAudioPlayerObject]
+        let fgVideos: [StoryMediaObject]
+        let texts: [StoryTextObject]
+        let stickers: [StorySticker]
+
+        init(project: TimelineProject) {
+            let isVideo: (StoryMediaObject) -> Bool = { $0.mediaType == StoryMediaKind.video.rawValue }
+            let isImage: (StoryMediaObject) -> Bool = { $0.mediaType == StoryMediaKind.image.rawValue }
+            bgImages = project.mediaObjects.filter { $0.isBackground && isImage($0) }
+            bgAudios = project.audioPlayerObjects.filter { $0.isBackground ?? false }
+            bgVideos = project.mediaObjects.filter { $0.isBackground && isVideo($0) }
+            fgImages = project.mediaObjects.filter { !$0.isBackground && isImage($0) }
+            fgAudios = project.audioPlayerObjects.filter { !($0.isBackground ?? false) }
+            fgVideos = project.mediaObjects.filter { !$0.isBackground && isVideo($0) }
+            texts = project.textObjects
+            stickers = project.stickerObjects
+        }
+    }
+
+    /// Titre de piste sticker, avec fallback intégré (« Sticker N ») pour ne PAS
+    /// dépendre d'une clé absente du catalogue — évite d'éditer le xcstrings.
+    private static func stickerTrackTitle(index: Int) -> String {
+        String(format: String(localized: "story.timeline.track.section.sticker",
+                              defaultValue: "Sticker %d", bundle: .module), index)
+    }
+
+    private static func sectionTitle(formatKey: String, index: Int) -> String {
+        String(format: String(localized: String.LocalizationValue(formatKey), bundle: .module), index)
+    }
+
+    /// Strip compact : mêmes SECTIONS que la vue déployée (FOND d'abord,
+    /// AVANT-PLAN ensuite), mais groupées en une lane par catégorie.
     public static func resolveCompactTracks(project: TimelineProject,
                                             selectedClipId: String?,
                                             maxCount: Int) -> [CompactTrack] {
+        let sections = SectionedProject(project: project)
         var allTracks: [CompactTrack] = []
-        // Split media by underlying kind so the compact strip labels images
-        // as "Image" and videos as "Vidéo" — collapsing both under a single
-        // "Vidéo" track was the bug surfaced when a slide had only photos.
-        let videoClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.video.rawValue }
-        let imageClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.image.rawValue }
-        if !videoClips.isEmpty {
+        func appendGrouped(_ ids: [String], id: String, formatKey: String, kind: CompactTrack.Kind) {
+            guard !ids.isEmpty else { return }
             allTracks.append(CompactTrack(
-                id: "video-1",
-                title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), 1),
-                kind: .bgVideo,
-                clipIds: videoClips.map { $0.id }
+                id: id,
+                title: sectionTitle(formatKey: formatKey, index: 1),
+                kind: kind,
+                clipIds: ids
             ))
         }
-        if !imageClips.isEmpty {
+        // Section FOND — IMAGE / SON / VIDÉO.
+        appendGrouped(sections.bgImages.map(\.id), id: "bg-image-1",
+                      formatKey: "story.timeline.track.section.image", kind: .bgImage)
+        appendGrouped(sections.bgAudios.map(\.id), id: "bg-audio-1",
+                      formatKey: "story.timeline.track.section.audio", kind: .bgAudio)
+        appendGrouped(sections.bgVideos.map(\.id), id: "bg-video-1",
+                      formatKey: "story.timeline.track.section.video", kind: .bgVideo)
+        // Section AVANT-PLAN — IMAGES / SONS / VIDÉOS / TEXTES.
+        appendGrouped(sections.fgImages.map(\.id), id: "image-1",
+                      formatKey: "story.timeline.track.section.image", kind: .image)
+        appendGrouped(sections.fgAudios.map(\.id), id: "audio-1",
+                      formatKey: "story.timeline.track.section.audio", kind: .audio)
+        appendGrouped(sections.fgVideos.map(\.id), id: "video-1",
+                      formatKey: "story.timeline.track.section.video", kind: .video)
+        appendGrouped(sections.texts.map(\.id), id: "text-1",
+                      formatKey: "story.timeline.track.section.text", kind: .text)
+        if !sections.stickers.isEmpty {
             allTracks.append(CompactTrack(
-                id: "image-1",
-                title: String(format: String(localized: "story.timeline.track.section.image", bundle: .module), 1),
-                kind: .bgImage,
-                clipIds: imageClips.map { $0.id }
+                id: "sticker-1",
+                title: stickerTrackTitle(index: 1),
+                kind: .sticker,
+                clipIds: sections.stickers.map(\.id)
             ))
         }
-        let audioClips = project.audioPlayerObjects
-        if !audioClips.isEmpty {
-            allTracks.append(CompactTrack(
-                id: "audio-1",
-                title: String(format: String(localized: "story.timeline.track.section.audio", bundle: .module), 1),
-                kind: .audio,
-                clipIds: audioClips.map { $0.id }
-            ))
-        }
-        let textClips = project.textObjects
-        if !textClips.isEmpty {
-            allTracks.append(CompactTrack(
-                id: "text-1",
-                title: String(format: String(localized: "story.timeline.track.section.text", bundle: .module), 1),
-                kind: .text,
-                clipIds: textClips.map { $0.id }
-            ))
-        }
+
         let nonEmpty = allTracks.filter { !$0.isEmpty }
         var picked: [CompactTrack] = []
-        if let selectedId = selectedClipId,
+        // Hisser la piste sélectionnée en tête ne sert que lorsque la place
+        // manque — c'est alors la seule façon de garder sous les yeux celle
+        // qu'on règle. Quand tout tient déjà, le hissage faisait permuter les
+        // lanes au moindre tap : rien de gagné, et le repère spatial de
+        // l'auteur qui saute.
+        if nonEmpty.count > maxCount,
+           let selectedId = selectedClipId,
            let selectedTrack = nonEmpty.first(where: { $0.containsClipId(selectedId) }) {
             picked.append(selectedTrack)
         }
@@ -104,44 +157,48 @@ public struct StoryTimelineView: View {
         return picked
     }
 
+    /// Vue déployée : une lane par clip, ordonnée par sections — FOND
+    /// (image/son/vidéo) puis AVANT-PLAN (images/sons/vidéos/textes). La
+    /// numérotation FG ne compte QUE les clips foreground de chaque kind
+    /// (une vidéo de fond ne consomme pas « VIDEO_1 »).
     public static func resolveAllTracks(project: TimelineProject) -> [CompactTrack] {
+        let sections = SectionedProject(project: project)
         var tracks: [CompactTrack] = []
-        // Group by media kind first so per-kind numbering ("Image 1", "Image 2",
-        // "Vidéo 1") matches what the user dropped onto the slide. Pre-fix this
-        // method lumped every non-audio media into the "Vidéo" bucket, so adding
-        // two photos surfaced as "Vidéo 1, Vidéo 2".
-        let videoClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.video.rawValue }
-        let imageClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.image.rawValue }
-        for (index, clip) in videoClips.enumerated() {
-            tracks.append(CompactTrack(
-                id: "video-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), index + 1),
-                kind: index == 0 ? .bgVideo : .video,
-                clipIds: [clip.id]
-            ))
+        func appendEach<T>(_ objects: [T], idPrefix: String, formatKey: String,
+                           kind: CompactTrack.Kind, clipId: (T) -> String) {
+            for (index, object) in objects.enumerated() {
+                tracks.append(CompactTrack(
+                    id: "\(idPrefix)-\(index + 1)",
+                    title: sectionTitle(formatKey: formatKey, index: index + 1),
+                    kind: kind,
+                    clipIds: [clipId(object)]
+                ))
+            }
         }
-        for (index, clip) in imageClips.enumerated() {
+        // Section FOND — IMAGE / SON / VIDÉO.
+        appendEach(sections.bgImages, idPrefix: "bg-image",
+                   formatKey: "story.timeline.track.section.image", kind: .bgImage, clipId: \.id)
+        appendEach(sections.bgAudios, idPrefix: "bg-audio",
+                   formatKey: "story.timeline.track.section.audio", kind: .bgAudio, clipId: \.id)
+        appendEach(sections.bgVideos, idPrefix: "bg-video",
+                   formatKey: "story.timeline.track.section.video", kind: .bgVideo, clipId: \.id)
+        // Section AVANT-PLAN — IMAGES / SONS / VIDÉOS / TEXTES.
+        appendEach(sections.fgImages, idPrefix: "image",
+                   formatKey: "story.timeline.track.section.image", kind: .image, clipId: \.id)
+        appendEach(sections.fgAudios, idPrefix: "audio",
+                   formatKey: "story.timeline.track.section.audio", kind: .audio, clipId: \.id)
+        appendEach(sections.fgVideos, idPrefix: "video",
+                   formatKey: "story.timeline.track.section.video", kind: .video, clipId: \.id)
+        appendEach(sections.texts, idPrefix: "text",
+                   formatKey: "story.timeline.track.section.text", kind: .text, clipId: \.id)
+        // Section AVANT-PLAN — STICKERS (emoji overlays), listés pour indiquer
+        // QUAND ils apparaissent. Titre avec fallback intégré (pas de clé xcstrings).
+        for (index, sticker) in sections.stickers.enumerated() {
             tracks.append(CompactTrack(
-                id: "image-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.image", bundle: .module), index + 1),
-                kind: index == 0 ? .bgImage : .image,
-                clipIds: [clip.id]
-            ))
-        }
-        for (index, audio) in project.audioPlayerObjects.enumerated() {
-            tracks.append(CompactTrack(
-                id: "audio-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.audio", bundle: .module), index + 1),
-                kind: index == 0 ? .bgAudio : .audio,
-                clipIds: [audio.id]
-            ))
-        }
-        for (index, text) in project.textObjects.enumerated() {
-            tracks.append(CompactTrack(
-                id: "text-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.text", bundle: .module), index + 1),
-                kind: .text,
-                clipIds: [text.id]
+                id: "sticker-\(index + 1)",
+                title: stickerTrackTitle(index: index + 1),
+                kind: .sticker,
+                clipIds: [sticker.id]
             ))
         }
         return tracks.filter { !$0.isEmpty }
@@ -168,22 +225,26 @@ public struct StoryTimelineView: View {
         }
     }
 
-    /// Étiquette de type d'une piste : `TYPE_index` (IMAGE_1, AUDIO_2…), en
-    /// majuscules avec underscore (format demandé). Un `customName` non-nil et
-    /// non-vide l'emporte sur le tag de type. Pure — testée sans monter la vue.
+    /// Étiquette de type d'une piste : `TYPE_index` (IMAGE_1, AUDIO_2…) pour
+    /// l'avant-plan, `BG_TYPE` SANS index pour la section FOND (le fond est
+    /// unique par nature — l'index n'apporte que du bruit). Majuscules avec
+    /// underscore (format demandé). Un `customName` non-nil et non-vide
+    /// l'emporte sur le tag de type. Pure — testée sans monter la vue.
     public static func typeLabel(kind: CompactTrack.Kind, index: Int,
                                  customName: String?) -> String {
         if let customName, !customName.trimmingCharacters(in: .whitespaces).isEmpty {
             return customName
         }
-        let tag: String
         switch kind {
-        case .bgVideo, .video: tag = "VIDEO"
-        case .bgImage, .image: tag = "IMAGE"
-        case .bgAudio, .audio: tag = "AUDIO"
-        case .text:            tag = "TEXT"
+        case .bgVideo: return "BG_VIDEO"
+        case .bgImage: return "BG_IMAGE"
+        case .bgAudio: return "BG_AUDIO"
+        case .video:   return "VIDEO_\(index)"
+        case .image:   return "IMAGE_\(index)"
+        case .audio:   return "AUDIO_\(index)"
+        case .text:    return "TEXT_\(index)"
+        case .sticker: return "STICKER_\(index)"
         }
-        return "\(tag)_\(index)"
     }
 
     /// Durée totale (secondes) d'une piste = borne de fin max de ses clips, via
@@ -210,6 +271,12 @@ public struct StoryTimelineView: View {
                     startTime: start, duration: t.duration.map { Float($0) },
                     slideDuration: project.slideDuration)
                 maxEnd = max(maxEnd, start + dur)
+            } else if let s = project.stickerObjects.first(where: { $0.id == id }) {
+                let start = Float(s.startTime ?? 0)
+                let dur = TimelineGeometry.effectiveClipDuration(
+                    startTime: start, duration: s.duration.map { Float($0) },
+                    slideDuration: project.slideDuration)
+                maxEnd = max(maxEnd, start + dur)
             }
         }
         return maxEnd
@@ -228,6 +295,23 @@ public struct StoryTimelineView: View {
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.name }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.name }
         return nil
+    }
+
+    /// Nombre de lanes que « déployer » RÉVÉLERAIT réellement : ce que le
+    /// déploiement affiche (une lane par clip) moins ce que le strip compact
+    /// montre déjà (une lane par catégorie, plafonnée).
+    ///
+    /// L'ancien compte partait de quatre seaux fourre-tout — médias non-audio,
+    /// audios, textes, stickers — sans rapport ni avec les huit catégories du
+    /// strip compact ni avec le une-lane-par-clip du déploiement. Sur une
+    /// slide à cinq vidéos il rendait `1 - 3 = 0` : le bouton disparaissait,
+    /// et avec lui l'accès aux quatre pistes cachées.
+    public static func hiddenTrackCount(project: TimelineProject, selectedClipId: String?) -> Int {
+        let deployed = resolveAllTracks(project: project).count
+        let visible = resolveCompactTracks(project: project,
+                                           selectedClipId: selectedClipId,
+                                           maxCount: compactMaxTracks).count
+        return max(0, deployed - visible)
     }
 
     public static func footerLabelKey(isExpanded: Bool) -> String {
@@ -276,6 +360,7 @@ public struct StoryTimelineView: View {
                 .frame(height: isExpanded ? 220 : 360)
                 .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
             }
+            operationsBar
             transport
             scrubRegion
             footerTrigger
@@ -290,12 +375,12 @@ public struct StoryTimelineView: View {
                 : MeeshyColors.indigo50.opacity(0.32)
         )
         .gesture(swipeUpExpand)
-        // Full editing surface: selecting a clip, keyframe or transition
-        // floats its inspector over the tracks — same host the Pro layout
-        // used, so selection is never a dead end in the unified timeline.
-        .overlay(alignment: .bottomTrailing) {
-            TimelineInspectorHost(viewModel: viewModel)
-        }
+        // Surface d'édition complète : sélectionner un clip, un keyframe ou une
+        // transition ouvre son inspecteur en SHEET (item 8, 2026-07-25). Le
+        // survol translucide qu'on utilisait avant recouvrait précisément la
+        // piste qu'on réglait ; la sheet libère la timeline et apporte les
+        // affordances système (poignée, glisser-fermer, paliers de hauteur).
+        .timelineInspectorSheet(viewModel: viewModel)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.container", defaultValue: "Timeline", bundle: .module))
     }
@@ -308,6 +393,22 @@ public struct StoryTimelineView: View {
     /// le point de bascule si le produit retranche à nouveau.
     public static let transportShowsTimeReadout = true
 
+    /// Bande d'opérations SOUS la bande des outils : historique, snap,
+    /// prolongation « +10 s » et enregistrement (retour user 2026-07-20) —
+    /// le transport en dessous ne garde que lecture / temps / zoom / son.
+    private var operationsBar: some View {
+        TimelineOperationsBar(
+            canUndo: viewModel.canUndo,
+            canRedo: viewModel.canRedo,
+            isSnapEnabled: viewModel.isSnapEnabled,
+            onUndo: { viewModel.undo() },
+            onRedo: { viewModel.redo() },
+            onSnapToggle: { viewModel.toggleSnap() },
+            onSave: onExport,
+            onExtendDuration: { viewModel.extendSlideDuration() }
+        )
+    }
+
     private var transport: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
@@ -316,20 +417,26 @@ public struct StoryTimelineView: View {
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
             showsTimeReadout: Self.transportShowsTimeReadout,
-            // Vue unifiée : undo/redo ET snap vivent dans le transport —
-            // il n'y a plus de TimelineToolbar dédiée.
-            canUndo: viewModel.canUndo,
-            canRedo: viewModel.canRedo,
-            isSnapEnabled: viewModel.isSnapEnabled,
+            // Historique, snap et enregistrement vivent dans la bande
+            // d'opérations au-dessus — nil masque leurs clusters ici.
+            canUndo: nil,
+            canRedo: nil,
+            isSnapEnabled: nil,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
-            onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
-            onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
+            // Bornes partagées avec le pinch (`TimelineScrubArea.zoomRange`,
+            // 5 % – 800 %) — plus de littéraux dupliqués.
+            onZoomIn: { viewModel.zoomScale = min(
+                TimelineScrubArea<AnyView>.zoomRange.upperBound,
+                viewModel.zoomScale * 1.25) },
+            onZoomOut: { viewModel.zoomScale = max(
+                TimelineScrubArea<AnyView>.zoomRange.lowerBound,
+                viewModel.zoomScale / 1.25) },
             onZoomReset: { viewModel.zoomScale = 1.0 },
-            onUndo: { viewModel.undo() },
-            onRedo: { viewModel.redo() },
-            onSnapToggle: { viewModel.toggleSnap() },
-            onSave: onExport
+            onUndo: {},
+            onRedo: {},
+            onSnapToggle: {},
+            onSave: nil
         )
     }
 
@@ -362,7 +469,6 @@ public struct StoryTimelineView: View {
                     rulerHeight: 22,
                     isPlaying: viewModel.isPlaying,
                     onZoomScaleChanged: { viewModel.zoomScale = $0 },
-                    onSlideDurationChanged: { viewModel.setSlideDuration($0) },
                     snapGuideTime: viewModel.selection.activeDrag.flatMap {
                         $0.snappedTo != nil ? $0.currentStartTime : nil
                     },
@@ -395,6 +501,7 @@ public struct StoryTimelineView: View {
                     laneWidth: laneWidth,
                     laneHeight: 52,
                     iconName: Self.iconName(for: track.kind),
+                    isBackgroundSection: track.kind.isBackgroundSection,
                     labelColumnWidth: TimelineScrubArea<AnyView>.laneLabelWidth,
                     durationLabel: TrackBarView<AnyView>.formatTrackDuration(clipDuration),
                     typeLabel: Self.typeLabel(kind: track.kind, index: index, customName: customName)
@@ -409,7 +516,11 @@ public struct StoryTimelineView: View {
                             selectedId: viewModel.selection.selectedClipId,
                             geometry: geometry,
                             laneHeight: 52,
-                            onSelect: { viewModel.selectClip(id: $0) }
+                            // Un marqueur fait 12–16 pt : exiger un double tap
+                            // sur une cible aussi petite serait une régression.
+                            // Il ouvre donc sa fiche au tap simple, contrairement
+                            // aux pistes, qui se contentent de se surligner.
+                            onSelect: { viewModel.inspectClip(id: $0) }
                         )
                         LaneTransitionOverlays(
                             junctions: TransitionJunctionResolver.junctions(
@@ -418,14 +529,14 @@ public struct StoryTimelineView: View {
                             isDark: colorScheme == .dark,
                             geometry: geometry,
                             laneHeight: 52,
-                            onSelect: { viewModel.selectClip(id: $0) },
+                            onSelect: { viewModel.inspectClip(id: $0) },
                             onCreate: { junction in
                                 if let id = viewModel.addTransition(
                                     fromClipId: junction.fromClipId,
                                     toClipId: junction.toClipId,
                                     kind: .crossfade,
                                     duration: 0.5) {
-                                    viewModel.selectClip(id: id)
+                                    viewModel.inspectClip(id: id)
                                 }
                             }
                         )
@@ -442,7 +553,7 @@ public struct StoryTimelineView: View {
 
     @ViewBuilder
     private var footerTrigger: some View {
-        let hidden = max(0, allTrackCount - Self.compactMaxTracks)
+        let hidden = hiddenTrackCount
         // Hide the deploy button when there are no extra tracks to reveal —
         // showing "+ 0 track(s)" is noise that distracts from the empty state.
         if hidden > 0 || isExpanded {
@@ -489,6 +600,7 @@ public struct StoryTimelineView: View {
         case .bgImage, .image: return "8B5CF6"
         case .bgAudio, .audio: return "818CF8"
         case .text:            return "A5B4FC"
+        case .sticker:         return "C7D2FE"
         }
     }
 
@@ -502,6 +614,7 @@ public struct StoryTimelineView: View {
         case .bgImage, .image: return "photo.fill"
         case .bgAudio, .audio: return "waveform"
         case .text:            return "textformat"
+        case .sticker:         return "face.smiling"
         }
     }
 
@@ -543,12 +656,16 @@ public struct StoryTimelineView: View {
                 imageURL: (media.kind == .image && mediaFrames.isEmpty)
                     ? CacheCoordinator.imageLocalFileURL(for: media.postMediaId)
                     : nil,
+                keyframes: media.keyframes ?? [],
+                isMuted: media.isMuted,
+                // Mute UN-BOUTON : vidéos réelles uniquement (une image ou un
+                // clip synthétique n'a rien à couper). Fonctionne aussi sur un
+                // FOND verrouillé — couper le son n'est pas un déplacement.
+                onToggleMute: (media.kind == .video && !isSynthetic)
+                    ? { viewModel.toggleClipMute(id: media.id) }
+                    : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
-                onDoubleTap: {
-                    viewModel.selectClip(id: media.id)
-                    viewModel.splitSelectedAtPlayhead()
-                },
-                onLongPress: { viewModel.selectClip(id: media.id) },
+                onDoubleTap: { viewModel.inspectClip(id: media.id) },
                 onTrimStartDelta: { delta in
                     viewModel.trimClipStart(id: media.id,
                                             deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
@@ -614,9 +731,9 @@ public struct StoryTimelineView: View {
                 laneHeight: laneHeight,
                 waveformSamples: audio.waveformSamples,
                 audioURL: viewModel.loadedURL(for: audio.id),
+                keyframes: audio.keyframes ?? [],
                 onTap: { viewModel.selectClip(id: audio.id) },
-                onDoubleTap: { viewModel.selectClip(id: audio.id) },
-                onLongPress: { viewModel.selectClip(id: audio.id) },
+                onDoubleTap: { viewModel.inspectClip(id: audio.id) },
                 onMoveDelta: { delta in
                     // Snowball-drift guard mirrors VideoClipBar above: only call
                     // beginClipDrag once per gesture (when activeDrag is absent
@@ -643,7 +760,8 @@ public struct StoryTimelineView: View {
                 onTrimEndDelta: { delta in
                     viewModel.trimClipEnd(id: audio.id,
                                           deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
-                }
+                },
+                onToggleMute: { viewModel.toggleClipMute(id: audio.id) }
             )
             .equatable()
             if audio.isBackground == true, audio.loop == true {
@@ -671,8 +789,7 @@ public struct StoryTimelineView: View {
                 geometry: geometry,
                 laneHeight: laneHeight,
                 onTap: { viewModel.selectClip(id: text.id) },
-                onDoubleTap: { viewModel.selectClip(id: text.id) },
-                onLongPress: { viewModel.selectClip(id: text.id) },
+                onDoubleTap: { viewModel.inspectClip(id: text.id) },
                 onMoveDelta: { delta in
                     // Snowball-drift guard mirrors VideoClipBar above: only call
                     // beginClipDrag once per gesture (when activeDrag is absent
@@ -702,14 +819,55 @@ public struct StoryTimelineView: View {
                 }
             )
             .equatable()
+        } else if let sticker = viewModel.project.stickerObjects.first(where: { $0.id == clipId }) {
+            // Sticker = overlay temporel comme le texte (même famille start/durée).
+            // On réutilise `TextClipBar` avec l'emoji comme contenu ; déplacer la
+            // barre fixe QUAND le sticker apparaît, et l'aimant s'accroche aux
+            // bords des autres objets (cf. magneticSnapCandidates).
+            TextClipBar(
+                clipId: sticker.id,
+                content: sticker.emoji,
+                startTime: Float(sticker.startTime ?? 0),
+                duration: TimelineGeometry.effectiveClipDuration(
+                    startTime: Float(sticker.startTime ?? 0),
+                    duration: sticker.duration.map { Float($0) },
+                    slideDuration: viewModel.project.slideDuration),
+                isSelected: viewModel.selection.selectedClipId == sticker.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                onTap: { viewModel.selectClip(id: sticker.id) },
+                onDoubleTap: { viewModel.inspectClip(id: sticker.id) },
+                onMoveDelta: { delta in
+                    let stickerId = sticker.id
+                    if viewModel.selection.activeDrag?.clipId != stickerId {
+                        viewModel.beginClipDrag(clipId: stickerId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
+                    viewModel.dragClipMoved(
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: sticker.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: sticker.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                }
+            )
+            .equatable()
         }
     }
 
-    private var allTrackCount: Int {
-        var c = 0
-        if !viewModel.project.mediaObjects.filter({ !($0.mediaType == "audio") }).isEmpty { c += 1 }
-        if !viewModel.project.audioPlayerObjects.isEmpty { c += 1 }
-        if !viewModel.project.textObjects.isEmpty { c += 1 }
-        return c
+    private var hiddenTrackCount: Int {
+        Self.hiddenTrackCount(project: viewModel.project,
+                              selectedClipId: viewModel.selection.selectedClipId)
     }
 }
