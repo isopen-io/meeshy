@@ -18,7 +18,35 @@ export interface MessageMutationManager {
     messageId: string;
     payload: Record<string, unknown>;
   }): Promise<void>;
+  emitUnreadCountsToRecipients?(params: {
+    conversationId: string;
+    senderId: string | null | undefined;
+  }): Promise<void>;
 }
+
+type MessageMutationBase = {
+  prisma: MutationPrisma;
+  manager: MessageMutationManager | null | undefined;
+  conversationId: string;
+  actorUserId: string;
+  messageId: string;
+  payload: Record<string, unknown>;
+  onError?: (error: unknown) => void;
+};
+
+/**
+ * `authorId` n'existe QUE sur la suppression, et y est REQUIS.
+ *
+ * Requis, parce qu'une suppression doit repousser la pastille de non-lus et que
+ * l'exclusion porte sur l'AUTEUR du message : le type est ce qui empêche un
+ * sixième transport de suppression de rouvrir la brèche en silence.
+ *
+ * Absent de l'édition, parce qu'éditer ne change aucun compte : redemander le
+ * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
+ */
+export type MessageMutationParams =
+  | (MessageMutationBase & { eventType: 'edited' })
+  | (MessageMutationBase & { eventType: 'deleted'; authorId: string | null | undefined });
 
 const EVENT_NAME = {
   edited: SERVER_EVENTS.MESSAGE_EDITED,
@@ -56,16 +84,7 @@ const EVENT_NAME = {
  * successful edit into a 500. `onError` lets callers log against the
  * originating request.
  */
-export async function broadcastMessageMutation(params: {
-  prisma: MutationPrisma;
-  manager: MessageMutationManager | null | undefined;
-  conversationId: string;
-  actorUserId: string;
-  eventType: 'edited' | 'deleted';
-  messageId: string;
-  payload: Record<string, unknown>;
-  onError?: (error: unknown) => void;
-}): Promise<void> {
+export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
   const { prisma, manager, conversationId, actorUserId, eventType, messageId, payload, onError } = params;
   if (!manager) return;
 
@@ -76,6 +95,31 @@ export async function broadcastMessageMutation(params: {
   }
 
   await emitConversationPreviewUpdate(prisma, manager.getIO(), conversationId, actorUserId, onError);
+
+  // (4) La pastille de non-lus, sur une SUPPRESSION seulement : le message ne
+  // compte plus, et sans cette poussée la liste web (`staleTime: Infinity`) le
+  // compterait indéfiniment. Le décompte est déjà juste — il ne manquait que de
+  // le redemander. Exclusion sur l'AUTEUR, jamais sur l'acteur : un modérateur
+  // qui supprime le message d'un autre est lui-même un destinataire à
+  // rafraîchir. Cf. `README.md` § « La pastille de non-lus ».
+  //
+  // Fire-and-forget, comme dans `broadcastLinkMessage` et pour la même raison :
+  // l'unité partagée s'annonce « never awaited on the ACK path », et elle coûte
+  // jusqu'à deux requêtes. Les attendre les mettrait devant la réponse HTTP de
+  // la suppression, pour un canal purement latéral. Le `.catch()` est
+  // obligatoire — un rejet non traité termine le process sous le
+  // `--unhandled-rejections=throw` par défaut de Node 22 — et le try/catch garde
+  // l'APPEL lui-même (un double de manager sans la méthode).
+  if (eventType === 'deleted') {
+    try {
+      void manager.emitUnreadCountsToRecipients?.({
+        conversationId,
+        senderId: params.authorId,
+      })?.catch((error: unknown) => onError?.(error));
+    } catch (error) {
+      onError?.(error);
+    }
+  }
 
   // Fire-and-forget: `enqueueOfflineMessageMutation` swallows its own failures,
   // so awaiting it would only add the participant lookup's latency to the

@@ -194,3 +194,136 @@ describe('DELETE /posts/:postId/like — retirer suit la même garde que poser',
     await app.close();
   });
 });
+
+// ─── Repost simple → redirection vers la racine (tâche 9) ────────────────────
+
+const ROOT_ID = '507f1f77bcf86cd799439ccc';
+const OTHER_REPOST_ID = '507f1f77bcf86cd799439ddd';
+
+function repostRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: POST_ID,
+    authorId: AUTHOR_ID,
+    visibility: 'PUBLIC',
+    visibilityUserIds: [],
+    isQuote: false,
+    repostOfId: ROOT_ID,
+    originalRepostOfId: ROOT_ID,
+    ...overrides,
+  };
+}
+
+function rootRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: ROOT_ID,
+    authorId: 'root-author-1',
+    visibility: 'PUBLIC',
+    visibilityUserIds: [],
+    isQuote: false,
+    repostOfId: null,
+    originalRepostOfId: null,
+    ...overrides,
+  };
+}
+
+function makeRedirectPrisma(byId: Record<string, unknown | null>) {
+  return {
+    post: {
+      findFirst: jest.fn<any>().mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(byId[where.id] ?? null)),
+      update: jest.fn<any>().mockResolvedValue({}),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    postImpression: { create: jest.fn<any>(), createMany: jest.fn<any>() },
+    friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+    participant: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+  } as any;
+}
+
+describe('POST /posts/:postId/like — repost simple redirige vers la racine', () => {
+  it('aime la RACINE, pas le repost affiché — likePost reçoit l’id de la racine', async () => {
+    const prisma = makeRedirectPrisma({ [POST_ID]: repostRecord(), [ROOT_ID]: rootRecord() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockLikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID, expect.any(String));
+    await app.close();
+  });
+
+  it('idempotence : liker via deux reposts distincts du MÊME original cible tous les deux la racine', async () => {
+    const prisma = makeRedirectPrisma({
+      [POST_ID]: repostRecord({ id: POST_ID }),
+      [OTHER_REPOST_ID]: repostRecord({ id: OTHER_REPOST_ID }),
+      [ROOT_ID]: rootRecord(),
+    });
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+    await app.inject({ method: 'POST', url: `/posts/${OTHER_REPOST_ID}/like`, payload: {} });
+
+    expect(mockLikePost).toHaveBeenNthCalledWith(1, ROOT_ID, USER_ID, expect.any(String));
+    expect(mockLikePost).toHaveBeenNthCalledWith(2, ROOT_ID, USER_ID, expect.any(String));
+    await app.close();
+  });
+
+  it('une CITATION garde sa vie sociale propre — likePost reçoit l’id de la citation elle-même', async () => {
+    const prisma = makeRedirectPrisma({
+      [POST_ID]: repostRecord({ isQuote: true }),
+      [ROOT_ID]: rootRecord(),
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String));
+    await app.close();
+  });
+
+  it('racine devenue invisible pour l’acteur → refus standard, aucun like posé (jamais un crédit silencieux)', async () => {
+    const prisma = makeRedirectPrisma({
+      [POST_ID]: repostRecord(),
+      [ROOT_ID]: rootRecord({ visibility: 'PRIVATE' }),
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('POST_NOT_FOUND');
+    expect(mockLikePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('DELETE /posts/:postId/like — repost simple redirige vers la racine', () => {
+  it('retire le like posé sur la RACINE — unlikePost reçoit l’id de la racine', async () => {
+    const prisma = makeRedirectPrisma({ [POST_ID]: repostRecord(), [ROOT_ID]: rootRecord() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockUnlikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID);
+    await app.close();
+  });
+
+  it('unlike via un repost retire le like posé via un AUTRE repost du même original', async () => {
+    const prisma = makeRedirectPrisma({
+      [POST_ID]: repostRecord({ id: POST_ID }),
+      [OTHER_REPOST_ID]: repostRecord({ id: OTHER_REPOST_ID }),
+      [ROOT_ID]: rootRecord(),
+    });
+    const app = await buildApp(prisma);
+
+    // Liked via POST_ID's repost, unliked via a DIFFERENT repost of the same root.
+    await app.inject({ method: 'DELETE', url: `/posts/${OTHER_REPOST_ID}/like` });
+
+    expect(mockUnlikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID);
+    await app.close();
+  });
+});

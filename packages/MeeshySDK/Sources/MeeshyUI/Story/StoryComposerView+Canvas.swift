@@ -901,11 +901,12 @@ extension StoryComposerView {
 
     /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
     /// calcul de `recomputeCanvasShift`, pour respecter split-screen / Stage Manager.
+    /// Délègue à `WindowMetrics`, le SSOT du module : l'implémentation locale
+    /// choisissait la scène par `.first` sur un `Set` non ordonné (donc
+    /// potentiellement une scène en arrière-plan), quand `WindowMetrics` la
+    /// résout par `activationState == .foregroundActive`.
     var composerScreenHeight: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
-            ?? UIScreen.main.bounds.height
+        WindowMetrics.windowSize.height
     }
 
     /// Liseré pointillé du bord du canvas, visible uniquement quand le fond ne

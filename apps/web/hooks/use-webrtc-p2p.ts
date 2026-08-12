@@ -621,6 +621,28 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         await service.setRemoteDescription(answer);
         remoteDescriptionSetRef.current.add(fromUserId);
 
+        // Vague 113 (2026-08-12) — this IS the caller's true "answered"
+        // moment. `CallManager.tsx`'s `handleParticipantJoined` used to
+        // stamp `answeredAt`/status on the room-join event instead, but
+        // iOS deliberately auto-early-joins the call room the instant it
+        // RECEIVES an incoming call (CallManager.swift
+        // `joinCallRoomReliably`, fired from `reportIncomingVoIPCall` /
+        // foreground incoming-call handling, "so the SDP offer can be
+        // received while ringing") — call:join fires long before the human
+        // answers. A web caller ringing an iOS callee therefore saw its
+        // clock start (and the call flip to 'active') the instant that
+        // device started ringing, not when it was picked up — defeating the
+        // exact ring-time-vs-talk-time fix Vague 110 made, for every call
+        // to an iOS callee. The genuine pickup signal is the SDP *answer*,
+        // which only a real Accept sends (gateway `call:signal`'s 'answer'
+        // branch — see CallEventsHandler.ts, ADR Vague 104). Guarded on
+        // 'initiated' so a later renegotiation/ICE-restart answer (call
+        // already active) never re-stamps it — same guard CallManager used.
+        const { currentCall, setCurrentCall } = useCallStore.getState();
+        if (currentCall && currentCall.status === 'initiated') {
+          setCurrentCall({ ...currentCall, status: 'active', answeredAt: new Date() });
+        }
+
         // Drain any ICE candidates buffered before the remote description was set
         await drainIceCandidateQueue(fromUserId, service);
 

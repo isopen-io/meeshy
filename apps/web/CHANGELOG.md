@@ -1,5 +1,432 @@
 # @meeshy/web
 
+## 1.25.8
+
+### Patch Changes
+
+- 74eee6a: Cinq défauts temps réel : un invité qui rejoignait en silence, une traduction fabriquée, un socket coupé, une réaction fantôme et un audio envoyé en double
+
+  ## 1. Gateway — l'invité de lien partagé rejoignait en silence
+
+  Le handler gatait **toutes** ses émissions post-join sur `connectedUser.userId`,
+  `undefined` pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a
+  laissé passer et que le socket EST dans la room. Résultat : un invité rejoignait en
+  silence, badge de non-lus vide, et rien pour le remplir.
+
+  `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` — son en-tête
+  nomme même le chemin anonyme comme le cas courant. Le compteur sort donc du garde et
+  reçoit `participantId`. **Pas `connectedUser.id`** (le jeton de session) : il ne résout
+  aucune ligne Participant et aurait rendu `0` en silence, un badge « correct » et faux. Un
+  test verrouille l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
+
+  **L'accusé `conversation:joined` part lui aussi**, sous la même identité. Le blocage annoncé
+  — « quelle identité mettre dans `userId` pour un participant sans compte ? » — s'est dissous à
+  la lecture des clients : les cinq consommateurs (web `use-socket-cache-sync`,
+  `use-stream-socket`, `orchestrator` ; iOS `ConversationSyncEngine`, `ParticipantsView`)
+  n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+  La seule contrainte dure est de **décodage** : `ConversationParticipationEvent.userId` est un
+  `String` **non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé
+  serait silencieusement jeté sur iOS. Le champ doit donc être présent ; sa valeur n'est lue par
+  personne. D'où `participationId = userId ?? participantId`, une seule résolution d'identité
+  pour les deux émissions.
+
+  ## 2. Gateway — une traduction présentée comme telle, mais jamais traduite
+
+  `getTranslation()` lisait `translations[targetLanguage]` **verbatim** quand tous les
+  écrivains stockent sous la forme canonique de `normalizeLanguageCode` (`'pt-BR'` →
+  `'pt'`). Une demande `pt-BR` interrogeait donc une clé absente pendant que la traduction
+  attendait une clé plus loin ; l'appelant sondait 20 fois sur 10 s, puis rendait un repli
+  **fabriqué** `[PT-BR] <texte original>` — le texte source affublé d'une étiquette de
+  langue. Violation directe du Prisme Linguistique, et dans sa pire forme : du contenu non
+  traduit présenté comme traduit.
+
+  Verbatim d'abord, forme normalisée en repli : un document legacy portant réellement une
+  clé régionale reste servi tel quel. Aucune traduction ne change de gagnant — seules
+  celles qu'on ne trouvait pas deviennent trouvables. La cible **rendue** reste celle
+  demandée (`'pt-BR'`), le client corrèle sa requête dessus.
+
+  ## 3. Web — ouvrir un profil coupait la connexion temps réel
+
+  `useSocketIOMessaging` appelait `meeshySocketIOService.reconnect()` **sans condition** au
+  montage. Or `reconnect()` n'est pas un « connecte si besoin » : c'est `disconnect()` suivi
+  d'une reconnexion différée par backoff, 1 à 2,5 s au premier essai. Cinq composants
+  montent ce hook — ouvrir un profil coupait donc un socket parfaitement sain, messages
+  temps réel compris.
+
+  L'étape 1C, quinze lignes plus bas, fait exactement le même geste correctement gardé
+  (`!isConnected && !isConnecting`) ; c'est cette garde qui est appliquée au montage.
+
+  ## 4. Web — une réaction refusée par le serveur restait affichée pour toujours
+
+  Les deux mutations de réaction gardaient leur rollback derrière
+  `if (context?.previousData)`. Or `onMutate` **fabrique** l'état optimiste quand le cache
+  est vide : `previousData` vaut alors `undefined`, et le garde refusait précisément de
+  défaire ce qui venait d'être inventé.
+
+  Le rollback devient inconditionnel — mais `setQueryData(key, undefined)` n'y suffit pas :
+  React Query traite `undefined` comme « ne rien changer ». Restaurer l'absence de donnée
+  exige `removeQueries`. `restoreReactionSnapshot` retire donc l'entrée quand il n'y avait
+  rien, et la réécrit sinon.
+
+  ## 5. Translator — chaque audio traduit partait en double
+
+  Bloc `if audio_bytes:` dupliqué verbatim dans le sender multipart : 2× la charge ZMQ par
+  message vocal multilingue. La seconde copie écrasait en outre la métadonnée avec son
+  propre index, si bien qu'elle désignait le doublon et que la première copie restait un
+  frame orphelin. Rien ne cassait — le gateway résout les frames strictement par
+  `info.index`, bornes vérifiées — ce qui explique la survie du défaut. Origine sans
+  ambiguïté au `git log -L` : un hunk de conflit résolu en double.
+
+  ## Vérification
+
+  - **RED prouvé pour chacun des quatre correctifs TypeScript** avant correction ; le
+    rollback de réaction est resté rouge après un premier correctif « évident »
+    (`setQueryData(key, undefined)`, no-op), ce que seul le test a révélé.
+  - **Suite gateway complète verte** : 654/654 suites, 16 504/16 504 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 563/563 suites, 12 089 tests passés, 21 ignorés,
+    0 échec.
+  - **Réserve sur le translator** : sa suite pytest n'a pas pu être exécutée dans cet
+    environnement (`numpy`/`torch` s'installent depuis l'index PyTorch, bloqué par le
+    proxy). La sûreté du retrait est établie par lecture des deux côtés du contrat —
+    producteur, et consommateur `extractAudioBinaryFrames` — **pas par exécution**.
+
+- 2111603: Deux compteurs qui mentaient sans jamais se corriger : la pastille après une suppression REST, et les accusés après une coupure socket
+
+  ## 1. Gateway — les deux transports REST de suppression ne repoussaient pas la pastille de non-lus
+
+  Le cycle 89 a câblé le recalcul du badge sur le transport WebSocket
+  (`MessageHandler.handleMessageDelete`). Les deux transports REST — `DELETE /messages/:id`
+  (celui d'Android) et `DELETE /conversations/:id/messages/:messageId` (celui du SDK iOS) —
+  ne le faisaient pas : le lecteur voyait le message disparaître pendant que sa pastille
+  continuait de le compter. La liste de conversations du web tourne en `staleTime: Infinity`,
+  donc sans poussée la valeur ne vieillit pas — **elle ment, indéfiniment**.
+
+  Le décompte lui-même était déjà juste (`getUnreadCountsForParticipants` filtre
+  `deletedAt: null`) : il ne manquait que de le **redemander**.
+
+  La poussée vit dans `broadcastMessageMutation`, l'unique broadcaster des cinq routes de
+  mutation REST — donc écrite **une seule fois** pour les deux suppressions. Les trois autres
+  appelants sont des éditions, et une édition ne change aucun compte : le badge n'y est pas
+  touché, ce qui aurait coûté deux requêtes par frappe validée pour zéro delta.
+
+  **L'exclusion porte sur l'AUTEUR (`authorId`), jamais sur l'acteur** : un modérateur qui
+  retire le message d'un autre est lui-même un destinataire dont la pastille doit bouger.
+  C'est le contraire de la file hors ligne, dix lignes plus bas, qui exclut bien l'acteur.
+
+  **C'est le TYPE qui tient la règle**, pas la vigilance : `MessageMutationParams` est une
+  union discriminée où `authorId` est **requis** sur `eventType: 'deleted'` et **absent** de
+  `'edited'`. Un sixième transport de suppression ne compile pas sans nommer l'auteur — les
+  deux callsites REST ont d'ailleurs été trouvés par `tsc`, pas par lecture.
+
+  La table du § « La pastille de non-lus » de `socketio/README.md` annonçait TROIS transports
+  REST de suppression, et les disait dépourvus d'aperçu de liste. Vérification faite : il y en
+  a **deux**, et ils émettent bien `emitConversationPreviewUpdate` depuis qu'ils passent par
+  `broadcastMessageMutation`. Le document est corrigé.
+
+  ## 2. Web — les accusés de lecture n'étaient jamais re-synchronisés après une coupure socket
+
+  Le lot REST `messagesService.getReadStatuses` est gardé par une clé
+  `${conversationId}:${dernier message à soi}` : il ne se relance donc que lorsqu'on **ENVOIE**
+  un nouveau message. Et `conversation:join` ne re-émet aucun `read-status:updated`.
+
+  Depuis que le cycle 85 a rendu ces compteurs **monotones** (`isStaleReceipt` rejette tout
+  résumé qui recule à `totalMembers` inchangé), un `read-status:updated` manqué pendant une
+  coupure n'est plus une valeur en retard qu'un événement suivant corrigerait : c'est un **gel
+  permanent**. L'expéditeur regarde une coche « remis » sur un message que tout le monde a lu,
+  jusqu'à ce qu'il en envoie un autre.
+
+  Le hook rattrapait déjà les MESSAGES manqués sur le front montant de la reconnexion
+  (« Trigger 1 » → `syncNewerMessages`). Ce front est désormais compté **une seule fois**
+  (`reconnectEpoch`, en tête du hook) et sert les deux dettes du même instant : les messages
+  manqués et les accusés manqués. La détection de front, qui était dupliquée pour le premier
+  et absente pour le second, n'existe plus qu'en un endroit.
+
+  ## Vérification
+
+  - **RED prouvé avant chaque correctif** : la pastille au niveau de l'unité partagée ET des
+    deux routes (le type impose de passer _une_ identité ; seuls les tests de route disent
+    LAQUELLE) ; le rattrapage des accusés par un cycle connecté → coupé → reconnecté sans
+    envoi de message.
+  - **Suite gateway complète verte** : 680/680 suites, 16 847/16 847 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 564/564 suites, 12 122 tests passés, 21 ignorés.
+  - **Réserve honnête sur le typecheck web** : `tsc --noEmit -p tsconfig.json` rend **1 224
+    diagnostics, tous situés dans `**tests**/**`, et strictement PRÉ-EXISTANTS\*\* — le même
+    compte exactement, mesuré sur l'arbre stashé. Ce travail n'en ajoute aucun, et aucun ne
+    porte sur un fichier qu'il touche. Le décompte n'a pas été assaini (hors périmètre) mais
+    il est consigné ici pour que le prochain cycle ne le découvre pas comme une nouveauté.
+  - Le test de rattrapage a d'abord été écrit avec `waitFor` et s'est révélé **flaky sous la
+    suite complète** (564 suites en parallèle, délai par défaut d'une seconde dépassé). Il
+    asserte désormais directement après `rerender` — le front monté relance le lot de façon
+    synchrone, il n'y avait rien à attendre. RED/GREEN re-prouvé sous cette forme.
+
+## 1.25.7
+
+### Patch Changes
+
+- 125934c: Les indicateurs de saisie de la vue conversation existent enfin — ils étaient morts à la réception, et fantômes à l'émission
+
+  Deux défauts indépendants, une seule fonctionnalité : sur le web, « X est en train d'écrire… »
+  n'apparaissait **jamais** dans la vue conversation, et l'indicateur qu'on faisait naître chez les
+  pairs n'était **jamais retracté** quand on changeait de conversation.
+
+  ## 1. Réception — le callback socket jetait ce qu'il recevait
+
+  `ConversationLayout` confie à `useSocketIOMessaging` un `onUserTyping` dont le corps se réduisait à
+  deux gardes suivies de… rien :
+
+  ```ts
+  const onUserTyping = useCallback(
+    (userId, _username, _isTyping, typingConversationId) => {
+      if (!user || userId === user.id) return;
+      if (typingConversationId !== selectedConversation?.id) return;
+    }, // ← la fonction se termine ici
+    [user, selectedConversation?.id]
+  );
+  ```
+
+  `useConversationTyping` retourne pourtant `handleUserTyping`, **seul écrivain** de son état
+  `typingUsers`. Cette valeur n'était pas déstructurée, et le callback ne l'appelait pas : chaque
+  `typing:start` / `typing:stop` livré par le socket était filtré puis abandonné. `typingUsers` restait
+  `[]` à vie, et l'en-tête — qui le rend réellement, via `ConversationView.mapTypingUsers` →
+  `ConversationHeader` → `ParticipantsDisplay` → `TypingIndicator` — n'affichait donc jamais rien.
+
+  La panne était invisible en test manuel parce que le **flux d'accueil** (`use-stream-socket.ts`) tient
+  sa PROPRE copie du handler et la câble correctement : les indicateurs marchaient sur une surface et
+  pas sur l'autre.
+
+  Les deux gardes recopiées dans le layout n'ont pas été rebranchées : `handleUserTyping` les porte
+  déjà toutes les deux (« pas mon propre écho », « pas une autre conversation »). Le callback remis au
+  socket relaie désormais vers le hook via un ref — les deux hooks se précèdent mutuellement
+  (`useConversationTyping` a besoin de `startTyping`/`stopTyping`, que produit `useSocketIOMessaging`,
+  qui a besoin du récepteur), et le ref casse ce cycle sans dupliquer de règle. Effet de bord bienvenu :
+  le callback devient STABLE, donc l'abonnement socket cesse de se refaire à chaque changement de
+  conversation.
+
+  ## 2. Émission — quitter une conversation laissait un fantôme chez les pairs
+
+  Le nettoyage de `useConversationTyping` est une fermeture créée au rendu où `conversationId` a changé
+  pour la dernière fois. Elle y capture un `isTyping` qui vaut alors toujours `false` :
+
+  ```ts
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      clearAllRemoteTypingTimeouts();
+      if (isTyping) {
+        stopTyping();
+      } // ← branche inatteignable
+    };
+  }, [conversationId]); // deps sans isTyping ni stopTyping
+  ```
+
+  La branche `stopTyping()` ne s'exécutait donc jamais — et le même nettoyage **annule** au passage le
+  timer d'auto-stop local (3 s), si bien qu'aucun des deux chemins d'arrêt ne partait.
+
+  Rien en aval ne rattrapait : côté gateway, `conversation:leave` ne retracte pas la frappe (seul
+  `disconnecting` le fait, cf. `StatusHandler.handleSocketDisconnecting`), et changer de conversation
+  ne déconnecte pas le socket. Résultat : taper dans une conversation puis cliquer sur une autre sans
+  vider le composeur laissait « X est en train d'écrire… » chez tous les pairs de la première, jusqu'à
+  l'expiration de leur filet de sécurité de 8 s — **à chaque changement de conversation**.
+
+  Le correctif est un miroir SYNCHRONE de `isTyping`, écrit aux trois mêmes endroits que l'état
+  (`handleTypingStart`, `handleTypingStop`, auto-stop). Un ref synchronisé par `useEffect` n'aurait pas
+  suffi : React exécute tous les nettoyages avant tous les effets, l'ordre resterait à démontrer.
+  Écrit à la main, le miroir est juste par construction à l'instant où le nettoyage le lit. Le
+  `stopTyping` capturé par cette fermeture est celui du rendu où la conversation quittée avait été
+  sélectionnée : la retraction vise donc bien la conversation qu'on QUITTE, pas celle qu'on ouvre.
+
+  ## Deux tests qui ne prouvaient rien
+
+  Le défaut d'émission a traversé une suite verte parce que deux tests le DOCUMENTAIENT au lieu de
+  l'affirmer — « The cleanup effect may or may not call stopTyping depending on React's cleanup
+  timing » — et n'assertaient donc rien sur `stopTyping`. Ils affirment désormais la vérité attendue.
+
+  Le défaut de réception, lui, était hors de portée de tout test de la vue : `useConversationTyping` y
+  était doublé en ENTIER, ce qui figeait `typingUsers: []` et rendait `undefined` tout export
+  nouvellement consommé. Le double est retiré — c'est le hook qui porte la règle, il tourne
+  maintenant pour de vrai sous le test de la vue.
+
+  ## Vérification
+
+  - **RED prouvé avant le correctif** : 2 rouges sur le hook (retraction au changement de conversation,
+    au démontage), 2 rouges sur la vue (un `typing:start` de pair n'atteint pas l'en-tête, un
+    `typing:stop` ne l'efface pas). Les 4 gardes négatives (écho de soi, autre conversation, pas de
+    stop si on ne tapait pas, pas de double stop) passaient déjà — elles verrouillent le correctif.
+  - **Mutation appliquée et vérifiée — 6 réversions, 6 rouges** : le relais `onUserTyping` neutralisé
+    (2 rouges), le branchement du ref retiré (2), le nettoyage relisant l'état périmé (2), le miroir
+    non armé par `handleTypingStart` (2), non désarmé par `handleTypingStop` (1), non désarmé par
+    l'auto-stop (1). Restauré, re-vérifié vert.
+  - **Suite web complète : 563/563 fichiers, 12 084 tests verts** (21 skipped).
+  - `tsc --noEmit` : **1 224 diagnostics avant comme après** (pré-existants), **aucun** dans les
+    fichiers touchés.
+
+## 1.25.6
+
+### Patch Changes
+
+- c730c3e: Les accusés de lecture ne reculent plus — un instantané REST en retard ne repeint plus les coches bleues en gris
+
+  Deux écrivains alimentent `readStatusSummaries` / `messageReadStatuses`, et un seul des deux est
+  ordonné :
+
+  - le **socket** (`presence.service.ts` → `updateReadStatusSummary`) — ordonné par connexion, il
+    porte toujours l'état le plus frais que le serveur connaisse ;
+  - le **lot REST** (`use-conversation-messages-rq.ts` →
+    `messagesService.getReadStatuses(…).then(updateMessageReadStatusBatch)`) — un INSTANTANÉ pris au
+    départ de la requête, appliqué au retour, **sans garde d'ordre**. `updateMessageReadStatusBatch`
+    faisait un `{ ...state.messageReadStatuses, ...statuses }` : le dernier arrivé écrasait, quelle
+    que soit son ancienneté.
+
+  La fenêtre n'est pas une curiosité de démarrage à froid. La clé de garde du lot
+  (`batchFetchedRef`) est indexée sur l'id du dernier message propre : **chaque envoi de message
+  relance la lecture REST**. Il suffit donc qu'un pair lise un message pendant que la requête est en
+  vol pour que l'instantané, parti avant cette lecture, atterrisse après elle.
+
+  Et la régression est VISIBLE : `DeliveryIndicator` rend `readCount > 0` en **double coche bleue**
+  et `readCount === 0 && deliveredCount > 0` en **double coche grise**. Perdre cette course fait donc
+  passer les coches au bleu puis les ramène au gris — et elles restent fausses jusqu'à ce qu'un
+  prochain accusé passe par là. Le même écrasement pouvait aussi « dé-livrer » un message
+  (`deliveredCount` qui redescend).
+
+  **Le correctif** : un unique prédicat `isStaleReceipt(current, incoming)` dans le store, appliqué
+  par les TROIS écrivains (`updateReadStatusSummary`, `updateMessageReadStatus`,
+  `updateMessageReadStatusBatch`) — un seul énoncé de la règle, là où l'état vit, plutôt qu'une garde
+  recopiée chez chaque appelant.
+
+  Trois décisions, chacune verrouillée par un test.
+
+  **`totalMembers` est le discriminant, et il empêche la garde de figer les compteurs à vie.** Les
+  accusés ne sont croissants que pour un effectif FIXE. Quand quelqu'un quitte la conversation, le
+  serveur recompte sur les survivants et rapporte légitimement moins de lectures. Un `totalMembers`
+  qui bouge signifie donc que l'instantané décrit une autre conversation : il gagne sans condition.
+
+  **Un résumé qui recule est rejeté ENTIER, jamais fusionné champ par champ.** Un maximum par champ
+  synthétiserait un état qu'aucun serveur n'a jamais rapporté, alors que c'est précisément
+  `readCount >= totalMembers` qui pilote la branche « lu par tous » de l'indicateur. Chaque résumé
+  stocké reste un instantané serveur réel.
+
+  **Le lot filtre par ENTRÉE, pas en tout-ou-rien.** Un message dont l'instantané a perdu sa course ne
+  doit pas coûter au lot les accusés qu'il porte pour tous les autres. Et le miroir vers le dernier
+  message propre (`updateReadStatusSummary` écrit aussi `messageReadStatuses[latestOwnMsgId]`) est
+  gardé sur SA propre histoire, pas sur celle de la conversation : le lot REST écrit cette entrée
+  directement, elle peut donc légitimement être en avance sur le résumé conversationnel.
+
+  Vérification : 10 tests neufs (`conversation-ui-store-read-receipts.test.ts`), rouges avant
+  (6 échecs / 10) et verts après. **Mutation appliquée et vérifiée — 7 réversions, 7 rouges** :
+  prédicat neutralisé, discriminant `totalMembers` retiré, garde du lot retirée, garde du miroir
+  retirée, garde de `updateMessageReadStatus` retirée, garde conversationnelle retirée, `||` changé
+  en `&&`. Restauré, re-vérifié vert. Suite web complète : **563/563 fichiers, 12 077 tests verts**.
+  `tsc --noEmit` : 1 757 diagnostics avant comme après, aucun dans les fichiers touchés.
+
+## 1.25.5
+
+### Patch Changes
+
+- a14746a: Le tray de stories du web draine ses pages, et l'intent write-ahead d'une story publiée cesse de courir contre son propre succès
+
+  `storyService.getStories` appelait `GET /posts/feed/stories` **sans aucun paramètre** et rendait
+  `response.data?.data ?? []` : ni `limit`, ni `cursor`, et surtout aucune lecture de
+  `pagination.hasMore`/`nextCursor`. Le tray web était donc coupé à 50 stories exactement comme
+  l'était celui d'iOS avant le cycle 80, pour la même raison, avec le même silence.
+
+  Il draine désormais, avec les **deux arrêts** que le cycle 80 avait établis comme distincts et tous
+  deux nécessaires : un plafond de pages (6, valeur miroir d'iOS) protège contre un serveur qui
+  annoncerait `hasMore` sans fin, et un `hasMore` **sans curseur** s'arrête au lieu de rejouer la même
+  page indéfiniment. La pagination de cette route est réellement exacte — sa fenêtre est filtrée par
+  `updatedAt` mais son curseur porte sur le couple `(createdAt, id)` de l'ordre — c'est ce qui rend le
+  drain suffisant, sans l'escalade dont le delta des conversations avait besoin.
+
+  Deux services se disputaient la route. L'inventaire des consommateurs a tranché :
+  `postsService.getStories` n'avait **aucun lecteur de production** — sa seule occurrence dans tout le
+  dépôt était son propre test. Copie morte supprimée, test compris ; paginer les deux aurait dupliqué
+  la dette au lieu de la payer. Rien de la troncature de tombstones n'est transposé : le web ne passe
+  jamais `updatedSince`, donc `meta.deletedStoryIdsTruncated` lui vaut toujours `false`.
+
+  Côté iOS, `StoryViewModel.launchUploadTask` retirait l'intent write-ahead d'une story publiée dans
+  un `Task.detached`, puis vidait `activeUploads` et déclarait le succès à l'écran sans que rien
+  n'ordonne les deux. Ce que l'intent protège est écrit sur place — « sinon le boot suivant
+  re-publierait » : détaché, le retrait ouvre une fenêtre où l'app meurt avec l'intent encore en base
+  alors que la story est **déjà en ligne**, et le drain de boot la publie une seconde fois. Le retrait
+  est désormais awaité (la tâche englobante est déjà `async`), exactement comme le fait le chemin de
+  drain hors-ligne depuis toujours ; le ménage disque reste détaché, c'est de l'IO synchrone qu'on ne
+  veut pas sur le MainActor.
+
+## 1.25.4
+
+### Patch Changes
+
+- 2079119: Une page delta qui laisse du reste ne fait plus avancer le curseur iOS, et le web arrête d'escalader pour rien
+
+  `ConversationSyncEngine.deltaSyncCore` (SDK iOS) demandait `limit=500` à
+  `GET /conversations?updatedSince=`, que la route plafonne à 100 — puis avançait
+  `lastSyncTimestamp` au max des `updatedAt` REÇUS, sans jamais regarder si la page avait été
+  coupée. Le tri par `updatedAt` croissant (cycle 77) fait pointer le curseur sur les lignes
+  coupées dans le cas général, mais pas quand plus de 100 conversations partagent la MÊME
+  milliseconde : la borne serveur est stricte (`gt`), donc le débordement était enjambé
+  DÉFINITIVEMENT — jusqu'à la réconciliation complète, bornée à 1× par 24 h. Entre les deux, la
+  liste iOS affichait des compteurs de non-lus et des aperçus périmés sans aucun signal.
+
+  iOS lit désormais le `pagination.hasMore` de la réponse. Quand le serveur annonce du reste :
+  le curseur NE BOUGE PAS, puis `fullSync()` est enchaîné. L'ordre est le correctif — c'est
+  parce que le curseur est resté en arrière qu'une escalade échouée (offline, panne gateway)
+  laisse la fenêtre entière rejouable au prochain delta au lieu d'un trou permanent. La fusion
+  de la page reçue, elle, est conservée dans tous les cas.
+
+  Côté web, la même escalade se déclenchait sur `conversations.length >= DELTA_PAGE_LIMIT`.
+  `hasMore` est autoritaire sur une page delta — elle part toujours d'`offset=0`, ce qui fait
+  compter au serveur toutes les lignes de la même clause `updatedAt > since` — donc une fenêtre
+  de très exactement 100 conversations est COMPLÈTE. Le web relisait toutes ses pages chargées
+  pour rien dans ce cas ; il lit maintenant le même signal qu'iOS.
+
+- c51cebe: Une réaction n'invalide plus la liste de conversations
+
+  Les deux handlers socket de réaction (`use-reactions-query.ts`) faisaient
+  `invalidateQueries({ queryKey: conversations.lists() })`, commentaire à l'appui : « réaction
+  ajoutée = conversation modifiée ». Deux défauts dans le même geste.
+
+  `lists()` valait `['conversations','list']` ; la sidebar lit `infinite()` =
+  `['conversations','infinite']`. Les deux préfixes étaient DISJOINTS : l'intention écrite n'était
+  jamais exécutée. Panne silencieuse, pas code mort — le commentaire faisait foi pour le prochain
+  lecteur.
+
+  Et l'intention elle-même est fausse : une ligne de liste ne porte rien qui dérive des réactions
+  (aperçu du dernier message, non-lus, horodatage). L'emoji `reaction` rendu par `ConversationList`
+  est la PRÉFÉRENCE de conversation, sans rapport avec les réactions de message. Rediriger vers
+  `infinite()` aurait donc relu toutes les pages chargées à chaque réaction — exactement le
+  refetch que le cycle 77 venait de retirer du chemin de focus.
+
+  Le seul cache concerné par une réaction reste celui du message, déjà mis à jour juste en dessous
+  par `updateReactionSummaryInMessageCache`. Le commentaire qui reste sur le site dit pourquoi il
+  n'y a PAS d'invalidation : un retrait silencieux inviterait le prochain lecteur à « réparer
+  l'invalidation manquante ».
+
+- 0ca31f1: Un seul cache de liste de conversations — la forme plate sans lecteur est retirée
+
+  `queryKeys.conversations` exposait `lists()` / `list(filters)` (`['conversations','list', …]`) à
+  côté de `infinite()` (`['conversations','infinite']`). Les deux préfixes sont DISJOINTS, et aucun
+  écran ne lisait le premier : la sidebar passe par `useConversationsPaginationRQ` →
+  `useInfiniteConversationsQuery`. Une dizaine d'écrivains l'alimentaient quand même, à chaque
+  événement — autant de no-ops silencieux, et un code qui se lisait comme si deux caches étaient
+  tenus en phase alors qu'un seul existait.
+
+  Retirés : la clé plate, ses écrivains, les hooks sans consommateur (`useConversationsQuery`,
+  `useConversationsWithPagination`, les mutations create/delete de conversation) et tout
+  `use-send-message-mutation.ts`, dont les quatre mutations n'avaient elles non plus aucun appelant —
+  l'envoi réel passe par l'orchestrateur Socket.IO.
+
+  Deux corrections de comportement au passage : les `invalidateQueries` déclenchées par une réaction
+  ciblaient la clé plate et ne s'exécutaient donc jamais (supprimées — la ligne de liste ne dépend
+  d'aucune réaction de message), et `useInfiniteConversationsQuery` acceptait un `filters` que sa clé
+  de requête n'incluait pas, donc silencieusement ignoré.
+
+  Les témoins de `use-socket-cache-sync` qui n'assertaient que la forme plate — « déplacer la
+  conversation en tête », « avancer l'aperçu sur suppression », « purger la conversation refusée » —
+  ont été rebranchés sur le cache réellement lu, et vérifiés rouges contre une écriture cassée avant
+  tout retrait : le chemin que la sidebar emprunte n'avait jusqu'ici aucune couverture.
+
 ## 1.25.3
 
 ### Patch Changes

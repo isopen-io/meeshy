@@ -24,8 +24,18 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 // Logger dédié pour ZmqRequestSender
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
+
+/**
+ * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). Les cibles
+ * partent telles que l'appelant les donne (`'EN'`, `'pt-BR'`) et le translator
+ * rend la sienne : sans forme commune, une langue rendue ne se reconnaîtrait pas
+ * dans le jeu des langues attendues.
+ */
+const canonicalLanguage = (language: string): string =>
+  normalizeLanguageCode(language) ?? language.toLowerCase();
 
 
 export interface RequestSenderStats {
@@ -39,12 +49,18 @@ export interface RequestSenderStats {
 export class ZmqRequestSender {
   private connectionManager: ZmqConnectionManager;
 
-  // Cache des requêtes en cours (pour traçabilité + timeout)
+  // Cache des requêtes en cours (pour traçabilité + timeout).
+  //
+  // `pendingLanguages` n'existe que pour les requêtes de TRADUCTION : le
+  // translator rend une langue à la fois, donc une requête à N langues reçoit N
+  // `translationCompleted`. Elle n'est soldée qu'une fois ce jeu vidé — sinon
+  // les langues 2..N perdraient deadman, retry et erreur dès la première rendue.
   private pendingRequests: Map<string, {
     request: any;
     timestamp: number;
     timeoutId?: NodeJS.Timeout;
-    onTimeout?: () => void;
+    onTimeout?: (pendingLanguages?: string[]) => void;
+    pendingLanguages?: Set<string>;
   }> = new Map();
 
   private stats: RequestSenderStats = {
@@ -106,10 +122,13 @@ export class ZmqRequestSender {
       throw error;
     }
 
-    // Stocker la requête en cours pour traçabilité
+    // Stocker la requête en cours pour traçabilité, avec le jeu des langues
+    // qu'elle attend encore (un renvoi avec `existingTaskId` REMPLACE ce jeu :
+    // il ne porte plus que les langues encore manquantes).
     this.pendingRequests.set(taskId, {
       request: request,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
     });
 
     this.stats.translationRequests++;
@@ -438,19 +457,54 @@ export class ZmqRequestSender {
   /**
    * Enregistre un timeout pour une requête en cours.
    * Doit être appelé après que la requête a été ajoutée via pendingRequests.set().
+   *
+   * `onTimeout` reçoit les langues encore attendues au moment où le deadman
+   * tombe : l'entrée est retirée AVANT l'appel, donc c'est la seule occasion de
+   * les lire, et un renvoi ne doit redemander que celles-là.
    */
-  registerTimeout(taskId: string, timeoutMs: number, onTimeout: () => void): void {
+  registerTimeout(taskId: string, timeoutMs: number, onTimeout: (pendingLanguages?: string[]) => void): void {
     const entry = this.pendingRequests.get(taskId);
     if (!entry) return;
 
     const timeoutId = setTimeout(() => {
-      if (this.pendingRequests.has(taskId)) {
+      const pending = this.pendingRequests.get(taskId);
+      if (pending) {
         this.pendingRequests.delete(taskId);
-        onTimeout();
+        onTimeout(pending.pendingLanguages ? [...pending.pendingLanguages] : undefined);
       }
     }, timeoutMs);
 
     this.pendingRequests.set(taskId, { ...entry, timeoutId, onTimeout });
+  }
+
+  /**
+   * Solde UNE langue d'une requête de traduction.
+   *
+   * Rend les langues encore attendues, ou `null` si le taskId n'est plus (ou
+   * n'a jamais été) en cours — un doublon, ou un résultat arrivé après le
+   * deadman. Quand la dernière langue est soldée, la requête est retirée et son
+   * timeout annulé, exactement comme `removePendingRequest`.
+   *
+   * Une requête sans jeu de langues (audio, voix) se solde d'un coup : ces
+   * pipelines ne rendent qu'un résultat.
+   */
+  settleTranslationLanguage(taskId: string, targetLanguage: string): { remaining: string[] } | null {
+    const entry = this.pendingRequests.get(taskId);
+    if (!entry) return null;
+
+    if (!entry.pendingLanguages) {
+      this.removePendingRequest(taskId);
+      return { remaining: [] };
+    }
+
+    entry.pendingLanguages.delete(canonicalLanguage(targetLanguage));
+
+    if (entry.pendingLanguages.size === 0) {
+      this.removePendingRequest(taskId);
+      return { remaining: [] };
+    }
+
+    return { remaining: [...entry.pendingLanguages] };
   }
 
   /**

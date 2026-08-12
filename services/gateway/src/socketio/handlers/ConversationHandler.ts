@@ -20,14 +20,29 @@ export interface ConversationHandlerDependencies {
   prisma: PrismaClient;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
-  readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  readStatusService: Pick<MessageReadStatusService, 'getUnreadCount' | 'getLatestMessageSummary'>;
+  /**
+   * Retracte la frappe que CE socket a diffusée dans la conversation qu'il
+   * quitte — `StatusHandler.retractTypingIn` en pratique.
+   *
+   * Sans elle, seul `disconnecting` retracte, et changer de conversation ne
+   * déconnecte pas le socket : les pairs gardent un « X est en train
+   * d'écrire… » fantôme jusqu'à leur propre filet de sécurité. La conversation
+   * est passée DÉJÀ NORMALISÉE — ce handler l'a résolue, la faire re-résoudre
+   * coûterait un second `findUnique` à chaque changement de conversation.
+   *
+   * Optionnelle : un `ConversationHandler` construit sans elle quitte
+   * normalement, il ne retracte simplement rien.
+   */
+  retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
 }
 
 export class ConversationHandler {
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
-  private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount' | 'getLatestMessageSummary'>;
+  private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -35,6 +50,7 @@ export class ConversationHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.readStatusService = deps.readStatusService;
+    this.retractTyping = deps.retractTyping;
   }
 
   /**
@@ -86,6 +102,13 @@ export class ConversationHandler {
         return;
       }
 
+      // La ligne `Participant` que le contrôle d'appartenance résout, quelle que
+      // soit la branche. Distincte de `participationId` plus bas, qui est
+      // l'identité de ROOM (`User.id` quand il y en a un) : les deux espaces
+      // d'id ne se croisent pas, et le rattrapage d'accusés doit remplir un
+      // champ `participantId` avec un vrai `Participant.id`.
+      let participantRowId: string | null = null;
+
       if (connectedUser.isAnonymous) {
         // Anonymous: verify participant owns this exact conversation
         const participantId = connectedUser.participantId;
@@ -93,6 +116,7 @@ export class ConversationHandler {
           where: { id: participantId, conversationId: normalizedId, isActive: true },
           select: { id: true },
         });
+        participantRowId = participant?.id ?? null;
         if (!participant) {
           socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
             conversationId: validated.conversationId,
@@ -108,6 +132,7 @@ export class ConversationHandler {
           where: { conversationId: normalizedId, userId },
           select: { id: true, bannedAt: true, leftAt: true, isActive: true },
         });
+        participantRowId = participant?.id ?? null;
 
         if (!participant) {
           socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
@@ -140,19 +165,46 @@ export class ConversationHandler {
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
       const registeredUserId = connectedUser.userId;
-      if (registeredUserId) {
+      // L'identité du socket dans cette conversation. Un invité de lien partagé
+      // n'a pas de `userId` : c'est son `Participant.id` qui l'identifie, et
+      // c'est celui que le contrôle d'appartenance vient de résoudre. SURTOUT
+      // PAS `connectedUser.id`, qui est le jeton de SESSION — un credential n'a
+      // rien à faire dans un payload d'événement, et il ne résout d'ailleurs
+      // aucune ligne Participant (`getUnreadCount` rendrait 0 en silence).
+      //
+      // Les deux émissions ci-dessous étaient gatées sur `userId` et laissaient
+      // donc l'invité rejoindre en SILENCE — sans accusé, sans badge — alors
+      // que le contrôle d'appartenance l'a laissé passer et que son socket EST
+      // dans la room.
+      const participationId = registeredUserId ?? connectedUser.participantId;
+
+      if (participationId) {
+        // `userId` ne peut pas être omis pour un anonyme : côté iOS,
+        // `ConversationParticipationEvent.userId` est un `String` NON optionnel
+        // et un payload amputé ferait échouer le décodage Swift — l'accusé
+        // serait silencieusement jeté. Aucun des cinq consommateurs connus ne
+        // LIT ce champ (web use-socket-cache-sync / use-stream-socket /
+        // orchestrator, iOS ConversationSyncEngine / ParticipantsView
+        // n'exploitent que `conversationId`), mais tous exigent qu'il soit là.
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId: registeredUserId
+          userId: participationId
         });
 
+        // `getUnreadCount` accepte indifféremment un `Participant.id` ou un
+        // `User.id` (contrat documenté dans MessageReadStatusService, qui nomme
+        // le chemin anonyme comme le cas courant).
         try {
-          const unreadCount = await this.readStatusService.getUnreadCount(registeredUserId, normalizedId);
+          const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }
 
+        await this._resyncReadStatusToSocket(socket, normalizedId, participantRowId, registeredUserId ?? null);
+      }
+
+      if (registeredUserId) {
         // Envoyer les stats de conversation. On passe l'id RÉSOLU (`normalizedId`),
         // comme le room join, le payload joined et l'emit unread ci-dessus — sauf
         // pour la conversation globale "meeshy", que ConversationStatsService résout
@@ -176,6 +228,79 @@ export class ConversationHandler {
   }
 
   /**
+   * Rattrape les accusés de livraison/lecture manqués pendant que ce socket
+   * était absent.
+   *
+   * `read-status:updated` n'est émis QUE par une action d'accusé — un pair qui
+   * lit, une remise automatique. Un socket coupé à cet instant ne le reçoit
+   * jamais, et RIEN ne le lui rejoue : l'événement n'est pas dans la file de
+   * livraison hors ligne (elle ne porte que des messages et leurs mutations),
+   * et la coche de l'expéditeur reste donc figée sur sa valeur d'avant la
+   * coupure. Le seul rattrapage existant est le lot REST du web, mémoïsé sur
+   * l'id du dernier message PROPRE : il ne se relance qu'en ENVOYANT un
+   * message, si bien qu'une personne qui lit sans écrire ne voit plus jamais
+   * ses coches avancer.
+   *
+   * Le join est le point de rattachement de CHAQUE reconnexion — web
+   * (`_autoJoinLastConversation`), iOS et Android re-joignent tous après
+   * l'authentification. Réparer ici sert donc les trois clients, sans qu'aucun
+   * n'ait à changer : le payload est celui qu'ils traitent déjà.
+   *
+   * `type: 'received'` n'est pas décoratif. iOS (`ConversationSyncEngine`,
+   * `NotificationCoordinator`) et Android ne remettent le compteur de non-lus à
+   * zéro que sur un `type: 'read'` émis par SOI-MÊME ; estampiller ce
+   * rattrapage `read` viderait la pastille du rejoignant à chaque ouverture de
+   * conversation. `received` ne porte que le `summary` agrégé — exactement le
+   * contrat de la remise automatique en lot
+   * (`MessageHandler.autoDeliverToOnlineRecipients`), qui est le précédent de
+   * cette forme. Ni `lastReadAt` ni `unreadCount` ne l'accompagnent : ils
+   * n'appartiennent qu'aux diffusions `read`, et le badge du rejoignant vient
+   * de partir juste au-dessus.
+   *
+   * Un résumé à zéro membre signifie « aucun message dans cette conversation » :
+   * il n'y a rien à rattraper, et les trois clients ignorent de toute façon un
+   * résumé qui ne monte aucune coche.
+   *
+   * `participantId` prend la ligne `Participant` résolue par le contrôle
+   * d'appartenance, JAMAIS l'identité de room (`participationId`), qui est un
+   * `User.id` dès que le rejoignant a un compte. Les deux espaces d'id ne se
+   * croisent pas : y mettre le mauvais ne planterait rien — iOS lit
+   * `userId ?? participantId` et le trouve non nul dans les deux cas — mais le
+   * champ mentirait sur ce qu'il nomme, et c'est ainsi que se fabriquent les
+   * confusions d'id que ce fichier documente ailleurs.
+   *
+   * Best-effort : le join a réussi, la room est rejointe. Un rattrapage qui
+   * échoue ne doit pas le défaire.
+   */
+  private async _resyncReadStatusToSocket(
+    socket: Socket,
+    conversationId: string,
+    participantRowId: string | null,
+    registeredUserId: string | null
+  ): Promise<void> {
+    try {
+      const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
+      if (summary.totalMembers === 0 && summary.deliveredCount === 0 && summary.readCount === 0) return;
+
+      const payload = {
+        conversationId,
+        participantId: participantRowId,
+        userId: registeredUserId,
+        type: 'received' as const,
+        updatedAt: new Date(),
+        summary,
+      };
+
+      // Les DEUX noms : l'historique et le canonique voyagent en parallèle
+      // partout ailleurs, et un client migré n'écoute plus que le second.
+      socket.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+      socket.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+    } catch (err) {
+      logger.warn('read-status resync failed on join (non-blocking)', { conversationId, error: err });
+    }
+  }
+
+  /**
    * Gère l'événement conversation:leave
    */
   async handleConversationLeave(socket: Socket, data: { conversationId: string }): Promise<void> {
@@ -191,6 +316,18 @@ export class ConversationHandler {
         validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
+
+      // Retracter AVANT de sortir : « je retire ce que j'ai diffusé, puis je
+      // sors ». Le try/catch est local et non le try/catch général — une
+      // retraction qui échoue ne doit pas transformer un départ demandé par le
+      // client en `conversation:leave` refusé.
+      if (this.retractTyping) {
+        try {
+          await this.retractTyping(socket, normalizedId);
+        } catch (error) {
+          logger.error('conversation:leave — typing retraction failed', { error, conversationId: normalizedId });
+        }
+      }
 
       const room = ROOMS.conversation(normalizedId);
       await socket.leave(room);

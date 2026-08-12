@@ -627,6 +627,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         conversationId: message.conversationId,
         actorUserId: userId,
         eventType: 'deleted',
+        // L'AUTEUR, pas l'acteur : la pastille de l'acteur bouge aussi quand un
+        // modérateur retire le message de quelqu'un d'autre.
+        authorId: message.senderId,
         messageId,
         payload: { messageId, conversationId: message.conversationId },
         onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),

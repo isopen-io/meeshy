@@ -13,6 +13,10 @@ import MeeshyUI
 public struct StoryNotificationLoadingView: View {
     public init() {}
 
+    private var loadingMessage: String {
+        String(localized: "loading.message", defaultValue: "Loading…", bundle: .main)
+    }
+
     public var body: some View {
         ZStack {
             Color.black.opacity(0.6)
@@ -21,10 +25,12 @@ public struct StoryNotificationLoadingView: View {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
-                Text(String(localized: "loading.message", defaultValue: "Loading…", bundle: .main))
+                Text(loadingMessage)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.85))
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(loadingMessage)
         }
     }
 }

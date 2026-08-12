@@ -518,6 +518,50 @@ describe('MessageTranslationService', () => {
       expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
     });
 
+    it('resolves a regional target code against the normalized stored key', async () => {
+      // Les écrivains stockent sous la forme canonique du SSOT
+      // `normalizeLanguageCode` ('pt-BR' → 'pt'). Une lecture verbatim de
+      // `translations['pt-BR']` manquait donc la traduction pourtant présente
+      // une clé plus loin, et l'appelant rendait un repli fabriqué
+      // `[PT-BR] <texte original>` — le texte source affublé d'une étiquette,
+      // violation directe du Prisme Linguistique.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-regional',
+        originalLanguage: 'en',
+        translations: {
+          pt: {
+            text: 'Olá mundo',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá mundo');
+      // La cible RENDUE reste celle demandée : le client corrèle sa requête
+      // dessus, la normalisation est un détail de stockage.
+      expect(result?.targetLanguage).toBe('pt-BR');
+    });
+
+    it('prefers an exact verbatim key over its normalized form', async () => {
+      // Un document legacy qui porterait RÉELLEMENT une clé régionale ne doit
+      // pas se faire détourner vers la clé de base : le verbatim gagne.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-legacy-regional',
+        originalLanguage: 'en',
+        translations: {
+          'pt-BR': { text: 'Olá (BR)', translationModel: 'basic', confidenceScore: 0.9 },
+          pt: { text: 'Olá (base)', translationModel: 'basic', confidenceScore: 0.9 }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-legacy-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá (BR)');
+    });
+
     it('should return null if translation not found', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
         id: 'msg-not-found',
@@ -554,6 +598,27 @@ describe('MessageTranslationService', () => {
       const result = await translationService.getTranslation('msg-src', 'fr', 'en');
 
       expect(result).toBeDefined();
+      expect(result?.translatedText).toBe('Bonjour');
+    });
+
+    // Le cas CAPITALISÉ, que la couverture voisine ne porte pas : `Locale.current`
+    // rend aussi bien `'FR'` que `'pt-BR'`, et la lecture stricte manquait les
+    // deux. La normalisation en repli les rattrape l'un comme l'autre.
+    it('resolves an uppercase target against the normalized stored key', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-upper',
+        originalLanguage: 'en',
+        translations: {
+          fr: {
+            text: 'Bonjour',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-upper', 'FR');
+
       expect(result?.translatedText).toBe('Bonjour');
     });
   });
@@ -1853,7 +1918,20 @@ describe('MessageTranslationService - Translation Deduplication', () => {
   });
 });
 
-describe('MessageTranslationService - Retranslation with Old Translation Cleanup', () => {
+/**
+ * Ce bloc verrouillait l'inverse : « should delete old translations before
+ * retranslation », c'est-à-dire la description de l'implémentation d'alors, pas
+ * une exigence produit.
+ *
+ * Cette suppression pré-envoi était persistée SANS rollback : translator muet,
+ * retries épuisés ou circuit ouvert, la traduction correcte disparaissait
+ * définitivement. Et elle ne protégeait de rien — l'invalidation qui compte
+ * (ne jamais publier la traduction du texte d'AVANT) vit dans l'écriture du
+ * CONTENU, sur les quatre transports d'édition, et son propre test la verrouille
+ * (`message-edit-stale-translation.test.ts`). Le remplacement, lui, est
+ * inconditionnel dans `_saveTranslationToDatabase`.
+ */
+describe('MessageTranslationService - la retraduction ne détruit pas ce qu\'elle remplace', () => {
   let translationService: MessageTranslationService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;
 
@@ -1867,7 +1945,7 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
     mockZmqClient.sendTranslationRequest.mockResolvedValue('retrans-task');
   });
 
-  it('should delete old translations before retranslation', async () => {
+  it('laisse la traduction existante en base tant que le remplacement n\'est pas revenu', async () => {
     const messageData: MessageData = {
       id: 'existing-retrans-msg',
       conversationId: 'conv-retrans',
@@ -1897,11 +1975,42 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
     // Wait for async processing
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Should have called message.update to remove old translations from JSON
-    expect(mockPrisma.message.update).toHaveBeenCalledWith({
-      where: { id: 'existing-retrans-msg' },
-      data: { translations: {} }
+    // Aucune écriture de `Message.translations` sur le chemin de dispatch : la
+    // traduction française d'avant reste servie jusqu'à ce que la nouvelle
+    // arrive, et survit si elle n'arrive jamais.
+    expect(mockPrisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('demande bien la retraduction de la langue visée', async () => {
+    const messageData: MessageData = {
+      id: 'existing-retrans-msg',
+      conversationId: 'conv-retrans',
+      content: 'Content to retranslate',
+      originalLanguage: 'en',
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'existing-retrans-msg',
+      conversationId: 'conv-retrans',
+      content: 'Content to retranslate',
+      originalLanguage: 'en'
     });
+    mockPrisma.message.findUnique.mockResolvedValue({
+      id: 'existing-retrans-msg',
+      translations: { fr: { text: 'Old translation', translationModel: 'basic' } }
+    });
+    mockPrisma.participant.findMany.mockResolvedValue([]);
+
+    await translationService.handleNewMessage(messageData);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'existing-retrans-msg',
+        targetLanguages: ['fr']
+      })
+    );
   });
 });
 

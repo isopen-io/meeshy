@@ -311,6 +311,16 @@ Côté client, `APIClient.shared` (`APIClient.swift:260-765`) est le funnel de t
 **Dépendances.** gwcontract-04-conversations-delta-no-tombstones, gwcontract-06-notifications-no-delta · **Backend requis :** oui
 
 ### gwcontract-11-story-tombstone-truncation-silent — Troncature tombstones stories : invisible du client ET détectée par une égalité non fiable · **P3** · effort S
+**LIVRÉ (2026-08-11, routine messaging cycle 80).** Les 5 étapes du correctif ci-dessous sont
+appliquées telles quelles : sonde `take: STORY_TOMBSTONE_LIMIT + 1` + slice, flag exact
+`> LIMIT` remplaçant l'égalité, `logger.warn` conservé et conditionné au flag,
+`meta.deletedStoryIdsTruncated` dans `feed.ts`, et côté iOS l'escalade vers le fetch complet
+(`StoryViewModel.fetchStoriesFromNetwork`). Les 4 témoins prescrits existent, et le RED
+discriminant « exactement LIMIT ⇒ truncated false » a été **vérifié rouge** contre l'ancienne
+égalité avant d'être livré. Un défaut voisin, non listé par cette fiche, a été trouvé et corrigé
+dans le même lot : `pagination.hasMore`/`nextCursor` de cette même route n'avaient **aucun
+lecteur** dans le dépôt, donc le tray était coupé à 50 stories pour tout le monde — le client iOS
+draine désormais ses pages (cf. `tasks/todo.md`, cycle 80).
 **Constat.** Quand le nombre de tombstones stories dépasse le cap (500), la troncature ne produit qu'un `logger.warn` serveur : la réponse ne porte aucun flag, le client purge partiellement en croyant sa purge complète. Ajustement de la vérification : la détection actuelle est une ÉGALITÉ (`length === LIMIT`) qui ne distingue pas « exactement 500 » de « plus de 500 » — un flag fiable exige `take LIMIT+1` + slice, pattern déjà utilisé trois lignes plus haut pour `hasMore`.
 **Preuve.** `services/gateway/src/services/PostFeedService.ts:343` (`take: STORY_TOMBSTONE_LIMIT` = 500, :24) ; :383-391 (seul un `logger.warn`, check d'égalité :383) ; la réponse (:393 + `feed.ts:115` meta) ne porte aucun flag. Pattern fiable existant : :306-310 (`hasMore` par take+1).
 **Impact.** Au-delà du cap, stories fantômes conservées en cache client sans aucun signal.

@@ -71,6 +71,9 @@ struct StarredMessagesView: View {
         }
     }
 
+    // Native HIG empty state (`ContentUnavailableView` on iOS 17+, faithful
+    // fallback on iOS 16) via the shared design-system wrapper — same treatment
+    // as FeedView / CreateShareLinkView. Centered by the enclosing ZStack.
     private var emptyState: some View {
         AdaptiveContentUnavailableView(
             String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),

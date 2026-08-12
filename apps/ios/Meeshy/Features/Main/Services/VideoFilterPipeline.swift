@@ -73,6 +73,33 @@ enum VideoFilterPreset: String, CaseIterable, Sendable {
         }
         return c
     }
+
+    /// Reverse-lookup: which preset (if any) produced `config`'s colorimetry.
+    ///
+    /// Compares colorimetric fields only (`temperature`/`tint`/`brightness`/
+    /// `contrast`/`saturation`/`exposure`) — never `isEnabled` or the two
+    /// advanced-filter fields. `isEnabled` is intentionally ignored so the
+    /// "Reset" affordance (which sets `.natural`'s colorimetry but flips
+    /// `isEnabled` back to `false`) still resolves to `.natural`. The advanced
+    /// fields are ignored because `presetChip` deliberately carries the
+    /// caller's own `backgroundBlurEnabled`/`skinSmoothingEnabled` across a
+    /// preset switch (see `VideoFiltersPanel.presetChip`) — they are
+    /// orthogonal to which colorimetry preset is active.
+    ///
+    /// Returns `nil` when no preset's colorimetry matches — e.g. the user
+    /// hand-tuned a slider in `VideoFilterControlView`, which is a legitimate
+    /// "no preset selected" state, not a bug.
+    static func matching(_ config: VideoFilterConfig) -> VideoFilterPreset? {
+        allCases.first { preset in
+            let c = preset.config
+            return c.temperature == config.temperature
+                && c.tint == config.tint
+                && c.brightness == config.brightness
+                && c.contrast == config.contrast
+                && c.saturation == config.saturation
+                && c.exposure == config.exposure
+        }
+    }
 }
 
 // MARK: - Protocol

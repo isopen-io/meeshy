@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> **Candidat déposé le 2026-08-12 par la routine iOS/gateway (PR #2870) — défaut VÉRIFIÉ, non
+> livré, faute de toolchain.** `StoryCacheSource.revalidate()`
+> (`:sdk-core/src/main/kotlin/me/meeshy/sdk/story/StoryCacheSource.kt:55`) demande **une** page de
+> 50 stories (`storyApi.list(null, STORIES_PAGE_SIZE)`) et ne lit **ni** `pagination.hasMore` **ni**
+> `pagination.nextCursor`. Or `persist()` fait `storyDao.deleteNotIn(rows.map { it.id })` : au-delà
+> de la 50ᵉ story, la troncature ne se contente pas d'OMETTRE, elle **SUPPRIME** les lignes du cache
+> Room. C'est la variante nuisible du même défaut, corrigée sur iOS au cycle 80 (PR #2867 — chemin
+> complet qui écrasait le tray) et sur le web au cycle 81. **Android est la dernière plateforme qui
+> le porte encore** ; vérifié le 2026-08-12 : zéro occurrence de `hasMore`/`nextCursor`/`cursor`
+> dans `StoryCacheSource.kt`.
+>
+> Ce qui joue en votre faveur : l'enveloppe `ApiResponse` décode **déjà**
+> `pagination.hasMore`/`nextCursor` (`:core:model/ApiResponse.kt`) — aucun changement de type DTO
+> nécessaire. Le seul obstacle réel est que `apiCall()` (`:core:network/ApiCall.kt`) **jette**
+> le bloc `pagination` : il ne rend que `data`. Il faut donc un frère (`pagedApiCall` rendant
+> data + pagination) ou passer par `rawApiCall`. À trancher sur place.
+>
+> Trois décisions de conception, transposées de ce qui a été appris sur iOS — à re-décider, pas à
+> recopier :
+> 1. **Budget de pages** (iOS : 6 = 300 stories, tray borné 24 h). L'atteindre alors que le serveur
+>    annonce encore du reste ne doit **jamais** autoriser le `deleteNotIn` : une fenêtre non prouvée
+>    complète peut upserter, jamais élaguer — sinon le correctif recrée le défaut qu'il corrige.
+> 2. **Échec d'une page ≥ 2** : ici, contrairement à iOS, Room détient déjà un tray complet
+>    précédent. Jeter la passe (`throw StorySyncException`, cache intact) est donc probablement
+>    MEILLEUR que de persister une fenêtre partielle — l'inverse du choix iOS, et pour une raison
+>    qui tient au support, pas au goût.
+> 3. `StoryRepository.list(cursor, limit)` (ligne 73) est un passe-plat qui perd aussi la
+>    pagination — deux usages divergents de la même API à inventorier, comme sur le web.
+>
+> **Pourquoi non livré** : `dl.google.com` est bloqué par le proxy de ce conteneur (`CONNECT tunnel
+> failed, 403`), donc l'AGP 8.13.0 ne résout pas et **aucun test Android ne peut tourner ici** —
+> et ce dépôt n'a pas de workflow CI Android. Écrire du Kotlin non vérifié dans le seul chemin dont
+> le métier est de SUPPRIMER des lignes de cache aurait été irresponsable. À reprendre par une
+> session dont le `:app:assembleDebug` passe.
+
+
 > On 2026-08-12 **conversation-list live-presence data plumbing landed** (slice
 > `conversation-list-live-presence`, feature-parity §B "Conversations list" — the "conversation-
 > participant presence" candidate the prior slice's own note explicitly flagged as now-unblocked).

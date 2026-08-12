@@ -210,8 +210,8 @@ export function CallManager() {
    * `startCallTimeout`, so the initiator's 45s no-answer auto-cleanup never
    * armed for the caller — only the callee (via `handleIncomingCall`) had
    * one. Arm it here, reactively, the moment the initiator's own call
-   * becomes current in `initiated` status; `handleParticipantJoined` already
-   * clears it the instant someone actually joins.
+   * becomes current in `initiated` status; the sibling effect below clears
+   * it the instant the call genuinely answers.
    */
   useEffect(() => {
     if (!user || !currentCall) return;
@@ -220,6 +220,26 @@ export function CallManager() {
     startCallTimeout(currentCall.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCall?.id, currentCall?.status, currentCall?.initiatorId, user?.id]);
+
+  /**
+   * Vague 114 (2026-08-12) — clear the no-answer timeout on a genuine
+   * answer, not on room-join. `handleParticipantJoined` used to call
+   * `clearCallTimeout()` directly on `call:participant-joined`, which fires
+   * on iOS the instant the callee's device auto-early-joins the call room
+   * while still ringing (`CallManager.swift` `joinCallRoomReliably` — see
+   * Vague 113). That disarmed the caller's 45s no-answer auto-hangup the
+   * moment an iOS callee's phone started ringing, not when they picked up:
+   * an iOS callee who never answered left the caller ringing forever, with
+   * only the gateway's own 60s server-side ringing timeout as a backstop.
+   * `status` only flips to `'active'` on a genuine answer (`useWebRTCP2P`'s
+   * `handleAnswer`, or the callee's own local Accept in `acceptOrJoinCall`)
+   * — clearing here instead tracks that real signal for both sides.
+   */
+  useEffect(() => {
+    if (currentCall?.status === 'active') {
+      clearCallTimeout();
+    }
+  }, [currentCall?.status, clearCallTimeout]);
 
   /**
    * CALL-RESILIENCE — client heartbeat liveness contract (audit Vague 26,
@@ -394,9 +414,6 @@ export function CallManager() {
     (event: CallParticipantJoinedEvent) => {
       logger.info('[CallManager]', 'Participant joined - callId: ' + event.callId + ', participantId: ' + event.participant.id);
 
-      // Clear timeout since someone joined
-      clearCallTimeout();
-
       // Apply the per-user ICE servers (STUN + time-limited TURN) the gateway
       // attaches to participant-joined, so the initiator's RTCPeerConnection is
       // built with TURN credentials before the SDP offer is created.
@@ -407,21 +424,32 @@ export function CallManager() {
       // Add participant to call
       addParticipant(event.participant);
 
-      // Update call status to 'active' if it was 'initiated'
-      const { currentCall } = useCallStore.getState();
-      if (currentCall && currentCall.status === 'initiated') {
-        setCurrentCall({
-          ...currentCall,
-          status: 'active',
-        });
-      }
+      // Vague 113 (2026-08-12, supersedes Vague 110's stamp here) — this
+      // event fires on room-JOIN, not on answer: iOS deliberately
+      // auto-early-joins the call room the instant it receives an incoming
+      // call (CallManager.swift `joinCallRoomReliably`), specifically to
+      // receive the SDP offer while still ringing. Treating this as the
+      // caller's "answered" moment meant the visible call-duration clock
+      // started (and status flipped to 'active') the instant an iOS
+      // callee's phone started ringing, not when they picked up — for
+      // every call to an iOS callee. The genuine pickup signal is the SDP
+      // *answer*, which only a real Accept sends: `useWebRTCP2P`'s
+      // `handleAnswer` now stamps `status`/`answeredAt` there instead (same
+      // 'initiated' guard, so a later participant joining a group call
+      // still never re-stamps it).
+      //
+      // Vague 114 (2026-08-12) — the no-answer timeout used to be cleared
+      // right here too, for the same wrong reason: an early room-join isn't
+      // an answer. It's now cleared reactively off `currentCall.status`
+      // turning 'active' (see the effect above), the same real signal
+      // Vague 113 moved the stamp to.
 
       // Note: CallInterface will handle creating the WebRTC offer
       // based on currentCall.initiatorId check
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [addParticipant, setCurrentCall, setIceServers, clearCallTimeout]
+    [addParticipant, setIceServers]
   );
 
   /**
@@ -727,14 +755,19 @@ export function CallManager() {
         setIceServers(ack.data.iceServers);
       }
 
-      // Create call session in store
+      // Create call session in store. `answeredAt` (Vague 110, 2026-08-12) is
+      // what VideoCallInterface anchors the visible call-duration clock on —
+      // for the callee this IS the answer moment, unlike the caller whose
+      // `startedAt` is stamped back at ring-start (use-video-call.ts).
+      const answeredAt = new Date();
       setCurrentCall({
         id: params.callId,
         conversationId: params.conversationId,
         mode: params.mode,
         status: 'active',
         initiatorId: params.initiatorId,
-        startedAt: new Date(),
+        startedAt: answeredAt,
+        answeredAt,
         participants: params.participants,
       } as CallSession);
 

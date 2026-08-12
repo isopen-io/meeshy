@@ -425,6 +425,39 @@ describe('DELETE /messages/:messageId', () => {
     expect(messageType).toBe('text');
   });
 
+  // La QUATRIÈME audience d'une suppression. Le cycle 89 l'a câblée sur le
+  // transport WS ; les deux transports REST — dont celui-ci — laissaient la
+  // pastille compter un message que le lecteur voyait pourtant disparaître,
+  // indéfiniment (la liste web tourne en `staleTime: Infinity`).
+  //
+  // L'exclusion porte sur l'AUTEUR (`senderId`, ici `PART_ID`) et jamais sur
+  // l'acteur (`USER_ID`) : un modérateur qui retire le message d'un autre est
+  // lui-même un destinataire dont la pastille doit bouger. Le type de
+  // `broadcastMessageMutation` impose de passer UNE identité ; seul ce test dit
+  // LAQUELLE.
+  it('repousse la pastille de non-lus, en excluant l\'auteur et non l\'acteur', async () => {
+    const emitUnread = jest.fn(async (_params: any) => {});
+    (app as any).socketIOHandler.getManager = () => ({
+      getIO: () => ({ to: () => ({ emit: () => {} }) }),
+      enqueueOfflineMessageMutation: jest.fn(async () => {}),
+      emitUnreadCountsToRecipients: emitUnread,
+    });
+
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce(null);
+
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect(emitUnread).toHaveBeenCalledWith({
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+    });
+
+    (app as any).socketIOHandler.getManager = () => null;
+  });
+
   it('recomputes lastMessageAt via an optimistic-concurrency updateMany guarded on the pre-delete value', async () => {
     const lastNonDeletedAt = new Date('2026-07-02T00:00:00Z');
     (app as any).prisma.message.findFirst
