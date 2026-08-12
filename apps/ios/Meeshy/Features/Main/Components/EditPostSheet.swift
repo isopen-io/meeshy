@@ -14,20 +14,40 @@ struct EditPostDraft {
     let type: String?
     /// Ids of attached media the author chose to remove. Empty when none.
     let removeMediaIds: [String]
+    /// Non-nil UNIQUEMENT quand l'auteur a touché à la position : `.set` la
+    /// remplace, `.remove` la retire. `nil` = inchangée (clé absente du PATCH).
+    var location: PostLocationUpdate? = nil
 }
 
 /// Lightweight, presentation-only view of an attached media item for the edit
 /// sheet — maps from the SDK `FeedMedia` to just what the thumbnail strip needs.
 struct EditablePostMedia: Identifiable, Equatable {
-    enum Kind { case image, video, audio, document, location }
+    enum Kind { case image, video, audio, document }
     let id: String
     let kind: Kind
     let previewURL: URL?
+    /// Durée serveur-autoritaire (ms), quand connue — alimente le plancher de
+    /// 3s de `ReelComposition` pour les vidéos/audios. `nil` pour les images
+    /// et documents (jamais soumis à cette condition).
+    let durationMs: Int?
 
-    init(id: String, kind: Kind, previewURL: URL?) {
+    /// Pont vers le moteur de classification SDK (`ReelComposition`), pour que
+    /// la sheet évalue la règle produit (video >=3s || audio >=3s || >= 2
+    /// images) sur la même échelle de types que les composers.
+    var feedMediaType: FeedMediaType {
+        switch kind {
+        case .image: return .image
+        case .video: return .video
+        case .audio: return .audio
+        case .document: return .document
+        }
+    }
+
+    init(id: String, kind: Kind, previewURL: URL?, durationMs: Int? = nil) {
         self.id = id
         self.kind = kind
         self.previewURL = previewURL
+        self.durationMs = durationMs
     }
 
     init(_ media: FeedMedia) {
@@ -37,10 +57,10 @@ struct EditablePostMedia: Identifiable, Equatable {
         case .video: self.kind = .video
         case .audio: self.kind = .audio
         case .document: self.kind = .document
-        case .location: self.kind = .location
         }
         let raw = media.thumbnailUrl ?? media.url
         self.previewURL = raw.flatMap { MeeshyConfig.resolveMediaURL($0) }
+        self.durationMs = media.duration
     }
 }
 
@@ -51,12 +71,13 @@ struct EditPostSheet: View {
     let originalContent: String
     var originalLanguage: String? = nil
     var originalType: String? = nil
-    /// The post carries media → switching to REEL is allowed (a reel needs
-    /// something to show on the immersive surface).
-    var canBeReel: Bool = false
     /// Attached media shown with a remove control. Removing here sends the ids
-    /// in `removeMediaIds`; the gateway detaches them.
+    /// in `removeMediaIds`; the gateway detaches them. C'est aussi la source de
+    /// la règle de composition REEL (`remainingQualifiesAsReel`).
     var media: [EditablePostMedia] = []
+    /// Position actuellement attachée au post (`FeedPost.location`) — affichée
+    /// dans la sheet avec « retirer » / « changer » (picker).
+    var originalLocation: SharedPlace? = nil
     /// A repost mirrors its source; its type is not editable.
     var isRepost: Bool = false
     var maxLength: Int = 5000
@@ -72,6 +93,10 @@ struct EditPostSheet: View {
     @FocusState private var isFocused: Bool
     @State private var isSaving: Bool = false
     @State private var removedMediaIds: Set<String> = []
+    /// Modification de la position pendant l'édition — `nil` tant que
+    /// l'auteur n'y a pas touché (la clé ne part pas au PATCH).
+    @State private var locationEdit: PostLocationUpdate? = nil
+    @State private var showEditLocationPicker = false
 
     private var trimmedContent: String {
         draftContent.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,10 +104,21 @@ struct EditPostSheet: View {
 
     private var normalizedOriginalType: String { (originalType ?? "POST").uppercased() }
 
-    /// Only meaningful when not a repost and the post can actually be a reel
-    /// (carries media) or already is one (allowing the reverse switch).
+    /// Règle produit 2026-08-02 + directive durée minimale, évaluée sur la
+    /// composition APRÈS retraits : un REEL exige une vidéo (>=3s), un audio
+    /// (>=3s), ou au moins deux images.
+    private var remainingQualifiesAsReel: Bool {
+        ReelComposition.qualifiesAsReel(
+            mediaKinds: media.filter { !removedMediaIds.contains($0.id) }
+                .map { (kind: $0.feedMediaType, durationMs: $0.durationMs) }
+        )
+    }
+
+    /// Only meaningful when not a repost and either the remaining composition
+    /// qualifies as a reel, or the post already IS one (the picker then shows
+    /// the imposed switch back to POST when media removal de-qualifies it).
     private var showTypePicker: Bool {
-        !isRepost && (canBeReel || normalizedOriginalType == "REEL")
+        !isRepost && (remainingQualifiesAsReel || normalizedOriginalType == "REEL")
     }
 
     private var contentChanged: Bool {
@@ -91,7 +127,18 @@ struct EditPostSheet: View {
     private var languageChanged: Bool { selectedLanguage != (originalLanguage ?? "") }
     private var typeChanged: Bool { showTypePicker && selectedType != normalizedOriginalType }
     private var mediaChanged: Bool { !removedMediaIds.isEmpty }
-    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged || mediaChanged }
+    private var locationChanged: Bool { locationEdit != nil }
+    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged || mediaChanged || locationChanged }
+
+    /// Position telle qu'elle sera après sauvegarde : l'édition locale prime,
+    /// sinon la position d'origine.
+    private var displayedLocation: SharedPlace? {
+        switch locationEdit {
+        case .set(let place): return place
+        case .remove: return nil
+        case nil: return originalLocation
+        }
+    }
 
     private var remainingMediaCount: Int { media.count - removedMediaIds.count }
 
@@ -134,6 +181,8 @@ struct EditPostSheet: View {
                         .frame(maxHeight: .infinity)
 
                     mediaSection
+
+                    locationSection
 
                     metadataSection
 
@@ -189,7 +238,13 @@ struct EditPostSheet: View {
         .onAppear {
             draftContent = originalContent
             selectedLanguage = originalLanguage ?? ""
-            selectedType = normalizedOriginalType
+            // Corpus hérité (E11) : un REEL existant dont la composition ne
+            // qualifie plus (ex. une seule image) est rebasculé sur POST dès
+            // l'ouverture — le picker l'affiche, et la sauvegarde envoie le
+            // changement de type (le gateway refuse un REEL non qualifiant).
+            selectedType = (normalizedOriginalType == "REEL" && !remainingQualifiesAsReel)
+                ? "POST"
+                : normalizedOriginalType
             // Defer focus slightly so the keyboard rises after the sheet
             // present animation settles — otherwise the appearance jolts.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -225,7 +280,7 @@ struct EditPostSheet: View {
                             .font(MeeshyFont.relative(15))
                             .foregroundColor(theme.textMuted)
                     }
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
@@ -242,13 +297,69 @@ struct EditPostSheet: View {
             if showTypePicker {
                 Picker(String(localized: "feed.post.edit.type", defaultValue: "Type", bundle: .main), selection: $selectedType) {
                     Text(String(localized: "feed.post.edit.type.post", defaultValue: "Post", bundle: .main)).tag("POST")
-                    Text(String(localized: "feed.post.edit.type.reel", defaultValue: "Réel", bundle: .main)).tag("REEL")
+                    // L'option Réel n'est offerte que si la composition
+                    // restante qualifie — `toggleRemove` a déjà rebasculé la
+                    // sélection sur POST quand un retrait dé-qualifie, donc la
+                    // sélection ne pointe jamais sur un tag absent.
+                    if remainingQualifiesAsReel {
+                        Text(String(localized: "feed.post.edit.type.reel", defaultValue: "Réel", bundle: .main)).tag("REEL")
+                    }
                 }
                 .pickerStyle(.segmented)
                 .disabled(isSaving)
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    // MARK: - Position
+
+    /// Sticker de la position + « changer »/« retirer », ou bouton d'ajout
+    /// quand le post n'en porte pas. Le tap du sticker ouvre le picker (en
+    /// édition, « ouvrir la carte » serait un détour — on est là pour changer).
+    @ViewBuilder
+    private var locationSection: some View {
+        HStack(spacing: 10) {
+            if let place = displayedLocation {
+                FeedPostLocationSticker(place: place) {
+                    showEditLocationPicker = true
+                }
+                Button {
+                    HapticFeedback.light()
+                    // Retirer une position ajoutée pendant CETTE édition =
+                    // simple retour à l'état d'origine (clé absente du PATCH).
+                    locationEdit = originalLocation == nil ? nil : .remove
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.body)
+                        .foregroundColor(theme.textMuted)
+                }
+                .disabled(isSaving)
+                .accessibilityLabel(String(localized: "feed.post.edit.location.remove", defaultValue: "Retirer la position", bundle: .main))
+            } else {
+                Button {
+                    HapticFeedback.light()
+                    showEditLocationPicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.footnote.weight(.semibold))
+                        Text(String(localized: "feed.post.edit.location.add", defaultValue: "Ajouter une position", bundle: .main))
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .foregroundColor(MeeshyColors.indigo400)
+                }
+                .disabled(isSaving)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .sheet(isPresented: $showEditLocationPicker) {
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+                locationEdit = .set(place)
+                showEditLocationPicker = false
+            }
+        }
     }
 
     // MARK: - Attached media
@@ -271,7 +382,6 @@ struct EditPostSheet: View {
     @ViewBuilder
     private func mediaThumbnail(_ item: EditablePostMedia) -> some View {
         let removed = removedMediaIds.contains(item.id)
-        let blockRemoval = selectedType == "REEL" && !removed && remainingMediaCount <= 1
         ZStack(alignment: .topTrailing) {
             Group {
                 if let url = item.previewURL, item.kind == .image || item.kind == .video {
@@ -290,6 +400,16 @@ struct EditPostSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.inputBorder, lineWidth: 1))
             .opacity(removed ? 0.35 : 1)
+            // Sans label, la bande de vignettes se lit comme une série de boutons
+            // « Retirer le média » identiques : VoiceOver n'annonce ni le TYPE du
+            // média ni son état « retiré » (transmis par la seule opacité 0.35,
+            // violation WCAG 1.4.1). On décrit chaque vignette comme UN élément
+            // (kind + état) ; le bouton retirer/restaurer reste un frère atteignable.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(mediaKindLabel(item.kind))
+            .accessibilityValue(removed
+                ? String(localized: "feed.post.edit.media.removed.a11y", defaultValue: "Retiré", bundle: .main)
+                : "")
 
             Button {
                 toggleRemove(item.id)
@@ -305,7 +425,7 @@ struct EditPostSheet: View {
             }
             .buttonStyle(.plain)
             .offset(x: 6, y: -6)
-            .disabled(blockRemoval || isSaving)
+            .disabled(isSaving)
             .accessibilityLabel(removed
                 ? String(localized: "feed.post.edit.media.restore.a11y", defaultValue: "Restaurer le média", bundle: .main)
                 : String(localized: "feed.post.edit.media.remove.a11y", defaultValue: "Retirer le média", bundle: .main))
@@ -329,17 +449,35 @@ struct EditPostSheet: View {
         case .audio: return "music.note"
         case .image: return "photo"
         case .document: return "doc"
-        case .location: return "mappin.and.ellipse"
+        }
+    }
+
+    /// Noms courts localisés du type de média, pour l'annonce VoiceOver de chaque
+    /// vignette (les glyphes SF Symbols étant décoratifs / masqués).
+    private func mediaKindLabel(_ kind: EditablePostMedia.Kind) -> String {
+        switch kind {
+        case .image: return String(localized: "feed.post.edit.media.kind.image", defaultValue: "Image", bundle: .main)
+        case .video: return String(localized: "feed.post.edit.media.kind.video", defaultValue: "Vidéo", bundle: .main)
+        case .audio: return String(localized: "feed.post.edit.media.kind.audio", defaultValue: "Audio", bundle: .main)
+        case .document: return String(localized: "feed.post.edit.media.kind.document", defaultValue: "Document", bundle: .main)
         }
     }
 
     private func toggleRemove(_ id: String) {
         if removedMediaIds.contains(id) {
             removedMediaIds.remove(id)
+            // Restaurer un média peut re-qualifier la composition : l'option
+            // Réel réapparaît, mais on n'y rebascule PAS automatiquement —
+            // repasser en REEL reste un choix explicite de l'auteur.
         } else {
-            // A reel must keep at least one media — block removing the last one.
-            if selectedType == "REEL" && remainingMediaCount <= 1 { return }
             removedMediaIds.insert(id)
+            // Règle produit 2026-08-02 : on PEUT retirer un média d'un REEL
+            // tant que la composition reste qualifiante (video || audio ||
+            // >= 2 images). Sinon le retrait est permis mais IMPOSE le passage
+            // en POST — le gateway rejette (422) un REEL non qualifiant.
+            if selectedType == "REEL" && !remainingQualifiesAsReel {
+                selectedType = "POST"
+            }
         }
     }
 
@@ -350,7 +488,8 @@ struct EditPostSheet: View {
             content: trimmedContent,
             language: languageChanged ? selectedLanguage : nil,
             type: typeChanged ? selectedType : nil,
-            removeMediaIds: Array(removedMediaIds)
+            removeMediaIds: Array(removedMediaIds),
+            location: locationEdit
         )
         await onSave(draft)
         isSaving = false

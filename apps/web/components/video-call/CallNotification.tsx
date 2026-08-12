@@ -25,8 +25,16 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
 
   // Play ringtone on mount
   useEffect(() => {
+    let cancelled = false;
+
     // Dynamically import ringtone utility
     import('@/utils/ringtone').then(({ getRingtone }) => {
+      // The call may already be gone (answered elsewhere, cancelled,
+      // superseded) by the time this chunk resolves — never start ringing
+      // for a notification that already unmounted.
+      if (cancelled) {
+        return;
+      }
       ringtoneRef.current = getRingtone();
       ringtoneRef.current.play();
     }).catch((error) => {
@@ -35,6 +43,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
 
     // Cleanup on unmount
     return () => {
+      cancelled = true;
       if (ringtoneRef.current) {
         ringtoneRef.current.stop();
         ringtoneRef.current = null;

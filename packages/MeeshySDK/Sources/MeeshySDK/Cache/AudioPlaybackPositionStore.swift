@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Pure model (testable without UserDefaults)
 
@@ -122,15 +123,15 @@ public final class AudioPlaybackPositionStore {
     // MARK: - Persistence
 
     private static func load(from userDefaults: UserDefaults, key: String) -> AudioPlaybackPositions {
-        guard let data = userDefaults.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(AudioPlaybackPositions.self, from: data) else {
-            return AudioPlaybackPositions()
-        }
-        return decoded
+        guard let data = userDefaults.data(forKey: key) else { return AudioPlaybackPositions() }
+        // Un blob présent mais illisible réinitialise l'état : sans trace, la
+        // perte passe pour un premier lancement.
+        return JSONDecoder().decodeOrLog(AudioPlaybackPositions.self, from: data,
+                                         field: "audio playback positions", logger: Logger.cache) ?? AudioPlaybackPositions()
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(positions) else { return }
+        guard let data = JSONEncoder().encodeOrLog(positions, field: "audio playback positions", logger: Logger.cache) else { return }
         userDefaults.set(data, forKey: key)
     }
 }

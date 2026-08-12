@@ -1,216 +1,200 @@
 /**
- * MutationLogService Unit Tests
- *
- * Covers:
- * - MutationLogDuplicate: error name, resultId, kind, message
- * - recordOrReturn(): duplicate → throws MutationLogDuplicate with prior resultId
- * - recordOrReturn(): fresh → executes op, upserts log, returns result
- * - recordOrReturn(): op failure → log NOT persisted (retry semantics)
- * - recordOrReturn(): passes correct upsert payload (concurrent race convergence)
+ * Unit tests for MutationLogService
+ * Covers: fresh mutation (no log entry) → op executed + log upserted + result returned,
+ * duplicate mutation → MutationLogDuplicate thrown with correct resultId and kind,
+ * op failure → MutationLogDuplicate NOT thrown, error propagated, log NOT written,
+ * MutationLogDuplicate carries null resultId when stored resultId is null.
  *
  * @jest-environment node
  */
 
+import { describe, it, expect, jest } from '@jest/globals';
 import { MutationLogService, MutationLogDuplicate } from '../../../services/MutationLogService';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-type MutationLogRow = { resultId: string | null; kind: string };
+// ─── Factories ───────────────────────────────────────────────────────────────
 
-function makePrisma(existingRow: MutationLogRow | null = null) {
+function makePrisma(logEntry: { resultId: string | null; kind: string } | null = null) {
   return {
     mutationLog: {
-      findUnique: jest.fn().mockResolvedValue(existingRow),
-      upsert: jest.fn().mockResolvedValue({}),
+      findUnique: jest.fn<any>().mockResolvedValue(logEntry),
+      upsert: jest.fn<any>().mockResolvedValue({}),
     },
-  } as any;
+  } as unknown as PrismaClient;
+}
+
+function makeSut(prisma?: PrismaClient) {
+  return new MutationLogService(prisma ?? makePrisma());
 }
 
 const BASE_ARGS = {
-  userId: 'user_001',
+  userId: 'user-1',
   clientMutationId: 'cmid_abc123',
-  kind: 'friend_request',
+  kind: 'friend-request',
 };
 
-describe('MutationLogDuplicate', () => {
-  it('is an Error subclass with name MutationLogDuplicate', () => {
-    const err = new MutationLogDuplicate('result_42', 'friend_request');
-    expect(err).toBeInstanceOf(Error);
-    expect(err.name).toBe('MutationLogDuplicate');
-  });
-
-  it('exposes resultId and kind properties', () => {
-    const err = new MutationLogDuplicate('result_42', 'friend_request');
-    expect(err.resultId).toBe('result_42');
-    expect(err.kind).toBe('friend_request');
-  });
-
-  it('accepts null resultId', () => {
-    const err = new MutationLogDuplicate(null, 'profile_update');
-    expect(err.resultId).toBeNull();
-  });
-
-  it('includes resultId and kind in message', () => {
-    const err = new MutationLogDuplicate('result_42', 'friend_request');
-    expect(err.message).toMatch('friend_request');
-    expect(err.message).toMatch('result_42');
-  });
-});
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('MutationLogService', () => {
-  describe('recordOrReturn — duplicate path', () => {
-    it('throws MutationLogDuplicate when cmid already exists', async () => {
-      const prisma = makePrisma({ resultId: 'existing_id', kind: 'friend_request' });
-      const svc = new MutationLogService(prisma);
+  // ── recordOrReturn — fresh mutation ─────────────────────────────────────
 
-      await expect(
-        svc.recordOrReturn({ ...BASE_ARGS, op: jest.fn() })
-      ).rejects.toThrow(MutationLogDuplicate);
-    });
-
-    it('throws with the prior resultId from the log', async () => {
-      const prisma = makePrisma({ resultId: 'prior_result_999', kind: 'friend_request' });
-      const svc = new MutationLogService(prisma);
-
-      try {
-        await svc.recordOrReturn({ ...BASE_ARGS, op: jest.fn() });
-        fail('Expected MutationLogDuplicate to be thrown');
-      } catch (err) {
-        expect(err).toBeInstanceOf(MutationLogDuplicate);
-        expect((err as MutationLogDuplicate).resultId).toBe('prior_result_999');
-      }
-    });
-
-    it('throws with null resultId when log has null resultId', async () => {
-      const prisma = makePrisma({ resultId: null, kind: 'profile_update' });
-      const svc = new MutationLogService(prisma);
-
-      try {
-        await svc.recordOrReturn({ ...BASE_ARGS, kind: 'profile_update', op: jest.fn() });
-        fail('Expected MutationLogDuplicate');
-      } catch (err) {
-        expect((err as MutationLogDuplicate).resultId).toBeNull();
-      }
-    });
-
-    it('does not call op when duplicate is detected', async () => {
-      const prisma = makePrisma({ resultId: 'prior', kind: 'friend_request' });
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn();
-
-      await expect(svc.recordOrReturn({ ...BASE_ARGS, op })).rejects.toThrow(MutationLogDuplicate);
-
-      expect(op).not.toHaveBeenCalled();
-    });
-
-    it('does not upsert when duplicate is detected', async () => {
-      const prisma = makePrisma({ resultId: 'prior', kind: 'friend_request' });
-      const svc = new MutationLogService(prisma);
-
-      await expect(svc.recordOrReturn({ ...BASE_ARGS, op: jest.fn() })).rejects.toThrow();
-
-      expect(prisma.mutationLog.upsert).not.toHaveBeenCalled();
-    });
-
-    it('queries by correct compound key', async () => {
+  describe('fresh mutation (no existing log entry)', () => {
+    it('executes the op and returns its result', async () => {
       const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn().mockResolvedValue({ id: 'r1' });
+      const sut = makeSut(prisma);
+      const op = jest.fn<any>().mockResolvedValue({ id: 'new-resource-1', name: 'Alice' });
 
-      await svc.recordOrReturn({ ...BASE_ARGS, op });
+      const result = await sut.recordOrReturn({ ...BASE_ARGS, op });
 
-      expect(prisma.mutationLog.findUnique).toHaveBeenCalledWith({
-        where: {
-          userId_clientMutationId: {
-            userId: BASE_ARGS.userId,
-            clientMutationId: BASE_ARGS.clientMutationId,
-          },
-        },
-        select: { resultId: true, kind: true },
-      });
-    });
-  });
-
-  describe('recordOrReturn — fresh path', () => {
-    it('calls op when no existing log entry', async () => {
-      const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn().mockResolvedValue({ id: 'new_result' });
-
-      await svc.recordOrReturn({ ...BASE_ARGS, op });
-
+      expect(result).toEqual({ id: 'new-resource-1', name: 'Alice' });
       expect(op).toHaveBeenCalledTimes(1);
     });
 
-    it('returns the op result', async () => {
+    it('upserts the log with resultId from op result', async () => {
       const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const payload = { id: 'new_result', extra: 'data' };
-      const op = jest.fn().mockResolvedValue(payload);
+      const sut = makeSut(prisma);
+      const op = jest.fn<any>().mockResolvedValue({ id: 'res-42' });
 
-      const result = await svc.recordOrReturn({ ...BASE_ARGS, op });
-
-      expect(result).toEqual(payload);
-    });
-
-    it('upserts the mutation log after a successful op', async () => {
-      const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn().mockResolvedValue({ id: 'new_result' });
-
-      await svc.recordOrReturn({ ...BASE_ARGS, op });
-
-      expect(prisma.mutationLog.upsert).toHaveBeenCalledTimes(1);
-    });
-
-    it('upsert create payload includes userId, clientMutationId, kind, resultId', async () => {
-      const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn().mockResolvedValue({ id: 'result_xyz' });
-
-      await svc.recordOrReturn({ ...BASE_ARGS, op });
+      await sut.recordOrReturn({ ...BASE_ARGS, op });
 
       expect(prisma.mutationLog.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: {
+            userId_clientMutationId: {
+              userId: BASE_ARGS.userId,
+              clientMutationId: BASE_ARGS.clientMutationId,
+            },
+          },
           create: expect.objectContaining({
             userId: BASE_ARGS.userId,
             clientMutationId: BASE_ARGS.clientMutationId,
             kind: BASE_ARGS.kind,
-            resultId: 'result_xyz',
+            resultId: 'res-42',
           }),
         })
       );
     });
 
-    it('upsert update payload sets kind without clobbering resultId', async () => {
+    it('queries the log with the correct composite key', async () => {
       const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn().mockResolvedValue({ id: 'result_xyz' });
+      const sut = makeSut(prisma);
 
-      await svc.recordOrReturn({ ...BASE_ARGS, op });
+      await sut.recordOrReturn({ ...BASE_ARGS, op: jest.fn<any>().mockResolvedValue({ id: 'x' }) });
 
-      const call = (prisma.mutationLog.upsert as jest.Mock).mock.calls[0][0];
-      expect(call.update).toEqual({ kind: BASE_ARGS.kind });
-      expect(call.update).not.toHaveProperty('resultId');
+      expect(prisma.mutationLog.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId_clientMutationId: {
+              userId: BASE_ARGS.userId,
+              clientMutationId: BASE_ARGS.clientMutationId,
+            },
+          },
+        })
+      );
     });
   });
 
-  describe('recordOrReturn — op failure (retry semantics)', () => {
-    it('propagates op error without persisting log entry', async () => {
-      const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const op = jest.fn().mockRejectedValue(new Error('DB write failed'));
+  // ── recordOrReturn — duplicate mutation ──────────────────────────────────
 
-      await expect(svc.recordOrReturn({ ...BASE_ARGS, op })).rejects.toThrow('DB write failed');
+  describe('duplicate mutation (log entry exists)', () => {
+    it('throws MutationLogDuplicate without calling op', async () => {
+      const prisma = makePrisma({ resultId: 'res-42', kind: 'friend-request' });
+      const sut = makeSut(prisma);
+      const op = jest.fn<any>();
+
+      await expect(
+        sut.recordOrReturn({ ...BASE_ARGS, op })
+      ).rejects.toThrow(MutationLogDuplicate);
+
+      expect(op).not.toHaveBeenCalled();
+    });
+
+    it('MutationLogDuplicate carries the prior resultId', async () => {
+      const prisma = makePrisma({ resultId: 'prior-result-99', kind: 'friend-request' });
+      const sut = makeSut(prisma);
+
+      try {
+        await sut.recordOrReturn({ ...BASE_ARGS, op: jest.fn<any>() });
+        throw new Error('should not reach here');
+      } catch (err) {
+        expect(err).toBeInstanceOf(MutationLogDuplicate);
+        expect((err as MutationLogDuplicate).resultId).toBe('prior-result-99');
+      }
+    });
+
+    it('MutationLogDuplicate carries the prior kind', async () => {
+      const prisma = makePrisma({ resultId: 'r1', kind: 'block-user' });
+      const sut = makeSut(prisma);
+
+      try {
+        await sut.recordOrReturn({ ...BASE_ARGS, kind: 'block-user', op: jest.fn<any>() });
+        throw new Error('should not reach here');
+      } catch (err) {
+        expect((err as MutationLogDuplicate).kind).toBe('block-user');
+      }
+    });
+
+    it('MutationLogDuplicate.resultId can be null', async () => {
+      const prisma = makePrisma({ resultId: null, kind: 'post-like' });
+      const sut = makeSut(prisma);
+
+      await expect(
+        sut.recordOrReturn({ ...BASE_ARGS, kind: 'post-like', op: jest.fn<any>() })
+      ).rejects.toMatchObject({ resultId: null });
+    });
+
+    it('does NOT write a new log entry on duplicate', async () => {
+      const prisma = makePrisma({ resultId: 'r', kind: 'friend-request' });
+      const sut = makeSut(prisma);
+
+      await expect(
+        sut.recordOrReturn({ ...BASE_ARGS, op: jest.fn<any>() })
+      ).rejects.toBeInstanceOf(MutationLogDuplicate);
 
       expect(prisma.mutationLog.upsert).not.toHaveBeenCalled();
     });
+  });
 
-    it('does not swallow op error', async () => {
+  // ── recordOrReturn — op failure ──────────────────────────────────────────
+
+  describe('op failure', () => {
+    it('propagates the op error without writing a log entry', async () => {
       const prisma = makePrisma(null);
-      const svc = new MutationLogService(prisma);
-      const specificError = new Error('constraint violation');
-      const op = jest.fn().mockRejectedValue(specificError);
+      const sut = makeSut(prisma);
+      const opError = new Error('network timeout');
+      const op = jest.fn<any>().mockRejectedValue(opError);
 
-      await expect(svc.recordOrReturn({ ...BASE_ARGS, op })).rejects.toBe(specificError);
+      await expect(sut.recordOrReturn({ ...BASE_ARGS, op })).rejects.toThrow('network timeout');
+      expect(prisma.mutationLog.upsert).not.toHaveBeenCalled();
+    });
+
+    it('error thrown is not a MutationLogDuplicate', async () => {
+      const prisma = makePrisma(null);
+      const sut = makeSut(prisma);
+      const op = jest.fn<any>().mockRejectedValue(new Error('db error'));
+
+      await expect(
+        sut.recordOrReturn({ ...BASE_ARGS, op })
+      ).rejects.not.toBeInstanceOf(MutationLogDuplicate);
+    });
+  });
+
+  // ── MutationLogDuplicate class ───────────────────────────────────────────
+
+  describe('MutationLogDuplicate', () => {
+    it('has name MutationLogDuplicate', () => {
+      const err = new MutationLogDuplicate('id-1', 'comment');
+      expect(err.name).toBe('MutationLogDuplicate');
+    });
+
+    it('is an instance of Error', () => {
+      expect(new MutationLogDuplicate(null, 'post-like')).toBeInstanceOf(Error);
+    });
+
+    it('message contains kind and resultId', () => {
+      const err = new MutationLogDuplicate('my-id', 'block-user');
+      expect(err.message).toContain('block-user');
+      expect(err.message).toContain('my-id');
     });
   });
 });

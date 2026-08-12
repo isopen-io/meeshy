@@ -33,7 +33,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
     let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
-    let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -71,10 +70,13 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
     let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
+    let participantJoined = PassthroughSubject<ParticipantJoinedEvent, Never>()
     let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
     let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
+    let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
     let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
@@ -93,7 +95,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var typingStartConversationIds: [String] = []
     var typingStopConversationIds: [String] = []
     var translationRequests: [(messageId: String, targetLanguage: String)] = []
-    var locationSharePayloads: [LocationSharePayload] = []
     var liveLocationStartPayloads: [LiveLocationStartPayload] = []
     var liveLocationUpdatePayloads: [LiveLocationUpdatePayload] = []
     var liveLocationStopConversationIds: [String] = []
@@ -103,6 +104,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var lastSendViaSocketFallbackClientMessageId: String?
     var lastSendViaSocketFallbackAttachmentIds: [String]?
     var lastSendViaSocketFallbackIsEncrypted: Bool?
+    /// Dernier lieu partagé transmis au repli socket (Lot 2 — chaîne
+    /// d'écriture du lieu) ; nil quand le message n'en portait pas.
+    var lastSendViaSocketFallbackLocation: SharedPlace?
     var callInitiateCallCount = 0
     var callInitiateResult: Result<MessageSocketManager.CallInitiateAck, Error> = .success(
         MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
@@ -163,10 +167,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         translationRequests.append((messageId, targetLanguage))
     }
 
-    func emitLocationShare(payload: LocationSharePayload) {
-        locationSharePayloads.append(payload)
-    }
-
     func emitLiveLocationStart(payload: LiveLocationStartPayload) {
         liveLocationStartPayloads.append(payload)
     }
@@ -183,11 +183,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         sendWithAttachmentsCallCount += 1
     }
 
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck? {
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck? {
         sendViaSocketFallbackCallCount += 1
         lastSendViaSocketFallbackClientMessageId = clientMessageId
         lastSendViaSocketFallbackAttachmentIds = attachmentIds
         lastSendViaSocketFallbackIsEncrypted = isEncrypted
+        lastSendViaSocketFallbackLocation = location
         return sendViaSocketFallbackResult
     }
 
@@ -315,7 +316,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         typingStartConversationIds.removeAll()
         typingStopConversationIds.removeAll()
         translationRequests.removeAll()
-        locationSharePayloads.removeAll()
         liveLocationStartPayloads.removeAll()
         liveLocationUpdatePayloads.removeAll()
         liveLocationStopConversationIds.removeAll()
@@ -325,6 +325,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         lastSendViaSocketFallbackClientMessageId = nil
         lastSendViaSocketFallbackAttachmentIds = nil
         lastSendViaSocketFallbackIsEncrypted = nil
+        lastSendViaSocketFallbackLocation = nil
         callInitiateCallCount = 0
         callJoinCallCount = 0
         callLeaveCallCount = 0

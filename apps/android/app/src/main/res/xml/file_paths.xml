@@ -4,4 +4,9 @@
     <cache-path
         name="exports"
         path="exports/" />
+    <!-- Feed-composer camera-photo captures written to context.cacheDir/captures before
+         being read back and uploaded (feature-parity §F, ActivityResultContracts.TakePicture). -->
+    <cache-path
+        name="captures"
+        path="captures/" />
 </paths>

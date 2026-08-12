@@ -21,7 +21,7 @@ struct InviteFriendsSheet: View {
     // MARK: - Phase toggle
     @State private var showOptions = false
 
-    // MARK: - Editable fields (defaults match shareConversationLink)
+    // MARK: - Editable fields
     @State private var inviteMessage = ""
     @State private var linkName = ""
 
@@ -47,13 +47,20 @@ struct InviteFriendsSheet: View {
     // Clipboard feedback
     @State private var showCopiedFeedback = false
 
+    /// Freshly minted invite link awaiting the system share sheet. Presenting it
+    /// through `.sheet(item:)` lets SwiftUI own the presentation — the previous
+    /// hand-rolled `UIActivityViewController` + window-hierarchy walk anchored
+    /// the iPad popover at `CGRect.zero` (top-left corner) and picked a scene
+    /// out of the *unordered* `connectedScenes` set.
+    @State private var shareableLink: ShareableLink?
+
     private var shareURL: String? {
         guard let link = createdLink else { return nil }
         return "https://meeshy.me/join/\(link.identifier ?? link.linkId)"
     }
 
     private var defaultInviteMessage: String {
-        String(localized: "invite.defaultMessage", defaultValue: "Rejoins moi pour echanger sans filtre ni barriere...")
+        String(localized: "invite.defaultMessage", defaultValue: "Rejoins-moi pour échanger sans filtre ni barrière...")
     }
 
     private var defaultLinkName: String {
@@ -113,6 +120,9 @@ struct InviteFriendsSheet: View {
             }
             .task {
                 await createLinkInBackground()
+            }
+            .sheet(item: $shareableLink) { link in
+                ShareSheet(activityItems: [link.url])
             }
         }
     }
@@ -393,7 +403,7 @@ struct InviteFriendsSheet: View {
             optionSection(title: String(localized: "invite.section.limits", defaultValue: "LIMITES"), icon: "gauge.with.dots.needle.bottom.50percent") {
                 VStack(spacing: 0) {
                     optionRow(icon: "clock.badge.xmark", iconColor: MeeshyColors.error) {
-                        Picker("Expiration", selection: $expirationOption) {
+                        Picker(String(localized: "invite.expiration.title", defaultValue: "Expiration", bundle: .main), selection: $expirationOption) {
                             ForEach(ExpirationOption.allCases, id: \.self) { opt in
                                 Text(opt.label).tag(opt)
                             }
@@ -620,8 +630,8 @@ struct InviteFriendsSheet: View {
             isCreating = false
         }
 
-        guard let url = shareURL else { return }
-        presentShareSheet(url: url)
+        guard let urlString = shareURL, let url = URL(string: urlString) else { return }
+        shareableLink = ShareableLink(url: url)
     }
 
     private func createLink() async throws -> CreatedShareLink {
@@ -673,18 +683,6 @@ struct InviteFriendsSheet: View {
             }
         }
     }
-
-    @MainActor
-    private func presentShareSheet(url: String) {
-        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            activityVC.popoverPresentationController?.sourceView = topVC.view
-            topVC.present(activityVC, animated: true)
-        }
-    }
 }
 
 // MARK: - ExpirationOption
@@ -722,14 +720,14 @@ private enum ExpirationOption: String, CaseIterable {
 private extension MeeshyConversation.ConversationType {
     var displayName: String {
         switch self {
-        case .direct: "Direct"
-        case .group: "Groupe"
-        case .public: "Public"
-        case .global: "Globale"
-        case .community: "Communaute"
-        case .channel: "Canal"
-        case .bot: "Bot"
-        case .broadcast: "Communication"
+        case .direct: String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
+        case .group: String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
+        case .public: String(localized: "conversation.type.public", defaultValue: "Publique", bundle: .main)
+        case .global: String(localized: "conversation.type.global", defaultValue: "Globale", bundle: .main)
+        case .community: String(localized: "conversation.type.community", defaultValue: "Communaut\u{00e9}", bundle: .main)
+        case .channel: String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .bot: String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
+        case .broadcast: String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 }

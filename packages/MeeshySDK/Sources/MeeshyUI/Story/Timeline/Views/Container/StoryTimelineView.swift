@@ -41,7 +41,7 @@ public struct StoryTimelineView: View {
         public let kind: Kind
         public let clipIds: [String]
         public enum Kind: Equatable {
-            case video, audio, text, image
+            case video, audio, text, image, sticker
             case bgVideo, bgAudio, bgImage
 
             /// Vrai pour les pistes de la section FOND — dérivé du flag
@@ -49,7 +49,7 @@ public struct StoryTimelineView: View {
             public var isBackgroundSection: Bool {
                 switch self {
                 case .bgVideo, .bgAudio, .bgImage: return true
-                case .video, .audio, .text, .image: return false
+                case .video, .audio, .text, .image, .sticker: return false
                 }
             }
         }
@@ -70,6 +70,7 @@ public struct StoryTimelineView: View {
         let fgAudios: [StoryAudioPlayerObject]
         let fgVideos: [StoryMediaObject]
         let texts: [StoryTextObject]
+        let stickers: [StorySticker]
 
         init(project: TimelineProject) {
             let isVideo: (StoryMediaObject) -> Bool = { $0.mediaType == StoryMediaKind.video.rawValue }
@@ -81,7 +82,15 @@ public struct StoryTimelineView: View {
             fgAudios = project.audioPlayerObjects.filter { !($0.isBackground ?? false) }
             fgVideos = project.mediaObjects.filter { !$0.isBackground && isVideo($0) }
             texts = project.textObjects
+            stickers = project.stickerObjects
         }
+    }
+
+    /// Titre de piste sticker, avec fallback intégré (« Sticker N ») pour ne PAS
+    /// dépendre d'une clé absente du catalogue — évite d'éditer le xcstrings.
+    private static func stickerTrackTitle(index: Int) -> String {
+        String(format: String(localized: "story.timeline.track.section.sticker",
+                              defaultValue: "Sticker %d", bundle: .module), index)
     }
 
     private static func sectionTitle(formatKey: String, index: Int) -> String {
@@ -120,10 +129,24 @@ public struct StoryTimelineView: View {
                       formatKey: "story.timeline.track.section.video", kind: .video)
         appendGrouped(sections.texts.map(\.id), id: "text-1",
                       formatKey: "story.timeline.track.section.text", kind: .text)
+        if !sections.stickers.isEmpty {
+            allTracks.append(CompactTrack(
+                id: "sticker-1",
+                title: stickerTrackTitle(index: 1),
+                kind: .sticker,
+                clipIds: sections.stickers.map(\.id)
+            ))
+        }
 
         let nonEmpty = allTracks.filter { !$0.isEmpty }
         var picked: [CompactTrack] = []
-        if let selectedId = selectedClipId,
+        // Hisser la piste sélectionnée en tête ne sert que lorsque la place
+        // manque — c'est alors la seule façon de garder sous les yeux celle
+        // qu'on règle. Quand tout tient déjà, le hissage faisait permuter les
+        // lanes au moindre tap : rien de gagné, et le repère spatial de
+        // l'auteur qui saute.
+        if nonEmpty.count > maxCount,
+           let selectedId = selectedClipId,
            let selectedTrack = nonEmpty.first(where: { $0.containsClipId(selectedId) }) {
             picked.append(selectedTrack)
         }
@@ -168,6 +191,16 @@ public struct StoryTimelineView: View {
                    formatKey: "story.timeline.track.section.video", kind: .video, clipId: \.id)
         appendEach(sections.texts, idPrefix: "text",
                    formatKey: "story.timeline.track.section.text", kind: .text, clipId: \.id)
+        // Section AVANT-PLAN — STICKERS (emoji overlays), listés pour indiquer
+        // QUAND ils apparaissent. Titre avec fallback intégré (pas de clé xcstrings).
+        for (index, sticker) in sections.stickers.enumerated() {
+            tracks.append(CompactTrack(
+                id: "sticker-\(index + 1)",
+                title: stickerTrackTitle(index: index + 1),
+                kind: .sticker,
+                clipIds: [sticker.id]
+            ))
+        }
         return tracks.filter { !$0.isEmpty }
     }
 
@@ -210,6 +243,7 @@ public struct StoryTimelineView: View {
         case .image:   return "IMAGE_\(index)"
         case .audio:   return "AUDIO_\(index)"
         case .text:    return "TEXT_\(index)"
+        case .sticker: return "STICKER_\(index)"
         }
     }
 
@@ -237,6 +271,12 @@ public struct StoryTimelineView: View {
                     startTime: start, duration: t.duration.map { Float($0) },
                     slideDuration: project.slideDuration)
                 maxEnd = max(maxEnd, start + dur)
+            } else if let s = project.stickerObjects.first(where: { $0.id == id }) {
+                let start = Float(s.startTime ?? 0)
+                let dur = TimelineGeometry.effectiveClipDuration(
+                    startTime: start, duration: s.duration.map { Float($0) },
+                    slideDuration: project.slideDuration)
+                maxEnd = max(maxEnd, start + dur)
             }
         }
         return maxEnd
@@ -255,6 +295,23 @@ public struct StoryTimelineView: View {
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.name }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.name }
         return nil
+    }
+
+    /// Nombre de lanes que « déployer » RÉVÉLERAIT réellement : ce que le
+    /// déploiement affiche (une lane par clip) moins ce que le strip compact
+    /// montre déjà (une lane par catégorie, plafonnée).
+    ///
+    /// L'ancien compte partait de quatre seaux fourre-tout — médias non-audio,
+    /// audios, textes, stickers — sans rapport ni avec les huit catégories du
+    /// strip compact ni avec le une-lane-par-clip du déploiement. Sur une
+    /// slide à cinq vidéos il rendait `1 - 3 = 0` : le bouton disparaissait,
+    /// et avec lui l'accès aux quatre pistes cachées.
+    public static func hiddenTrackCount(project: TimelineProject, selectedClipId: String?) -> Int {
+        let deployed = resolveAllTracks(project: project).count
+        let visible = resolveCompactTracks(project: project,
+                                           selectedClipId: selectedClipId,
+                                           maxCount: compactMaxTracks).count
+        return max(0, deployed - visible)
     }
 
     public static func footerLabelKey(isExpanded: Bool) -> String {
@@ -318,12 +375,12 @@ public struct StoryTimelineView: View {
                 : MeeshyColors.indigo50.opacity(0.32)
         )
         .gesture(swipeUpExpand)
-        // Full editing surface: selecting a clip, keyframe or transition
-        // floats its inspector over the tracks — same host the Pro layout
-        // used, so selection is never a dead end in the unified timeline.
-        .overlay(alignment: .bottomTrailing) {
-            TimelineInspectorHost(viewModel: viewModel)
-        }
+        // Surface d'édition complète : sélectionner un clip, un keyframe ou une
+        // transition ouvre son inspecteur en SHEET (item 8, 2026-07-25). Le
+        // survol translucide qu'on utilisait avant recouvrait précisément la
+        // piste qu'on réglait ; la sheet libère la timeline et apporte les
+        // affordances système (poignée, glisser-fermer, paliers de hauteur).
+        .timelineInspectorSheet(viewModel: viewModel)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.container", defaultValue: "Timeline", bundle: .module))
     }
@@ -347,11 +404,8 @@ public struct StoryTimelineView: View {
             onUndo: { viewModel.undo() },
             onRedo: { viewModel.redo() },
             onSnapToggle: { viewModel.toggleSnap() },
-            onExtendDuration: {
-                viewModel.extendSlideDuration(
-                    by: TimelineOperationsBar.extendStepSeconds)
-            },
-            onSave: onExport
+            onSave: onExport,
+            onExtendDuration: { viewModel.extendSlideDuration() }
         )
     }
 
@@ -415,7 +469,6 @@ public struct StoryTimelineView: View {
                     rulerHeight: 22,
                     isPlaying: viewModel.isPlaying,
                     onZoomScaleChanged: { viewModel.zoomScale = $0 },
-                    onSlideDurationChanged: { viewModel.setSlideDuration($0) },
                     snapGuideTime: viewModel.selection.activeDrag.flatMap {
                         $0.snappedTo != nil ? $0.currentStartTime : nil
                     },
@@ -463,7 +516,11 @@ public struct StoryTimelineView: View {
                             selectedId: viewModel.selection.selectedClipId,
                             geometry: geometry,
                             laneHeight: 52,
-                            onSelect: { viewModel.selectClip(id: $0) }
+                            // Un marqueur fait 12–16 pt : exiger un double tap
+                            // sur une cible aussi petite serait une régression.
+                            // Il ouvre donc sa fiche au tap simple, contrairement
+                            // aux pistes, qui se contentent de se surligner.
+                            onSelect: { viewModel.inspectClip(id: $0) }
                         )
                         LaneTransitionOverlays(
                             junctions: TransitionJunctionResolver.junctions(
@@ -472,14 +529,14 @@ public struct StoryTimelineView: View {
                             isDark: colorScheme == .dark,
                             geometry: geometry,
                             laneHeight: 52,
-                            onSelect: { viewModel.selectClip(id: $0) },
+                            onSelect: { viewModel.inspectClip(id: $0) },
                             onCreate: { junction in
                                 if let id = viewModel.addTransition(
                                     fromClipId: junction.fromClipId,
                                     toClipId: junction.toClipId,
                                     kind: .crossfade,
                                     duration: 0.5) {
-                                    viewModel.selectClip(id: id)
+                                    viewModel.inspectClip(id: id)
                                 }
                             }
                         )
@@ -496,7 +553,7 @@ public struct StoryTimelineView: View {
 
     @ViewBuilder
     private var footerTrigger: some View {
-        let hidden = max(0, allTrackCount - Self.compactMaxTracks)
+        let hidden = hiddenTrackCount
         // Hide the deploy button when there are no extra tracks to reveal —
         // showing "+ 0 track(s)" is noise that distracts from the empty state.
         if hidden > 0 || isExpanded {
@@ -543,6 +600,7 @@ public struct StoryTimelineView: View {
         case .bgImage, .image: return "8B5CF6"
         case .bgAudio, .audio: return "818CF8"
         case .text:            return "A5B4FC"
+        case .sticker:         return "C7D2FE"
         }
     }
 
@@ -556,6 +614,7 @@ public struct StoryTimelineView: View {
         case .bgImage, .image: return "photo.fill"
         case .bgAudio, .audio: return "waveform"
         case .text:            return "textformat"
+        case .sticker:         return "face.smiling"
         }
     }
 
@@ -597,12 +656,16 @@ public struct StoryTimelineView: View {
                 imageURL: (media.kind == .image && mediaFrames.isEmpty)
                     ? CacheCoordinator.imageLocalFileURL(for: media.postMediaId)
                     : nil,
+                keyframes: media.keyframes ?? [],
+                isMuted: media.isMuted,
+                // Mute UN-BOUTON : vidéos réelles uniquement (une image ou un
+                // clip synthétique n'a rien à couper). Fonctionne aussi sur un
+                // FOND verrouillé — couper le son n'est pas un déplacement.
+                onToggleMute: (media.kind == .video && !isSynthetic)
+                    ? { viewModel.toggleClipMute(id: media.id) }
+                    : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
-                onDoubleTap: {
-                    viewModel.selectClip(id: media.id)
-                    viewModel.splitSelectedAtPlayhead()
-                },
-                onLongPress: { viewModel.selectClip(id: media.id) },
+                onDoubleTap: { viewModel.inspectClip(id: media.id) },
                 onTrimStartDelta: { delta in
                     viewModel.trimClipStart(id: media.id,
                                             deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
@@ -668,9 +731,9 @@ public struct StoryTimelineView: View {
                 laneHeight: laneHeight,
                 waveformSamples: audio.waveformSamples,
                 audioURL: viewModel.loadedURL(for: audio.id),
+                keyframes: audio.keyframes ?? [],
                 onTap: { viewModel.selectClip(id: audio.id) },
-                onDoubleTap: { viewModel.selectClip(id: audio.id) },
-                onLongPress: { viewModel.selectClip(id: audio.id) },
+                onDoubleTap: { viewModel.inspectClip(id: audio.id) },
                 onMoveDelta: { delta in
                     // Snowball-drift guard mirrors VideoClipBar above: only call
                     // beginClipDrag once per gesture (when activeDrag is absent
@@ -697,7 +760,8 @@ public struct StoryTimelineView: View {
                 onTrimEndDelta: { delta in
                     viewModel.trimClipEnd(id: audio.id,
                                           deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
-                }
+                },
+                onToggleMute: { viewModel.toggleClipMute(id: audio.id) }
             )
             .equatable()
             if audio.isBackground == true, audio.loop == true {
@@ -725,8 +789,7 @@ public struct StoryTimelineView: View {
                 geometry: geometry,
                 laneHeight: laneHeight,
                 onTap: { viewModel.selectClip(id: text.id) },
-                onDoubleTap: { viewModel.selectClip(id: text.id) },
-                onLongPress: { viewModel.selectClip(id: text.id) },
+                onDoubleTap: { viewModel.inspectClip(id: text.id) },
                 onMoveDelta: { delta in
                     // Snowball-drift guard mirrors VideoClipBar above: only call
                     // beginClipDrag once per gesture (when activeDrag is absent
@@ -756,14 +819,55 @@ public struct StoryTimelineView: View {
                 }
             )
             .equatable()
+        } else if let sticker = viewModel.project.stickerObjects.first(where: { $0.id == clipId }) {
+            // Sticker = overlay temporel comme le texte (même famille start/durée).
+            // On réutilise `TextClipBar` avec l'emoji comme contenu ; déplacer la
+            // barre fixe QUAND le sticker apparaît, et l'aimant s'accroche aux
+            // bords des autres objets (cf. magneticSnapCandidates).
+            TextClipBar(
+                clipId: sticker.id,
+                content: sticker.emoji,
+                startTime: Float(sticker.startTime ?? 0),
+                duration: TimelineGeometry.effectiveClipDuration(
+                    startTime: Float(sticker.startTime ?? 0),
+                    duration: sticker.duration.map { Float($0) },
+                    slideDuration: viewModel.project.slideDuration),
+                isSelected: viewModel.selection.selectedClipId == sticker.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                onTap: { viewModel.selectClip(id: sticker.id) },
+                onDoubleTap: { viewModel.inspectClip(id: sticker.id) },
+                onMoveDelta: { delta in
+                    let stickerId = sticker.id
+                    if viewModel.selection.activeDrag?.clipId != stickerId {
+                        viewModel.beginClipDrag(clipId: stickerId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
+                    viewModel.dragClipMoved(
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: sticker.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: sticker.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                }
+            )
+            .equatable()
         }
     }
 
-    private var allTrackCount: Int {
-        var c = 0
-        if !viewModel.project.mediaObjects.filter({ !($0.mediaType == "audio") }).isEmpty { c += 1 }
-        if !viewModel.project.audioPlayerObjects.isEmpty { c += 1 }
-        if !viewModel.project.textObjects.isEmpty { c += 1 }
-        return c
+    private var hiddenTrackCount: Int {
+        Self.hiddenTrackCount(project: viewModel.project,
+                              selectedClipId: viewModel.selection.selectedClipId)
     }
 }

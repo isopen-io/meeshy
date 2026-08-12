@@ -145,6 +145,11 @@ struct ContactsListTab: View {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
         let isOnline = user.isOnline ?? false
+        let presence = PresenceManager.shared.resolvedState(
+            userId: user.id,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt
+        )
 
         return Button {
             router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
@@ -156,7 +161,7 @@ struct ContactsListTab: View {
                     accentColor: color,
                     avatarURL: user.avatar,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
-                    presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                    presenceState: presence,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -183,7 +188,7 @@ struct ContactsListTab: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
@@ -192,8 +197,20 @@ struct ContactsListTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(isOnline ? String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main) : String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))")
+        .accessibilityLabel(contactRowAccessibilityLabel(user, isOnline: isOnline))
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
+    }
+
+    private func contactRowAccessibilityLabel(_ user: FriendRequestUser, isOnline: Bool) -> String {
+        var parts = [user.name, "@\(user.username)"]
+        if isOnline {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        } else if let lastActive = user.lastActiveAt {
+            parts.append(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))
+        } else {
+            parts.append(String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Empty State

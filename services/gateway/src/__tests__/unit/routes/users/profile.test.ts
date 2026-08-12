@@ -365,7 +365,7 @@ describe('PATCH /users/me — with language change fires socketIO refresh', () =
 });
 
 describe('PATCH /users/me — realtime propagation to conversation partners', () => {
-  it('emits USER_UPDATED with only the changed public fields when displayName/firstName/lastName change', async () => {
+  it('emits USER_UPDATED with the whole name group when displayName/firstName/lastName change', async () => {
     const prisma = makePrisma();
     const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
     const res = await app.inject({
@@ -376,7 +376,53 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith' },
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
+    });
+    await app.close();
+  });
+
+  // Le défaut que ce groupe ferme : un `firstName` seul est irrecomposable chez
+  // le destinataire, qui ne stocke que le nom DÉJÀ composé. Sans `displayName`
+  // il ne sait pas si le prénom compte, sans `username` il ne sait pas sur quoi
+  // retomber. Un delta d'un seul champ le laissait donc afficher l'ancien nom.
+  it('emits the other three name components even when a single one changed', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Bob' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
+    });
+    await app.close();
+  });
+
+  // `null` = EFFACÉ, et c'est la seule façon pour le client de faire retomber le
+  // nom sur le composant suivant. Omettre la clé se lirait « inchangé » et
+  // figerait l'ancien nom d'affichage.
+  it('emits a cleared displayName as null rather than omitting the key', async () => {
+    const prisma = makePrisma({
+      user: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockUser),
+        findUnique: jest.fn<any>().mockResolvedValue(mockUser),
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, displayName: null }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { displayName: '' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: null, username: 'alice' },
     });
     await app.close();
   });
@@ -786,13 +832,18 @@ describe('PATCH /users/me/username — success', () => {
 });
 
 describe('PATCH /users/me/username — realtime propagation to conversation partners', () => {
-  it('emits USER_UPDATED with the new username', async () => {
+  // `username` n'est le nom RENDU que si `displayName` et « Prénom Nom » sont
+  // vides — un destinataire qui reçoit le handle seul ne peut pas savoir si son
+  // affichage doit bouger. Même règle de groupe que `PATCH /users/me`.
+  it('emits USER_UPDATED with the whole name group, not the handle alone', async () => {
     mockBcryptCompare.mockResolvedValueOnce(true);
     const prisma = makePrisma({
       user: {
         findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
         findFirst: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue({ id: USER_ID, username: 'bob' }),
+        update: jest.fn<any>().mockResolvedValue({
+          id: USER_ID, username: 'bob', displayName: null, firstName: null, lastName: null,
+        }),
       },
     });
     const app = await buildApp({ routes: [updateUsername], prisma, withNotificationService: true });
@@ -803,8 +854,32 @@ describe('PATCH /users/me/username — realtime propagation to conversation part
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { username: 'bob' },
+      changes: { username: 'bob', displayName: null, firstName: null, lastName: null },
     });
+    await app.close();
+  });
+
+  // Les trois autres composants doivent être SÉLECTIONNÉS : le `select` d'origine
+  // ne ramenait que `{ id, username }`, donc les envoyer aurait produit trois
+  // `undefined` — un groupe qui ment.
+  it('selects the three other name components alongside the username', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const update = jest.fn<any>().mockResolvedValue({ id: USER_ID, username: 'bob' });
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update,
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma, withNotificationService: true });
+    await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(update.mock.calls[0][0].select).toEqual(
+      expect.objectContaining({ displayName: true, firstName: true, lastName: true }),
+    );
     await app.close();
   });
 

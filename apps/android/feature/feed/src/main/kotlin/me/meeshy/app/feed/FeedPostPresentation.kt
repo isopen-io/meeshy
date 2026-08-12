@@ -29,6 +29,7 @@ data class FeedPostImage(
 @Immutable
 data class FeedPostPresentation(
     val id: String,
+    val authorId: String?,
     val authorName: String?,
     val authorAvatarUrl: String?,
     val createdAtIso: String?,
@@ -86,6 +87,7 @@ object FeedPostBuilder {
         val activeIsOriginal = activeCode == null || activeCode == originalCode
         return FeedPostPresentation(
             id = post.id,
+            authorId = post.author?.id,
             authorName = (post.author?.displayName ?: post.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = post.author?.avatar

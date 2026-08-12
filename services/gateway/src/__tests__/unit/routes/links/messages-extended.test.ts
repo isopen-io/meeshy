@@ -40,7 +40,11 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: { LINK_MESSAGE_NEW: 'link:message-new' },
 }));
 
+// Real response schemas: stubbing them permissively makes fast-json-stringify
+// echo whatever the route hands it, so a truncating schema would still look
+// correct. Only the Zod parse is replaced.
 jest.mock('../../../../routes/links/types', () => ({
+  ...(jest.requireActual('../../../../routes/links/types') as Record<string, unknown>),
   sendMessageSchema: {
     parse: (body: any) => ({
       content: body.content,
@@ -49,9 +53,6 @@ jest.mock('../../../../routes/links/types', () => ({
       clientMessageId: body.clientMessageId || 'cid_test',
     }),
   },
-  sendMessageBodySchema: { type: 'object', properties: {}, additionalProperties: true },
-  messageSenderSchema: { type: 'object', additionalProperties: true },
-  SendMessageInput: {},
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────

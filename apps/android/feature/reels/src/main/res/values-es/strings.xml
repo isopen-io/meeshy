@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reels_close">Cerrar</string>
+    <string name="reels_unmute">Activar sonido</string>
+    <string name="reels_mute">Silenciar</string>
+    <string name="reels_like">Me gusta</string>
+    <string name="reels_comments">Comentarios</string>
+    <string name="reels_repost">Republicar</string>
+    <string name="reels_share">Compartir</string>
+</resources>

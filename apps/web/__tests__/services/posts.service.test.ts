@@ -43,14 +43,6 @@ describe('postsService', () => {
     });
   });
 
-  describe('getStories', () => {
-    it('calls GET /posts/feed/stories', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-      await postsService.getStories();
-      expect(mockApi.get).toHaveBeenCalledWith('/posts/feed/stories');
-    });
-  });
-
   describe('getStatuses', () => {
     it('calls GET /posts/feed/statuses', async () => {
       mockApi.get.mockResolvedValue({ success: true, data: [] });
@@ -178,6 +170,22 @@ describe('postsService', () => {
       await postsService.sharePost('post-1', 'twitter');
       expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { platform: 'twitter' });
     });
+
+    it('calls POST /posts/:postId/share with generateLink:true and returns the tracked link', async () => {
+      mockApi.post.mockResolvedValue({
+        success: true,
+        data: { shared: true, shareCount: 3, shortUrl: 'https://meeshy.me/l/abc123', token: 'abc123' },
+      });
+      const result = await postsService.sharePost('post-1', { generateLink: true });
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { generateLink: true });
+      expect(result).toEqual({ shared: true, shareCount: 3, shortUrl: 'https://meeshy.me/l/abc123', token: 'abc123' });
+    });
+
+    it('combines platform and generateLink in the options form', async () => {
+      mockApi.post.mockResolvedValue({ success: true });
+      await postsService.sharePost('post-1', { platform: 'twitter', generateLink: true });
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { platform: 'twitter', generateLink: true });
+    });
   });
 
   describe('pinPost', () => {
@@ -262,6 +270,30 @@ describe('postsService', () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: true } });
       await postsService.recordImpression('post-1', 'notification');
       expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/impression', { source: 'notification' });
+    });
+  });
+
+  describe('recordMediaDownloads', () => {
+    it('calls POST /posts/:postId/downloads with mediaIds and default surface detail', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 1 } });
+      await postsService.recordMediaDownloads('post-1', ['media-1']);
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1'], surface: 'detail' });
+    });
+
+    it('forwards an explicit surface', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 2 } });
+      await postsService.recordMediaDownloads('post-1', ['media-1', 'media-2'], 'feed');
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1', 'media-2'], surface: 'feed' });
+    });
+
+    it('is a no-op when mediaIds is empty (never hits the network)', async () => {
+      await postsService.recordMediaDownloads('post-1', []);
+      expect(mockApi.post).not.toHaveBeenCalled();
+    });
+
+    it('never throws — best-effort analytics must not break the download UX', async () => {
+      mockApi.post.mockRejectedValue(new Error('network down'));
+      await expect(postsService.recordMediaDownloads('post-1', ['media-1'])).resolves.toBeUndefined();
     });
   });
 
@@ -403,42 +435,6 @@ describe('postsService gap-fill', () => {
       await postsService.getPostViews('post-2', 25, 10);
 
       expect(mockApi.get).toHaveBeenCalledWith('/posts/post-2/views?limit=25&offset=10');
-    });
-  });
-
-  describe('getStoryAudioLibrary', () => {
-    it('calls GET /stories/audio with default limit and no query', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-
-      await postsService.getStoryAudioLibrary();
-
-      expect(mockApi.get).toHaveBeenCalledWith('/stories/audio?limit=20');
-    });
-
-    it('includes q param when query is provided', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-
-      await postsService.getStoryAudioLibrary('chill');
-
-      expect(mockApi.get).toHaveBeenCalledWith('/stories/audio?q=chill&limit=20');
-    });
-
-    it('uses custom limit when provided', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-
-      await postsService.getStoryAudioLibrary(undefined, 50);
-
-      expect(mockApi.get).toHaveBeenCalledWith('/stories/audio?limit=50');
-    });
-  });
-
-  describe('trackStoryAudioUse', () => {
-    it('calls POST /stories/audio/:audioId/use', async () => {
-      mockApi.post.mockResolvedValue({ success: true });
-
-      await postsService.trackStoryAudioUse('audio-123');
-
-      expect(mockApi.post).toHaveBeenCalledWith('/stories/audio/audio-123/use');
     });
   });
 

@@ -1114,6 +1114,40 @@ describe('MessageTranslationService — branch supplement', () => {
 
       expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
     });
+
+    it('filters a locale-tagged source (fr-FR) against a normalized target (fr)', async () => {
+      // originalLanguage is persisted verbatim (clients send Locale.current like
+      // 'fr-FR'); target languages are normalized lowercase. A raw `===` misses
+      // fr-FR vs fr and fires a text-corrupting fr→fr NLLB round-trip.
+      await (svc as any)['_processTranslationsAsync'](
+        { id: 'msg-locale-fr', content: 'Bonjour', originalLanguage: 'fr-FR', conversationId: 'conv-1' },
+        'fr'
+      );
+
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+    });
+
+    it('filters an uppercase source (FR) against a normalized target (fr)', async () => {
+      await (svc as any)['_processTranslationsAsync'](
+        { id: 'msg-upper-fr', content: 'Bonjour', originalLanguage: 'FR', conversationId: 'conv-1' },
+        'fr'
+      );
+
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+    });
+
+    it('normalizes a client-supplied target (EN → en) before requesting translation', async () => {
+      // The explicit-client-target path must not inject a non-canonical code
+      // (uppercase/BCP-47) as the ZMQ target and translation storage key.
+      await (svc as any)['_processTranslationsAsync'](
+        { id: 'msg-en-target', content: 'Bonjour', originalLanguage: 'fr', conversationId: 'conv-1' },
+        'EN'
+      );
+
+      expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en'] })
+      );
+    });
   });
 
   // =========================================================================
@@ -1280,10 +1314,11 @@ describe('MessageTranslationService — branch supplement', () => {
   });
 
   // =========================================================================
-  // 22b. invalidateCacheForMessage — public API for message-edit flow
+  // 22b. invalidateCacheForMessage — la purge elle-même (son déclenchement
+  //      automatique par la retraduction est verrouillé en 22c)
   // =========================================================================
   describe('invalidateCacheForMessage', () => {
-    it('removes all LRU cache entries for the given messageId before retranslation', () => {
+    it('removes all LRU cache entries for the given messageId', () => {
       const msgId = '507f1f77bcf86cd799439011';
       const cache = (svc as any).translationCache as TranslationCache;
 
@@ -1300,6 +1335,113 @@ describe('MessageTranslationService — branch supplement', () => {
 
     it('is a no-op when the messageId has no cached entries', () => {
       expect(() => svc.invalidateCacheForMessage('nonexistent-id')).not.toThrow();
+    });
+  });
+
+  // =========================================================================
+  // 22c. La retraduction PURGE elle-même le cache mémoire du message
+  //
+  // Une édition invalide `Message.translations` en base, mais le cache LRU
+  // `translationCache` reste servi AVANT la base (`getTranslation`,
+  // `_processTranslationsAsync`). Une entrée non purgée rend donc la traduction
+  // du texte D'AVANT pour le texte d'APRÈS — sans TTL, jusqu'à l'éviction LRU
+  // au millième message.
+  //
+  // La purge était câblée à UN SEUL des quatre transports d'édition
+  // (`PUT /conversations/:id/messages/:messageId`). Elle appartient à la
+  // retraduction elle-même : « retraduire » signifie précisément que l'ancien
+  // résultat ne vaut plus, quel que soit l'appelant.
+  // =========================================================================
+  describe('_processRetranslationAsync — purge du cache mémoire', () => {
+    const cacheOf = () => (svc as any).translationCache as TranslationCache;
+
+    const primeRetranslation = (content: string) => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: 'msg-edited',
+        content,
+        conversationId: 'conv-1',
+        originalLanguage: 'en',
+        translations: {}
+      });
+      prisma.message.findUnique.mockResolvedValue({ translations: {} });
+    };
+
+    it('drops the pre-edit cached translations of the retranslated message', async () => {
+      primeRetranslation('Hello, edited');
+      const cache = cacheOf();
+      cache.set(TranslationCache.generateKey('msg-edited', 'fr', 'en'), {
+        messageId: 'msg-edited',
+        translatedText: 'texte d’avant'
+      } as any);
+
+      await svc.retranslateMessageAsync('msg-edited', { targetLanguage: 'fr' });
+
+      expect(cache.get(TranslationCache.generateKey('msg-edited', 'fr', 'en'))).toBeNull();
+    });
+
+    it('leaves other messages\' cached translations untouched', async () => {
+      primeRetranslation('Hello, edited');
+      const cache = cacheOf();
+      cache.set(TranslationCache.generateKey('msg-other', 'fr', 'en'), {
+        messageId: 'msg-other',
+        translatedText: 'intact'
+      } as any);
+
+      await svc.retranslateMessageAsync('msg-edited', { targetLanguage: 'fr' });
+
+      expect(cache.get(TranslationCache.generateKey('msg-other', 'fr', 'en'))).not.toBeNull();
+    });
+
+    // La purge précède TOUT court-circuit : un message édité en contenu vide
+    // ne repart pas en traduction, mais ses traductions d'avant sont périmées
+    // exactement pareil.
+    it('purges even when the retranslation short-circuits on empty content', async () => {
+      primeRetranslation('');
+      const cache = cacheOf();
+      cache.set(TranslationCache.generateKey('msg-edited', 'fr', 'en'), {
+        messageId: 'msg-edited',
+        translatedText: 'texte d’avant'
+      } as any);
+
+      await svc.retranslateMessageAsync('msg-edited', { targetLanguage: 'fr' });
+
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+      expect(cache.get(TranslationCache.generateKey('msg-edited', 'fr', 'en'))).toBeNull();
+    });
+
+    // Le message introuvable fait lever à l'intérieur, et le `catch` de l'unité
+    // avale. La purge doit donc avoir eu lieu AVANT cette lecture : sinon un
+    // incident de base laisse en mémoire la traduction d'un texte périmé, et
+    // rien ne repassera jamais l'effacer.
+    it('purges even when the message lookup finds nothing', async () => {
+      prisma.message.findFirst.mockResolvedValue(null);
+      const cache = cacheOf();
+      cache.set(TranslationCache.generateKey('msg-edited', 'fr', 'en'), {
+        messageId: 'msg-edited',
+        translatedText: 'texte d’avant'
+      } as any);
+
+      await svc.retranslateMessageAsync('msg-edited', { targetLanguage: 'fr' });
+
+      expect(cache.get(TranslationCache.generateKey('msg-edited', 'fr', 'en'))).toBeNull();
+    });
+
+    // La conséquence observable, exprimée par le chemin de LECTURE : après une
+    // retraduction, `getTranslation` ne doit plus rendre le texte d'avant.
+    it('stops getTranslation from serving the pre-edit text afterwards', async () => {
+      primeRetranslation('Hello, edited');
+      const cache = cacheOf();
+      cache.set(TranslationCache.generateKey('msg-edited', 'fr', 'en'), {
+        messageId: 'msg-edited',
+        translatedText: 'texte d’avant'
+      } as any);
+
+      await svc.retranslateMessageAsync('msg-edited', { targetLanguage: 'fr' });
+
+      prisma.message.findUnique.mockResolvedValue({ originalLanguage: 'en', translations: null });
+      const served = await svc.getTranslation('msg-edited', 'fr', 'en');
+
+      expect(served).toBeNull();
     });
   });
 
@@ -1322,6 +1464,78 @@ describe('MessageTranslationService — branch supplement', () => {
 
       // Despite null message, update is still called with the new translation
       expect(prisma.message.update).toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // 23. processAudioAttachment — explicit targetLanguages honored over conversation
+  // =========================================================================
+  describe('processAudioAttachment — explicit targetLanguages param', () => {
+    const audioParams = {
+      messageId: 'msg-explicit-langs',
+      attachmentId: 'att-explicit-langs',
+      conversationId: 'conv-explicit-langs',
+      senderId: 'user-explicit-langs',
+      audioUrl: 'https://example.com/audio.mp3',
+      audioPath: '/app/uploads/audio/test.mp3',
+      audioDurationMs: 3000
+    };
+
+    it('uses params.targetLanguages verbatim instead of recomputing from the conversation', async () => {
+      // Regression test (prod 2026-08-09): POST /api/v1/voice/translate(/async)
+      // with an explicit targetLanguages was silently ignored — processAudioAttachment
+      // always recomputed languages from the conversation's participants, dropping
+      // any caller-provided list. Requested ['en','es','de'], translator received
+      // ['fr','en'] derived from the two participants' own language preferences.
+      await svc.processAudioAttachment({
+        ...audioParams,
+        targetLanguages: ['en', 'es', 'de']
+      } as any);
+
+      expect(mockZmqClient.sendAudioProcessRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en', 'es', 'de'] })
+      );
+    });
+
+    it('still falls back to conversation-derived languages when targetLanguages is omitted', async () => {
+      await svc.processAudioAttachment(audioParams);
+
+      // participant.findMany() resolves to [] in this suite's default mocks →
+      // _extractConversationLanguages returns [] → hardcoded ['en','fr'] fallback.
+      expect(mockZmqClient.sendAudioProcessRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en', 'fr'] })
+      );
+    });
+  });
+
+  // =========================================================================
+  // 24. translateAttachment — forwards explicit targetLanguages
+  // =========================================================================
+  describe('translateAttachment — forwards explicit targetLanguages', () => {
+    it('passes options.targetLanguages through to processAudioAttachment', async () => {
+      const processSpy = jest.spyOn(svc, 'processAudioAttachment')
+        .mockResolvedValueOnce('mock-task-explicit-langs');
+
+      prisma.messageAttachment.findUnique.mockResolvedValue({
+        id: 'att-fwd-langs',
+        messageId: 'msg-fwd-langs',
+        fileName: 'audio.mp3',
+        filePath: 'audio/audio.mp3',
+        fileUrl: 'https://example.com/audio.mp3',
+        duration: 5000,
+        mimeType: 'audio/mp3',
+        uploadedBy: 'user-1',
+        message: { conversationId: 'conv-1', senderId: 'participant-1' }
+      });
+
+      const result = await svc.translateAttachment('att-fwd-langs', {
+        targetLanguages: ['en', 'es', 'de']
+      });
+
+      expect(result).not.toBeNull();
+      expect(processSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en', 'es', 'de'] })
+      );
     });
   });
 });

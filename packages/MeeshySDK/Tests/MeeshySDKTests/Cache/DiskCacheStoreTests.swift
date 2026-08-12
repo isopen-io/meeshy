@@ -222,6 +222,49 @@ final class DiskCacheStoreTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    // MARK: - cacheImageForPreview (2026-07-21: synchronous insert + budget guard)
+
+    /// The optimistic-media-send path calls `cacheImageForPreview` and expects
+    /// the bubble's very next render to hit the NSCache — it previously
+    /// deferred the insert via `Task { @MainActor in … }`, so a synchronous
+    /// `cachedImage(for:)` right after could race and miss (the same race
+    /// already fixed for `cacheIfWithinBudget`'s callers). No await/sleep here
+    /// on purpose: the insert must already be visible by the time this call
+    /// returns.
+    func test_cacheImageForPreview_insertsSynchronously() {
+        let image = makeSolidImage(width: 4, height: 4)
+        let key = "https://example.com/preview-\(UUID().uuidString).jpg"
+
+        DiskCacheStore.cacheImageForPreview(image, key: key)
+
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key),
+            "must be readable immediately — no MainActor hop to await")
+    }
+
+    /// Mirrors the budget guard `image(for:)`/`warmedImage(for:)` already
+    /// apply via `cacheIfWithinBudget`: an oversized decoded bitmap (well
+    /// past the 50 MB cap) must be skipped, never forced into the shared
+    /// NSCache where it would evict everything else.
+    func test_cacheImageForPreview_oversizedImage_isNotCached() {
+        let image = makeSolidImage(width: 4000, height: 4000) // ~61 MB decoded (bytesPerRow × height)
+        let key = "https://example.com/preview-oversized-\(UUID().uuidString).jpg"
+
+        DiskCacheStore.cacheImageForPreview(image, key: key)
+
+        XCTAssertNil(DiskCacheStore.cachedImage(for: key),
+            "an oversized bitmap must not blow the shared NSCache budget")
+    }
+
+    private func makeSolidImage(width: CGFloat, height: CGFloat) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
+        return renderer.image { ctx in
+            UIColor.blue.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+    }
+
     // MARK: - MediaCaching-Compatible API Tests
 
     func test_data_returnsDataAfterSave() async throws {
@@ -232,13 +275,19 @@ final class DiskCacheStoreTests: XCTestCase {
         XCTAssertEqual(result, expected)
     }
 
+    /// `data(for:)` falls back to a REAL network fetch for uncached http(s)
+    /// keys (2026-04-05, unified media layer), so an http(s) key here would
+    /// hit the live network and surface `URLError` on any transport failure.
+    /// The deterministic contract left to protect: a key absent from cache
+    /// that is not fetchable over http(s) throws `DiskCacheError.notCached`.
     func test_data_throwsForMissingKey() async {
         let store = makeStore()
         do {
-            _ = try await store.data(for: "https://example.com/missing.mp3")
+            _ = try await store.data(for: "file:///missing.mp3")
             XCTFail("Expected error to be thrown")
         } catch {
-            XCTAssertTrue(error is DiskCacheStore.DiskCacheError)
+            XCTAssertTrue(error is DiskCacheStore.DiskCacheError,
+                "Expected DiskCacheError.notCached, got \(error)")
         }
     }
 

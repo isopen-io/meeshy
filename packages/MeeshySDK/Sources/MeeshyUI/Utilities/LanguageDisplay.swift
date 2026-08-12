@@ -26,6 +26,21 @@ public struct LanguageDisplay {
         return LanguageDisplay(code: code, flag: entry.flag, name: entry.name, color: entry.color)
     }
 
+    /// Curated 18-language picker set for message-translation surfaces
+    /// (message detail language explorer + transcription language explorer).
+    /// An ordered *view* over `languages` — single source for both the
+    /// flag/native-name/color data (`languages`) and the picker's iteration
+    /// order — previously copied byte-for-byte across three app-side views
+    /// (`MessageDetailSheet`, `MessageLanguageDetailView`,
+    /// `MessageTranscriptionDetailView`), each with its own duplicate table.
+    public static let translationPickerLanguages: [LanguageDisplay] = {
+        let orderedCodes = [
+            "fr", "en", "es", "de", "ar", "zh", "pt", "it", "ja",
+            "ko", "ru", "hi", "tr", "nl", "pl", "vi", "th", "sv"
+        ]
+        return orderedCodes.compactMap { LanguageDisplay.from(code: $0) }
+    }()
+
     private static let languages: [String: (flag: String, name: String, color: String)] = [
         "fr": ("🇫🇷", "Français", "5E60CE"),
         "en": ("🇬🇧", "English", "2A9D8F"),

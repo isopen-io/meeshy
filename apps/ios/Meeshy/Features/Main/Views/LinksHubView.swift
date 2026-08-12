@@ -214,7 +214,7 @@ struct LinksHubView: View {
                         .accessibilityHidden(true)
                     }
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)

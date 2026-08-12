@@ -79,45 +79,122 @@ extension ConversationAudioCoordinator {
     // MARK: - NowPlayingInfoCenter
 
     private func pushNowPlayingInfo() {
+        // Un appel est en cours : la carte doit rester absente. Ce gate est
+        // indispensable — les sinks `$currentTime` / `$isPlaying` continuent de
+        // tirer pendant la suspension (`stopAll()` écrit lui-même
+        // `currentTime = 0` / `isPlaying = false`), et republieraient la carte
+        // que `suspendForSystemCall()` vient d'effacer.
+        guard !_isSuspendedBySystemCall else { return }
         guard let context = activeContext else {
             clearNowPlaying()
             return
         }
         let totalDuration = duration > 0 ? duration : Double(context.durationMs) / 1000.0
-        let info: [String: Any] = [
-            MPMediaItemPropertyTitle: context.senderName,
+        let position = queuePosition
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: Self.nowPlayingTitle(
+                conversationName: context.conversationName,
+                receivedAt: context.receivedAt
+            ),
+            MPMediaItemPropertyArtist: context.senderName,
             MPMediaItemPropertyAlbumTitle: context.conversationName,
             MPMediaItemPropertyPlaybackDuration: totalDuration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Float(speed.rawValue) : 0.0,
-            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+            MPNowPlayingInfoPropertyPlaybackQueueCount: position.count,
+            MPNowPlayingInfoPropertyPlaybackQueueIndex: position.index
         ]
+
+        // Artwork : avatar auteur > avatar conversation > icône app, badge
+        // icône bas-gauche sur les avatars (règle produit — NowPlayingArtwork).
+        // Le mémo évite de recomposer à chaque tick 4Hz : quand la clé n'a pas
+        // changé, l'artwork repart SYNCHRONE dans le même dictionnaire (la
+        // carte ne clignote jamais entre deux pushes).
+        let artworkKey = NowPlayingArtwork.preferredAvatarURL(
+            senderAvatarURL: context.senderAvatarURL,
+            conversationArtworkURL: context.conversationArtworkURL
+        ) ?? ""
+        if _nowPlayingArtworkKey == artworkKey, let composed = _nowPlayingArtwork {
+            // `NowPlayingArtwork.makeArtwork` — jamais construire un
+            // `MPMediaItemArtwork` inline ici : son `requestHandler` doit
+            // rester SANS isolation d'acteur (cf. doc au site de définition).
+            info[MPMediaItemPropertyArtwork] = NowPlayingArtwork.makeArtwork(image: composed)
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            return
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        // Best-effort artwork — async, non-blocking. Cache hit returns
-        // immediately; cache miss falls back to URLSession. Re-checks the
-        // active context after the await to avoid stamping artwork for a
-        // stale playback once the queue has already advanced.
-        if let urlString = context.conversationArtworkURL,
-           !urlString.isEmpty {
-            let pinnedAttachmentId = context.attachmentId
-            Task { [weak self] in
-                guard let self else { return }
-                guard let img = await Self.loadArtworkImage(for: urlString) else { return }
-                await MainActor.run {
-                    guard self.activeContext?.attachmentId == pinnedAttachmentId,
-                          var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo
-                    else { return }
-                    let artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
-                    currentInfo[MPMediaItemPropertyArtwork] = artwork
-                    MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
-                }
+        // Best-effort — async, non-blocking. Cache hit returns immediately;
+        // cache miss falls back to URLSession. Re-checks the active context
+        // after the await to avoid stamping artwork for a stale playback once
+        // the queue has already advanced. Un avatar injoignable est mémoïsé
+        // comme icône seule (pas de retry à chaque tick) ; la piste suivante
+        // relance sa propre résolution.
+        let pinnedAttachmentId = context.attachmentId
+        Task { [weak self] in
+            guard let self else { return }
+            var avatar: UIImage?
+            if !artworkKey.isEmpty {
+                avatar = await Self.loadArtworkImage(for: artworkKey)
+            }
+            let composed = NowPlayingArtwork.compose(
+                avatar: avatar,
+                appIcon: NowPlayingArtwork.appIconImage()
+            )
+            guard let composed else { return }
+            await MainActor.run {
+                self._nowPlayingArtworkKey = artworkKey
+                self._nowPlayingArtwork = composed
+                guard self.activeContext?.attachmentId == pinnedAttachmentId,
+                      var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo
+                else { return }
+                // Idem : passer par la fabrique nonisolated, pas un closure
+                // littéral ici (ce bloc tourne dans `await MainActor.run`).
+                let artwork = NowPlayingArtwork.makeArtwork(image: composed)
+                currentInfo[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
             }
         }
     }
 
     private func clearNowPlaying() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    // MARK: - Ponts pour la suspension d'appel
+    //
+    // `pushNowPlayingInfo` et `clearNowPlaying` sont `private` : visibles dans
+    // CE fichier uniquement, donc inatteignables depuis le corps de la classe.
+    // Ces trois ponts `internal` sont la surface que `suspendForSystemCall()` /
+    // `resumeAfterSystemCall()` consomment.
+
+    func clearNowPlayingForSystemCall() {
+        clearNowPlaying()
+    }
+
+    func pushNowPlayingForSystemCall() {
+        pushNowPlayingInfo()
+    }
+
+    /// Arme ou désarme les transports système.
+    ///
+    /// Bascule `isEnabled` — ne JAMAIS rappeler `installRemoteCommands()` pour
+    /// réarmer : elle est one-shot (`_isNowPlayingActivated`) et ses
+    /// `_remoteCommandTokens` ne sont jamais retirés, donc un second appel
+    /// doublerait les targets et ferait double-déclencher chaque commande.
+    ///
+    /// Le désarmement n'est pas redondant avec les gardes `isCallActiveForAudioGuard` :
+    /// `nextTrackCommand` et `changePlaybackPositionCommand` n'en avaient aucune,
+    /// et la première détruisait la tête de file.
+    func setRemoteCommandsEnabled(_ enabled: Bool) {
+        guard _isNowPlayingActivated else { return }
+        let cc = MPRemoteCommandCenter.shared()
+        cc.playCommand.isEnabled = enabled
+        cc.pauseCommand.isEnabled = enabled
+        cc.nextTrackCommand.isEnabled = enabled
+        cc.previousTrackCommand.isEnabled = enabled
+        cc.changePlaybackPositionCommand.isEnabled = enabled
     }
 
     // MARK: - RemoteCommandCenter
@@ -182,17 +259,35 @@ extension ConversationAudioCoordinator {
     /// first (3-tier cache: NSCache memory → FileManager disk → network),
     /// then falls back to a raw URLSession fetch.
     ///
+    /// L'URL est résolue via `MeeshyConfig.resolveMediaURL` AVANT toute
+    /// lecture : les avatars circulent en chemins relatifs (`/uploads/…`) —
+    /// sans résolution, la clé de cache ne matche jamais celle des surfaces
+    /// avatar (`CachedAsyncImage` résout systématiquement) et `URL(string:)`
+    /// produit une URL sans schéma dont le fetch échoue en silence. C'est ce
+    /// qui laissait la carte lock screen sans artwork.
+    ///
     /// `nonisolated` so it can be called from any actor — the `images`
     /// store is itself an actor and synchronizes internally.
     nonisolated private static func loadArtworkImage(for urlString: String) async -> UIImage? {
-        if let img = await CacheCoordinator.shared.images.image(for: urlString) {
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        if let img = await CacheCoordinator.shared.images.image(for: resolved) {
             return img
         }
-        guard let url = URL(string: urlString),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let img = UIImage(data: data) else {
+        guard let url = URL(string: resolved),
+              url.scheme == "https" || url.scheme == "http" else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return UIImage(data: data)
+        } catch {
+            // Artwork absent de l'écran verrouillé — la lecture continue.
+            Logger.nowPlaying.error("Now-playing artwork fetch failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
-        return img
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let nowPlaying = Logger(subsystem: "me.meeshy.app", category: "now-playing")
 }

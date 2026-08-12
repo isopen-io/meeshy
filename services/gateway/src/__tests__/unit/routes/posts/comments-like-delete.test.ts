@@ -81,9 +81,18 @@ function makeRequiredAuth(authenticated: boolean) {
 
 async function buildApp(authenticated = true): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  // Audience déclarée PUBLIC : ce harnais porte sur le like/unlike et la
+  // suppression, pas sur le droit de voir (cf. `comments-audience.test.ts`).
+  const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
   const prisma = {
-    postComment: { findUnique: jest.fn().mockResolvedValue({ content: 'hi' }) },
-    post: { findUnique: jest.fn().mockResolvedValue(null) },
+    postComment: {
+      findUnique: jest.fn().mockResolvedValue({ content: 'hi' }),
+      findFirst: jest.fn().mockResolvedValue({ postId: POST_ID, post: publicAcl }),
+    },
+    post: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue(publicAcl),
+    },
   } as any;
   app.decorate('prisma', prisma);
   registerCommentRoutes(app, prisma, makeRequiredAuth(authenticated));

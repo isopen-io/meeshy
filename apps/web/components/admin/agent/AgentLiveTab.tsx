@@ -27,23 +27,11 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { useI18n } from '@/hooks/useI18n';
 import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
-import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { formatCompactTimeAgo } from '@/utils/relative-time-format';
 
 function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
   if (!dateStr) return t('agent.overview.timeAgo.never');
-  const bucket = classifyRelativeTime(new Date(dateStr).getTime(), Date.now(), { beyondDays: Infinity });
-  switch (bucket.unit) {
-    case 'now':
-      return t('timeAgo.now');
-    case 'minutes':
-      return `${bucket.value}${t('timeAgo.minutes')}`;
-    case 'hours':
-      return `${bucket.value}${t('timeAgo.hours')}`;
-    case 'days':
-      return `${bucket.value}${t('timeAgo.days')}`;
-    default:
-      return t('timeAgo.now');
-  }
+  return formatCompactTimeAgo(new Date(dateStr).getTime(), Date.now(), t, 'timeAgo');
 }
 
 function confidenceColor(value: number) {
