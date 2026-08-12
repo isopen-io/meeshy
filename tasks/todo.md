@@ -138,6 +138,16 @@ rétention au correctif de sécurité `ccaa9311f`. Celui-ci n'a ajouté que la v
 d'appartenance. Retourné, et remplacé par trois tests : l'accusé porte le `Participant.id`, le
 compteur est résolu PAR ce même id, les stats partent comme pour tout autre membre.
 
+**Il y en avait DEUX.** `ConversationHandler` possède deux suites unitaires, dans deux répertoires —
+`src/__tests__/unit/handlers/ConversationHandler.test.ts` et
+`src/socketio/handlers/__tests__/ConversationHandler.test.ts` — et toutes deux affirmaient le
+silence du join anonyme, dans des harnais différents. Seule la première apparaissait dans le dossier
+légué ; la seconde n'est tombée qu'à l'exécution de la suite COMPLÈTE (1 rouge sur 16 507). Deux
+enseignements : `grep` sur le NOM du test n'aurait pas suffi (les libellés diffèrent), et une suite
+partielle ne solde pas un correctif qui retourne un contrat. **Dette laissée ouverte** : ces deux
+fichiers testent le même handler et se recouvrent largement ; les fusionner est un chantier propre,
+hors périmètre ici.
+
 ## 2. `getTranslation()` lisait la clé de langue verbatim quand tous les écrivains la normalisent
 
 Parité écriture/lecture rompue. `_resolveTargetLanguages` canonicalise chaque cible via le SSOT
