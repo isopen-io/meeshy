@@ -81,15 +81,17 @@ const DEFAULT_STAT = {
 // ─── App factory ─────────────────────────────────────────────────────────────
 
 /** Prisma minimal : le contrôle d'accès remonte du message à la participation. */
-function makeAccessPrisma(granted: boolean) {
+function makeAccessPrisma(granted: boolean, message: unknown = { conversationId: 'conv-1' }) {
   return {
-    message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: 'conv-1' }) },
+    message: { findUnique: jest.fn<any>().mockResolvedValue(message) },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(granted ? { id: 'part-1' } : null) },
   } as any;
 }
 
-async function buildApp(opts: { authenticated?: boolean; granted?: boolean } = {}): Promise<FastifyInstance> {
-  const { authenticated = true, granted = true } = opts;
+async function buildApp(
+  opts: { authenticated?: boolean; granted?: boolean; message?: unknown } = {}
+): Promise<FastifyInstance> {
+  const { authenticated = true, granted = true, message = { conversationId: 'conv-1' } } = opts;
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   // Ces routes servaient le fichier à qui connaissait l'identifiant. Elles
@@ -107,7 +109,7 @@ async function buildApp(opts: { authenticated?: boolean; granted?: boolean } = {
     };
   });
 
-  registerDownloadRoutes(app, makeAccessPrisma(granted));
+  registerDownloadRoutes(app, makeAccessPrisma(granted, message));
   await app.ready();
   return app;
 }
@@ -690,6 +692,125 @@ describe('contrôle d\'accès aux pièces jointes', () => {
       uploadedBy: 'user-1',
     });
     const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Les octets suivent la vie du message porteur
+//
+// Les cycles 92 à 94 ont bâti toute la chaîne de destruction du contenu de
+// message ; les routes qui rendent les OCTETS n'en tenaient aucun compte. Elles
+// ne vérifiaient que l'appartenance à la conversation — un membre légitime
+// retéléchargeait donc indéfiniment la photo d'un message rappelé, expiré ou
+// brûlé, tant que le balayage n'avait pas `unlink` le fichier.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('cycle de vie du message porteur', () => {
+  const PAST = new Date(Date.now() - 60_000);
+  const FUTURE = new Date(Date.now() + 60_000);
+
+  beforeEach(() => {
+    mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
+    mockGetFilePath.mockResolvedValue(FILE_PATH);
+    mockGetThumbnailPath.mockResolvedValue(THUMBNAIL_PATH);
+    mockStat.mockResolvedValue(DEFAULT_STAT);
+  });
+
+  it('sert le fichier tant que le message porteur est vivant', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', deletedAt: null, expiresAt: null } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('sert le fichier quand l\'échéance est encore devant', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: FUTURE } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('refuse le fichier d\'un message rappelé, même à un membre de la conversation', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', deletedAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('refuse le fichier d\'un message éphémère expiré', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  /**
+   * `scheduleViewOnceBurn` écrit le budget de vue unique épuisé sous forme
+   * d'`expiresAt`. La garde couvre donc la brûlure sans rien connaître de la
+   * vue unique — l'échéance EST la brûlure.
+   */
+  it('refuse le fichier d\'un message à vue unique dont le sursis de brûlure est écoulé', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('refuse la miniature d\'un message rappelé — elle révèle la même image', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', deletedAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('refuse la miniature d\'un message expiré', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  /**
+   * Le refus doit être INDISCERNABLE du 404 que rendra le balayage une minute
+   * plus tard, une fois le fichier `unlink`. Un 403 confirmerait en prime
+   * l'existence d'un contenu que l'émetteur a voulu disparu.
+   */
+  it('refuse en 404, comme le fera le balayage après unlink — et non en 403', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', deletedAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().success).toBe(false);
+    await app.close();
+  });
+
+  it('garde le header CORP cross-origin sur le refus de cycle de vie', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    await app.close();
+  });
+
+  /**
+   * L'étranger à la conversation garde son 403 : il ne doit rien apprendre du
+   * cycle de vie d'un contenu auquel il n'a de toute façon pas accès.
+   */
+  it('rend 403, et non 404, à un étranger — l\'appartenance se juge avant le cycle de vie', async () => {
+    const app = await buildApp({ granted: false, message: { conversationId: 'conv-1', deletedAt: PAST } });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  /**
+   * Une pièce jointe pas encore rattachée à un message n'a pas de porteur dont
+   * hériter : son déposant continue d'y accéder pendant l'envoi.
+   */
+  it('sert une pièce jointe non rattachée à son déposant — aucun porteur, aucune échéance', async () => {
+    mockGetAttachment.mockResolvedValue({ ...DEFAULT_ATTACHMENT, messageId: null, uploadedBy: 'user-1' });
+    const app = await buildApp({ message: null });
     const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
     expect(res.statusCode).toBe(200);
     await app.close();

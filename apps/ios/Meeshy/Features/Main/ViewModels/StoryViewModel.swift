@@ -146,6 +146,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
     @Published private(set) var receiverCoverRenderTick = 0
     private var uploadTask: Task<Void, Never>?
+    /// Garde local-first du drain d'archive « Mes stories » : un seul drain
+    /// réseau ABOUTI par session (cf. `loadMyStoriesArchive`).
+    private var myStoriesArchiveDrained = false
 
     private let storyService: StoryServiceProviding
     private let postService: PostServiceProviding
@@ -928,9 +931,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     }
 
     /// Échéance du pin : l'expiry de la story (le pin ne doit jamais lui
-    /// survivre). Fallback aligné sur `toStoryGroups` : createdAt + 21 h.
+    /// survivre). Fallback aligné sur `toStoryGroups` : createdAt + fenêtre
+    /// publique (`StoryItem.defaultExpiryInterval`, 20 h depuis 2026-08-12).
     static func pinDeadline(for story: StoryItem) -> Date {
-        story.expiresAt ?? story.createdAt.addingTimeInterval(21 * 3600)
+        story.expiresAt ?? story.createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)
     }
 
     /// Plan de pin PUR (testable) : chaque URL média de la story routée vers
@@ -1235,6 +1239,74 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     func storyGroupForUser(userId: String) -> StoryGroup? {
         storyGroups.first { $0.id == userId }
+    }
+
+    // MARK: - Archive auteur (« Mes stories », stories en cours ET passées)
+
+    /// Draine `GET /posts/stories/mine` (archive complète — les stories ne
+    /// sont plus jamais détruites côté serveur) et fusionne les stories
+    /// manquantes dans le groupe de l'utilisateur courant. La page du tray
+    /// borne son archive auteur à 7 j pour ne pas noyer les amis ;
+    /// « Mes stories » lit ICI l'historique au-delà. Idempotent (dédup par id),
+    /// drain borné à 10 pages de 50.
+    func loadMyStoriesArchive() async {
+        guard let user = AuthManager.shared.currentUser else { return }
+        // Local-first : un seul drain par session — l'archive est immuable côté
+        // serveur (les nouvelles stories arrivent par le flux temps réel /
+        // publication locale, la republication par `applyRepublishedStory`).
+        // Sans ce garde, chaque apparition de MyStoriesView relançait jusqu'à
+        // 10 pages de refetch d'un contenu déjà présent.
+        guard !myStoriesArchiveDrained else { return }
+        myStoriesArchiveDrained = true
+        var cursor: String? = nil
+        var fetched: [APIPost] = []
+        for _ in 0..<10 {
+            guard let response = try? await storyService.listMine(cursor: cursor, limit: 50) else { break }
+            fetched.append(contentsOf: response.data)
+            guard response.pagination?.hasMore == true,
+                  let next = response.pagination?.nextCursor else { break }
+            cursor = next
+        }
+        guard !fetched.isEmpty,
+              let archiveGroup = fetched.toStoryGroups(currentUserId: user.id).first(where: { $0.id == user.id })
+        else {
+            // Rien reçu (offline, erreur, archive vide) : rendre le drain
+            // retentable — le garde ne doit verrouiller qu'un drain ABOUTI.
+            myStoriesArchiveDrained = false
+            return
+        }
+
+        if let idx = groupIndex(forUserId: user.id) {
+            let existing = storyGroups[idx].stories
+            let existingIds = Set(existing.map(\.id))
+            let missing = archiveGroup.stories.filter { !existingIds.contains($0.id) }
+            guard !missing.isEmpty else { return }
+            let merged = (existing + missing).sorted { $0.createdAt < $1.createdAt }
+            storyGroups[idx] = storyGroups[idx].with(stories: merged)
+        } else {
+            storyGroups.append(archiveGroup)
+        }
+        persistStoryCache()
+    }
+
+    /// Applique le résultat d'une republication (`POST /posts/:id/republish`) :
+    /// la MÊME story (même id) repart avec des dates fraîches et un engagement
+    /// remis à zéro — on remplace l'item en place et on re-trie le groupe.
+    func applyRepublishedStory(_ post: APIPost) {
+        guard let user = AuthManager.shared.currentUser,
+              let refreshed = [post].toStoryGroups(currentUserId: user.id)
+                  .first(where: { $0.id == user.id })?.stories.first
+        else { return }
+
+        if let gIdx = groupIndex(forUserId: user.id),
+           let sIdx = storyGroups[gIdx].stories.firstIndex(where: { $0.id == refreshed.id }) {
+            var stories = storyGroups[gIdx].stories
+            stories[sIdx] = refreshed
+            storyGroups[gIdx] = storyGroups[gIdx].with(stories: stories.sorted { $0.createdAt < $1.createdAt })
+            persistStoryCache()
+        } else {
+            insertOrAppendStoryItem(refreshed, forAuthor: post.author)
+        }
     }
 
     func groupIndex(forUserId userId: String) -> Int? {
@@ -2657,9 +2729,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             Logger.messages.error("[StoryVM] ensureStoryLoaded fetch failed postId=\(postId, privacy: .public): \(error.localizedDescription)")
             return false
         }
-        let groups = [post].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+        // Exception AUTEUR (cohérente avec `purgeDeadStories` et le
+        // skip-resolver) : mes propres stories expirées restent chargeables —
+        // deep link depuis « Mes stories » vers une story archivée.
+        let myId = AuthManager.shared.currentUser?.id
+        let groups = [post].toStoryGroups(currentUserId: myId)
             .compactMap { group -> StoryGroup? in
-                let alive = group.stories.filter { !$0.isExpired() }
+                let alive = group.id == myId
+                    ? group.stories
+                    : group.stories.filter { !$0.isExpired() }
                 return alive.isEmpty ? nil : group.with(stories: alive)
             }
         guard !groups.isEmpty else { return false }
@@ -2685,9 +2763,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// cache (chemin normal, sans notification).
     func refreshFromCachedPostIfAvailable(postId: String) {
         guard let cached = storyService.cachedPost(id: postId) else { return }
-        let groups = [cached].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+        // Même exception auteur que `ensureStoryLoaded` ci-dessus.
+        let myId = AuthManager.shared.currentUser?.id
+        let groups = [cached].toStoryGroups(currentUserId: myId)
             .compactMap { group -> StoryGroup? in
-                let alive = group.stories.filter { !$0.isExpired() }
+                let alive = group.id == myId
+                    ? group.stories
+                    : group.stories.filter { !$0.isExpired() }
                 return alive.isEmpty ? nil : group.with(stories: alive)
             }
         guard !groups.isEmpty else { return }
@@ -2966,9 +3048,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     }
 
     /// Realtime delta for a STORY reaction (`story:reacted`/`story:unreacted` — fan-out
-    /// distinct des events POST). La réaction propre est fire-and-forget (`sendReaction`
-    /// n'incrémente pas en optimiste), donc l'écho de sa propre action fournit le +1 sans
-    /// double-compte. Non-`private` pour permettre la vérification unitaire.
+    /// distinct des events POST). L'optimiste du viewer vit dans son @State
+    /// (`StoryViewerView.sendReaction` incrémente `storyReactionCount` localement,
+    /// PAS `item.reactionCount`) ; l'écho de sa propre action fournit ici le +1 sur
+    /// l'item, et le miroir absolu (`storyReactionCount = currentStory?.reactionCount`)
+    /// écrase l'optimiste — les deux chemins convergent sans double-compte.
+    /// Non-`private` pour permettre la vérification unitaire.
     func applyStoryReactionDelta(storyId: String, userId: String, emoji: String, delta: Int) {
         let myId = AuthManager.shared.currentUser?.id
         mutateStoryItem(byPostId: storyId) { item in

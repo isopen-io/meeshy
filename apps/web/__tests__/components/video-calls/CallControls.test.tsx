@@ -52,16 +52,16 @@ describe('CallControls', () => {
   it('invokes onToggleSpeaker when the speaker button is pressed, and never manages its own state', () => {
     const onToggleSpeaker = jest.fn();
     render(<CallControls {...baseProps} speakerEnabled onToggleSpeaker={onToggleSpeaker} />);
-    const button = screen.getByRole('button', { name: 'calls.controls.speakerOff' });
+    const button = screen.getByRole('button', { name: 'controls.speakerOff' });
     fireEvent.click(button);
     expect(onToggleSpeaker).toHaveBeenCalledTimes(1);
     // A controlled component must not flip its own label on click — only a
     // prop change from the parent may do that.
-    expect(screen.getByRole('button', { name: 'calls.controls.speakerOff' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'controls.speakerOff' })).toBeInTheDocument();
   });
 
   it('reflects speakerEnabled=false via the "speakerOn" (call-to-action) label', () => {
     render(<CallControls {...baseProps} speakerEnabled={false} />);
-    expect(screen.getByRole('button', { name: 'calls.controls.speakerOn' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'controls.speakerOn' })).toBeInTheDocument();
   });
 });

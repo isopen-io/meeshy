@@ -105,4 +105,24 @@ final class CommentsSheetMergeTests: XCTestCase {
         XCTAssertEqual(merged.map(\.id), ["tmp_new", "c2", "c1", "c3"])
         XCTAssertEqual(merged.first(where: { $0.id == "c1" })?.likes, 3, "server copy of c1 wins over the stale local one")
     }
+
+    // MARK: - persistableComments (jamais de fantôme optimiste en cache)
+
+    /// Une ligne optimiste non confirmée (id `cmid_`/`tmp_`) ne doit JAMAIS
+    /// être persistée : une fois réconciliée en mémoire par l'écho socket, le
+    /// fantôme resterait en cache pour toujours (`mergeFetchedComments` garde
+    /// les local-only en tête à chaque relecture).
+    func test_persistableComments_dropsUnconfirmedOptimisticRows() {
+        let rows = [
+            makeComment(id: "cmid_0b7f2f2a-1111-2222-3333-444455556666"),
+            makeComment(id: "tmp_123"),
+            makeComment(id: "c1"),
+            makeComment(id: "c2")
+        ]
+
+        let persistable = CommentsSheetView.persistableComments(rows)
+
+        XCTAssertEqual(persistable.map(\.id), ["c1", "c2"],
+                       "seules les lignes confirmées serveur atteignent le cache")
+    }
 }

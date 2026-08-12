@@ -23,6 +23,12 @@ struct ThreadedCommentSection: View {
     /// optimiste + l'appel API. Câblé sur chaque ligne uniquement quand
     /// l'utilisateur courant est l'auteur (`canDelete`).
     var onDeleteComment: ((FeedComment) -> Void)? = nil
+    /// Édite un commentaire (contenu + effets visuels). Même règle
+    /// d'éligibilité que la suppression : auteur uniquement.
+    var onEditComment: ((FeedComment) -> Void)? = nil
+    /// Demande la traduction d'un commentaire vers la langue préférée du
+    /// lecteur — câblé par l'hôte (sheet / détail) vers le endpoint on-demand.
+    var onRequestTranslation: ((FeedComment) -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState? = nil
@@ -49,6 +55,15 @@ struct ThreadedCommentSection: View {
               let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
               c.authorId == me else { return nil }
         return { onDeleteComment(c) }
+    }
+
+    /// Même éligibilité que `deleteHandler` : l'item « Modifier » n'apparaît
+    /// que sur les commentaires de l'utilisateur courant.
+    private func editHandler(for c: FeedComment) -> (() -> Void)? {
+        guard let onEditComment,
+              let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
+              c.authorId == me else { return nil }
+        return { onEditComment(c) }
     }
 
     /// Show first 2 replies by default without requiring toggle
@@ -80,6 +95,8 @@ struct ThreadedCommentSection: View {
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
                 onDeleteComment: deleteHandler(for: comment),
+                onEditComment: editHandler(for: comment),
+                onRequestTranslation: onRequestTranslation.map { handler in { handler(comment) } },
                 showSeeReplies: showSeeReplies,
                 onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
@@ -100,6 +117,8 @@ struct ThreadedCommentSection: View {
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
                         onDeleteComment: deleteHandler(for: reply),
+                        onEditComment: editHandler(for: reply),
+                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
@@ -136,6 +155,8 @@ struct ThreadedCommentSection: View {
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
                         onDeleteComment: deleteHandler(for: reply),
+                        onEditComment: editHandler(for: reply),
+                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
@@ -218,6 +239,9 @@ struct CommentsSheetView: View {
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
+    /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
+    /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
+    @State private var editingComment: FeedComment?
     @State private var composerFocusTrigger: Bool = false
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
@@ -347,6 +371,159 @@ struct CommentsSheetView: View {
         return localOnly + fetched
     }
 
+    /// Ne JAMAIS persister une ligne optimiste non confirmée (id `cmid_`/`tmp_`) :
+    /// une fois la ligne réconciliée en mémoire par l'écho socket, le fantôme
+    /// resterait en cache pour toujours — `mergeFetchedComments` le garde en
+    /// tête à chaque relecture puisque le serveur ne le renverra jamais.
+    static func persistableComments(_ comments: [FeedComment]) -> [FeedComment] {
+        comments.filter { !$0.id.hasPrefix("cmid_") && !$0.id.hasPrefix("tmp_") }
+    }
+
+    /// Réconciliation par l'agrégat absolu d'un événement cœur de commentaire —
+    /// pose `likes = count` (top-level ou réponse), purge le delta optimiste et
+    /// dérive « mon cœur » de la liste des réacteurs. Miroir de
+    /// `PostDetailViewModel.applyCommentReactionAggregate`.
+    private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
+        var resolvedCount = count
+        if let myId = AuthManager.shared.currentUser?.id {
+            if reactorUserIds.contains(myId) {
+                likedIds.insert(commentId)
+            } else if actorUserId == myId {
+                // L'événement décrit MA propre action (cet appareil ou un
+                // autre) : l'agrégat est autoritatif pour mon cœur.
+                likedIds.remove(commentId)
+            } else if likedIds.contains(commentId) {
+                // Événement d'un TIERS pendant que MON like est encore en vol :
+                // son agrégat ne me connaît pas — préserver le cœur et compter
+                // le mien par-dessus (l'écho de mon propre like reconfirmera).
+                resolvedCount = count + 1
+            }
+        }
+        likeDelta[commentId] = nil
+        var current = liveComments ?? post.comments
+        if let idx = current.firstIndex(where: { $0.id == commentId }) {
+            current[idx].likes = resolvedCount
+            liveComments = current
+            return
+        }
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx].likes = resolvedCount
+                repliesMap[key] = replies
+                return
+            }
+        }
+    }
+
+    // MARK: - Édition de commentaire (auteur)
+
+    /// Bandeau au-dessus du composer pendant une édition — sortie possible
+    /// par la croix (le composer revient en mode création, texte effacé).
+    private var editingBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil")
+                .font(MeeshyFont.relative(12))
+                .foregroundColor(Color(hex: accentColor))
+            Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
+                .font(MeeshyFont.relative(12, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+            Spacer()
+            Button {
+                cancelEditComment()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(MeeshyFont.relative(14))
+                    .foregroundColor(theme.textMuted)
+            }
+            .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(theme.inputBackground.opacity(0.6))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// Charge le commentaire dans le composer avec TOUT ce que l'édition
+    /// permet : texte + effets visuels (lueur/pulse/…) + flou — mêmes
+    /// capacités que la création (le média existant est conservé tel quel).
+    private func beginEditComment(_ target: FeedComment) {
+        replyingTo = nil
+        editingComment = target
+        composerText = target.content
+        let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
+        commentBlurEnabled = flags.contains(.blurred)
+        commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
+        HapticFeedback.light()
+    }
+
+    private func cancelEditComment() {
+        editingComment = nil
+        composerText = ""
+        commentEffects = .none
+        commentBlurEnabled = false
+    }
+
+    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
+    /// d'insertion — même id), rollback complet si le serveur refuse.
+    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
+    private func submitCommentEdit(_ target: FeedComment, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || !target.media.isEmpty else { return }
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        let flags = Int(effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0))
+        editingComment = nil
+        commentEffects = .none
+        commentBlurEnabled = false
+        commentAttachments.removeAll()
+        commentPendingPlace = nil
+        mentionController.clearDraft()
+
+        let edited = target.withEditedContent(trimmed, effectFlags: flags)
+        let snapshotComments = liveComments ?? post.comments
+        let snapshotReplies = repliesMap
+        applyCommentEdit(edited)
+        Task {
+            do {
+                _ = try await PostService.shared.updateComment(
+                    postId: post.id, commentId: target.id, content: trimmed, effectFlags: flags
+                )
+                // Invalidation locale par réécriture : la version éditée
+                // remplace la version cachée — les autres vues (détail,
+                // overlay story) la resservent depuis le cache sans refetch.
+                if let parentId = edited.parentId {
+                    if let replies = repliesMap[parentId] {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
+                    }
+                } else if let current = liveComments {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
+                }
+            } catch {
+                liveComments = snapshotComments
+                repliesMap = snapshotReplies
+                FeedbackToastManager.shared.showError(
+                    String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
+            }
+        }
+    }
+
+    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
+    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
+    private func applyCommentEdit(_ edited: FeedComment) {
+        if let parentId = edited.parentId {
+            if var existing = repliesMap[parentId], let idx = existing.firstIndex(where: { $0.id == edited.id }) {
+                existing[idx] = edited
+                repliesMap[parentId] = existing
+                return
+            }
+        }
+        var current = liveComments ?? post.comments
+        if let idx = current.firstIndex(where: { $0.id == edited.id }) {
+            current[idx] = edited
+            liveComments = current
+        }
+    }
+
     /// Removes the optimistic `tempId` row (and decrements its parent's reply
     /// count / the sheet's total count) — shared by the synchronous
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
@@ -430,6 +607,16 @@ struct CommentsSheetView: View {
                                     onDeleteComment: { target in
                                         Task { await deleteComment(target) }
                                     },
+                                    onEditComment: { target in
+                                        beginEditComment(target)
+                                    },
+                                    onRequestTranslation: { target in
+                                        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+                                        Task {
+                                            try? await PostService.shared.requestCommentTranslation(
+                                                postId: post.id, commentId: target.id, targetLanguage: lang)
+                                        }
+                                    },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                     storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
@@ -462,6 +649,9 @@ struct CommentsSheetView: View {
                     } // ScrollViewReader
 
                     VStack(spacing: 0) {
+                        if editingComment != nil {
+                            editingBanner
+                        }
                         if mentionController.activeQuery != nil {
                             MentionSuggestionPanel(
                                 controller: mentionController,
@@ -544,6 +734,15 @@ struct CommentsSheetView: View {
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { data in
             let parentId = data.comment.parentId
+            // Parité effets + Prisme avec le mapping REST (`mapFetchedComments`) :
+            // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
+            // temps réel rendait SANS ses effets dans cette feuille.
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: data.comment.translations,
+                originalLanguage: data.comment.originalLanguage,
+                preferredLanguages: langs
+            )
             let feedComment = FeedComment(
                 id: data.comment.id, author: data.comment.author.name,
                 authorId: data.comment.author.id,
@@ -552,13 +751,19 @@ struct CommentsSheetView: View {
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                 parentId: parentId,
+                effectFlags: data.comment.effectFlags ?? 0,
+                originalLanguage: data.comment.originalLanguage,
+                translatedContent: translated,
                 currentUserReactions: data.comment.currentUserReactions,
                 media: (data.comment.media ?? []).map { $0.toFeedMedia() }
             )
             // The echoed event for OUR own just-sent comment: replace the optimistic
-            // placeholder (same author + content) in place instead of duplicating it.
+            // placeholder in place instead of duplicating it. Primary key: the
+            // cmid echoed by the gateway matches the optimistic row id exactly.
+            // Fallback: legacy tmp_ rows matched by author + content + parent.
             func isTwin(_ c: FeedComment) -> Bool {
-                c.id.hasPrefix("tmp_")
+                if let cmid = data.clientMutationId, c.id == cmid { return true }
+                return c.id.hasPrefix("tmp_")
                     && c.authorId == feedComment.authorId
                     && c.content == feedComment.content
                     && c.parentId == parentId
@@ -568,6 +773,16 @@ struct CommentsSheetView: View {
                 if let idx = existing.firstIndex(where: isTwin) {
                     existing[idx] = feedComment                 // reconcile our temp
                     repliesMap[parentId] = existing
+                    // Réécriture du cache avec la ligne RÉCONCILIÉE : un cache
+                    // persisté pendant que la ligne optimiste (cmid) était
+                    // encore là garderait le fantôme pour toujours. Scope
+                    // STRICT à la réconciliation — persister sur l'insertion
+                    // d'un TIERS écraserait un fil de réponses caché plus
+                    // complet quand le fil n'a pas (encore) été chargé ici.
+                    let replies = existing
+                    Task {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
+                    }
                 } else if !existing.contains(where: { $0.id == feedComment.id }) {
                     existing.insert(feedComment, at: 0)
                     repliesMap[parentId] = existing
@@ -581,6 +796,13 @@ struct CommentsSheetView: View {
                 var current = liveComments ?? post.comments
                 if let idx = current.firstIndex(where: isTwin) {
                     current[idx] = feedComment                  // reconcile our temp
+                    // Même réécriture réconciliée pour le fil top-level (clé
+                    // partagée avec le détail de post et l'overlay story) —
+                    // même scope strict que côté réponses.
+                    let snapshot = current
+                    Task {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(snapshot), for: "post-\(post.id)")
+                    }
                 } else if !current.contains(where: { $0.id == feedComment.id }) {
                     current.insert(feedComment, at: 0)
                 }
@@ -588,18 +810,80 @@ struct CommentsSheetView: View {
             }
             liveCommentCount = data.commentCount
         }
+        // Édition en temps réel : remplace la ligne EN PLACE (contenu, effets,
+        // traductions régénérées) — idempotent avec l'optimiste local.
+        .onReceive(
+            SocialSocketManager.shared.commentUpdated
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: data.comment.translations,
+                originalLanguage: data.comment.originalLanguage,
+                preferredLanguages: langs
+            )
+            let updated = FeedComment(
+                id: data.comment.id, author: data.comment.author.name,
+                authorId: data.comment.author.id,
+                authorUsername: data.comment.author.username,
+                authorAvatarURL: data.comment.author.avatar,
+                content: data.comment.content, timestamp: data.comment.createdAt,
+                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
+                parentId: data.comment.parentId,
+                effectFlags: data.comment.effectFlags ?? 0,
+                originalLanguage: data.comment.originalLanguage,
+                translatedContent: translated,
+                currentUserReactions: data.comment.currentUserReactions,
+                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+            )
+            applyCommentEdit(updated)
+        }
+        // Traduction de commentaire arrivée (pipeline async ou demande à la
+        // demande) : pose `translatedContent` si la langue est préférée et
+        // qu'aucune traduction n'est déjà affichée (règle unique du Prisme —
+        // miroir de `FeedViewModel.applyCommentTranslation`).
+        .onReceive(
+            SocialSocketManager.shared.commentTranslationUpdated
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
+            let text = data.translation.text
+            var current = liveComments ?? post.comments
+            if let idx = current.firstIndex(where: { $0.id == data.commentId }), current[idx].translatedContent == nil {
+                current[idx].translatedContent = text
+                liveComments = current
+                return
+            }
+            for (key, var replies) in repliesMap {
+                if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
+                    replies[idx].translatedContent = text
+                    repliesMap[key] = replies
+                    return
+                }
+            }
+        }
+        // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
+        // `StoryViewerView.applyCommentReactionEvent`) : l'ancien ±1 ne purgeait
+        // jamais le delta de sa PROPRE réaction — dès que la base était
+        // rafraîchie (loadReplies, refetch), `likes` incluait déjà le like et
+        // l'affichage `likes + delta` comptait DOUBLE. « Mon cœur » dérive de
+        // `aggregation.userIds` (User.id des réacteurs), PAS de `hasCurrentUser`
+        // qui est calculé relativement à l'ACTEUR de l'événement côté gateway.
         .onReceive(
             SocialSocketManager.shared.commentReactionAdded
                 .receive(on: DispatchQueue.main)
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { event in
             guard event.emoji == StoryViewerView.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                likedIds.insert(event.commentId)
-            } else {
-                likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) + 1
-            }
+            applyCommentReactionAggregate(
+                commentId: event.commentId,
+                count: event.aggregation.count,
+                reactorUserIds: event.aggregation.userIds,
+                actorUserId: event.userId
+            )
         }
         .onReceive(
             SocialSocketManager.shared.commentReactionRemoved
@@ -607,12 +891,12 @@ struct CommentsSheetView: View {
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { event in
             guard event.emoji == StoryViewerView.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                likedIds.remove(event.commentId)
-            } else {
-                likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) - 1
-            }
+            applyCommentReactionAggregate(
+                commentId: event.commentId,
+                count: event.aggregation.count,
+                reactorUserIds: event.aggregation.userIds,
+                actorUserId: event.userId
+            )
         }
         // Pipeline audio d'un média de commentaire terminé (transcription / variantes
         // TTS prêtes) → on remplace le média du commentaire en cache par la version
@@ -686,7 +970,25 @@ struct CommentsSheetView: View {
         let cacheKey = "post-\(post.id)"
         let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
         switch cached {
-        case .fresh(let full, _), .stale(let full, _):
+        case .fresh(let full, _):
+            // LOCAL-FIRST : un cache FRAIS se sert SANS refetch — changer de
+            // vue (feed → sheet → détail → story) ne recharge pas des
+            // commentaires déjà présents et non modifiés. Le temps réel
+            // (comment:added/updated/deleted/translation-updated) et les
+            // écritures locales maintiennent la fraîcheur ; la modification
+            // invalide le cache par réécriture (savePreservingFreshness).
+            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: full)
+            seedLikedIds(from: full)
+            // La pagination reste possible : cursor nil = page 1 de recovery
+            // quand l'utilisateur atteint le bas (même contrat que le profil).
+            // `post.commentCount` compte TOUTES les lignes (réponses incluses)
+            // alors que `liveComments` n'a que le top-level : le total local
+            // comparable = top-level chargés + réponses qu'ils annoncent.
+            let loaded = liveComments ?? []
+            let knownTotal = loaded.count + loaded.reduce(0) { $0 + $1.replies }
+            commentsHasMore = post.commentCount > knownTotal
+            return
+        case .stale(let full, _):
             // Merge (not overwrite): the `await` above may have given an
             // optimistic send or a `comment:added` socket echo enough time
             // to land in `liveComments` first.
@@ -1491,6 +1793,10 @@ struct CommentsSheetView: View {
     /// restent ignorés (hors périmètre).
     /// Un commentaire média-seul ou lieu-seul (sans texte) est autorisé.
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        if let editing = editingComment {
+            submitCommentEdit(editing, text: text)
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
         let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
@@ -1523,7 +1829,12 @@ struct CommentsSheetView: View {
         // display) IMMEDIATELY — reply under its parent, else top-level — without
         // waiting for the network. The confirmed server row reconciles it (REST
         // response OR the `comment:added` socket event); a failure rolls it back.
-        let tempId = "tmp_\(UUID().uuidString)"
+        // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
+        // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
+        // revient dans l'écho `comment:added` pour une réconciliation par id
+        // exacte — le twin-match par contenu ne tenait pas quand le serveur
+        // normalise le texte (sanitize).
+        let tempId = ClientMutationId.generate()
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
             id: tempId,
@@ -1566,7 +1877,7 @@ struct CommentsSheetView: View {
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
                     attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
-                    originalLanguage: lang, location: place
+                    originalLanguage: lang, location: place, clientMutationId: tempId
                 )
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -1604,18 +1915,23 @@ struct CommentsSheetView: View {
                 // already use) instead of unconditionally losing the comment.
                 // The optimistic `tempId` row is reconciled by the already-wired
                 // `comment:added` socket handler once the outbox replay lands.
-                // NOTE: like those two call sites, `CreateCommentPayload` doesn't
-                // carry `effectFlags`/`attachmentIds` yet (SDK schema gap) — a
-                // blur/sticker effect or attached media on a comment sent while
-                // offline is dropped on replay; the comment text itself survives.
+                // NOTE: `CreateCommentPayload` carries `effectFlags` but not
+                // `attachmentIds` (SDK schema gap) — attached media on a comment
+                // sent while offline is dropped on replay; the comment text and
+                // its visual effects survive.
                 do {
-                    let cmid = ClientMutationId.generate()
+                    // MÊME cmid que la tentative REST : si le POST a abouti côté
+                    // serveur mais que sa réponse s'est perdue, le rejeu outbox
+                    // est dédoublonné par le MutationLog au lieu de créer un
+                    // second commentaire.
+                    let cmid = tempId
                     let payload = CreateCommentPayload(
                         clientMutationId: cmid,
                         postId: post.id,
                         parentCommentId: parentId,
                         content: trimmed,
-                        location: place
+                        location: place,
+                        effectFlags: effectFlags
                     )
                     try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
                     onCommentSent?(post.id)
@@ -1724,6 +2040,12 @@ struct CommentsSheetView: View {
 
         do {
             try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id)
+            // Invalidation locale par réécriture : sans elle, la version cachée
+            // ressuscitait le commentaire supprimé à la prochaine ouverture
+            // (sheet, détail, overlay story lisent la même clé).
+            if comment.parentId == nil, let current = liveComments {
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
+            }
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
         } catch {
             liveComments = previousComments
@@ -1750,6 +2072,14 @@ struct CommentRowView: View, Equatable {
     /// courant est l'auteur — le parent décide de l'éligibilité. `nil` ⇒ l'item
     /// « Supprimer » n'apparaît pas dans le menu « … ».
     var onDeleteComment: (() -> Void)? = nil
+    /// Édite ce commentaire (contenu + effets). Fourni UNIQUEMENT quand
+    /// l'utilisateur courant est l'auteur — même règle que la suppression.
+    var onEditComment: (() -> Void)? = nil
+    /// Demande la traduction du commentaire vers la langue préférée du
+    /// lecteur (Prisme « Exploration ») — affiché quand AUCUNE traduction
+    /// n'est disponible et que la langue d'origine diffère. Le résultat
+    /// arrive via `comment:translation-updated`.
+    var onRequestTranslation: (() -> Void)? = nil
     /// Affiche le bouton « Voir » (charger/afficher les réponses) à côté de
     /// « Répondre ». Calculé par le parent (`ThreadedCommentSection`) : vrai
     /// seulement s'il reste des réponses non révélées. Ignoré pour une réponse.
@@ -1770,6 +2100,8 @@ struct CommentRowView: View, Equatable {
         // Re-render si l'éligibilité à la suppression change (ex: changement de
         // compte avec la feuille ouverte) — sinon l'item « Supprimer » reste figé.
         (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
+        (lhs.onEditComment == nil) == (rhs.onEditComment == nil) &&
+        lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
@@ -1788,6 +2120,9 @@ struct CommentRowView: View, Equatable {
     @State private var hasPlayedAppearanceEffect = false
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
     @State private var rowFullscreenPlace: BubbleFullscreenPlace?
+    /// Demande de traduction envoyée pour cette ligne (feedback immédiat,
+    /// l'icône passe en sablier jusqu'à l'arrivée du résultat).
+    @State private var translationRequested = false
 
     private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
@@ -1812,7 +2147,7 @@ struct CommentRowView: View, Equatable {
     /// évite un bouton mort (le bug d'origine) sur un commentaire média-seul
     /// dont l'utilisateur n'est pas l'auteur.
     private var hasMoreOptions: Bool {
-        canCopyContent || onDeleteComment != nil
+        canCopyContent || onDeleteComment != nil || onEditComment != nil
     }
 
     var body: some View {
@@ -1912,6 +2247,26 @@ struct CommentRowView: View, Equatable {
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
                             .accessibilityHidden(true)
+                    } else if let onRequestTranslation,
+                              comment.originalLanguage != nil,
+                              comment.originalLanguage?.lowercased()
+                                != (AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr") {
+                        // Pas encore de traduction vers la langue préférée :
+                        // « Traduire » à la demande (langues hors des 5
+                        // pré-générées comprises) — le résultat remplit la
+                        // ligne via `comment:translation-updated`.
+                        Button {
+                            guard !translationRequested else { return }
+                            translationRequested = true
+                            onRequestTranslation()
+                            HapticFeedback.light()
+                        } label: {
+                            Image(systemName: translationRequested ? "hourglass" : "translate")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
+                        }
+                        .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
+                        .meeshyTapTarget(44)
                     }
 
                     Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
@@ -2064,6 +2419,14 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.success()
                                 } label: {
                                     Label(String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+                                }
+                            }
+                            if let onEditComment {
+                                Button {
+                                    HapticFeedback.light()
+                                    onEditComment()
+                                } label: {
+                                    Label(String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                                 }
                             }
                             if let onDeleteComment {

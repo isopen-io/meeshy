@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PostType } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendInternalError } from '../utils/response';
+import { NOT_DELETED } from '../services/posts/softDelete';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -33,6 +35,16 @@ export type UserStats = {
   friendRequestsReceived: number;
   languagesUsed: number;
   memberDays: number;
+  /**
+   * Compteurs de contenu du profil (phase 2 du bandeau de stats iOS —
+   * `ProfilePostsStatsBand`). `storiesCount` compte TOUTES les stories non
+   * supprimées de l'auteur, expirées comprises : l'auteur garde son archive,
+   * et la valeur dérivée côté client était structurellement 0
+   * (`GET /posts/user/:id` exclut le type STORY).
+   */
+  postsCount: number;
+  reelsCount: number;
+  storiesCount: number;
   languages: string[];
   achievements: Achievement[];
 };
@@ -54,6 +66,9 @@ export async function computeUserStats(
     friendRequestsReceived,
     languagesRaw,
     user,
+    postsCount,
+    reelsCount,
+    storiesCount,
   ] = await Promise.all([
     prisma.message.count({
       where: { sender: { userId }, deletedAt: null },
@@ -91,6 +106,19 @@ export async function computeUserStats(
       where: { id: userId },
       select: { createdAt: true },
     }),
+    // Compteurs de contenu — `deletedAt: NOT_DELETED` (champ ABSENT sur un
+    // post vivant : `null` brut ne matcherait rien sur Mongo, cf. softDelete.ts).
+    // Les stories comptent SANS filtre d'expiration : l'auteur garde l'accès à
+    // ses stories passées (archive), le compteur reflète tout ce qu'il a publié.
+    prisma.post.count({
+      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
+    }),
+    prisma.post.count({
+      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
+    }),
+    prisma.post.count({
+      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
+    }),
   ]);
 
   const languagesUsed = languagesRaw.length;
@@ -111,7 +139,7 @@ export async function computeUserStats(
     .filter((lang: string | null): lang is string => Boolean(lang));
   const achievements = computeAchievements(numericStats);
 
-  return { ...numericStats, languages, achievements };
+  return { ...numericStats, postsCount, reelsCount, storiesCount, languages, achievements };
 }
 
 export async function userStatsRoutes(fastify: FastifyInstance) {

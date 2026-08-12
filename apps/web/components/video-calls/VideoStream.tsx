@@ -99,7 +99,7 @@ export function VideoStream({
               </span>
             </div>
             <VideoOff className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-300">{participantName || t('calls.stream.participant')}</p>
+            <p className="text-sm text-gray-300">{participantName || t('stream.participant')}</p>
           </div>
         </div>
       )}
@@ -121,8 +121,8 @@ export function VideoStream({
                 <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
             </div>
-            <p className="text-lg text-white font-semibold">{t('calls.stream.disconnected')}</p>
-            <p className="text-sm text-gray-400 mt-1">{t('calls.stream.participantLeft').replace('{name}', participantName || t('calls.stream.participant'))}</p>
+            <p className="text-lg text-white font-semibold">{t('stream.disconnected')}</p>
+            <p className="text-sm text-gray-400 mt-1">{t('stream.participantLeft').replace('{name}', participantName || t('stream.participant'))}</p>
           </div>
         </div>
       )}
@@ -137,12 +137,12 @@ export function VideoStream({
           {/* Audio/Video Status Icons */}
           <div className="flex gap-1">
             {!isAudioEnabled && (
-              <div className="bg-red-600 p-1 rounded-full" title={t('calls.stream.micMuted')}>
+              <div className="bg-red-600 p-1 rounded-full" title={t('stream.micMuted')}>
                 <MicOff className="w-3 h-3 text-white" />
               </div>
             )}
             {!isVideoEnabled && (
-              <div className="bg-red-600 p-1 rounded-full" title={t('calls.stream.videoOff')}>
+              <div className="bg-red-600 p-1 rounded-full" title={t('stream.videoOff')}>
                 <VideoOff className="w-3 h-3 text-white" />
               </div>
             )}

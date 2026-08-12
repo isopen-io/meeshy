@@ -842,6 +842,44 @@ export function registerInteractionRoutes(
   });
 
   // POST /posts/:postId/repost
+  // POST /posts/:postId/republish — la MÊME story repart avec une date de
+  // publication fraîche (createdAt/expiresAt = now/now+TTL) et un engagement
+  // remis à zéro. Auteur uniquement, type STORY uniquement. Le broadcast
+  // `story:created` la re-fanne dans les trays des destinataires.
+  fastify.post('/posts/:postId/republish', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const { postId } = request.params;
+      const republished = await postService.republishStory(postId, authContext.registeredUser.id);
+      if (!republished) {
+        return sendNotFound(reply, 'Story not found', { code: 'POST_NOT_FOUND' });
+      }
+
+      const socialEvents = fastify.socialEvents;
+      if (socialEvents) {
+        socialEvents.broadcastStoryCreated(republished as unknown as Post, authContext.registeredUser.id)
+          .catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/republish]: broadcast story created failed'));
+      }
+
+      return sendSuccess(reply, republished);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return sendForbidden(reply, 'Only the author can republish a story', { code: 'FORBIDDEN' });
+      }
+      if (error instanceof Error && error.message === 'NOT_A_STORY') {
+        return sendBadRequest(reply, 'Only stories can be republished', { code: 'NOT_A_STORY' });
+      }
+      fastify.log.error(`[POST /posts/:postId/republish] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   fastify.post('/posts/:postId/repost', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {

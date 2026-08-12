@@ -135,7 +135,7 @@ export function DraggableParticipantOverlay({
         <div
           role="button"
           tabIndex={0}
-          aria-label={t('calls.stream.fullscreen')}
+          aria-label={t('stream.fullscreen')}
           className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/40"
           onClick={(e) => {
             e.stopPropagation();
@@ -148,7 +148,7 @@ export function DraggableParticipantOverlay({
               onDoubleClick?.();
             }
           }}
-          title={t('calls.stream.fullscreen')}
+          title={t('stream.fullscreen')}
         >
           <Maximize2 className="w-4 h-4 text-white" />
         </div>
@@ -156,7 +156,7 @@ export function DraggableParticipantOverlay({
 
       {/* Drag indicator */}
       <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/60 opacity-0 group-hover:opacity-100 transition-opacity">
-        {t('calls.stream.dragToMove')}
+        {t('stream.dragToMove')}
       </div>
     </div>
   );

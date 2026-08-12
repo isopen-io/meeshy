@@ -53,6 +53,9 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
     friendRequest: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    post: {
+      count: jest.fn<any>().mockResolvedValue(0),
+    },
     $runCommandRaw: jest.fn<any>().mockResolvedValue({ n: 0 }),
     ...prismaOverrides,
   } as any;

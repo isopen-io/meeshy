@@ -28,6 +28,9 @@ type StatsPrismaOverrides = {
    * `totalConversations` to prove the helper only counts active memberships.
    */
   totalConversationsIncludingInactive?: number;
+  postsCount?: number;
+  reelsCount?: number;
+  storiesCount?: number;
 };
 
 /**
@@ -45,6 +48,9 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
     createdAt = new Date(),
     resolvedId = 'resolved-user-id',
     totalConversationsIncludingInactive = totalConversations,
+    postsCount = 0,
+    reelsCount = 0,
+    storiesCount = 0,
   } = overrides;
 
   const prisma = {
@@ -72,6 +78,23 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
     },
     friendRequest: {
       count: jest.fn(() => Promise.resolve(friendRequestsReceived)),
+    },
+    post: {
+      // Compteurs de contenu du profil : le double discrimine par type et
+      // n'accepte que le filtre `deletedAt: { isSet: false }` (NOT_DELETED) —
+      // un `deletedAt: null` brut ne matcherait rien sur Mongo.
+      count: jest.fn((args: { where?: { type?: string; deletedAt?: unknown } }) => {
+        const deletedFilter = args?.where?.deletedAt as { isSet?: boolean } | undefined;
+        if (!deletedFilter || deletedFilter.isSet !== false) {
+          return Promise.reject(new Error('post.count must filter deletedAt with NOT_DELETED ({ isSet: false })'));
+        }
+        switch (args?.where?.type) {
+          case 'POST': return Promise.resolve(postsCount);
+          case 'REEL': return Promise.resolve(reelsCount);
+          case 'STORY': return Promise.resolve(storiesCount);
+          default: return Promise.resolve(0);
+        }
+      }),
     },
     user: {
       findUnique: jest.fn(() =>
@@ -118,11 +141,28 @@ describe('computeUserStats', () => {
         'languages',
         'languagesUsed',
         'memberDays',
+        'postsCount',
+        'reelsCount',
+        'storiesCount',
         'totalConversations',
         'totalMessages',
         'totalTranslations',
       ].sort()
     );
+  });
+
+  it('counts posts, reels and stories by type with the NOT_DELETED filter', async () => {
+    // Le compteur de stories dérivé côté client valait structurellement 0
+    // (GET /posts/user/:id exclut le type STORY) — c'est le backend qui doit
+    // fournir les totaux, stories expirées comprises (archive auteur).
+    const stats = await computeUserStats(
+      buildPrisma({ postsCount: 7, reelsCount: 3, storiesCount: 12 }),
+      'u1'
+    );
+
+    expect(stats.postsCount).toBe(7);
+    expect(stats.reelsCount).toBe(3);
+    expect(stats.storiesCount).toBe(12);
   });
 
   it('computes achievement unlock state and progress against thresholds', async () => {

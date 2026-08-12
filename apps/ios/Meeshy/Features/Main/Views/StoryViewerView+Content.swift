@@ -960,8 +960,13 @@ extension StoryViewerView {
         let currentUser = AuthManager.shared.currentUser
         let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let authorId: String = currentUser?.id ?? ""
+        // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
+        // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
+        // revient dans l'écho `comment:added` pour une réconciliation par id
+        // exacte (le twin-match par contenu ne tenait pas quand le serveur
+        // normalise le texte).
         let optimisticComment = FeedComment(
-            id: "temp_\(UUID().uuidString)",
+            id: ClientMutationId.generate(),
             author: authorName,
             authorId: authorId,
             authorUsername: currentUser?.username,
@@ -1019,7 +1024,8 @@ extension StoryViewerView {
                     parentId: parentId,
                     attachmentIds: attachmentIds,
                     mobileTranscription: pendingMedia?.mobileTranscription,
-                    location: location
+                    location: location,
+                    clientMutationId: tempCommentId
                 )
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -1031,11 +1037,13 @@ extension StoryViewerView {
                 // `comment:added` déjà câblé quand le rejeu aboutit.
                 //
                 // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
-                // porte ni `effectFlags` ni `attachmentIds` (lacune du schéma
-                // SDK). Un effet de flou ou un média joint à un commentaire
-                // envoyé hors-ligne est perdu au rejeu ; le TEXTE, lui, survit.
+                // porte pas `attachmentIds` (lacune du schéma SDK). Un média
+                // joint à un commentaire envoyé hors-ligne est perdu au rejeu ;
+                // le TEXTE et ses effets visuels, eux, survivent.
                 do {
-                    let cmid = ClientMutationId.generate()
+                    // MÊME cmid que la tentative REST : un POST abouti dont la
+                    // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
+                    let cmid = tempCommentId
                     try await OfflineQueue.shared.enqueue(
                         .createComment,
                         payload: CreateCommentPayload(
@@ -1043,7 +1051,8 @@ extension StoryViewerView {
                             postId: story.id,
                             parentCommentId: parentId,
                             content: text,
-                            location: location
+                            location: location,
+                            effectFlags: effectFlags
                         ),
                         conversationId: story.id
                     )
@@ -2093,6 +2102,7 @@ extension StoryViewerView {
                 content: c.content, timestamp: c.createdAt,
                 likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                 parentId: parentId,
+                effectFlags: c.effectFlags ?? 0,
                 originalLanguage: c.originalLanguage, translatedContent: translated,
                 currentUserReactions: c.currentUserReactions,
                 media: (c.media ?? []).map { $0.toFeedMedia() },
@@ -2200,6 +2210,7 @@ extension StoryViewerView {
 
         let result = Self.applyingStoryCommentAdded(
             comment: comment,
+            clientMutationId: data.clientMutationId,
             expandedThreads: storyCommentExpandedThreads,
             comments: storyComments,
             repliesMap: storyCommentRepliesMap
@@ -2207,6 +2218,69 @@ extension StoryViewerView {
         storyComments = result.comments
         storyCommentRepliesMap = result.repliesMap
         storyCommentCount = data.commentCount
+    }
+
+    /// Édition en temps réel (`comment:updated`) : remplace la ligne EN PLACE
+    /// dans l'overlay (racine ou réponse) — idempotent par id, aucun compteur
+    /// à toucher. Miroir de `PostDetailViewModel.applyCommentUpdated`.
+    func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
+        guard data.postId == currentStory?.id else { return }
+        let translated = PostDetailViewModel.resolveCommentTranslation(
+            translations: data.comment.translations,
+            originalLanguage: data.comment.originalLanguage,
+            preferredLanguages: resolvedViewerLanguageChain
+        )
+        let updated = FeedComment(
+            id: data.comment.id,
+            author: data.comment.author.name,
+            authorId: data.comment.author.id,
+            authorUsername: data.comment.author.username,
+            authorAvatarURL: data.comment.author.avatar,
+            content: data.comment.content,
+            timestamp: data.comment.createdAt,
+            likes: data.comment.likeCount ?? 0,
+            replies: data.comment.replyCount ?? 0,
+            parentId: data.comment.parentId,
+            effectFlags: data.comment.effectFlags ?? 0,
+            originalLanguage: data.comment.originalLanguage,
+            translatedContent: translated,
+            currentUserReactions: data.comment.currentUserReactions,
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
+            location: data.comment.location
+        )
+        if let parentId = updated.parentId,
+           var replies = storyCommentRepliesMap[parentId],
+           let idx = replies.firstIndex(where: { $0.id == updated.id }) {
+            replies[idx] = updated
+            storyCommentRepliesMap[parentId] = replies
+            return
+        }
+        if let idx = storyComments.firstIndex(where: { $0.id == updated.id }) {
+            storyComments[idx] = updated
+        }
+    }
+
+    /// Traduction de commentaire arrivée pendant la lecture : pose
+    /// `translatedContent` (racine ou réponse) si la langue est préférée et
+    /// que la ligne n'affiche pas déjà une traduction plus prioritaire —
+    /// règle unique du Prisme (`FeedViewModel.applyCommentTranslation`).
+    func applyStoryCommentTranslationUpdated(_ data: SocketCommentTranslationUpdatedData) {
+        guard data.postId == currentStory?.id else { return }
+        let langs = resolvedViewerLanguageChain
+        guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
+        let text = data.translation.text
+        if let idx = storyComments.firstIndex(where: { $0.id == data.commentId }),
+           storyComments[idx].translatedContent == nil {
+            storyComments[idx].translatedContent = text
+            return
+        }
+        for (key, var replies) in storyCommentRepliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
+                replies[idx].translatedContent = text
+                storyCommentRepliesMap[key] = replies
+                return
+            }
+        }
     }
 
     /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
@@ -2222,6 +2296,7 @@ extension StoryViewerView {
     /// equivalent case.
     nonisolated static func applyingStoryCommentAdded(
         comment: FeedComment,
+        clientMutationId: String? = nil,
         expandedThreads: Set<String>,
         comments: [FeedComment],
         repliesMap: [String: [FeedComment]]
@@ -2229,8 +2304,13 @@ extension StoryViewerView {
         var comments = comments
         var repliesMap = repliesMap
 
+        // Clé primaire : le cmid ré-émis par le gateway matche exactement l'id
+        // de la ligne optimiste. Repli : les lignes `temp_` héritées, matchées
+        // par auteur + contenu + parent (fragile quand le serveur normalise le
+        // texte — d'où le cmid).
         func isTwin(_ c: FeedComment) -> Bool {
-            c.id.hasPrefix("temp_")
+            if let clientMutationId, c.id == clientMutationId { return true }
+            return c.id.hasPrefix("temp_")
                 && c.authorId == comment.authorId
                 && c.content == comment.content
                 && c.parentId == comment.parentId
@@ -2270,26 +2350,36 @@ extension StoryViewerView {
 
         let commentId = event.commentId
         let serverCount = event.aggregation.count
-        let userHasReacted = event.aggregation.hasCurrentUser
 
-        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — peu
-        // importe que ce soit l'événement de l'utilisateur courant ou d'un
-        // autre, l'agrégat décrit l'état global.
-        if userHasReacted {
-            storyCommentLikedIds.insert(commentId)
-        } else {
-            storyCommentLikedIds.remove(commentId)
+        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — « mon
+        // cœur » dérive de `userIds` (la liste des User.id ayant réagi), PAS de
+        // `hasCurrentUser` : ce flag est calculé côté gateway relativement à
+        // l'ACTEUR de l'événement, donc il vaut true pour le like d'un TIERS et
+        // allumait le cœur de tous les destinataires du broadcast.
+        var resolvedCount = serverCount
+        if let myId = AuthManager.shared.currentUser?.id {
+            if event.aggregation.userIds.contains(myId) {
+                storyCommentLikedIds.insert(commentId)
+            } else if event.userId == myId {
+                // L'événement décrit MA propre action : agrégat autoritatif.
+                storyCommentLikedIds.remove(commentId)
+            } else if storyCommentLikedIds.contains(commentId) {
+                // Agrégat d'un TIERS pendant que MON like est encore en vol :
+                // il ne me connaît pas — préserver le cœur, compter le mien
+                // par-dessus (l'écho de mon propre like reconfirmera).
+                resolvedCount = serverCount + 1
+            }
         }
 
         // Reset du delta et propagation du count serveur dans la liste pour
         // que la prochaine reaction parte d'une baseline propre.
         storyCommentLikeDelta[commentId] = 0
         if let idx = storyComments.firstIndex(where: { $0.id == commentId }) {
-            storyComments[idx].likes = serverCount
+            storyComments[idx].likes = resolvedCount
         } else if let parentId = storyComments.first(where: { storyCommentRepliesMap[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
                   var replies = storyCommentRepliesMap[parentId],
                   let replyIdx = replies.firstIndex(where: { $0.id == commentId }) {
-            replies[replyIdx].likes = serverCount
+            replies[replyIdx].likes = resolvedCount
             storyCommentRepliesMap[parentId] = replies
         }
     }
@@ -2409,6 +2499,7 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
+                    effectFlags: c.effectFlags ?? 0,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
                     media: (c.media ?? []).map { $0.toFeedMedia() },

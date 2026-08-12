@@ -33,13 +33,13 @@ const renderOverlay = (onDoubleClick = jest.fn()) => {
 describe('DraggableParticipantOverlay — fullscreen control keyboard a11y', () => {
   it('exposes the fullscreen toggle as a focusable button with an accessible name', () => {
     renderOverlay();
-    const button = screen.getByRole('button', { name: 'calls.stream.fullscreen' });
+    const button = screen.getByRole('button', { name: 'stream.fullscreen' });
     expect(button).toHaveAttribute('tabIndex', '0');
   });
 
   it('activates fullscreen on Enter', () => {
     const { onDoubleClick } = renderOverlay();
-    fireEvent.keyDown(screen.getByRole('button', { name: 'calls.stream.fullscreen' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'stream.fullscreen' }), {
       key: 'Enter',
     });
     expect(onDoubleClick).toHaveBeenCalledTimes(1);
@@ -47,7 +47,7 @@ describe('DraggableParticipantOverlay — fullscreen control keyboard a11y', () 
 
   it('activates fullscreen on Space', () => {
     const { onDoubleClick } = renderOverlay();
-    fireEvent.keyDown(screen.getByRole('button', { name: 'calls.stream.fullscreen' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'stream.fullscreen' }), {
       key: ' ',
     });
     expect(onDoubleClick).toHaveBeenCalledTimes(1);
@@ -55,7 +55,7 @@ describe('DraggableParticipantOverlay — fullscreen control keyboard a11y', () 
 
   it('does not activate on unrelated keys', () => {
     const { onDoubleClick } = renderOverlay();
-    fireEvent.keyDown(screen.getByRole('button', { name: 'calls.stream.fullscreen' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'stream.fullscreen' }), {
       key: 'a',
     });
     expect(onDoubleClick).not.toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe('DraggableParticipantOverlay — fullscreen control keyboard a11y', () 
 
   it('still activates on click (pointer parity preserved)', () => {
     const { onDoubleClick } = renderOverlay();
-    fireEvent.click(screen.getByRole('button', { name: 'calls.stream.fullscreen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'stream.fullscreen' }));
     expect(onDoubleClick).toHaveBeenCalledTimes(1);
   });
 });

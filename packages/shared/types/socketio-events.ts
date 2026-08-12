@@ -65,6 +65,7 @@ import type {
   StatusReactedEventData,
   StatusUnreactedEventData,
   CommentAddedEventData,
+  CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
@@ -365,6 +366,7 @@ export const SERVER_EVENTS = {
 
   // --- Comments ---
   COMMENT_ADDED: 'comment:added',
+  COMMENT_UPDATED: 'comment:updated',
   COMMENT_DELETED: 'comment:deleted',
   COMMENT_LIKED: 'comment:liked',
   COMMENT_REACTION_ADDED: 'comment:reaction-added',
@@ -1563,6 +1565,7 @@ export interface ServerToClientEvents {
 
   // Comments
   [SERVER_EVENTS.COMMENT_ADDED]: (data: CommentAddedEventData) => void;
+  [SERVER_EVENTS.COMMENT_UPDATED]: (data: CommentUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_DELETED]: (data: CommentDeletedEventData) => void;
   [SERVER_EVENTS.COMMENT_LIKED]: (data: CommentLikedEventData) => void;
   [SERVER_EVENTS.COMMENT_REACTION_ADDED]: (data: CommentReactionUpdateEventData) => void;

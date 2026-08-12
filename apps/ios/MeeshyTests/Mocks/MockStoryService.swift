@@ -116,6 +116,28 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         try repostResult.get()
     }
 
+    var listMineResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(JSONStub.decode("""
+    {"success":true,"data":[],"pagination":null,"error":null}
+    """))
+    var listMineCallCount = 0
+    var lastListMineCursor: String?
+
+    func listMine(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        listMineCallCount += 1
+        lastListMineCursor = cursor
+        return try listMineResult.get()
+    }
+
+    var republishResult: Result<APIPost, Error> = .failure(NSError(domain: "MockStoryService", code: 0))
+    var republishCallCount = 0
+    var lastRepublishStoryId: String?
+
+    func republish(storyId: String) async throws -> APIPost {
+        republishCallCount += 1
+        lastRepublishStoryId = storyId
+        return try republishResult.get()
+    }
+
     func cachedPost(id: String) -> APIPost? {
         cachedPostCallCount += 1
         lastCachedPostId = id

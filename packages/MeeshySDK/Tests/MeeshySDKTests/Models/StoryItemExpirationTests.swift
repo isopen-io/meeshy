@@ -58,9 +58,10 @@ final class StoryItemExpirationTests: XCTestCase {
     }
 
     func test_defaultExpiryInterval_matchesServerStoryExpiryHours() {
-        // G6 — piège dormant fermé : 21 h partout (PostService.STORY_EXPIRY_HOURS,
-        // toStoryGroups fallback, pinDeadline, isExpired).
-        XCTAssertEqual(StoryItem.defaultExpiryInterval, 21 * 3600)
+        // G6 — piège dormant fermé : 20 h partout (ephemeralPosts.ts SSOT,
+        // toStoryGroups fallback, pinDeadline, isExpired). 20 h depuis
+        // 2026-08-12 (était 21 h).
+        XCTAssertEqual(StoryItem.defaultExpiryInterval, 20 * 3600)
     }
 
     func test_isExpired_withoutExpiresAt_over24h_returnsTrue() {

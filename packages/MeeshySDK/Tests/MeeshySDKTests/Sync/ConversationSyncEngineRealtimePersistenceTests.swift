@@ -234,11 +234,11 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         await engine.startSocketRelay()
 
         socket.reactionAdded.send(ReactionUpdateEvent(
-            messageId: "m-rx", conversationId: "c-closed", participantId: "p1",
+            messageId: "m-rx", conversationId: "c-closed", participantId: "p1", userId: nil,
             emoji: "🔥", action: "added", aggregation: nil, timestamp: nil
         ))
         socket.reactionRemoved.send(ReactionUpdateEvent(
-            messageId: "m-rx", conversationId: "c-closed", participantId: "p1",
+            messageId: "m-rx", conversationId: "c-closed", participantId: "p1", userId: nil,
             emoji: "🔥", action: "removed", aggregation: nil, timestamp: nil
         ))
 

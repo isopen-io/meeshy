@@ -66,7 +66,20 @@ struct CallPresentationLayer: ViewModifier {
     @ObservedObject private var callManager = CallManager.shared
 
     func body(content: Content) -> some View {
-        content
+        // Compression de frame, PAS augmentation de safe area : la bannière
+        // d'appel est le premier élément d'un VStack au-dessus du contenu,
+        // donc TOUTE l'app (NavigationStack comprise) voit sa frame commencer
+        // sous la bannière — comportement WhatsApp. L'ancien montage
+        // `.safeAreaInset(edge: .top)` ne traversait pas la frontière UIKit
+        // de la NavigationStack : les headers des navigationDestination
+        // (ConversationView, ConversationListView) restaient épinglés au
+        // sommet physique, cachés et inaccessibles derrière la bannière.
+        // Réduire la frame préserve aussi toutes les géométries internes des
+        // écrans (clearances, gradients, overlays) — seul le viewport bouge.
+        VStack(spacing: 0) {
+            FloatingCallPillView(callManager: callManager)
+            content
+        }
             // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
             // swiper le cover vers le bas ne raccroche pas. Le bouton hangup de
             // chaque UI passe explicitement par `callManager.endCall()`.
@@ -104,9 +117,6 @@ struct CallPresentationLayer: ViewModifier {
                         .padding(.top, MeeshySpacing.sm)
                         .allowsHitTesting(false)
                 }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                FloatingCallPillView(callManager: callManager)
             }
             .overlay {
                 CallBubbleView(callManager: callManager)
@@ -195,6 +205,14 @@ struct RootView: View {
     /// every parent view. The coordinator's `pendingRequest` mirrors the
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
+    /// Page « Mes stories » (en cours + passées) ouverte depuis la tuile
+    /// Stories du bandeau de stats du profil. Hébergée ICI (racine, toujours
+    /// montée) : la feuille de profil peut être présentée depuis n'importe
+    /// quel écran (feed, recherche, détail de post, viewer) — un listener dans
+    /// StoryTrayView n'existait que là où un tray était monté.
+    @State private var showMyStoriesFromProfile = false
+    @State private var myStoriesProfileFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
+    @State private var editingStorySessionFromProfile: StoryEditSession?
 
     /// U1 — namespace de la transition zoom tray→viewer (iOS 18+). Injecté
     /// dans l'environnement pour que la bulle du tray (source) et le cover
@@ -607,6 +625,38 @@ struct RootView: View {
         // story is on top. Read by `ConnectionBanner` via
         // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
         .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
+        // Tuile « Stories » du profil → page « Mes stories » (en cours et
+        // passées). Hôte UNIQUE de ce listener : la racine est montée quelle
+        // que soit la provenance de la feuille de profil.
+        .myStoriesSheet(
+            isPresented: $showMyStoriesFromProfile,
+            followUp: $myStoriesProfileFollowUp,
+            viewModel: storyViewModel,
+            userId: AuthManager.shared.currentUser?.id ?? "",
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationListViewModel: conversationViewModel,
+            perform: { action in
+                switch action {
+                case .openViewer(let postId):
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: AuthManager.shared.currentUser?.id ?? "",
+                        singleGroup: true, postId: postId))
+                case .createStory:
+                    storyViewModel.showStoryComposer = true
+                case .editStory(let story):
+                    editingStorySessionFromProfile = StoryEditSession(
+                        story: story,
+                        composer: StoryComposerViewModel(editing: story))
+                case .resumeDraft(let draftId):
+                    storyViewModel.openComposer(resumingDraftId: draftId)
+                }
+            }
+        )
+        .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
+            showMyStoriesFromProfile = true
+        }
         // Le titre de scène est ce qu'iPadOS affiche sous la fenêtre en App
         // Exposé / Stage Manager. `connectedScenes.first` le posait sur une
         // scène arbitraire : avec deux fenêtres Meeshy, la fenêtre au premier
@@ -743,9 +793,9 @@ struct RootView: View {
         // statut connexion + file d'attente hors-ligne), voir
         // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
         // Chaîné ICI, AVANT .modifier(CallPresentationLayer()), pour que le
-        // composite (contenu + SyncPill) descende comme un bloc quand la
-        // bannière d'appel réserve de l'espace (§B2 de la spec — l'ordre
-        // inverse ferait chevaucher les deux bannières).
+        // composite (contenu + SyncPill) soit comprimé comme un bloc sous la
+        // bannière d'appel (VStack de compression de frame, §B2 de la spec —
+        // l'ordre inverse ferait chevaucher les deux bannières).
         // conversationListViewModel/isStoryViewerPresenting passés
         // explicitement, jamais via @EnvironmentObject/@Environment dans ce
         // .overlay (§B1 de la spec — crash documenté 4× dans ce repo).

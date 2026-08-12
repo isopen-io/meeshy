@@ -36,7 +36,7 @@ jest.mock('../../../services/posts/SoundCaptureService', () => ({
 }));
 
 import { ExpiredStoriesCleanupService } from '../../../services/ExpiredStoriesCleanupService';
-import { EPHEMERAL_POST_TYPES } from '../../../services/posts/ephemeralPosts';
+import { SWEPT_POST_TYPES } from '../../../services/posts/ephemeralPosts';
 import { NOT_DELETED } from '../../../services/posts/softDelete';
 
 function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: string }[] } = {}) {
@@ -137,12 +137,13 @@ describe('ExpiredStoriesCleanupService', () => {
       // connecteur MongoDB, le filtre nul ne matche que les documents
       // présent-et-null, or `post.create` n'écrit jamais cette colonne. Cette
       // attente-là — le `null` — décrivait le défaut qui faisait que la passe
-      // n'appariait AUCUN post. Et le balayage porte les DEUX types éphémères,
-      // pas seulement `STORY` : les statuts n'étaient jamais balayés.
+      // n'appariait AUCUN post. Et le balayage ne porte plus que les types
+      // SWEPT (les STATUS) : les stories ne sont plus jamais détruites
+      // (archive auteur, 2026-08-12).
       expect(prisma.post.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            type: { in: [...EPHEMERAL_POST_TYPES] },
+            type: { in: [...SWEPT_POST_TYPES] },
             expiresAt: { lt: expect.any(Date) },
             deletedAt: NOT_DELETED,
           }),

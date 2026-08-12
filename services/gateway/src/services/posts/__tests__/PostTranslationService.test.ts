@@ -489,6 +489,51 @@ describe('PostTranslationService', () => {
     });
   });
 
+  describe('translateCommentOnDemand', () => {
+    const commentFixture = (overrides: Record<string, unknown> = {}) => ({
+      content: 'Hello world', originalLanguage: 'en', translations: null, postId: 'post-1', ...overrides,
+    });
+
+    it('sends a single-language ZMQ request with the comment routing keys', async () => {
+      const { service, zmqClient } = makeService({ postComment: commentFixture() });
+      await service.translateCommentOnDemand('comment-1', 'de');
+
+      expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
+      const [content, sourceLang, targets, messageId, context] =
+        (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+      expect(content).toBe('Hello world');
+      expect(sourceLang).toBe('en');
+      expect(targets).toEqual(['de']);
+      expect(messageId).toBe('comment:comment-1');
+      expect(context).toBe('comment_context:post-1');
+    });
+
+    it('skips when the translation is already cached — unless force replays it', async () => {
+      const cached = commentFixture({ translations: { de: { text: 'Hallo' } } });
+      const { service, zmqClient } = makeService({ postComment: cached });
+
+      await service.translateCommentOnDemand('comment-1', 'de');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+
+      await service.translateCommentOnDemand('comment-1', 'de', { force: true });
+      expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips when target equals source, URL-only content, or missing comment', async () => {
+      const { service, zmqClient } = makeService({ postComment: commentFixture() });
+      await service.translateCommentOnDemand('comment-1', 'en');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+
+      const urlOnly = makeService({ postComment: commentFixture({ content: 'https://example.com/x' }) });
+      await urlOnly.service.translateCommentOnDemand('comment-1', 'de');
+      expect(urlOnly.zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+
+      const missing = makeService({ postComment: null as unknown as Record<string, unknown> });
+      await missing.service.translateCommentOnDemand('comment-gone', 'de');
+      expect(missing.zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+  });
+
   describe('ZMQ event listener — translationCompleted', () => {
     const makeEvent = (messageId: string) => ({
       type: 'translation_completed' as const,

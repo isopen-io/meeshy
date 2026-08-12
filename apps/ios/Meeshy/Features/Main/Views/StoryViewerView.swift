@@ -786,6 +786,16 @@ struct StoryViewerView: View {
         .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { data in
             applyStoryCommentAdded(data)
         }
+        // Édition en temps réel : remplace la ligne EN PLACE dans l'overlay
+        // (contenu, effets, traductions régénérées) — idempotent par id.
+        .onReceive(SocialSocketManager.shared.commentUpdated.receive(on: DispatchQueue.main)) { data in
+            applyStoryCommentUpdated(data)
+        }
+        // Traduction de commentaire arrivée : pose `translatedContent` dans
+        // l'overlay si la langue est préférée (chaîne du Prisme du viewer).
+        .onReceive(SocialSocketManager.shared.commentTranslationUpdated.receive(on: DispatchQueue.main)) { data in
+            applyStoryCommentTranslationUpdated(data)
+        }
     }
 
     var body: some View {

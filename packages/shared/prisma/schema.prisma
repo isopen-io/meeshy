@@ -583,7 +583,7 @@ model Message {
   /// ID du post cité quand le message répond à un post (status/story/reel/post).
   /// Le SNAPSHOT figé des détails du post (mood emoji, contenu, date, vignette,
   /// compteurs like/commentaire/partage) est stocké dans `metadata.postReplyTo`
-  /// — il survit à l'expiration du post (STATUS 1h / STORY 21h) et à sa
+  /// — il survit à l'expiration du post (STATUS 1h / STORY 20h) et à sa
   /// suppression. La résolution live via cet id n'est qu'un fallback legacy.
   storyReplyToId              String?   @db.ObjectId
   /// ID of the original message if this is a forwarded message
@@ -2859,7 +2859,7 @@ model PushToken {
 enum PostType {
   POST   // Permanent — feed classique (texte, media, reposts, commentaires)
   REEL   // Permanent — feed immersif plein écran. Règle produit 2026-08-02 : composition QUALIFIANTE exigée (une vidéo, un audio, ou >= 2 images) — une image seule reste un POST. L'auteur peut forcer POST ; le gateway dégrade en POST toute création REEL non qualifiante (reelComposition.ts, miroir du SDK ReelComposition).
-  STORY  // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
+  STORY  // Masquée du public après 20h (jamais détruite — archive auteur) ; image/texte/vidéo/lien avec effets et audio
   STATUS // Éphémère 1h  — mood textuel avec audio optionnel
 }
 
@@ -2977,7 +2977,7 @@ model Post {
   // ============================================
   // EXPIRATION
   // ============================================
-  /// null = permanent (POST), auto-set: STORY = now+21h, STATUS = now+1h
+  /// null = permanent (POST), auto-set: STORY = now+20h, STATUS = now+1h
   expiresAt DateTime?
 
   // ============================================

@@ -1182,9 +1182,14 @@ public actor MessagePersistenceActor {
     /// on top of the optimistic row (keyed by the `currentUserId` sentinel),
     /// which made a single tap render as "2". `nil` (the default) keeps the
     /// legacy unbounded behaviour for the optimistic and rollback write paths.
+    /// `ownerUserId` (le `User.id` de l'auteur, porté par l'écho socket) étend
+    /// la dédup à la ligne optimiste keyée par la sentinelle `currentUserId` :
+    /// sans lui, l'écho (keyé `Participant.id`) ne matchait jamais la ligne
+    /// optimiste (keyée `User.id`) et une seule réaction s'affichait « 2 ».
     public func appendReaction(localId: String, reactionId: String,
                                 messageId: String, participantId: String?,
-                                emoji: String, maxCount: Int? = nil) throws {
+                                emoji: String, maxCount: Int? = nil,
+                                ownerUserId: String? = nil) throws {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
@@ -1199,7 +1204,12 @@ public actor MessagePersistenceActor {
                                           field: "reactionsJson", id: localId)
             } ?? []
             let alreadyExists = reactions.contains {
-                $0.emoji == emoji && $0.participantId == participantId
+                guard $0.emoji == emoji else { return false }
+                if $0.participantId == participantId { return true }
+                // Ligne optimiste keyée par le User.id de l'auteur : même
+                // identité humaine que l'écho serveur keyé Participant.id.
+                if let ownerUserId, $0.participantId == ownerUserId { return true }
+                return false
             }
             guard !alreadyExists else { return }
             if let cap = maxCount {
@@ -1223,7 +1233,11 @@ public actor MessagePersistenceActor {
 
     /// Remove a reaction from a persisted message, matched by emoji+participantId.
     /// The GRDB change triggers store observation so the view re-renders.
-    public func removeReaction(localId: String, emoji: String, participantId: String?) throws {
+    /// `ownerUserId` : même extension d'identité que `appendReaction` — l'écho
+    /// de suppression (keyé `Participant.id`) doit aussi effacer une ligne
+    /// optimiste keyée `User.id`, sinon un doublon historique devient collant.
+    public func removeReaction(localId: String, emoji: String, participantId: String?,
+                               ownerUserId: String? = nil) throws {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
@@ -1238,7 +1252,12 @@ public actor MessagePersistenceActor {
                                           field: "reactionsJson", id: localId)
             } ?? []
             let countBefore = reactions.count
-            reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
+            reactions.removeAll {
+                guard $0.emoji == emoji else { return false }
+                if $0.participantId == participantId { return true }
+                if let ownerUserId, $0.participantId == ownerUserId { return true }
+                return false
+            }
             guard reactions.count != countBefore else { return }
             record.reactionsJson = try JSONEncoder().encode(reactions)
             record.reactionCount = reactions.count

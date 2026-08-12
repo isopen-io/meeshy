@@ -191,6 +191,109 @@ export class PostCommentService {
     return { ...comment, media };
   }
 
+  /**
+   * Édition d'un commentaire par son AUTEUR : contenu et/ou effets visuels
+   * (`effectFlags` — lueur/pulse/etc., même bitfield que les messages).
+   * `isEdited` passe à true ; un contenu modifié PURGE `translations` (les
+   * traductions décrivent l'ANCIEN texte — les garder les servirait
+   * indéfiniment, et les gardes de cache empêcheraient toute régénération).
+   * La re-traduction est déclenchée par la route (fire-and-forget, comme au
+   * POST). Retourne le commentaire au même select que la création (+ media),
+   * `null` si introuvable, jette `FORBIDDEN` pour un non-auteur.
+   */
+  async updateComment(
+    commentId: string,
+    userId: string,
+    data: { content?: string; effectFlags?: number },
+  ) {
+    const existing = await this.prisma.postComment.findFirst({
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: { id: true, postId: true, authorId: true, content: true },
+    });
+    if (!existing) return null;
+    if (existing.authorId !== userId) throw new Error('FORBIDDEN');
+
+    // Contenu blanc : accepté SEULEMENT pour un commentaire à média (retrait
+    // de légende) — un commentaire texte ne s'édite pas vers du vide (le
+    // retrait passe par DELETE).
+    if (data.content !== undefined && data.content.trim() === '') {
+      const mediaCount = await this.prisma.postMedia.count({ where: { commentId } });
+      if (mediaCount === 0) throw new Error('EMPTY_CONTENT');
+    }
+
+    const contentChanged = data.content !== undefined && data.content !== existing.content;
+    // isEdited ne se pose QUE sur un vrai changement de texte : un ajustement
+    // d'effets visuels seul ne doit pas marquer le commentaire « modifié ».
+    const updateData: Prisma.PostCommentUpdateInput = {};
+    if (contentChanged) updateData.isEdited = true;
+    if (data.content !== undefined) updateData.content = data.content;
+    if (data.effectFlags !== undefined) updateData.effectFlags = data.effectFlags;
+    // Texte changé → les traductions ET la langue d'origine décrivaient
+    // l'ANCIEN contenu. On purge les deux ; le pipeline de retraduction
+    // redétecte la langue du nouveau texte (originalLanguage absent =
+    // auto-détection, même contrat qu'une création sans claim client).
+    if (contentChanged) {
+      updateData.translations = {};
+      updateData.originalLanguage = null;
+    }
+
+    const comment = await this.prisma.postComment.update({
+      where: { id: commentId },
+      data: updateData,
+      select: {
+        id: true,
+        content: true,
+        originalLanguage: true,
+        isEdited: true,
+        translations: true,
+        likeCount: true,
+        replyCount: true,
+        effectFlags: true,
+        parentId: true,
+        createdAt: true,
+        metadata: true,
+        author: { select: authorSelect },
+      },
+    });
+
+    const media = await this.prisma.postMedia.findMany({
+      where: { commentId },
+      ...commentMediaInclude,
+    });
+
+    return { ...comment, postId: existing.postId, contentChanged, media };
+  }
+
+  /// Relecture d'un commentaire au FORMAT de `updateComment` — pour le rejeu
+  /// idempotent du PATCH (MutationLog) : une ligne Prisma brute n'a ni
+  /// `author` ni `media`, et casserait le décodage côté client.
+  async getCommentAsUpdateResult(commentId: string) {
+    const comment = await this.prisma.postComment.findFirst({
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: {
+        id: true,
+        content: true,
+        originalLanguage: true,
+        isEdited: true,
+        translations: true,
+        likeCount: true,
+        replyCount: true,
+        effectFlags: true,
+        parentId: true,
+        createdAt: true,
+        metadata: true,
+        postId: true,
+        author: { select: authorSelect },
+      },
+    });
+    if (!comment) return null;
+    const media = await this.prisma.postMedia.findMany({
+      where: { commentId },
+      ...commentMediaInclude,
+    });
+    return { ...comment, contentChanged: false, media };
+  }
+
   async getComments(postId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 

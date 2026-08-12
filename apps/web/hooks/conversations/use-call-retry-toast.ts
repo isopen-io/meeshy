@@ -38,10 +38,10 @@ export function useCallRetryToast(
     // Consume only THIS conversation's offer: other conversations' offers
     // (map keyed by conversationId) must survive to be surfaced later.
     clearCallRetry(conversationId);
-    toast.error(t('calls.toasts.callFailed'), {
+    toast.error(t('toasts.callFailed'), {
       duration: 10_000,
       action: {
-        label: t('calls.toasts.retry'),
+        label: t('toasts.retry'),
         onClick: () => onRetryRef.current(type),
       },
     });

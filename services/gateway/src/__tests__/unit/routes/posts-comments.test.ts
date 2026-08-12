@@ -21,6 +21,10 @@ const mockAddComment = jest.fn<any>().mockResolvedValue({ id: 'comment-1', conte
 const mockLikeComment = jest.fn<any>().mockResolvedValue({ id: 'comment-1', authorId: '507f1f77bcf86cd799439011', likeCount: 1, reactionSummary: { '❤️': 1 } });
 const mockUnlikeComment = jest.fn<any>().mockResolvedValue({ id: 'comment-1', authorId: '507f1f77bcf86cd799439011', likeCount: 0, reactionSummary: {} });
 const mockDeleteComment = jest.fn<any>().mockResolvedValue({ success: true });
+const mockUpdateComment = jest.fn<any>().mockResolvedValue({
+  id: 'comment-1', postId: '507f1f77bcf86cd799439022', content: 'Edited', effectFlags: 65536,
+  contentChanged: true, originalLanguage: 'fr', media: [],
+});
 
 jest.mock('../../../services/PostCommentService', () => ({
   PostCommentService: jest.fn().mockImplementation(() => ({
@@ -30,12 +34,18 @@ jest.mock('../../../services/PostCommentService', () => ({
     likeComment: (...a: any[]) => mockLikeComment(...a),
     unlikeComment: (...a: any[]) => mockUnlikeComment(...a),
     deleteComment: (...a: any[]) => mockDeleteComment(...a),
+    updateComment: (...a: any[]) => mockUpdateComment(...a),
   })),
 }));
 
+const mockTranslateCommentOnDemand = jest.fn<any>().mockResolvedValue(undefined);
+
 jest.mock('../../../services/posts/PostTranslationService', () => ({
   PostTranslationService: {
-    shared: { translateComment: jest.fn<any>().mockResolvedValue(undefined) },
+    shared: {
+      translateComment: jest.fn<any>().mockResolvedValue(undefined),
+      translateCommentOnDemand: (...a: any[]) => mockTranslateCommentOnDemand(...a),
+    },
   },
 }));
 
@@ -73,6 +83,14 @@ jest.mock('../../../routes/posts/types', () => ({
       return { success: true, data: { content: data?.content ?? 'Test comment', ...data } };
     },
   },
+  UpdateCommentSchema: {
+    safeParse: (data: any) => {
+      if (data?.invalid || (data?.content === undefined && data?.effectFlags === undefined)) {
+        return { success: false, error: {} };
+      }
+      return { success: true, data };
+    },
+  },
   FeedQuerySchema: {
     safeParse: (data: any) => ({
       success: true,
@@ -99,7 +117,7 @@ const COMMENT_ID = '507f1f77bcf86cd799439033';
 
 // ─── buildApp ────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, withCmidDecoration = false } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -117,6 +135,7 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
 
   app.decorate('socialEvents', {
     broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastCommentUpdated: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentDeleted: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentLiked: jest.fn<any>().mockReturnValue(undefined),
   } as any);
@@ -138,6 +157,17 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
     },
   };
   app.decorate('prisma', prisma);
+
+  if (withCmidDecoration) {
+    // Miroir du middleware `clientMutationId` (non enregistré dans ce
+    // harnais) : décore la requête depuis le header, comme en production.
+    app.addHook('onRequest', async (req) => {
+      const raw = req.headers['x-client-mutation-id'];
+      if (typeof raw === 'string' && raw.length > 0) {
+        (req as any).clientMutationId = raw;
+      }
+    });
+  }
 
   registerCommentRoutes(app, prisma as any, requiredAuth);
   await app.ready();
@@ -258,6 +288,51 @@ describe('POST /posts/:postId/comments — success', () => {
   });
 });
 
+describe('POST /posts/:postId/comments — broadcast carries clientMutationId', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp({ withCmidDecoration: true });
+    // La room de broadcast n'est résolue que si le post existe.
+    ((app as any).prisma.post.findUnique as jest.Mock<any>).mockResolvedValue({
+      authorId: 'author-1',
+      commentCount: 4,
+      type: 'post',
+      content: 'p',
+      createdAt: new Date(),
+      expiresAt: null,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('echoes the request cmid in the comment:added payload so the sender can reconcile its optimistic row', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      headers: { 'x-client-mutation-id': 'cmid-test-1234' },
+      payload: { content: 'Test comment' },
+    });
+    expect(res.statusCode).toBe(201);
+    const broadcast = (app as any).socialEvents.broadcastCommentAdded as jest.Mock<any>;
+    expect(broadcast).toHaveBeenCalledTimes(1);
+    expect((broadcast.mock.calls[0][0] as any).clientMutationId).toBe('cmid-test-1234');
+  });
+
+  it('omits clientMutationId from the payload when the request carries none', async () => {
+    const broadcast = (app as any).socialEvents.broadcastCommentAdded as jest.Mock<any>;
+    broadcast.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Test comment' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(broadcast).toHaveBeenCalledTimes(1);
+    expect((broadcast.mock.calls[0][0] as any).clientMutationId).toBeUndefined();
+  });
+});
+
 describe('POST /posts/:postId/comments — post not found', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });
@@ -327,6 +402,139 @@ describe('POST /posts/:postId/comments — media not available', () => {
 });
 
 // ─── POST /posts/:postId/comments/:commentId/like ────────────────────────────
+
+// ─── POST /posts/:postId/comments/:commentId/translate ───────────────────────
+
+describe('POST /posts/:postId/comments/:commentId/translate — on-demand', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 and fires the on-demand pipeline for the requested language', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/translate`,
+      payload: { targetLanguage: 'de' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.requested).toBe(true);
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'de', { force: false });
+  });
+
+  it('forwards force=true for the « Retraduire » path', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/translate`,
+      payload: { targetLanguage: 'es', force: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'es', { force: true });
+  });
+
+  it('returns 400 for a malformed language', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/translate`,
+      payload: { targetLanguage: 'x' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ─── PATCH /posts/:postId/comments/:commentId ────────────────────────────────
+
+describe('PATCH /posts/:postId/comments/:commentId — edit own comment', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp();
+    ((app as any).prisma.post.findUnique as jest.Mock<any>).mockResolvedValue({
+      authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 and broadcasts comment:updated with the full comment', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'Edited', effectFlags: 65536 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    const broadcast = (app as any).socialEvents.broadcastCommentUpdated as jest.Mock<any>;
+    expect(broadcast).toHaveBeenCalledTimes(1);
+    const payload = broadcast.mock.calls[0][0] as any;
+    expect(payload.postId).toBe(POST_ID);
+    expect(payload.comment.content).toBe('Edited');
+    // Visibilité passée BRUTE du post (jamais un défaut permissif).
+    expect(broadcast.mock.calls[0][2]).toBe('PUBLIC');
+  });
+
+  it('returns 400 when nothing is updated', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 EMPTY_CONTENT when a text comment is edited to blank', async () => {
+    mockUpdateComment.mockRejectedValueOnce(new Error('EMPTY_CONTENT'));
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('EMPTY_CONTENT');
+  });
+
+  it('real UpdateCommentSchema borne effectFlags à Int32 (Prisma Int + iOS UInt32)', () => {
+    // Le schéma est mocké pour les tests de route — la borne se vérifie sur le vrai.
+    const { UpdateCommentSchema } = jest.requireActual('../../../routes/posts/types') as
+      typeof import('../../../routes/posts/types');
+    expect(UpdateCommentSchema.safeParse({ effectFlags: 0x80000000 }).success).toBe(false);
+    expect(UpdateCommentSchema.safeParse({ effectFlags: -1 }).success).toBe(false);
+    expect(UpdateCommentSchema.safeParse({ effectFlags: 0x7FFFFFFF }).success).toBe(true);
+    expect(UpdateCommentSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('returns 403 when the caller is not the author', async () => {
+    mockUpdateComment.mockRejectedValueOnce(new Error('FORBIDDEN'));
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'Pirate' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 404 when the comment does not exist', async () => {
+    mockUpdateComment.mockResolvedValueOnce(null);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'x' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('PATCH /posts/:postId/comments/:commentId — not authenticated', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp({ authenticated: false }); });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 401', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'x' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
 
 describe('POST /posts/:postId/comments/:commentId/like — not authenticated', () => {
   let app: FastifyInstance;

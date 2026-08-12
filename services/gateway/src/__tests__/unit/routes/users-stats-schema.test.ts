@@ -36,6 +36,17 @@ function buildPrisma(): PrismaClient {
     friendRequest: {
       count: jest.fn(() => Promise.resolve(50)),
     },
+    post: {
+      // Discrimine par type : les 3 compteurs de contenu du bandeau profil.
+      count: jest.fn((args: { where?: { type?: string } }) => {
+        switch (args?.where?.type) {
+          case 'POST': return Promise.resolve(21);
+          case 'REEL': return Promise.resolve(8);
+          case 'STORY': return Promise.resolve(13);
+          default: return Promise.resolve(0);
+        }
+      }),
+    },
     $runCommandRaw: jest.fn(() => Promise.resolve({ n: 100 })),
   };
   return prisma as unknown as PrismaClient;
@@ -78,5 +89,10 @@ describe('GET /users/:userId/stats — response schema does not strip stat field
     expect(typeof data.memberDays).toBe('number');
     expect(Array.isArray(data.achievements)).toBe(true);
     expect((data.achievements as unknown[]).length).toBe(6);
+    // Compteurs de contenu (bandeau profil iOS) — l'anti-strip Fastify doit
+    // aussi les laisser passer (additionalProperties: true).
+    expect(data.postsCount).toBe(21);
+    expect(data.reelsCount).toBe(8);
+    expect(data.storiesCount).toBe(13);
   });
 });

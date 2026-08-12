@@ -69,30 +69,30 @@ export function ConnectionQualityBadge({
           className="bg-gray-900 border-gray-700 text-white p-4 max-w-xs"
         >
           <div className="space-y-2">
-            <div className="font-semibold mb-2">{t('calls.quality.details')}</div>
+            <div className="font-semibold mb-2">{t('quality.details')}</div>
 
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="text-gray-400">{t('calls.quality.quality')}</div>
+              <div className="text-gray-400">{t('quality.quality')}</div>
               <div className={qualityColor}>{qualityLabel}</div>
 
-              <div className="text-gray-400">{t('calls.quality.packetLoss')}</div>
+              <div className="text-gray-400">{t('quality.packetLoss')}</div>
               <div>{stats.packetLoss.toFixed(2)}%</div>
 
-              <div className="text-gray-400">{t('calls.quality.latency')}</div>
+              <div className="text-gray-400">{t('quality.latency')}</div>
               <div>{stats.rtt}ms</div>
 
-              <div className="text-gray-400">{t('calls.quality.jitter')}</div>
+              <div className="text-gray-400">{t('quality.jitter')}</div>
               <div>{stats.jitter.toFixed(2)}ms</div>
 
-              <div className="text-gray-400">{t('calls.quality.audioBitrate')}</div>
+              <div className="text-gray-400">{t('quality.audioBitrate')}</div>
               <div>{stats.bitrate.audio} kbps</div>
 
-              <div className="text-gray-400">{t('calls.quality.videoBitrate')}</div>
+              <div className="text-gray-400">{t('quality.videoBitrate')}</div>
               <div>{stats.bitrate.video} kbps</div>
             </div>
 
             <div className="pt-2 mt-2 border-t border-gray-700 text-xs text-gray-400">
-              {t('calls.quality.updated')} {new Date(stats.timestamp).toLocaleTimeString(locale)}
+              {t('quality.updated')} {new Date(stats.timestamp).toLocaleTimeString(locale)}
             </div>
           </div>
         </TooltipContent>

@@ -740,6 +740,227 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.post?.commentCount, initialCount)
     }
 
+    // MARK: - comment:added echo reconciliation (anti-doublon)
+
+    /// L'écho de NOTRE propre envoi porte le cmid ré-émis par le gateway : il
+    /// doit REMPLACER la ligne optimiste (id local = cmid) au lieu d'en insérer
+    /// une seconde sous l'id serveur — c'était le doublon visible « pendant un
+    /// temps » après chaque publication de commentaire depuis le détail.
+    func test_commentAdded_withCmid_replacesOptimisticTopLevelRow() async {
+        let queue = MockOfflineQueue()
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, offlineQueue: queue, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        await sut.sendComment("Hello")
+        guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
+            return XCTFail("no createComment enqueue")
+        }
+        XCTAssertEqual(sut.comments.count, 1, "ligne optimiste posée")
+
+        let echo: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","clientMutationId":"\(cmid)","comment":{"id":"srv-1","content":"Hello","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"me","username":"me"}},"commentCount":1}
+        """)
+        socket.commentAdded.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.count, 1, "l'écho remplace la ligne optimiste — jamais de doublon")
+        XCTAssertEqual(sut.comments.first?.id, "srv-1")
+    }
+
+    /// Même contrat pour une réponse : réconciliation en place dans le fil ET
+    /// pas de second incrément du compteur du parent (déjà bumpé à l'insertion
+    /// optimiste de sendReply).
+    func test_commentAdded_withCmid_replacesOptimisticReply_withoutDoubleCountingParent() async {
+        let queue = MockOfflineQueue()
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, offlineQueue: queue, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+        guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
+            return XCTFail("no createComment enqueue")
+        }
+        XCTAssertEqual(sut.repliesMap["c1"]?.count, 1, "réponse optimiste posée")
+        XCTAssertEqual(sut.comments.first?.replies, 1, "compteur du parent bumpé par l'optimiste")
+
+        let echo: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","clientMutationId":"\(cmid)","comment":{"id":"srv-r1","content":"Coucou","parentId":"c1","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"me","username":"me"}},"commentCount":2}
+        """)
+        socket.commentAdded.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.count, 1, "l'écho remplace la réponse optimiste — pas de doublon")
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.id, "srv-r1")
+        XCTAssertEqual(sut.comments.first?.replies, 1,
+                       "le compteur du parent ne doit PAS être ré-incrémenté par l'écho de notre propre réponse")
+    }
+
+    /// Sans cmid (client legacy), le commentaire d'un TIERS s'insère
+    /// normalement — la réconciliation ne doit pas gober les vrais nouveaux.
+    func test_commentAdded_withoutCmid_insertsThirdPartyComment() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        let echo: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","comment":{"id":"c-other","content":"Salut","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"other","username":"other"}},"commentCount":1}
+        """)
+        socket.commentAdded.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.count, 1)
+        XCTAssertEqual(sut.comments.first?.id, "c-other")
+    }
+
+    // MARK: - Édition de commentaire (PATCH + écho comment:updated)
+
+    /// L'édition remplace la ligne EN PLACE (contenu + effets) et PATCHe le
+    /// serveur ; le contenu modifié invalide la traduction locale (le pipeline
+    /// régénère, l'écho comment:translation-updated re-remplira).
+    func test_updateComment_replacesRowInPlace_andPatchesServer() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .success(Self.stubComment)
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant",
+                                   translatedContent: "Before", currentUserReactions: nil)
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 65536)
+
+        XCTAssertEqual(sut.comments.count, 1, "édition = remplacement, jamais d'insertion")
+        XCTAssertEqual(sut.comments.first?.content, "Après")
+        XCTAssertEqual(sut.comments.first?.effectFlags, 65536, "les effets visuels éditent avec le texte")
+        XCTAssertNil(sut.comments.first?.translatedContent,
+                     "la traduction décrivait l'ANCIEN texte — invalidée localement")
+        XCTAssertEqual(mock.updateCommentCallCount, 1)
+        XCTAssertEqual(mock.lastUpdateCommentContent, "Après")
+        XCTAssertEqual(mock.lastUpdateCommentEffectFlags, 65536)
+    }
+
+    func test_updateComment_serverRejects_rollsBackTheRow() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .failure(NSError(domain: "test", code: 403))
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 0)
+
+        XCTAssertEqual(sut.comments.first?.content, "Avant", "refus serveur → rollback complet")
+    }
+
+    /// L'écho `comment:updated` d'un AUTRE appareil remplace la ligne en place.
+    func test_commentUpdatedEcho_replacesRowInPlace() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Avant")]
+
+        let echo: SocketCommentUpdatedData = JSONStub.decode("""
+        {"postId":"p1","comment":{"id":"c1","content":"Après","effectFlags":131072,"createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"alice"}}}
+        """)
+        socket.commentUpdated.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.count, 1)
+        XCTAssertEqual(sut.comments.first?.content, "Après")
+        XCTAssertEqual(sut.comments.first?.effectFlags, 131072,
+                       "les effets (pulse) voyagent dans l'écho et rendent dans toutes les vues")
+    }
+
+    // MARK: - Réactions de commentaire : agrégat absolu (anti double-compte)
+
+    /// L'événement cœur porte l'agrégat ABSOLU : la réconciliation pose
+    /// `likes = count` et PURGE le delta optimiste. L'ancien ±1 laissait le
+    /// delta de sa propre réaction empilé pour toute la session → dès que la
+    /// base était rafraîchie, `likes + delta` comptait DOUBLE.
+    func test_commentReactionAdded_appliesAbsoluteCountAndPurgesDelta() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 2)]
+        sut.commentLikeDelta["c1"] = 1
+
+        let event: SocketCommentReactionUpdateEvent = JSONStub.decode("""
+        {"commentId":"c1","postId":"p1","userId":"me","emoji":"\u{2764}\u{FE0F}","action":"added","aggregation":{"emoji":"\u{2764}\u{FE0F}","count":3,"userIds":["me","u2","u3"],"hasCurrentUser":true}}
+        """)
+        socket.commentReactionAdded.send(event)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.first?.likes, 3, "le count absolu de l'agrégat fait autorité")
+        XCTAssertNil(sut.commentLikeDelta["c1"], "le delta optimiste est purgé — likes + delta ne compte plus double")
+    }
+
+    func test_commentReactionAggregate_updatesReplyRowInsideRepliesMap() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)]
+        sut.repliesMap = ["c1": [FeedComment(id: "r1", author: "bob", authorId: "a2", content: "Reply", likes: 0, parentId: "c1")]]
+        sut.commentLikeDelta["r1"] = 1
+
+        sut.applyCommentReactionAggregate(commentId: "r1", count: 5, reactorUserIds: ["u9"], actorUserId: "u9")
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.likes, 5)
+        XCTAssertNil(sut.commentLikeDelta["r1"])
+    }
+
+    /// L'agrégat d'un TIERS ne connaît pas un like local encore en vol : il ne
+    /// doit ni éteindre le cœur ni faire régresser le compte affiché. Seul un
+    /// événement dont JE suis l'acteur fait autorité pour retirer mon cœur.
+    func test_commentReactionAggregate_thirdPartyEvent_preservesInFlightOwnHeart() async throws {
+        // Le résolveur lit AuthManager.shared (non injectable ici) : sans
+        // session, la branche « mon cœur » est inerte — rien à vérifier.
+        guard let myId = AuthManager.shared.currentUser?.id, myId != "u9" else {
+            throw XCTSkip("nécessite une session utilisateur courante")
+        }
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 1)]
+        sut.commentLikedIds.insert("c1")
+
+        // Tiers "u9" like pendant que MON like n'est pas encore persisté
+        // (absent de userIds) : cœur préservé, mon like compté par-dessus.
+        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: "u9")
+        XCTAssertTrue(sut.commentLikedIds.contains("c1"), "le cœur en vol n'est pas éteint par l'agrégat d'un tiers")
+        XCTAssertEqual(sut.comments.first?.likes, 2, "le like en vol est compté par-dessus l'agrégat du tiers")
+
+        // Événement dont JE suis l'acteur (unlike depuis un autre appareil) :
+        // l'agrégat fait autorité et retire le cœur.
+        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: myId)
+        XCTAssertFalse(sut.commentLikedIds.contains("c1"), "mon propre événement fait autorité pour mon cœur")
+        XCTAssertEqual(sut.comments.first?.likes, 1)
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {

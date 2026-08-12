@@ -4,6 +4,7 @@ import {
   EPHEMERAL_AUTHOR_ARCHIVE_MS,
   EPHEMERAL_POST_TYPES,
   EPHEMERAL_POST_TTL_HOURS,
+  SWEPT_POST_TYPES,
   ephemeralExpiresAt,
 } from '../posts/ephemeralPosts';
 import { NOT_DELETED } from '../posts/softDelete';
@@ -105,55 +106,67 @@ describe('ExpiredStoriesCleanupService — D1 : un post vivant a son deletedAt A
 });
 
 /**
- * D2 — le balayage ne connaissait qu'un des deux types éphémères.
+ * D2 (révisé 2026-08-12) — les stories ne sont PLUS JAMAIS balayées : leur
+ * échéance ne fait que les masquer du public, l'auteur garde son archive pour
+ * toujours (« Mes stories », republication, rechargement dans le composer).
+ * Le balayage ne porte plus que sur `SWEPT_POST_TYPES` (les STATUS).
  */
-describe('ExpiredStoriesCleanupService — D2 : tout contenu éphémère est balayé, pas seulement les stories', () => {
-  it('test_softDeletePass_targetsEveryEphemeralType', async () => {
+describe('ExpiredStoriesCleanupService — D2 : seuls les types SWEPT sont balayés, jamais les stories', () => {
+  it('test_softDeletePass_neverTargetsStories', async () => {
     const prisma = buildPrisma();
     await new ExpiredStoriesCleanupService(prisma).cleanup();
 
-    expect(softDeleteWhere(prisma).type).toEqual({ in: expect.arrayContaining(['STORY', 'STATUS']) });
+    const asked = (softDeleteWhere(prisma).type as { in: string[] }).in;
+    expect(asked).not.toContain('STORY');
+    expect(asked).toContain('STATUS');
   });
 
-  it('test_hardDeletePass_targetsEveryEphemeralType', async () => {
+  it('test_hardDeletePass_neverTargetsStories', async () => {
     const prisma = buildPrisma();
     await new ExpiredStoriesCleanupService(prisma).cleanup();
 
-    expect(eligibleQuery(prisma).where.type).toEqual({ in: expect.arrayContaining(['STORY', 'STATUS']) });
+    const asked = (eligibleQuery(prisma).where.type as { in: string[] }).in;
+    expect(asked).not.toContain('STORY');
+    expect(asked).toContain('STATUS');
   });
 
   /**
-   * Le témoin qui compte vraiment : ce n'est pas « STATUS est dans la liste »,
-   * c'est « la liste est CELLE de la table des durées ». Un troisième type
-   * éphémère ajouté à la table sans toucher au balayage doit faire rougir ici.
+   * Le témoin qui compte : la liste balayée est CELLE de `SWEPT_POST_TYPES`,
+   * une liste EXPLICITE et distincte de la table des durées — la dériver de la
+   * table réintroduirait mécaniquement STORY dans la destruction.
    */
-  it('test_bothPasses_deriveTheirTypesFromTheTtlTable', async () => {
+  it('test_bothPasses_useTheExplicitSweptList_notTheTtlTable', async () => {
     const prisma = buildPrisma();
     await new ExpiredStoriesCleanupService(prisma).cleanup();
 
-    const expected = { in: [...EPHEMERAL_POST_TYPES] };
+    const expected = { in: [...SWEPT_POST_TYPES] };
     expect(softDeleteWhere(prisma).type).toEqual(expected);
     expect(eligibleQuery(prisma).where.type).toEqual(expected);
+    expect([...SWEPT_POST_TYPES]).not.toContain('STORY');
   });
 
-  it('test_expiredStatus_isDestroyedAlongsideTheStory_throughTheSameEffects', async () => {
+  it('test_expiredStory_survivesEveryPass_whileStatusIsDestroyed', async () => {
     const prisma = buildPrisma();
     const result = await new ExpiredStoriesCleanupService(prisma).cleanup();
 
-    // Le statut périmé n'est pas seulement compté : il traverse les MÊMES
-    // effets que la story — purge des médias, des commentaires, des usages de
-    // sons, retrait des notifications — puisqu'il entre dans le même lot.
+    // Le statut périmé traverse la chaîne de destruction ; la story périmée
+    // n'entre JAMAIS dans le lot — c'est l'archive de son auteur.
     expect(prisma.post.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ['story-1', 'status-1'] } },
+      where: { id: { in: ['status-1'] } },
     });
-    expect(result.hardDeleted).toBe(2);
-    expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          OR: expect.arrayContaining([{ postId: { in: ['story-1', 'status-1'] } }]),
-        }),
-      }),
-    );
+    expect(result.hardDeleted).toBe(1);
+  });
+
+  it('test_expiredStory_survivesManyPasses', async () => {
+    const prisma = buildPrisma();
+    const service = new ExpiredStoriesCleanupService(prisma);
+    for (let i = 0; i < 10; i += 1) {
+      await service.cleanup();
+    }
+
+    const destroyed = (prisma.post.deleteMany as jest.Mock).mock.calls
+      .flatMap((call: any[]) => call[0]?.where?.id?.in ?? []);
+    expect(destroyed).not.toContain('story-1');
   });
 });
 
@@ -235,8 +248,19 @@ describe('ephemeralPosts — la table des durées gouverne les deux chemins', ()
   it('test_ephemeralExpiresAt_matchesTheDocumentedSchemaValues', () => {
     const from = new Date('2026-08-10T00:00:00.000Z');
 
-    expect(ephemeralExpiresAt('STORY', from)).toEqual(new Date('2026-08-10T21:00:00.000Z'));
+    // 20 h de visibilité publique depuis 2026-08-12 (était 21 h).
+    expect(ephemeralExpiresAt('STORY', from)).toEqual(new Date('2026-08-10T20:00:00.000Z'));
     expect(ephemeralExpiresAt('STATUS', from)).toEqual(new Date('2026-08-10T01:00:00.000Z'));
+  });
+
+  it('test_sweptTypes_areAnExplicitSubset_thatExcludesStories', () => {
+    // Chaque type balayé doit avoir une échéance… mais l'inverse est FAUX
+    // depuis que les stories sont archivées à vie : la liste balayée est un
+    // sous-ensemble explicite, jamais la table entière.
+    for (const swept of SWEPT_POST_TYPES) {
+      expect(EPHEMERAL_POST_TYPES).toContain(swept);
+    }
+    expect([...SWEPT_POST_TYPES]).not.toContain('STORY');
   });
 
   it('test_ephemeralExpiresAt_returnsUndefinedForPermanentTypes', () => {

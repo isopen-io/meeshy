@@ -2151,11 +2151,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// rendered).
     /// G6 — durée de vie d'une story SANS `expiresAt` explicite : alignée sur
     /// la constante serveur `STORY_EXPIRY_HOURS = 21` (PostService.ts) et sur
-    /// le fallback client de `toStoryGroups`/`pinDeadline` (createdAt + 21 h).
+    /// le fallback client de `toStoryGroups`/`pinDeadline` (createdAt + 20 h).
     /// L'ancien défaut interne de 24 h était un piège dormant : sans effet
     /// tant que le serveur pose toujours `expiresAt`, mais une story au
-    /// fallback aurait survécu 3 h de plus que sa vie serveur.
-    public static let defaultExpiryInterval: TimeInterval = 21 * 60 * 60
+    /// fallback aurait survécu plus longtemps que sa vie serveur.
+    /// 20 h depuis 2026-08-12 (était 21 h) — SSOT serveur :
+    /// `services/gateway/src/services/posts/ephemeralPosts.ts`.
+    public static let defaultExpiryInterval: TimeInterval = 20 * 60 * 60
 
     public func isExpired(at now: Date = Date()) -> Bool {
         if let explicit = expiresAt {
