@@ -58,8 +58,10 @@ Résultats : **41/41 branches des lots réconciliées et poussées** (23 iOS + 1
 
 ## CI et PRs
 
-- **PR #2891 ouverte** : `claude/ios-a11y-reintegration-2026-08-12` → main. Branche d'intégration des 23 branches iOS des lots (57 fichiers, +2610/−28, iOS uniquement). Sert de véhicule CI : un seul run du gate compile-only macos-15 valide les 23 branches. Si mergée, les 23 branches sources deviennent purgeables.
-- **PR #2888** (admin avatar) et **PR #2889** (déblocage suites gateway) : mises à jour par nos pushes, CI relancée (#2889 : run 31597341002 sur `e4c0048bf`).
+- **PR #2891 ouverte** : `claude/ios-a11y-reintegration-2026-08-12` → main. Branche d'intégration des 23 branches iOS des lots (57 fichiers, +2610/−28, iOS uniquement). Véhicule CI : **gate compile-only macos-15 VERT** (run 31598392045) — les 23 branches compilent sur macOS. Le job `Test gateway` du workflow CI est rouge mais préexistant sur main (les 8 suites que réaligne la #2889) — commenté sur la PR, rafraîchissement prévu après merge de #2889. Si #2891 est mergée, les 23 branches sources deviennent purgeables.
+- **PR #2889** (`keen-hamilton-wqdzsm`, débloque les 8 suites gateway de main) : mise à jour par notre push, **CI verte** sur `e4c0048bf` — prête à merger.
+- **PR #2888** (admin avatar) : mise à jour par notre push (main mergé + 432 tests ciblés verts en local).
+- **PR #2897** : cette branche de rapport (`claude/worktrees-branches-cleanup-ddo2ll`).
 
 ## Backlog restant (227 branches CONFLICT_CODE)
 
