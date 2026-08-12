@@ -65,6 +65,10 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         return result
     }
 
+    private func occurrences(of needle: String, in source: String) -> Int {
+        source.components(separatedBy: needle).count - 1
+    }
+
     private func source(of fileName: String, file: StaticString = #filePath, line: UInt = #line) throws -> String {
         // #filePath → .../apps/ios/MeeshyTests/Unit/Views/<ce fichier>
         let appRoot = URL(fileURLWithPath: "\(#filePath)")
@@ -114,8 +118,12 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
 
     func test_iPadRootView_mountsConnectionBannerOnce_routingTapsToHandleSyncPillTap() throws {
         let code = try source(of: "iPadRootView+Sheets.swift")
+        XCTAssertEqual(
+            occurrences(of: "ConnectionBanner(", in: code), 1,
+            "iPadRootView+Sheets.swift doit monter le SyncPill EXACTEMENT une fois — le point de montage est unique."
+        )
         XCTAssertTrue(
-            code.contains("ConnectionBanner(") && code.contains("onItemTap: handleSyncPillTap"),
+            code.contains("onItemTap: handleSyncPillTap"),
             "Le point de montage unique doit router le tap vers handleSyncPillTap, comme RootView (iPhone)."
         )
     }
