@@ -81,12 +81,18 @@ const mockRemovePeerConnection = jest.fn();
 const mockSetError = jest.fn();
 const mockSetConnecting = jest.fn();
 const mockSetIceServersStore = jest.fn();
+const mockSetCurrentCall = jest.fn();
 let mockIceServers: RTCIceServer[] | null = null;
+// Vague 113: `currentCall` as read by `useCallStore.getState()` inside
+// `handleAnswer` — mutable per-test so the "first real answer" guard
+// (`status === 'initiated'`) can be exercised in both directions.
+let mockCurrentCall: { status: string; answeredAt?: Date; [key: string]: unknown } | null = null;
 
 jest.mock('@/stores/call-store', () => {
   const buildState = () => ({
     localStream: null,
     iceServers: mockIceServers,
+    currentCall: mockCurrentCall,
     setLocalStream: mockSetLocalStream,
     addRemoteStream: mockAddRemoteStream,
     addPeerConnection: mockAddPeerConnection,
@@ -94,6 +100,7 @@ jest.mock('@/stores/call-store', () => {
     setError: mockSetError,
     setConnecting: mockSetConnecting,
     setIceServers: mockSetIceServersStore,
+    setCurrentCall: mockSetCurrentCall,
   });
   const useCallStore = Object.assign(buildState, { getState: buildState });
   return { useCallStore };
@@ -147,6 +154,7 @@ describe('useWebRTCP2P', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIceServers = null;
+    mockCurrentCall = null;
 
     // Default mock implementations
     mockGetSocket.mockReturnValue(mockSocket);
@@ -448,6 +456,80 @@ describe('useWebRTCP2P', () => {
 
       expect(mockClose).toHaveBeenCalled();
       expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+  });
+
+  describe('Handle Answer stamps the caller\'s answeredAt/active (Vague 113)', () => {
+    // Root cause: iOS deliberately auto-early-joins the call room the
+    // instant an incoming call is received (CallManager.swift
+    // `joinCallRoomReliably`, fired from `reportIncomingVoIPCall` /
+    // foreground incoming-call handling — "emit call:join IMMEDIATELY...
+    // so the SDP offer can be received while ringing"), long before the
+    // human answers. `CallManager.tsx`'s `handleParticipantJoined` used to
+    // treat that room-join as the caller's "answered" signal, so a web
+    // caller ringing an iOS callee saw its clock start (and status flip to
+    // 'active') the instant that device started ringing — defeating the
+    // ring-time-vs-talk-time fix Vague 110 made. The genuine pickup signal
+    // is the SDP *answer*, which only a real Accept sends.
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    const fireAnswer = async (signalHandler: (event: any) => void, sdp = 'answer-sdp') => {
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp },
+        });
+      });
+    };
+
+    it('stamps status "active" and answeredAt the moment the real SDP answer is processed', async () => {
+      mockCurrentCall = { id: mockCallId, status: 'initiated' };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      await fireAnswer(getSignalHandler());
+
+      expect(mockSetCurrentCall).toHaveBeenCalledWith(
+        expect.objectContaining({ id: mockCallId, status: 'active', answeredAt: expect.any(Date) })
+      );
+    });
+
+    it('does not re-stamp answeredAt once the call is already active (renegotiation/ICE-restart answer)', async () => {
+      mockCurrentCall = { id: mockCallId, status: 'active', answeredAt: new Date('2026-08-12T00:00:00Z') };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      await fireAnswer(getSignalHandler());
+
+      expect(mockSetCurrentCall).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when no currentCall is present', async () => {
+      mockCurrentCall = null;
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      await fireAnswer(getSignalHandler());
+
+      expect(mockSetCurrentCall).not.toHaveBeenCalled();
     });
   });
 

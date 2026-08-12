@@ -32,7 +32,6 @@ const ACTIVE_TOKEN = {
 
 function makePrisma(overrides: {
   affiliateToken?: any;
-  existingFriendRequest?: any;
   existingRelation?: any;
   newRelation?: any;
   referrals?: any[];
@@ -40,6 +39,7 @@ function makePrisma(overrides: {
   tokens?: any[];
   sessionPreference?: any;
   deleteCount?: number;
+  existingFriendRequest?: any;
 } = {}) {
   const {
     affiliateToken = ACTIVE_TOKEN,
@@ -50,6 +50,7 @@ function makePrisma(overrides: {
     tokens = [],
     sessionPreference = null,
     deleteCount = 0,
+    existingFriendRequest = null,
   } = overrides;
 
   return {
@@ -70,13 +71,13 @@ function makePrisma(overrides: {
       update: jest.fn<any>().mockResolvedValue({}),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: deleteCount }),
     },
+    // `FriendRequest` n'a pas d'index unique : le service cherche d'abord une
+    // demande dans les DEUX sens avant de créer, pour ne pas fabriquer un
+    // doublon désynchronisé. Un double sans `findFirst` faisait lever le bloc
+    // — silencieusement, il est en try/catch — et `create` n'était jamais
+    // atteint.
     friendRequest: {
-      // `findFirst` est indispensable : le produit cherche une demande
-      // préexistante DANS LES DEUX SENS avant de créer (FriendRequest n'a pas
-      // d'index unique, donc un `create()` nu pouvait produire un doublon
-      // désynchronisé). Sans ce stub, l'appel jetait un TypeError que le
-      // try/catch du produit avalait — et `create` n'était jamais atteint.
-      findFirst: jest.fn<any>().mockResolvedValue(overrides.existingFriendRequest ?? null),
+      findFirst: jest.fn<any>().mockResolvedValue(existingFriendRequest),
       create: jest.fn<any>().mockResolvedValue({}),
       update: jest.fn<any>().mockResolvedValue({}),
     },
@@ -227,16 +228,34 @@ describe('convertAffiliateVisit', () => {
     );
   });
 
-  it('increments currentUses on the token', async () => {
+  // L'incrément est ATOMIQUE, pas un `currentUses + 1` calculé en mémoire :
+  // deux conversions concurrentes lues à la même valeur écriraient la même, et
+  // un token à usages limités dépasserait sa borne. Le service le documente
+  // explicitement — ce test verrouillait la version racée.
+  it('incrémente currentUses de façon atomique, sans relire la valeur', async () => {
     const prisma = makePrisma({ affiliateToken: { ...ACTIVE_TOKEN, currentUses: 3 } });
 
     await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
 
     expect(prisma.affiliateToken.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        // Incrément ATOMIQUE côté base : deux conversions simultanées se
-        // perdaient l'une l'autre avec l'ancien lire-puis-écrire.
         data: expect.objectContaining({ currentUses: { increment: 1 } }),
+      })
+    );
+  });
+
+  it('accepte la demande d\'amitié préexistante au lieu d\'en créer une seconde', async () => {
+    const prisma = makePrisma({
+      existingFriendRequest: { id: 'fr-1', status: 'pending' },
+    });
+
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'fr-1' },
+        data: expect.objectContaining({ status: 'accepted' }),
       })
     );
   });
@@ -254,32 +273,6 @@ describe('convertAffiliateVisit', () => {
         }),
       })
     );
-  });
-
-  it('accepts a pre-existing friend request instead of creating a duplicate', async () => {
-    // Branche ajoutée avec la garde anti-doublon, et jusqu'ici sans témoin :
-    // `FriendRequest` n'ayant pas d'index unique, créer sans regarder laissait
-    // deux lignes contradictoires pour la même paire.
-    const prisma = makePrisma({ existingFriendRequest: { id: 'fr-1', status: 'pending' } });
-
-    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
-
-    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
-    expect(prisma.friendRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'fr-1' },
-        data: expect.objectContaining({ status: 'accepted' }),
-      })
-    );
-  });
-
-  it('leaves an already-accepted friend request untouched', async () => {
-    const prisma = makePrisma({ existingFriendRequest: { id: 'fr-1', status: 'accepted' } });
-
-    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
-
-    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
-    expect(prisma.friendRequest.update).not.toHaveBeenCalled();
   });
 
   it('silently ignores friendRequest creation errors (already friends)', async () => {

@@ -83,16 +83,29 @@ export class MessageTranslationService extends EventEmitter {
   private readonly PROCESSED_TASK_TTL_MS = 3_600_000; // 1 heure
   private readonly processedTasksCleanupInterval: ReturnType<typeof setInterval>;
 
-  // Ordering guard : dernier taskId de RETRADUCTION dispatché par message.
+  // Ordering guard : dernier taskId de RETRADUCTION dispatché, par message ET
+  // PAR LANGUE (clé `${messageId}::${langue canonique}`).
   // Une édition rapide (ou une édition qui court avec la traduction initiale)
   // peut faire arriver deux réponses ZMQ dans le désordre : la traduction d'un
   // contenu périmé écraserait alors la traduction du contenu courant (violation
   // du Prisme Linguistique). On mémorise le task le plus récent ; toute réponse
-  // dont le taskId n'est plus le plus récent pour son message est périmée et
-  // droppée. Borné par TTL (balayé par le timer existant) + plafond FIFO.
+  // dont le taskId n'est plus le plus récent POUR SA LANGUE est périmée et
+  // droppée.
+  //
+  // La clé porte la langue parce qu'une retraduction ne redemande pas forcément
+  // TOUTES les langues : une demande ciblée (`messageData.targetLanguage`), ou
+  // un prisme de conversation qui a changé entre deux éditions, n'en couvre
+  // qu'une partie. Une clé par MESSAGE faisait tomber les langues encore en vol
+  // que la nouvelle tâche ne redemandait pas — et rien ne les retente jamais :
+  // ces lecteurs restaient sur l'original définitivement.
+  // Borné par TTL (balayé par le timer existant) + plafond FIFO.
   private readonly latestRetranslationTask = new Map<string, { taskId: string; ts: number }>();
   private readonly RETRANSLATION_TASK_TTL_MS = 3_600_000; // 1h ≫ round-trip ZMQ (timeout 5s)
-  private static readonly RETRANSLATION_TASK_MAX = 5000;
+  // Une entrée par (message, langue) : le plafond doit couvrir autant de MESSAGES
+  // qu'avant la mise à l'échelle par langue, sinon l'éviction FIFO se met à
+  // désarmer le garde sur des messages encore récents (une entrée évincée se lit
+  // « jamais retraduit », donc « jamais périmé »). ~20k entrées ≈ 2 Mo.
+  private static readonly RETRANSLATION_TASK_MAX = 20_000;
 
   constructor(prisma: PrismaClient, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
@@ -694,35 +707,26 @@ export class MessageTranslationService extends EventEmitter {
       const finalModelType = messageData.modelType ?? autoModelType;
       
       
-      // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES
-      // Cela permet de remplacer les traductions existantes par les nouvelles
-      if (filteredTargetLanguages.length > 0) {
-        // Sérialisé par messageId (même mutex que _saveTranslationToDatabase) :
-        // ce read-modify-write peut sinon clobber des traductions en cours de
-        // complétion (lost update sur Message.translations).
-        await this.messageTranslationMutex.runExclusive(messageId, async () => {
-          const message = await this.prisma.message.findUnique({
-            where: { id: messageId },
-            select: { translations: true }
-          });
+      // 3. AUCUNE SUPPRESSION PRÉALABLE DES TRADUCTIONS VISÉES.
+      //
+      // Ce chemin retirait les langues cibles de `Message.translations` et
+      // PERSISTAIT la suppression avant l'envoi ZMQ, sans rollback. Si le
+      // remplacement ne revenait jamais — translator muet, retries épuisés,
+      // circuit breaker ouvert — la traduction correcte était perdue
+      // DÉFINITIVEMENT : aucun chemin ne retente une traduction absente.
+      //
+      // Cette suppression n'a jamais protégé de rien :
+      //   • les QUATRE transports d'édition écrivent déjà `translations: null`
+      //     dans l'écriture du contenu elle-même (c'est ce qui ferme la fenêtre
+      //     « texte d'après + traductions d'avant ») ;
+      //   • `_saveTranslationToDatabase` REMPLACE `translations[langue]` quoi
+      //     qu'il s'y trouve.
+      // Elle ne pouvait donc que détruire — notamment sur une retraduction
+      // ciblée, qui n'accompagne aucune réécriture de contenu.
+      //
+      // Bénéfice annexe : un read-modify-write et un `message.update` de moins
+      // sur le chemin chaud de CHAQUE édition.
 
-          if (message?.translations) {
-            const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
-
-            // Supprimer les langues cibles du JSON
-            filteredTargetLanguages.forEach(lang => {
-              delete translations[lang];
-            });
-
-            // Sauvegarder
-            await this.prisma.message.update({
-              where: { id: messageId },
-              data: { translations: translations as any }
-            });
-          }
-        });
-      }
-      
       // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
       const request: TranslationRequest = {
         messageId: messageId,
@@ -734,7 +738,7 @@ export class MessageTranslationService extends EventEmitter {
       };
       
       const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this._registerLatestRetranslationTask(messageId, taskId);
+      this._registerLatestRetranslationTask(messageId, taskId, filteredTargetLanguages);
       this.stats.incrementRequestsSent();
 
 
@@ -745,41 +749,62 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   /**
-   * Enregistre le taskId de la retraduction la plus récente pour un message.
-   * Sert d'ordering guard : toute réponse ZMQ ultérieure dont le taskId ne
-   * correspond plus à cette entrée est considérée périmée (voir
-   * `_isStaleTranslationResult`). Borné par plafond FIFO — le TTL est balayé
-   * par le timer périodique existant.
+   * Clé du garde d'ordonnancement : un message ET une langue, sous la forme
+   * canonique du SSOT `normalizeLanguageCode`. Les deux côtés (enregistrement
+   * au dispatch, lecture à la réception) doivent normaliser, sinon une cible
+   * demandée `'pt-BR'` et un résultat rendu `'pt'` ne se reconnaissent pas.
    */
-  private _registerLatestRetranslationTask(messageId: string, taskId: string): void {
+  private _retranslationTaskKey(messageId: string, targetLanguage: string): string {
+    const code = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+    return `${messageId}::${code}`;
+  }
+
+  /**
+   * Enregistre le taskId de la retraduction la plus récente pour un message,
+   * UNE ENTRÉE PAR LANGUE REDEMANDÉE. Sert d'ordering guard : toute réponse ZMQ
+   * ultérieure dont le taskId ne correspond plus à l'entrée de SA langue est
+   * considérée périmée (voir `_isStaleTranslationResult`). Une langue que cette
+   * retraduction ne redemande pas n'est pas touchée — son résultat en vol reste
+   * valide. Borné par plafond FIFO — le TTL est balayé par le timer périodique
+   * existant.
+   */
+  private _registerLatestRetranslationTask(
+    messageId: string,
+    taskId: string,
+    targetLanguages: readonly string[]
+  ): void {
     const now = Date.now();
 
-    if (this.latestRetranslationTask.size >= MessageTranslationService.RETRANSLATION_TASK_MAX) {
-      const expiry = now - this.RETRANSLATION_TASK_TTL_MS;
-      for (const [id, entry] of this.latestRetranslationTask) {
-        if (entry.ts < expiry) this.latestRetranslationTask.delete(id);
-      }
-      // Toujours au plafond après balayage des expirés → évincer le plus ancien.
+    for (const language of targetLanguages) {
       if (this.latestRetranslationTask.size >= MessageTranslationService.RETRANSLATION_TASK_MAX) {
-        const oldest = this.latestRetranslationTask.keys().next().value;
-        if (oldest !== undefined) this.latestRetranslationTask.delete(oldest);
+        const expiry = now - this.RETRANSLATION_TASK_TTL_MS;
+        for (const [id, entry] of this.latestRetranslationTask) {
+          if (entry.ts < expiry) this.latestRetranslationTask.delete(id);
+        }
+        // Toujours au plafond après balayage des expirés → évincer le plus ancien.
+        if (this.latestRetranslationTask.size >= MessageTranslationService.RETRANSLATION_TASK_MAX) {
+          const oldest = this.latestRetranslationTask.keys().next().value;
+          if (oldest !== undefined) this.latestRetranslationTask.delete(oldest);
+        }
       }
-    }
 
-    // delete+set : replace l'entrée en fin d'ordre d'insertion (éviction FIFO
-    // = purge d'abord les messages les moins récemment retraduits).
-    this.latestRetranslationTask.delete(messageId);
-    this.latestRetranslationTask.set(messageId, { taskId, ts: now });
+      // delete+set : replace l'entrée en fin d'ordre d'insertion (éviction FIFO
+      // = purge d'abord les couples message/langue les moins récents).
+      const key = this._retranslationTaskKey(messageId, language);
+      this.latestRetranslationTask.delete(key);
+      this.latestRetranslationTask.set(key, { taskId, ts: now });
+    }
   }
 
   /**
    * Vrai si une retraduction plus récente que `taskId` a été dispatchée pour ce
-   * message — le résultat porté par `taskId` correspond alors à un contenu
-   * périmé et doit être ignoré. Un message jamais retraduit (pas d'entrée) n'est
-   * jamais considéré périmé.
+   * message DANS CETTE LANGUE — le résultat porté par `taskId` correspond alors
+   * à un contenu périmé et doit être ignoré. Une langue jamais redemandée (pas
+   * d'entrée) n'est jamais considérée périmée : son résultat est le seul qui
+   * viendra jamais.
    */
-  private _isStaleTranslationResult(messageId: string, taskId: string): boolean {
-    const latest = this.latestRetranslationTask.get(messageId);
+  private _isStaleTranslationResult(messageId: string, taskId: string, targetLanguage: string): boolean {
+    const latest = this.latestRetranslationTask.get(this._retranslationTaskKey(messageId, targetLanguage));
     return latest !== undefined && latest.taskId !== taskId;
   }
 
@@ -971,8 +996,9 @@ export class MessageTranslationService extends EventEmitter {
       // Ordering guard : dropper une traduction dont le contenu source a été
       // supplanté par une édition plus récente (réponses ZMQ dans le désordre).
       // Le contenu courant a déjà (ou aura) sa propre traduction ; écraser avec
-      // ce résultat périmé casserait le Prisme Linguistique.
-      if (this._isStaleTranslationResult(data.result.messageId, data.taskId)) {
+      // ce résultat périmé casserait le Prisme Linguistique. Le garde est scopé
+      // À LA LANGUE : une retraduction ne périme que ce qu'elle redemande.
+      if (this._isStaleTranslationResult(data.result.messageId, data.taskId, data.targetLanguage)) {
         logger.debug(
           `⏭️ [TranslationService] Traduction périmée droppée (message ${data.result.messageId} ré-édité, task ${data.taskId} supplanté)`
         );

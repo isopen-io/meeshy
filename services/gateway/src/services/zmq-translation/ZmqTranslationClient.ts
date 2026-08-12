@@ -170,13 +170,13 @@ export class ZmqTranslationClient extends EventEmitter {
     taskId: string,
     errorEventName: string,
     errorEvent: Record<string, unknown>,
-    resend: (existingTaskId: string) => Promise<string>,
+    resend: (existingTaskId: string, pendingLanguages?: string[]) => Promise<string>,
     opts: { retryEnabled?: boolean; timeoutMs?: number } = {}
   ): void {
     const retryEnabled = opts.retryEnabled !== false;
     const timeoutMs = opts.timeoutMs ?? ZMQ_REQUEST_TIMEOUT_MS;
 
-    this.requestSender.registerTimeout(taskId, timeoutMs, async () => {
+    this.requestSender.registerTimeout(taskId, timeoutMs, async (pendingLanguages) => {
       if (!retryEnabled) {
         logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (no retry for long voice pipelines)`);
         this.retryCount.delete(taskId);
@@ -190,7 +190,7 @@ export class ZmqTranslationClient extends EventEmitter {
       if (retries < ZMQ_MAX_RETRIES) {
         logger.warn(`⏱️ ZMQ timeout for taskId=${taskId} (attempt ${retries + 1}/${ZMQ_MAX_RETRIES + 1}), retrying with same taskId...`);
         try {
-          await resend(taskId);
+          await resend(taskId, pendingLanguages);
           this.retryCount.set(taskId, retries + 1);
           this._registerRequestTimeout(taskId, errorEventName, errorEvent, resend, opts);
         } catch (err) {
@@ -295,8 +295,17 @@ export class ZmqTranslationClient extends EventEmitter {
     this.messageHandler.on('translationCompleted', (event) => {
       this.stats.results_received++;
       this._cbRecordSuccess();
-      this.retryCount.delete(event.taskId);
-      this.requestSender.removePendingRequest(event.taskId);
+      // Le translator rend UNE langue par événement : solder la requête entière
+      // ici désarmait deadman, retry et erreur pour toutes les autres langues,
+      // qui n'avaient alors plus aucun chemin de récupération. On ne solde que
+      // la langue rendue ; la requête ne tombe qu'avec sa dernière.
+      const settled = this.requestSender.settleTranslationLanguage(
+        event.taskId,
+        event.result?.targetLanguage ?? event.targetLanguage ?? ''
+      );
+      if (settled === null || settled.remaining.length === 0) {
+        this.retryCount.delete(event.taskId);
+      }
       this.emit('translationCompleted', event);
       // Also forward the per-messageId scoped event (ZmqMessageHandler emits
       // both) so callers — PostService's story-caption translation,
@@ -552,8 +561,13 @@ export class ZmqTranslationClient extends EventEmitter {
       taskId,
       'translationError',
       { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId },
-      async (existingTaskId: string) => {
-        await this.requestSender.sendTranslationRequest(request, existingTaskId);
+      async (existingTaskId: string, pendingLanguages?: string[]) => {
+        // Ne redemander QUE les langues encore manquantes : re-pousser une langue
+        // déjà rendue duplique le travail du worker pool ML pour rien.
+        const outstanding = pendingLanguages?.length
+          ? { ...request, targetLanguages: pendingLanguages }
+          : request;
+        await this.requestSender.sendTranslationRequest(outstanding, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
       }

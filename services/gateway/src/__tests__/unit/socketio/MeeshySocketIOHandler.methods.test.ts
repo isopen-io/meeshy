@@ -1,6 +1,7 @@
 /**
  * Unit tests for MeeshySocketIOHandler — methods other than broadcastMessage.
- * Covers: getManager, getConnectedUsers (no manager, with manager, error).
+ * Covers: getManager, broadcastMessage, getConnectedUsers (no manager, with
+ * manager, error).
  *
  * @jest-environment node
  */
@@ -52,16 +53,13 @@ describe('getManager', () => {
   });
 });
 
-// `sendNotificationToUser` — TÉMOINS RETIRÉS (2026-08-12).
-//
-// Ils testaient une méthode qui n'existe NULLE PART : `MeeshySocketIOHandler`
-// expose `setupSocketIO`, `getManager`, `broadcastMessage` et
-// `getConnectedUsers`, et `sendNotificationToUser` n'apparaissait dans tout le
-// dépôt que dans ce fichier — aucune implémentation, aucun appelant. Le fichier
-// vient d'une branche de tests de JUIN fusionnée en août avec « prefer theirs
-// for conflicts » : ces 4 témoins figeaient une API imaginée, jamais livrée.
-// L'implémenter pour les satisfaire aurait créé de la surface morte — on retire
-// donc les témoins, pas le produit.
+// `sendNotificationToUser` n'a jamais existé sur `MeeshySocketIOHandler` — ni
+// dans l'histoire du fichier, ni ailleurs dans le service, et aucun appelant ne
+// la nomme. Le bloc qui la décrivait a été retiré plutôt qu'accompagné d'une
+// production écrite pour lui : ajouter une méthode que rien n'appelle pour
+// satisfaire un test imaginé, c'est écrire du code mort sous garantie. Les
+// notifications passent par `NotificationService` et, pour le transport,
+// `MeeshySocketIOManager.sendToUser`.
 
 // ─── getConnectedUsers ────────────────────────────────────────────────────────
 
