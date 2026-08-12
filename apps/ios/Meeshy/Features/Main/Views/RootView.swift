@@ -105,9 +105,8 @@ struct CallPresentationLayer: ViewModifier {
                         .allowsHitTesting(false)
                 }
             }
-            .overlay(alignment: .top) {
+            .safeAreaInset(edge: .top, spacing: 0) {
                 FloatingCallPillView(callManager: callManager)
-                    .padding(.top, MeeshySpacing.sm)
             }
             .overlay {
                 CallBubbleView(callManager: callManager)

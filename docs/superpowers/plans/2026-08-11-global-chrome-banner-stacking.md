@@ -829,7 +829,7 @@ git commit -m "feat(ios): FloatingCallPillView — aplat brandGradient + scrim W
 - Consumes: `FloatingCallPillView(callManager:)` (Task 5, signature inchangée).
 - Produces: le point d'ancrage exact que les Tasks 8/9 chaînent leur propre `.overlay(alignment: .top) { ConnectionBanner }` juste AVANT (`.modifier(CallPresentationLayer())` reste le nom du point d'entrée, inchangé).
 
-- [ ] **Step 1: Modify the mount mechanism**
+- [x] **Step 1: Modify the mount mechanism**
 
 Dans `CallPresentationLayer.body(content:)`, remplacer (SANS changer sa position dans la chaîne — reste le 2ᵉ modifier, entre `PiPSourceAnchor` et `CallBubbleView` ; cf. spec §B2 pour pourquoi cet ordre précis fait que `PiPSourceAnchor` suit la bannière et que `CallWaitingBannerView` s'affiche sous elle, PAR CONSTRUCTION) :
 
@@ -850,21 +850,21 @@ par :
 
 (le `.padding(.top, MeeshySpacing.sm)` disparaît — bannière bord-à-bord, elle EST le bord ; `FloatingCallPillView.body` retombe déjà à rien via son `if` sans `else` quand la condition d'affichage est fausse, donc l'espace réservé retombe à zéro automatiquement dans ce cas, comme `SyncPill` le fait déjà).
 
-- [ ] **Step 2: Run build**
+- [x] **Step 2: Run build**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
-- [ ] **Step 3: Run regression tests touching this exact struct**
+- [x] **Step 3: Run regression tests touching this exact struct**
 
 Run: `xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath apps/ios/Build && xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/CallViewObservedObjectInjectionTests -only-testing:MeeshyTests/CallPiPPolicyTests -derivedDataPath apps/ios/Build`
 Expected: PASS — `CallViewObservedObjectInjectionTests` grep le littéral `"FloatingCallPillView(callManager: callManager)"` (inchangé par cette tâche) et `".modifier(CallPresentationLayer())"` dans `iPadRootView+Sheets.swift` (inchangé) — reste vert tant que ces deux chaînes exactes survivent.
 
-- [ ] **Step 4: Manual verification (non-automatable, obligatoire avant de considérer cette tâche terminée)**
+- [x] **Step 4: Manual verification (non-automatable, obligatoire avant de considérer cette tâche terminée)**
 
 Lancer l'app sur simulateur (`./apps/ios/meeshy.sh run`), démarrer un appel de test, vérifier visuellement que le contenu de l'écran descend bien sous la nouvelle bannière plein-largeur (pas de chevauchement). **La transition PiP réelle (émergence/retour) ne peut PAS être vérifiée en simulateur** (`AVPictureInPictureController.isPictureInPictureSupported()` y est faux) — noter explicitement dans le message de commit que cette vérification reste à faire sur device physique avant mise en production, conformément à la spec §B2/§Tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/RootView.swift
