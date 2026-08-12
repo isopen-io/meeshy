@@ -161,14 +161,27 @@ export class ConversationHandler {
           conversationId: normalizedId,
           userId: registeredUserId
         });
+      }
 
+      // Le compteur de non-lus ne se gate PAS sur `userId` : un invité de lien
+      // partagé n'en a pas, et voyait donc son badge rester vide alors que le
+      // contrôle d'appartenance au-dessus l'a laissé passer et que son socket
+      // EST dans la room. `getUnreadCount` accepte indifféremment un
+      // `Participant.id` ou un `User.id` (contrat documenté dans
+      // MessageReadStatusService) — on lui passe celui qu'on a. Le jeton de
+      // session (`connectedUser.id`) ne résout AUCUNE ligne Participant : le
+      // passer rendrait 0 en silence.
+      const unreadTargetId = registeredUserId ?? connectedUser.participantId;
+      if (unreadTargetId) {
         try {
-          const unreadCount = await this.readStatusService.getUnreadCount(registeredUserId, normalizedId);
+          const unreadCount = await this.readStatusService.getUnreadCount(unreadTargetId, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }
+      }
 
+      if (registeredUserId) {
         // Envoyer les stats de conversation. On passe l'id RÉSOLU (`normalizedId`),
         // comme le room join, le payload joined et l'emit unread ci-dessus — sauf
         // pour la conversation globale "meeshy", que ConversationStatsService résout

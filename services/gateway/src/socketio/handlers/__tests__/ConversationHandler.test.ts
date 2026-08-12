@@ -227,10 +227,65 @@ describe('ConversationHandler', () => {
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
       // Valid anonymous member (owns the participant): the handler joins the
-      // room and, having no userId, does NOT emit CONVERSATION_JOINED.
+      // room but withholds CONVERSATION_JOINED — non parce que « pas de userId
+      // ⇒ rien », mais parce que l'accusé PORTE un `userId` et qu'on n'a pas
+      // encore tranché quelle identité y mettre pour un participant sans compte
+      // (jeton de session vs `Participant.id`, non interchangeables côté
+      // client). Le compteur de non-lus, lui, n'a pas ce problème et EST
+      // poussé — cf. le test dédié plus bas.
       expect(socket.join).toHaveBeenCalled();
       expect(socket.emit).not.toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_JOINED,
+        expect.anything()
+      );
+    });
+
+    it('pushes the unread counter to an anonymous member, keyed on their Participant.id', async () => {
+      // Un invité de lien partagé a un badge de non-lus comme tout le monde :
+      // `getUnreadCount` accepte un `Participant.id` autant qu'un `User.id`
+      // (contrat documenté dans MessageReadStatusService). Le compteur ne doit
+      // donc PAS être gaté sur `userId`, absent d'un SocketUser anonyme.
+      const SESSION_TOKEN = 'anon-session-token';
+      const ANON_PARTICIPANT_ID = 'anon-part-1';
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const connectedUsers = new Map();
+      connectedUsers.set(SESSION_TOKEN, {
+        id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr', resolvedLanguages: [],
+      });
+      const prisma = makePrisma({ id: ANON_PARTICIPANT_ID });
+      const readStatusService = { getUnreadCount: jest.fn<any>().mockResolvedValue(4) };
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, socketToUser, readStatusService });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      // L'identité passée est le Participant.id — PAS le jeton de session, qui
+      // ne résout aucune ligne Participant et rendrait 0 en silence.
+      expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(ANON_PARTICIPANT_ID, CONV_ID);
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        { conversationId: CONV_ID, unreadCount: 4 }
+      );
+    });
+
+    it('keeps the join non-blocking when the anonymous unread lookup throws', async () => {
+      const SESSION_TOKEN = 'anon-session-token';
+      const ANON_PARTICIPANT_ID = 'anon-part-1';
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const connectedUsers = new Map();
+      connectedUsers.set(SESSION_TOKEN, {
+        id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr', resolvedLanguages: [],
+      });
+      const prisma = makePrisma({ id: ANON_PARTICIPANT_ID });
+      const readStatusService = { getUnreadCount: jest.fn<any>().mockRejectedValue(new Error('db down')) };
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, socketToUser, readStatusService });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(socket.join).toHaveBeenCalled();
+      expect(socket.emit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
         expect.anything()
       );
     });

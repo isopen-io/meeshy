@@ -246,8 +246,10 @@ describe('ConversationHandler', () => {
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      // Valid anonymous member (owns the participant): joins the room and emits
-      // no conversation:joined (no userId on an anonymous SocketUser).
+      // Valid anonymous member (owns the participant): joins the room. L'accusé
+      // conversation:joined reste retenu — il porte un `userId` et l'identité à
+      // y mettre pour un participant sans compte n'est pas tranchée. Le
+      // compteur de non-lus, lui, est bien poussé (clé `Participant.id`).
       expect(socket.join).toHaveBeenCalled();
       expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
     });
