@@ -1,3 +1,181 @@
+# Tête instruite pour le cycle 86 — la suite iOS rend des verdicts que le code ne justifie pas
+
+*Le cycle 85 est allé chercher pourquoi la suite de référence iOS est rouge un run sur trois. La
+réponse n'est pas « des tests flaky » : au moins un verdict est DÉMONTRABLEMENT faux.*
+
+## Le fait à instruire en priorité
+
+Run `31543763910` (`push dev`, 2026-08-11 22:45 UTC, head `bec43248`) rapporte :
+
+```
+XCTAssertTrue failed - hasActiveEffects must also check config.hasAdvancedFilters,
+not just config.isEnabled, …
+CallViewAccessibilityTests/test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone()
+```
+
+Or `git show bec43248:apps/ios/Meeshy/Features/Main/Views/CallView.swift` contient bien, ligne
+1528, `return config.isEnabled || config.hasAdvancedFilters`. Le test cherche `hasAdvancedFilters`
+dans les **700 premiers caractères** suivant `private var hasActiveEffects: Bool {` : la chaîne s'y
+trouve à l'**offset 500**, et le motif d'ancrage n'apparaît **qu'une fois** dans le fichier
+(vérifié en rejouant l'assertion caractère par caractère sur le blob de ce commit exact).
+
+**L'assertion ne PEUT pas échouer sur la source du commit testé. Elle a donc lu autre chose.**
+
+C'est un défaut de classe, pas un test isolé : `MeeshyTests` compte **137 fichiers** et
+**242 lectures** de la forme `String(contentsOf: URL(fileURLWithPath: #filePath)…)` — des « source
+guards » qui grep le code produit **au runtime**, depuis un chemin figé à la COMPILATION. Le verdict
+de ces 242 assertions ne dépend donc pas de ce qui a été compilé, mais de ce que le système de
+fichiers de l'hôte présente au moment de l'exécution. Quand les deux divergent — cache DerivedData
+restauré, worktree partagé, re-tentative après `** TEST EXECUTE FAILED **` (le log de ce run montre
+bien un second `Testing started`) — la suite prononce un verdict sans rapport avec le commit.
+
+Ce qu'il faut instruire, dans l'ordre :
+
+1. **Reproduire sur macOS** : relancer ce test seul sur `bec43248` et logguer le chemin ET la taille
+   du fichier réellement lu (`url.path`, `source.count`) avant l'assertion. C'est la mesure qui
+   tranche entre « mauvais chemin » et « bon chemin, contenu périmé ».
+2. **Décider du sort de l'idiome.** Un source guard qui passe vert sur une source qu'il n'a pas
+   compilée ne garde rien. Soit on l'ancre à la compilation (ressource copiée dans le bundle de test
+   par une build phase, donc solidaire du binaire), soit on le remplace par une assertion de
+   COMPORTEMENT là où c'est possible. 242 sites : chantier à cadencer, pas à faire d'un bloc.
+3. **Ne pas confondre avec le reste du rouge.** Sur 30 runs `push dev`, 11 échecs (37 %). Trois
+   récidivistes — `AuthServiceTests` (timeout 2 s), `MiniAudioPlayerBarTests`,
+   `LocalizationConsistencyTests` — ont été corrigés le 2026-08-11 par `0032297d`, déjà sur `main`
+   ET sur `dev`. Le rouge restant se partage entre le défaut ci-dessus et le RETARD de `dev` :
+   au moment du relevé, `dev` était **40 commits derrière `main`** et n'avait pas le correctif du
+   cycle 81 que `StoryUploadQueueTests/test_uploadSucceeds_dequeuesItsWriteAheadIntent` exige.
+   **Rapprocher `dev` de `main` avant de conclure quoi que ce soit d'un run rouge.**
+
+## Ce qui reste ouvert des cycles précédents
+
+- La porte `actions: write` reste close (cycle 82) : la routine ne peut toujours pas déclencher
+  `workflow_dispatch`, donc pas de lancement à la demande de la suite complète.
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+
+## Ce que le cycle 85 n'a PAS pu faire
+
+Aucune toolchain Swift dans l'environnement de la routine (`swift`, `swiftc`, `xcodebuild` absents,
+Linux). Tout ce dossier iOS est donc établi par lecture de source, rejeu d'assertion et API Actions —
+jamais par exécution. C'est suffisant pour affirmer le point 1 (l'arithmétique de l'offset est
+vérifiable hors Xcode) ; ça ne l'est pas pour corriger.
+
+---
+
+# Cycle 85 — Un accusé de lecture ne recule pas, et la suite iOS rend un verdict faux
+
+## 1. Le correctif livré — web, accusés de lecture monotones
+
+`readStatusSummaries` / `messageReadStatuses` (`apps/web/stores/conversation-ui-store.ts`) ont deux
+écrivains et **un seul est ordonné** :
+
+| écrivain | nature | ordre |
+|---|---|---|
+| socket — `presence.service.ts` → `updateReadStatusSummary` | événement | ordonné par connexion |
+| lot REST — `use-conversation-messages-rq.ts` → `getReadStatuses` → `updateMessageReadStatusBatch` | **instantané** pris au départ de la requête | **aucun** |
+
+`updateMessageReadStatusBatch` faisait `{ ...state.messageReadStatuses, ...statuses }` — le dernier
+arrivé écrase, quelle que soit son ancienneté.
+
+**La fenêtre est large.** La clé de garde du lot (`batchFetchedRef`) est indexée sur l'id du dernier
+message propre : chaque message envoyé relance la lecture REST. Un pair qui lit pendant que la
+requête est en vol suffit pour que l'instantané, parti AVANT cette lecture, atterrisse APRÈS elle.
+
+**Et c'est visible.** `DeliveryIndicator` rend `readCount > 0` en double coche BLEUE,
+`readCount === 0 && deliveredCount > 0` en double coche GRISE. Les coches passent au bleu, puis
+reviennent au gris, et restent fausses jusqu'au prochain accusé. Le même écrasement pouvait
+« dé-livrer » un message (`deliveredCount` qui redescend).
+
+Correctif : un prédicat unique `isStaleReceipt(current, incoming)` dans le store, appliqué par les
+TROIS écrivains — un seul énoncé de la règle, là où l'état vit.
+
+Trois décisions, chacune verrouillée :
+
+- **`totalMembers` est le discriminant.** Les accusés ne sont croissants que pour un effectif FIXE ;
+  quand quelqu'un part, le serveur recompte sur les survivants et rapporte légitimement MOINS de
+  lectures. Sans ce discriminant la garde figerait les compteurs à vie.
+- **Un résumé qui recule est rejeté ENTIER**, jamais fusionné champ par champ : un max par champ
+  synthétiserait un état qu'aucun serveur n'a rapporté, alors que `readCount >= totalMembers` pilote
+  la branche « lu par tous ».
+- **Le lot filtre par ENTRÉE**, pas en tout-ou-rien ; et le miroir vers le dernier message propre est
+  gardé sur SA propre histoire, pas sur celle de la conversation (le lot REST écrit cette entrée
+  directement, elle peut être en avance).
+
+### Vérification
+
+- **RED prouvé avant le correctif** : 10 tests neufs, 6 rouges / 4 verts (les 4 verts sont les cas
+  « la progression s'applique », qui passaient déjà). GREEN après : 10/10.
+- **Mutation appliquée et vérifiée (leçon 117) — 7 réversions, 7 rouges** : prédicat neutralisé
+  (6 rouges), discriminant `totalMembers` retiré (1), garde du lot retirée (3), garde du miroir
+  retirée (1), garde de `updateMessageReadStatus` retirée (1), garde conversationnelle retirée (1),
+  `||` changé en `&&` (5). Restauré, re-vérifié 10/10.
+- **Suite web complète : 563/563 fichiers, 12 077 tests verts** (21 skipped).
+- `tsc --noEmit` : **1 757 diagnostics avant comme après** (pré-existants, fichiers de test admin
+  sans rapport), **aucun** dans les fichiers touchés.
+
+Réserve d'honnêteté : un premier passage de suite complète a rapporté 6 échecs — c'était MON
+`git stash` de mesure du tsc de référence qui a retiré le correctif sous une exécution de fond déjà
+lancée. Relancé sur arbre propre : vert. Et les 23 « suites en échec » du passage suivant étaient
+toutes des erreurs de CONFIGURATION (`@meeshy/shared/dist` non construit — prérequis documenté dans
+le CLAUDE.md racine), pas des tests : après `bun run build` dans `packages/shared`, 563/563.
+
+## 2. Le dossier iOS — mesure, et un verdict qui ne tient pas
+
+Le cycle 84 signalait la suite `dev` « rouge très fréquemment » et la renvoyait à qui possède la
+zone. Relevé de ce cycle sur les **30 derniers runs `push dev`** d'`ios-tests.yml` : **11 échecs,
+soit 37 %**.
+
+Échecs relevés sur 4 runs échantillonnés :
+
+| run | date (UTC) | tests en échec |
+|---|---|---|
+| `31543763910` | 08-11 22:45 | `CallViewAccessibilityTests/test_hasActiveEffects_…`, `StoryUploadQueueTests/test_uploadSucceeds_dequeuesItsWriteAheadIntent` |
+| `31482338455` | 08-11 10:28 | `AuthServiceTests/test_handleUnauthorized_…`, `MiniAudioPlayerBarTests/test_tapPlayPause_…` |
+| `31468948328` | 08-11 07:26 | `LocalizationConsistencyTests/test_everyAppCatalogIdentifierKeyIsReferencedInCode`, `MiniAudioPlayerBarTests/test_tapPlayPause_…` |
+| `31417194286` | 08-10 18:04 | `AuthServiceTests/test_handleUnauthorized_…` (« Exceeded timeout of 2 seconds ») |
+
+**Les trois récidivistes sont déjà corrigés** par `0032297d` (2026-08-11 11:45 UTC) : timeout
+AuthService porté à 10 s, `MiniAudioPlayerBar` adapté à la relance de tête, 39 clés orphelines
+purgées du catalogue. Ce commit est sur `main` ET sur `dev`.
+
+**Le run le plus récent, lui, ne s'explique pas ainsi** — et c'est le point porté en tête de cycle
+ci-dessus : son verdict sur `CallViewAccessibilityTests` est faux au regard de la source du commit
+testé (démonstration reproduite en tête). Sa seconde ligne rouge, `StoryUploadQueueTests`, est en
+revanche un simple RETARD : le correctif du cycle 81 (`704a3c5b`, 2026-08-12 03:03 UTC) est
+POSTÉRIEUR au run et n'était pas sur `dev` au moment du relevé — `dev` accusait alors 40 commits de
+retard sur `main`.
+
+Conséquence pratique, à retenir avant de rouvrir ce dossier : **un run `dev` rouge ne prouve rien
+tant que `dev` n'a pas été rapproché de `main`.**
+
+## 3. Ce qui a été audité et trouvé SAIN (ne pas re-défricher)
+
+- **`emitToConversationParticipants`** (gateway) — chaînage `to()` (une copie par socket au plus),
+  `userId ?? id` pour les participants sans compte, seed de la room de conversation. Correct.
+- **Ajout d'un participant** (`routes/conversations/participants.ts`) — auto-join des sockets vivants
+  à la room, `CONVERSATION_NEW` en room personnelle, effectif ABSOLU et non delta, arrivant écarté du
+  fan-out. Correct. Retrait/bannissement/départ font bien `fetchSockets()` + `leave()`.
+- **Catch-up incrémental web** (`use-conversation-messages-rq.ts` → `syncNewerMessages`) — déclenché
+  sur le front montant de la reconnexion socket ET au focus d'onglet ; filigrane calculé sur les
+  seuls messages CONFIRMÉS par le serveur (un optimiste stampé par l'horloge locale sauterait la
+  fenêtre) ; réconciliation des optimistes par `clientMessageId`. La boucle de pagination est
+  correcte **parce que** le gateway trie `asc` en mode `after`
+  (`routes/conversations/messages.ts` : `orderBy: { createdAt: afterMode ? 'asc' : 'desc' }`) —
+  en `desc` elle sauterait le milieu d'un trou plus grand qu'une page. Vérifié.
+- **`admitEditedContent`, `emitMentionCreated`, `isStaleEdit`** — corrects.
+
+## 4. Un constat reporté, non traité
+
+`message:read-status-updated` est **dual-émis** avec `read-status:updated` aux 5 points d'émission,
+et **aucun client ne l'écoute** (web, iOS, Android : tous sur le nom legacy). C'est délibéré et
+documenté (`tasks/socketio-events-cleanup.md` #3, coexistence ~3 mois depuis le 2026-07-05), donc
+**pas un défaut** — mais les accusés de lecture/livraison sont la classe d'événements la plus
+volumineuse d'une messagerie, et chacun coûte aujourd'hui deux trames par socket. La fenêtre se
+ferme début octobre 2026 : migrer les clients vers le nom namespacé est le préalable au retrait du
+legacy. À cadencer, pas urgent.
+
+---
+
 # Tête instruite pour le cycle 84 — le gate compile existe ; ce qui reste à instruire est ce qu'il ne voit pas
 
 *Le cycle 83 a exécuté la consigne du cycle 82 : mesurer avant de câbler. La mesure a répondu, le
