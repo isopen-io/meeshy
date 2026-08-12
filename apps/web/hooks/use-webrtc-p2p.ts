@@ -54,6 +54,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new');
+  // Real mid-call stall signal, derived from stalledPeersRef — unlike
+  // connectionState (an RTCPeerConnectionState, which never carries the
+  // string 'reconnecting'), this is what callers (e.g. call:analytics'
+  // reconnectionCount) must observe to detect an actual reconnect.
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   // Store WebRTC services per participant
   const webrtcServicesRef = useRef<Map<string, WebRTCService>>(new Map());
@@ -255,13 +260,19 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
             if (state === 'connected' || state === 'completed') {
               connectedPeersRef.current.add(participantId);
-              if (stalledPeersRef.current.delete(participantId) && userId) {
-                // Le restart mené par webrtc-service a abouti — le serveur
-                // repasse l'appel `active`.
-                meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTED, {
-                  callId,
-                  participantId: userId,
-                });
+              const wasStalled = stalledPeersRef.current.delete(participantId);
+              if (wasStalled) {
+                if (stalledPeersRef.current.size === 0) {
+                  setIsReconnecting(false);
+                }
+                if (userId) {
+                  // Le restart mené par webrtc-service a abouti — le serveur
+                  // repasse l'appel `active`.
+                  meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTED, {
+                    callId,
+                    participantId: userId,
+                  });
+                }
               }
             } else if (state === 'disconnected' || state === 'failed') {
               // Stall MID-CALL seulement : le serveur suspend son cleanup et
@@ -274,6 +285,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
                 !stalledPeersRef.current.has(participantId)
               ) {
                 stalledPeersRef.current.add(participantId);
+                setIsReconnecting(true);
                 reconnectAttemptRef.current = Math.min(reconnectAttemptRef.current + 1, 10);
                 meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTING, {
                   callId,
@@ -664,11 +676,32 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
    * Turn the local camera ON mid-call (audio→video upgrade, FaceTime-style).
    * Acquires a single camera track and attaches it to every peer (cloning for
    * additional peers), flipping each reserved video transceiver to sendrecv
-   * and renegotiating. Works while ringing or connected.
+   * and renegotiating.
+   *
+   * Throws if no peer connection exists yet (e.g. still ringing, before the
+   * caller's own createOffer or the callee's first offer signal has run) —
+   * the caller MUST NOT treat a resolved promise as "video is on" when there
+   * is nothing to attach a camera track to. Silently no-op'ing here used to
+   * let handleToggleVideo (VideoCallInterface) flip controls.videoEnabled to
+   * true and tell the peer video is enabled, while no camera track was ever
+   * acquired — a UI/media desync with nothing to recover it automatically.
+   *
+   * The peer list is read TWICE: once before `getUserMedia()` (fail fast,
+   * without prompting for camera permission, when nobody is connected yet)
+   * and again right after it resolves, immediately before distributing the
+   * track (Vague 97). `getUserMedia()` can take human-scale time (the
+   * permission prompt), and a peer joining an ALREADY-active group call
+   * during that window is an ordinary sequence, not adversarial timing. A
+   * stale pre-await snapshot used to permanently exclude that peer: its
+   * video transceiver stays recvonly forever, with no later event ever
+   * re-triggering enableVideoSend for it. If the second read comes back
+   * empty (every peer left while the prompt was pending), the just-acquired
+   * camera is released instead of leaking a live, unattached capture.
    */
   const enableVideo = useCallback(async (): Promise<void> => {
-    const services = Array.from(webrtcServicesRef.current.values());
-    if (services.length === 0) return;
+    if (webrtcServicesRef.current.size === 0) {
+      throw new Error('NO_PEER_CONNECTION');
+    }
     const cam = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
@@ -679,6 +712,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     });
     const baseTrack = cam.getVideoTracks()[0];
     if (!baseTrack) return;
+    const services = Array.from(webrtcServicesRef.current.values());
+    if (services.length === 0) {
+      cam.getTracks().forEach((track) => track.stop());
+      throw new Error('NO_PEER_CONNECTION');
+    }
     await Promise.all(
       services.map((service, index) =>
         service.enableVideoSend(index === 0 ? baseTrack : baseTrack.clone())
@@ -686,6 +724,51 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     );
     logger.info('[useWebRTCP2P]', 'Local video enabled (upgrade)', { callId });
   }, [callId]);
+
+  /**
+   * Switch the local camera between front/back mid-call (FaceTime-style flip
+   * — Vague 95). Mirrors enableVideo()'s "one real track + N clones"
+   * ownership model — giving the first peer the literal camera track and
+   * every other peer a `.clone()` — so each peer's WebRTCService instance
+   * (via switchVideoSendTrack) can safely stop/release only the exact track
+   * it owns.
+   *
+   * Before this existed, VideoCallInterface's handleSwitchCamera replaced
+   * every sender with a SINGLE shared track object while assuming
+   * `localStream` held only one video track — an assumption that breaks the
+   * moment a group call has clones in flight, silently orphaning a live
+   * camera capture on every switch beyond the first.
+   *
+   * Same double-read-around-getUserMedia() as enableVideo() (Vague 97): a
+   * peer joining WHILE the flip's camera prompt is pending is excluded from
+   * the initial pre-await snapshot, so the peer list is re-read right after
+   * `getUserMedia()` resolves, immediately before distributing the track.
+   */
+  const switchCamera = useCallback(
+    async (facingMode: 'user' | 'environment'): Promise<void> => {
+      if (webrtcServicesRef.current.size === 0) {
+        throw new Error('NO_PEER_CONNECTION');
+      }
+      const cam = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
+        audio: false,
+      });
+      const baseTrack = cam.getVideoTracks()[0];
+      if (!baseTrack) return;
+      const services = Array.from(webrtcServicesRef.current.values());
+      if (services.length === 0) {
+        cam.getTracks().forEach((track) => track.stop());
+        throw new Error('NO_PEER_CONNECTION');
+      }
+      await Promise.all(
+        services.map((service, index) =>
+          service.switchVideoSendTrack(index === 0 ? baseTrack : baseTrack.clone())
+        )
+      );
+      logger.info('[useWebRTCP2P]', 'Camera switched', { callId, facingMode });
+    },
+    [callId]
+  );
 
   /**
    * Turn the local camera OFF mid-call (video→audio downgrade). Stops outbound
@@ -726,6 +809,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     remoteDescriptionSetRef.current.clear();
     connectedPeersRef.current.clear();
     stalledPeersRef.current.clear();
+    setIsReconnecting(false);
     negotiationIdsRef.current.clear();
     reconnectAttemptRef.current = 0;
 
@@ -902,11 +986,13 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   return {
     connectionState,
     iceConnectionState,
+    isReconnecting,
     initializeLocalStream,
     ensureLocalStream,
     createOffer,
     enableVideo,
     disableVideo,
+    switchCamera,
     applyQualityTier,
     removeParticipant,
     cleanup,

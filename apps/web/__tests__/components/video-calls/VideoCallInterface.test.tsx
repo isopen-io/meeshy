@@ -8,6 +8,7 @@ const webrtc = {
   connectionState: 'connected',
   enableVideo: jest.fn().mockResolvedValue(undefined),
   disableVideo: jest.fn().mockResolvedValue(undefined),
+  switchCamera: jest.fn().mockResolvedValue(undefined),
   applyQualityTier: jest.fn().mockResolvedValue(undefined),
   removeParticipant: jest.fn(),
 };
@@ -41,8 +42,17 @@ jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({ t: (k: string) => k, isLoading: false }),
 }));
 // VideoStream carries heavy WebRTC/ref machinery — stub it for the fullscreen-region test.
+// `data-muted` mirrors the real `muted` prop so tests can assert speaker-toggle wiring
+// without reaching into an actual <video> element's audio output. The testid is keyed
+// off `isLocal` — LocalVideoTile renders this same component (always muted, self-view)
+// and would otherwise collide with the remote instance under the same fixed testid.
 jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: () => <div data-testid="remote-video-stream" />,
+  VideoStream: (props: { muted?: boolean; isLocal?: boolean }) => (
+    <div
+      data-testid={props.isLocal ? 'local-video-stream' : 'remote-video-stream'}
+      data-muted={String(props.muted)}
+    />
+  ),
 }));
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
@@ -147,6 +157,37 @@ describe('VideoCallInterface (container)', () => {
     expect(screen.getByTestId('call-duration')).toBeInTheDocument();
   });
 
+  // --- Vague 110 (2026-08-12): the visible clock must anchor on answeredAt,
+  // never startedAt (ring delay bleeding into "call duration") -------------
+
+  it('shows 0:00 while a call has been ringing but not yet answered (answeredAt unset)', () => {
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date(Date.now() - 12000).toISOString(), // rang 12s ago
+      answeredAt: undefined,
+      initiatorId: 'other',
+      participants: [
+        { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+      ],
+    };
+    render(<VideoCallInterface callId="call1" />);
+    expect(screen.getByTestId('call-duration')).toHaveTextContent('0:00');
+  });
+
+  it('ticks from answeredAt, not from the earlier startedAt ring-start', () => {
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date(Date.now() - 17000).toISOString(), // rang 17s ago
+      answeredAt: new Date(Date.now() - 5000).toISOString(), // answered 5s ago
+      initiatorId: 'other',
+      participants: [
+        { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+      ],
+    };
+    render(<VideoCallInterface callId="call1" />);
+    expect(screen.getByTestId('call-duration')).toHaveTextContent('0:05');
+  });
+
   // --- watchdog de connexion : un appel jamais connecté est borné à 45 s ---
   // (parité iOS connectingFailSeconds / Android CallConnectingWatchdog — un
   // échec ICE ne produisait qu'un toast, l'UI d'appel restait à vie)
@@ -243,6 +284,38 @@ describe('VideoCallInterface (container)', () => {
     } finally {
       storeState.remoteStreams = new Map();
     }
+  });
+
+  // Regression guard — the speaker button used to flip a `useState` local to
+  // `CallControls` that nothing downstream ever read: clicking it changed the
+  // icon but never muted/unmuted a single <video> element, on any surface
+  // (fullscreen main participant or draggable overlay tiles).
+  describe('speaker toggle actually mutes/unmutes remote audio', () => {
+    beforeEach(() => {
+      storeState.remoteStreams = new Map([['peer1', {} as MediaStream]]);
+    });
+    afterEach(() => {
+      storeState.remoteStreams = new Map();
+    });
+
+    it('plays remote audio (unmuted) by default', () => {
+      render(<VideoCallInterface callId="call1" />);
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'false');
+    });
+
+    it('mutes the remote video element when the speaker is toggled off', () => {
+      render(<VideoCallInterface callId="call1" />);
+      fireEvent.click(screen.getByRole('button', { name: 'calls.controls.speakerOff' }));
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'true');
+    });
+
+    it('unmutes again on a second toggle', () => {
+      render(<VideoCallInterface callId="call1" />);
+      const button = () => screen.getByRole('button', { name: /calls\.controls\.speaker(On|Off)/ });
+      fireEvent.click(button());
+      fireEvent.click(button());
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'false');
+    });
   });
 
   // Sibling-drift fix: `offersCreatedFor` used to be populated on offer
@@ -449,8 +522,22 @@ describe('VideoCallInterface (container)', () => {
   // camera-switch path used to stop/detach the old track synchronously,
   // right after firing (not awaiting) replaceTrack, unlike the sibling
   // audio-track-replacement effect a few lines above it in the same file.
-  describe('handleSwitchCamera — must not tear down the old track before replaceTrack settles', () => {
-    const setupCameraSwitchDom = (getUserMediaImpl: jest.Mock) => {
+  // Vague 95: the actual track acquisition + per-peer replaceTrack/stop
+  // sequencing used to live here, assuming `localStream` held exactly one
+  // video track and that a single new track object could safely replace
+  // every peer connection's sender — an assumption that silently orphans a
+  // camera capture the moment a group call has per-peer clones in flight
+  // (use-webrtc-p2p.ts's enableVideo() ownership model). That sequencing now
+  // lives in WebRTCService.switchVideoSendTrack (unit-tested in
+  // webrtc-service.coverage.test.ts) orchestrated by use-webrtc-p2p.ts's
+  // switchCamera() (unit-tested in use-webrtc-p2p.test.tsx) — this
+  // component's only remaining job is computing the target facing mode and
+  // delegating to it.
+  describe('handleSwitchCamera — delegates the track swap to switchCamera()', () => {
+    beforeEach(() => {
+      // The switch-camera button only renders once CallControls' own
+      // enumerateDevices probe confirms 2+ cameras — unrelated to
+      // switchCamera() itself, which is mocked at the hook level below.
       Object.defineProperty(navigator, 'mediaDevices', {
         configurable: true,
         value: {
@@ -458,16 +545,15 @@ describe('VideoCallInterface (container)', () => {
             { kind: 'videoinput' },
             { kind: 'videoinput' },
           ]),
-          getUserMedia: getUserMediaImpl,
         },
       });
-    };
+    });
 
     afterEach(() => {
-      // @ts-expect-error -- test-only cleanup of a property we defined above
-      delete navigator.mediaDevices;
+      webrtc.switchCamera.mockResolvedValue(undefined);
       storeState.localStream = null;
-      storeState.peerConnections = new Map();
+      // @ts-expect-error -- test-only cleanup of a property defined above
+      delete navigator.mediaDevices;
     });
 
     const clickSwitchCamera = async () => {
@@ -475,68 +561,58 @@ describe('VideoCallInterface (container)', () => {
       fireEvent.click(button);
     };
 
-    it('waits for every peer connection to finish replaceTrack before stopping/detaching the old track', async () => {
-      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
-      const localStream = {
+    it('derives "environment" from a user-facing current track and delegates to switchCamera()', async () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }) };
+      storeState.localStream = {
         getVideoTracks: () => [videoTrack],
         getAudioTracks: () => [],
-        removeTrack: jest.fn(),
-        addTrack: jest.fn(),
-      };
-      storeState.localStream = localStream as unknown as MediaStream;
-
-      let resolveReplace: () => void = () => {};
-      const replaceTrack = jest.fn(() => new Promise<void>((resolve) => { resolveReplace = resolve; }));
-      const pc = { getSenders: () => [{ track: { kind: 'video' }, replaceTrack }] };
-      storeState.peerConnections = new Map([['peer1', pc]]) as unknown as typeof storeState.peerConnections;
-
-      const newVideoTrack = {};
-      setupCameraSwitchDom(jest.fn().mockResolvedValue({ getVideoTracks: () => [newVideoTrack] }));
+      } as unknown as MediaStream;
 
       render(<VideoCallInterface callId="call1" />);
       await clickSwitchCamera();
 
-      await waitFor(() => expect(replaceTrack).toHaveBeenCalledWith(newVideoTrack));
-      expect(videoTrack.stop).not.toHaveBeenCalled();
-      expect(localStream.removeTrack).not.toHaveBeenCalled();
-
-      resolveReplace();
-
-      await waitFor(() => expect(videoTrack.stop).toHaveBeenCalledTimes(1));
-      expect(localStream.removeTrack).toHaveBeenCalledWith(videoTrack);
-      expect(localStream.addTrack).toHaveBeenCalledWith(newVideoTrack);
+      await waitFor(() => expect(webrtc.switchCamera).toHaveBeenCalledWith('environment'));
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('calls.toasts.cameraSwitched'));
     });
 
-    it('surfaces cameraSwitchFailed and keeps the old track alive when a peer connection rejects replaceTrack', async () => {
-      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
-      const localStream = {
+    it('derives "user" from an environment-facing current track', async () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'environment' }) };
+      storeState.localStream = {
         getVideoTracks: () => [videoTrack],
         getAudioTracks: () => [],
-        removeTrack: jest.fn(),
-        addTrack: jest.fn(),
-      };
-      storeState.localStream = localStream as unknown as MediaStream;
-
-      const replaceTrack = jest.fn().mockRejectedValue(new Error('sender closed'));
-      const pc = { getSenders: () => [{ track: { kind: 'video' }, replaceTrack }] };
-      storeState.peerConnections = new Map([['peer1', pc]]) as unknown as typeof storeState.peerConnections;
-
-      // Carries its own `stop` spy: the newly-acquired track must never
-      // survive a rejected replaceTrack, or the other-facing camera hardware
-      // is left capturing with nothing consuming it.
-      const newVideoTrack = { stop: jest.fn() };
-      setupCameraSwitchDom(jest.fn().mockResolvedValue({ getVideoTracks: () => [newVideoTrack] }));
+      } as unknown as MediaStream;
 
       render(<VideoCallInterface callId="call1" />);
       await clickSwitchCamera();
 
-      await waitFor(() => expect(replaceTrack).toHaveBeenCalled());
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.cameraSwitchFailed'));
+      await waitFor(() => expect(webrtc.switchCamera).toHaveBeenCalledWith('user'));
+    });
 
-      expect(newVideoTrack.stop).toHaveBeenCalledTimes(1);
-      expect(videoTrack.stop).not.toHaveBeenCalled();
-      expect(localStream.removeTrack).not.toHaveBeenCalled();
-      expect(localStream.addTrack).not.toHaveBeenCalled();
+    it('surfaces cameraSwitchFailed and does not toast success when switchCamera rejects', async () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }) };
+      storeState.localStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+      } as unknown as MediaStream;
+      webrtc.switchCamera.mockRejectedValueOnce(new Error('replaceTrack failed'));
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.cameraSwitchFailed'));
+      expect(toast.success).not.toHaveBeenCalledWith('calls.toasts.cameraSwitched');
+    });
+
+    it('no-ops without calling switchCamera when there is no local video track', async () => {
+      storeState.localStream = {
+        getVideoTracks: () => [],
+        getAudioTracks: () => [],
+      } as unknown as MediaStream;
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera();
+
+      expect(webrtc.switchCamera).not.toHaveBeenCalled();
     });
   });
 
@@ -673,10 +749,8 @@ describe('VideoCallInterface (container)', () => {
     afterEach(() => {
       webrtc.enableVideo.mockResolvedValue(undefined);
       webrtc.disableVideo.mockResolvedValue(undefined);
-      // @ts-expect-error -- test-only cleanup of a property defined per-test below
-      delete navigator.mediaDevices;
+      webrtc.switchCamera.mockResolvedValue(undefined);
       storeState.localStream = null;
-      storeState.peerConnections = new Map();
     });
 
     it('handleToggleVideo: a second click before enableVideo resolves must not call enableVideo twice', async () => {
@@ -726,30 +800,26 @@ describe('VideoCallInterface (container)', () => {
       });
     });
 
-    it('handleSwitchCamera: a second click before getUserMedia resolves must not acquire a second camera track', async () => {
-      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
-      const localStream = {
-        getVideoTracks: () => [videoTrack],
-        getAudioTracks: () => [],
-        removeTrack: jest.fn(),
-        addTrack: jest.fn(),
-      };
-      storeState.localStream = localStream as unknown as MediaStream;
-      storeState.peerConnections = new Map([
-        ['peer1', { getSenders: () => [{ track: { kind: 'video' }, replaceTrack: jest.fn().mockResolvedValue(undefined) }] }],
-      ]) as unknown as typeof storeState.peerConnections;
-
-      let resolveGetUserMedia: (stream: unknown) => void = () => {};
-      const getUserMedia = jest.fn(
-        () => new Promise((resolve) => { resolveGetUserMedia = resolve; }),
-      );
+    it('handleSwitchCamera: a second click before switchCamera resolves must not call switchCamera twice', async () => {
       Object.defineProperty(navigator, 'mediaDevices', {
         configurable: true,
         value: {
-          enumerateDevices: jest.fn().mockResolvedValue([{ kind: 'videoinput' }, { kind: 'videoinput' }]),
-          getUserMedia,
+          enumerateDevices: jest.fn().mockResolvedValue([
+            { kind: 'videoinput' },
+            { kind: 'videoinput' },
+          ]),
         },
       });
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }) };
+      storeState.localStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+      } as unknown as MediaStream;
+
+      let resolveSwitch: () => void = () => {};
+      webrtc.switchCamera.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveSwitch = resolve; }),
+      );
 
       render(<VideoCallInterface callId="call1" />);
       const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
@@ -757,13 +827,48 @@ describe('VideoCallInterface (container)', () => {
       fireEvent.click(button);
       fireEvent.click(button);
 
-      expect(getUserMedia).toHaveBeenCalledTimes(1);
+      expect(webrtc.switchCamera).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        resolveGetUserMedia({ getVideoTracks: () => [{}] });
-        await Promise.resolve();
+        resolveSwitch();
         await Promise.resolve();
       });
+
+      // @ts-expect-error -- test-only cleanup of a property defined above
+      delete navigator.mediaDevices;
+    });
+  });
+
+  // Vague 86: enableVideo() (use-webrtc-p2p.ts) used to resolve silently
+  // (no-op, no throw) when no peer connection exists yet — e.g. the call is
+  // still ringing. handleToggleVideo has no way to distinguish that from a
+  // real success: it flipped controls.videoEnabled to true and told the peer
+  // video was on via CALL_TOGGLE_VIDEO, even though no camera track was ever
+  // acquired or attached to anything. enableVideo now throws in that case —
+  // this locks handleToggleVideo's reaction to the rejection through the
+  // SAME catch path already proven for a mid-call replaceTrack failure.
+  describe('handleToggleVideo — enableVideo rejecting must not report video as enabled (Vague 86)', () => {
+    afterEach(() => {
+      webrtc.enableVideo.mockResolvedValue(undefined);
+    });
+
+    it('keeps controls.videoEnabled false and does not notify the peer when enableVideo rejects', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: false };
+      webrtc.enableVideo.mockRejectedValueOnce(new Error('NO_PEER_CONNECTION'));
+      const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+      (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button);
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.videoSwitchFailed'));
+
+      expect(storeState.setControls).not.toHaveBeenCalled();
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith(
+        'call:toggle-video',
+        expect.anything(),
+      );
     });
   });
 
@@ -830,6 +935,139 @@ describe('VideoCallInterface (container)', () => {
       fireEvent.click(button);
 
       expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+      await suspendPromise;
+    });
+  });
+
+  // Vague 92: Vague 82 unified the manual toggle with the adaptive-degradation
+  // controller's suspend()/resume(), but `handleSwitchCamera` kept its own,
+  // entirely disconnected `cameraSwitchInFlightRef` — a camera flip could
+  // still race either path, letting one replaceTrack/stop a track the other
+  // was still mid-acquisition on.
+  describe('mutual exclusion — camera switch vs. manual toggle / adaptive-degradation controller (Vague 92)', () => {
+    type CapturedDegradationActions = {
+      applyTier: (tier: string) => void;
+      suspend: () => Promise<void>;
+      resume: () => Promise<void>;
+    };
+
+    const capturedActions = (): CapturedDegradationActions => {
+      const calls = useAdaptiveDegradationMock.mock.calls;
+      const lastCall = calls[calls.length - 1] as unknown as [{ actions: CapturedDegradationActions }];
+      return lastCall[0].actions;
+    };
+
+    const setupCameraSwitchFixture = () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }) };
+      storeState.localStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+      } as unknown as MediaStream;
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest.fn().mockResolvedValue([{ kind: 'videoinput' }, { kind: 'videoinput' }]),
+        },
+      });
+    };
+
+    const clickSwitchCamera = async () => {
+      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+      fireEvent.click(button);
+    };
+
+    afterEach(() => {
+      webrtc.enableVideo.mockResolvedValue(undefined);
+      webrtc.disableVideo.mockResolvedValue(undefined);
+      webrtc.switchCamera.mockResolvedValue(undefined);
+      // @ts-expect-error -- test-only cleanup of a property defined per-test below
+      delete navigator.mediaDevices;
+      storeState.localStream = null;
+    });
+
+    it('a camera switch in flight blocks a concurrent manual toggle from calling disableVideo', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveSwitch: () => void = () => {};
+      webrtc.switchCamera.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveSwitch = resolve; }),
+      );
+      setupCameraSwitchFixture();
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera(); // camera switch now in flight
+
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button);
+
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveSwitch();
+        await Promise.resolve();
+      });
+    });
+
+    it('an in-flight manual toggle blocks a concurrent camera switch from calling switchCamera', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+      setupCameraSwitchFixture();
+
+      render(<VideoCallInterface callId="call1" />);
+      const button = screen.getByTestId('toggle-video');
+      fireEvent.click(button); // manual disableVideo now in flight
+
+      await clickSwitchCamera();
+
+      expect(webrtc.switchCamera).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveDisable();
+        await Promise.resolve();
+      });
+    });
+
+    it('a camera switch in flight blocks a concurrent auto-suspend from calling disableVideo', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveSwitch: () => void = () => {};
+      webrtc.switchCamera.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveSwitch = resolve; }),
+      );
+      setupCameraSwitchFixture();
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera(); // camera switch now in flight
+
+      await expect(capturedActions().suspend()).rejects.toThrow();
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveSwitch();
+        await Promise.resolve();
+      });
+    });
+
+    it('an in-flight auto-suspend blocks a concurrent camera switch from calling switchCamera', async () => {
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      let resolveDisable: () => void = () => {};
+      webrtc.disableVideo.mockImplementation(
+        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
+      );
+      setupCameraSwitchFixture();
+
+      render(<VideoCallInterface callId="call1" />);
+      const suspendPromise = capturedActions().suspend(); // auto suspend now in flight
+
+      await clickSwitchCamera();
+
+      expect(webrtc.switchCamera).not.toHaveBeenCalled();
 
       await act(async () => {
         resolveDisable();

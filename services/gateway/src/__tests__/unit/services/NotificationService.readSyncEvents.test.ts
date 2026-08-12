@@ -104,7 +104,12 @@ describe('NotificationService — événements de sync de lecture multi-appareil
 
       expect(mockIO.emit).toHaveBeenCalledWith('notification:counts', expect.any(Object));
       const countWheres = prisma.notification.count.mock.calls.map((c: any[]) => c[0].where);
-      expect(countWheres).toContainEqual({ userId: USER_ID, isRead: false });
+      // `objectContaining` et non l'égalité : ce que ce test défend est le
+      // PRÉDICAT de non-lu (isRead, jamais readAt), pas la clause entière — le
+      // filtre de visibilité (`expiresAt`) s'y compose depuis, et il est tenu
+      // sur son propre terrain par `notificationExpiry.test.ts`, en évaluant
+      // la clause contre des lignes plutôt qu'en la recopiant.
+      expect(countWheres).toContainEqual(expect.objectContaining({ userId: USER_ID, isRead: false }));
       expect(countWheres.some((w: Record<string, unknown>) => 'readAt' in w)).toBe(false);
     });
 
@@ -172,6 +177,53 @@ describe('NotificationService — événements de sync de lecture multi-appareil
       const count = await service.deleteAllRead(USER_ID);
 
       expect(count).toBe(0);
+    });
+  });
+  /**
+   * Le RAPPEL d'un message retire en base les notifications qu'il avait
+   * produites (`applyMessageRemovalEffects`). Ce service n'en tient que la
+   * moitié volatile : sans elle, la ligne resterait affichée sur les écrans
+   * ouverts et la cloche compterait des lignes que le serveur vient de
+   * supprimer, jusqu'au prochain démarrage à froid.
+   */
+  describe('announceNotificationsRetracted', () => {
+    const OTHER_USER_ID = '64a000000000000000000002';
+
+    it('émet notification:deleted vers la room de CHAQUE destinataire', async () => {
+      await service.announceNotificationsRetracted([
+        { id: 'notif-a', userId: USER_ID },
+        { id: 'notif-b', userId: OTHER_USER_ID },
+      ]);
+      await flushAsync();
+
+      expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+      expect(mockIO.to).toHaveBeenCalledWith(`user:${OTHER_USER_ID}`);
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: 'notif-a' });
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: 'notif-b' });
+    });
+
+    it('ne recompte les badges qu\'UNE fois par destinataire', async () => {
+      // Une mention et une réponse sur le même message rappelé visent la même
+      // personne : deux lignes retirées, un seul badge à recalculer.
+      await service.announceNotificationsRetracted([
+        { id: 'notif-a', userId: USER_ID },
+        { id: 'notif-b', userId: USER_ID },
+      ]);
+      await flushAsync();
+
+      const countsEmits = mockIO.emit.mock.calls.filter(([event]: [string]) => event === 'notification:counts');
+      expect(countsEmits).toHaveLength(1);
+    });
+
+    it('reste silencieux et sans erreur quand aucun socket n\'est câblé', async () => {
+      // Le retrait durable a DÉJÀ eu lieu quand ceci tourne : un worker sans
+      // `io` ne doit pas transformer une suppression réussie en rejet.
+      const offline = new NotificationService(prisma);
+
+      await expect(
+        offline.announceNotificationsRetracted([{ id: 'notif-a', userId: USER_ID }])
+      ).resolves.toBeUndefined();
+      expect(mockIO.emit).not.toHaveBeenCalled();
     });
   });
 });

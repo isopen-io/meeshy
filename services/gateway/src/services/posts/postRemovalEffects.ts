@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
+import { deactivatePostTrackingLinks } from './deactivatePostTrackingLinks';
+import { retractPostNotifications } from './retractPostNotifications';
 import { SoundCaptureService } from './SoundCaptureService';
 
 const log = enhancedLogger.child({ module: 'postRemovalEffects' });
@@ -53,7 +57,12 @@ export async function applyPostRemovalEffects(
   prisma: PrismaClient,
   post: RemovedPostRecord,
   actor: PostRemovalActor,
-  soundCapture: PostSoundReleaser = new SoundCaptureService(prisma)
+  soundCapture: PostSoundReleaser = new SoundCaptureService(prisma),
+  // Défaut = le service partagé du processus, le seul câblé avec `io`. Même
+  // résolution que le jumeau `applyMessageRemovalEffects` : les deux routes qui
+  // retirent un post n'ont ainsi rien à câbler, et un appelant hors serveur
+  // (worker, script, test) retire quand même les lignes, sans annonce.
+  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService()
 ): Promise<void> {
   // Retrait par un tiers habilité : trace d'audit. Un auteur qui retire son
   // propre contenu n'est pas un acte de modération — c'est ce qui distingue
@@ -78,15 +87,30 @@ export async function applyPostRemovalEffects(
     }
   }
 
+  // Les notifications que le post a produites. Placées juste après l'audit —
+  // qui doit rester le premier effet écrit, c'est la trace de modération — et
+  // avant les deux autres, parce que c'est le SEUL des quatre dont le retard se
+  // voit : tant qu'il n'a pas eu lieu, l'extrait du contenu retiré et la
+  // vignette de son média restent affichés dans l'inbox de toute l'audience.
+  // Les liens de partage et les usages de sons, eux, ne se lisent nulle part en
+  // temps réel.
+  try {
+    await retractPostNotifications(prisma, [post.id], announcer);
+  } catch (err) {
+    log.warn('post removal: notification retraction failed', { postId: post.id, err });
+  }
+
   // Le soft-delete ne bascule que `deletedAt` — le `onDelete: Cascade` de
   // Prisma ne se déclenche jamais. Les `/l/<token>` qui visent ce post
   // resteraient donc opérationnels, et un contenu retiré POUR MODÉRATION
   // resterait atteignable par le lien même qui l'a diffusé.
+  //
+  // Délégué depuis que le balayage du contenu éphémère — l'autre chemin qui
+  // rend un post inatteignable, et le seul qui le DÉTRUISE — applique le même
+  // effet : deux copies de la règle divergeraient, et c'est exactement ce que
+  // l'en-tête de ce module raconte être arrivé aux trois autres.
   try {
-    await prisma.trackingLink.updateMany({
-      where: { targetId: post.id },
-      data: { isActive: false },
-    });
+    await deactivatePostTrackingLinks(prisma, [post.id]);
   } catch (err) {
     log.warn('post removal: tracking link deactivation failed', { postId: post.id, err });
   }

@@ -66,6 +66,9 @@ export interface UseAudioEffectsOptions {
 export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEffectsOptions) {
   const inputNodeRef = useRef<ToneTypes.ToneAudioNode | null>(null);
   const mediaStreamDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const channelSplitterRef = useRef<ChannelSplitterNode | null>(null);
+  const channelMergerRef = useRef<ChannelMergerNode | null>(null);
   const processorsRef = useRef<Map<AudioEffectType, AudioEffectProcessor>>(new Map());
   const previouslyEnabledTypesRef = useRef<Set<AudioEffectType>>(new Set());
   // Mirrors `isInitialized` synchronously. The mount effect below tears down
@@ -100,6 +103,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
 
       const audioContext = Tone.context.rawContext as AudioContext;
       const source = audioContext.createMediaStreamSource(inputStream);
+      sourceNodeRef.current = source;
 
       const inputChannels =
         source.channelCount ||
@@ -110,6 +114,8 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       if (inputChannels < 2) {
         const splitter = audioContext.createChannelSplitter(1);
         const merger = audioContext.createChannelMerger(2);
+        channelSplitterRef.current = splitter;
+        channelMergerRef.current = merger;
         source.connect(splitter);
         splitter.connect(merger, 0, 0);
         splitter.connect(merger, 0, 1);
@@ -284,9 +290,38 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
         (inputNodeRef.current as any).dispose?.();
         inputNodeRef.current = null;
       }
+      // `disconnect()` only severs a node's OUTGOING edges — disconnecting the
+      // Gain node above leaves the UPSTREAM `source [→ splitter → merger]`
+      // chain still wired into the shared, app-lifetime AudioContext graph.
+      // Left uncut, each mic/camera swap during a call pins one more
+      // MediaStreamAudioSourceNode (and, on mono input, its upmix pair) into
+      // the graph forever, holding a reference to the old stream/tracks.
+      if (channelSplitterRef.current) {
+        channelSplitterRef.current.disconnect();
+        channelSplitterRef.current = null;
+      }
+      if (channelMergerRef.current) {
+        channelMergerRef.current.disconnect();
+        channelMergerRef.current = null;
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
       processorsRef.current.forEach((processor) => processor.destroy());
       processorsRef.current.clear();
       previouslyEnabledTypesRef.current = new Set();
+      if (mediaStreamDestinationRef.current) {
+        // The destination node stays wired into the shared, long-lived
+        // AudioContext graph until explicitly stopped — overwriting the ref
+        // on re-init (below, in initializeAudioPipeline) isn't enough, it
+        // just orphans the old node while it keeps generating audio into a
+        // MediaStream nobody reads from anymore. Left unstopped, this leaks
+        // CPU/battery on every mic/camera switch for the rest of the call.
+        mediaStreamDestinationRef.current.stream.getTracks?.().forEach((track) => track.stop());
+        mediaStreamDestinationRef.current.disconnect?.();
+        mediaStreamDestinationRef.current = null;
+      }
       if (inputStream) {
         isInitializedRef.current = false;
         setIsInitialized(false);

@@ -153,6 +153,73 @@ final class SeenMessageAccumulatorTests: XCTestCase {
         XCTAssertEqual(first.drain(at: dwell), second.drain(at: dwell))
     }
 
+    // MARK: - Promotion immédiate
+
+    // Arriver au bas de la conversation, demander ce bas, ou quitter l'écran :
+    // à ces instants ce qui est affiché EST ce qui est lu, et attendre le seuil
+    // ne rendrait l'accusé ni plus ni moins véridique — seulement plus tardif.
+    func test_promoteAndDrain_yieldsMessagesBelowDwell() {
+        var acc = makeAccumulator()
+        acc.appeared("m1", at: 1000)
+
+        XCTAssertEqual(acc.promoteAndDrain(at: 1000), ["m1"])
+    }
+
+    func test_promoteAndDrain_emptiesState() {
+        var acc = makeAccumulator()
+        acc.appeared("m1", at: 0)
+
+        XCTAssertEqual(acc.promoteAndDrain(at: 0), ["m1"])
+        XCTAssertEqual(acc.promoteAndDrain(at: 10_000), [])
+        XCTAssertEqual(acc.drain(at: 10_000), [])
+    }
+
+    // Les identifiants déjà acquis par le seuil sortent avec ceux promus de
+    // force : une promotion ne doit pas court-circuiter une lecture en attente.
+    func test_promoteAndDrain_yieldsAcquiredAndVisibleTogether() {
+        var acc = makeAccumulator()
+        acc.appeared("acquis", at: 0)
+        acc.disappeared("acquis", at: dwell)
+        acc.appeared("fraiche", at: dwell)
+
+        XCTAssertEqual(acc.promoteAndDrain(at: dwell).sorted(), ["acquis", "fraiche"])
+    }
+
+    func test_promoteAndDrain_neverReportsTheSameMessageTwice() {
+        var acc = makeAccumulator()
+        acc.appeared("m1", at: 0)
+
+        XCTAssertEqual(acc.drain(at: dwell), ["m1"])
+        acc.appeared("m1", at: 5000)
+
+        XCTAssertEqual(acc.promoteAndDrain(at: 5000), [])
+    }
+
+    func test_promoteAndDrain_isDeterministic() {
+        var first = makeAccumulator()
+        first.appeared("b", at: 0)
+        first.appeared("a", at: 0)
+
+        var second = makeAccumulator()
+        second.appeared("a", at: 0)
+        second.appeared("b", at: 0)
+
+        XCTAssertEqual(first.promoteAndDrain(at: 0), second.promoteAndDrain(at: 0))
+    }
+
+    // La promotion ne change RIEN au régime normal : le seuil reste le
+    // mécanisme par défaut pour tout défilement ultérieur.
+    func test_promoteAndDrain_leavesDwellRuleIntactForLaterMessages() {
+        var acc = makeAccumulator()
+        acc.appeared("m1", at: 0)
+        _ = acc.promoteAndDrain(at: 0)
+
+        acc.appeared("m2", at: 100)
+
+        XCTAssertEqual(acc.drain(at: 100 + dwell - 1), [])
+        XCTAssertEqual(acc.drain(at: 100 + dwell), ["m2"])
+    }
+
     // Le garde-fou anti-doublon est borné ; au pire un oubli provoque un
     // signalement redondant, sans conséquence puisque l'écriture est write-once.
     func test_reportedSet_isBounded() {

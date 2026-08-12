@@ -7,6 +7,12 @@
     <string name="login_error_required">Le nom d\'utilisateur et le mot de passe sont requis</string>
     <string name="login_signup_prompt">Pas encore de compte ?</string>
     <string name="login_signup_link">Créer un compte</string>
+    <string name="login_other_account">Autre compte</string>
+    <string name="login_remove_account">Supprimer ce compte</string>
+    <string name="login_saved_accounts">Comptes sauvegardés</string>
+    <string name="login_custom_host_label">Hôte personnalisé</string>
+    <string name="login_apply_custom_host">Appliquer l\'hôte personnalisé</string>
+    <string name="login_server_origin">Connecté à : %1$s</string>
 
     <string name="registration_close">Fermer</string>
     <string name="registration_back">Retour</string>
@@ -15,6 +21,7 @@
     <string name="registration_username_label">Nom d\'utilisateur</string>
     <string name="registration_username_available">Nom d\'utilisateur disponible</string>
     <string name="registration_username_taken">Ce nom d\'utilisateur est déjà pris</string>
+    <string name="registration_username_suggestions_title">Suggestions disponibles</string>
     <string name="registration_next">Suivant</string>
     <string name="registration_continue">Continuer</string>
     <string name="registration_create_account">Créer mon compte</string>
@@ -63,6 +70,26 @@
     <string name="registration_language_regional_tab">Langue régionale</string>
     <string name="registration_language_search_hint">Chercher une langue…</string>
     <string name="registration_language_example_title">Comment ça marche</string>
+    <string name="registration_profile_header">Montre-toi sous ton plus beau jour</string>
+    <string name="registration_profile_subtitle">Une belle photo et une bannière soignée ouvrent toutes les portes — c\'est comme ça qu\'on rencontre les meilleures personnes, ici et ailleurs.</string>
+    <string name="registration_profile_optional_note">Optionnel — mais un profil soigné fait meilleure impression</string>
+    <string name="registration_profile_bio_title">Bio (optionnel)</string>
+    <string name="registration_profile_bio_counter">%1$d/150 caractères</string>
+    <string name="registration_profile_photo_a11y">Ajouter une photo de profil</string>
+    <string name="registration_profile_banner_a11y">Ajouter une photo de bannière</string>
+    <string name="registration_recap_header">Presque fini !</string>
+    <string name="registration_recap_subtitle">Vérifie que tout est correct avant de créer ton compte.</string>
+    <string name="registration_recap_summary_title">Ton profil en un coup d\'œil</string>
+    <string name="registration_recap_field_username">Nom d\'utilisateur</string>
+    <string name="registration_recap_field_email">E-mail</string>
+    <string name="registration_recap_field_name">Nom</string>
+    <string name="registration_recap_field_phone">Téléphone</string>
+    <string name="registration_recap_field_languages">Langues</string>
+    <string name="registration_recap_field_bio">Bio</string>
+    <string name="registration_recap_terms_accept">J\'accepte les conditions d\'utilisation et la politique de confidentialité</string>
+    <string name="registration_recap_terms_read">Lire les conditions</string>
+    <string name="registration_recap_terms_title">Conditions d\'utilisation</string>
+    <string name="registration_recap_terms_body">Bienvenue sur Meeshy ! En utilisant notre application, tu acceptes les conditions suivantes :\n\n1. UTILISATION RESPONSABLE\nMeeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illégal.\n\n2. TON COMPTE\nTu es responsable de ton compte. Garde ton mot de passe secret !\n\n3. TES DONNÉES\nOn protège tes données avec le chiffrement de bout en bout. Tes messages sont privés.\n\n4. TRADUCTION\nLa traduction est automatique et peut ne pas être parfaite. C\'est un outil, pas une science exacte !\n\n5. RESPECT\nTraite les autres comme tu voudrais être traité. On est une communauté !\n\nOn est ensemble !</string>
 
     <string name="guest_join_title">Rejoindre la conversation</string>
     <string name="guest_join_subtitle">Créez une identité temporaire pour rejoindre</string>
@@ -80,4 +107,25 @@
     <string name="guest_join_preview_error">Ce lien n\'a pas pu être ouvert</string>
     <string name="guest_join_requires_account">Ce lien nécessite un compte.</string>
     <string name="guest_join_sign_in">Se connecter</string>
+
+    <!-- Account recovery -->
+    <string name="login_forgot_password">Mot de passe oublié ?</string>
+    <string name="login_magic_link">Lien magique</string>
+    <string name="auth_back">Retour</string>
+    <string name="auth_back_to_login">Retour à la connexion</string>
+    <string name="auth_email_label">Email</string>
+    <string name="auth_forgot_title">Réinitialiser le mot de passe</string>
+    <string name="auth_forgot_subtitle">Saisissez votre adresse email et nous vous enverrons un lien de réinitialisation.</string>
+    <string name="auth_forgot_send">Envoyer le lien</string>
+    <string name="auth_forgot_sent">Si un compte existe pour %1$s, un lien de réinitialisation a été envoyé. Vérifiez votre boîte mail.</string>
+    <string name="auth_magic_title">Lien magique</string>
+    <string name="auth_magic_subtitle">Connectez-vous sans mot de passe : nous vous envoyons un lien de connexion à usage unique.</string>
+    <string name="auth_magic_send">Envoyer le lien magique</string>
+    <string name="auth_magic_sent">Lien envoyé à %1$s. Ouvrez-le sur cet appareil pour vous connecter.</string>
+    <string name="auth_magic_countdown">Lien valide pendant %1$s</string>
+    <string name="auth_magic_expired">Le lien a expiré. Envoyez-en un nouveau.</string>
+    <string name="auth_magic_resend">Renvoyer le lien</string>
+    <string name="auth_magic_validating">Connexion en cours…</string>
+    <string name="auth_magic_success">Connexion réussie !</string>
+    <string name="auth_magic_invalid">Lien invalide ou expiré</string>
 </resources>

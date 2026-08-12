@@ -275,7 +275,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 > only when the feature is implemented **and** verified.
 
 ## A. Auth & Onboarding
-- [~] Username/password login with saved-account picker (multi-account, one-tap switch) —
+- [x] Username/password login with saved-account picker (multi-account, one-tap switch) —
       **saved-account list core shipped** (slice `auth-saved-account-picker-core`, 2026-07-21).
       Pure `:core:model` `SavedAccount` + `SavedAccounts` (faithful port of iOS `AuthManager`'s
       saved-account logic, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`, +
@@ -303,9 +303,47 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       unrelated reds this diff never touches: the documented `:sdk-core` DataStore parallel-load flake —
       green in isolation — and a **newly-noted deterministic** `:feature:profile` `ProfileHeaderBuilderTest`
       failure that reproduces on clean `origin/main`; see the ⚠ follow-up below.) Diff = `apps/android`
-      only. **Follow-up:** the app-side `LoginView` picker composable + a DataStore-backed saved-account
-      store (observing `SavedAccounts.sorted`, wiring `upsert` on login / `remove` on delete / `find` on
-      one-tap select → password focus), and the "other account" toggle driving `showPicker`.
+      only. **Follow-up shipped** (slice `auth-saved-account-picker-ui`, 2026-08-10): the app-side
+      `LoginScreen` picker UI + a SharedPreferences-backed `SavedAccountsStore` (`:sdk-core`, mirrors
+      `StarredMessagesStore` — JSON-encoded list under one key, always exposes an already-
+      `SavedAccounts.sorted` list, never a password/token). `AuthViewModel` seeds `AuthUiState.
+      savedAccounts` synchronously from the store's `StateFlow.value` at construction (cache-first, no
+      spinner) then collects it for live updates; `showPicker` is a pure derivation
+      (`SavedAccounts.showPicker(savedAccounts, showNormalLogin)`). New transitions: `selectAccount`
+      (tap a row → prefill username, clear password, iOS `selectedAccount`/one-tap-select),
+      `deselectAccount` (back arrow → return to the list), `useAnotherAccount` (→ the plain form, iOS
+      `showNormalLogin = true`), `backToSavedAccounts`, `removeAccount` (→ `store.remove`).
+      `login()` on success now also `store.upsert`s the freshly-authenticated user
+      (id/username/displayName/avatar + `CacheClock.nowMillis()` — iOS stamps `Date()` at
+      `upsertSavedAccount`, not the server's `lastActiveAt`) so it appears in the picker on the next
+      cold start; a failed login never upserts. `logout()` re-seeds `savedAccounts` from the store
+      after resetting the rest of the state — the list is cross-account and deliberately **not**
+      wiped by `SessionTeardown` (same rule as iOS: `AuthManager.logout()` never touches
+      `savedAccounts`), so a picker with 2 remembered accounts survives a logout. **Deliberate
+      Android-idiomatic divergence:** iOS surfaces row removal via a `.contextMenu` (long-press);
+      Compose has no first-class context-menu primitive, so `LoginScreen`'s `SavedAccountRow` uses a
+      visible trailing close-icon button instead — same capability, platform-native discovery, called
+      out rather than silently diverging. **+10 new `AuthViewModelTest`** (initial state seeded from
+      the store + `showPicker` both ways; select prefills + clears; deselect returns to the picker;
+      "other account" toggle; back-to-picker; remove drops from state; login success upserts with the
+      injected clock's value; login failure upserts nothing; logout preserves the list) **+7 new
+      `SharedPrefsSavedAccountsStoreTest`** (empty on fresh install, upsert prepends/re-sorts,
+      survives a fresh store construction, remove drops/is inert on an unknown id, a corrupt blob
+      degrades to empty — mirrors `SharedPrefsStarredMessagesStoreTest`). Mutation (RED proof):
+      commenting out the `store.upsert(...)` call inside `login()`'s success branch fails **exactly**
+      `login_success_upsertsTheAccountIntoTheSavedAccountsStore` (19 run, 1 failed, no collateral).
+      **Gate:** `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (full `assembleDebug` +
+      all-module `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only —
+      `core/model` [`SavedAccount` gains `@Serializable`, no shape change], `sdk-core`
+      [new `auth/SavedAccountsStore.kt` + 1 `SdkModule` binding], `feature/auth`
+      [`AuthViewModel` +4 transitions +1 constructor dep, `LoginScreen.kt` decomposed into
+      `SavedAccountsPicker`/`SavedAccountRow`/`SelectedAccountForm`/`NormalLoginForm`, ×3 strings ×4
+      locales]; SDK purity — `SavedAccountsStore` is a stateless durability seam at the same grain as
+      `StarredMessagesStore`, no product rule; the product decisions (when to show the picker, upsert
+      on login, remove on tap) stay in the `:feature:auth` ViewModel; SSOT — reuses `SavedAccounts`'
+      pure transforms, `MeeshyAvatar`, `CacheClock`, `login_password_label` untouched; instant-app —
+      cache-first synchronous seed, no spinner; UDF — unchanged `AuthViewModel` shape, immutable
+      `StateFlow<AuthUiState>`; no dead end; no tautological tests; no coverage floor lowered).
 - ⚠ **Pre-existing red on main (needs a dedicated repair slice):** `:feature:profile`
       `ProfileHeaderBuilderTest` fails deterministically on clean `origin/main` — `presence is away when
       disconnected and idle past the window` + `last seen carries the parsed instant for an away user`
@@ -314,7 +352,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       expectation and the resolver's `AWAY_WINDOW_MS` diverged. Reconcile against the CLAUDE.md presence
       spec (online/recent → green, away → orange, offline > 30 min → no dot) in its own slice
       (`profile-presence-window-reconcile`). Out of scope for the pure saved-account core.
-- [~] Server environment selector (dev/staging/prod/custom host) — **enum + URL-derivation
+- [x] Server environment selector (dev/staging/prod/custom host) — **enum + URL-derivation
       core shipped** (slice `auth-server-environment-selector`, 2026-07-21). Pure `:core:model`
       `ServerEnvironment` (enum: `PRODUCTION`/`STAGING`/`LOCALHOST`/`CUSTOM` with `id`/`label`/`origin`
       + `fromId` production-fallback) + `ServerEnvironmentResolver` (faithful port of iOS `MeeshyConfig`,
@@ -341,10 +379,51 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (35 run, 3 failed, no collateral). `:core:model:testDebugUnitTest` green (35/35); `assembleDebug`
       compiled every module (full-repo `testDebugUnitTest` only tripped the pre-existing unrelated
       `:sdk-core` `InterfaceLanguageStoreTest` DataStore parallel-load flake, green in isolation). Diff =
-      `apps/android` only. **Follow-up:** the
-      app-side `LoginView` environment-selector composable + a persistence store (DataStore) owning the
-      selected env + custom host, driving `ServerEnvironmentResolver.apiBaseUrl` into the SDK config at
-      app launch (iOS `restoreEnvironment`).
+      `apps/android` only. **App-side wiring shipped** (slice `auth-server-environment-wiring`,
+      2026-08-10): `:core:network` `ServerEnvironmentStore` (interface + `InMemoryServerEnvironmentStore`
+      + `SharedPrefsServerEnvironmentStore`, plain SharedPreferences — non-sensitive dev/QA config,
+      unlike `TokenStore`'s encrypted storage) persists the selected environment + custom host next to
+      `MeeshyConfig`/`NetworkModule` (same module, since `NetworkModule.providesMeeshyConfig()` is the
+      one caller that needs it at Hilt-graph-construction time — the Android equivalent of iOS
+      `restoreEnvironment()` "at app launch": `providesMeeshyConfig(store)` now derives `apiBaseUrl`/
+      `socketUrl` from `ServerEnvironmentResolver.apiBaseUrl`/`.serverOrigin` fed by the store instead of
+      a hardcoded literal. `AuthViewModel` gains a 5th/6th constructor dep (`MeeshyConfig` — reused, not
+      new; `ServerEnvironmentStore`), seeds `AuthUiState.selectedEnvironment`/`customHostInput`
+      synchronously from the store at construction (cache-first, matches the SharedPrefs read being
+      synchronous), and 3 new transitions: `selectEnvironment` (non-custom pill → persists immediately,
+      mirrors iOS `if env != .custom { applyEnvironment(env) }`; `.CUSTOM` only reveals the host field
+      locally, matching iOS leaving `selectedEnvironment` untouched until the checkmark), `onCustomHostChange`
+      (pure text binding), `applyCustomHost` (persists host + selects CUSTOM in one step — iOS
+      `applyEnvironment(.custom, customHost:)` — inert on a blank/whitespace host, mirroring the disabled
+      apply button). `logout()` now explicitly re-seeds the environment fields from the store (same
+      cross-account-survives-logout treatment as `savedAccounts` — `SessionTeardown.wipe()` doesn't touch
+      either). `LoginScreen.kt` gains an `EnvironmentSelector` composable (Material3 `FilterChip` row +
+      conditional custom-host field + "Connected to: %@" label) gated on `state.showEnvironmentSelector`.
+      **Deliberate simplifications over iOS, called out:** (1) gates on `config.enableLogging`
+      (`BuildConfig.DEBUG`, reused not duplicated) instead of iOS's `Self.isSimulator` — Android has no
+      reliable simulator-vs-device signal, and "developer/QA build" is the intent either way; (2) a
+      selection persists to `ServerEnvironmentStore` but only takes effect on the **next app launch**, not
+      mid-session — iOS's `APIClient` re-reads `MeeshyConfig.shared.apiBaseURL` per request from a mutable
+      singleton, while Android's `MeeshyApi` bakes `apiBaseUrl` into a `Retrofit.Builder` at Hilt-graph
+      construction; hot-swapping that live would be new architecture, not this slice's scope. +3 new
+      `NetworkModuleTest`, +9 new `ServerEnvironmentStoreTest` (InMemory + SharedPrefs, including
+      persistence-survives-reconstruction and unknown-persisted-id-falls-back-to-production), +10 new
+      `AuthViewModelTest` (seed from store, selector visibility both ways, select non-custom persists,
+      select custom does not, host text binding, apply valid/blank host, origin-label derivation, logout
+      preserves the selection). Mutation (RED proof): making `select()` also overwrite `customHost` fails
+      **exactly** `inMemory_select_neverTouchesTheCustomHost` (9 run, 1 failed, no collateral); dropping the
+      environment-preserving fields from `logout()`'s reset fails **exactly**
+      `logout_preservesTheServerEnvironmentSelection` (29 run, 1 failed, no collateral). **Gate:**
+      `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL in 21s`** (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only — `core/network`
+      [new `ServerEnvironmentStore.kt`, `NetworkModule.kt` rewired, +1 test dep], `feature/auth`
+      [`AuthViewModel` +2 constructor deps +3 transitions, `LoginScreen.kt` +`EnvironmentSelector`, ×3
+      strings ×4 locales]; SDK purity — the store is a stateless persistence seam at `TokenStore`'s grain,
+      no product rule; the product decisions (when to persist, selector visibility, "connected to" label)
+      stay in `:feature:auth`; SSOT — reuses `ServerEnvironment`/`ServerEnvironmentResolver`/
+      `config.enableLogging` untouched, no re-implementation; instant-app — N/A, synchronous SharedPrefs
+      read, no network/spinner; UDF — unchanged `AuthViewModel` shape, immutable `StateFlow<AuthUiState>`;
+      no dead end; no tautological tests; no coverage floor lowered).
 - [~] Passwordless magic-link login (email + countdown + resend) via deep link —
       **countdown state-machine + strict email gate core shipped** (slice
       `auth-magic-link-countdown`, 2026-07-21). Pure `:core:model` `MagicLinkCountdown`
@@ -373,7 +452,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:app:assembleDebug` → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the
       app-side `MagicLinkView` composable (email field → `AuthService.requestMagicLink` → waiting
       step driving `MagicLinkCountdown` off a 1 s `Flow`) + the `meeshy://` deep-link handler.
-- [~] 8-step gamified registration wizard (username/email/phone live availability + suggestions) —
+- [x] 8-step gamified registration wizard (username/email/phone live availability + suggestions) —
       **local-validation gate + availability-debounce policy core shipped** (slice
       `auth-signup-availability-local-gate`, 2026-07-21). Pure `:core:model` `SignupFieldValidation` +
       `SignupAvailabilityPolicy` + `AvailabilityIntent` (faithful port of iOS `RegistrationViewModel`:
@@ -399,9 +478,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up (network probe now DONE — slice
       `signup-availability-probe`, 2026-07-25):** `AuthApi.checkAvailability` + `AuthRepository.checkAvailability`
       + the three debounced probe pipelines in `RegistrationViewModel` now drive these cores off the 1 s
-      debounce, feeding the `on…Availability` seam. Remaining: the wizard step composables (username/email/
-      phone fields) + the username-suggestion strip.
-- [~] Interactive step progress bar with jump-back to completed steps —
+      debounce, feeding the `on…Availability` seam. **Both remaining follow-ups now DONE**: the 8 wizard
+      step composables shipped across `auth-onboarding-shell` through `auth-profile-step-fields`
+      (2026-08-09, see the bullets below); **the username-suggestion strip shipped** (slice
+      `auth-username-suggestion-strip`, 2026-08-10) — closing the last open gap, box flips to `[x]`.
+      Re-proven before picking: grepped `usernameSuggestions`/`selectUsernameSuggestion` across
+      `apps/android` — zero production hits, confirming this specific follow-up (unlike the composables,
+      already done) was still open. **Added (production, all `apps/android`):**
+      `RegistrationFields.usernameSuggestions: List<String>` (`:core:model`, alongside
+      `usernameAvailable`, mirrors iOS `RegistrationViewModel.usernameSuggestions` sourced from
+      `AvailabilityResult.suggestions`); `RegistrationViewModel.onUsernameSuggestions` (background-verdict
+      setter via `updateFields`, same errorMessage-preserving rationale as `onUsernameAvailability`) +
+      `selectUsernameSuggestion` (iOS `selectSuggestion` port — adopts the handle, optimistically marks it
+      available since the server already confirmed it when offering it, clears the list); the username
+      probe pipeline in `init{}` now applies both the verdict and its suggestions from the one
+      `checkAvailability` round-trip (a side effect inside the `launchProbe` closure — the shared
+      generic plumbing only carries one value back to `apply`, mirrors iOS `checkUsernameAvailability`
+      setting both `@Published` properties from the same response); `onUsernameChange` now also clears
+      `usernameSuggestions` (extends the existing "invalidate stale verdict on edit" SOTA convention to
+      suggestions, stronger than iOS which only clears them inside the debounced sink's locally-invalid
+      guard). `RegistrationScreen.kt`'s new `UsernameSuggestionStrip` (`FlowRow` of Material3
+      `SuggestionChip`s, warning-tinted card + lightbulb icon — parity target iOS `StepPseudoView.
+      suggestionsCard`) renders under `PseudoStepBody`'s availability indicator whenever the list is
+      non-empty, dispatching taps to `selectUsernameSuggestion`. **+7 behavioural tests**
+      (`RegistrationViewModelTest`: direct setter, edit-invalidates, select-suggestion marks
+      available+clears list+unlocks `canProceed`, re-editing after a select re-invalidates, taken-username
+      probe applies suggestions, available-username probe leaves them empty, failed probe leaves them
+      empty). **Mutation (RED proof):** reverting `selectUsernameSuggestion`'s optimistic
+      `usernameAvailable = true` to `null` fails **exactly** `selectUsernameSuggestion_
+      setsUsernameAndMarksAvailable` (71 run, 1 failed, no collateral); RED was also proven first by the
+      suite failing to **compile** against the absent production members. `./apps/android/meeshy.sh check`
+      → `BUILD SUCCESSFUL` (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks). Reviewer
+      **PASS** (diff `apps/android` only — `core/model` [`RegistrationFields` +1 field, no new files],
+      `feature/auth` [`RegistrationViewModel` +2 setters + probe wiring, `RegistrationScreen.kt` +1
+      composable, ×4 locale strings ×4 locales]; SDK purity — `usernameSuggestions` is inert data on an
+      existing `:core:model` type, the "select a suggestion" decision is ordinary ViewModel plumbing (same
+      grain as the sibling `on…Change` setters), the Compose strip is UI glue; SSOT — reuses
+      `AvailabilityResult.suggestions` untouched, no re-implementation; instant-app — no spinner
+      introduced; UDF — unchanged `RegistrationViewModel` + immutable `StateFlow`; no dead end — the strip
+      is purely additive under the existing field; no tautological tests; no coverage floor lowered, no
+      existing test weakened). **Bookkeeping correction (not new work this slice):** re-verifying this
+      area found the three sibling bullets below (progress bar, bottom-bar nav, ViewModel wiring) were
+      still marked `[~]` despite their own text already documenting completion — `auth-onboarding-shell`
+      (2026-08-09) shipped the composables/wiring those bullets describe, but nobody flipped the checkbox
+      afterwards. Corrected alongside this slice's own change since it was directly re-verified in the
+      course of this run's research, not left to accumulate further staleness.
+- [x] Interactive step progress bar with jump-back to completed steps —
       **step-set + progress-bar decision core shipped** (slice `registration-progress-bar-core`,
       2026-07-22). Pure `:core:model` `RegistrationStep` (8-step ordinal enum: `PSEUDO`..`RECAP`
       by `index`, + `ordered`/`total`/`fromIndex`) + `RegistrationProgressBar` (fill partition +
@@ -431,7 +553,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Follow-up:** the app-side `InteractiveProgressBar` composable (an accent-coloured tappable
       bar row wired to `RegistrationProgressBar.fill`/`jumpTarget` → `currentStep`) + the
       `nextStep`/`previousStep`/`skipCurrentStep` bottom-bar navigation core (a separate box).
-- [~] Bottom-bar step navigation (next / previous / skip) — **step-transition decision core shipped**
+- [x] Bottom-bar step navigation (next / previous / skip) — **step-transition decision core shipped**
       (slice `registration-step-navigation-core`, 2026-07-22). Pure `:core:model`
       `RegistrationStepNavigator` + `SkipOutcome` — faithful port of iOS `RegistrationViewModel`
       (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`): `nextStep()` (gated on
@@ -476,7 +598,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `showSkip_isTrueOnlyOnTheProfileStep` (1 failed, no collateral). `./apps/android/meeshy.sh check` →
       BUILD SUCCESSFUL (full `assembleDebug` + all module tests; `RegistrationNavTest` 16/16,
       `RegistrationViewModelTest` 45/45). Diff = `apps/android` only.
-- [~] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
+- [x] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
       (slice `registration-wizard-viewmodel`, 2026-07-25). The first app-side wiring that turns the
       shipped registration cores from orphan logic into a real observable wizard. New
       `:feature:auth/RegistrationViewModel` (`@HiltViewModel`) + immutable `RegistrationUiState`
@@ -844,7 +966,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       coverage floor lowered, no existing test weakened). **Follow-up (deliberately deferred, not
       part of this slice):** wiring `SignupRegionInference` for a device-locale default (noted
       above).
-- [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
+- [x] Profile photo / banner / bio optional step; registration recap + terms acceptance —
       **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
       Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's
       advance decision for **all 8 steps**, a faithful port of iOS `RegistrationViewModel.canProceed`
@@ -904,6 +1026,131 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `./apps/android/meeshy.sh check` (`assembleDebug testDebugUnitTest`) → **BUILD SUCCESSFUL in 9m38s**
       (every module; `RegistrationViewModelTest` 32/32, `RegistrationSummaryTest` 18/18). Diff =
       `apps/android` only (1 new source + 1 new test + edits to the wizard VM/its test + tracking docs).
+      **RECAP step field UI shipped** (slice `auth-recap-step-fields`, 2026-08-09) — slice 7 of the
+      `OnboardingFlowView` Compose decomposition, closing the "registration recap + terms acceptance"
+      half of this checklist item (the "profile photo / banner / bio" half — PROFILE — is still `[ ]`,
+      the one step genuinely large enough it needs its own photo/banner picker + compression pipeline).
+      New `feature/auth/RegistrationScreen.kt` `RecapStepBody` — header/subtitle, a `RecapSummaryCard`
+      rendering `RegistrationUiState.summary`'s rows (icon + localized label per
+      `SummaryField`, faithful port of iOS `summaryItems`'s SF Symbols: `at`→`AlternateEmail`,
+      `envelope.fill`→`Email`, `person.fill`→`Person`, `phone.fill`→`Phone`, `globe`→`Language`), and a
+      `RecapTermsCheckbox` (`Modifier.toggleable(role = Role.Checkbox)` for correct a11y semantics,
+      mirrors iOS's `.accessibilityAddTraits(.isSelected)` intent) bound verbatim to the already-shipped
+      `RegistrationViewModel.onAcceptTermsChange` — no new ViewModel/core code needed, the RECAP gate
+      (`RegistrationStepGate.canProceed`'s `fields.acceptTerms` arm) and the register-button wiring
+      (`RegistrationNavModel.primaryAction == REGISTER` → `viewModel.register()`) were already correct
+      and already tested, the same "wiring-only" shape as every step since `auth-identity-step-fields`.
+      A "Read the terms" link opens a `RecapTermsSheet` (`ModalBottomSheet`, same established pattern as
+      `CountryPickerSheet`) with the terms body text ported from iOS's `termsSheet`. **Deliberately no
+      password row**: iOS's recap appends a `••••••••` row (`String(repeating: "•", count:
+      min(password.count, 10))`) outside `summaryItems`; Android's `RegistrationSummaryRow`/
+      `SummaryField` (shipped `registration-recap-summary`, 2026-07-26) has no `PASSWORD` case — a
+      decision made and tested two slices before this one, re-verified here (not silently overridden)
+      rather than re-opening the core to add a field only this step would ever read. Never re-surfacing
+      the password, even as masked dots whose *length* leaks a weak signal, is treated as a legitimate
+      simplification over iOS. **SSOT reuse:** the terms sheet's close button reuses the existing
+      `registration_close` string (already used by the top bar's leading-Close icon) rather than adding
+      a near-duplicate "Fermer"/"Close" string. **No skip affordance** (`RegistrationNavModel.showSkip`
+      is PROFILE-only, matches iOS `StepRecapView` having none). Loading/error states are NOT
+      re-implemented inside the step body (unlike iOS, which branches internally) — the wizard's shared
+      `state.errorMessage` banner (above every step body since `auth-onboarding-shell`) and the bottom
+      bar's `loading` param already cover both, so RECAP stays as thin as every other field-UI step.
+      **+2 core tests** (`RegistrationStepContentTest.isImplemented_recap_isTrue`; the "every other
+      step" sweep renamed to exclude PSEUDO+PHONE+EMAIL+IDENTITY+PASSWORD+LANGUAGE+RECAP). **Mutation
+      (RED proof):** the new test against the pre-slice `implemented` set (still only `{PSEUDO, PHONE,
+      EMAIL, IDENTITY, PASSWORD, LANGUAGE}`) failed **exactly** `isImplemented_recap_isTrue` (8 run, 1
+      failed, no collateral) before the one-line core change landed. **Zero new ViewModel tests
+      needed** — `RegistrationViewModelTest` already exercises `onAcceptTermsChange`/`register()`/
+      `summary` end-to-end; re-ran unmodified and stayed green (52/52) — the regression proof for this
+      Compose-wiring-only slice, per `TDD-COVERAGE.md`'s exemption for `@Composable` glue. **Gate:**
+      `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 23s** (full `assembleDebug` + all-module
+      `testDebugUnitTest`, 970 tasks). Reviewer **PASS** (diff `apps/android` only — `core/model`
+      [1-line `implemented` set change, no new files], `feature/auth` [+9 composables/helpers in
+      `RegistrationScreen.kt`, the `when` arm, ×13 locale strings ×4 locales], `tasks/feature-parity.md`;
+      SDK purity — `RegistrationStepContent` stays a stateless `:core:model` lookup, every new Composable
+      is ordinary UI glue over the already-shipped `RegistrationSummary`/`RegistrationStepGate`/
+      `RegistrationViewModel` cores, no shared-singleton-plus-product-rule combo; SSOT — reuses every
+      existing recap/terms/register wiring untouched, re-implements no rule, reuses `registration_close`
+      instead of duplicating it; instant-app — no spinner introduced; UDF — unchanged
+      `RegistrationViewModel` + immutable `StateFlow`; no dead end — Back stays reachable, the terms
+      sheet dismisses via its close button/scrim/swipe; no tautological tests; no coverage floor
+      lowered, no existing test weakened). **PROFILE step field UI + post-registration upload shipped**
+      (slice `auth-profile-step-fields`, 2026-08-09) — slice 8/8, closing the `OnboardingFlowView`
+      Compose decomposition entirely. **RE-PROVEN, not re-scoped:** every prior run since
+      `auth-password-step-fields` flagged PROFILE as "the one step genuinely large enough it needs its
+      own photo/banner picker + compression pipeline" — re-reading the actual remaining surface (not the
+      note) before committing this run found the opposite: `feature/profile/AvatarBannerUploadViewModel`
+      already ships a fully tested pick → validate (`ImageUploadValidator`) → upload (`MediaRepository`)
+      → confirm (`UserRepository.updateAvatar`/`updateBanner`) pipeline for the Settings/Profile avatar
+      editor, and `RegistrationSummaryInput.bio` already existed unused since `registration-recap-summary`
+      — so the actual gap was two afternoons of wiring, not a new subsystem. No compression pipeline
+      exists anywhere in `apps/android` today (grepped `Bitmap.CompressFormat`/`BitmapFactory` — zero
+      production hits); the existing avatar/banner flow uploads raw picked bytes capped by
+      `ImageUploadTarget.{AVATAR,BANNER}.maxBytes` (8 MB / 12 MB) instead, which this slice reuses
+      as-is rather than inventing byte-shrinking Android never had. **Also re-verified against iOS
+      itself, not just its `RegistrationViewModel.@Published` fields:** `StepProfileView` never sends
+      `profileImage`/`bannerImage`/`bio` through `POST /auth/register` at all — `RegisterRequest` has no
+      such fields. iOS uploads them **after** authentication succeeds, via a separate
+      `OnboardingFlowView.uploadProfileCompletionAssets()` → `ProfileCompletionUploader`, best-effort and
+      independent per asset. Android mirrors this exactly rather than trying to smuggle the assets into
+      `RegisterRequest`. **Added (production, all `apps/android`):** `RegistrationFields.bio` (the one
+      genuinely core-relevant addition — feeds `RegistrationUiState.summary` via
+      `RegistrationSummaryInput(bio = fields.bio)`, wiring the already-shipped but previously-unused
+      `SummaryField.BIO` row for the first time); `RegistrationUiState.profileImage`/`bannerImage:
+      MediaUploadItem?` (kept OUTSIDE `fields` — unlike bio, nothing in `RegistrationStepGate` or
+      `RegistrationSummary` ever reads them, they only feed the post-registration upload); ViewModel
+      setters `onBioChange`/`onProfileImagePicked`/`onBannerImagePicked`; `RegistrationScreen.kt`
+      `ProfileStepBody` (optional-note banner, `ProfilePreviewCard` with two `PickVisualMedia` pickers +
+      `AsyncImage` previews off the picked bytes directly — Coil 2.7's built-in `ByteArrayMapper`, no
+      Uri persistence needed across step navigation — a bio `OutlinedTextField` with a 150-char soft
+      counter, matching iOS's display-only ceiling) + `RecapSummaryCard` **reused verbatim** for the
+      profile preview (iOS reuses the same `summaryItems` for both `StepProfileView` and
+      `StepRecapView` — same card, no near-duplicate string/composable). **Deliberate simplification
+      over iOS:** the avatar does not overlap the banner (iOS offsets it -30pt over the banner's bottom
+      edge) — a plain stacked layout sidesteps Compose's offset/clip interaction inside a rounded,
+      clipped container for a purely cosmetic flourish with zero functional value. **Post-registration
+      upload wiring** (`RegistrationViewModel.register()` → new `uploadProfileCompletionAssets`): fires
+      only after `authRepository.register()` returns `NetworkResult.Success` (by which point
+      `AuthRepository.storeSession` has already adopted the session, so the calls below are
+      authenticated) and before the final `isRegistered = true` flip. Avatar/banner go through the exact
+      same `ImageUploadValidator.validate` → `MediaRepository.upload` → `AvatarBannerUpload.
+      firstUploadedUrl` → `UserRepository.updateAvatar`/`updateBanner` sequence
+      `AvatarBannerUploadViewModel` already ships (not called directly — that ViewModel is scoped to the
+      profile screen's own uploading/error UI state, which this fire-and-forget call has no use for).
+      Bio goes through `UserRepository.enqueueProfileEdit` + waking `OutboxFlushWorker` on a non-null
+      `cmid` — the exact established optimistic + offline-durable path `SettingsViewModel`/
+      `ProfileViewModel` already use for profile edits (SOTA over iOS's online-only bio save), not a new
+      one invented for this slice. Every step wrapped in `try/catch` (rethrowing `CancellationException`)
+      so a failed upload never blocks `isRegistered` — proven by a dedicated test that throws inside
+      `mediaRepository.upload` and asserts `isRegistered` still flips true. **Deliberate divergence from
+      iOS's shape:** iOS fires this upload via a detached `Task` (survives the view's dismissal); Android
+      awaits it inline inside the same `viewModelScope.launch` before flipping `isRegistered`, because
+      `RegistrationScreen`'s `LaunchedEffect(state.isRegistered)` navigates away immediately on that flip,
+      which would cancel a sibling `launch` racing it — awaiting first trades iOS's marginally earlier UI
+      handoff for a guarantee the picked photo is never silently dropped. **+15 new/changed tests**
+      (`RegistrationStepContentTest.isImplemented_profile_isTrue` + the "every other step" sweep, now
+      permanently vacuous since all 8 steps are implemented; `RegistrationViewModelTest`:
+      `onBioChange`/`onProfileImagePicked`/`onBannerImagePicked`, bio summary include/omit, avatar upload
+      + confirm, banner upload + confirm, bio enqueue + wake-worker, no-assets skips every call, an
+      `ImageUploadValidator`-rejected empty pick skips upload, an explicit `NetworkResult.Failure` from
+      the upload call skips the confirm PATCH, and the exception-safety-net test). **Mutation (RED
+      proof):** the PROFILE-implemented test against the pre-slice `implemented` set failed **exactly**
+      `isImplemented_profile_isTrue` (10 run, 1 failed, no collateral); the full `RegistrationViewModel`
+      test file failed to *compile* against the pre-slice 2-arg constructor before the 3 new deps landed
+      — a stronger RED than a runtime failure. **Gate:** `./apps/android/meeshy.sh check` → **BUILD
+      SUCCESSFUL in 36s** (full `assembleDebug` + all-module `testDebugUnitTest`, 970 tasks). Reviewer
+      **PASS** (diff `apps/android` only — `core/model` [`RegistrationFields.bio`,
+      `RegistrationStepContent.implemented`], `feature/auth` [`RegistrationViewModel` +3 constructor
+      deps + upload orchestration, `RegistrationScreen.kt` +3 composables + 2 private extensions, +8
+      locale strings ×4 locales, `build.gradle.kts` +2 deps: `work-runtime`, `coil-compose`],
+      `tasks/feature-parity.md`; SDK purity — the ViewModel orchestrates existing `:sdk-core`
+      repositories, no product rule added to `:sdk-core`/`:sdk-ui`; SSOT — reuses
+      `ImageUploadValidator`/`AvatarBannerUpload`/`MediaRepository`/`UserRepository.enqueueProfileEdit`/
+      `RecapSummaryCard` untouched, invents nothing; instant-app — no new blocking spinner, the existing
+      `isSubmitting` spinner just covers a little more work; UDF — unchanged `RegistrationViewModel` +
+      immutable `StateFlow`; no dead end — Back/skip unchanged; no tautological tests; no coverage floor
+      lowered, no existing test weakened). The **`OnboardingFlowView` Compose decomposition is now
+      complete (8/8 steps)** — every `RegistrationStep` has real field UI.
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +
@@ -932,7 +1179,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the app-side `EmailVerificationView` composable (code field driving `OtpCodeField.sanitize` →
       `AuthService.verifyEmailWithCode`, resend → `resendVerificationEmail` with the 3 s confirmation
       window off a `Flow`, success overlay) + `oneTimeCode` autofill.
-- [~] Country auto-detection + region→language inference at signup — **inference core shipped**
+- [x] Country auto-detection + region→language inference at signup — **inference core shipped**
       (slice `auth-region-language-inference`, 2026-07-21). Pure `:core:model`
       `SignupRegionInference` + `SignupLanguages` (faithful port of iOS
       `RegistrationViewModel.detectLanguages()` + `detectCountry()`,
@@ -952,8 +1199,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `dropsRegionalLanguageEqualToSystem` + `regionMappingEqualToEnglishSystemFallsBackToFrench` +
       `regionMappingEqualToNonEnglishSystemFallsBackToEnglish` (22 run, 3 failed, no collateral).
       `:core:model:testDebugUnitTest` green + full `:app:assembleDebug` → BUILD SUCCESSFUL. Diff =
-      `apps/android` only. **Follow-up:** wire it into the app-side registration-wizard scaffold
-      (source `Locale.getDefault()` at wizard start to pre-select the language step + country picker).
+      `apps/android` only. **Follow-up shipped** (slice `auth-signup-region-inference-wiring`,
+      2026-08-10): wired into the app-side registration-wizard scaffold — see §Auth's own wiring
+      note under the routine's `PROGRESS.md` for the full writeup. `RegistrationViewModel.init` now
+      calls a new `applyDeviceLocaleDefaults()` (new `:sdk-core` seam
+      `me.meeshy.sdk.locale.DeviceLocaleProvider`/`SystemDeviceLocaleProvider`, same shape as
+      `CacheClock`/`SystemCacheClock`, wrapping `Locale.getDefault()` behind a fake-able interface
+      for tests) that feeds `SignupRegionInference.inferLanguages`/`.inferCountryIso` and applies the
+      result to `RegistrationFields.systemLanguage`/`.regionalLanguage`/`.countryIso` before the user
+      touches anything — pre-selecting the LANGUAGE step and the PHONE step's country picker exactly
+      like iOS `RegistrationViewModel.init()` → `detectCountry()` + `detectLanguages()`.
 - [~] Password recovery via email link — **pure flow core shipped** (slice `auth-email-recovery-core`,
       2026-07-21). Faithful port of iOS `MeeshyForgotPasswordView.emailFlow`
       (`packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift`): the `@State email` /
@@ -1114,7 +1369,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       resulting store state, not literals the test itself set; no coverage floor lowered, no existing
       test weakened — the two adapted tests keep their original assertions, only their execution
       mechanics catch up with the new suspend/async signature).
-- [ ] Splash screen with brand animation + minimum display duration
+- [x] Splash screen with brand animation + minimum display duration — **shipped** (slice
+      `splash-screen`, 2026-08-10). System pre-Compose splash (`androidx.core:core-splashscreen`,
+      `Theme.Meeshy.Starting` → `postSplashScreenTheme` → `Theme.Meeshy`) bridges the truly-first
+      frame down to minSdk 26 (previously zero dependency, bare `Theme.Meeshy`, blank flash on
+      cold start pre-API 31). Branded, ANIMATED Compose splash (`MeeshySplashScreen`, `:sdk-ui`)
+      takes over once Compose paints: reuses `MeeshyBackground` (gradient + ambient orbs, the
+      same root treatment as every top-level screen — zero new gradient/orb code) + a new
+      animated "stacked-dashes" logo (`SplashLogo`/`SplashLogoGeometry`, staggered bar reveal,
+      same source geometry as the launcher icon's `ic_launcher_foreground.xml` so the two brand
+      surfaces never drift) + gradient "Meeshy" wordmark + tagline (en/fr/es/pt, iOS's exact
+      copy) + a footer `BrandSignature` (version line "Meeshy {versionName} · {versionCode}",
+      "Services CEO" credit, small static brand mark tinted `MeeshyPalette.Error` — port of iOS
+      `BrandSignature.swift`, reusing the same `StackedDashesMark` draw call the animated logo
+      uses at `progress = 1f`, so the two brand-mark renders can never drift). `MeeshyApp.kt`
+      shows it for a 1200ms floor (parity iOS `minSplashDuration`) via a plain `Box` overlay on
+      top of the already-composing Scaffold/NavHost — no gating of `startDestination`, since
+      `AuthViewModel.isAuthenticated` already resolves synchronously.
+      **Deliberately scoped simpler than iOS, documented not silent:** no pulsing ambient-orb
+      animation (the static orbs already shipped in `MeeshyBackground` are reused as-is); the
+      floor is a pure minimum-display-duration timer, not a readiness gate combining boot work
+      the way iOS's `.task` block does (cache hydration + socket handshake) — Android has no
+      equivalent async boot phase yet to additionally gate on, tracked as a future follow-up
+      once one exists. +21 tests: `SplashLogoGeometryTest`
+      (11, bar geometry invariants + stagger-progress math, mutation-proven — dropping the
+      stagger offset fails exactly the one discriminating test), `SplashThemeGuardTest` (7,
+      manifest/theme/resource/gradle-catalog/`MainActivity`/version-string/wiring source guards,
+      mirror of `LauncherIconManifestGuardTest`, mutation-proven twice — reverting the manifest
+      theme attribute fails exactly the expected test; hardcoding `versionLabel` instead of
+      sourcing `BuildConfig` fails exactly the expected test). **Verified visually on-device**
+      (not just compiled): installed on `meeshy_pixel8` (API 35), captured the OS-level system
+      splash (flat Indigo950 + white glyph) and, further into the same cold start, the Compose
+      splash in its real 1200ms window (gradient background, ambient glow, fully-revealed
+      stacked-dashes logo, gradient "Meeshy" wordmark, "Break the language barrier" tagline,
+      AND the footer signature "Meeshy 0.1.0 · 1" / "Services CEO" / small red brand mark) —
+      confirmed via pixel sampling (corner colors match `MeeshyGradients.mainBackground(dark=
+      true)` exactly, not the flat system-splash color) and direct visual read of the rendered
+      footer text. Two methodological notes: (1) an early single-shot capture landed at
+      literally `progress≈0` of the logo's own 600ms entrance (cold-start jitter on a
+      resource-contended dev box, not a product bug) — isolated with a temporary debug fill
+      (reverted before commit) proving both sizing and draw calls were correct; (2) the footer
+      signature was caught missing from the FIRST verification pass — a user correction mid-run
+      ("Il manque la signature avec les details de version!") against this same slice's own
+      documented "no footer brand signature" scope cut, added before merge rather than deferred
+      to a follow-up, since the component (iOS `BrandSignature.swift`) and its exact copy
+      ("Services CEO", version/build format) were already fully specified and cheap to port
+      once flagged.
 
 ## B. Conversations list
 - [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
@@ -1210,10 +1510,39 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
+      **as swipe gestures specifically** — mute/mark-unread already reachable via
+      the context menu (see below), swipe stays capped at its 2 directions; this
+      list is genuinely swipe-only follow-up, not a full-feature gap.
 - [~] Context menu done (long-press → `DropdownMenu` : pin/unpin, mute/unmute,
-      mark-read si non lu, archive/unarchive) ; details/invite/favorite/move/
+      mark-read si non lu, archive/unarchive) ; **mark-read/mark-unread toggle
+      done** (slice `conversation-mark-unread`, 2026-08-10): the menu previously
+      only ever offered "Mark as read" (`hasUnread`-gated) — the reverse action
+      was entirely absent (confirmed via a zero-hit grep for `markUnread`/
+      `mark-unread` across `apps/android` before starting), even though the
+      gateway route (`POST conversations/{id}/mark-unread`) and iOS's own
+      `ConversationContextMenuView` toggle already existed. New
+      `ConversationApi.markUnread` + `ConversationRepository.markUnreadOptimistic`
+      (hints `unreadCount = 1` locally, server stays authoritative on the exact
+      count; no-op when already unread) + `OutboxKind.MARK_UNREAD` sharing the
+      `READ_RECEIPT` lane + `ConversationListViewModel.markUnread`, wired as a
+      second `DropdownMenuItem` shown only when `!hasUnread` (symmetric to the
+      existing `hasUnread`-gated "Mark as read" item — an `if/else`, not two
+      independent `if`s, since exactly one of the pair is always offered).
+      `MARK_UNREAD` coalesces against a pending `READ_RECEIPT` as opposite
+      terminal states (`OutboxCoalescer.terminalToggle`, same shape as
+      block/unblock and pin/unpin) rather than iOS's simpler always-replace
+      shared coalescing key — **SOTA over iOS**: a quick read-then-unread undo
+      cancels both mutations locally instead of firing a redundant round-trip
+      the gateway would just no-op anyway. +3 `ConversationRepositoryTest`, +2
+      `ConversationListViewModelTest`, +5 `OutboxCoalescerTest`, +1
+      `OutboxLaneMapTest`. Mutation-proven: dropping the already-unread no-op
+      guard fails **exactly**
+      `markUnreadOptimistic is a no-op when the conversation is already unread`
+      (18 run, 1 failed, no collateral). ; details/invite/favorite/move/
       lock/block/delete pending
-- [ ] Hard-press conversation preview popover
+- [x] Hard-press conversation preview popover — port of iOS `ConversationPreviewView` (header +
+      up to 5 recent cached messages, Prisme-resolved) rendered as the first child of the
+      long-press context menu (slice `conversation-hardpress-preview`, 2026-08-11)
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
       « Vous » pour soi) + unread badge + **draft preview** done (slice
@@ -1353,6 +1682,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
       `ConversationRepository.create` → navigation vers le chat créé
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
+- [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
+      `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
+      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
+      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
+      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
+      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
+      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
+      `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
+      preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
+      the presence-lookup key. `ConversationListViewModel.observePresence()` (mirrors
+      `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
+      `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
+      `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
+      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
+      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
+      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
+      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
+      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
+      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
+      direct-type gate and the snapshot merge.
 - [ ] Story tray + per-conversation story rings
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
@@ -1467,7 +1817,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `listState.firstVisibleItemIndex`. +8 tests, mutation-prouvé (dropper la garde
       « en-tête en haut → null » casse exactement 1 test). **SOTA over iOS** : la décision est un
       value type pur entièrement couvert (iOS n'a pas de pastille flottante).
-      Reste : inverted list pending
+      **Inverted-list sub-slice 1 done** (slice `chat-scroll-geometry`, 2026-08-10) : préparation pure,
+      zéro changement de comportement visible — `:feature:chat/ChatScrollGeometry` (+
+      `ChatListOrientation.TopDown|BottomUp`) factorise l'arithmétique d'index jusque-là ad hoc dans
+      `ChatScreen` (`bottomIndex`, `isNearBottom`, `isNearOldEnd`) derrière une SSOT paramétrée par
+      orientation ; `ChatScreen` est rebranché sur `TopDown` (sortie identique bit à bit, `LOAD_OLDER_
+      THRESHOLD`/`BOTTOM_TOLERANCE_ITEMS` déplacées dans l'objet, l'extension privée `isNearBottom`
+      remplacée par `lastVisibleItemIndex()`), et la branche `BottomUp` est prouvée correcte en
+      isolation (17 tests, mutation-prouvée — casser le seuil `LOAD_OLDER_THRESHOLD` de `<=` à `<`
+      casse exactement 1 test). `PinnedDayHeader.governingDayMillis` reste volontairement inchangé (déjà
+      sa propre SSOT pure et testée ; migrer son scan vers `ChatScrollGeometry` est laissé à la sous-
+      tranche 2, quand `BottomUp` a un appelant réel). Reste : sous-tranche 2 (le flip visible —
+      `reverseLayout = true` + liste inversée + rebrancher les 4 sites restants sur `BottomUp`) et
+      sous-tranche 3 (vérification IME on-device) — décomposition complète dans PROGRESS.md.
+      **Inverted-list sub-slice 2 (the visible flip) done** (slice `chat-inverted-list-flip`,
+      2026-08-10) : `ChatScreen`'s `LazyColumn` gagne `reverseLayout = true` + `listItems.asReversed()`
+      (`renderedItems`, une vue paresseuse — les deux renversements s'annulent, l'ordre de lecture
+      visuel reste identique) ; les 7 comportements dépendants de la direction (scroll initial,
+      auto-scroll sur nouveau message, jump recherche, jump réponse citée, `isNearBottom`, le pilier
+      `PinnedDayHeader`, le déclencheur load-older) sont tous rebranchés sur `ChatListOrientation.
+      BottomUp`. Deux nouvelles fonctions pures dans `ChatScrollGeometry` (`bottomEdgeIndex`/
+      `topEdgeIndex`) traduisent la paire `firstVisibleItemIndex`/`lastVisibleItemIndex()` Compose en
+      bord bas/bord ancien sémantique — le seul endroit qui connaît le sens du flip, mutation-prouvées
+      (inverser une branche casse exactement les 2 tests discriminants pour chacune).
+      `PinnedDayHeader.governingDayMillis` gagne un overload orienté : le renversement d'ordre inverse
+      aussi chaque bloc `[DayHeader, messages...]` en `[messages..., DayHeader]`, donc le scan `BottomUp`
+      remonte (`top..lastIndex`) au lieu de descendre (`top downTo 0`) — mutation-prouvé (inverser les
+      deux branches du `when` casse exactement les 6 tests discriminants, TopDown et BottomUp). Le
+      spinner « chargement d'historique » est déplacé de AVANT à APRÈS `items(renderedItems)` dans le
+      scope du `LazyColumn` (le plus haut index Compose rend en haut visuel sous `reverseLayout`).
+      +14 tests (`ChatScrollGeometryTest`/`PinnedDayHeaderTest`/`InitialScrollTargetTest`), tous
+      mutation-prouvés. **Vérifié on-device** (émulateur `meeshy_pixel8`, conversation réelle avec
+      ~40+ messages historiques) : atterrissage initial sur le message le plus récent, `load-older`
+      déclenché en remontant (Today → Saturday 4 July en 5 swipes, aucun crash), pastille de jour
+      flottante affichant le bon jour pendant le défilement, FAB « scroll to bottom » apparaît/
+      disparaît correctement selon `isNearBottom`, jump de recherche (`REPRO-B-1638`, 1/1, surbrillance
+      exacte), et auto-scroll vers le bas à l'envoi d'un message propre. Zéro crash sur toute la passe
+      (logcat vérifié). **Inverted-list sub-slice 3 (vérification IME on-device) done — confirmée
+      gratuite, aucun code nécessaire** (2026-08-10) : sur le même émulateur/conversation, ouvrir le
+      clavier logiciel (tap sur le champ `Message`) redimensionne la liste sans aucune logique
+      dédiée — le bord bas de la liste inversée (index 0, le plus récent) reste naturellement ancré
+      juste au-dessus du composer/clavier, exactement le bénéfice attendu d'une liste inversée. Envoi
+      d'un message texte (`ime-verify-flip-c3`) **clavier toujours ouvert** : auto-scroll vers le bas
+      correct, le nouveau message apparaît immédiatement au-dessus du composer, aucun glitch visuel.
+      Fermeture du clavier (`KEYCODE_BACK`) : la liste reprend sa hauteur pleine proprement, le
+      dernier message reste ancré en bas. Zéro crash (logcat vérifié, aucun `FATAL EXCEPTION`).
+      **§C inverted-list rewrite complet (3/3 sous-tranches)**.
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
@@ -1920,19 +2315,121 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       interactive preview — `BubbleContent` does not yet carry a playable video attachment, so there is nothing to drive
       there yet (audio/voice-note is the dominant overlay case and is now interactive).
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
-- [~] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
+- [x] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
       **logic + pill UI done** (slice `chat-voice-recording-pill`, 2026-07-15, +29 tests). Pure
       `:feature:chat` `VoiceRecordingSession` SSOT: `Idle`/`Recording` phases, `start`/`tick`/`meter`/
       `cancel`/`stop` transitions, `canSend` min-duration gate (`>= 0.5s`, iOS `minimumSendableDuration`
       parity), `formattedElapsed` (`m:ss`, iOS `formatDuration`), `recordingDotOpacity(reduceMotion)`
       blink (iOS `dotOpacity`), and a `VoiceRecordingStop(session, outcome)` result
       (`Completed(duration, levels)` / `TooShort` / `Inactive`). Composes the existing `:core:model`
-      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer. Wired real
-      (`ChatComposer`, exempt glue): blank-composer `Mic` button starts, a 100 ms `LaunchedEffect` ticks
-      the timer, the `VoiceRecordingPill` (X cancel / animated waveform / blinking dot + timer / stop /
-      send, stop+send gated by `canSend`) replaces the input row while recording. **Pending follow-up:**
-      real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
-      (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
+      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer.
+      **Real `MediaRecorder` capture + send pipeline done** (slice `chat-voice-recording-capture`,
+      2026-08-10): the `Mic` tap now requests `RECORD_AUDIO` (mirrors `feature:calls`'
+      `CallPermissions`/`withMediaPermissions` pattern) and starts a real `MediaRecorder`
+      (`MPEG_4`/`AAC`, `voice_<millis>.m4a` via the new pure `VoiceRecordingFile` builder,
+      mirrors `:feature:feed`'s `CameraCaptureFile`) writing into `cacheDir/voice`. The 100 ms
+      `LaunchedEffect` tick loop now also polls `MediaRecorder.maxAmplitude` and feeds it through
+      a new pure `:core:model` `MicAmplitudeDecibels.toDecibels` (linear PCM → dB, Android has no
+      direct dB-metering API unlike iOS `AVAudioRecorder.averagePower`) into
+      `VoiceRecordingSession.meter()` — the waveform strip (`VoiceRecordingPill`'s
+      `RecordingWaveform`) now renders `session.levels` directly (`animateFloatAsState` per bar)
+      instead of the old synthetic `rememberInfiniteTransition` placeholder. Stop and Send both
+      finalise the take (no staging tray exists anywhere in this composer — every other
+      attachment kind sends immediately on pick too) and, when `canSend` (`Completed` outcome),
+      hand the real file bytes to the **existing, unmodified** `onPickFile`/
+      `ChatViewModel.sendFileAttachment` chain — zero VM/pipeline changes, since
+      `AttachmentMessageType.forMime("audio/mp4")` already resolves to `"audio"` and
+      `ComposerSendGate` already gates it on `canSendAudios`, exactly the Mic button's own
+      visibility gate. +10 tests (`MicAmplitudeDecibelsTest`: silence floor, defensive negative
+      amplitude, full/half-scale dB, monotonicity, above-reference-amplitude safety;
+      `VoiceRecordingFileTest`: naming determinism/uniqueness, mirrors `CameraCaptureFileTest`).
+      **Mutation-proven**: hardcoding `toDecibels` to always return `FLOOR_DB` fails **exactly**
+      the 4 discriminating tests (monotonicity, full-scale, half-scale, above-reference) — the 2
+      silence-floor tests (already expecting `FLOOR_DB`) correctly stay green; reverted via a
+      scratch `cp`-backed edit (never `git checkout --`), re-confirmed green. **Gate**:
+      `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks). Reviewer **PASS**
+      (diff `apps/android` only — 2 new files [`MicAmplitudeDecibels.kt`, `VoiceRecordingFile.kt`]
+      + 2 new test files, `VoiceRecordingPill.kt`/`ChatScreen.kt` edited; SDK purity — the dB
+      conversion is a stateless `:core:model` transform reusable by any future recorder, the
+      "when to request permission / how to wire the mic" product decision stays app-side in
+      `:feature:chat`; SSOT — `AttachmentMessageType`/`ComposerSendGate`/`MimeTypeResolver` all
+      reused verbatim, zero new classification logic; no coverage floor lowered; no tautological
+      tests). **Verified end-to-end on-device against the live gateway** (`meeshy_pixel8`,
+      already-authenticated session): tapped the real Mic button (`uiautomator dump` exact
+      bounds, not estimated screenshot coordinates), confirmed Android's system mic-in-use
+      indicator appeared (genuine hardware capture, not simulated), recorded ~24s, confirmed via
+      `run-as` a real, growing `voice_<millis>.m4a` file in `cacheDir/voice` (67 KB mid-recording).
+      Tapped Send: `adb logcat` confirmed a real `POST /api/v1/attachments/upload` (multipart,
+      `Content-Type: audio/mp4`, 89706-byte body) returning 200 with the gateway's own
+      **independent server-side audio probe** of the uploaded file —
+      `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — definitive
+      proof the recorded bytes are genuine playable AAC audio, not silence-shaped garbage.
+      **Investigation dead-end, NOT a bug in this diff**: the resulting message stayed
+      locally-pending (clock icon, never reached the server) after the attachment upload
+      succeeded — traced to the **pre-existing** two-stage `OutboxFlushWorker` dependency chain
+      (`SEND_MESSAGE`'s `dependsOn` the upload's cmid; `messageLanes` — computed once at the
+      START of `doWork()` — files require a SEPARATE later flush pass once the media graft lands,
+      not a re-check within the same pass) — confirmed pre-existing and unrelated to this diff
+      because **other, older test messages already sitting in this exact conversation's local
+      outbox from unrelated prior verification sessions** (`flip-test-verify`,
+      `ime-verify-flip-c3`, plain text, no attachment dependency at all) show the **identical**
+      stuck-pending symptom; a fresh text message sent in the same conversation during this
+      verification also stuck pending. This diff never touches `OutboxFlushWorker`/
+      `MessageRepository`/the outbox drain code — the capture-to-pipeline handoff this slice owns
+      is proven correct by the server's own independent audio probe; the outbox's
+      wake-only-once-per-mutation reliability gap (same family as the iOS
+      `reference_persistent_queue_must_not_wake_only_on_a_network_edge` finding) is a separate,
+      pre-existing, cross-cutting issue affecting every chat attachment send, not scoped to this
+      slice — flagged below as a new backlog candidate rather than fixed here. Test artifacts
+      (the recorded file, the two verification-only messages) left as-is since they never reached
+      the server (nothing to delete server-side).
+      **Follow-up (2026-08-11, slice `outbox-message-lane-discovery`) — RE-PROUVEN, and the real
+      root cause was more severe than the "same-run redrain" framing above assumed.** Reading
+      `OutboxFlushWorker.doWork()` closely: `messageLanes` was discovered via
+      `outboxRepository.deliverable(OutboxLanes.forMessage(""))` — an **exact-match** query
+      (`OutboxDao.deliverableForLane`: `WHERE lane = :lane`) against the literal lane string
+      `"message:"` (empty conversation id). No real row is ever enqueued with a blank
+      conversation id, so this call **always returned an empty list** — the entire "drain
+      per-conversation message lanes" loop was **dead code in production**, for every build that
+      has ever shipped this discovery mechanism. `SEND_MESSAGE`/`EDIT_MESSAGE`/`DELETE_MESSAGE`
+      were never attempted at all (not "delayed one pass" — never even reaching `drainLane`),
+      which is the exact, complete explanation for `flip-test-verify`/`ime-verify-flip-c3`
+      staying pending forever with zero dependency at all. **Proven empirically, not just by
+      static reading**: a new Robolectric test (`OutboxRepositoryTest`, real in-memory Room DB)
+      enqueues a `SEND_MESSAGE` on `OutboxLanes.forMessage("c1")` and asserts
+      `deliverable(OutboxLanes.forMessage(""))` returns empty — RED against the old call
+      pattern's intent, pinned as a permanent regression guard. **Fix**: new
+      `OutboxDao.activeMessageLanes()` (`SELECT lane ... WHERE lane LIKE 'message:%' AND state !=
+      'EXHAUSTED' GROUP BY lane ORDER BY MIN(createdAt) ASC`, `core:database`) +
+      `OutboxRepository.activeMessageLanes()` wrapper (`sdk-core`) — a real distinct-lane
+      discovery query — replaces the broken call in `OutboxFlushWorker.doWork()`. 4 new tests
+      (discovers a lane with a pending send; discovers every distinct lane without duplicating a
+      lane holding 2 rows, oldest-lane-first; omits a lane whose only row is `EXHAUSTED`; empty
+      when the queue holds only shared-lane rows) plus the regression-pin test. **The
+      already-existing "same-run" retry design was correct and needed no separate fix once
+      discovery works**: `OutboxFlushPlan.outcome` already returns `FlushOutcome.RETRY` (→
+      `Result.retry()` → WorkManager's own `EXPONENTIAL, 10s` backoff) whenever a lane stops on a
+      still-blocked dependency — the doc comment on that file already describes exactly this
+      "prerequisite delivered later in the same pass, next pass picks it up" design. It simply
+      never fired for message lanes because they were never visited. **Verified**:
+      `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970 tasks, zero failures). **On-device
+      against the live gateway** (`meeshy_pixel8`, already-authenticated session): sent a fresh
+      plain-text message in the SAME polluted conversation from the investigation above —
+      `adb logcat` now shows `OutboxFlush lane=message:68f3808baf186ffd9583b0fa ...` for the
+      **first time ever** (this log line structurally could not have appeared before the fix);
+      `flip-test-verify` (previously an inert clock icon for weeks) was actually attempted for the
+      first time and transitioned to `Not sent — tap to retry` (a stale-schema payload decode
+      failure now correctly surfaced instead of silently rotting); a fresh message in a second,
+      clean conversation triggered a real `POST https://gate.meeshy.me/api/v1/conversations/
+      6a712c3acd1fb95d11b8fc6d/messages` (confirmed via OkHttp request/response logging). **New,
+      separate, out-of-lane finding — NOT fixed here (gateway code, violates diff purity)**: that
+      POST (and the equivalent one for the first conversation) currently returns `400
+      {"error":"Internal Server Error"}` in production; reproduced with a bare `curl` using the
+      same bearer token (ruling out any Android-side request-shape cause) while a `GET` on the
+      same conversation's messages returns `200` normally — i.e. **creating a new message via the
+      REST API currently appears broken in production**, independent of platform. Flagged for a
+      dedicated gateway-side investigation; not a regression from this diff (this diff contains no
+      gateway changes and the failure reproduces identically via `curl`).
 - [◐] Attachment ladder (emoji, file, location, camera, photo library, voice) — **file + photo-library picker done**
       (slice `chat-attachment-file-picker`, 2026-07-16): the composer now carries an attach button
       (`Icons.Filled.AttachFile`) launching the system document/photo picker (`GetContent("*/*")`); the pick is
@@ -2343,7 +2840,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       inbound server truth); `ChatViewModel` collects the flow, conversation-scoped. +37 tests
       (18 `AttachmentAudioTranslationMergeTest`, 2 `AudioTranslationEventTest` decode-contract, 8
       `BubbleContentBuilderTest`, 4 repo, 2 VM, +3 wiring). Diff = `apps/android` only.
-- [ ] Ad-hoc blocking text translation
+- [x] Ad-hoc blocking text translation — **stale checkbox, RE-PROUVEN 2026-08-11**: already fully
+      shipped. iOS's own `/translate-blocking` on-demand mechanism (`MessageLanguageDetailView.
+      translateTo`, `TranslationService.shared.translate(messageId:)` — passing `messageId` routes
+      the gateway into its "retranslation" branch, which persists AND broadcasts via
+      `message:translation`) has a direct Android counterpart:
+      `ChatViewModel.onExplorerRetranslate(messageId, code)` → `requestOnDemandTranslation` →
+      `MessageRepository.requestTranslation(messageId, targetLanguage)` — a real, synchronous
+      (`suspend fun`) REST call (`translationApi.translate(...)`) that persists the result,
+      exactly mirroring the "blocking" semantics. Wired from `MessageDetailExplorer`'s per-language
+      retranslate affordance in the same long-press → "Explore languages" sheet root `CLAUDE.md`
+      documents as the sole translation-exploration entry point. Fully tested: 7
+      `MessageRepositoryTest` cases (success, translator failure, unknown/deleted message, blank
+      target, blank result ignored, idempotent-on-match) + ~10 `ChatViewModelTest` cases (success,
+      failure, in-flight double-tap guard, unknown-message no-op, blank-target no-op). No code
+      change needed this run — just the checkbox.
 - [x] Source-language stamping from in-app prefs (NEVER device locale) — **done**
       (slice `chat-compose-language-detection`, 2026-07-10): `ChatViewModel.send()` stamped
       `originalLanguage = user.systemLanguage ?: "fr"` — doubly wrong: it ignored the Prisme
@@ -2542,8 +3053,54 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       multi-item picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to single when one slot
       is left so the multi-picker's `maxItems > 1` requirement never throws and launching nothing
       when full; the screen reads every picked uri off-main and the VM's existing free-slot
-      truncation still caps the batch. Pending: on-canvas crop/edit, durable
-      upload-then-publish outbox chain (SOTA follow-up).
+      truncation still caps the batch. **Wire-format bug fixed** (slice `story-media-tus-upload`,
+      2026-08-10): the upload foundation above sent every picked media through `MediaApi`/
+      `MediaRepository` (`POST /attachments/upload`), which server-side ALWAYS creates a
+      `MessageAttachment` row (`services/gateway/src/services/attachments/UploadProcessor.ts`) —
+      never a `PostMedia` row. But `CreateStoryRequest.mediaIds` is claimed **exclusively** against
+      `PostMedia` (`prisma.postMedia.updateMany`, `services/gateway/src/services/PostService.ts` +
+      `mediaOwnership.ts`'s `claimableMediaWhere`), a structurally different collection/id-space —
+      only the gateway's TUS handler (`POST /api/v1/uploads`, `uploadcontext` metadata one of
+      `post`/`story`/`status`/`comment`) ever creates one. So every published story with a
+      picked photo/video silently published **without its media**: the upload itself succeeded,
+      the story published successfully, but the server-side claim matched zero rows (logged as a
+      shortfall, never thrown) — a real, user-visible production defect, not a missing feature.
+      New `TusApi`/`TusUploadRepository` (`:core:network`/`:sdk-core`) implement a **single-shot**
+      (no chunking/resume/checkpoint — sufficient for compressed images; large-video chunked upload
+      remains the tracked TUS follow-up two lines below and at §Q) port of iOS `TusUploadManager`'s
+      two-call exchange (`POST` create session reading the `Location` header via the new
+      `:core:network` `headerCall` helper, then one `PATCH` of the whole body at `Upload-Offset: 0`).
+      `StoryMediaUploader` (`:feature:stories`, binds the generic repository to
+      `TusUploadContext.STORY` — the SDK-purity "which context" product decision) replaces
+      `StoryComposerViewModel`'s eager `mediaRepository.upload` call; the **durable offline-retry
+      path** ( `MediaUploadQueue.enqueue`'s new optional `context` param, persisted via
+      `MediaUploadPayload` on the `UPLOAD_MEDIA` outbox row and read back by
+      `OutboxFlushWorker`'s sender) is fixed too, so a queued-while-offline story upload retried
+      later also produces a real `PostMedia` row — not just the common online path. Chat
+      attachments are untouched (still `MediaRepository`/`MessageAttachment`, correctly — messages
+      legitimately want that collection); a legacy/blank outbox payload (any row enqueued before
+      this fix) still decodes as "no context" and keeps using the old path, so nothing already
+      queued on a user's device breaks on upgrade. +30 tests across the chain (6
+      `TusUploadMetadataTest`, 2 `TusUploadContextTest`, 4 new `headerCall` tests in
+      `ApiCallTest`, 13 `TusUploadRepositoryTest`, 2 `StoryMediaUploaderTest`, 2 new
+      `MediaUploadQueueTest`, +1 precise `StoryComposerViewModelTest` proving the durable path is
+      tagged `TusUploadContext.STORY` and not just `any()`); the other ~130 pre-existing
+      `StoryComposerViewModelTest` cases needed only a mechanical mock-type rename
+      (`MediaRepository` → `StoryMediaUploader`, same `upload(items)` shape) since
+      `StoryMediaUploader.upload` preserves the exact `NetworkResult<List<UploadedMedia>>`
+      contract the ViewModel's existing (unchanged) decision logic already expected. Mutation-proven:
+      reverting `queueDurably`'s explicit `context = TusUploadContext.STORY` argument fails
+      **exactly** the one new precise test, the other 130 stay green; making `TusUploadRepository.
+      uploadAll` swallow a mid-batch failure instead of stopping fails **exactly** the one test
+      built to catch it, the other 12 stay green. **Gate:** `./apps/android/meeshy.sh check` →
+      `BUILD SUCCESSFUL` (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`).
+      **Still open** (unchanged from before this fix, now correctly scoped as follow-ups rather
+      than assumed-simple): chunked/resumable large-video TUS upload (see §Q and the two `[ ]`
+      TUS lines above/below this one), on-canvas crop/edit, and — the original "attachments
+      fast-follow" this fix was discovered while scoping — wiring a photo/camera picker into the
+      still-text-only Feed post composer (`feed-post-composer-text`, 2026-08-10) now correctly
+      depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
+      than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
@@ -2758,8 +3315,318 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
 - [x] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
       new-posts banner + realtime-head merge done (slice `feed-new-posts-banner`, 2026-07-16)
-- [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
-- [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
+- [~] Feed overlay shell with draggable floating buttons + radial menu ladder — the two
+      draggable floating buttons + radial menu ladder (`MeeshyFloatingButtons`/`MeeshyMenuFab`)
+      are wired (`MeeshyApp.kt`); the left button's tap **now genuinely toggles Flux <-> Conversations**
+      (slice `feed-conversation-toggle`, 2026-08-10) — before this fix it navigated to
+      `Routes.FEED` unconditionally, so a second tap while already on the Flux did nothing
+      (no way back except the system Back gesture), diverging from iOS
+      `RootView.draggableFloatingButtons.onLeftTap`'s `showFeed.toggle()`. Icon now reflects
+      the active state too (filled `Home` on the Flux, outline elsewhere) — the closest Android
+      equivalent to iOS's icon swap (static glyph <-> `AnimatedLogoView` breathing logo when
+      `showFeed == true`); Android has no ported equivalent of that animated-logo treatment yet.
+      **Deliberate architectural deviation, not a gap**: iOS shows the Flux as a `ZStack`
+      overlay animated on top of the conversation list (`showFeed` toggles visibility with a
+      spring animation, the list stays mounted underneath); Android navigates via `NavHost`
+      (a real screen swap with save/restore state) — functionally equivalent (same
+      toggle semantics, same destination reached) but not a pixel-identical port of the
+      overlay/animation mechanism.
+- [~] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
+      — **text-only sub-slice done** (slice `feed-post-composer-text`, 2026-08-10): a new
+      `FeedComposerPlaceholder` row above the post list (iOS parity: `FeedView.composerPlaceholder`)
+      opens `FeedComposerSheet` (`ModalBottomSheet`, same shape as the existing `StatusComposerSheet`),
+      publishing a text-only `POST` via the existing, previously-unused-for-this-purpose
+      `PostRepository.create()`. Pure `FeedComposerDraft`/`FeedPostVisibility` (Public/Friends/Private,
+      port of iOS `postVisibility`) owns the publish gate (non-blank trimmed text) and the trimmed body.
+      A new `FeedRealtimeReducer.created()` prepends the network-confirmed post to the same realtime
+      head the socket `post:created` path already uses — visible at the top instantly, WITHOUT bumping
+      the "N new posts" banner (that's for arrivals from others), and defensively deduped against the
+      gateway's own `post:created` echo of this same publish (`state.posts.any { it.id == id }` already
+      true by the time the echo lands). **Photo/video attachments sub-slice now done too** (slice
+      `feed-composer-media-attachments`, 2026-08-10): the composer sheet gained an attach-media tile
+      (system `PickVisualMedia`/`PickMultipleVisualMedia`, routed single-vs-multi by the pure
+      `FeedMediaPicker.modeFor` — the Feed counterpart of `StoryMediaPicker`) that uploads through
+      `FeedMediaUploader` (`post`-context TUS, the Feed counterpart of `StoryMediaUploader`, consuming
+      the `TusUploadRepository` foundation the story-media-tus-upload slice built — never the legacy
+      `MessageAttachment`-producing path). `FeedComposerDraft` gained `mediaIds`/`withMedia`/`withoutMedia`/
+      `remainingMediaSlots`/`isMediaFull` (`MAX_MEDIA = 10`, parity with the story composer) and the
+      publish gate is now non-blank text **or** at least one attached media (mirror of iOS
+      `!composerText.isEmpty || !pendingAttachments.isEmpty`) — a media-only post is now possible, and
+      its blank content is sent as `null`, never `""`. Verified end-to-end on a real device against the
+      live gateway (not just unit tests): logcat confirmed the real TUS `POST`+`PATCH` round-trip
+      (`uploadcontext=post`), the `POST /api/v1/posts` body carrying the real returned `mediaIds`, and a
+      direct `GET` of the created post confirming the media persisted with a working `fileUrl`/
+      `thumbnailUrl` and Prisme translations generated — the test post was deleted afterward.
+      **Reel classification done** (slice `feed-composer-reel-classification`, 2026-08-10): every prior
+      publish hardcoded `type = "POST"` — confirmed via `services/gateway/src/services/PostService.ts`
+      that the gateway only ever *degrades* a claimed `REEL` back to `POST` when the composition doesn't
+      qualify, it never auto-*upgrades* a client-sent `POST`, so any Android post with qualifying media
+      (a video/audio ≥3s, or ≥2 images) was permanently stuck as a plain post, unlike iOS. New pure
+      `ReelComposition` (`:core:model`, mirror of iOS SDK `ReelComposition` and the gateway's own
+      `reelComposition.ts` — all three sites now share one rule) computes `qualifiesAsReel`/`defaultType`
+      from the already-uploaded media's `mimeType`/`durationMs` — no on-device metadata extraction
+      needed, since the gateway's TUS finish response already returns the server-probed duration in the
+      same `UploadedMedia` shape every upload path surfaces. `FeedComposerDraft` gained `postType`/
+      `qualifiesAsReel`/`forcePlainPost`/`withForcePlainPost` and now tracks `media: List<UploadedMedia>`
+      instead of bare ids (mechanical, `mediaIds` stays a computed projection); `FeedComposerSheet` shows
+      a Réel⇄Post override chip (iOS parity: `FeedView.composerOverlay`'s toggle) only when the current
+      composition qualifies, exactly mirroring iOS's own conditional `if ReelComposition.qualifiesAsReel`
+      gate; `FeedViewModel.publishPost` threads the resolved `type` through to `PostRepository.create`
+      instead of the old hardcoded literal. +15 tests (13 `ReelCompositionTest`, +14 net new
+      `FeedComposerDraftTest` cases covering qualification/boundary/force-toggle/de-qualification-on-
+      removal, +1 `FeedViewModelTest` asserting the `type` threads through). Mutation-proof, three axes:
+      (a) forcing `meetsMinDuration` to always `true` failed exactly the 3 duration-floor tests: (b)
+      loosening the image-count rule from `>= 2` to `>= 1` failed exactly the 2 single-image tests; (c)
+      hardcoding `FeedComposerDraft.postType` to ignore `forcePlainPost` failed exactly the 2 tests
+      asserting the override — every other test in all three files stayed green each time; all three
+      reverted and re-run clean. **Camera-photo capture now done** (slice
+      `feed-composer-camera-capture`, 2026-08-10): a second attach tile
+      ([Icons.Filled.PhotoCamera], mirror of iOS's `camera.fill` button) launches the system
+      `ACTION_IMAGE_CAPTURE` activity ([ActivityResultContracts.TakePicture]) writing into a
+      fresh [CameraCaptureFile]-named destination under `context.cacheDir/captures` (new
+      `file_paths.xml` `cache-path`), exposed via the app's existing `FileProvider` authority
+      (previously used only for GDPR-export sharing) — the resulting Uri is dispatched through
+      the **exact same** `dispatchPicked` pipeline gallery picks already use, so zero new
+      upload/error-handling logic. **A genuine, on-device-confirmed Android platform bug found
+      and fixed in the same slice**: `ActivityResultContracts.TakePicture()`'s own
+      `createIntent()` (decompiled and read directly — `Intent(ACTION_IMAGE_CAPTURE).putExtra
+      (EXTRA_OUTPUT, uri)`) never sets `FLAG_GRANT_WRITE_URI_PERMISSION`, so the implicitly-
+      resolved camera app has no permission to write into our `FileProvider` Uri. First
+      on-device pass (stock AOSP camera on `meeshy_pixel8`) reproduced this exactly: the camera
+      activity opened and the shutter appeared to work, but the destination `captures/`
+      directory stayed empty and no TUS upload ever fired (`success = false` from the launcher,
+      silently swallowed by the existing cancel/discard branch — a real device confirms this
+      class of bug is invisible to any JVM/Robolectric test). Fixed with the canonical, publicly
+      documented Android pattern: `context.packageManager.queryIntentActivities(ACTION_IMAGE_
+      CAPTURE, MATCH_DEFAULT_ONLY)` + an explicit `grantUriPermission(pkg, uri,
+      FLAG_GRANT_WRITE_URI_PERMISSION or FLAG_GRANT_READ_URI_PERMISSION)` per resolved package,
+      called before `takePicture.launch(uri)`. **Deliberate, documented scope cut vs. iOS**:
+      photo capture only — iOS's `CameraView` is a custom AVFoundation screen with an in-app
+      photo/video toggle; Android delegates entirely to the system camera app's own
+      `ACTION_IMAGE_CAPTURE` intent (so no `CAMERA` runtime permission request is needed here —
+      the system camera app owns that), and video capture (`ACTION_VIDEO_CAPTURE`, its own
+      destination MIME/extension) is a separately-scoped follow-up. New pure
+      `CameraCaptureFile.next(nowMillis)` (`:feature:feed`, mirror of the split
+      `me.meeshy.sdk.model.export.DataExportFileBuilder` uses) names the destination file from
+      an explicit timestamp — deterministic, +4 tests, mutation-proven (hardcoding the filename
+      to ignore the timestamp parameter fails **exactly** the 2 discriminating tests, the other
+      2 stay green). **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970 tasks,
+      full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). **On-device
+      verification partially blocked by severe shared-host contention this run**: the first pass
+      (pre-fix) ran clean on `meeshy_pixel8` and is what surfaced the URI-permission bug in the
+      first place; re-confirming the FULL round-trip (capture → upload → thumbnail) after the
+      fix hit host load spiking past 450 mid-session (other concurrent agent sessions on this
+      shared box, consistent with prior `feedback_shared_disk_contention_multi_session` reports)
+      — the emulator process itself became CPU-starved to the point of never completing boot
+      across two fresh launches (~30 min total), so the post-fix round-trip is verified by
+      code-level evidence (decompiled bytecode proving the gap; the fix is Android's own
+      documented canonical pattern for exactly this problem, not a novel/risky guess) rather
+      than a second on-device capture. Flagged honestly rather than claimed — a natural
+      candidate for a quick on-device confirmation pass once this shared box is quieter, not
+      required to consider this slice done given the strength of the remaining evidence.
+      **Camera-video capture now done too** (slice `feed-composer-video-capture`, 2026-08-10 —
+      the standing "video capture fast-follow" candidate from the photo-capture slice's own
+      deliberate scope cut): a third attach tile ([Icons.Filled.Videocam]) launches the system
+      `ACTION_VIDEO_CAPTURE` activity ([ActivityResultContracts.CaptureVideo]) writing into a
+      fresh [CameraCaptureFile.nextVideo]-named destination in the **same** `captures/`
+      cache directory the photo tile already uses (no new `file_paths.xml` entry needed —
+      `cache-path` covers the whole directory, not per-extension), then dispatched through the
+      **exact same** `dispatchPicked` pipeline both the gallery pickers and the photo tile already
+      use — zero new upload/error-handling logic, zero new manifest surface. **Re-proved the same
+      URI-permission bug class applies here before writing any code**: decompiled
+      `ActivityResultContracts.CaptureVideo()`'s bytecode (`javap` on the same AndroidX
+      `activity-1.9.3` jar) and confirmed its `createIntent()` is the byte-for-byte identical
+      shape as `TakePicture()`'s — `Intent(ACTION_VIDEO_CAPTURE).putExtra("output", uri)`, no
+      `FLAG_GRANT_WRITE_URI_PERMISSION` — so the fix already shipped for photo capture was known
+      to be needed here too, not a novel risk. **Refactor, not duplication**: the
+      `queryIntentActivities`+`grantUriPermission` dance and the `capturesDir`/`File`/
+      `FileProvider.getUriForFile` construction (previously inlined once in `launchCamera`) are
+      now two small private `Context` extensions (`grantCaptureWritePermission(action, uri)`,
+      `createCaptureUri(fileName)`) shared by both `launchCamera` and the new
+      `launchVideoCapture` — keeps the one bug-prone piece (the permission grant) in exactly one
+      place rather than risking the fix drifting between two copies. `CameraCaptureFile` gains
+      `nextVideo(nowMillis)` (`video_<millis>.mp4`, distinct prefix/extension from the photo
+      `capture_<millis>.jpg` so the two never collide in the shared directory) alongside the
+      existing `next` — same pure-builder shape, +6 tests (naming, determinism, distinctness
+      across instants, extension, and a same-instant no-collision-with-photo test), mutation-
+      proven (hardcoding `nextVideo` to ignore its `nowMillis` parameter fails **exactly** the 2
+      discriminating tests — "names the file from the given instant" and "two different instants
+      produce two different video file names" — the other 7 in the file, including all 4 existing
+      photo tests, stay green). **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+      (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). **Full
+      on-device verification against the live gateway** (`meeshy_pixel8`, already booted and
+      idle, host load moderate — no repeat of the prior slice's severe contention): tapped the new
+      video tile, confirmed the system `com.android.camera2` app opened in genuine VIDEO mode
+      (red `REC 00:0x` indicator, not the photo shutter UI), recorded a ~3s clip, confirmed via
+      the same in-flight spinner tile the upload started immediately on return to the composer.
+      `adb logcat` confirmed the real TUS `POST`+`PATCH` round-trip (`filename=video_
+      1786394334180.mp4`, `filetype=video/mp4`, `uploadcontext=post`, full 1,260,047-byte
+      single-`PATCH` upload) — the `video_`/`.mp4` naming from `CameraCaptureFile.nextVideo`
+      confirmed verbatim in the real request. Published the resulting post for real (`POST
+      /api/v1/posts` → 201): the gateway independently probed the video (`duration: 13982`,
+      `width: 1280`, `height: 720`) and **auto-classified it `type: "REEL"`** — the existing
+      `ReelComposition` duration-floor rule firing correctly against a genuinely-captured (not
+      gallery-picked) video for the first time, with the composer's `Reel⇄Post` override chip
+      appearing exactly as it does for a qualifying gallery video. `GET /api/v1/posts/:id`
+      confirmed the persisted media (`fileUrl`/`thumbnailUrl` both resolving) before the test
+      post was deleted via `DELETE /api/v1/posts/:id` (`{"deleted":true}`, confirmed gone via a
+      follow-up 404). **Deliberate, documented scope cut vs. iOS unchanged**: Android now has two
+      system-delegated tiles (photo, video) where iOS has one custom AVFoundation screen with an
+      in-app photo/video toggle — functionally equivalent capture capability, different
+      interaction shape; no `CAMERA` runtime permission needed on Android either way (the system
+      camera app owns it). **Generic file attachment now done too** (slice
+      `feed-composer-file-attachment`, 2026-08-10 — the standing "files, location, audio,
+      per-post language" candidate's smallest, lowest-risk sub-slice, decomposed and picked
+      first): a fifth attach tile ([Icons.Filled.AttachFile]) mirrors iOS's `doc.fill` button —
+      [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the author pick ANY
+      document from the system picker, dispatched through the **exact same** `dispatchPicked`
+      pipeline every other tile already uses. **Re-proved the upload path was MIME-agnostic
+      before writing any code, rather than assuming it**: read `getAttachmentType`
+      (`packages/shared/types/attachment.ts`) and `UploadProcessor.validateFile`
+      (`services/gateway/src/services/attachments/UploadProcessor.ts`) end to end — arbitrary
+      MIME types are classified (image/audio/video/text/code/document) and only size-limited,
+      never type-rejected, so the existing `post`-context TUS pipeline needed zero changes.
+      Unlike `PickMultipleVisualMedia`, `OpenMultipleDocuments` has no `maxItems<=1` crash
+      constraint, so there is no picker-mode routing to do — `dispatchPicked` already caps to
+      `draft.remainingMediaSlots` and surfaces the limit message on overflow. The one genuinely
+      new rendering decision — a picked document has no image/video thumbnail — lives in a new
+      pure `UploadedMedia.hasThumbnailPreview` extension (`FeedComposerDraft.kt`), reusing the
+      already-tested `MediaKindClassifier` (`:core:model`, the SSOT for MIME→kind originally
+      built for the auto-download gate) rather than re-sniffing MIME prefixes: `IMAGE`/`VIDEO`
+      preview as a thumbnail, everything else (a document, `AUDIO`/`AUDIO_TRANSLATION`, an
+      unclassifiable/blank MIME type) falls back to a generic `InsertDriveFile` icon tile.
+      `ReelComposition`'s own doc comment ("documents and every other kind never qualify")
+      already anticipated this — confirmed no change needed there. +5 tests
+      (`FeedComposerDraftTest`: image/video preview, document/audio/blank-mime fallback).
+      Mutation-proof: hardcoding `hasThumbnailPreview` to always `true` fails **exactly** the 3
+      discriminating fallback tests, the other 37 (including every pre-existing test in the
+      file) stay green; reverted via `cp`-backed scratch edit, never `git checkout --`, re-run
+      green before continuing. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
+      (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures).
+      Reviewer **PASS** (diff `apps/android` only — 2 production files, 4 locale `strings.xml`
+      [en/fr/es/pt, `feed_composer_attach_file` carries zero format specifiers], 1 test file;
+      SDK purity — the rendering rule lives in `:feature:feed`, reuses the `:core:model`
+      classifier rather than duplicating it; SSOT honoured; no coverage floor lowered).
+      **Full on-device verification against the live gateway**: pushed a real non-media file to
+      the emulator's Downloads, tapped the new tile, confirmed via `uiautomator dump` bounds
+      the system DocumentsUI picker opened and the picked file rendered as a generic file-icon
+      tile (screenshot-confirmed, not a broken/blank thumbnail) with the same remove-X overlay
+      every other tile has. `adb logcat` confirmed two independent real TUS round-trips for two
+      different non-media MIME types (`text/plain` and `text/xml`, both `uploadcontext=post`).
+      Published the resulting post for real (`POST /api/v1/posts` → success, `media` array
+      populated); `GET /api/v1/posts/:id` confirmed the persisted attachment plus Prisme
+      translations generated; the test post was deleted afterward (`DELETE` →
+      `{"deleted":true}`, confirmed gone via a follow-up 404). Emulator left idle at the home
+      screen afterward, pushed test file removed. **Deliberate, documented scope cut**: no
+      filename/size label on the file tile yet — `UploadedMedia` (`:core:model`) doesn't carry
+      the original filename the gateway's TUS response discards on this path, unlike iOS's
+      `MessageAttachment.fileName`; adding it is a separately-scoped follow-up touching the wire
+      model, not a rendering-only change. **Audio attachment now done too** (slice
+      `feed-composer-voice-capture`, 2026-08-10 — unblocked by the chat composer's real
+      `MediaRecorder` capture landing the same day, `chat-voice-recording-capture`): a sixth
+      attach tile (`Icons.Filled.Mic`) records in-app via the exact same `VoiceRecordingSession`/
+      `VoiceRecordingPill`/`VoiceRecordingFile`/`MicAmplitudeDecibels` stack chat uses — moved to
+      `:core:model`/`:sdk-ui` this slice (no behaviour change to chat) specifically so both
+      composers share one state machine instead of two drifting copies. While recording, the
+      pill replaces the attach-tiles row (same UX shape as chat swapping its input row); Stop/
+      Send hands the take to `dispatchItems` (a new shared upload tail extracted from
+      `dispatchPicked`) as one more `audio/mp4` `MediaUploadItem` — no gateway/pipeline change
+      needed, reusing the already-tested generic-icon fallback (`hasThumbnailPreview`'s `AUDIO`
+      case). On-device verification against the live gateway: real mic capture (system
+      indicator, growing `cacheDir/voice/*.m4a` file), real TUS `POST`+`PATCH` round-trip
+      (`filetype=audio/mp4`, `uploadcontext=post`), gateway's own audio probe confirming genuine
+      AAC (`duration:15741,codec:"MPEG-4/AAC"`) — composed cleanly with the existing
+      `ReelComposition` duration-floor rule (the ≥3s clip correctly triggered the Reel⇄Post
+      chip, zero special-casing needed). Published for real (`POST /api/v1/posts` → 201,
+      `type:"REEL"`), confirmed via `GET`, deleted via `DELETE` → follow-up `GET` 404; the local
+      recording file is deleted after upload (confirmed empty cache dir), no crash throughout.
+      **Location attachment now done too** (slice `feed-composer-location-attachment`,
+      2026-08-11 — the smallest, lowest-risk sub-slice of the standing candidate, deliberately
+      scoped narrower than iOS's map-based `LocationPickerView`): a seventh attach tile
+      ([Icons.Filled.LocationOn]) mirrors iOS's `location.fill` button, requesting
+      `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` then capturing one fresh fix straight from
+      `android.location.LocationManager` (GPS preferred, network fallback — no Play Services
+      dependency added). New pure `SharedPlace` (`:core:model`, mirrors the gateway's
+      `{latitude, longitude, name, address, category}` and iOS's `SharedPlace` field-for-field)
+      threaded through `CreatePostRequest.location` → `PostRepository.create(location:)` →
+      `FeedViewModel.publishPost(location:)`. The attached place renders as its own removable
+      chip (raw coordinates via the new `formattedCoordinates()`, `Locale.ROOT`-pinned).
+      **Per-post language override now done too** (slice `feed-composer-language-override`,
+      2026-08-11 — the last unshipped item of this candidate besides on-device transcription):
+      a compact flag pill under the header (port of iOS's `ComposerLanguageFlag` button; the
+      collapsed pill shows ONLY the flag, matching iOS's own 2026-07-30 directive) opens a
+      search-filtered picker dialog (`ComposerLanguagePickerDialog`, a plain `AlertDialog` —
+      mirrors `SettingsScreen`'s own `RegionalLanguageDialog` shape rather than nesting a second
+      `ModalBottomSheet`, an established anti-pattern this codebase avoids) reusing the
+      already-tested `LanguageStepSelection.pickerLanguages`/`.filter` pure core the registration
+      wizard's language step already established — no re-implementation of the catalogue/filter
+      rule. New pure `ComposerLanguage` (`:core:model`, port of iOS `ComposerModels.swift`'s
+      `DefaultComposerLanguage.resolve()`/`ComposerLanguageFlag.label(for:)`): `DEFAULT` reuses
+      `LanguageResolver.FALLBACK_LANGUAGE` ("fr", SSOT — no second hardcoded literal), `flag(code)`
+      the catalogue flag or an uppercased raw-code fallback. **RE-PROUVEN before coding**: iOS's
+      own `FeedComposerSheet.composerLanguage` does NOT auto-detect from the typed text either
+      (confirmed by reading `FeedView+Attachments.swift` — the live-typing detector only wires
+      into `UniversalComposerBar`/messages, via `ComposeLanguageDetector` on Android's chat
+      composer) — it starts at a hardcoded `"fr"` and only a manual picker changes it, so this
+      slice mirrors that exactly rather than reusing chat's auto-detection. Also re-confirmed no
+      shared cross-feature language-picker UI component exists yet outside the registration
+      inline menu: the pure catalogue/filter core (`LanguageStepSelection`, `:core:model`) IS
+      reusable and was reused verbatim, but the Composable picker UI itself is now duplicated a
+      third time (registration's inline grid, Settings' `RegionalLanguageDialog`, this dialog) —
+      flagged as a legitimate `:sdk-ui` promotion candidate for a future iOS-dette-style pass, not
+      done here (stays feature-local per the SDK-purity convention of duplicating small UI glue
+      until 3+ call sites force a shared abstraction, and to keep this slice's diff scoped to
+      `:feature:feed`/`:core:model` alone). `FeedComposerDraft` gained `language` (defaults to
+      `ComposerLanguage.DEFAULT`) + `withLanguage(code)` (replaces, mirrors `withLocation`); the
+      choice is always forwarded on publish (`FeedPostPublishRequest.language` → `FeedViewModel.
+      publishPost(language:)` → `PostRepository.create(originalLanguage:)`, an already-existing,
+      previously-dead wire field — mirrors iOS always sending `originalLanguage: composerLanguage`,
+      never omitting it). +12 new tests (5 `ComposerLanguageTest`: default value, known-code flag,
+      case-insensitive match, unknown-code uppercase fallback, blank-code empty-string fallback; 5
+      `FeedComposerDraftTest`: default language, override, replace-not-accumulate, publish request
+      carries default, publish request carries override; 2 `FeedViewModelTest`: no-override
+      forwards `null` verbatim, override forwards verbatim). **Mutation-proven**, three axes:
+      hardcoding `publishRequest().language` to always `ComposerLanguage.DEFAULT` fails **exactly**
+      the "carries the author's chosen language override" test (54 others green); dropping the
+      uppercase fallback in `ComposerLanguage.flag` fails **exactly** the unknown-code test (4
+      others green); hardcoding `FeedViewModel.publishPost`'s repository call to `originalLanguage
+      = null` fails **exactly** the "forwards the author's chosen language override" test (58
+      others green) — each reverted via a scratch `cp`-backed edit, never `git checkout --`,
+      re-confirmed green. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` (970
+      tasks, matching every prior slice — no build-graph regression). Reviewer **PASS** (diff
+      `apps/android` only — 2 new `:core:model` files, 4 `:feature:feed` production files edited
+      [+1 UI file gaining 2 new Composables], 4 locale `strings.xml` [en/fr/es/pt, 3 new keys each,
+      one carrying a `%1$s` format spec used only as a content-description string, not rendered
+      literally], 2 test files edited; SDK purity — `ComposerLanguage`/`LanguageStepSelection`
+      stay the stateless building blocks, the picker dialog + pill are ordinary `:feature:feed` UI
+      glue over them; SSOT — `LanguageResolver.FALLBACK_LANGUAGE`/`LanguageStepSelection`/
+      `LanguageData` all reused verbatim, zero re-implementation; no coverage floor lowered; no
+      tautological tests). **Full on-device verification against the live gateway**
+      (`meeshy_pixel8`): repeated the itération-precedent's own corrected lesson — every tap
+      resolved via `uiautomator dump` + a grepped `bounds="[x1,y1][x2,y2]"` attribute, including
+      catching and correcting a first attempt that reused a screenshot-estimated Publish
+      coordinate (missed entirely, sheet stayed open) before switching to the dump-derived bounds.
+      Tapped the new flag pill (`content-desc="Francais"` confirmed the default), the picker
+      dialog opened showing all 6 catalogue languages with French pre-selected via `RadioButton`,
+      selected "Deutsch" — dialog closed, pill updated to the German flag
+      (`content-desc="Deutsch"` confirmed via a fresh dump), typed text, tapped the
+      dump-verified Publish bounds: `adb logcat` confirmed the real request body
+      `{"content":"TestLanguageOverride_de2","originalLanguage":"de"}` and the gateway's `201`
+      response echoed `"originalLanguage":"de"` on the persisted post — proving the full
+      composer-to-gateway pipeline round-trips the override correctly end to end, not just at the
+      unit-test level. Deleted the test post via `curl DELETE /api/v1/posts/:id` (confirmed gone
+      via a follow-up `GET` → 404). `adb logcat` checked across the whole session for `FATAL
+      EXCEPTION`/`AndroidRuntime` app crashes — none. Emulator left idle on the Feed screen
+      afterward (composer closed, not mid-flow). **Still open**: no map UI, no search, no
+      reverse-geocoded name/address for the location attachment (each a separately-scoped, heavier
+      follow-up — the map picker alone needs a Maps SDK dependency this slice deliberately
+      avoided), on-device transcription (iOS's dedicated `AudioPostComposerView` with
+      `EdgeTranscriptionService` — a materially larger, separately-scoped feature), durable-outbox
+      queueing for offline resilience (media upload itself has no offline-retry path yet either,
+      unlike the story composer's — the whole Feed publish isn't durable yet, so this is
+      consistent, not a new gap) — each a separately-scoped follow-up. With this slice, the Feed
+      post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
+      exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
@@ -3538,7 +4405,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       are now live** (Contacts / Requests / Discover / Blocked) — no placeholder remains
       (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
       Requests (Blocked/Discover counts).
-- [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
+- [x] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
       **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
       `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
       All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
@@ -3550,7 +4417,58 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
       is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
       online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
-      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
+      and the friend row renders green/amber/none accordingly. **Mood-emoji presence shipped** (slice
+      `contacts-mood-emoji-presence`, 2026-08-11): port of iOS `ContactsListTab.swift`'s
+      `statusViewModel.statusForUser(userId:)?.moodEmoji` passed into `MeeshyAvatar`. `MeeshyAvatar`
+      (`:sdk-ui`) already rendered a `moodEmoji: String?` badge (shipped with the avatar atom itself,
+      just never fed a real value from Contacts) — this slice is the missing orchestration wire, not a
+      new UI atom. New pure `List<StatusEntry>.statusForUser(userId) → StatusEntry?` (`:sdk-core/status`,
+      exact port of iOS's `statuses.first { $0.userId == userId }`) backs a new
+      `ContactsListUiState.moodEmojiFor(userId) → String?` (blank-guarded — a structurally-impossible-
+      but-defended-against blank `moodEmoji`). `ContactsListViewModel` now injects the already-existing
+      `StatusBarCache` (`:sdk-core`, the Feed status bar's L1 in-memory cache) and reads its **FRIENDS**-
+      mode snapshot synchronously on every `load()` — deliberately best-effort, no dedicated network
+      fetch of its own: `valueOrNull` collapses Fresh/Stale/Syncing uniformly (a decorative avatar badge
+      doesn't need a freshness distinction, mirrors the existing `CategoryRepository` precedent), and a
+      cold/never-loaded cache just means no badges yet — exactly iOS's own behaviour before its Feed
+      status bar has ever loaded (no popup, no error, the row simply renders without the badge). +9 tests
+      (4 `StatusMapperTest`: found/absent/empty-list/first-of-duplicates; 5 `ContactsListViewModelTest`:
+      pure state blank-guard, live emoji painted from the FRIENDS cache, no emoji when the user has no
+      live status, and the DISCOVER cache never leaking into a Contacts row). Mutation-proven: dropping
+      `moodEmojiFor`'s blank-guard fails **exactly** the pure state test (21 others green); swapping the
+      cache read from `StatusFeedMode.FRIENDS` to `.DISCOVER` fails **exactly** the two mode-scoped tests
+      (19 others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`), restored
+      via `cp`, diffed clean against the backup afterward. **Deliberate, documented scope cut**: only the
+      Contacts tab is wired this slice (the checklist bullet this closes is specifically "Contacts list")
+      — Discover/Requests/Blocked tabs' `MeeshyAvatar(...)` call sites still pass no `moodEmoji` and are
+      a natural, small follow-up (same `moodEmojiFor` pattern, same `StatusBarCache` injection, per-tab
+      `StatusFeedMode` where relevant — Discover reads the DISCOVER-mode cache, not FRIENDS). No
+      cross-screen reactivity: a mood set/cleared while the Contacts tab is already open only shows up on
+      the next `load()` (pull-to-retry or re-entry), never live via a socket/Flow — matches the
+      "best-effort decoration, not primary content" scope, tracked as a future refinement alongside the
+      other 3 tabs, not a regression (iOS itself has no live-update wiring into this specific row either,
+      only through re-render on the shared `statusViewModel`'s own `@Published` updates when SwiftUI
+      happens to re-evaluate the row).
+      **Presence dot now updates LIVE (2026-08-11, slice `presence-live-contacts-overlay`)** — a
+      DIFFERENT gap than the mood-emoji one just above: the three-state online/away/offline dot
+      shipped by `presence-away-indicator` (2026-07-04) read `FriendRequestUser.isOnline`/
+      `lastActiveAt` off the roster's last full `/friends` fetch only, frozen until the next reload
+      — unlike mood, this one already HAD a live wire target ready to use: `MessageSocketManager`
+      already listened for `user:status`/`presence:snapshot` (both real, gateway-emitted events —
+      confirmed via `SERVER_EVENTS.USER_STATUS`/`_broadcastUserStatus` in
+      `MeeshySocketIOManager.ts`), just with zero consumers anywhere in the app. **A genuine
+      correctness bug found and fixed en route**: `UserStatusEvent`/`PresenceSnapshotEvent`
+      (`:core:model`) didn't even match the real payload shape (`status`/`lastSeenAt`/flat
+      `onlineUserIds: List<String>` vs. the gateway's actual `isOnline`/`lastActiveAt`/`username` /
+      `{users: [...]}`) — so even wiring a consumer to the OLD shape would have silently decoded
+      every live frame to blank defaults. Fixed both DTOs against the shared TS type
+      (`packages/shared/types/socketio-events.ts`), then wired `ContactsListViewModel.
+      observePresence()` (mirrors the existing `observeFriendshipCache()` pattern) to overlay live
+      updates via new pure `PresenceOverlay.applyStatus`/`.applySnapshot` (`:feature:contacts`).
+      +15 tests (4 `UserStatusEventTest` decode-contract, 6 `PresenceOverlayTest`, 3 new
+      `ContactsListViewModelTest`). Mutation-proven on the filter/decode branches. Conversation-
+      participant presence (a separate, still-open gap noted in the Home-screen widgets item
+      above) can now reuse this same corrected wire in a future slice.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
@@ -3795,9 +4713,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       profile's app bar (own profile shows Edit instead). +28 tests (ReportReason 6, ReportRequestBuilder 9,
       ReportRepository 5, ReportUserViewModel 8). EN/FR/ES/PT strings. Surpasses iOS (correct wire token +
       testable UDF + retryable error state).
-- [ ] Change email / phone (two-step verification)
-- [ ] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable
-- [ ] Active device sessions: list, revoke one, revoke all others
+- [x] Change email / phone (two-step verification) — `settings-account-contact-change` (2026-08-11): `AccountContactViewModel`/`AccountContactScreen` (`:feature:settings`), reached via a new Settings row between Two-factor and Active sessions. Email confirms out-of-band (a link mailed to the new address — mirrors iOS `SecurityView`, which never wires `verifyEmailChange` into any UI either) with a 60s resend cooldown (`MagicLinkCountdown` reused verbatim); phone confirms in-app via a 6-digit SMS code (`changePhone` → `verifyPhoneChange`), refreshing the session on success. Both online-only (like `ChangePasswordViewModel`), never optimistic/offline-queued. Reuses `SignupFieldValidation.isEmailValidLocally`/`isPhoneValidLocally` for the local submit gates — no new validator duplicated. +31 tests. Mutation-proven: `canVerifyPhoneCode`'s length check and `toPhoneVerifyErrorKind`'s httpStatus==400 branch each fail exactly their pinning test.
+- [x] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable — `settings-two-factor-auth` (2026-08-11)
+- [x] Active device sessions: list, revoke one, revoke all others — shipped `761164959` (2026-08-10, `ActiveSessionsScreen`/`ActiveSessionsViewModel`), confirmed still live on-device 2026-08-11
 - [ ] Voice-cloning onboarding wizard (consent → 18+ age gate → record ≥3 samples → process)
 - [ ] Voice-profile management (status, cloning toggle, sample add/list/delete, GDPR delete-all)
 
@@ -4129,6 +5047,62 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Push message prefetch + pre-persist into Room for instant cold-launch
 - [ ] `NotificationCoordinator` authority model (socket authoritative; cache only seeds)
 - [ ] Comprehensive notification system (~80 types)
+- [~] Android `NotificationChannel` taxonomy (ARCHITECTURE.md §18: "~80 notification types
+      map onto a curated notification-channel taxonomy"). Today only 2 channels exist
+      (`CHANNEL_CALLS` full-screen ringer + a single generic "Messages" channel, both in
+      `MeeshyFcmService`) — the ~80 backend notification types above are not mapped onto a
+      curated per-category channel set (message/reaction/mention/social/call/etc, each with
+      its own importance/sound/badge policy, mirroring iOS's per-category push handling).
+      Line added by the app-icon-audit angle-mort pass (2026-08-10, `tasks/android-parity-
+      ios-debt-agent-prompt.md` §"Angle mort catégoriel") — not implemented that run.
+      **A concrete, live bug behind this gap got found and fixed** (slice
+      `notification-channel-id-drift`, 2026-08-10): re-reading `services/gateway/src/services/
+      PushNotificationService.ts` `sendViaFCM` end to end (not just the taxonomy line's own
+      wording) found the gateway already sends `message.android.notification.channelId =
+      'meeshy_notifications'` for every Android non-call push — but `MeeshyFcmService` had only
+      ever created a channel named `meeshy_messages`, and only lazily, inside
+      `onMessageReceived`. FCM Android semantics: a push carrying both a `notification` and a
+      `data` block (every non-call push today) is auto-rendered by the OS/Play services when the
+      app is backgrounded or killed — `onMessageReceived` never runs in that case, so the system
+      posts directly against the gateway's `channelId`. With no `meeshy_notifications` channel
+      ever created and no `com.google.firebase.messaging.default_notification_channel_id`
+      manifest fallback declared either (grepped, absent), that push is either dropped or folded
+      into a generic, unbranded system "Miscellaneous" channel with none of the intended
+      importance/sound — exactly backwards from precisely the scenario push exists for
+      (foregrounded, where `onMessageReceived` DOES run and channel creation already worked, was
+      never actually affected). **Fixed (production, all `apps/android`)**: new `:app`
+      `NotificationChannelIds` object (SSOT for `CHANNEL_MESSAGES`/`CHANNEL_CALLS` + their legacy
+      predecessors, replacing the two ad-hoc constant sets previously duplicated in
+      `MeeshyFcmService`'s companion) renames the client's message channel id to
+      `meeshy_notifications` — byte-for-byte matching the gateway's own literal — and a new
+      `NotificationChannelInstaller` creates it **eagerly at process start**
+      (`MeeshyApplication.onCreate`, injected via Hilt) rather than only lazily inside the
+      handler that's exactly the one that doesn't run in the failure scenario; it also deletes
+      the orphaned pre-drift `meeshy_messages` channel (channels are immutable once created —
+      same "delete + recreate under a new id" migration `CHANNEL_CALLS` already took `meeshy_calls`
+      v1→v2). `MeeshyFcmService`'s own lazy `createNotificationChannel` call in the
+      foreground-received path is kept as a harmless, idempotent belt-and-suspenders, now
+      pointing at the same SSOT id. **+4 `NotificationChannelInstallerTest`** (Robolectric,
+      `@Config(sdk = [26])` pinned to the app's own `minSdk` floor — the module's ambient default
+      SDK resolution silently fell back to API 21, well below the O+ `NotificationChannel` API,
+      producing a `NoSuchMethodError` until pinned; `testImplementation(libs.androidx.test.ext.
+      junit)` added to `:app` for `ApplicationProvider`, missing before this slice): creates the
+      channel under the gateway-matching id at `IMPORTANCE_HIGH`, deletes the stale legacy
+      channel, idempotent across repeated `install()` calls (no duplicate), never touches the
+      calls channel. Mutation-proven: commenting out the legacy-delete call fails **exactly** the
+      1 discriminating test, the other 3 stay green. **Gate**: `./apps/android/meeshy.sh check`
+      → `BUILD SUCCESSFUL` (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`,
+      zero failures). **Verified on-device** (`meeshy_pixel8` emulator, fresh app launch, no push
+      sent): `adb shell dumpsys notification` confirms `NotificationChannel{mId=
+      'meeshy_notifications', mImportance=4, mDeleted=false}` exists for `me.meeshy.app.debug`
+      the instant the process starts, before any message push ever arrives. **Still open, and
+      honestly scoped as a separate, larger follow-up**: the full curated *multi*-channel
+      taxonomy (a distinct channel per category — messages/reactions/mentions/social/etc, each
+      individually mutable in system settings) needs the gateway to send a **per-type**
+      `channelId` instead of the one hardcoded literal it sends today for every non-call push —
+      a `services/gateway` change, outside this lane's `apps/android`-only diff scope. This slice
+      only closes the concrete id-mismatch defect and lays the SSOT + eager-install foundation a
+      future richer taxonomy would build on.
 - [x] Per-type semantic row accent (`notifications-type-accent-color`, 2026-07-13): pure
       `:core:model` `notificationTypeAccentHex(type)` SSOT — faithful port of iOS
       `MeeshyNotificationType.accentHex`, mapping all ~80 backend `type` strings (lowercase +
@@ -4227,7 +5201,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + the initial `Array(repeating:0,count:15)`), `WaveformInterpolator.interpolate`
       (levels→`barCount` linear-blend strip, ports `UniversalComposerBar.interpolatedLevel`,
       whole strip in one pass). +28 tests. The `MediaRecorder`/`AudioRecord` capture + the
-      Compose `Canvas` that paints the strip remain app-side glue (pending); this same core
+      Compose `Canvas` that paints the strip remain app-side glue (pending as a standalone,
+      reusable "universal recorder" abstraction — concrete instances now exist and are shared
+      between the chat composer's voice pill and the Feed post composer's audio-attachment pill,
+      `chat-voice-recording-capture` + `feed-composer-voice-capture`, both driving the same
+      `:core:model`/`:sdk-ui` `VoiceRecordingSession`/`VoiceRecordingPill`); this same core
       also underpins the audio-message-player waveform (line 2111).
 - [ ] Full-screen audio editor (waveform, trim/crop, word-level transcription, language picker)
 - [ ] On-device speech-to-text transcription of recordings
@@ -4270,6 +5248,41 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       raster→`Bitmap` wrap + Coil placeholder wiring + slide-level generation (encode → upload) still pending.
 
 ## Q. Cross-cutting infrastructure
+- [x] App icon — launcher icon (`app-launcher-icon`, 2026-08-10). Was **entirely absent**:
+      `apps/android/app/src/main/res/` had zero `mipmap-*` folders and no drawable icon asset,
+      and `<application>` in `AndroidManifest.xml` carried neither `android:icon` nor
+      `android:roundIcon` — every install rendered the generic Android launcher icon. Not a
+      single line anywhere flagged this, because the integral iOS audit
+      (`tasks/audit/part-01..23.md`) only read `.swift` production files and never opened
+      iOS's `.xcassets` asset catalogs — a categorical blind spot in the audit itself (found
+      by the user, 2026-08-10, `tasks/android-parity-ios-debt-agent-prompt.md` §"Angle mort
+      catégoriel"), not a regression. **Shipped:** adaptive icon
+      (`mipmap-anydpi-v26/ic_launcher{,_round}.xml` + `drawable/ic_launcher_{background,
+      foreground,monochrome}.xml` — background/foreground/Android-13+-themed-icon layers) plus
+      legacy PNG fallback (`mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher{,_round}.png`,
+      inert at `minSdk 26` — the OS always resolves the adaptive XML — but shipped for
+      tooling/launchers that still read the classic path directly) + `android:icon`/
+      `android:roundIcon` wired on `<application>`. Ported **pixel-measured**, not eyeballed,
+      off the iOS brand asset
+      (`apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png`): a
+      connected-component scan of the white glyph pixels gave the 3 bar bounding boxes exactly,
+      and corner-pixel sampling confirmed the gradient is exactly Indigo500 `#6366F1`
+      (top-left) → Indigo700 `#4338CA` (bottom-right) — matching `apps/ios/CLAUDE.md`'s
+      documented brand identity precisely, not a re-hue. Glyph scaled 0.85× beyond the literal
+      108/1024 port so every bar corner clears the 66dp adaptive safe-zone circle (max corner
+      distance ~30dp of the 33dp radius). Vector layers (API 26+, i.e. every device this app
+      can run on) and the legacy PNGs share the exact same derivation
+      (`apps/android/scripts/generate_legacy_launcher_icons.py`, committed + documented, mirrors
+      the iOS `check_appicon_variants.py` convention) so they can never visually drift. **TDD**:
+      `LauncherIconManifestGuardTest` (app module) — asserts `<application>` declares both
+      manifest attributes, the adaptive XML references drawables that exist on disk, and every
+      legacy density ships both PNGs; proven RED (manifest attributes reverted → the
+      icon-declaration test failed, the resource-existence tests stayed green as expected) then
+      restored to GREEN by hand before commit. **Verified visually, not just compiled**:
+      installed the debug APK on the `meeshy_pixel8` emulator (API 35) and screenshotted both
+      the Overview task-switcher (circle mask) and the home-screen app drawer (squircle mask) —
+      both render the Indigo-gradient background + white stacked-dashes glyph correctly, no
+      generic Android robot icon anywhere.
 - [ ] Cache-first / SWR data layer (`CacheResult`, `cacheFirstFlow`, Room as single SoT)
 - [ ] Offline outbox (one Room table, FIFO flush, backoff ×5, coalescing, `cmid` idempotency, rollback)
 - [ ] Optimistic updates with snapshot rollback + in-flight guards + self/others socket-echo split
@@ -4279,7 +5292,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Real-time socket→Room relay (messages, reactions, read status, translations, lifecycle)
 - [ ] Two Socket.IO connections (message + social), long-polling transport, robust reconnect + room re-join
 - [ ] Crash-safe boot recovery for in-flight queue items + orphaned audio files
-- [ ] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance
+- [~] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance —
+      **non-resumable TUS client done** (slice `story-media-tus-upload`, 2026-08-10, §E): `TusApi`/
+      `TusUploadRepository` speak the tus.io protocol against the gateway's `POST /api/v1/uploads`.
+      **Chunked upload within a single session done** (slice `tus-chunked-upload-core`, 2026-08-10):
+      `TusUploadRepository.upload` now splits the body into bounded PATCH calls (`TusChunkPlan`,
+      pure chunk-boundary math, `:core:model`) of at most `DEFAULT_CHUNK_SIZE_BYTES` (10 MB, matches
+      iOS `TusUploadManager.chunkSize`) instead of one monolithic PATCH — every chunk but the last
+      goes through the new `TusApi.uploadChunk`/`patchChunk` (typed `Response<Unit>`, since the
+      gateway's `@tus/server` returns a bare `204 No Content` for any non-final PATCH per the
+      tus.io protocol), only the last chunk still goes through `uploadData` (the only PATCH whose
+      response actually carries the `onUploadFinish` JSON body). A body no larger than one chunk
+      (the common case today — compressed images) still makes exactly one PATCH, byte-identical to
+      before. **Room-backed checkpoint, resume-within-retries done** (slice
+      `tus-upload-checkpoint-resume`, 2026-08-11): new `tus_upload_checkpoint` table
+      (`:core:database`, `TusUploadCheckpointEntity`/`Dao`) + pure `TusCheckpointKey`/
+      `TusResumePlanner` (`:core:model`) decide, on every `upload()` call, whether to resume an
+      existing session (skip `createUpload` entirely, PATCH only the chunks past the last
+      *confirmed* offset) or start fresh — deliberately conservative: a checkpoint with zero
+      confirmed progress (no intermediate chunk ever acknowledged) always starts fresh rather than
+      trust an unconfirmed/possibly-stale session, so only genuinely large multi-chunk uploads that
+      failed partway through ever benefit. The row is written after every acknowledged
+      intermediate chunk and defensively cleared on completion (harmless no-op when absent). **Does
+      NOT yet survive an app kill**: `MediaUploadItem.bytes` is still fully resident in memory for
+      the call's lifetime, so a killed process loses the source bytes regardless of the persisted
+      offset — that needs the lazy file-source read + a boot-time recovery scan (the existing
+      "Crash-safe boot recovery for in-flight queue items" bullet above), still NOT done, along
+      with 409 HEAD-recovery and a dedicated `WorkManager` foreground chain. Those remain the next
+      sub-slices. Message-retention cleanup / DB maintenance still not started.
 - [ ] Background conversation sync + message prefetch (backoff + jitter)
 - [ ] Encrypted local storage (AES-GCM Room / EncryptedSharedPreferences) + per-user namespacing + logout wipe
 - [ ] E2EE message encryption/decryption (libsignal, batched, fail-closed)
@@ -4287,8 +5327,57 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`meeshy://` + `https://meeshy.me`)
 - [ ] Universal Link / push / socket notification routing into the correct screen
 - [ ] Home-screen widgets (recent conversations, unread count, favorite contacts, quick reply, mark-read)
+      **Angle mort catégoriel comblé (2026-08-11)** : premier `GlanceAppWidget`/`AppWidgetProvider` de
+      `apps/android` (slice `widget-unread-count-scaffold`) — foundation minimale + sous-tranche
+      "unread count" (`UnreadCountWidget`, parité avec iOS `MeeshyWidgets.UnreadCountWidget`
+      `.systemSmall`). Statique/déclenché par l'OS, pas de push-refresh sur changement de données
+      (l'analogue Android de `WidgetCenter.reloadAllTimelines()`). **Deuxième sous-tranche
+      (2026-08-11)** : `RecentConversationsWidget` (slice `widget-recent-conversations`), parité
+      avec iOS `MeeshyWidgets.RecentConversationsWidget` — pinned-first puis plus-récent-d'abord
+      (`ConversationRowTime` SSOT), jusqu'à 5 lignes, tap sur une ligne = deep-link direct
+      `meeshy://conversation/{id}`. A nécessité un ajout de fondation : `TokenStore.userId`
+      (persisté à côté du JWT) — `SessionRepository` est en mémoire seule et vide dans un
+      processus widget froid qui n'a jamais tourné le flux de démarrage normal de l'app ; le
+      widget lit désormais l'id utilisateur persisté pour résoudre le nom du bon participant
+      dans une conversation directe. **Troisième sous-tranche (2026-08-11)** :
+      `FavoriteContactsWidget` (slice `widget-favorite-contacts`), parité avec iOS
+      `MeeshyWidgets.FavoriteContactsWidget` — une "favorite contact" est une conversation
+      DIRECTE épinglée (`isPinned && type == direct`), pas une notion distincte, exactement
+      comme `WidgetDataManager.publishFavoriteContacts` sur iOS ; jusqu'à 8 lignes,
+      plus-récent-d'abord (`ConversationRowTime` SSOT), tap = deep-link direct dans la
+      conversation (`meeshy://conversation/{id}` — Android n'a pas l'équivalent de l'URI
+      `meeshy://contact/{id}` d'iOS, réutilise la route déjà câblée plutôt que d'en créer une
+      seconde pour le même id). Pas de badge de présence en ligne : `ApiConversation.participants`
+      ne porte aucun champ `isOnline`/`lastActiveAt` côté Android (contrairement à
+      `MeeshyConversation.lastSeenText` sur iOS) — un vrai gap documenté, pas un oubli. Restent :
+      quick reply, mark-read, tailles/kinds additionnels, push-refresh, badge de présence.
+      **Fondation posée (2026-08-11, slice `chat-composer-prefill-draft`)** : le deep-link
+      `meeshy://conversation/{id}?draft={texte}` pré-remplit désormais le composer via
+      `ChatViewModel.initialDraft` — débloque un futur Quick Reply RÉELLEMENT fonctionnel (celui
+      d'iOS s'est avéré mort en production, cf. slice `dynamic-launcher-shortcuts`).
+      **Quatrième sous-tranche livrée (2026-08-11, slice `widget-quick-reply`)** :
+      `QuickReplyWidget`, parité avec iOS `MeeshyWidgets.QuickReplyWidget` — même règle de
+      sélection (`premier non-lu, sinon premier`, sur le même ordre pinned-first-then-recency),
+      4 chips de réponse pré-écrite (👍/OK/Merci !/Rappelle-moi, exactement le jeu d'iOS),
+      chaque tap ouvrant la conversation avec la réponse déjà pré-remplie via le deep-link
+      `?draft=` — **réellement fonctionnel, contrairement à son homologue iOS** (confirmé mort en
+      production lors du slice `dynamic-launcher-shortcuts`). Restent : mark-read, tailles/kinds
+      additionnels, push-refresh, badge de présence.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
+      **First sub-slice shipped (2026-08-11, slice `dynamic-launcher-shortcuts`)**: dynamic launcher
+      shortcuts (long-press the launcher icon) publishing up to the device's own reported max
+      (`ShortcutManagerCompat.getMaxShortcutCountPerActivity`) recent conversations, pinned-first
+      then most-recent (same ordering SSOT the home-screen widgets already apply), tapping one
+      deep-links straight into that conversation. This is the closest ALWAYS-local, fully-testable
+      Android equivalent to iOS's `OpenRecentConversationIntent` App Shortcut — confirmed by reading
+      `MeeshyAppIntents.swift` end to end that iOS's other 4 App Shortcuts (Send Message, Call
+      Contact, Translate, Check Notifications) are Siri/Assistant voice phrases requiring the
+      `AppIntents` framework's NL parameter resolution, with **no direct Android equivalent**:
+      Android's nearest analogue (Google Assistant "App Actions" via `shortcuts.xml` capability
+      bindings) needs external Assistant indexing/review and isn't reliably locally verifiable —
+      deliberately deferred as its own, larger follow-up rather than attempted here. Restent :
+      Assistant App Actions (send message/call/translate/check notifications voice phrases).
 - [ ] Crash / hang / ANR diagnostics with on-device persistence + remote report
 - [ ] Privacy-gated analytics (screen tracking); client telemetry headers; network reachability awareness
 - [ ] Adaptive iPad/tablet/foldable two-column layout (feed + conversation list/detail, resizable splitter)

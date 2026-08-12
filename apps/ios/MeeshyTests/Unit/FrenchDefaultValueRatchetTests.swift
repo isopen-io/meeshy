@@ -66,8 +66,15 @@ final class FrenchDefaultValueRatchetTests: XCTestCase {
                 as? [String: Any] ?? [:]).keys
         )
 
+        // Le tiret DOIT figurer dans la classe de caractères de la clé.
+        // Sans lui, `location.move-prompt`, `common.clear-search`,
+        // `contacts.discover.no-results`… n'étaient tout simplement pas
+        // reconnues comme des appels localisés : le cliquet ne les voyait pas,
+        // quelle que soit leur langue. Constaté le 2026-08-09 — 194 clés à
+        // tiret manquaient au catalogue, dont 74 en français, c'est-à-dire
+        // 74 violations que ce test était censé rendre impossibles.
         let pattern = try NSRegularExpression(
-            pattern: #"String\(\s*localized:\s*"([A-Za-z0-9_][A-Za-z0-9_.]*)"\s*,\s*defaultValue:\s*"((?:[^"\\]|\\.)*)""#
+            pattern: #"String\(\s*localized:\s*"([A-Za-z0-9_][A-Za-z0-9_.\-]*)"\s*,\s*defaultValue:\s*"((?:[^"\\]|\\.)*)""#
         )
 
         var offenders: Set<String> = []

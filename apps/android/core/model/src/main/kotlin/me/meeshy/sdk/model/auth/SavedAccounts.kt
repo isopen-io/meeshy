@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.auth
 
+import kotlinx.serialization.Serializable
+
 /**
  * A previously signed-in account remembered for the login screen's saved-account
  * picker — faithful port of iOS `SavedAccount`
@@ -17,6 +19,7 @@ package me.meeshy.sdk.model.auth
  * @property lastActiveAtMillis epoch-millis of the account's last activity, the
  *   primary sort key so the most recently used account floats to the top.
  */
+@Serializable
 data class SavedAccount(
     val id: String,
     val username: String,

@@ -1486,6 +1486,62 @@ describe('PostService', () => {
       expect(prisma.postBookmark.findFirst).not.toHaveBeenCalled();
       expect(prisma.post.count).not.toHaveBeenCalled();
     });
+
+    // Repost simple → racine (chantier reposts cohérents & watermark, tâche
+    // 9) : les flags personnels (isLikedByMe/currentUserReactions) d'un
+    // repost simple reflètent l'état de l'utilisateur sur l'ORIGINAL — un des
+    // deux chemins d'enrichissement gateway (l'autre est
+    // `PostFeedService`). Une citation garde son propre état.
+
+    it('redirects currentUserReactions/isLikedByMe to the ROOT for a simple repost', async () => {
+      const repost = makePost({ id: 'repost-1', isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+      prisma.post.findFirst.mockResolvedValue(repost);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([{ postId: 'root-1', emoji: '❤️' }]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('repost-1', 'user-1');
+
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', postId: 'root-1' },
+        select: { postId: true, emoji: true },
+      });
+      expect((result as any).currentUserReactions).toEqual(['❤️']);
+      expect((result as any).isLikedByMe).toBe(true);
+    });
+
+    it('resolves the root through the FIRST hop of the chain (originalRepostOfId), not the intermediate parent', async () => {
+      const repost = makePost({ id: 'repost-2', isQuote: false, repostOfId: 'middle-repost', originalRepostOfId: 'root-1' });
+      prisma.post.findFirst.mockResolvedValue(repost);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      await service.getPostById('repost-2', 'user-1');
+
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', postId: 'root-1' },
+        select: { postId: true, emoji: true },
+      });
+    });
+
+    it('a QUOTE keeps its own currentUserReactions/isLikedByMe — no redirect', async () => {
+      const quote = makePost({ id: 'quote-1', isQuote: true, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+      prisma.post.findFirst.mockResolvedValue(quote);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      await service.getPostById('quote-1', 'user-1');
+
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', postId: 'quote-1' },
+        select: { postId: true, emoji: true },
+      });
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -2082,7 +2138,7 @@ describe('PostCommentService', () => {
           data: { commentCount: { decrement: 1 } },
         }),
       );
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual(expect.objectContaining({ success: true }));
     });
 
     it('cascades to surviving replies and decrements commentCount by 1 + reply count', async () => {

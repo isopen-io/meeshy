@@ -5,7 +5,9 @@ import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
+import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
 
@@ -58,9 +60,13 @@ export function registerBanRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
+      // `isActive` et `leftAt` sont lus, pas seulement filtrés : la cible peut
+      // être un ancien membre — bannir quelqu'un qui est déjà parti est ce qui
+      // l'empêche de revenir par un lien de partage — et l'écriture ne doit
+      // alors pas réécrire la date de son départ.
       const targetParticipant = await prisma.participant.findFirst({
         where: { conversationId: id, userId: targetUserId },
-        select: { id: true, role: true, bannedAt: true, displayName: true },
+        select: { id: true, role: true, bannedAt: true, displayName: true, isActive: true, leftAt: true },
       })
 
       if (!targetParticipant) {
@@ -79,9 +85,10 @@ export function registerBanRoutes(
       }
 
       const now = new Date()
+      const ban = resolveBanWrite(targetParticipant, now)
       await prisma.participant.update({
         where: { id: targetParticipant.id },
-        data: { bannedAt: now, isActive: false, leftAt: now },
+        data: ban.data,
       })
       invalidateParticipantLookup(targetParticipant.id, id)
 
@@ -90,11 +97,32 @@ export function registerBanRoutes(
 
       const manager = socketIOHandler?.getManager()
       if (io) {
-        io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, {
+        // Effectif APRÈS le bannissement, et rooms personnelles des membres
+        // restants : la room de conversation seule n'atteignait pas l'écran de
+        // LISTE, qui rend pourtant cet effectif.
+        const remaining = await prisma.participant.findMany({
+          where: { conversationId: id, isActive: true },
+          select: { id: true, userId: true },
+        })
+
+        emitToConversationParticipants({
+          io,
           conversationId: id,
-          userId: targetUserId,
-          bannedBy: { id: currentUserId },
-          bannedAt: now.toISOString(),
+          participants: remaining,
+          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED],
+          payload: {
+            conversationId: id,
+            userId: targetUserId,
+            bannedBy: { id: currentUserId },
+            bannedAt: now.toISOString(),
+            // Faux quand la cible avait déjà quitté : sans cette distinction, tout
+            // client qui décrémente son compteur de membres sur cet événement le
+            // décrémente pour quelqu'un qui n'y était plus. `memberCount`
+            // ci-dessous rend ce raisonnement inutile pour qui le lit — le
+            // drapeau reste pour les clients qui décomptent encore.
+            membershipEnded: ban.membershipEnded,
+            memberCount: remaining.length,
+          },
         })
 
         const userSockets = await io.in(ROOMS.user(targetUserId)).fetchSockets()
@@ -146,24 +174,28 @@ export function registerBanRoutes(
         return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
       }
 
+      // `leftAt` et `bannedAt` disent si le bannissement avait mis fin à une
+      // appartenance ou frappé quelqu'un qui était déjà parti — cf.
+      // `conversationBanState.ts`. Sans eux, débannir REND une appartenance que
+      // le bannissement n'avait jamais prise.
       const targetParticipant = await prisma.participant.findFirst({
         where: { conversationId: id, userId: targetUserId, bannedAt: { not: null } },
-        select: { id: true },
+        select: { id: true, isActive: true, leftAt: true, bannedAt: true },
       })
 
       if (!targetParticipant) {
         return sendNotFound(reply, 'Participant banni introuvable')
       }
 
+      const unban = resolveUnbanWrite(targetParticipant)
       await prisma.participant.update({
         where: { id: targetParticipant.id },
-        data: { bannedAt: null, isActive: true, leftAt: null },
+        data: unban.data,
       })
+      invalidateParticipantLookup(targetParticipant.id, id)
 
       const manager = socketIOHandler?.getManager()
       const io = manager?.getIO()
-      const room = ROOMS.conversation(id)
-
       // Exact inverse of the ban eviction above: the ban pulled every socket of
       // this user out of `conversation:<id>`, and nothing puts them back until
       // they reconnect (AuthHandler._joinUserConversations) or their client
@@ -174,13 +206,19 @@ export function registerBanRoutes(
       // meanwhile are lost outright rather than replayed on reconnect (the
       // hazard AuthHandler documents when a room join fails).
       //
-      // Awaited BEFORE the broadcast, because the broadcast goes to the
-      // conversation room only: emitting first would leave the person being
-      // unbanned as the single participant who never learns about it. Mirrors
-      // ban's emit-then-evict ordering, which likewise ensures the target
-      // receives their own transition. A join failure is logged, never fatal —
-      // the broadcast still goes out for the remaining members.
-      if (manager) {
+      // Awaited BEFORE the broadcast. Ce n'est PLUS ce qui garantit que la
+      // cible apprenne sa réintégration — la diffusion chaîne désormais les
+      // rooms personnelles des membres actifs, dont la sienne dès que
+      // l'appartenance est restaurée. L'ordre reste : rebrancher d'abord, c'est
+      // s'assurer qu'aucun événement de room émis entre les deux ne lui manque.
+      // A join failure is logged, never fatal — the broadcast still goes out
+      // for the remaining members.
+      //
+      // Conditionné à `membershipRestored` : quand le bannissement avait frappé
+      // quelqu'un déjà parti, il n'y a aucune éviction à défaire, et rebrancher
+      // ses sockets le ferait entrer dans une conversation qu'il avait quittée
+      // de lui-même.
+      if (manager && unban.membershipRestored) {
         try {
           await manager.joinUserToConversationRoom(targetUserId, id)
         } catch (err) {
@@ -193,9 +231,29 @@ export function registerBanRoutes(
       }
 
       if (io) {
-        io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
+        // Effectif APRÈS la levée : quand elle restaure l'appartenance, la
+        // cible est de nouveau active et figure donc dans ce compte ET dans
+        // l'audience — elle apprend ainsi son retour sur sa propre ligne de
+        // liste, ce que la room de conversation ne pouvait pas lui dire.
+        const remaining = await prisma.participant.findMany({
+          where: { conversationId: id, isActive: true },
+          select: { id: true, userId: true },
+        })
+
+        emitToConversationParticipants({
+          io,
           conversationId: id,
-          userId: targetUserId,
+          participants: remaining,
+          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED],
+          payload: {
+            conversationId: id,
+            userId: targetUserId,
+            // Le bannissement est levé dans tous les cas ; l'appartenance, non.
+            // Les compteurs de membres des clients suivent ce champ, pas
+            // l'événement.
+            membershipRestored: unban.membershipRestored,
+            memberCount: remaining.length,
+          },
         })
       }
 

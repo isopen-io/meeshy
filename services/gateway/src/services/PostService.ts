@@ -7,7 +7,8 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
-import { qualifiesAsReel } from './posts/reelComposition';
+import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
@@ -41,13 +42,14 @@ interface StoryTextObjectRaw {
   [key: string]: unknown;
 }
 
-const STORY_EXPIRY_HOURS = 21;
-const STATUS_EXPIRY_HOURS = 1;
-
+/**
+ * Les durées vivent dans `posts/ephemeralPosts.ts`, avec la liste des types
+ * qu'elles rendent éphémères — la même que celle du balayage. Elles étaient
+ * ici, en copie privée : le balayage en avait sa propre version, réduite aux
+ * stories, et les statuts recevaient donc une échéance que personne n'honorait.
+ */
 function computeExpiresAt(type: PostType): Date | undefined {
-  if (type === PostType.STORY) return new Date(Date.now() + STORY_EXPIRY_HOURS * 3600_000);
-  if (type === PostType.STATUS) return new Date(Date.now() + STATUS_EXPIRY_HOURS * 3600_000);
-  return undefined;
+  return ephemeralExpiresAt(type, new Date());
 }
 
 // Minimal language detection (first word heuristics + fallback)
@@ -132,13 +134,7 @@ export class PostService {
     discoverabilityPrecision?: unknown;
   }, userId: string) {
     const now = new Date();
-    let expiresAt: Date | undefined;
-
-    if (data.type === PostType.STORY) {
-      expiresAt = new Date(now.getTime() + STORY_EXPIRY_HOURS * 3600_000);
-    } else if (data.type === PostType.STATUS) {
-      expiresAt = new Date(now.getTime() + STATUS_EXPIRY_HOURS * 3600_000);
-    }
+    const expiresAt = ephemeralExpiresAt(data.type, now);
 
     // Canonicalize the client claim at the write boundary — clients send the raw
     // platform locale (iOS `fr_FR`, web `fr-FR`). `detectLanguage` already returns
@@ -604,9 +600,20 @@ export class PostService {
     // (single source of truth). Without these, the detail always rendered
     // « non liké / non bookmarké / non reposté » even when the post was
     // liked, saved or reposted (absent field → SDK decodes `?? false`).
+    //
+    // Repost simple → racine (chantier reposts cohérents & watermark, tâche
+    // 9) : `isLikedByMe`/`currentUserReactions` d'un repost `isQuote:false`
+    // reflètent l'état de l'utilisateur sur sa RACINE (`originalRepostOfId ??
+    // repostOfId`), jamais sur le repost lui-même — un repost simple n'a pas
+    // de vie sociale propre. Une citation garde son propre état. Bookmark et
+    // `isRepostedByMe` restent ceux du post AFFICHÉ, inchangés.
+    const reactionRootId = (!post.isQuote && post.repostOfId)
+      ? (post.originalRepostOfId ?? post.repostOfId)
+      : post.id;
+
     const [userReactions, viewerBookmark, viewerRepostCount] = await Promise.all([
       this.prisma.postReaction.findMany({
-        where: { userId: viewerUserId, postId: post.id },
+        where: { userId: viewerUserId, postId: reactionRootId },
         select: { postId: true, emoji: true },
       }),
       this.prisma.postBookmark.findFirst({
@@ -1328,10 +1335,72 @@ export class PostService {
   }
 
   /**
+   * Dédup + incrément d'UN post : singleton `PostView` (postId,userId) + `viewCount`
+   * au premier insert, `duration` promue au max sur ré-ouverture. Factorisé hors de
+   * `recordView` pour être appliqué IDENTIQUEMENT au post affiché ET, pour un
+   * repost, à la racine créditée ci-dessous — même mécanique de dédup, aucune
+   * règle nouvelle inventée pour la racine.
+   */
+  private async creditPostView(
+    postId: string,
+    userId: string,
+    safeDuration: number | undefined,
+  ): Promise<boolean> {
+    const existing = await this.prisma.postView.findUnique({
+      where: { postId_userId: { postId, userId } },
+    });
+
+    if (existing) {
+      if (safeDuration !== undefined) {
+        // Le PostView est un singleton (postId,userId) : `duration` est le
+        // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
+        // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
+        // rétrograder la plus longue durée déjà observée — on conserve le max.
+        const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
+        if (nextDuration !== existing.duration) {
+          await this.prisma.postView.update({
+            where: { id: existing.id },
+            data: { duration: nextDuration },
+          });
+        }
+      }
+      return false;
+    }
+
+    await this.prisma.postView.create({
+      data: { postId, userId, duration: safeDuration },
+    });
+
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: { viewCount: { increment: 1 } },
+    });
+
+    return true;
+  }
+
+  /**
    * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
-   * réelle (création du PostView) — permet à l'appelant de ne déclencher les
-   * effets de bord coûteux « une fois » (ex : marquer les notifications du post
-   * comme lues) sans les rejouer à chaque impression répétée du feed.
+   * réelle du post AFFICHÉ (création du PostView) — permet à l'appelant de ne
+   * déclencher les effets de bord coûteux « une fois » (ex : marquer les
+   * notifications du post comme lues) sans les rejouer à chaque impression
+   * répétée du feed. Le crédit de la racine (ci-dessous) n'influence JAMAIS
+   * cette valeur de retour.
+   *
+   * Repost (chantier reposts cohérents & watermark, tâche 1) : quand le post
+   * visionné pointe vers un original (`repostOfId`), la RACINE de la chaîne
+   * (`originalRepostOfId ?? repostOfId` — jamais le parent intermédiaire) est
+   * créditée EN PLUS via `creditPostView`, donc avec EXACTEMENT les mêmes
+   * règles de dédup que le post affiché — y compris le MÊME filtre de
+   * visibilité que le post affiché (une racine FRIENDS-only repostée en
+   * PUBLIC reste inaccessible à un inconnu : sans ce filtre, n'importe qui
+   * pourrait créditer/exposer un original privé via son repost public).
+   *
+   * Chaque crédit (affiché, racine) est gardé INDÉPENDAMMENT par le même
+   * invariant anti-auto-inflation : l'auteur d'UN post donné n'inflate jamais
+   * SON PROPRE compteur en le consultant. Un reposteur qui revisionne son
+   * propre repost ne gonfle donc pas ce repost, mais reste un viewer légitime
+   * de l'ORIGINAL — dont l'auteur diffère — et crédite bien la racine.
    */
   async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
     try {
@@ -1342,12 +1411,9 @@ export class PostService {
       const visibilityFilter = await this.buildVisibilityFilter(userId);
       const post = await this.prisma.post.findFirst({
         where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-        select: { id: true, authorId: true },
+        select: { id: true, authorId: true, repostOfId: true, originalRepostOfId: true },
       });
       if (!post) return false;
-
-      // Author re-opening their own story shouldn't inflate viewCount.
-      if (post.authorId === userId) return false;
 
       // Sanitize duration: client-supplied → cap at 5 minutes (way past any
       // reasonable story).
@@ -1355,37 +1421,28 @@ export class PostService {
         ? Math.max(0, Math.min(300_000, Math.round(duration)))
         : undefined;
 
-      const existing = await this.prisma.postView.findUnique({
-        where: { postId_userId: { postId, userId } },
-      });
+      // Author re-opening their own story shouldn't inflate viewCount — but
+      // this guards ONLY the displayed post's own credit. It must NOT abort
+      // the whole call: a reposter viewing their own repost is still a
+      // legitimate viewer of the ORIGINAL (see root credit below).
+      const isNewView = post.authorId === userId
+        ? false
+        : await this.creditPostView(postId, userId, safeDuration);
 
-      if (existing) {
-        if (safeDuration !== undefined) {
-          // Le PostView est un singleton (postId,userId) : `duration` est le
-          // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
-          // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
-          // rétrograder la plus longue durée déjà observée — on conserve le max.
-          const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
-          if (nextDuration !== existing.duration) {
-            await this.prisma.postView.update({
-              where: { id: existing.id },
-              data: { duration: nextDuration },
-            });
-          }
+      const rootId = post.originalRepostOfId ?? post.repostOfId;
+      if (rootId && rootId !== postId) {
+        // Même filtre de visibilité que le post affiché — pas de requête
+        // supplémentaire hors périmètre, le filtre est déjà résolu ci-dessus.
+        const root = await this.prisma.post.findFirst({
+          where: { id: rootId, deletedAt: NOT_DELETED, ...visibilityFilter },
+          select: { id: true, authorId: true },
+        });
+        if (root && root.authorId !== userId) {
+          await this.creditPostView(rootId, userId, safeDuration);
         }
-        return false;
       }
 
-      await this.prisma.postView.create({
-        data: { postId, userId, duration: safeDuration },
-      });
-
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: { viewCount: { increment: 1 } },
-      });
-
-      return true;
+      return isNewView;
     } catch (error) {
       // P7-2 — course double-submit : l'index unique (postId,userId) fait
       // lever P2002 sur le create concurrent. Dédup ATTENDUE → no-op

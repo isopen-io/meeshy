@@ -24,6 +24,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     notification: {
       findMany: jest.fn(),
       updateMany: jest.fn(),
+      deleteMany: jest.fn(),
       count: jest.fn(),
     },
     $runCommandRaw: jest.fn(),
@@ -175,6 +176,113 @@ describe('NotificationService — marquage par contexte en 1 requête (iter 35 F
       const count = await service.markFriendRequestNotificationsAsRead('anon-session-token', FRIEND_REQUEST_ID);
 
       expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
+      expect(count).toBe(0);
+    });
+  });
+
+  // Le marquage a un pendant : quand la demande d'amitié est SUPPRIMÉE
+  // (`DELETE /friend-requests/:id`), la notification ne devient pas « lue »,
+  // elle devient morte — son `action: accept_or_reject_contact` mène à une ligne
+  // qui n'existe plus. Même arbitrage que le rappel d'un message
+  // (`retractMessageNotifications`) : retrait, pas neutralisation.
+  describe('retractFriendRequestNotifications', () => {
+    const NOTIF_A = '64e000000000000000000005';
+    const NOTIF_B = '64e000000000000000000006';
+
+    function rawFind(ids: string[]) {
+      return {
+        cursor: {
+          firstBatch: ids.map((id) => ({ _id: { $oid: id } })),
+          id: 0,
+          ns: 'meeshy.Notification',
+        },
+        ok: 1,
+      };
+    }
+
+    it('lit par chemin JSON, sans filtre isRead — une lue est aussi morte qu\'une non lue', async () => {
+      prisma.$runCommandRaw.mockResolvedValue(rawFind([NOTIF_A]));
+      prisma.notification.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.retractFriendRequestNotifications(USER_ID, FRIEND_REQUEST_ID);
+
+      expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
+        find: 'Notification',
+        filter: {
+          userId: { $oid: USER_ID },
+          'context.friendRequestId': FRIEND_REQUEST_ID,
+        },
+        projection: { _id: 1 },
+        singleBatch: true,
+        batchSize: 1000,
+      });
+    });
+
+    it('supprime EXACTEMENT les lignes lues, et les annonce toutes', async () => {
+      prisma.$runCommandRaw.mockResolvedValue(rawFind([NOTIF_A, NOTIF_B]));
+      prisma.notification.deleteMany.mockResolvedValue({ count: 2 });
+
+      const count = await service.retractFriendRequestNotifications(USER_ID, FRIEND_REQUEST_ID);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: [NOTIF_A, NOTIF_B] } },
+      });
+      expect(count).toBe(2);
+      expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: NOTIF_A });
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: NOTIF_B });
+      // La cloche recalcule son badge : sans ça, le compteur resterait sur des
+      // lignes que le serveur vient de retirer.
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:counts', expect.any(Object));
+    });
+
+    it('annonce APRÈS l\'écriture durable — les compteurs voient la base d\'après le retrait', async () => {
+      const order: string[] = [];
+      prisma.$runCommandRaw.mockResolvedValue(rawFind([NOTIF_A]));
+      prisma.notification.deleteMany.mockImplementation(async () => {
+        order.push('delete');
+        return { count: 1 };
+      });
+      mockIO.emit.mockImplementation((event: string) => {
+        if (event === 'notification:counts') order.push('counts');
+      });
+      prisma.notification.count.mockImplementation(async () => {
+        order.push('count-read');
+        return 0;
+      });
+
+      await service.retractFriendRequestNotifications(USER_ID, FRIEND_REQUEST_ID);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(order[0]).toBe('delete');
+      expect(order).toContain('counts');
+    });
+
+    it('ne supprime rien et n\'annonce rien quand aucune ligne ne porte cette demande', async () => {
+      prisma.$runCommandRaw.mockResolvedValue(rawFind([]));
+
+      const count = await service.retractFriendRequestNotifications(USER_ID, FRIEND_REQUEST_ID);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(count).toBe(0);
+      expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+      expect(mockIO.emit).not.toHaveBeenCalled();
+    });
+
+    it('retourne 0 sans requête DB pour un userId non-ObjectId (session anonyme)', async () => {
+      const count = await service.retractFriendRequestNotifications('anon-session-token', FRIEND_REQUEST_ID);
+
+      expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
+      expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+      expect(count).toBe(0);
+    });
+
+    it('retourne 0 et n\'explose pas si Mongo échoue', async () => {
+      prisma.$runCommandRaw.mockRejectedValue(new Error('mongo down'));
+
+      const count = await service.retractFriendRequestNotifications(USER_ID, FRIEND_REQUEST_ID);
+
       expect(count).toBe(0);
     });
   });

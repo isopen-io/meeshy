@@ -23,6 +23,7 @@
     <string name="conversations_preview_you">Tú</string>
     <string name="conversations_preview_draft_prefix">Borrador: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_preview_loading">Cargando…</string>
     <string name="conversations_search">Buscar</string>
     <string name="conversations_search_hint">Buscar conversaciones</string>
     <string name="conversations_search_close">Cerrar búsqueda</string>
@@ -43,6 +44,7 @@
     <string name="conversations_action_archive">Archivar</string>
     <string name="conversations_action_unarchive">Desarchivar</string>
     <string name="conversations_action_mark_read">Marcar como leído</string>
+    <string name="conversations_action_mark_unread">Marcar como no leído</string>
     <string name="conversations_action_move_to_category">Mover a una categoría</string>
     <string name="conversations_category_search_hint">Buscar o crear una categoría…</string>
     <string name="conversations_action_create_category">Crear «%1$s»</string>
@@ -132,4 +134,35 @@
     <string name="share_link_detail_cancel">Cancelar</string>
     <string name="share_link_detail_not_found">Este enlace ya no está disponible.</string>
     <string name="share_link_detail_dismiss">Descartar</string>
+
+    <!-- Search bar trailing icons -->
+    <string name="conversations_open_dashboard">Panel</string>
+    <string name="conversations_open_global_search">Búsqueda global</string>
+
+    <!-- Global search screen -->
+    <string name="global_search_back">Atrás</string>
+    <string name="global_search_hint">Buscar en todas partes…</string>
+    <string name="global_search_searching">Buscando…</string>
+    <string name="global_search_empty_title">Buscar en Meeshy</string>
+    <string name="global_search_empty_subtitle">Mensajes, conversaciones, usuarios</string>
+    <string name="global_search_no_results">Sin resultados</string>
+    <string name="global_search_no_results_hint">Prueba con otras palabras</string>
+    <string name="global_search_tab_messages">Mensajes</string>
+    <string name="global_search_tab_conversations">Conversaciones</string>
+    <string name="global_search_tab_users">Usuarios</string>
+    <string name="global_search_members">%1$d miembros</string>
+    <string name="global_search_online">En línea</string>
+
+    <!-- Dashboard screen -->
+    <string name="dashboard_title">Panel</string>
+    <string name="dashboard_unread">Mensajes no leídos</string>
+    <string name="dashboard_recent">Conversaciones recientes</string>
+    <string name="dashboard_quick_actions">Acciones rápidas</string>
+    <string name="dashboard_action_new_conversation">Nueva conversación</string>
+    <string name="dashboard_action_search">Búsqueda global</string>
+    <string name="dashboard_action_share_links">Enlaces para compartir</string>
+    <string name="dashboard_action_contacts">Contactos</string>
+    <string name="global_search_recent_title">Búsquedas recientes</string>
+    <string name="global_search_recent_clear">Borrar</string>
+    <string name="global_search_recent_remove">Quitar</string>
 </resources>

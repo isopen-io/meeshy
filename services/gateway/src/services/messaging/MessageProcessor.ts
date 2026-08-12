@@ -30,6 +30,8 @@ import {
   type PostReplyTo,
 } from './postReplySnapshot';
 import { parseSharedPlace } from '../location/sharedPlace';
+import { LIVE_MESSAGE_MARK } from './liveMessage';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -411,7 +413,7 @@ export class MessageProcessor {
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,
-      deletedAt: null,
+      ...LIVE_MESSAGE_MARK,
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
     } as const;
 
@@ -809,11 +811,19 @@ export class MessageProcessor {
       for (const match of matches) {
         const token = match[1];
         try {
+          // `messageId: null` n'appariait AUCUN lien : la réécriture appelle
+          // `createTrackingLink` avec `messageId` encore indisponible, donc
+          // omis, donc la colonne est ABSENTE du document — pas nulle.
+          // L'attribution d'un lien à son message n'était jamais écrite sur ce
+          // chemin. La garde reste nécessaire pour ne pas voler le lien qu'un
+          // autre message de la conversation a déjà réclamé (un `TrackingLink`
+          // est PARTAGÉ par URL, cf. `messageRemovalEffects.ts`).
+          // Voir `utils/prisma-unset.ts`.
           await this.prisma.trackingLink.updateMany({
             where: {
               token,
               conversationId: data.conversationId,
-              messageId: null
+              ...unsetOrNull('messageId')
             },
             data: { messageId }
           });

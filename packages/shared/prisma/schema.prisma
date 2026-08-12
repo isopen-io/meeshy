@@ -332,6 +332,18 @@ model Conversation {
   /// Denormalized member count for performance
   memberCount   Int      @default(0)
   lastMessageAt DateTime @default(now())
+  /// null tant qu'aucun message n'a été envoyé dans une conversation `direct`.
+  /// Source de vérité unique pour la visibilité des DM vides (voir Prisme
+  /// design doc 2026-08-04) — jamais backfillé sur les conversations
+  /// existantes : le champ est ABSENT (pas `null`) sur tout document créé
+  /// avant cette migration. Un `NOT: { firstMessageSentAt: null }` seul ne
+  /// matche PAS les documents où le champ est ABSENT sur le connecteur
+  /// MongoDB de Prisma (il ne matche que present-et-non-null) — une lecture
+  /// décidant la visibilité DOIT donc combiner les deux : `OR: [{ NOT: {
+  /// firstMessageSentAt: null } }, { firstMessageSentAt: { isSet: false } }]`
+  /// (posé ⇒ visible OU absent-legacy ⇒ visible). Même idiome que
+  /// `deletedForMe` dans `routes/conversations/core.ts`.
+  firstMessageSentAt DateTime?
 
   // ============================================
   // WRITE PERMISSIONS
@@ -1362,7 +1374,14 @@ model Notification {
   user User @relation(fields: [userId], references: [id])
 
   // ===== INDEXES =====
-  @@index([userId, isRead])
+  /// `expiresAt` en 3e clé, pas un index de plus : toute requête que
+  /// [userId, isRead] servait est servie par son préfixe. Les lectures d'inbox
+  /// filtrent désormais `expiresAt = null OU > maintenant` (cf.
+  /// `visibleNotificationsWhere`) — sans la clé dans l'index, ce filtre force
+  /// un fetch de chaque document candidat sur un compteur qui tourne à CHAQUE
+  /// notification créée ; avec elle, les deux branches du OU restent deux
+  /// plages d'index et le compte reste couvert.
+  @@index([userId, isRead, expiresAt])
   @@index([userId, type])
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])

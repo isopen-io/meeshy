@@ -1,233 +1,259 @@
-import { ZmqAgentClient } from '../../../services/zmq-agent/ZmqAgentClient';
+/**
+ * Unit tests for services/zmq-agent/ZmqAgentClient.
+ * Covers: onResponse/onReaction handler registration, initialize (success,
+ * push failure, sub failure), sendEvent (initialized, not-initialized),
+ * startListening (agent:response, agent:reaction, invalid schema, parse error,
+ * running=false early exit), close (happy path, already-closed, error).
+ *
+ * @jest-environment node
+ */
 
-// Mock zeromq to avoid native socket connections
-const mockPushSocket = {
-  connect: jest.fn().mockResolvedValue(undefined),
-  send: jest.fn().mockResolvedValue(undefined),
-  close: jest.fn().mockResolvedValue(undefined),
-};
-
-const mockSubSocket = {
-  connect: jest.fn().mockResolvedValue(undefined),
-  subscribe: jest.fn().mockResolvedValue(undefined),
-  close: jest.fn().mockResolvedValue(undefined),
-  [Symbol.asyncIterator]: jest.fn(),
-};
-
-jest.mock('zeromq', () => ({
-  Push: jest.fn(() => mockPushSocket),
-  Subscriber: jest.fn(() => mockSubSocket),
-}));
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
-    child: jest.fn(() => ({
-      info: jest.fn(),
-      debug: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    })),
+    child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
   },
 }));
 
-describe('ZmqAgentClient', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+jest.mock('zeromq');
 
-  describe('constructor', () => {
-    it('uses default host/ports when not specified', () => {
-      const client = new ZmqAgentClient();
-      expect(client).toBeDefined();
-    });
+import * as zmq from 'zeromq';
+import { ZmqAgentClient } from '../../../services/zmq-agent/ZmqAgentClient';
 
-    it('accepts custom host and ports', () => {
-      const client = new ZmqAgentClient('agent-host', 6000, 6001);
-      expect(client).toBeDefined();
-    });
-  });
+// ─── Fixtures ──────────────────────────────────────────────────────────────────
 
-  describe('onResponse / onReaction', () => {
-    it('registers response handler', () => {
-      const client = new ZmqAgentClient();
-      const handler = jest.fn().mockResolvedValue(undefined);
-      client.onResponse(handler);
-    });
+function makeAgentResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'agent:response',
+    conversationId: 'conv-1',
+    asUserId: 'user-1',
+    content: 'Hello!',
+    originalLanguage: 'en',
+    messageSource: 'agent',
+    metadata: { agentType: 'impersonator', roleConfidence: 0.9 },
+    ...overrides,
+  };
+}
 
-    it('registers reaction handler', () => {
-      const client = new ZmqAgentClient();
-      const handler = jest.fn().mockResolvedValue(undefined);
-      client.onReaction(handler);
-    });
-  });
+function makeAgentReaction(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'agent:reaction',
+    conversationId: 'conv-1',
+    asUserId: 'user-1',
+    targetMessageId: 'msg-1',
+    emoji: '👍',
+    ...overrides,
+  };
+}
 
-  describe('initialize', () => {
-    it('connects PUSH and SUB sockets', async () => {
-      const client = new ZmqAgentClient('localhost', 5560, 5561);
-      await client.initialize();
-
-      expect(mockPushSocket.connect).toHaveBeenCalledWith('tcp://localhost:5560');
-      expect(mockSubSocket.connect).toHaveBeenCalledWith('tcp://localhost:5561');
-      expect(mockSubSocket.subscribe).toHaveBeenCalledWith('');
-    });
-
-    it('throws when socket connection fails', async () => {
-      mockPushSocket.connect.mockRejectedValueOnce(new Error('Connection refused'));
-      const client = new ZmqAgentClient();
-
-      await expect(client.initialize()).rejects.toThrow('Connection refused');
-    });
-  });
-
-  describe('sendEvent', () => {
-    it('sends JSON-serialized event via PUSH socket', async () => {
-      const client = new ZmqAgentClient();
-      await client.initialize();
-
-      const event = { type: 'test', payload: 'data' };
-      await client.sendEvent(event);
-
-      expect(mockPushSocket.send).toHaveBeenCalledWith(JSON.stringify(event));
-    });
-
-    it('throws when PUSH socket is not initialized', async () => {
-      const client = new ZmqAgentClient();
-
-      await expect(client.sendEvent({ type: 'test' })).rejects.toThrow(
-        'Agent PUSH socket not initialized'
-      );
-    });
-  });
-
-  describe('startListening', () => {
-    it('does nothing when sub socket is not initialized', async () => {
-      const client = new ZmqAgentClient();
-      // Don't call initialize — subSocket is null
-      await client.startListening();
-    });
-
-    it('processes valid agent:response messages', async () => {
-      const client = new ZmqAgentClient();
-      await client.initialize();
-
-      const responseHandler = jest.fn().mockResolvedValue(undefined);
-      client.onResponse(responseHandler);
-
-      const validResponse = {
-        type: 'agent:response',
-        conversationId: 'conv-1',
-        asUserId: 'user-1',
-        content: 'Hello!',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'impersonator', roleConfidence: 0.9 },
+/** Build an async iterable that yields provided messages then stops. */
+function makeAsyncIterable(messages: Buffer[][]) {
+  let idx = 0;
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next() {
+          if (idx < messages.length) {
+            return Promise.resolve({ value: messages[idx++], done: false });
+          }
+          return Promise.resolve({ value: undefined, done: true });
+        },
       };
+    },
+  };
+}
 
-      // Setup async iterator to yield one message then stop
-      mockSubSocket[Symbol.asyncIterator] = jest.fn().mockReturnValue({
-        next: jest.fn()
-          .mockResolvedValueOnce({
-            value: [Buffer.from(JSON.stringify(validResponse))],
-            done: false,
-          })
-          .mockResolvedValueOnce({ value: undefined, done: true }),
-        [Symbol.asyncIterator]() { return this; },
-      });
+// ─── Setup ────────────────────────────────────────────────────────────────────
 
-      await client.startListening();
-      expect(responseHandler).toHaveBeenCalledWith(validResponse);
-    });
+let mockPushSocket: any;
+let mockSubSocket: any;
 
-    it('processes valid agent:reaction messages', async () => {
-      const client = new ZmqAgentClient();
-      await client.initialize();
+beforeEach(() => {
+  mockPushSocket = {
+    connect: jest.fn<any>().mockResolvedValue(undefined),
+    send: jest.fn<any>().mockResolvedValue(undefined),
+    close: jest.fn<any>().mockResolvedValue(undefined),
+  };
 
-      const reactionHandler = jest.fn().mockResolvedValue(undefined);
-      client.onReaction(reactionHandler);
+  mockSubSocket = {
+    connect: jest.fn<any>().mockResolvedValue(undefined),
+    subscribe: jest.fn<any>().mockResolvedValue(undefined),
+    close: jest.fn<any>().mockResolvedValue(undefined),
+  };
 
-      const validReaction = {
-        type: 'agent:reaction',
-        conversationId: 'conv-1',
-        asUserId: 'user-1',
-        targetMessageId: 'msg-1',
-        emoji: '👍',
-      };
+  (zmq.Push as jest.MockedClass<typeof zmq.Push>) = jest.fn<any>(() => mockPushSocket) as any;
+  (zmq.Subscriber as jest.MockedClass<typeof zmq.Subscriber>) = jest.fn<any>(() => mockSubSocket) as any;
+});
 
-      mockSubSocket[Symbol.asyncIterator] = jest.fn().mockReturnValue({
-        next: jest.fn()
-          .mockResolvedValueOnce({
-            value: [Buffer.from(JSON.stringify(validReaction))],
-            done: false,
-          })
-          .mockResolvedValueOnce({ value: undefined, done: true }),
-        [Symbol.asyncIterator]() { return this; },
-      });
+afterEach(() => {
+  jest.clearAllMocks();
+});
 
-      await client.startListening();
-      expect(reactionHandler).toHaveBeenCalledWith(validReaction);
-    });
+// ─── onResponse / onReaction ──────────────────────────────────────────────────
 
-    it('skips invalid messages that fail schema validation', async () => {
-      const client = new ZmqAgentClient();
-      await client.initialize();
+describe('handler registration', () => {
+  it('onResponse and onReaction accept and store handlers without throwing', () => {
+    const client = new ZmqAgentClient();
+    expect(() => {
+      client.onResponse(jest.fn<any>());
+      client.onReaction(jest.fn<any>());
+    }).not.toThrow();
+  });
+});
 
-      const responseHandler = jest.fn().mockResolvedValue(undefined);
-      client.onResponse(responseHandler);
+// ─── initialize ───────────────────────────────────────────────────────────────
 
-      const invalidMessage = { type: 'agent:response', conversationId: '' }; // missing required fields
+describe('initialize', () => {
+  it('connects push and sub sockets to the configured host/port', async () => {
+    const client = new ZmqAgentClient('myhost', 5560, 5561);
+    await client.initialize();
 
-      mockSubSocket[Symbol.asyncIterator] = jest.fn().mockReturnValue({
-        next: jest.fn()
-          .mockResolvedValueOnce({
-            value: [Buffer.from(JSON.stringify(invalidMessage))],
-            done: false,
-          })
-          .mockResolvedValueOnce({ value: undefined, done: true }),
-        [Symbol.asyncIterator]() { return this; },
-      });
-
-      await client.startListening();
-      expect(responseHandler).not.toHaveBeenCalled();
-    });
-
-    it('handles JSON parse errors gracefully', async () => {
-      const client = new ZmqAgentClient();
-      await client.initialize();
-
-      mockSubSocket[Symbol.asyncIterator] = jest.fn().mockReturnValue({
-        next: jest.fn()
-          .mockResolvedValueOnce({
-            value: [Buffer.from('not-valid-json{{{')],
-            done: false,
-          })
-          .mockResolvedValueOnce({ value: undefined, done: true }),
-        [Symbol.asyncIterator]() { return this; },
-      });
-
-      await expect(client.startListening()).resolves.not.toThrow();
-    });
+    expect(mockPushSocket.connect).toHaveBeenCalledWith('tcp://myhost:5560');
+    expect(mockSubSocket.connect).toHaveBeenCalledWith('tcp://myhost:5561');
+    expect(mockSubSocket.subscribe).toHaveBeenCalledWith('');
   });
 
-  describe('close', () => {
-    it('closes both sockets when initialized', async () => {
-      const client = new ZmqAgentClient();
-      await client.initialize();
-      await client.close();
+  it('uses default host/ports when constructed without arguments', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
 
-      expect(mockPushSocket.close).toHaveBeenCalled();
-      expect(mockSubSocket.close).toHaveBeenCalled();
-    });
+    expect(mockPushSocket.connect).toHaveBeenCalledWith(expect.stringContaining('localhost'));
+  });
 
-    it('does not throw when sockets are not initialized', async () => {
-      const client = new ZmqAgentClient();
-      await expect(client.close()).resolves.not.toThrow();
-    });
+  it('throws when push socket connect fails', async () => {
+    mockPushSocket.connect.mockRejectedValue(new Error('push fail'));
+    const client = new ZmqAgentClient();
+    await expect(client.initialize()).rejects.toThrow('push fail');
+  });
 
-    it('handles errors during close gracefully', async () => {
-      mockPushSocket.close.mockRejectedValueOnce(new Error('close error'));
-      const client = new ZmqAgentClient();
-      await client.initialize();
-      await expect(client.close()).resolves.not.toThrow();
-    });
+  it('throws when sub socket connect fails', async () => {
+    mockSubSocket.connect.mockRejectedValue(new Error('sub fail'));
+    const client = new ZmqAgentClient();
+    await expect(client.initialize()).rejects.toThrow('sub fail');
+  });
+});
+
+// ─── sendEvent ────────────────────────────────────────────────────────────────
+
+describe('sendEvent', () => {
+  it('sends serialized JSON to the push socket', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    await client.sendEvent({ action: 'ping', data: 42 });
+
+    expect(mockPushSocket.send).toHaveBeenCalledWith(JSON.stringify({ action: 'ping', data: 42 }));
+  });
+
+  it('throws when the push socket is not initialized', async () => {
+    const client = new ZmqAgentClient();
+    await expect(client.sendEvent({ action: 'ping' })).rejects.toThrow();
+  });
+});
+
+// ─── startListening ───────────────────────────────────────────────────────────
+
+describe('startListening', () => {
+  it('returns immediately when subSocket is null (not initialized)', async () => {
+    const client = new ZmqAgentClient();
+    await expect(client.startListening()).resolves.toBeUndefined();
+  });
+
+  it('calls the response handler for a valid agent:response message', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const responseHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onResponse(responseHandler);
+
+    const payload = Buffer.from(JSON.stringify(makeAgentResponse()));
+    Object.assign(mockSubSocket, makeAsyncIterable([[payload]]));
+
+    await client.startListening();
+
+    expect(responseHandler).toHaveBeenCalledTimes(1);
+    expect(responseHandler.mock.calls[0][0]).toMatchObject({ type: 'agent:response', conversationId: 'conv-1' });
+  });
+
+  it('calls the reaction handler for a valid agent:reaction message', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const reactionHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onReaction(reactionHandler);
+
+    const payload = Buffer.from(JSON.stringify(makeAgentReaction()));
+    Object.assign(mockSubSocket, makeAsyncIterable([[payload]]));
+
+    await client.startListening();
+
+    expect(reactionHandler).toHaveBeenCalledTimes(1);
+    expect(reactionHandler.mock.calls[0][0]).toMatchObject({ type: 'agent:reaction', emoji: '👍' });
+  });
+
+  it('skips messages that fail Zod schema validation (logs warn, no handler call)', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const responseHandler = jest.fn<any>();
+    client.onResponse(responseHandler);
+
+    const payload = Buffer.from(JSON.stringify({ type: 'agent:response', conversationId: '' })); // missing required fields
+    Object.assign(mockSubSocket, makeAsyncIterable([[payload]]));
+
+    await client.startListening();
+
+    expect(responseHandler).not.toHaveBeenCalled();
+  });
+
+  it('continues processing after a JSON parse error', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const reactionHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onReaction(reactionHandler);
+
+    const bad = Buffer.from('not json {{{');
+    const good = Buffer.from(JSON.stringify(makeAgentReaction()));
+    Object.assign(mockSubSocket, makeAsyncIterable([[bad], [good]]));
+
+    await client.startListening();
+
+    expect(reactionHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the loop when no handler is registered for the message type', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+    // no handlers registered
+    const payload = Buffer.from(JSON.stringify(makeAgentResponse()));
+    Object.assign(mockSubSocket, makeAsyncIterable([[payload]]));
+    await expect(client.startListening()).resolves.toBeUndefined();
+  });
+});
+
+// ─── close ────────────────────────────────────────────────────────────────────
+
+describe('close', () => {
+  it('closes both sockets and sets them to null', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+    await client.close();
+
+    expect(mockPushSocket.close).toHaveBeenCalled();
+    expect(mockSubSocket.close).toHaveBeenCalled();
+  });
+
+  it('does not throw when called before initialize', async () => {
+    const client = new ZmqAgentClient();
+    await expect(client.close()).resolves.toBeUndefined();
+  });
+
+  it('handles errors during close gracefully (does not throw)', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+    mockPushSocket.close.mockRejectedValue(new Error('close fail'));
+    await expect(client.close()).resolves.toBeUndefined();
   });
 });

@@ -139,7 +139,7 @@ describe('GET /admin/users/:userId/conversations', () => {
           type: 'group',
           avatar: null,
           isActive: true,
-          memberCount: 4,
+          _count: { participants: 4 },
           communityId: null,
           createdAt: new Date('2026-01-01').toISOString(),
           lastMessageAt: new Date('2026-06-01').toISOString(),
@@ -163,6 +163,11 @@ describe('GET /admin/users/:userId/conversations', () => {
     expect(body.success).toBe(true);
     expect(body.data).toHaveLength(1);
     expect(body.data[0].membership).toMatchObject({ userId: TARGET_ID, role: 'moderator' });
+    // Effectif compté par la base. La colonne `Conversation.memberCount` que
+    // cette route lisait n'est écrite nulle part dans le gateway : l'écran
+    // admin annonçait « 0 membres » sur toute conversation créée depuis la
+    // migration héritée.
+    expect(body.data[0].memberCount).toBe(4);
     // participants are now surfaced (preview for direct display / group modal)
     expect(body.data[0].participants).toHaveLength(2);
     expect(body.pagination).toMatchObject({ total: 7, offset: 0, limit: 20, hasMore: true });

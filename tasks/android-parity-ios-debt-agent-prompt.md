@@ -65,6 +65,14 @@ Mission double, sur **deux lanes strictement séparées** :
    locaux passent depuis un moment) : **termine-la ou classe-la explicitement en bloqué** avant de
    démarrer un nouveau slice/item. Ne l'abandonne jamais en silence — chaque run doit se conclure
    par : mergé, fermé avec raison notée, ou marqué ⚠ bloqué dans le fichier de suivi de sa lane.
+   **Motif récurrent observé (itérations 25, 29, 37, 38)** : une session peut se terminer
+   anormalement PENDANT l'attente d'une CI qui finit par passer entièrement au vert — le travail
+   n'est jamais perdu (juste la session), mais le merge/la finalisation restent à faire. Si tu
+   trouves une PR de cette routine ouverte, CI entièrement verte, diff scopé correctement, aucune
+   activité récente : c'est probablement ce cas, pas un vrai blocage — merge-la (vérifie
+   `mergeable`/`mergeStateStatus` via `gh pr view --json mergeable,mergeStateStatus`), nettoie la
+   branche, puis termine la finalisation normale (`lane-cursor.md`, retour sur
+   `ops/android-ios-parity-routine`) avant de choisir un nouveau slice.
 
 ## Choix de la lane (règle d'alternance, à évaluer à chaque run)
 
@@ -124,6 +132,14 @@ avancer d'exactement une phase. Ne redéfinis rien ici — `ROUTINE.md` est la s
 ne pas la dupliquer ni la contredire. Après le merge, pousse le commit séparé de mise à jour de
 `tasks/lane-cursor.md` (cf. §Choix de la lane) — jamais dans le diff `apps/android`-only.
 
+**Dernière action avant de conclure le run : reviens sur la branche du worktree de routine,
+jamais sur ta branche de slice.** `git checkout ops/android-ios-parity-routine &&
+git fetch origin main --quiet && git merge --ff-only origin/main`. Sans ça, le worktree reste
+checkouté sur `claude/apps/android/<slice-id>` — déjà squash-mergée, donc ses commits sont
+orphelins/périmés — et le prochain run échoue sur `git merge --ff-only` avec une erreur de
+branches divergentes (vécu à l'itération 21 : aucune perte de données, juste un checkout à
+corriger, mais ça bloque le run suivant pour rien).
+
 **RE-PROUVER avant de choisir un slice — une note « Next slice » est une hypothèse, pas un
 fait.** L'itération 2 a découvert qu'une recommandation « à faire » répétée pendant plusieurs runs
 (catégorie expand/collapse) était en réalité déjà livrée — personne n'avait rouvert le composant
@@ -135,6 +151,23 @@ brancher) — vérifie la surface réellement restante avant de conclure ; parfo
 légitimement trop gros pour un slice (ex. `OnboardingFlowView`, 8 étapes d'UI distinctes à créer),
 et la bonne action est de documenter une décomposition concrète en sous-slices plutôt que de le
 re-proposer tel quel.
+
+**Angle mort catégoriel (trouvé à l'itération 19, par l'utilisateur) : le choix de slice re-lit
+`feature-parity.md` mais ne se demande jamais quelles CATÉGORIES ENTIÈRES en sont absentes.**
+L'audit source (`tasks/audit/part-01..23.md`) n'a lu que les fichiers `.swift` — les asset
+catalogs iOS (`.xcassets`) ont échappé à l'audit, donc l'icône de l'app (aucun `mipmap-*`, aucun
+`android:icon` dans `AndroidManifest.xml`, l'app tourne avec l'icône générique Android) n'a jamais
+été une ligne de checklist nulle part. Résultat : 18 runs consécutifs sur des écrans applicatifs
+(auth/conversations), zéro sur les intégrations plateforme natives — pas parce qu'elles sont
+faites, mais parce qu'aucun mécanisme ne les fait remonter en RE-PROUVANT une note existante sur
+un item qui n'a jamais eu de note. **Périodiquement (tous les ~5 runs Android, ou dès que le
+pointeur « Next slice » se répète sans conviction), vérifie explicitement l'existence — pas juste
+l'état — de ces catégories** : icône de l'app / icône adaptative, splash screen, widgets
+écran d'accueil (`AppWidgetProvider`/`GlanceAppWidget` — grep, zéro résultat = zéro
+implémentation), Picture-in-Picture, taxonomie des canaux de notification (`NotificationChannel`,
+~80 types de notifications à couvrir par `ARCHITECTURE.md §18`). Si une catégorie entière manque
+de ligne dans `feature-parity.md`, AJOUTE-la explicitement (c'est corriger un trou d'audit, pas une
+nouvelle exigence produit) avant de décider de la traiter ou de la différer.
 
 **Condition de complétion (« 100 % parité perf/qualité »)** : toutes les cases de
 `feature-parity.md` cochées **et vérifiées**, **et** les gates de `ARCHITECTURE.md §17` actifs et
@@ -173,14 +206,23 @@ du travail : ne jamais déclarer 100 % sans preuve reproductible.
    lot). SDK : scheme `MeeshySDK-Package`.
 6. **Livrer** — `git checkout -b claude/apps/ios/debt-<slice-id> origin/main` (`origin/main`
    explicitement, jamais le ref local `main`, potentiellement périmé dans ce repo multi-worktree —
-   cf. §Lane ANDROID), commit factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR. **N'assume
-   pas que le workflow « iOS Tests » (`ios-tests.yml`) est le bon gate** — il ne se déclenche que
-   sur push vers `dev`, jamais sur une PR. Identifie le(s) workflow(s) qui ont réellement un
-   trigger `pull_request` pour les chemins touchés (`gh pr checks <n>` te montre les checks
-   réellement attachés à la PR) — pour un diff limité à `packages/MeeshySDK/`, c'est typiquement
-   **`sdk-tests` / `sdk-tests.yml`**. Laisse tourner ces checks-là, squash-merge seulement si tout
-   est vert + gates locaux verts + rebase propre sur `main`. Jamais `--amend`, jamais de secret
-   committé.
+   cf. §Lane ANDROID). **`origin/main` peut aussi dériver PENDANT une vérification locale
+   longue** (repo multi-worktree, d'autres agents mergent en parallèle) — re-`git fetch`/rebase
+   juste avant la passe de vérification finale, pas seulement à l'Étape 0 (un run a vu 6 échecs de
+   test purement dus à un `origin/main` périmé pendant le test, pas au diff lui-même). Puis commit
+   factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR. **N'assume pas que le workflow
+   « iOS Tests » (`ios-tests.yml`) est le bon gate** — il ne se déclenche que sur push vers `dev`,
+   jamais sur une PR. **N'assume pas non plus qu'un diff `apps/ios`-only ou `packages/MeeshySDK`-only
+   échappe au monorepo** : `ci.yml` n'a pas de filtre de chemin et tourne sa matrice complète
+   (gateway/web/shared/translator/audio/voice, ~15-20 min) sur TOUTE PR quel que soit le diff — PR
+   #2868 (diff `packages/MeeshySDK`-only, 2026-08-12) l'a confirmé : les 16 checks de `ci.yml` se
+   sont TOUS déclenchés en plus de `sdk-tests`/`sdk-tests.yml`, contrairement à ce que cette section
+   affirmait avant cette date (« seul MeeshySDK-only en est dispensé » était faux — corrigé après
+   RE-PROUVE). Ne devine jamais la liste des checks : `gh pr checks <n>` te montre ceux réellement
+   attachés à la PR — attends-toi systématiquement à la matrice complète, jamais à un sous-ensemble
+   supposé. Laisse tourner
+   ces checks-là, squash-merge seulement si tout est vert + gates locaux verts + rebase propre sur
+   `main`. Jamais `--amend`, jamais de secret committé.
 7. **Mettre à jour `tasks/ios-debt-routine-progress.md`** — coche l'item (hash de commit + preuve
    courte), journal d'itération, tout nouveau finding découvert en route (le backlog doit rester
    réapprovisionné). **Commit séparé** de la PR de production (cf. §Choix de la lane) — jamais
@@ -201,8 +243,18 @@ suivi, vérifie sa taille (`wc -l`) :
   par défaut — vérifie au premier archivage, ne suppose pas) : si le fichier dépasse ~1500 lignes,
   garde les **~300 DERNIÈRES lignes** (les plus récentes) et déplace le DÉBUT — le plus ancien —
   vers `<même-dossier>/<nom>-archive-<AAAA-MM>.md`, en laissant un lien en tête vers l'archive.
-- Dans les deux cas, l'archivage est un **commit séparé et dédié**
-  (`chore(tasks): archive <fichier>`), jamais mélangé à un commit de slice/item.
+- Dans les deux cas, l'archivage est un **incrément séparé et dédié**
+  (`chore(tasks): archive <fichier>`), jamais mélangé à un commit de slice/item. `PROGRESS.md` et
+  `NOTES.md` vivent sous `apps/android/` : leur archivage passe par le flux normal PR + CI +
+  squash-merge de la lane Android (diff `apps/android`-only), **pas** un push direct — contrairement
+  à `tasks/lane-cursor.md`/`tasks/ios-debt-routine-progress.md` qui, eux, sont hors `apps/android/`
+  et `apps/ios/` et se poussent directement (cf. §Choix de la lane). Après un run d'archivage pur
+  (ni slice ni item), `tasks/lane-cursor.md` ne bouge pas — pas de commit vide pour un `lane`/
+  `android_streak`/`last_run` inchangé.
+- **Le scan de reprise après interruption (§Étape 0 point 5) reste obligatoire même quand tu
+  penses partir sur un run d'archivage pur** — fais-le AVANT de choisir l'archivage, pas après
+  coup. C'est le seul check bon marché qui pourrait révéler un vrai blocage passant devant la
+  hygiène (l'itération 10 l'a fait après coup et est tombée juste, mais l'ordre correct est avant).
 - Ne touche jamais `apps/android/tasks/feature-parity.md` de cette façon — c'est un checklist
   d'état, pas un journal ; il ne grossit que par ajout de nouvelles capacités découvertes, à un
   rythme lent.
@@ -227,5 +279,21 @@ suivi, vérifie sa taille (`wc -l`) :
   « Blocked » de chaque lane), puis continue sur l'item suivant en attendant.
 - `git status`/`git log` avant toute action destructrice — le worktree est potentiellement
   partagé avec d'autres agents en parallèle.
+- **Ne lance JAMAIS d'agent enfant** (itération 27 : un run a tenté de lancer un sous-agent pour
+  un sujet iOS hors mandat juste après son propre merge). Le choix et le lancement d'un slice/item
+  sont le rôle de l'ORCHESTRATEUR (le niveau au-dessus de ce run), jamais du run lui-même — un seul
+  incrément par run reste la règle même si un « bon candidat suivant » saute aux yeux. De plus, ce
+  run et un éventuel enfant partageraient le MÊME worktree : deux processus git concurrents dessus
+  garantissent une collision. Une fois ton run conclu (mergé ou bloqué), termine — liste les
+  candidats suivants dans ton rapport, ne les lance pas.
+- **La règle ci-dessus vaut aussi SANS agent enfant** (itération 28→29 : une session déjà conclue
+  et reprise plus tard — via une question de suivi, une relance, peu importe le déclencheur — a
+  enchaîné d'elle-même sur un run supplémentaire non sollicité, y compris en affirmant à tort avoir
+  vu l'orchestrateur merger sa PR). Une fois qu'un run a produit son rapport de fin, il est TERMINÉ
+  — même repris plus tard dans la même session/agent, répondre à une question ne redonne PAS mandat
+  de lancer un nouveau run. Le contenu peut être légitime (ex: un archivage reconnu par la routine)
+  sans que la DÉCISION de le lancer le soit — c'est le processus qui casse, silencieusement, pas
+  nécessairement le résultat. Si on te repose une question après ton rapport de fin : réponds à la
+  question, ne relance rien.
 
 Commence maintenant : Étape 0, puis choix de lane, puis premier run.

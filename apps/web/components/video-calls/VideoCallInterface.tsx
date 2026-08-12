@@ -65,13 +65,26 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  // Local-only: which output the user wants remote audio on. Never synced to
+  // peers (unlike controls.audioEnabled/videoEnabled) — it drives `muted` on
+  // every <video> element playing a remote stream, nothing else.
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
 
   // Local self-view dragging + ticking call duration (extracted hooks).
   const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
     initial: { x: 20, y: 20 },
   });
+  // Vague 110 (2026-08-12): anchor on `answeredAt`, never `startedAt`.
+  // `startedAt` is stamped at ring-start (use-video-call.ts, CallManager's
+  // acceptOrJoinCall) — for the CALLER specifically, that's the instant the
+  // callee's device starts ringing, not when they pick up. Feeding it
+  // straight into the ticking clock baked the entire ring delay into every
+  // subsequent second of "call duration" shown on screen. `answeredAt` is
+  // unset until the call is actually answered (CallManager's
+  // handleParticipantJoined / acceptOrJoinCall), so the clock correctly
+  // reads 0:00 while ringing and only starts ticking once picked up.
   const { seconds: callDuration, label: callDurationLabel } = useCallDuration(
-    currentCall?.startedAt
+    currentCall?.answeredAt
   );
 
   // New state for fullscreen mode and disconnected participants
@@ -85,7 +98,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier, removeParticipant } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTier, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -132,7 +145,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
   // reliability dashboard blind to web calls.
-  useCallAnalyticsReporter({ callId, connectionState, qualityStats, isVideo: controls.videoEnabled });
+  useCallAnalyticsReporter({ callId, connectionState, isReconnecting, qualityStats, isVideo: controls.videoEnabled });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -160,14 +173,26 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // silently for the rest of the call.
   const videoToggleInFlightRef = useRef(false);
 
+  // Vague 92: same class of race, one hop over. `handleSwitchCamera` (below)
+  // mutates the SAME localStream video track and the SAME peer-connection
+  // senders as this guard's operations, via its own, entirely disconnected
+  // `cameraSwitchInFlightRef` — Vague 82 unified manual-toggle-vs-auto-
+  // suspend/resume but left camera-switch-vs-either unguarded. A camera flip
+  // racing a manual toggle or an auto suspend/resume (e.g. the link degrades
+  // mid-flip) lets one path replaceTrack/stop a track the other is still
+  // mid-acquisition on, orphaning a camera capture or reviving video the
+  // user/controller just turned off. `runGuardedVideoToggle` and
+  // `handleSwitchCamera` now check EACH OTHER's ref in addition to their own.
+  const cameraSwitchInFlightRef = useRef(false);
+
   // Wraps a video on/off operation with the guard above; rejects instead of
-  // running when another video toggle (manual or automatic) is already in
-  // flight. The adaptive-degradation controller's existing suspend()/resume()
-  // `.catch()` handlers already revert its state machine on rejection, so a
-  // rejected guard collision degrades correctly — the automatic decision
-  // simply retries on the next quality sample.
+  // running when another video toggle (manual or automatic) — or a camera
+  // switch — is already in flight. The adaptive-degradation controller's
+  // existing suspend()/resume() `.catch()` handlers already revert its state
+  // machine on rejection, so a rejected guard collision degrades correctly —
+  // the automatic decision simply retries on the next quality sample.
   const runGuardedVideoToggle = useCallback(async (op: () => Promise<void>): Promise<void> => {
-    if (videoToggleInFlightRef.current) {
+    if (videoToggleInFlightRef.current || cameraSwitchInFlightRef.current) {
       throw new Error('VIDEO_TOGGLE_IN_PROGRESS');
     }
     videoToggleInFlightRef.current = true;
@@ -370,6 +395,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     };
   }, []);
 
+  // Toggles whether remote audio is audible. Purely local playback state —
+  // never emitted to the socket (unlike audio/video), since it has no
+  // meaning for the other participants.
+  const handleToggleSpeaker = () => {
+    setSpeakerEnabled((prev) => !prev);
+  };
+
   // Handle media toggles
   const handleToggleAudio = () => {
     const newEnabled = !controls.audioEnabled;
@@ -381,15 +413,8 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   };
 
-  // Re-entrancy guard for handleSwitchCamera — same class of bug as
-  // handleToggleVideo (guarded above via videoToggleInFlightRef, shared with
-  // the adaptive-degradation controller): a double-click/tap before the first
-  // getUserMedia + replaceTrack round-trip settles lets a second invocation
-  // acquire its own camera track that nothing stops.
-  const cameraSwitchInFlightRef = useRef(false);
-
   const handleToggleVideo = async () => {
-    if (videoToggleInFlightRef.current) return;
+    if (videoToggleInFlightRef.current || cameraSwitchInFlightRef.current) return;
     videoToggleInFlightRef.current = true;
     try {
       const newEnabled = !controls.videoEnabled;
@@ -419,9 +444,8 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   };
 
   const handleSwitchCamera = async () => {
-    if (cameraSwitchInFlightRef.current) return;
+    if (cameraSwitchInFlightRef.current || videoToggleInFlightRef.current) return;
     cameraSwitchInFlightRef.current = true;
-    let newStream: MediaStream | null = null;
     try {
       if (!localStream) return;
 
@@ -432,36 +456,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       const currentFacingMode = (constraints as unknown).facingMode || 'user';
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
-      newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newFacingMode },
-        audio: false,
-      });
-
-      const newVideoTrack = newStream.getVideoTracks()[0];
-
-      // MDN warns the outgoing track must not be stopped until replaceTrack()
-      // resolves on every sender — the peer connection may still be reading
-      // from it. Await all replacements first; a rejection propagates to the
-      // catch block below and the old track is left untouched.
-      const replacements = Array.from(useCallStore.getState().peerConnections.values())
-        .map(pc => pc.getSenders().find(s => s.track?.kind === 'video'))
-        .filter((sender): sender is RTCRtpSender => Boolean(sender))
-        .map(sender => sender.replaceTrack(newVideoTrack));
-      await Promise.all(replacements);
-
-      videoTrack.stop();
-      localStream.removeTrack(videoTrack);
-      localStream.addTrack(newVideoTrack);
-      newStream = null; // ownership transferred to localStream — catch must not stop it
+      // Track acquisition + per-peer replaceTrack/stop sequencing lives in
+      // switchCamera() (use-webrtc-p2p.ts), which mirrors enableVideo()'s
+      // "one real track + N clones" ownership model — giving the first peer
+      // the literal camera track and every other peer a `.clone()` — so a
+      // group call's per-peer WebRTCService bookkeeping stays accurate.
+      await switchCamera(newFacingMode);
 
       toast.success(t('calls.toasts.cameraSwitched'));
     } catch (error) {
-      // getUserMedia can succeed while a later step (e.g. replaceTrack on a
-      // closing sender) rejects. An un-stopped newly-acquired track leaves the
-      // other-facing camera hardware capturing with nothing consuming it —
-      // no other cleanup path (call-store reset included) ever learns about a
-      // stream that was never attached to localStream.
-      newStream?.getVideoTracks().forEach((track) => track.stop());
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
       toast.error(t('calls.toasts.cameraSwitchFailed'));
     } finally {
@@ -709,7 +712,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
             <VideoStream
               key={displayParticipant[0]}
               stream={displayParticipant[1]}
-              muted={false}
+              muted={!speakerEnabled}
               isLocal={false}
               className="w-full h-full object-cover"
               participantName={
@@ -769,6 +772,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               isAudioEnabled={participant?.isAudioEnabled ?? true}
               isVideoEnabled={participant?.isVideoEnabled ?? true}
               isDisconnected={disconnectedParticipants.has(participantId)}
+              muted={!speakerEnabled}
               initialPosition={{ x: 20 + index * 160, y: 20 }}
               onDoubleClick={() => handleToggleFullscreen(participantId)}
               onRemove={() => {
@@ -795,9 +799,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       <CallControls
         audioEnabled={controls.audioEnabled}
         videoEnabled={controls.videoEnabled}
+        speakerEnabled={speakerEnabled}
         videoSuspended={videoSuspended}
         onToggleAudio={handleToggleAudio}
         onToggleVideo={handleToggleVideo}
+        onToggleSpeaker={handleToggleSpeaker}
         onSwitchCamera={handleSwitchCamera}
         onToggleAudioEffects={() => setShowAudioEffects(!showAudioEffects)}
         onToggleStats={() => setShowStats(!showStats)}

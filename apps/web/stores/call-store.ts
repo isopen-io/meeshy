@@ -55,9 +55,7 @@ export type PendingCallRetryMap = Record<string, PendingCallRetry>;
 
 interface CallStoreState extends CallState {
   // Extended state
-  reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
-  isReconnecting: boolean;
   joinRequest: JoinCallRequest | null;
   /** Retry affordances owed after transient call failures, keyed by conversationId (see PendingCallRetryMap). */
   pendingRetry: PendingCallRetryMap;
@@ -102,9 +100,6 @@ interface CallStoreState extends CallState {
   // Actions: Heartbeat
   startHeartbeat: (callId: string) => void;
   stopHeartbeat: () => void;
-
-  // Actions: Reconnection
-  setReconnecting: (attempt: number) => void;
 
   // Actions: Connection quality
   setConnectionQuality: (quality: ConnectionQualityLevel) => void;
@@ -175,9 +170,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
 
   // Extended state defaults
-  reconnectAttempt: 0,
   connectionQuality: null,
-  isReconnecting: false,
   iceServers: null,
   joinRequest: null,
   pendingRetry: {},
@@ -299,12 +292,9 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   addRemoteStream: (participantId, stream) => {
     const { remoteStreams } = get();
 
-    // Stop the previous stream's tracks if this participant is being reassigned
-    // a different MediaStream (e.g. a full ICE restart producing a fresh remote
-    // stream object) — mirrors setLocalStream's replace-and-stop behavior above.
-    // A repeated ontrack for the SAME stream (e.g. the audio->video mid-call
-    // upgrade, where the reserved video m-line shares the audio track's MSID)
-    // must be a no-op here: stopping still-live tracks would kill the call.
+    // Stop the previous stream's tracks if this participant's stream is being
+    // replaced (renegotiation / ICE restart / mid-call A/V switch re-fires
+    // ontrack with a new MediaStream) — mirrors setLocalStream's guard above.
     const previousStream = remoteStreams.get(participantId);
     if (previousStream && previousStream !== stream) {
       previousStream.getTracks().forEach((track) => track.stop());
@@ -486,15 +476,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  // ===== RECONNECTION =====
-
-  setReconnecting: (attempt) => {
-    set({
-      isReconnecting: attempt > 0,
-      reconnectAttempt: attempt,
-    });
-  },
-
   // ===== CONNECTION QUALITY =====
 
   setConnectionQuality: (quality) => {
@@ -569,9 +550,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
-      reconnectAttempt: 0,
       connectionQuality: null,
-      isReconnecting: false,
       iceServers: null,
       joinRequest: null,
       pendingRetry: survivingRetry,

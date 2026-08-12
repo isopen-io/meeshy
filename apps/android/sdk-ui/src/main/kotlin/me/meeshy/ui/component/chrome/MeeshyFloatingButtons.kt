@@ -1,7 +1,13 @@
 package me.meeshy.ui.component.chrome
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -118,35 +125,58 @@ private fun DraggableFloatingButton(
     var dragged by remember { mutableStateOf<FloatingButtonPosition?>(null) }
     val shown = dragged ?: position
 
+    // Sous le doigt la position est INSTANTANEE (snap) ; au relachement elle
+    // rejoint le bord aimante par un ressort — le saut sec du bouton vers le bord
+    // etait le principal marqueur "non fini" du composant.
+    val followSpec = if (dragged != null) {
+        snap<Float>()
+    } else {
+        spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+    }
+    val animatedX by animateFloatAsState(shown.x, followSpec, label = "fab-x")
+    val animatedY by animateFloatAsState(shown.y, followSpec, label = "fab-y")
+
+    // Retour d'appui : la pastille s'ecrase legerement sous le doigt. Remplace le
+    // ripple (une onde rectangulaire sous un cercle deborde) par un geste plus
+    // proche des bulles de chat systeme.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
+        label = "fab-press-scale",
+    )
+
     Box(
         modifier = Modifier
             // Pas de .align ici : TopStart est deja le defaut du Box, et align
             // n'existe que dans son scope.
             .offset {
                 IntOffset(
-                    x = (shown.x * travelXPx).roundToInt(),
-                    y = (shown.y * travelYPx).roundToInt(),
+                    x = (animatedX * travelXPx).roundToInt(),
+                    y = (animatedY * travelYPx).roundToInt(),
                 )
             }
-            // Taille MINIMALE, pas fixe : le contenu du bouton droit devient un menu
-            // deploye de plusieurs entrees, qu'un `.size(56.dp)` clippait — seule la
-            // premiere entree apparaissait. `unbounded` laisse la colonne depasser
-            // le gabarit du bouton tout en gardant la cible tactile au repos.
+            // Taille MINIMALE, pas fixe : le contenu garde sa cible tactile de
+            // 56dp mais un avatar legerement plus grand ne se fait pas clipper.
+            // Le menu deploye ne vit plus ici : il est ancre dans un Popup
+            // (MeeshyMenuFab), qui le positionne et le CLAMPE dans la fenetre.
             .defaultMinSize(minWidth = FloatingButtonSize, minHeight = FloatingButtonSize)
-            // Aligne du COTE ou le bouton se trouve : centre, un menu deploye contre
-            // le bord droit sortait de l'ecran et ses libelles etaient coupes.
-            .wrapContentSize(
-                align = if (position.isLeft) Alignment.BottomStart else Alignment.BottomEnd,
-                unbounded = true,
-            )
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .semantics { this.contentDescription = contentDescription }
             // combinedClickable et NON un second detectTapGestures : deux
             // pointerInput concurrents se disputent le meme evenement, et un simple
             // tap finissait par etre traite comme un glissement — observe sur
             // emulateur, les deux boutons derivaient de leur place a chaque appui.
             // combinedClickable applique le touch slop standard, et apporte en prime
-            // le retour tactile et l'activation au clavier.
+            // l'activation au clavier. indication = null : le retour visuel est
+            // porte par l'echelle d'appui, pas par un ripple.
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onTap,
                 onLongClick = onLongPress,
             )

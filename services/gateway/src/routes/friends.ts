@@ -698,6 +698,22 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           friendRequestId: id,
           cancelledBy: userId,
         });
+
+        // La ligne `FriendRequest` vient de partir : la notification
+        // « X vous a envoyé une demande d'amitié » n'a plus rien où mener. On
+        // la RETIRE au lieu de la marquer lue — c'est ce qui distingue cette
+        // route de son voisin `PATCH`, qui laisse la ligne en place et n'a donc
+        // qu'à la marquer consommée (cf. `retractFriendRequestNotifications`).
+        // Elle appartient toujours au receveur, quel que soit celui des deux
+        // qui a appelé : c'est lui, et lui seul, que la création a notifié.
+        try {
+          await notificationService.retractFriendRequestNotifications(friendRequest.receiverId, id);
+        } catch (error) {
+          // Le service avale déjà ses erreurs ; ce filet garde la propriété qui
+          // compte : le retrait des notifications ne fait JAMAIS échouer la
+          // suppression, qui est déjà committée en base.
+          logError(fastify.log, 'Error retracting friend request notifications:', error);
+        }
       }
 
       return sendSuccess(reply, { message: 'Demande d\'ami supprimee' });

@@ -24,14 +24,29 @@ export type QueuedMessagePayload = {
    * relevant transition per message per event type, so messageId+eventType
    * dedup is correct and no finer dedupKey is needed; never a delivery
    * receipt.
-   * 'link-message' replays LINK_MESSAGE_NEW for a message sent through a share
-   * link. It is a CREATION like 'new', not a mutation, but it keeps its own
-   * eventType because the two are different wire events carrying different
+   * 'link-message' replays a message sent through a share link under BOTH
+   * LINK_MESSAGE_NEW and MESSAGE_NEW, exactly as the live room emit does (see
+   * `linkMessageEmissions`). It is a CREATION like 'new', not a mutation, but
+   * it keeps its own eventType because the two wire events carry different
    * payload shapes: `message:new` sends the message object, `link:message:new`
-   * wraps it as `{ message }`. messageId dedup is correct (one creation per
-   * message) and it carries no delivery receipt — the share-link send path
-   * creates no read-status rows, so a receipt on drain alone would claim a
-   * delivery the rest of the pipeline never tracked. */
+   * wraps it as `{ message }` — one queued envelope, two shapes on the wire.
+   * Replaying LINK_MESSAGE_NEW alone left iOS and Android, which listen to
+   * `message:new` only, with nothing to converge on at reconnect. messageId
+   * dedup is correct (one creation per message) and it carries no delivery
+   * receipt — the share-link send path creates no read-status rows, so a
+   * receipt on drain alone would claim a delivery the rest of the pipeline
+   * never tracked.
+   * 'attachment-updated' replays MESSAGE_ATTACHMENT_UPDATED so a peer who was
+   * offline when Whisper finished transcribing (or when NLLB+Chatterbox
+   * finished one language of translated audio) still gets the enrichment. The
+   * `message:new` that was queued at SEND time carries the attachment as it
+   * was then — no transcription, no translated audio, both landing a second or
+   * two later — so without this entry the replayed message is permanently the
+   * un-enriched one. It needs a dedupKey scoped to the ATTACHMENT id: two
+   * audio attachments on one message would otherwise collapse into a single
+   * entry, and the supersede-in-place rule (latest payload wins) is exactly
+   * right per attachment since the payload carries its FULL state. Never a
+   * delivery receipt. */
   readonly eventType?:
     | 'new'
     | 'edited'
@@ -42,7 +57,8 @@ export type QueuedMessagePayload = {
     | 'attachment-reaction-removed'
     | 'pinned'
     | 'unpinned'
-    | 'link-message';
+    | 'link-message'
+    | 'attachment-updated';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:

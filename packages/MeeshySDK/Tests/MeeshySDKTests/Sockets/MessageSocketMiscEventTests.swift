@@ -216,6 +216,56 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.updatedAt, "2026-04-09T10:00:00.000Z")
     }
 
+    // Le tri-état du Prisme. `Optional` confondrait « clé absente » (renommage :
+    // ne pas toucher la carte) et « clé nulle » (le serveur DIT que la carte est
+    // périmée après une édition). Ces trois témoins fixent la distinction sur le
+    // fil, là où elle est décidée.
+
+    func test_conversationUpdatedEvent_absentTranslationsKey_isUnchanged() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "title": "Renamed",
+            "updatedAt": "2026-04-09T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessageTranslations, .unchanged)
+    }
+
+    func test_conversationUpdatedEvent_nullTranslations_isReplacedEmpty() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "lastMessagePreview": "Hello (edited)",
+            "lastMessageTranslations": null,
+            "lastMessageOriginalLanguage": "en",
+            "updatedAt": "2026-04-09T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessageTranslations, .replaced([:]),
+                       "an explicit null expires the client map — it is a value, not an absence")
+        XCTAssertEqual(event.lastMessageOriginalLanguage, "en")
+    }
+
+    func test_conversationUpdatedEvent_translationsMap_isReplacedWithIt() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "lastMessagePreview": "Hello",
+            "lastMessageTranslations": {"fr": "Bonjour"},
+            "lastMessageOriginalLanguage": "en",
+            "updatedAt": "2026-04-09T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessageTranslations, .replaced(["fr": "Bonjour"]))
+    }
+
     func test_conversationUpdatedEvent_minimalFields() throws {
         let json = """
         {
@@ -447,5 +497,60 @@ final class MessageSocketMiscEventTests: XCTestCase {
         let event = try decoder.decode(ParticipantUnbannedEvent.self, from: json)
         XCTAssertEqual(event.conversationId, "conv1")
         XCTAssertEqual(event.userId, "u1")
+    }
+
+    // MARK: - Appartenance : ce que le bannissement retire, ce que le débannissement rend
+
+    func test_participantBannedEvent_membershipEnded_absent_readsAsTrue() throws {
+        // Un serveur antérieur à ce champ ne bannissait qu'en retirant. Lire
+        // l'absence comme `false` ferait ignorer tous ses bannissements.
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "bannedBy": {"id": "u2"},
+            "bannedAt": "2026-04-09T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantBannedEvent.self, from: json)
+        XCTAssertNil(event.membershipEnded)
+        XCTAssertTrue(event.didEndMembership)
+    }
+
+    func test_participantBannedEvent_membershipEnded_false_whenTargetHadAlreadyLeft() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "bannedBy": {"id": "u2"},
+            "bannedAt": "2026-04-09T10:00:00.000Z",
+            "membershipEnded": false
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantBannedEvent.self, from: json)
+        XCTAssertEqual(event.membershipEnded, false)
+        XCTAssertFalse(event.didEndMembership)
+    }
+
+    func test_participantUnbannedEvent_membershipRestored_absent_readsAsTrue() throws {
+        let json = """
+        {"conversationId": "conv1", "userId": "u1"}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantUnbannedEvent.self, from: json)
+        XCTAssertNil(event.membershipRestored)
+        XCTAssertTrue(event.didRestoreMembership)
+    }
+
+    func test_participantUnbannedEvent_membershipRestored_false_whenNobodyWasReadmitted() throws {
+        let json = """
+        {"conversationId": "conv1", "userId": "u1", "membershipRestored": false}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantUnbannedEvent.self, from: json)
+        XCTAssertEqual(event.membershipRestored, false)
+        XCTAssertFalse(event.didRestoreMembership)
     }
 }

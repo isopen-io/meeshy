@@ -64,3 +64,97 @@ final class LocationPickerModelTests: XCTestCase {
         XCTAssertNil(place?.address)
     }
 }
+
+/// Géométrie du pin qui se soulève pendant le déplacement de la carte.
+///
+/// Le soulèvement ne se lit QUE si l'ombre au sol le contredit : un pin qui
+/// grossit sans que son ombre rétrécisse se lit comme un zoom, pas comme un
+/// décollage. Les quatre valeurs sont donc solidaires et testées ensemble.
+final class MapPinLiftTests: XCTestCase {
+
+    func test_auRepos_pinANormalEtOmbrePleine() {
+        let s = MapPinLift.style(lifted: false)
+
+        XCTAssertEqual(s.scale, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(s.yOffset, 0, accuracy: 1e-9)
+        XCTAssertEqual(s.shadowScale, 1.0, accuracy: 1e-9)
+    }
+
+    func test_souleve_pinDoubleEtMonte() {
+        let s = MapPinLift.style(lifted: true)
+
+        XCTAssertEqual(s.scale, 2.0, accuracy: 1e-9, "le pin doit doubler pendant le déplacement")
+        XCTAssertLessThan(s.yOffset, 0, "un décalage négatif = vers le haut de l'écran")
+    }
+
+    func test_souleve_lOmbreRetrecitEtPalit() {
+        let rest = MapPinLift.style(lifted: false)
+        let up = MapPinLift.style(lifted: true)
+
+        XCTAssertLessThan(up.shadowScale, rest.shadowScale,
+                          "une ombre qui ne rétrécit pas fait lire un zoom, pas un décollage")
+        XCTAssertLessThan(up.shadowOpacity, rest.shadowOpacity)
+    }
+
+    func test_lesDeuxEtatsSontDistincts() {
+        XCTAssertNotEqual(MapPinLift.style(lifted: true), MapPinLift.style(lifted: false))
+    }
+}
+
+/// Composition du titre affiché sur la carte du bas.
+///
+/// `reverseGeocode` construit `addressString` en partant de `placemark.name` —
+/// l'adresse CONTIENT donc déjà le nom du lieu. Concaténer nom et adresse sans
+/// s'en apercevoir affiche « Tour Eiffel · Tour Eiffel, Champ de Mars, … » dès
+/// qu'un lieu est choisi dans les résultats de recherche, le chemin le plus
+/// courant.
+final class LocationPlaceTitleTests: XCTestCase {
+
+    func test_placeTitle_sansNom_rendLAdresse() {
+        XCTAssertEqual(
+            LocationSharingLabels.placeTitle(name: nil, address: "Paris, France"),
+            "Paris, France"
+        )
+    }
+
+    func test_placeTitle_sansAdresse_rendLeNom() {
+        XCTAssertEqual(
+            LocationSharingLabels.placeTitle(name: "Gros-Caillou", address: nil),
+            "Gros-Caillou"
+        )
+    }
+
+    func test_placeTitle_sansRien_rendNil() {
+        XCTAssertNil(LocationSharingLabels.placeTitle(name: nil, address: nil))
+    }
+
+    func test_placeTitle_distincts_lesJoint() {
+        XCTAssertEqual(
+            LocationSharingLabels.placeTitle(name: "Gros-Caillou", address: "Paris, France"),
+            "Gros-Caillou · Paris, France"
+        )
+    }
+
+    func test_placeTitle_adresseContenantDejaLeNom_neRepetePas() {
+        XCTAssertEqual(
+            LocationSharingLabels.placeTitle(
+                name: "Tour Eiffel",
+                address: "Tour Eiffel, Champ de Mars, Paris, France"
+            ),
+            "Tour Eiffel, Champ de Mars, Paris, France"
+        )
+    }
+
+    func test_placeTitle_containmentInsensibleALaCasse() {
+        XCTAssertEqual(
+            LocationSharingLabels.placeTitle(name: "tour eiffel", address: "Tour Eiffel, Paris"),
+            "Tour Eiffel, Paris"
+        )
+    }
+
+    func test_placeTitle_chainesVides_traiteesCommeAbsentes() {
+        XCTAssertEqual(LocationSharingLabels.placeTitle(name: "   ", address: "Paris"), "Paris")
+        XCTAssertEqual(LocationSharingLabels.placeTitle(name: "Paris", address: "  "), "Paris")
+        XCTAssertNil(LocationSharingLabels.placeTitle(name: "", address: "   "))
+    }
+}

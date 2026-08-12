@@ -1111,7 +1111,7 @@ final class CallManager: ObservableObject {
             callController.request(transaction) { [weak self] error in
                 if let error {
                     Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
-                    Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+                    Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed("CallKit error")) }
                 } else {
                     let update = CXCallUpdate()
                     update.remoteHandle = CXHandle(type: .generic, value: userId)
@@ -1656,7 +1656,7 @@ final class CallManager: ObservableObject {
                     // also reports `.failed` back to CallKit, matching every
                     // other failure path in this file (see failCall's doc
                     // comment) instead of leaving Recents with a stranded entry.
-                    Task { @MainActor in self?.failCall("CallKit error") }
+                    Task { @MainActor [weak self] in self?.failCall("CallKit error") }
                 }
             }
         }
@@ -2662,9 +2662,23 @@ final class CallManager: ObservableObject {
     /// leaving the second caller ringing forever with no local signal. Mirror
     /// `rejectPendingCall()`'s socket signal for the call being displaced so
     /// its caller sees a clean end instead of a silent local drop.
+    ///
+    /// Audit 2026-08-10 (Vague 87 fix) — this used to call the raw
+    /// `MessageSocketManager.shared.emitCallEnd(callId:)` directly instead of
+    /// the `emitCallReject(callId:)` helper this doc comment already claimed
+    /// to mirror. Two consequences: (1) the gateway's `CallService.endCall`
+    /// resolves a pre-answer `call:end` with no `reason` to `CallStatus
+    /// .missed`, not `.rejected` — the displaced caller got a false "missed
+    /// call" notification/history entry for a call A was simply busy
+    /// juggling, not one A never noticed; (2) `emitCallReject` guards on
+    /// `MessageSocketManager.shared.isConnected` and defers+replays on
+    /// reconnect, while the raw `emitCallEnd` is silently dropped by the SDK
+    /// when the socket is down — plausible here since one call site
+    /// (`reportIncomingVoIPCall`) can run synchronously off a cold-start
+    /// PushKit delivery, before the socket handshake completes.
     private func rejectSupersededPendingCall(replacingWithCallId newCallId: String) {
         guard let superseded = pendingIncomingCall, superseded.callId != newCallId else { return }
-        MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)
+        emitCallReject(callId: superseded.callId)
         Logger.calls.info("Superseded waiting call ended: \(superseded.callId) (replaced by \(newCallId))")
     }
 
@@ -4840,7 +4854,24 @@ final class CallManager: ObservableObject {
             Logger.calls.warning("call:end (rejected) deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
-        MessageSocketManager.shared.emitCallReject(callId: callId)
+        // ACK parity avec emitCallEndReliably (2026-08-11) : un socket vu
+        // "connecté" au moment du refus n'implique pas que l'emit atteint le
+        // gateway — un blip qui s'auto-répare avant que `connectionState` ne
+        // publie la coupure le laisse filer sans ACK ni réconciliation. Le
+        // déclinant a déjà fermé localement (endCallInternal a tourné avant
+        // cet appel), l'appelant sonne alors jusqu'au timeout (~45-60s) et le
+        // gateway résout `missed` au lieu de `rejected` — le même mislabel
+        // que l'arc reject 2026-07-12 fermait déjà sur les autres chemins,
+        // ici rouvert par la seule fenêtre "connecté mais jamais livré".
+        Task { [weak self] in
+            let acked = await MessageSocketManager.shared.emitCallRejectWithAck(callId: callId)
+            if !acked {
+                MessageSocketManager.shared.emitCallReject(callId: callId)
+                self?.pendingEndReconciliationCallId = callId
+                self?.pendingEndReconciliationReason = "rejected"
+                Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+            }
+        }
     }
 
     // MARK: - Duration Formatting

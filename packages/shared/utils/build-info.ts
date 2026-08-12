@@ -1,15 +1,23 @@
 /**
  * Métadonnées du build gravées dans l'image, remontées au runtime.
  *
- * Le Dockerfile pose déjà `org.opencontainers.image.revision` depuis le
+ * Les Dockerfiles des trois services — web, gateway et translator, ce dernier en
+ * deux variantes (`Dockerfile`, `Dockerfile.py310`) — posent déjà
+ * `org.opencontainers.image.revision` depuis le
  * build-arg `VCS_REF`, que `.github/workflows/docker.yml` alimente avec
  * `github.sha`. Un label OCI n'est cependant lisible que par `docker inspect`
  * sur la machine hôte : depuis l'extérieur, identifier le code en production
  * supposait de corréler l'uptime du container avec l'horodatage des tags
  * `sha-<short>` du registre — une inférence, jamais une lecture.
  *
- * Ces valeurs sont donc aussi exportées en variables d'environnement dans le
- * stage `runner`, et exposées par `/health` et `/info`.
+ * Ces valeurs sont donc aussi exportées en variables d'environnement dans les
+ * stages d'exécution, et exposées par les endpoints `/health`.
+ *
+ * Ce helper vit dans `shared` plutôt que dans chaque service : le gateway et le
+ * web le consomment tous deux, et le contrat de champs doit rester identique
+ * pour que les `/health` se comparent sans traduction. Le translator, écrit en
+ * Python, en porte un miroir — `services/translator/src/utils/build_info.py` —
+ * tenu aligné sur ces mêmes noms de champs. Toute évolution touche les DEUX.
  */
 export type BuildInfo = {
   /** SHA complet du commit, tel que gravé. `null` si l'image ne le porte pas. */

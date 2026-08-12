@@ -704,6 +704,43 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         )
     }
 
+    /// Vague 100 — `startCall`'s `callController.request` completion already
+    /// captures `[weak self]` (the outer closure), but the nested
+    /// `Task { @MainActor in ... }` it spawns on CallKit failure did NOT repeat
+    /// the weak capture: an unstructured `Task` closure captures whatever it
+    /// references independently of its enclosing closure's capture list, so
+    /// omitting `[weak self]` there re-strongly-captures `self` for the task's
+    /// lifetime — the exact convention `apps/ios/CLAUDE.md`'s "Common Retain
+    /// Cycle Traps" section calls out for `DispatchQueue`/`Task` closures.
+    func test_startCall_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func startCall(conversationId: String", in: source) else {
+            XCTFail("startCall not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
+            "startCall's CXStartCallAction failure Task must capture [weak self], not just the outer " +
+            "callController.request closure — an unstructured Task does not inherit its enclosing " +
+            "closure's capture list."
+        )
+    }
+
+    /// Mirrors `test_startCall_callKitFailureTask_capturesSelfWeakly` for the
+    /// incoming-call `reportNewIncomingCall` failure Task in
+    /// `handleIncomingCallNotification` — same bug, same fix.
+    func test_handleIncomingCallNotification_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.failCall(\"CallKit error\") }"),
+            "handleIncomingCallNotification's reportNewIncomingCall failure Task must capture [weak self]."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {
@@ -1979,11 +2016,14 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
     /// The hand-off must unconditionally hop to the MainActor via `Task`.
     func test_cxAnswerCallAction_heldUntilConnected() throws {
         let src = try callManagerSource()
-        guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
+        // Corps équilibré, pas `prefix(1600)` : `holdPendingAnswerAction`
+        // vit à 2 778 caractères de l'accolade, derrière le préambule qui
+        // explique les correctifs 2026-07-02 et 07-03.
+        guard let bodyFragment = DeclarationBodyScanner.body(
+            containing: "perform action: CXAnswerCallAction", in: src
+        ) else {
             XCTFail("CXAnswerCallAction handler not found"); return
         }
-        let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        let bodyFragment = String(src[bodyStart...].prefix(1600))
 
         XCTAssertTrue(bodyFragment.contains("holdPendingAnswerAction(action)"),
             "CXAnswerCallAction: the action must be handed to the manager (holdPendingAnswerAction) " +
@@ -2048,12 +2088,19 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    private func handlerBody(_ src: String, marker: String, length: Int = 2000) throws -> String {
-        guard let range = src.range(of: marker) else {
+    /// Corps ENTIER du handler, accolades équilibrées.
+    ///
+    /// Prenait auparavant `prefix(2000)` : une fenêtre devinée, que chaque
+    /// commentaire ajouté au-dessus du code surveillé repoussait hors de
+    /// portée. Le garde `callUUID` de `CXEndCallAction` s'est retrouvé à
+    /// 2 399 caractères de l'accolade et la garde a viré au rouge alors que le
+    /// code de production était juste. Le paramètre `length` a disparu : un
+    /// corps équilibré n'a pas de longueur à deviner.
+    private func handlerBody(_ src: String, marker: String) throws -> String {
+        guard let body = DeclarationBodyScanner.body(containing: marker, in: src) else {
             XCTFail("\(marker) handler not found"); return ""
         }
-        let bodyStart = src[range.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        return String(src[bodyStart...].prefix(length))
+        return body
     }
 
     func test_activeCallUUID_isFileprivate_soCallKitDelegateProxyCanReadIt() throws {
@@ -2119,7 +2166,10 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
     /// guard's own comment push the guard past the other handlers' default 2000-char
     /// window.
     func test_cxAnswerCallAction_guardsOnActiveCallUUIDBeforeHoldingAnswerAction() throws {
-        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXAnswerCallAction", length: 3500)
+        // `length: 3500` a disparu : c'était une fenêtre déjà élargie à la main
+        // une première fois quand le handler avait grossi. Le corps équilibré
+        // rend ce rattrapage inutile.
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXAnswerCallAction")
         let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
         let holdOffset = body.range(of: "manager.holdPendingAnswerAction(action)")?.lowerBound
         XCTAssertNotNil(guardOffset, "CXAnswerCallAction must guard on action.callUUID == manager.activeCallUUID")
@@ -2606,6 +2656,17 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
 /// sent, left ringing until the gateway's own ~60s timeout). Both sites must
 /// now reject the call being displaced via the same socket signal
 /// `rejectPendingCall()` already uses, before overwriting `pendingIncomingCall`.
+///
+/// Audit 2026-08-10 (Vague 87 fix): the original fix above landed
+/// `rejectSupersededPendingCall` calling the raw
+/// `MessageSocketManager.shared.emitCallEnd(callId:)` instead of the
+/// `emitCallReject(callId:)` helper `rejectPendingCall()` itself uses five
+/// lines above it — despite this file's own doc comment claiming to mirror
+/// it. `emitCallReject` sends `reason: "rejected"` (the raw `emitCallEnd`
+/// sends none, which the gateway resolves to `missed`) and defers+replays
+/// when the socket is down (the raw call is silently dropped by the SDK
+/// instead). `test_rejectSupersededPendingCall_helperExists_andSignalsCallEnd`
+/// below locked in the buggy call — updated to assert the correct one.
 @MainActor
 final class CallWaitingSupersedeTests: XCTestCase {
 
@@ -2635,8 +2696,18 @@ final class CallWaitingSupersedeTests: XCTestCase {
             XCTFail("rejectSupersededPendingCall not found"); return
         }
         XCTAssertTrue(
+            body.contains("emitCallReject(callId: superseded.callId)"),
+            "rejectSupersededPendingCall must go through emitCallReject(callId:) — same helper " +
+            "rejectPendingCall() uses — so the displaced caller's call:end carries reason=\"rejected\" " +
+            "(a bare emitCallEnd() resolves to CallStatus.missed on the gateway) and survives a " +
+            "socket-down window via the deferred-reconciliation path (a bare emitCallEnd() is " +
+            "silently dropped by the SDK when the socket isn't connected)."
+        )
+        XCTAssertFalse(
             body.contains("MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)"),
-            "rejectSupersededPendingCall must emit call:end for the call being displaced, mirroring rejectPendingCall()."
+            "rejectSupersededPendingCall must NOT call the raw MessageSocketManager.emitCallEnd " +
+            "directly — it bypasses the reason=\"rejected\" tagging and the socket-down deferral " +
+            "emitCallReject(callId:) provides."
         )
         XCTAssertTrue(
             body.contains("superseded.callId != newCallId"),
@@ -4077,6 +4148,44 @@ final class RejectDeferredReconciliationTests: XCTestCase {
             body.contains("pendingEndReconciliationCallId = callId"),
             "the deferred reject must be remembered in pendingEndReconciliationCallId " +
             "so the connectionState observer replays it on reconnect."
+        )
+    }
+
+    func test_emitCallReject_usesAtLeastOnceWithAck_notFireAndForget() throws {
+        // 2026-08-11: the socket-down guard above only protects the "socket is
+        // OBSERVABLY disconnected" case. A socket that LOOKS connected at the
+        // moment of decline can still drop the emit in flight — a blip that
+        // self-heals before connectionState ever publishes the disconnect. The
+        // decliner has already torn down locally (endCallInternal ran before
+        // this call), so a silently-dropped reject leaves the caller ringing
+        // until the gateway's own timeout, which resolves to `missed` — the
+        // exact mislabel the arc reject 2026-07-12 fix eliminated on every
+        // OTHER decline path. Mirrors emitCallEndReliably's ACK'd-with-fallback
+        // shape (§6.3 precedent: test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget).
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallRejectWithAck"),
+            "emitCallReject must await the ACK'd reject path — a plain fire-and-forget " +
+            "emit gives no signal that the gateway ever received it."
+        )
+        XCTAssertTrue(
+            body.contains("if !acked"),
+            "emitCallReject must branch on ACK failure, mirroring emitCallEndReliably."
+        )
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallReject(callId: callId)"),
+            "on ACK failure, emitCallReject must still emit the fire-and-forget fallback — " +
+            "the gateway's end handler is idempotent, a duplicate is a no-op."
+        )
+        let rejectedReasonCount = body.components(separatedBy: "pendingEndReconciliationReason = \"rejected\"").count - 1
+        XCTAssertEqual(
+            rejectedReasonCount, 2,
+            "emitCallReject must arm pendingEndReconciliationReason = \"rejected\" on BOTH the " +
+            "socket-down guard AND the ACK-failure fallback — an unacked-but-emitted reject needs " +
+            "replay too, or the caller keeps ringing until the gateway's own timeout mislabels it `missed`."
         )
     }
 

@@ -8,6 +8,11 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
+import {
+  rebuildInfiniteConversationPages,
+  type InfiniteConversationData,
+} from '@/lib/conversations/infinite-cache';
+import { extractPreviewTranslations } from '@/services/conversations/transformers.service';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
@@ -71,6 +76,20 @@ const CONVERSATION_DATE_FIELDS = new Set([
 export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
+    if (key === 'lastMessageTranslations') {
+      // `null` est une VALEUR ici, pas une absence : le serveur périme
+      // `Message.translations` dans la même écriture qu'une édition, et c'est ce
+      // null reçu qui doit périmer la carte du cache. La clé reste donc
+      // présente (le cache applique `{ ...conv, ...patch }` — une clé absente
+      // laisserait la carte de l'ANCIEN texte en place, et `formatLastMessage`
+      // la préfère à `lastMessagePreview`). Même forme que le chemin REST.
+      patch[key] = extractPreviewTranslations(value);
+      continue;
+    }
+    if (key === 'lastMessageOriginalLanguage') {
+      patch[key] = typeof value === 'string' ? value : undefined;
+      continue;
+    }
     if (!CONVERSATION_DATE_FIELDS.has(key)) {
       patch[key] = value;
       continue;
@@ -80,11 +99,6 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
   }
   return patch as Partial<Conversation>;
 }
-
-type InfiniteConversationData = {
-  pages: { conversations: Conversation[]; pagination: any }[];
-  pageParams: number[];
-};
 
 function updateInfiniteConversationCache(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -97,54 +111,7 @@ function updateInfiniteConversationCache(
       const allConversations = old.pages.flatMap(page => page.conversations);
       const updated = updater(allConversations);
       if (updated === allConversations) return old;
-
-      // PRESERVE PAGE STRUCTURE. Previously this code collapsed every
-      // existing page into a single synthetic page with `pageParams: [0]`
-      // and `pagination.offset: 0` — meaning the next `fetchNextPage`
-      // call recomputed `getNextPageParam` against that single fused
-      // page and either re-fetched offset=0 (re-loading already-loaded
-      // conversations as duplicates) or stalled if the synthetic
-      // `hasMore` didn't propagate. By rebuilding the original page
-      // boundaries from the updated array, `pageParams` stay intact and
-      // infinite scroll keeps advancing past the last real page.
-      const rebuiltPages: typeof old.pages = [];
-      let cursor = 0;
-      for (let i = 0; i < old.pages.length; i++) {
-        const originalPage = old.pages[i];
-        const originalLength = originalPage.conversations.length;
-        const slice = updated.slice(cursor, cursor + originalLength);
-        rebuiltPages.push({
-          conversations: slice,
-          pagination: {
-            // Keep the original pagination metadata so `getNextPageParam`
-            // continues to see correct offsets/limits.
-            ...originalPage.pagination,
-            // `total` is the only field worth refreshing — the global
-            // count grows when a brand-new conversation is prepended.
-            total: i === old.pages.length - 1 ? updated.length : originalPage.pagination.total,
-          },
-        });
-        cursor += originalLength;
-      }
-      // Tail: any items the updater added beyond the original total
-      // length (e.g. a brand-new conversation prepended via fetch
-      // fallback). Append them as an extra page so they're not lost.
-      if (cursor < updated.length) {
-        const last = old.pages[old.pages.length - 1];
-        rebuiltPages.push({
-          conversations: updated.slice(cursor),
-          pagination: {
-            ...last.pagination,
-            offset: cursor,
-            total: updated.length,
-          },
-        });
-      }
-
-      return {
-        pages: rebuiltPages,
-        pageParams: old.pageParams,
-      };
+      return rebuildInfiniteConversationPages(old, updated);
     }
   );
 }
@@ -165,10 +132,6 @@ function advanceConversationPreviewOnDelete(
       ? { ...conv, lastMessage: replacement, lastMessageAt: replacement.createdAt }
       : conv;
 
-  queryClient.setQueriesData<Conversation[]>(
-    { queryKey: queryKeys.conversations.lists() },
-    (old) => (old ? old.map(replace) : old)
-  );
   updateInfiniteConversationCache(queryClient, (convs) => convs.map(replace));
 }
 
@@ -340,32 +303,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         });
       }
 
-      // Update ALL conversation list variants with latest message AND move to top
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-
-          let updated: Conversation | null = null;
-          const rest: Conversation[] = [];
-          for (const conv of old) {
-            if (conv.id === targetConversationId) {
-              updated = {
-                ...conv,
-                lastMessage: message,
-                lastMessageAt: message.createdAt,
-                updatedAt: message.createdAt,
-              };
-            } else {
-              rest.push(conv);
-            }
-          }
-
-          if (!updated) return old;
-          return [updated, ...rest];
-        }
-      );
-
       // Update infinite conversations query (paginated cache used by ConversationList)
       let conversationFoundInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
@@ -452,23 +389,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         queryClient.setQueryData(key, applyEdit);
       }
 
-      // Update lastMessage in ALL conversation list variants if this edited message is the last one
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-          return old.map((conv) => {
-            if (
-              conv.id === targetConversationId &&
-              conv.lastMessage?.id === message.id &&
-              !isStaleEdit(conv.lastMessage, message)
-            ) {
-              return { ...conv, lastMessage: message };
-            }
-            return conv;
-          });
-        }
-      );
       updateInfiniteConversationCache(queryClient, (convs) =>
         convs.map((conv) =>
           conv.id === targetConversationId &&
@@ -726,98 +646,110 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       }
     };
 
-    // Handler for participant joined — update memberCount in conversation lists
+    // `conversation:joined` n'est PAS une adhésion : le gateway l'émet aussi —
+    // même nom, même payload — comme l'ack self-only d'un socket qui REJOINT LA
+    // ROOM (`ConversationHandler`), c'est-à-dire à CHAQUE ouverture de fil.
+    // L'incrémentation qui vivait ici gonflait donc l'effectif de la ligne de
+    // liste d'une unité par ouverture, indéfiniment. L'adhésion réelle passe
+    // par `conversation:participant-joined` ci-dessous ; il ne reste ici que
+    // l'invalidation, légitime dans les deux lectures.
     const handleConversationJoined = (data: { conversationId: string; userId: string }) => {
-      const joinUpdater = (convs: Conversation[]) =>
-        convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, memberCount: (conv.memberCount ?? 0) + 1 }
-            : conv
-        );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? joinUpdater(old) : old
-      );
-      updateInfiniteConversationCache(queryClient, joinUpdater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(data.conversationId),
       });
     };
 
-    // Handler for participant left — update memberCount in conversation lists
-    const handleConversationLeft = (data: { conversationId: string; userId: string }) => {
-      const leftUpdater = (convs: Conversation[]) =>
+    // Réécrit l'effectif d'UNE conversation dans les deux formes de cache de
+    // liste, et invalide le roster paginé. Quatre handlers d'appartenance en
+    // faisaient chacun une copie ; seul `resolve` les distingue.
+    //
+    // `resolve` reçoit l'effectif en cache et rend le nouveau. Les événements
+    // du gateway portent désormais un `memberCount` ABSOLU : c'est lui qu'il
+    // faut POSER. Le delta n'est plus qu'un repli pour un serveur antérieur au
+    // contrat, et il ne converge pas — un événement manqué (hors ligne, trou de
+    // reconnexion) laisse une dérive définitive dans un cache dont le
+    // `staleTime: Infinity` interdit la relecture spontanée.
+    const applyMemberCount = (conversationId: string, resolve: (current: number) => number) => {
+      const updater = (convs: Conversation[]) =>
         convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+          conv.id === conversationId
+            ? { ...conv, memberCount: resolve(conv.memberCount ?? 0) }
             : conv
         );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? leftUpdater(old) : old
-      );
-      updateInfiniteConversationCache(queryClient, leftUpdater);
+      updateInfiniteConversationCache(queryClient, updater);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(conversationId),
+      });
+    };
+
+    // Handler for participant joined — the symmetric counterpart of
+    // `handleConversationParticipantLeft`, and the only unambiguous carrier of
+    // an actual membership gain. The gateway leaves the new member OUT of this
+    // fan-out: their own list gets the conversation from `conversation:new`,
+    // whose member count already includes them.
+    const handleConversationParticipantJoined = (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => {
+      applyMemberCount(data.conversationId, (current) => data.memberCount ?? current + 1);
+    };
+
+    // Le pendant EXACT de `conversation:joined` ci-dessus, et le même piège :
+    // `conversation:left` n'a qu'un seul émetteur, `socket.emit` après
+    // `socket.leave(room)` (`ConversationHandler.handleConversationLeave`). Il
+    // dit « ce socket a quitté la ROOM » — ce que produit la fermeture d'un
+    // fil — jamais « quelqu'un a quitté la conversation ». La décrémentation
+    // qui vivait ici retirait donc un membre à chaque fermeture de fil.
+    //
+    // Les deux erreurs se compensaient EN PARTIE, ce qui les cachait, mais
+    // jamais exactement : une reconnexion socket rejoint la room sans avoir
+    // émis de `leave`, et l'appli fermée ne l'émet pas non plus, tandis que la
+    // soustraction était bornée à 0 et l'addition ne l'était pas. Le départ
+    // réel passe par `conversation:participant-left`.
+    const handleConversationLeft = (data: { conversationId: string; userId: string }) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(data.conversationId),
       });
     };
 
     // Handler for participant-left (room broadcast) — another member was removed/left
-    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => {
-      const leftUpdater = (convs: Conversation[]) =>
-        convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
-            : conv
-        );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? leftUpdater(old) : old
-      );
-      updateInfiniteConversationCache(queryClient, leftUpdater);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.participants(data.conversationId),
-      });
+    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => {
+      applyMemberCount(data.conversationId, (current) => data.memberCount ?? Math.max(0, current - 1));
     };
 
-    // Handler for participant-banned — member was banned from the conversation
-    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => {
-      const bannedUpdater = (convs: Conversation[]) =>
-        convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
-            : conv
-        );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? bannedUpdater(old) : old
-      );
-      updateInfiniteConversationCache(queryClient, bannedUpdater);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.participants(data.conversationId),
-      });
+    // Handler for participant-banned — member was banned from the conversation.
+    // `membershipEnded: false` means the target had ALREADY left: banning an
+    // ex-member is what keeps them from walking back in through a share link,
+    // but it removes no membership, so the count must not move. Absent on
+    // servers older than that contract, where a ban always removed one.
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number }) => {
+      // L'effectif absolu tranche `membershipEnded` de lui-même — bannir un
+      // ex-membre ne retire personne, donc le compte est simplement inchangé.
+      // Le court-circuit ne subsiste que pour les serveurs qui ne l'envoient pas.
+      if (typeof data.memberCount !== 'number' && data.membershipEnded === false) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.participants(data.conversationId),
+        });
+        return;
+      }
+      applyMemberCount(data.conversationId, (current) => data.memberCount ?? Math.max(0, current - 1));
     };
 
     // Handler for participant-unbanned — member was unbanned and is an active
-    // member again. Increments memberCount as the exact inverse of the ban
-    // decrement above: without it every ban/unban round-trip drifts the cached
-    // count one lower than reality, and the drift persists until an unrelated
-    // full refetch (staleTime: Infinity never re-reads on its own).
-    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string }) => {
-      const unbannedUpdater = (convs: Conversation[]) =>
-        convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, memberCount: (conv.memberCount ?? 0) + 1 }
-            : conv
-        );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? unbannedUpdater(old) : old
-      );
-      updateInfiniteConversationCache(queryClient, unbannedUpdater);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.participants(data.conversationId),
-      });
+    // member again. Pose l'effectif du serveur, et à défaut incrémente comme
+    // l'exact inverse du décrément de bannissement : sans cela, chaque
+    // aller-retour ban/unban laissait le cache un cran sous la réalité, et la
+    // dérive tenait jusqu'à un refetch complet sans rapport (`staleTime:
+    // Infinity` ne relit jamais de lui-même).
+    //
+    // `membershipRestored: false` means the unban lifted the ban WITHOUT
+    // re-admitting anyone — the person had left on their own before being
+    // banned, so there is no ban-time decrement to undo here either.
+    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string; membershipRestored?: boolean; memberCount?: number }) => {
+      if (typeof data.memberCount !== 'number' && data.membershipRestored === false) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.participants(data.conversationId),
+        });
+        return;
+      }
+      applyMemberCount(data.conversationId, (current) => data.memberCount ?? current + 1);
     };
 
     // Handler for conversation:closed — conversation permanently closed by admin
@@ -974,17 +906,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const linkLastMessage = linkMsg as unknown as Message;
       const linkLastMessageAt = toDate(linkMsg.createdAt) ?? new Date();
 
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-          const idx = old.findIndex((c) => c.id === linkConvId);
-          if (idx === -1) return old;
-          const updated: Conversation = { ...old[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
-          return [updated, ...old.filter((_, i) => i !== idx)];
-        }
-      );
-
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
@@ -998,10 +919,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const { conversationId: rejectedId, reason } = data;
       if (!rejectedId) return;
       updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => (old ? old.filter((c) => c.id !== rejectedId) : old)
-      );
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
       queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
       if (typeof window !== 'undefined') {
@@ -1144,6 +1061,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
     const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
     const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
+    const unsubscribeParticipantJoined = meeshySocketIOService.onConversationParticipantJoined(handleConversationParticipantJoined);
     const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
     const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
     const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
@@ -1173,6 +1091,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationNew?.();
       unsubscribeConversationDeleted?.();
       unsubscribeConversationUpdated?.();
+      unsubscribeParticipantJoined?.();
       unsubscribeParticipantLeft?.();
       unsubscribeParticipantBanned?.();
       unsubscribeParticipantUnbanned?.();

@@ -27,9 +27,10 @@ final class FeedSocketHandler {
 
     // MARK: - Lifecycle
 
-    /// Idempotent : appelé à CHAQUE apparition du feed (le `disarm()` de
-    /// l'`onDisappear` doit être ré-armé au retour, pas seulement au premier
-    /// setup) — sans la garde, des sinks dupliqués s'accumuleraient.
+    /// Armé UNE fois au niveau app (`RootView.task`) et jamais désarmé : la
+    /// persistance disque ne doit dépendre d'aucun écran monté. La garde le
+    /// rend idempotent — un second appel (setup de `FeedView`, remontage) ne
+    /// duplique aucun sink.
     func arm() {
         guard cancellables.isEmpty else { return }
         // Post events
@@ -123,6 +124,17 @@ final class FeedSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Pipeline audio d'un média de commentaire terminé (transcription
+        // Whisper + variantes TTS). Les deux surfaces qui l'écoutaient
+        // (PostDetailViewModel, FeedCommentsSheet) ne muteraient que leur état
+        // en mémoire : l'enrichissement disparaissait à la fermeture de
+        // l'écran et ne revenait qu'au prochain aller-retour REST.
+        socialSocket.commentMediaUpdated
+            .sink { [weak self] data in
+                Task { await self?.handleCommentMediaUpdated(data) }
+            }
+            .store(in: &cancellables)
+
         // Reaction events (emoji, non-heart) — persist to GRDB so the count
         // survives an app restart. The live UI already updates in-session via
         // FeedViewModel / PostDetailViewModel; without this bridge the cached
@@ -206,6 +218,12 @@ final class FeedSocketHandler {
             emoji: event.aggregation.emoji,
             count: event.aggregation.count
         )
+    }
+
+    private func handleCommentMediaUpdated(_ data: SocketCommentMediaUpdatedData) async {
+        guard let media = data.comment.media, !media.isEmpty,
+              let json = try? JSONEncoder().encode(media) else { return }
+        try? await persistence.updateCommentMedia(commentId: data.commentId, mediaJson: json)
     }
 
     /// The `comment:reaction-request-sync` ACK carries the full authoritative set
@@ -317,7 +335,11 @@ extension CommentRecord {
             // Même hissage que sur PostRecord : sans lui, la position d'un
             // commentaire disparaît au prochain chargement du cache (Task 16).
             locationJson: comment.location.flatMap { try? JSONEncoder().encode($0) }
-                .flatMap { String(data: $0, encoding: .utf8) }
+                .flatMap { String(data: $0, encoding: .utf8) },
+            // Idem pour le média : sans ce hissage, `updateCommentMedia` serait
+            // le SEUL écrivain de la colonne et un commentaire audio inséré par
+            // `comment:added` naîtrait sans son média.
+            mediaJson: comment.media.flatMap { try? JSONEncoder().encode($0) }
         )
     }
 }

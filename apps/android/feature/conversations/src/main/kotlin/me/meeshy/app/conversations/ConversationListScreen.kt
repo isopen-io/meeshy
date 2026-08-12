@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -26,7 +30,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ManageSearch
 import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.filled.MarkChatUnread
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -73,10 +80,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
@@ -103,6 +112,8 @@ fun ConversationListScreen(
     onLogout: () -> Unit,
     onNewConversation: () -> Unit = {},
     onContacts: () -> Unit = {},
+    onDashboard: () -> Unit = {},
+    onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
 ) {
@@ -139,6 +150,17 @@ fun ConversationListScreen(
             ConversationSearchBar(
                 query = state.searchText,
                 onQueryChange = viewModel::setSearch,
+                onDashboard = onDashboard,
+                onGlobalSearch = onGlobalSearch,
+            )
+        },
+        // Le chemin DIRECT vers une nouvelle conversation : l'item "New" du menu
+        // flottant reste, mais une action aussi centrale merite un bouton visible
+        // en permanence (l'import FloatingGradientFab dormait ici, jamais pose).
+        floatingActionButton = {
+            FloatingGradientFab(
+                onClick = onNewConversation,
+                contentDescription = stringResource(R.string.conversations_new),
             )
         },
     ) { padding ->
@@ -171,16 +193,20 @@ fun ConversationListScreen(
                             ConversationRow(
                                 conversation = conversation,
                                 currentUserId = state.currentUserId,
+                                currentUserPrefs = state.currentUser,
                                 draft = state.draftFor(conversation.id),
                                 categories = state.categories,
+                                previewMessages = state.previewFor(conversation.id),
                                 onClick = { onConversationClick(conversation.id) },
                                 onTogglePin = { viewModel.togglePin(conversation.id) },
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
+                                onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
                                 onAssignCategory = { viewModel.reassignCategory(conversation.id, it) },
                                 onCreateCategory = { viewModel.createCategoryAndAssign(conversation.id, it) },
+                                onLoadPreview = { viewModel.loadPreviewMessages(conversation.id) },
                             )
                         }
                         // Sections (parity iOS): Épingles first, then Mes conversations.
@@ -220,11 +246,16 @@ fun ConversationListScreen(
     }
 }
 
-/** iOS parity: a floating glass search pill anchored to the bottom of the screen. */
+/** iOS parity: a floating glass search pill anchored to the bottom of the screen.
+ *  Trailing, comme iOS `themedSearchBar` : l'icone grille ouvre le tableau de
+ *  bord (`square.grid.2x2` -> WidgetPreview) et la loupe-texte la recherche
+ *  globale (`text.magnifyingglass` -> GlobalSearch). */
 @Composable
 private fun ConversationSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
+    onDashboard: () -> Unit = {},
+    onGlobalSearch: () -> Unit = {},
 ) {
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.pill),
@@ -264,6 +295,23 @@ private fun ConversationSearchBar(
                     }
                 },
             )
+            IconButton(onClick = onDashboard, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.GridView,
+                    contentDescription = stringResource(R.string.conversations_open_dashboard),
+                    tint = MeeshyPalette.Warning,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            IconButton(onClick = onGlobalSearch, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.ManageSearch,
+                    contentDescription = stringResource(R.string.conversations_open_global_search),
+                    tint = MeeshyPalette.Indigo500,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
     }
 }
@@ -306,16 +354,20 @@ private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier =
 private fun ConversationRow(
     conversation: ApiConversation,
     currentUserId: String?,
+    currentUserPrefs: MeeshyUser?,
     draft: ConversationDraft?,
     categories: List<CategoryOption>,
+    previewMessages: List<LocalMessage>?,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
+    onLoadPreview: () -> Unit,
 ) {
     val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
@@ -348,20 +400,24 @@ private fun ConversationRow(
         ConversationRowContent(
             conversation = conversation,
             currentUserId = currentUserId,
+            currentUserPrefs = currentUserPrefs,
             draft = draft,
             isPinned = isPinned,
             isMuted = isMuted,
             isArchived = isArchived,
             categories = categories,
             currentCategoryId = prefs?.categoryId,
+            previewMessages = previewMessages,
             onClick = onClick,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
+            onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
             onCreateCategory = onCreateCategory,
+            onLoadPreview = onLoadPreview,
         )
     }
 }
@@ -392,20 +448,24 @@ private fun conversationRowRelativeTime(conversation: ApiConversation): String? 
 private fun ConversationRowContent(
     conversation: ApiConversation,
     currentUserId: String?,
+    currentUserPrefs: MeeshyUser?,
     draft: ConversationDraft?,
     isPinned: Boolean,
     isMuted: Boolean,
     isArchived: Boolean,
     categories: List<CategoryOption>,
     currentCategoryId: String?,
+    previewMessages: List<LocalMessage>?,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
+    onLoadPreview: () -> Unit,
 ) {
     val title = conversation.displayTitle(currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
@@ -429,7 +489,10 @@ private fun ConversationRowContent(
                 .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
                 .combinedClickable(
                     onClick = onClick,
-                    onLongClick = { menuExpanded = true },
+                    onLongClick = {
+                        onLoadPreview()
+                        menuExpanded = true
+                    },
                 )
                 .semantics { role = Role.Button; contentDescription = title },
         ) {
@@ -522,6 +585,7 @@ private fun ConversationRowContent(
         ConversationContextMenu(
             expanded = menuExpanded,
             onDismiss = { menuExpanded = false },
+            title = title,
             isPinned = isPinned,
             isMuted = isMuted,
             isArchived = isArchived,
@@ -529,10 +593,16 @@ private fun ConversationRowContent(
             hasDraft = draft?.isMeaningful == true,
             categories = categories,
             currentCategoryId = currentCategoryId,
+            previewMessages = previewMessages,
+            previewShowSender = conversation.type != "direct",
+            currentUserId = currentUserId,
+            currentUserPrefs = currentUserPrefs,
+            previewLabels = previewLabels,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
+            onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
             onCreateCategory = onCreateCategory,
@@ -544,6 +614,7 @@ private fun ConversationRowContent(
 private fun ConversationContextMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
+    title: String,
     isPinned: Boolean,
     isMuted: Boolean,
     isArchived: Boolean,
@@ -551,15 +622,32 @@ private fun ConversationContextMenu(
     hasDraft: Boolean,
     categories: List<CategoryOption>,
     currentCategoryId: String?,
+    previewMessages: List<LocalMessage>?,
+    previewShowSender: Boolean,
+    currentUserId: String?,
+    currentUserPrefs: MeeshyUser?,
+    previewLabels: LastMessagePreviewLabels,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        ConversationPreviewCard(
+            title = title,
+            isPinned = isPinned,
+            isMuted = isMuted,
+            messages = previewMessages,
+            showSender = previewShowSender,
+            currentUserId = currentUserId,
+            currentUserPrefs = currentUserPrefs,
+            labels = previewLabels,
+        )
+        HorizontalDivider()
         DropdownMenuItem(
             text = {
                 Text(
@@ -594,6 +682,12 @@ private fun ConversationContextMenu(
                 text = { Text(stringResource(R.string.conversations_action_mark_read)) },
                 leadingIcon = { Icon(Icons.Filled.MarkChatRead, contentDescription = null) },
                 onClick = { onMarkRead(); onDismiss() },
+            )
+        } else {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_mark_unread)) },
+                leadingIcon = { Icon(Icons.Filled.MarkChatUnread, contentDescription = null) },
+                onClick = { onMarkUnread(); onDismiss() },
             )
         }
         if (hasDraft) {
@@ -669,6 +763,95 @@ private fun ConversationContextMenu(
                 leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
                 onClick = { onAssignCategory(category.id); onDismiss() },
             )
+        }
+    }
+}
+
+/**
+ * Hard-press preview card (iOS parity `ConversationPreviewView`): a compact
+ * header (title + pin/mute badges) followed by up to a handful of recent
+ * cached messages, one line each — rendered as the FIRST child of the
+ * long-press [ConversationContextMenu] so a peek always precedes the action
+ * list, mirroring iOS's native `.contextMenu(menuItems:preview:)`. [messages]
+ * is `null` while [ConversationListViewModel.loadPreviewMessages] has not
+ * resolved yet (a brief loading label); non-null-but-empty once loaded with
+ * genuinely no cached history for that conversation.
+ */
+@Composable
+private fun ConversationPreviewCard(
+    title: String,
+    isPinned: Boolean,
+    isMuted: Boolean,
+    messages: List<LocalMessage>?,
+    showSender: Boolean,
+    currentUserId: String?,
+    currentUserPrefs: MeeshyUser?,
+    labels: LastMessagePreviewLabels,
+) {
+    Column(
+        modifier = Modifier
+            .widthIn(max = 280.dp)
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isPinned) {
+                Icon(
+                    imageVector = Icons.Filled.PushPin,
+                    contentDescription = stringResource(R.string.conversations_badge_pinned),
+                    tint = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .padding(end = MeeshySpacing.xs),
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (isMuted) {
+                Icon(
+                    imageVector = Icons.Filled.NotificationsOff,
+                    contentDescription = stringResource(R.string.conversations_badge_muted),
+                    tint = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .padding(start = MeeshySpacing.xs),
+                )
+            }
+        }
+        Spacer(Modifier.height(MeeshySpacing.xs))
+        when {
+            messages == null -> Text(
+                text = stringResource(R.string.conversations_preview_loading),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+            messages.isEmpty() -> Text(
+                text = stringResource(R.string.conversations_no_messages),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+            else -> previewLines(
+                recent = messages,
+                currentUserId = currentUserId,
+                showSender = showSender,
+                prefs = currentUserPrefs,
+                labels = labels,
+            ).forEach { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(vertical = 1.dp),
+                )
+            }
         }
     }
 }

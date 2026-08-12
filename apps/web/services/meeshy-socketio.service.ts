@@ -390,6 +390,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationUpdated(listener);
   }
 
+  public onConversationParticipantJoined(listener: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantJoined(listener);
+  }
+
   public onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): () => void {
     return this.orchestrator.onConversationParticipantLeft(listener);
   }

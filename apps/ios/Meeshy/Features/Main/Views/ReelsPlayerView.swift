@@ -1108,7 +1108,7 @@ private struct ReelActionRail: View {
                 Button {
                     onSaveMedia()
                 } label: {
-                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "bookmark")
+                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
                 }
             }
             if isOwnReel {
@@ -1416,7 +1416,7 @@ private struct ReelVideoView: View {
                 // so this surface stays gesture-free to avoid swallowing scrub/rail
                 // touches.
                 if isActive, ready, isShowingThis, let player {
-                    ReelVideoSurface(player: player, videoGravity: .resizeAspect)
+                    ReelVideoSurface(player: player, videoGravity: .resizeAspect, enablesPip: true)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 } else if isActive, !ready {
@@ -1521,6 +1521,13 @@ struct ReelVideoSurface: UIViewRepresentable {
     /// WHOLE video is visible, letterboxed over the blurred ambient backdrop
     /// (mirrors the `.fit` image carousel — never a cropped reel).
     var videoGravity: AVLayerVideoGravity = .resizeAspectFill
+    /// Le viewer plein écran opte pour le Picture-in-Picture : quitter l'app
+    /// pendant la lecture bascule le réel en fenêtre PiP (auto-start système)
+    /// au lieu de laisser sa bande-son jouer invisible en arrière-plan ;
+    /// fermer la fenêtre arrête la vidéo. La surface muette du feed
+    /// (`ReelFeedVideoSurface`) reste hors PiP — un autoplay silencieux ne
+    /// doit jamais ouvrir de fenêtre.
+    var enablesPip: Bool = false
 
     func makeUIView(context: Context) -> ReelPlayerLayerView {
         let view = ReelPlayerLayerView()
@@ -1529,6 +1536,9 @@ struct ReelVideoSurface: UIViewRepresentable {
         view.backgroundColor = .clear
         view.playerLayer.player = player
         view.playerLayer.videoGravity = videoGravity
+        if enablesPip {
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
+        }
         return view
     }
 
@@ -1538,6 +1548,12 @@ struct ReelVideoSurface: UIViewRepresentable {
         }
         if view.playerLayer.videoGravity != videoGravity {
             view.playerLayer.videoGravity = videoGravity
+        }
+        if enablesPip {
+            // Idempotent (garde d'identité de layer dans `configurePip`) —
+            // ré-attache après le remount que provoque la chute du masque de
+            // reveal (`ReelsRevealMaskModifier` change de branche d'identité).
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
     }
 

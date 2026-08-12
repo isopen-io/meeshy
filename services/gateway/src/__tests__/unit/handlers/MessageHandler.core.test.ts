@@ -206,6 +206,32 @@ function makeMockIo(rooms?: Map<string, Set<string>>) {
   } as any;
 }
 
+/**
+ * `makeMockIo().to()` always returns the SAME chainable object with a single
+ * shared `emit` mock, so `expect(io._to).toHaveBeenCalledWith(room)` proves
+ * only that some emitter addressed that room — never which payload landed
+ * there. `conversation:updated` builds one payload PER destinataire (Prisme
+ * du lecteur), so an assertion needs to pick the payload OUT of a specific
+ * room. Mirrors `recordEmitChains` in `MeeshySocketIOManager.test.ts`,
+ * adapted to a plain (non-jest.fn) `.to` property.
+ */
+function recordEmitChains(io: any) {
+  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    except: () => chain(rooms),
+    emit: (event: string, payload: unknown) => { sent.push({ rooms, event, payload }); },
+  });
+  const originalTo = io.to;
+  io.to = (room: string) => chain([room]);
+  return {
+    roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    payloadFor: (event: string, room: string) =>
+      sent.find((s) => s.event === event && s.rooms.includes(room))?.payload,
+    restore: () => { io.to = originalTo; },
+  };
+}
+
 function makeMockPrisma(overrides: Record<string, any> = {}) {
   return {
     conversation: {
@@ -516,7 +542,7 @@ describe('MessageHandler.handleMessageSend', () => {
     }));
   });
 
-  it('successful send calls broadcastNewMessage and increments stats', async () => {
+  it('successful send calls broadcastNewMessage and leaves counting to the post-save unit', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
@@ -543,9 +569,11 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(mockPerformanceLogger.withTiming).toHaveBeenCalled();
     expect(stats.messages_processed).toBe(1);
 
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][5]).toBe('fr');
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
   it('skips broadcastNewMessage when isDuplicate is true', async () => {
@@ -898,7 +926,7 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   });
 
-  it('successful send calls broadcastNewMessage and increments stats', async () => {
+  it('successful send calls broadcastNewMessage and leaves counting to the post-save unit', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = makeAttachmentData();
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
@@ -953,7 +981,7 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Failed to send message' }));
   });
 
-  it('handles audio attachment type classification', async () => {
+  it('acquitte un envoi audio sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = makeAttachmentData();
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
@@ -980,12 +1008,14 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     });
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['audio']));
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
-  it('forwards the saved message originalLanguage to the stats service (languageDistribution)', async () => {
+  it('acquitte un envoi dont la langue source est allemande sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = makeAttachmentData();
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
@@ -1014,9 +1044,11 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
 
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][5]).toBe('de');
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -1261,14 +1293,14 @@ describe('MessageHandler.broadcastNewMessage', () => {
     expect(payload).not.toHaveProperty('mentionedUsers');
   });
 
-  it('emits CONVERSATION_UPDATED to each participant user room', async () => {
+  it('emits CONVERSATION_UPDATED to each participant user room, accountless ones included', async () => {
     const io = makeMockIo();
     const prisma = makeMockPrisma({
       participant: {
         findMany: jest.fn(async () => [
-          { userId: 'user-a' },
-          { userId: 'user-b' },
-          { userId: null },
+          { id: 'part-a', userId: 'user-a' },
+          { id: 'part-b', userId: 'user-b' },
+          { id: 'part-anon', userId: null },
         ]),
       },
       message: { findUnique: jest.fn(async () => ({ translations: [] })) },
@@ -1283,6 +1315,11 @@ describe('MessageHandler.broadcastNewMessage', () => {
     const toArgs = io._to.mock.calls.map((c: any[]) => c[0]);
     expect(toArgs).toContain('user:user-a');
     expect(toArgs).toContain('user:user-b');
+    // `conversation:updated` est le SEUL signal qui fait remonter une
+    // conversation en tête de liste et apparaître une conversation neuve.
+    // Adressé par `userId` seul, il ne parvenait jamais à un invité de lien
+    // partagé : sa liste ne se retriait pas, et un nouveau fil n'y entrait pas.
+    expect(toArgs).toContain('user:part-anon');
 
     // ConversationUpdatedEventData requires `updatedBy`. With no sender user
     // (anonymous), the payload falls back to the participant senderId — never
@@ -1334,6 +1371,109 @@ describe('MessageHandler.broadcastNewMessage', () => {
     const msg = makeMessage({ sender: null });
     // Should not throw even if conversation:updated fails
     await expect(handler.broadcastNewMessage(msg, 'conv-abc')).resolves.toBeUndefined();
+  });
+
+  // Jumeau du chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`) et du
+  // chemin édition/suppression (`emitConversationPreviewUpdate`) : la carte de
+  // traductions de l'aperçu de ligne de liste ne doit PAS dépendre du transport.
+  // Sans ce Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
+  // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
+  // rechargement manuel.
+  it('carries each recipient OWN preview prism in CONVERSATION_UPDATED, with lastMessageTranslations: null as a value when no match', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'part-fr',
+            userId: 'user-fr',
+            joinedAt: new Date(),
+            user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          },
+          {
+            id: 'part-es',
+            userId: 'user-es',
+            joinedAt: new Date(),
+            user: { systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          },
+          {
+            id: 'part-de',
+            userId: 'user-de',
+            joinedAt: new Date(),
+            user: { systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          },
+        ]),
+      },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage({
+      sender: null,
+      originalLanguage: 'en',
+      translations: {
+        fr: { text: 'Bonjour', targetLanguage: 'fr' },
+        es: { text: 'Hola', targetLanguage: 'es' },
+      },
+    });
+
+    const sent = recordEmitChains(io);
+    try {
+      await handler.broadcastNewMessage(msg, 'conv-abc');
+    } finally {
+      sent.restore();
+    }
+
+    const fr = sent.payloadFor('conversation:updated', 'user:user-fr');
+    const es = sent.payloadFor('conversation:updated', 'user:user-es');
+    const de = sent.payloadFor('conversation:updated', 'user:user-de');
+
+    expect(fr.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+    expect(es.lastMessageTranslations).toEqual({ es: 'Hola' });
+    expect(fr.lastMessageOriginalLanguage).toBe('en');
+    expect(es.lastMessageOriginalLanguage).toBe('en');
+    // Aucune traduction 'de' dans la carte : le prisme du lecteur ne matche
+    // rien, mais la clé DOIT être présente avec `null` comme VALEUR — pas
+    // omise — pour que le client puisse périmer une carte devenue fausse.
+    expect(de).toHaveProperty('lastMessageTranslations', null);
+  });
+
+  // Un invité de lien partagé (pas de ligne `User`) a un prisme vide : sa carte
+  // est `null`, mais il doit quand même recevoir l'événement — sur la room
+  // nommée par son `Participant.id` (`participantUserRoomTargets`), pas par un
+  // `userId` qui n'existe pas.
+  it('addresses an anonymous participant by its participant id with the null preview card', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: {
+        findMany: jest.fn(async () => [
+          { id: 'part-anon', userId: null, joinedAt: new Date() },
+        ]),
+      },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage({
+      sender: null,
+      originalLanguage: 'en',
+      translations: { fr: { text: 'Bonjour', targetLanguage: 'fr' } },
+    });
+
+    const sent = recordEmitChains(io);
+    try {
+      await handler.broadcastNewMessage(msg, 'conv-abc');
+    } finally {
+      sent.restore();
+    }
+
+    const anon = sent.payloadFor('conversation:updated', 'user:part-anon');
+    expect(anon).toBeDefined();
+    expect(anon).toHaveProperty('lastMessageTranslations', null);
   });
 
   it('strips clientMessageId from broadcastPayload but keeps it in senderPayload', async () => {
@@ -1767,7 +1907,13 @@ describe('MessageHandler._parseTranslations', () => {
     expect(payload.translations).toEqual(trans);
   });
 
-  it('converts object to [{targetLanguage, ...data}] array', async () => {
+  // Ce témoin verrouillait auparavant la forme brute `{ targetLanguage,
+  // ...data }` — celle qui répandait la carte Mongo telle quelle et laissait
+  // partir `text` sans `translatedContent`, `id` ni `messageId`. Il pinnait
+  // donc précisément le défaut. Il verrouille désormais le contrat de fil réel,
+  // celui du chemin REST/ZMQ (`transformTranslationsToArray`), le seul que le
+  // décodeur `APITextTranslation` du SDK iOS accepte.
+  it('sérialise la carte Mongo au format API — `id`/`messageId`/`translatedContent`, jamais `text` brut', async () => {
     const io = makeMockIo();
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
@@ -1776,17 +1922,27 @@ describe('MessageHandler._parseTranslations', () => {
     const connectedUsers = new Map<string, SocketUser>();
     const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any });
 
-    const transObj = { en: { content: 'hello' }, de: { content: 'hallo' } };
+    const transObj = {
+      en: { text: 'hello', translationModel: 'basic' },
+      de: { text: 'hallo', translationModel: 'basic' },
+    };
     const msg = msgWithTranslations(transObj);
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
     const emitCalls = io._emit.mock.calls.filter((c: any[]) => c[0] === 'message:new');
     const payload = emitCalls[0]?.[1] ?? {};
     expect(payload.translations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ targetLanguage: 'en', content: 'hello' }),
-      expect.objectContaining({ targetLanguage: 'de', content: 'hallo' }),
+      expect.objectContaining({
+        id: 'msg-1-en', messageId: 'msg-1', targetLanguage: 'en', translatedContent: 'hello',
+      }),
+      expect.objectContaining({
+        id: 'msg-1-de', messageId: 'msg-1', targetLanguage: 'de', translatedContent: 'hallo',
+      }),
     ]));
     expect(payload.translations).toHaveLength(2);
+    for (const t of payload.translations) {
+      expect(t).not.toHaveProperty('text');
+    }
   });
 
   it('returns [] when translations is null', async () => {
@@ -2410,25 +2566,7 @@ describe('MessageHandler — coverage gap tests', () => {
     await expect(handler.broadcastNewMessage(msg, 'conv-abc')).resolves.toBeUndefined();
   });
 
-  it('handleMessageSend: conversationMessageStats .catch when stats rejects (line 276)', async () => {
-    mockConversationMessageStatsOnNewMessage.mockRejectedValue(new Error('stats fail'));
-    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
-    const socket = makeSocket('socket-1');
-    const cb = jest.fn();
-    const data = makeValidSendData();
-    mockValidateSocketEvent.mockReturnValue({ success: true, data });
-
-    const prisma = makeMockPrisma({
-      participant: { findMany: jest.fn(async () => []) },
-      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-    });
-
-    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
-    await expect(handler.handleMessageSend(socket, data as any, cb)).resolves.toBeUndefined();
-    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-  });
-
-  it('handleMessageSendWithAttachments: video attachment type classification (line 463)', async () => {
+  it('handleMessageSendWithAttachments: acquitte une vidéo sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = {
       conversationId: 'conv-abc',
@@ -2460,12 +2598,14 @@ describe('MessageHandler — coverage gap tests', () => {
     });
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-    const statsCalls: any[] = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['video']));
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
-  it('handleMessageSendWithAttachments: file attachment type for unknown mimeType (line 464)', async () => {
+  it('handleMessageSendWithAttachments: acquitte un MIME inconnu sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const data = {
       conversationId: 'conv-abc',
@@ -2497,9 +2637,11 @@ describe('MessageHandler — coverage gap tests', () => {
     });
 
     await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-    const statsCalls: any[] = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['file']));
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
   it('broadcastNewMessage: connectedUsers.values() callback exercised via captured updateOnNewMessage arg (line 506)', async () => {
@@ -2593,7 +2735,7 @@ describe('MessageHandler — coverage gap tests', () => {
     }
   });
 
-  it('handleMessageSend: data.content undefined → stats called with empty string (line 276 ?? branch)', async () => {
+  it('handleMessageSend: acquitte un contenu absent sans recompter le message', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
@@ -2610,9 +2752,11 @@ describe('MessageHandler — coverage gap tests', () => {
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageSend(socket, rawData as any, cb);
 
-    const statsCalls: any[] = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(typeof statsCalls[0][3]).toBe('string');
+    // Le comptage a quitté ce handler pour `runMessagePostSaveEffects` — une
+    // seule place pour TOUS les tuyaux d'envoi (socket, REST, liens de
+    // partage), là où il ne vivait qu'ici. Ce qui se vérifie désormais est
+    // qu'il n'y est PAS refait : sinon l'envoi socket compterait double.
+    expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
   it('handleMessageSend: _sendResponse with no clientMessageId → stripped from response', async () => {
@@ -3191,8 +3335,13 @@ describe('MessageHandler — branch coverage boosters', () => {
     expect(emitCalls[0]?.[1]?.translations).toEqual([]);
   });
 
-  // Cover branch 101 (line 890): _parseTranslations when data is not an object (primitive)
-  it('broadcastNewMessage: translations object with primitive values → spread {} fallback', async () => {
+  // `Message.translations` est une colonne `Json` : aucun schéma n'empêche une
+  // entrée nulle ou primitive d'y être écrite. Ce témoin verrouillait
+  // auparavant leur émission SOUS forme d'entrées `{ targetLanguage }` nues —
+  // or une entrée sans `translatedContent` fait échouer le décodage du
+  // `message:new` entier côté iOS. Elles doivent être écartées, et surtout
+  // sans emporter les entrées VALIDES de la même carte.
+  it("écarte les entrées inexploitables de la carte sans perdre les entrées valides qui l'accompagnent", async () => {
     const io = makeMockIo();
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
@@ -3201,19 +3350,24 @@ describe('MessageHandler — branch coverage boosters', () => {
     const connectedUsers = new Map<string, SocketUser>();
     const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any });
 
-    // translations is an object where value is a string (not an object)
     const msg = {
       id: 'msg-1', conversationId: 'conv-abc', senderId: 'p1', content: 'hi',
       createdAt: new Date(), sender: null, attachments: [],
-      translations: { en: 'hello string', fr: null },
+      translations: {
+        en: 'hello string',
+        fr: null,
+        it: { translationModel: 'basic' },
+        es: { text: 'hola', translationModel: 'basic' },
+      },
     } as any;
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
     const emitCalls = io._emit.mock.calls.filter((c: any[]) => c[0] === 'message:new');
-    expect(emitCalls[0]?.[1]?.translations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ targetLanguage: 'en' }),
-      expect.objectContaining({ targetLanguage: 'fr' }),
-    ]));
+    expect(emitCalls[0]?.[1]?.translations).toEqual([
+      expect.objectContaining({
+        id: 'msg-1-es', messageId: 'msg-1', targetLanguage: 'es', translatedContent: 'hola',
+      }),
+    ]);
   });
 
   // Cover branch 146 (line 1152): createdAt undefined → no createdAt in response
@@ -3872,15 +4026,19 @@ describe('MessageHandler.handleMessageDelete', () => {
           .mockResolvedValueOnce({ createdAt: lastMsgDate }),
         update: jest.fn(async () => ({})),
       },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: {
+        findUnique: jest.fn(async () => message.conversation),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
 
     // Optimistic-concurrency guard: the write only lands while lastMessageAt is
-    // still the value read at handler start. A `message:new` committing in the
-    // gap advances lastMessageAt, the guard mismatches (updateMany count 0), and
-    // the cursor never regresses backward onto the just-deleted message.
+    // still the value `applyMessageRemovalEffects` read just before writing. A
+    // `message:new` committing in the gap advances lastMessageAt, the guard
+    // mismatches (updateMany count 0), and the cursor never regresses backward
+    // onto the just-deleted message.
     expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
       where: {
         id: message.conversationId,
@@ -3903,7 +4061,10 @@ describe('MessageHandler.handleMessageDelete', () => {
           .mockResolvedValueOnce(null),
         update: jest.fn(async () => ({})),
       },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: {
+        findUnique: jest.fn(async () => message.conversation),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);

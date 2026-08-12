@@ -13,8 +13,11 @@ extension FeedPostCard {
         let spacing: CGFloat = 3
 
         if count == 1, let media = mediaList.first {
+            // Aucun cadre de hauteur ici : image et vidéo portent la leur via
+            // `fittedMediaHeight`. Le `.frame(height: 220)` qui vivait ici
+            // écrasait ce calcul et letterboxait les clips verticaux.
+            // L'audio et les documents restent compacts et s'auto-dimensionnent.
             singleMediaView(media)
-                .frame(height: mediaIsCompact(media) ? nil : 220)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
         } else if count == 2 {
             // Two images side by side - equal width
@@ -255,15 +258,11 @@ extension FeedPostCard {
         HapticFeedback.light()
     }
 
-    // Check if media should be compact (audio, document)
-    func mediaIsCompact(_ media: FeedMedia) -> Bool {
-        switch media.type {
-        case .audio, .document:
-            return true
-        default:
-            return false
-        }
-    }
+    // `mediaIsCompact` vivait ici pour décider si `mediaPreview` devait imposer
+    // une hauteur de 220 pt. Ce cadre a disparu le 2026-08-10 — il écrasait le
+    // calcul de ratio des cellules image/vidéo et letterboxait les clips
+    // verticaux. L'audio et les documents s'auto-dimensionnent, le prédicat
+    // n'avait donc plus d'appelant.
 
     @ViewBuilder
     func singleMediaView(_ media: FeedMedia) -> some View {
@@ -280,11 +279,7 @@ extension FeedPostCard {
     }
 
     func imageMediaView(_ media: FeedMedia) -> some View {
-        let aspectRatio: CGFloat? = {
-            guard let w = media.width, let h = media.height, w > 0, h > 0 else { return nil }
-            return CGFloat(w) / CGFloat(h)
-        }()
-        return ProgressiveCachedImage(
+        ProgressiveCachedImage(
             thumbHash: media.thumbHash,
             thumbnailUrl: media.thumbnailUrl,
             fullUrl: media.url,
@@ -293,8 +288,10 @@ extension FeedPostCard {
             Color(hex: media.thumbnailColor)
                 .shimmer()
         }
-        .aspectRatio(aspectRatio, contentMode: .fill)
-        .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 280)
+        // Pas de ratio explicite : l'image remplit le cadre que
+        // `fittedMediaHeight` lui donne, et le débord est rogné.
+        .aspectRatio(contentMode: .fill)
+        .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { openFullscreen(media) }
@@ -307,24 +304,48 @@ extension FeedPostCard {
     func audioMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
         return AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            AudioPlayerView(
-                attachment: attachment,
-                context: .feedPost,
-                accentColor: media.thumbnailColor,
-                transcription: media.transcription,
-                translatedAudios: media.translatedAudios,
-                onFullscreen: {
-                    audioFullscreen = .fromFeed(
-                        media: media,
-                        author: ProfileSheetUser.from(feedPost: post),
-                        originalLanguage: post.originalLanguage,
-                        caption: post.content,
-                        createdAt: post.timestamp
+            CoordinatedAudioPlayer(
+                attachmentId: attachment.id,
+                nowPlayingName: post.author,
+                nowPlayingArtworkURL: post.authorAvatarURL,
+                makeQueuedAudio: {
+                    QueuedAudio(
+                        attachmentId: attachment.id,
+                        messageId: post.id,
+                        conversationId: post.id,
+                        fileUrl: attachment.fileUrl,
+                        durationMs: attachment.duration ?? 0,
+                        senderName: post.author,
+                        senderAvatarURL: post.authorAvatarURL,
+                        receivedAt: post.timestamp
                     )
-                },
-                availability: availability,
-                onDownload: onDownload
-            )
+                }
+            ) { external, onPlay in
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .feedPost,
+                    accentColor: media.thumbnailColor,
+                    transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        audioFullscreen = .fromFeed(
+                            media: media,
+                            author: ProfileSheetUser.from(feedPost: post),
+                            originalLanguage: post.originalLanguage,
+                            caption: post.content,
+                            createdAt: post.timestamp,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE post doit être vu comme
+                            // la même session coordinator.
+                            conversationId: post.id
+                        )
+                    },
+                    availability: availability,
+                    onDownload: onDownload,
+                    externalPlayer: external,
+                    onPlayRequest: onPlay
+                )
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -397,15 +418,6 @@ private struct FeedVideoMediaCell: View {
     let accentColor: String
     let onExpand: () -> Void
 
-    @State private var measuredWidth: CGFloat = 0
-
-    /// Source ratio (width / height), portrait capped at 1.6× width so a single
-    /// clip can't swallow the whole feed.
-    private var ratio: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 16.0 / 9.0 }
-        return max(CGFloat(w) / CGFloat(h), 1.0 / 1.6)
-    }
-
     var body: some View {
         let attachment = media.toMessageAttachment()
         VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
@@ -421,21 +433,7 @@ private struct FeedVideoMediaCell: View {
                 onExpand: onExpand
             )
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: measuredWidth > 0 ? measuredWidth / ratio : nil)
+        .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: FeedVideoWidthKey.self, value: geo.size.width)
-            }
-        )
-        .onPreferenceChange(FeedVideoWidthKey.self) { width in
-            if width > 0, abs(width - measuredWidth) > 0.5 { measuredWidth = width }
-        }
     }
-}
-
-private struct FeedVideoWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

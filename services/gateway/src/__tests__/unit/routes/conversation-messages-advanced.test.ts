@@ -61,7 +61,13 @@ jest.mock('../../../services/ConversationStatsService', () => ({
   },
 }));
 
+// Seul le singleton est doublé. `resolveAttachmentType` et `statsAuthorKey`
+// restent les VRAIS : depuis que le décompte vit dans `applyMessageRemovalEffects`,
+// ces tests traversent l'unité partagée pour de bon, et c'est ce qui en fait
+// des témoins de la ROUTE — « supprimer par ici débite bien les compteurs » —
+// et non du double.
 jest.mock('../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
   conversationMessageStatsService: {
     onMessageEdited: (...args: any[]) => mockOnMessageEdited(...args),
     onMessageDeleted: (...args: any[]) => mockOnMessageDeleted(...args),
@@ -194,6 +200,10 @@ const makePrisma = (): any => ({
   },
   conversation: {
     findUnique: jest.fn().mockResolvedValue(null),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+  },
+  trackingLink: {
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
 });
 
@@ -1362,6 +1372,76 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
+    // Cette route ne recalculait PAS `lastMessageAt`, alors que les deux autres
+    // chemins de suppression le faisaient mot pour mot. C'est justement la
+    // route d'iOS et de la vue web : supprimer le dernier message y laissait la
+    // liste des conversations triée sur un message devenu invisible.
+    it('recalcule lastMessageAt sur le dernier message vivant, sous garde CAS', async () => {
+      const convLastMessageAt = new Date('2026-08-01T00:00:00Z');
+      const survivorCreatedAt = new Date('2026-07-30T00:00:00Z');
+      prisma.message.findFirst
+        .mockResolvedValueOnce(makeExistingMessage())
+        .mockResolvedValueOnce({ createdAt: survivorCreatedAt });
+      prisma.conversation.findUnique.mockResolvedValue({
+        lastMessageAt: convLastMessageAt,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      prisma.message.update.mockResolvedValue({});
+
+      await getDeleteMsgHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeReply()
+      );
+
+      expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+        where: { id: CONV_ID, lastMessageAt: convLastMessageAt },
+        data: { lastMessageAt: survivorCreatedAt },
+      });
+    });
+
+    it('désactive le /l/<token> que plus aucun message vivant ne porte', async () => {
+      prisma.message.findRaw = jest.fn().mockResolvedValue([]);
+      prisma.message.findFirst.mockResolvedValueOnce(
+        makeExistingMessage({ content: 'regarde ça m+aB3xY9', metadata: null })
+      );
+      prisma.message.update.mockResolvedValue({});
+
+      await getDeleteMsgHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeReply()
+      );
+
+      expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith({
+        where: {
+          token: { in: ['aB3xY9'] },
+          targetType: 'EXTERNAL',
+          conversationId: CONV_ID,
+          isActive: true,
+        },
+        data: { isActive: false },
+      });
+    });
+
+    it("ne coupe PAS le lien qu'un autre message de la conversation affiche encore", async () => {
+      // Une ligne `TrackingLink` est PARTAGÉE entre messages d'une même
+      // conversation (`findExistingTrackingLink` la réutilise) : couper sur la
+      // seule foi de `messageId` casserait un message vivant.
+      prisma.message.findRaw = jest.fn().mockResolvedValue([
+        { content: 'je remets le lien m+aB3xY9', metadata: null },
+      ]);
+      prisma.message.findFirst.mockResolvedValueOnce(
+        makeExistingMessage({ content: 'regarde ça m+aB3xY9', metadata: null })
+      );
+      prisma.message.update.mockResolvedValue({});
+
+      await getDeleteMsgHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeReply()
+      );
+
+      expect(prisma.trackingLink.updateMany).not.toHaveBeenCalled();
+    });
+
     // C'est la route qu'iOS (`MeeshySDK/Services/MessageService.swift:138`) et
     // le web (`services/message.service.ts:75`) emploient pour supprimer. Sa
     // copie de la règle lisait `membership.user.role` — le rôle GLOBAL — alors
@@ -1711,6 +1791,42 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getPatchHandler(fastify)(req, reply);
 
       expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // Ce transport — celui qu'emploie Android — n'ajustait pas les compteurs :
+    // `totalWords`/`totalCharacters` restaient sur les longueurs du texte
+    // d'origine, définitivement.
+    it('ajuste les compteurs sur l\'écart de longueur', async () => {
+      mockOnMessageEdited.mockClear();
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'trois petits mots',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: {
+          identifier: 'some-conv',
+          participants: [{ userId: USER_ID, isActive: true }],
+        },
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(mockOnMessageEdited).toHaveBeenCalledTimes(1);
+      const [, conversationId, authorKey, previous, next] = mockOnMessageEdited.mock.calls[0];
+      expect(conversationId).toBe(CONV_ID);
+      expect(authorKey).toBe(USER_ID);
+      expect(previous).toBe('trois petits mots');
+      expect(next).toBe('Updated');
     });
 
     it('calls sendInternalError on error', async () => {

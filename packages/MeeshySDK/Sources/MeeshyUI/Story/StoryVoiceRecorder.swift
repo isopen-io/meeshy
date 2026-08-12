@@ -159,7 +159,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 recorder.cancelRecording()
             }
         }
-        .onChange(of: recorder.isRecording) { isRecording in
+        .adaptiveOnChange(of: recorder.isRecording) { _, isRecording in
             if !isRecording {
                 stopRecording()
             }

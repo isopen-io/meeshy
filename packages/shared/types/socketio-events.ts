@@ -221,6 +221,20 @@ export const SERVER_EVENTS = {
    * system notification, emitted in parallel.
    */
   FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
+  /**
+   * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
+   * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
+   * event that carries that fact unambiguously.
+   *
+   * `CONVERSATION_JOINED` cannot serve here: it carries the same
+   * `{ conversationId, userId }` shape for a completely different fact — the
+   * self-only ack a socket receives after JOINING THE ROOM
+   * (`ConversationHandler`), which every thread opening produces and which
+   * changes no membership. A client counting members off `conversation:joined`
+   * would inflate its count on every thread opening; that ambiguity is why no
+   * client ever incremented, and why the count could only ever drift DOWN.
+   */
+  CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   /**
@@ -512,6 +526,12 @@ export interface MessageDeletedEventData {
 export interface ConversationParticipationEventData {
   readonly conversationId: string;
   readonly userId: string;
+  // PAS d'effectif ici, et c'est délibéré : `conversation:joined` /
+  // `conversation:left` sont des accusés de ROOM (`ConversationHandler`),
+  // réémis à chaque ouverture et à chaque fermeture de fil, sans qu'aucune
+  // appartenance change. L'adhésion et le départ réels ont leurs propres
+  // événements — `CONVERSATION_PARTICIPANT_JOINED` / `_LEFT` — et ce sont eux
+  // qui portent `memberCount`.
 }
 
 /**
@@ -668,16 +688,31 @@ export interface FriendRequestRejectedEventData {
  * profil change (displayName, avatar, banner, username). Delta léger : seuls
  * les champs modifiés sont présents dans `changes`, pas le user complet.
  * Voir tasks/socketio-events-cleanup.md #6.
+ *
+ * **Exception : les quatre composants du nom voyagent en GROUPE.** Dès que
+ * `displayName`, `firstName`, `lastName` OU `username` change, les quatre sont
+ * présents. Le nom RENDU par un client est `displayName > « Prénom Nom » >
+ * username` ; un client ne stocke que le nom déjà composé, donc un delta
+ * partiel (« firstName vaut désormais Bob ») est irrecomposable chez lui — il
+ * lui manque toujours les autres composants. Le groupe entier lui permet
+ * d'appliquer SON résolveur (`getUserDisplayName` web,
+ * `APIConversationUser.name` iOS) sans qu'une quatrième copie de la règle
+ * apparaisse côté serveur. La présence de `username` est donc le marqueur du
+ * groupe : `avatar`/`banner` changent seuls, le nom jamais.
+ *
+ * `null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ, et c'est le
+ * seul moyen pour le client de faire retomber le nom sur le composant suivant.
+ * `username` est obligatoire côté base, donc jamais `null`.
  */
 export interface UserUpdatedEventData {
   readonly userId: string;
   readonly changes: Readonly<{
-    displayName?: string;
+    displayName?: string | null;
     avatar?: string | null;
     banner?: string | null;
     username?: string;
-    firstName?: string;
-    lastName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
   }>;
 }
 
@@ -715,6 +750,9 @@ export interface AttachmentStatusUpdatedEventData {
   readonly userId: string;
   readonly action: string;
   readonly updatedAt: Date;
+  readonly playPositionMs?: number;
+  readonly durationMs?: number;
+  readonly percentage?: number;
 }
 
 /**
@@ -1277,11 +1315,64 @@ export interface ConversationParticipantBannedEventData {
   readonly userId: string;
   readonly bannedBy: { readonly id: string };
   readonly bannedAt: string;
+  /**
+   * Faux quand la cible avait DÉJÀ quitté la conversation — bannir un ancien
+   * membre reste possible, c'est ce qui l'empêche de revenir par un lien de
+   * partage, mais ce bannissement-là ne retire aucune appartenance.
+   *
+   * Un compteur de membres doit suivre ce champ, jamais la seule réception de
+   * l'événement. Absent des serveurs antérieurs à ce contrat : le lire comme
+   * `true` y reproduit leur comportement, puisqu'ils ne bannissaient qu'en
+   * retirant.
+   */
+  readonly membershipEnded?: boolean;
+  /**
+   * Effectif ACTIF APRÈS le bannissement, absolu. Quand il est là, il tranche
+   * le cas ci-dessus de lui-même : bannir un ex-membre ne retire personne, donc
+   * le compte est simplement inchangé. `membershipEnded` reste pour les clients
+   * qui décomptent encore.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationParticipantUnbannedEventData {
   readonly conversationId: string;
   readonly userId: string;
+  /**
+   * Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
+   * que si le bannissement l'avait prise. Faux quand la personne était partie
+   * d'elle-même AVANT d'être bannie : elle redevient libre de revenir par une
+   * porte d'entrée, mais n'est pas réintégrée.
+   *
+   * Même lecture que `membershipEnded` côté bannissement — absent ⇒ `true`.
+   */
+  readonly membershipRestored?: boolean;
+  /**
+   * Effectif ACTIF APRÈS la levée, absolu — à poser plutôt qu'à incrémenter.
+   */
+  readonly memberCount?: number;
+}
+
+export interface ConversationParticipantJoinedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly joinedAt: string;
+  /**
+   * Effectif ACTIF APRÈS l'adhésion, absolu — à POSER, pas à incrémenter.
+   *
+   * Un delta ne converge pas : l'événement manqué (hors room, hors ligne, trou
+   * de reconnexion) laisse une dérive que rien ne rattrape, et que les deux
+   * clients PERSISTENT — cache disque iOS (`schedulePersist`), `staleTime:
+   * Infinity` côté web. Un total se rattrape à l'événement suivant.
+   *
+   * Le compte INCLUT l'arrivant, alors même que l'éventail l'écarte : son
+   * propre écran reçoit l'effectif par `conversation:new`.
+   *
+   * Absent des serveurs antérieurs à ce contrat, où l'incrément reste le seul
+   * repli disponible.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationParticipantLeftEventData {
@@ -1289,12 +1380,34 @@ export interface ConversationParticipantLeftEventData {
   readonly userId: string;
   readonly displayName: string;
   readonly leftAt: string;
+  /**
+   * Effectif ACTIF APRÈS le départ, absolu — à POSER, pas à soustraire. Un
+   * client qui décrémente ne se rattrape jamais d'un événement manqué.
+   * Absent des serveurs antérieurs à ce contrat, où le décrément reste le
+   * seul repli disponible.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
+  /**
+   * Prisme Linguistique de la ligne de liste, résolu POUR CE destinataire —
+   * jumeaux des champs que `GET /conversations` pose déjà sur la conversation.
+   *
+   * Les trois champs d'aperçu (`lastMessagePreview` + ces deux-ci) s'appliquent
+   * EN GROUPE : le client préfère la traduction à l'aperçu brut, donc poser l'un
+   * sans les autres laisse la ligne rendre l'ANCIEN texte traduit après une
+   * édition. `null` est une VALEUR, pas une absence — une édition remet
+   * `Message.translations` à null dans la même écriture tout en gardant le même
+   * `lastMessageId`, et c'est ce `null` reçu qui périme la carte du client.
+   * Seul le serveur sait que la carte a été périmée ; le client ne peut pas le
+   * déduire.
+   */
+  readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
+  readonly lastMessageOriginalLanguage?: string | null;
   readonly [key: string]: unknown;
 }
 
@@ -1495,6 +1608,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;

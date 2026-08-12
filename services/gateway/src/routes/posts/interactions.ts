@@ -12,10 +12,11 @@ import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInterna
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
-import { loadPostAcl, canUserInteractWithPost } from '../../services/posts/postVisibility';
+import { resolveInteractionTarget } from '../../services/posts/postVisibility';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
+import { NOT_DELETED } from '../../services/posts/postIncludes';
 
 /**
  * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
@@ -64,14 +65,19 @@ export function registerInteractionRoutes(
       const parsed = LikeSchema.safeParse(request.body ?? {});
       const emoji = parsed.success ? parsed.data.emoji : '❤️';
 
-      // Aimer est une INTERACTION : `likePost` (comme `PostReactionService`)
-      // ne vérifie que l'existence et le non-effacement du post, jamais son
-      // audience. Même garde et même refus indistinct que le jumeau socket
+      // Aimer est une INTERACTION. Un repost SIMPLE (`isQuote:false`,
+      // `repostOfId` renseigné) n'a pas de vie sociale propre : la cible
+      // réelle est sa RACINE (`resolveInteractionTarget`, point unique
+      // partagé avec le chemin socket) — une citation ou un post normal
+      // garde sa propre cible. La redirection ne dépasse jamais la
+      // visibilité de la racine (refus standard sinon, jamais un crédit
+      // silencieux). Même refus indistinct que le jumeau socket
       // `post:reaction-add` — sinon l'ACL dépendrait du transport.
-      const postAcl = await loadPostAcl(prisma, postId);
-      if (!postAcl || !(await canUserInteractWithPost(prisma, postAcl, authContext.registeredUser.id))) {
+      const target = await resolveInteractionTarget(prisma, postId, authContext.registeredUser.id);
+      if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      const targetPostId = target.id;
 
       // Idempotent via clientMutationId. `likePost` is naturally
       // idempotent at the storage layer (the reaction set keeps a
@@ -83,12 +89,12 @@ export function registerInteractionRoutes(
         userId: authContext.registeredUser.id,
         kind: 'toggleLikePost',
         op: async () => {
-          const res = await postService.likePost(postId, authContext.registeredUser.id, emoji);
+          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
           if (!res) throw new Error('POST_NOT_FOUND');
           return res as typeof res & { id: string };
         },
         onDuplicate: async (_resultId) => {
-          const res = await postService.getPostById(postId, authContext.registeredUser.id);
+          const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
           return res as (typeof res & { id: string }) | null;
         },
       }).catch((err) => {
@@ -99,7 +105,10 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast like via Socket.IO. Each post type fans out differently:
+      // Broadcast like via Socket.IO — porte l'id de la CIBLE réelle
+      // (`targetPostId`, l'original pour un repost simple) : les clients
+      // patchent l'original partout où il apparaît. Each post type fans out
+      // differently:
       // - STORY → private story:reacted to author + post room (privacy: not fanned to friends)
       // - STATUS → status:reacted to author + post room (same privacy model as STORY)
       // - POST/MOOD → post:liked fan-out to all friends
@@ -107,28 +116,28 @@ export function registerInteractionRoutes(
       if (socialEvents && post.authorId) {
         if (post.type === 'STORY') {
           socialEvents.broadcastStoryReacted({
-            storyId: postId,
+            storyId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
           }, post.authorId);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusReacted({
-            statusId: postId,
+            statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
           }, post.authorId);
         } else {
-          // L'audience du broadcast vient de `postAcl`, la tranche déjà chargée
-          // plus haut pour la garde d'interaction — pas d'un cast sur la forme
-          // rendue par `likePost`, qui laissait un `?? 'PUBLIC'` décider de la
-          // diffusion si le champ manquait à l'appel.
+          // L'audience du broadcast vient de `target`, la tranche ACL de la
+          // CIBLE réelle déjà chargée plus haut par `resolveInteractionTarget`
+          // — pas d'un cast sur la forme rendue par `likePost`, qui laissait
+          // un `?? 'PUBLIC'` décider de la diffusion si le champ manquait.
           socialEvents.broadcastPostLiked({
-            postId,
+            postId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId, postAcl.visibility, postAcl.visibilityUserIds,
+          }, post.authorId, target.visibility, target.visibilityUserIds,
           ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
         }
       }
@@ -138,7 +147,7 @@ export function registerInteractionRoutes(
       if (notifService && post.authorId) {
         notifService.createPostLikeNotification({
           actorId: authContext.registeredUser.id,
-          postId,
+          postId: targetPostId,
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
@@ -173,12 +182,14 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
 
-      // Retirer reste une interaction avec le post — même garde que la pose,
-      // pour que l'ACL ne dépende pas du sens du geste.
-      const postAcl = await loadPostAcl(prisma, postId);
-      if (!postAcl || !(await canUserInteractWithPost(prisma, postAcl, authContext.registeredUser.id))) {
+      // Retirer reste une interaction avec le post — même garde et même
+      // redirection repost simple → racine que la pose (`resolveInteractionTarget`),
+      // pour que ni l'ACL ni la cible ne dépendent du sens du geste.
+      const target = await resolveInteractionTarget(prisma, postId, authContext.registeredUser.id);
+      if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      const targetPostId = target.id;
 
       // Idempotent via clientMutationId. Unlike is also naturally
       // idempotent — re-running over an already-unliked post is a
@@ -190,12 +201,12 @@ export function registerInteractionRoutes(
         userId: authContext.registeredUser.id,
         kind: 'toggleLikePost',
         op: async () => {
-          const res = await postService.unlikePost(postId, authContext.registeredUser.id);
+          const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
           if (!res) throw new Error('POST_NOT_FOUND');
           return res as typeof res & { id: string };
         },
         onDuplicate: async (_resultId) => {
-          const res = await postService.getPostById(postId, authContext.registeredUser.id);
+          const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
           return res as (typeof res & { id: string }) | null;
         },
       }).catch((err) => {
@@ -206,31 +217,33 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast unlike via Socket.IO. Mirror the like broadcast routing per post type.
+      // Broadcast unlike via Socket.IO — porte l'id de la CIBLE réelle, comme
+      // le like. Mirror the like broadcast routing per post type.
       const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
         if (post.type === 'STORY') {
           socialEvents.broadcastStoryUnreacted({
-            storyId: postId,
+            storyId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji: '❤️',
           }, post.authorId);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusUnreacted({
-            statusId: postId,
+            statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji: '❤️',
           }, post.authorId);
         } else {
-          // Même source que le jumeau `POST` : la tranche ACL chargée pour la
-          // garde, jamais un défaut reconstruit au point d'appel.
+          // Même source que le jumeau `POST` : la tranche ACL de la CIBLE
+          // réelle chargée pour la garde, jamais un défaut reconstruit au
+          // point d'appel.
           socialEvents.broadcastPostUnliked({
-            postId,
+            postId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji: '❤️',
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId, postAcl.visibility, postAcl.visibilityUserIds,
+          }, post.authorId, target.visibility, target.visibilityUserIds,
           ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
         }
       }
@@ -406,10 +419,24 @@ export function registerInteractionRoutes(
         counters.postOpenCount = { increment: 1 };
       }
 
-      await prisma.post.update({
+      // Résout repostOfId/originalRepostOfId depuis le RETOUR de `update` —
+      // pas une lecture séparée : un repost doit créditer son original du
+      // même impressionCount en plus de son propre compteur (chantier
+      // reposts cohérents & watermark, tâche 1), sans ajouter de requête sur
+      // ce chemin chaud (chaque impression, majoritairement des non-reposts).
+      const target = await prisma.post.update({
         where: { id: postId },
-        data: counters
+        data: counters,
+        select: { repostOfId: true, originalRepostOfId: true },
       });
+
+      const rootId = target?.originalRepostOfId ?? target?.repostOfId;
+      if (rootId && rootId !== postId) {
+        await prisma.post.updateMany({
+          where: { id: rootId, deletedAt: NOT_DELETED },
+          data: { impressionCount: { increment: 1 } },
+        });
+      }
 
       return sendSuccess(reply, { recorded: true });
     } catch (error) {
@@ -471,14 +498,52 @@ export function registerInteractionRoutes(
         return acc;
       }, new Map());
 
-      await Promise.all(
-        [...idsByIncrement].map(([increment, ids]) =>
+      // Reposts du batch : résout repostOfId/originalRepostOfId de tous les
+      // posts DISTINCTS en UNE requête — jamais une par post — pour créditer
+      // la racine de chaque repost du même impressionCount (chantier reposts
+      // cohérents & watermark, tâche 1).
+      const repostSources = await prisma.post.findMany({
+        where: { id: { in: [...occurrences.keys()] }, repostOfId: { not: null } },
+        select: { id: true, repostOfId: true, originalRepostOfId: true },
+      });
+      const rootByPostId = new Map<string, string>(
+        repostSources
+          .map((p: { id: string; repostOfId: string | null; originalRepostOfId: string | null }) =>
+            [p.id, p.originalRepostOfId ?? p.repostOfId] as [string, string | null])
+          .filter((entry: [string, string | null]): entry is [string, string] =>
+            Boolean(entry[1]) && entry[1] !== entry[0]),
+      );
+
+      // Chaque OCCURRENCE d'un repost dans le batch crédite sa racine — deux
+      // reposts distincts (ou 2 occurrences du même repost) du même original
+      // doivent créditer l'original de +2, jamais +1. Même piège `in`
+      // dédupliqué que ci-dessus, appliqué ici au crédit de la racine.
+      const rootOccurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
+        const rootId = rootByPostId.get(postId);
+        if (!rootId) return acc;
+        acc.set(rootId, (acc.get(rootId) ?? 0) + 1);
+        return acc;
+      }, new Map());
+
+      const rootIdsByIncrement = [...rootOccurrences].reduce<Map<number, string[]>>((acc, [rootId, count]) => {
+        acc.set(count, [...(acc.get(count) ?? []), rootId]);
+        return acc;
+      }, new Map());
+
+      await Promise.all([
+        ...[...idsByIncrement].map(([increment, ids]) =>
           prisma.post.updateMany({
             where: { id: { in: ids } },
             data: { impressionCount: { increment } }
           })
-        )
-      );
+        ),
+        ...[...rootIdsByIncrement].map(([increment, ids]) =>
+          prisma.post.updateMany({
+            where: { id: { in: ids }, deletedAt: NOT_DELETED },
+            data: { impressionCount: { increment } }
+          })
+        ),
+      ]);
 
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {

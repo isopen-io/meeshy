@@ -1,18 +1,50 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { conversationStatsService } from '../ConversationStatsService';
+import {
+  conversationMessageStatsService,
+  resolveAttachmentType,
+  statsAuthorKey,
+} from '../ConversationMessageStatsService';
 
 /**
- * Le message tel que les effets post-commit le lisent. Volontairement structural
- * et minimal : les deux routes de lien de partage ne construisent pas un
- * `Message` Prisma complet, et rien ici n'a besoin de plus.
+ * Ce que la mise en file de traduction demande au message, et rien de plus.
+ * Le `Message` Prisma le satisfait structurellement — c'est ce qui permet à
+ * `MessagingService.queueTranslation` de repousser un doublon sans avoir à
+ * reconstruire l'enveloppe complète des effets post-commit.
  */
-export interface PostSaveMessage {
+export interface TranslatableMessage {
   readonly id: string;
   readonly conversationId: string;
   readonly senderId: string;
   readonly content: string;
   readonly messageType: string;
   readonly replyToId?: string | null;
+}
+
+/**
+ * Le message tel que les effets post-commit le lisent. Volontairement structural
+ * et minimal : les deux routes de lien de partage ne construisent pas un
+ * `Message` Prisma complet, et rien ici n'a besoin de plus.
+ *
+ * Les deux champs supplémentaires sont REQUIS, délibérément. Ils n'existaient
+ * pas tant que le comptage vivait recopié dans le seul handler socket ; les
+ * rendre optionnels reproduirait exactement la panne que cette unité ferme —
+ * un écrivain qui omet une obligation sans que rien ne le lui dise. Le
+ * compilateur les réclame désormais à chaque tuyau d'envoi.
+ */
+export interface PostSaveMessage extends TranslatableMessage {
+  /**
+   * `Participant.userId` — `null` pour un participant anonyme. Décide, avec
+   * `senderId`, sous quelle clé le message est crédité dans `participantStats`
+   * (cf. `statsAuthorKey`, la règle de `recompute()`).
+   */
+  readonly senderUserId: string | null;
+  /**
+   * Les MIME des pièces jointes DÉJÀ liées au message. Le comptage vit après
+   * `handleAttachments` : une liste vide dit « aucune pièce jointe », jamais
+   * « pas encore liées ».
+   */
+  readonly attachmentMimeTypes: readonly string[];
 }
 
 /**
@@ -32,7 +64,7 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'translation' | 'stats';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats';
 
 /**
  * La poussée d'un message au translator, sous la forme que le service attend.
@@ -45,7 +77,7 @@ export type PostSaveEffect = 'lastMessageAt' | 'translation' | 'stats';
  */
 export function queueMessageTranslation(params: {
   translationService: PostSaveTranslationQueue;
-  message: PostSaveMessage;
+  message: TranslatableMessage;
   originalLanguage: string;
 }): Promise<unknown> {
   const { translationService, message, originalLanguage } = params;
@@ -75,7 +107,22 @@ export function queueMessageTranslation(params: {
  *     n'est jamais rempli après coup : aucune retraduction n'est déclenchée hors
  *     édition ou demande explicite, donc un message non poussé ici reste en
  *     langue originale À VIE pour tous ses lecteurs.
+ *  1bis. `Conversation.firstMessageSentAt` — flip gardé (`updateMany` avec
+ *     `where: { firstMessageSentAt: null }`), séparé du bump ci-dessus qui
+ *     reste, lui, inconditionnel. Ne concerne que les DM créés vides (Prisme
+ *     design doc 2026-08-04) : `count` à 0 signifie "pas le premier message"
+ *     ou "conversation non concernée" — no-op silencieux dans les deux cas.
  *  3. Les statistiques de langue de la conversation.
+ *  4. Les COMPTEURS de la conversation (`ConversationMessageStats`) — total de
+ *     messages, mots, caractères, pièces jointes par type, et le crédit par
+ *     participant. Cet effet-ci vivait recopié dans le SEUL handler socket : un
+ *     message envoyé par `POST /conversations/:id/messages` — le chemin
+ *     PRIMAIRE d'iOS — ou par une route de lien de partage n'était jamais
+ *     compté. Sa SUPPRESSION, elle, décrémentait ; et comme les décréments sont
+ *     atomiques et sans plancher (choix assumé, cf. la note du service), les
+ *     compteurs ne dérivaient pas vers une erreur bornée : ils passaient sous
+ *     zéro et y restaient, aucun recalcul périodique n'existant pour les
+ *     relever.
  *
  * Cette unité existe parce que l'obligation vivait dans une méthode PRIVÉE de
  * `MessagingService` : les deux routes de lien de partage contournent la classe
@@ -130,6 +177,20 @@ export function runMessagePostSaveEffects(params: {
     )
     .catch(report('lastMessageAt'));
 
+  // Flip gardé, séparé du bump ci-dessus — celui-ci doit rester
+  // inconditionnel, il pilote l'ordre de liste/le curseur/le delta sync
+  // pour TOUS les messages, pas seulement le premier. Ne concerne que les
+  // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
+  // "pas le premier message" ou "conversation non concernée" — no-op.
+  void Promise.resolve()
+    .then(() =>
+      prisma.conversation.updateMany({
+        where: { id: message.conversationId, firstMessageSentAt: null },
+        data: { firstMessageSentAt: new Date() },
+      })
+    )
+    .catch(report('firstMessageSentAt'));
+
   if (translationService) {
     void Promise.resolve()
       .then(() => queueMessageTranslation({ translationService, message, originalLanguage }))
@@ -146,4 +207,18 @@ export function runMessagePostSaveEffects(params: {
       )
     )
     .catch(report('stats'));
+
+  void Promise.resolve()
+    .then(() =>
+      conversationMessageStatsService.onNewMessage(
+        prisma as PrismaClient,
+        message.conversationId,
+        statsAuthorKey(message.senderId, message.senderUserId),
+        message.content,
+        message.attachmentMimeTypes.map(resolveAttachmentType),
+        originalLanguage,
+        message.messageType
+      )
+    )
+    .catch(report('messageStats'));
 }

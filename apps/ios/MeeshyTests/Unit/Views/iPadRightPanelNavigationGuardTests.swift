@@ -100,6 +100,10 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         )
     }
 
+    /// Ancrée sur le CÂBLAGE (`onItemTap:` présent), pas sur la signature
+    /// complète : la bannière a depuis gagné `activeConversationId:`, et une
+    /// garde qui exigeait la parenthèse fermante serait devenue rouge sur un
+    /// changement sans rapport avec ce qu'elle protège.
     func test_iPadPanels_connectionBanner_alwaysRoutesTaps() throws {
         let code = try source(of: "iPadRootView+Panels.swift")
         XCTAssertFalse(
@@ -107,7 +111,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
             "ConnectionBanner sans onItemTap rend les entrées de la pastille de sync non navigables sur iPad."
         )
         XCTAssertTrue(
-            code.contains("ConnectionBanner(onItemTap: handleSyncPillTap)"),
+            code.contains("ConnectionBanner(onItemTap: handleSyncPillTap"),
             "Les bannières du panneau iPad doivent router le tap comme RootView (iPhone)."
         )
     }

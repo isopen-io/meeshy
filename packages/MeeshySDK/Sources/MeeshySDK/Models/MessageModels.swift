@@ -305,6 +305,14 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let translationModel: String
     public let confidenceScore: Double?
     public let sourceLanguage: String?
+    /// `true` quand `translatedContent` est un CRYPTOGRAMME et non du texte.
+    /// Le gateway pose le drapeau depuis `Message.translations[lang].isEncrypted`
+    /// (`transformTranslationsToArray`) ; il était sur le fil depuis toujours,
+    /// simplement jamais décodé — donc jamais respecté par les surfaces qui
+    /// rendent cette traduction sans clé de déchiffrement (l'aperçu de la ligne
+    /// de liste, cf. `ConversationSyncEngine.previewTranslations`).
+    /// `nil` sur un payload qui l'omet : on ne suppose alors PAS le chiffrement.
+    public let isEncrypted: Bool?
 }
 
 /// Métadonnées enrichies de la story citée — renvoyées par le gateway dans
@@ -328,9 +336,13 @@ public struct APIPostReplyTarget: Decodable, Sendable {
     /// Présent quand le post cité est un mood/statut — déclenche le rendu
     /// dédié (emoji + contenu + date) côté bulle.
     public let moodEmoji: String?
+    /// Nom d'affichage de l'auteur du post cité, figé par le gateway.
+    /// `nil` sur un snapshot antérieur au 2026-08-10 — le rendu retombe alors
+    /// sur le libellé générique de la citation.
+    public let authorName: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji
+        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji, authorName
     }
 
     nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
@@ -350,6 +362,7 @@ public struct APIPostReplyTarget: Decodable, Sendable {
         thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
         previewText = try c.decode(String.self, forKey: .previewText)
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
+        authorName = try c.decodeIfPresent(String.self, forKey: .authorName)
         // `createdAt` est décodé depuis une String puis parsé ici — agnostique
         // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
         // une stratégie `.custom`, les tests `.iso8601`). Tolère les
@@ -740,7 +753,11 @@ extension APIMessage {
                 // Réponse à un mood : rendu dédié (emoji + contenu + date).
                 if let emoji = target.moodEmoji {
                     return ReplyReference(
-                        messageId: target.id, authorName: "",
+                        messageId: target.id,
+                        // Le nom vient du snapshot serveur. Vide sur un snapshot
+                        // legacy : `quotedTitle` retombe alors sur « Humeur »,
+                        // filet et non cas nominal.
+                        authorName: target.authorName ?? "",
                         previewText: target.previewText,
                         isStoryReply: true,
                         storyPublishedAt: target.createdAt,

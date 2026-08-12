@@ -25,10 +25,16 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
-import { emitToConversationParticipants } from '../emitToConversationParticipants';
+import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
+import {
+  PREVIEW_PRISM_PARTICIPANT_SELECT,
+  resolveLastMessagePreviewPrism,
+  type PreviewPrismParticipant,
+} from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -64,6 +70,8 @@ import {
 } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -369,10 +377,12 @@ export class MessageHandler {
           createdAt: message.createdAt,
         });
 
-        conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], message.originalLanguage ?? null,
-          message.messageType || 'text'
-        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
+        // Le comptage du message n'est plus fait ici : il vit avec les trois
+        // autres obligations post-commit, dans `runMessagePostSaveEffects`, que
+        // `MessagingService.handleMessage` vient d'exécuter pour CE message.
+        // Le garder ici le compterait deux fois — et le laisser ici seulement
+        // était exactement ce qui laissait tous les autres tuyaux d'envoi
+        // (REST, liens de partage) ne jamais compter.
       }
 
       handlerLogger.info('perf:ws.message.send', {
@@ -592,18 +602,9 @@ export class MessageHandler {
           createdAt: message.createdAt,
         });
 
-        const msgAttachments = message.attachments as unknown as Array<Record<string, unknown>> | undefined;
-        const attachmentTypes = (msgAttachments ?? []).map((a: Record<string, unknown>) => {
-          const mime = (a.mimeType as string) ?? '';
-          if (mime.startsWith('image/')) return 'image';
-          if (mime.startsWith('audio/')) return 'audio';
-          if (mime.startsWith('video/')) return 'video';
-          return 'file';
-        });
-        conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, message.originalLanguage ?? null,
-          message.messageType || 'text'
-        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
+        // Idem : le comptage — pièces jointes comprises — vit dans
+        // `runMessagePostSaveEffects`, qui lit les MIME du message committé au
+        // lieu de retraduire ici une table déjà écrite ailleurs.
       }
 
       handlerLogger.info('perf:ws.message.send-with-attachments', {
@@ -679,6 +680,9 @@ export class MessageHandler {
           content: true,
           originalLanguage: true,
           createdAt: true,
+          // Lu pour la réconciliation des mentions : une mention ajoutée en
+          // éditant un message éphémère ne doit pas survivre à ce message.
+          expiresAt: true,
           // Lu pour la réconciliation des liens : `metadata` est un blob
           // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
           // `location`.
@@ -784,6 +788,20 @@ export class MessageHandler {
         return;
       }
 
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
+      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
+      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
+      // pour les quatre transports.
+      await applyMessageEditEffects(this.prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: editedContent,
+      });
+
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
       // ni notification — alors qu'il est le transport d'édition PRIMAIRE.
@@ -795,7 +813,12 @@ export class MessageHandler {
         prisma: this.prisma,
         mentionService: this.mentionService,
         notificationService: this.notificationService,
-        message: { id: message.id, conversationId: message.conversationId, senderId: message.senderId },
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          expiresAt: message.expiresAt,
+        },
         content: editedContent,
         editorUserId: userId,
         onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
@@ -941,16 +964,19 @@ export class MessageHandler {
           senderId: true,
           sender: { select: { id: true, userId: true } },
           // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
-          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. Ces deux
-          // dates restent pour la garde d'optimistic concurrency sur
-          // `lastMessageAt`, plus bas.
-          conversation: {
-            select: {
-              createdAt: true,
-              lastMessageAt: true,
-            },
-          },
-          attachments: { select: { id: true } },
+          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
+          // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
+          // relit `lastMessageAt` lui-même, au plus près de son écriture
+          // conditionnelle. Restent le contenu et les métadonnées, qui portent
+          // les deux représentations des `/l/<token>` du message. Et, depuis que
+          // le décompte des compteurs vit dans la même unité, `messageType` et
+          // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
+          // lisibles une fois les attachements supprimés, quelques lignes plus
+          // bas.
+          content: true,
+          metadata: true,
+          messageType: true,
+          attachments: { select: { id: true, mimeType: true } },
         },
       });
 
@@ -993,25 +1019,18 @@ export class MessageHandler {
         data: { translations: null, deletedAt: new Date() },
       });
 
-      // Recompute conversation's lastMessageAt to the latest non-deleted message.
-      // Optimistic-concurrency guard: only write while lastMessageAt is still the
-      // value read at handler start. A `message:new` committing between the read
-      // and this write advances lastMessageAt; the guard then mismatches (0 rows
-      // updated) so the cursor never regresses backward onto the deleted message
-      // and mis-sorts the conversation list.
-      const lastNonDeleted = await this.prisma.message.findFirst({
-        where: { conversationId: message.conversationId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      });
-      await this.prisma.conversation.updateMany({
-        where: {
-          id: message.conversationId,
-          lastMessageAt: message.conversation.lastMessageAt,
-        },
-        data: {
-          lastMessageAt: lastNonDeleted?.createdAt ?? message.conversation.createdAt,
-        },
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. La liste vit
+      // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
+      await applyMessageRemovalEffects(this.prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        messageType: message.messageType,
+        attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        metadata: message.metadata,
       });
 
       const room = ROOMS.conversation(message.conversationId);
@@ -1282,12 +1301,17 @@ export class MessageHandler {
 
       // Single participant query shared between CONVERSATION_UPDATED and
       // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
-      // The superset select (id + userId + joinedAt) satisfies both callers.
-      let sharedParticipants: { id: string; userId: string | null; joinedAt: Date }[] = [];
+      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
+      // satisfies both callers — `user` (préférences de langue) est le Prisme
+      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
+      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
+      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
+      // qui charge le même superset pour la même raison.
+      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> = [];
       try {
         sharedParticipants = await this.prisma.participant.findMany({
           where: { conversationId: normalizedId, isActive: true },
-          select: { id: true, userId: true, joinedAt: true }
+          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
         });
       } catch (err) {
         handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
@@ -1324,14 +1348,28 @@ export class MessageHandler {
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
-        for (const p of sharedParticipants) {
-          if (!p.userId) continue;
-          this.io.to(ROOMS.user(p.userId)).emit(
-            SERVER_EVENTS.CONVERSATION_UPDATED,
-            updatePayload
-          );
+        // `userId ?? id` — un participant sans compte a une room personnelle
+        // nommée d'après son `Participant.id`, et c'est la SEULE par laquelle il
+        // apprend qu'une conversation remonte en tête de liste. Sans elle, un
+        // invité de lien partagé ne voit jamais sa liste se retrier, et une
+        // conversation toute neuve n'y apparaît pas du tout.
+        //
+        // Un payload PAR destinataire : la carte d'aperçu est filtrée au prisme
+        // du lecteur (resolveLastMessagePreviewPrism), donc deux participants de
+        // langues différentes n'ont pas la même carte de traductions. Parité
+        // avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`)
+        // et `emitConversationPreviewUpdate` (édition/suppression) — sans ce
+        // Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
+        // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
+        // rechargement manuel.
+        const targets = participantUserRoomTargets(sharedParticipants);
+        for (const { room, participant } of targets) {
+          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+            ...updatePayload,
+            ...resolveLastMessagePreviewPrism(participant, message)
+          });
         }
-        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: sharedParticipants.filter((p) => p.userId).length });
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });
       }
 
       // Offline delivery queue — parity with the REST send path
@@ -1705,22 +1743,60 @@ export class MessageHandler {
    */
   private async _getMessageTranslations(message: Message): Promise<unknown[]> {
     if (message.translations !== undefined) {
-      return this._parseTranslations(message.translations);
+      return this._parseTranslations(message.id, message.translations);
     }
     const msg = await this.prisma.message.findUnique({
       where: { id: message.id },
       select: { translations: true }
     });
-    return this._parseTranslations(msg?.translations);
+    return this._parseTranslations(message.id, msg?.translations);
   }
 
-  private _parseTranslations(translations: unknown): unknown[] {
+  /**
+   * Sérialise les traductions d'un message pour le fil `message:new`.
+   *
+   * Deux formes entrent ici, et une seule sort :
+   * - une **carte Mongo** (`{ "en": { text, translationModel, ... } }`), telle
+   *   que la colonne `Message.translations` la stocke — c'est ce que rend le
+   *   `findUnique` ci-dessus, et ce que porte un message re-broadcasté après
+   *   traduction ;
+   * - un **tableau déjà au format API**, ce que le type partagé
+   *   `Message.translations` promet (`readonly MessageTranslation[]`) — laissé
+   *   intact, le re-transformer produirait `targetLanguage: "0"` (les clés
+   *   d'un tableau sont ses index).
+   *
+   * La carte passe par `transformTranslationsToArray`, le MÊME sérialiseur que
+   * le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`). Ce
+   * handler en portait une seconde copie qui répandait l'entrée Mongo telle
+   * quelle (`{ targetLanguage, ...data }`) : il en sortait `text`, jamais
+   * `translatedContent`, et ni `id` ni `messageId`. Ces trois champs sont NON
+   * optionnels dans `APITextTranslation` (SDK iOS), et `APIMessage.init(from:)`
+   * décode le tableau avec `try` et non `try?` — une seule entrée mal formée
+   * fait échouer le décodage du `message:new` ENTIER : le message n'apparaît
+   * pas du tout en temps réel, il ne lui manque pas seulement ses traductions.
+   * Le même message rechargé par `GET /messages` s'affichait normalement ; la
+   * visibilité dépendait donc du transport qui l'avait apporté.
+   *
+   * Les entrées inexploitables de la carte (valeur nulle, primitive, `text`
+   * non textuel — une colonne `Json` n'a pas de schéma pour l'interdire) sont
+   * ÉCARTÉES avant transformation, jamais émises mutilées : une entrée sans
+   * `translatedContent` utilisable ferait échouer le décodage du message
+   * entier, exactement le défaut que ce sérialiseur corrige. Les écarter ici
+   * plutôt que de laisser `transformTranslationsToArray` déréférencer `null`
+   * garde aussi les traductions VALIDES de la même carte — un seul `throw`
+   * remonterait au `.catch(() => [])` de l'appelant et les perdrait toutes.
+   */
+  private _parseTranslations(messageId: string, translations: unknown): unknown[] {
     if (!translations || typeof translations !== 'object') return [];
     if (Array.isArray(translations)) return translations;
-    return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({
-      targetLanguage: lang,
-      ...(typeof data === 'object' && data !== null ? data : {})
-    }));
+
+    const usableEntries = Object.entries(translations as Record<string, unknown>)
+      .filter(([, data]) => typeof (data as { text?: unknown })?.text === 'string');
+
+    return transformTranslationsToArray(
+      messageId,
+      Object.fromEntries(usableEntries) as Record<string, MessageTranslationJSON>
+    );
   }
 
   /**

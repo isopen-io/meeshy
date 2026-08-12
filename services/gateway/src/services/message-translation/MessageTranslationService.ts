@@ -29,6 +29,7 @@ import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -331,7 +332,7 @@ export class MessageTranslationService extends EventEmitter {
           originalLanguage: messageData.originalLanguage,
           messageType: messageData.messageType || 'text',
           replyToId: messageData.replyToId || null,
-          deletedAt: null
+          ...LIVE_MESSAGE_MARK
         }
       });
 
@@ -339,6 +340,32 @@ export class MessageTranslationService extends EventEmitter {
         where: { id: messageData.conversationId },
         data: { lastMessageAt: new Date() }
       });
+
+      // Flip gardé, séparé du bump ci-dessus — celui-ci doit rester
+      // inconditionnel, il pilote l'ordre de liste/le curseur/le delta sync
+      // pour TOUS les messages, pas seulement le premier. Ne concerne que les
+      // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
+      // "pas le premier message" ou "conversation non concernée" — no-op.
+      // Ce chemin (`_saveMessageToDatabase`) crée le message HORS
+      // `MessagingService.handleMessage` — ex: `POST /translate-blocking`
+      // (cas nouveau message) — donc il porte sa propre copie du flip plutôt
+      // que d'hériter de celui de `runMessagePostSaveEffects`.
+      //
+      // Isolé dans son propre try/catch, contrairement au reste de cette
+      // fonction : le message ET le bump `lastMessageAt` ci-dessus ont DÉJÀ
+      // committé avec succès à ce stade. Laisser une panne ici remonter au
+      // catch englobant transformerait un envoi réussi en 500 côté route
+      // (`POST /translate-blocking`) — exactement ce que le commentaire
+      // jumeau de `runMessagePostSaveEffects.ts` interdit ("aucune ne doit
+      // transformer un envoi réussi en 500").
+      try {
+        await this.prisma.conversation.updateMany({
+          where: { id: messageData.conversationId, firstMessageSentAt: null },
+          data: { firstMessageSentAt: new Date() }
+        });
+      } catch (flipError) {
+        logger.error(`❌ Erreur flip firstMessageSentAt: ${flipError}`);
+      }
 
       return message;
     } catch (error) {
@@ -3054,7 +3081,16 @@ export class MessageTranslationService extends EventEmitter {
 
       if (message?.translations) {
         const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
-        const translation = translations[targetLanguage];
+        // Les écrivains stockent sous la forme CANONIQUE du SSOT
+        // `normalizeLanguageCode` ('pt-BR' → 'pt', 'fil' rejeté plutôt que
+        // tronqué). Lire verbatim manquait donc la traduction présente une clé
+        // plus loin, et l'appelant rendait un repli fabriqué
+        // `[PT-BR] <texte original>` — violation directe du Prisme.
+        // Verbatim d'abord : un document legacy portant RÉELLEMENT une clé
+        // régionale reste servi tel quel, la normalisation ne fait que rattraper
+        // ce que la lecture stricte laissait tomber.
+        const normalizedTarget = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+        const translation = translations[targetLanguage] ?? translations[normalizedTarget];
 
         if (translation) {
           // SECURITY: Decrypt translation if encrypted

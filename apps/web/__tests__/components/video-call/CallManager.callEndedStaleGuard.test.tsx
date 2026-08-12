@@ -12,7 +12,7 @@
  * call destroyed the new, healthy one.
  */
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { act } from 'react';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -29,7 +29,7 @@ jest.mock('@/hooks/useI18n', () => ({
 }));
 
 jest.mock('@/components/video-call/CallNotification', () => ({
-  CallNotification: () => null,
+  CallNotification: () => <div data-testid="incoming-call-card" />,
 }));
 
 jest.mock('@/components/video-call/CallWaitingBanner', () => ({
@@ -210,5 +210,37 @@ describe('CallManager — call:ended stale-callId guard', () => {
 
     expect(useCallStore.getState().currentCall).toBeNull();
     expect(useCallStore.getState().isInCall).toBe(false);
+  });
+
+  it('does not dismiss an unrelated still-ringing incoming call when call:ended arrives for a different, unaccepted callId', () => {
+    // The stale-callId guard above only reads `currentCall` (the ACCEPTED/
+    // active call, set at Accept time). Before the user has answered
+    // anything, `currentCall` is still null, so the guard's
+    // `trackedCall && …` short-circuits false and falls through — even
+    // though a DIFFERENT call (`incomingCall`) is ringing. The gateway's
+    // call:ended fan-out reaches every conversation member's user room, not
+    // just call participants (so a still-ringing callee can learn a call it
+    // was never near ended) — a realistic delivery, not a contrived one.
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent());
+    });
+    expect(screen.getByTestId('incoming-call-card')).toBeInTheDocument();
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_ENDED, {
+        callId: REAPED_CALL_ID,
+        duration: 0,
+        endedBy: 'user-1',
+        reason: 'garbageCollected',
+      });
+    });
+
+    // The ringing call is unrelated to REAPED_CALL_ID — its banner must
+    // survive so the user can still see/answer/reject it.
+    expect(screen.getByTestId('incoming-call-card')).toBeInTheDocument();
   });
 });

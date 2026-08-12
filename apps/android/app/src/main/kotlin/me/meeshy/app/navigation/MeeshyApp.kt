@@ -7,11 +7,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +38,11 @@ import kotlinx.coroutines.delay
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.GuestJoinScreen
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ForgotPasswordScreen
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.auth.MagicLinkScreen
+import me.meeshy.app.auth.MagicLinkValidateScreen
+import me.meeshy.app.auth.MagicLinkValidateViewModel
 import me.meeshy.app.auth.RegistrationScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
@@ -46,6 +51,8 @@ import me.meeshy.app.calls.CallScreen
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
+import me.meeshy.sdk.model.chrome.menuGrowsRightward
+import me.meeshy.sdk.model.chrome.menuUnfoldsUpward
 import me.meeshy.ui.component.chrome.MeeshyMenuFab
 import me.meeshy.ui.component.chrome.RadialMenuItem
 import me.meeshy.ui.theme.MeeshyPalette
@@ -57,6 +64,8 @@ import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
+import me.meeshy.app.conversations.GlobalSearchScreen
+import me.meeshy.app.conversations.DashboardScreen
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
@@ -73,8 +82,11 @@ import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.AboutScreen
+import me.meeshy.app.settings.AccountContactScreen
+import me.meeshy.app.settings.ActiveSessionsScreen
 import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
+import me.meeshy.app.settings.TwoFactorScreen
 import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.LegalDocumentScreen
@@ -102,18 +114,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
+import me.meeshy.ui.component.chrome.MeeshySplashScreen
 import kotlinx.coroutines.launch
+import me.meeshy.app.BuildConfig
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.net.SessionExpiryNotifier
 
 object Routes {
     const val LOGIN = "login"
     const val REGISTRATION = "register"
+    const val FORGOT_PASSWORD = "forgot-password"
+    const val MAGIC_LINK = "magic-link"
+    const val MAGIC_LINK_VALIDATE = "auth/magic-link?token={token}"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
     fun guestJoin(identifier: String): String = "join/$identifier"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
+    const val GLOBAL_SEARCH = "search"
+    const val DASHBOARD = "dashboard"
     const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
     const val CREATE_SHARE_LINK =
         "conversations/{${CreateShareLinkViewModel.CONVERSATION_ID_ARG}}/share-link/new"
@@ -126,6 +145,16 @@ object Routes {
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+
+    /**
+     * Same destination as [CONVERSATION_SINGULAR_DEEP_LINK] plus an optional
+     * `?draft=` query arg — e.g. a future Quick Reply widget/shortcut
+     * (`ChatViewModel.DRAFT_ARG`/`initialDraft`). Kept as its own pattern (rather
+     * than appended to every conversation deep link) since it is the one shape a
+     * canned-reply tap would actually construct.
+     */
+    const val CONVERSATION_DRAFT_DEEP_LINK =
+        "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}?${ChatViewModel.DRAFT_ARG}={${ChatViewModel.DRAFT_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
     const val SAVED_POSTS = "feed/saved"
@@ -135,9 +164,13 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
     const val CHANGE_PASSWORD = "settings/change-password"
+    const val TWO_FACTOR = "settings/two-factor"
+    const val ACCOUNT_CONTACT = "settings/account-contact"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
+    const val ACTIVE_SESSIONS = "settings/sessions"
+    const val BLOCKED_USERS = "contacts/blocked"
     const val DATA_EXPORT = "settings/data-export"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val ABOUT = "settings/about"
@@ -184,8 +217,22 @@ internal fun menuItemLabelKeys(): List<String> = listOf(
     "tab_calls",
     "tab_activity",
     "menu_contacts",
-    "tab_profile",
+    "menu_settings",
 )
+
+/**
+ * Ou mene un tap sur le bouton gauche flottant, etant donne la route courante.
+ *
+ * Parite iOS : `RootView.draggableFloatingButtons.onLeftTap` fait
+ * `showFeed.toggle()` — un aller-retour Flux <-> Conversations sur le MEME
+ * bouton. Avant ce fix, le bouton Android naviguait TOUJOURS vers [Routes.FEED],
+ * quelle que soit la route courante : un tap depuis le Flux ne ramenait jamais
+ * aux Conversations (seul le bouton retour systeme le faisait). Extrait de
+ * `MeeshyApp` — qui est @Composable, donc hors de portee d'un test JVM — pour
+ * que la regle de bascule soit verifiable.
+ */
+internal fun leftButtonTapTarget(currentRoute: String?): String =
+    if (currentRoute == Routes.FEED) Routes.CONVERSATIONS else Routes.FEED
 
 /**
  * Parite iOS : la barre d'onglets est remplacee par DEUX boutons flottants
@@ -201,11 +248,11 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
     val messages = stringResource(R.string.tab_messages)
     val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
-    val profile = stringResource(R.string.tab_profile)
+    val settings = stringResource(R.string.menu_settings)
     val newConversation = stringResource(R.string.menu_new_conversation)
     val reels = stringResource(R.string.menu_reels)
     val contacts = stringResource(R.string.menu_contacts)
-    return remember(messages, calls, activity, profile, newConversation, reels, contacts) {
+    return remember(messages, calls, activity, settings, newConversation, reels, contacts) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -226,7 +273,7 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
             RadialMenuItem(Icons.Filled.People, contacts, MeeshyPalette.PinnedBlue) {
                 navController.navigate(Routes.CONTACTS)
             },
-            RadialMenuItem(Icons.Filled.Settings, profile, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
+            RadialMenuItem(Icons.Filled.Settings, settings, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
         )
     }
 }
@@ -240,6 +287,17 @@ private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, R
  * call can start (parity with [CallScreen]'s CALL_ENDED_AUTO_DISMISS_MS).
  */
 private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
+
+/**
+ * Floor duration the branded [MeeshySplashScreen] stays up on cold start — parity with iOS
+ * `MeeshyApp.swift`'s `minSplashDuration` (1.2s), which exists so the animation never flashes
+ * away before it can register on a hot-cache launch. Android's `AuthViewModel.isAuthenticated`
+ * is resolved synchronously at construction (no async "session check" phase to additionally
+ * gate on the way iOS's `.task` block does — cache hydration + socket handshake), so this is a
+ * pure minimum-display-duration floor, not a readiness gate; deferred as a documented follow-up
+ * once Android grows an equivalent async boot sequence worth waiting on.
+ */
+private const val SPLASH_MIN_DURATION_MS = 1200L
 
 @Composable
 fun MeeshyApp(
@@ -269,6 +327,18 @@ fun MeeshyApp(
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
+    // Branded splash: shown ALWAYS on cold start (parity iOS `MeeshyApp.swift`'s
+    // `showSplash`), for a minimum floor duration so it never flashes away — see
+    // SPLASH_MIN_DURATION_MS. `rememberSaveable` would survive process death into a
+    // fresh cold start showing no splash at all, which defeats the purpose, so this
+    // stays a plain `remember`: a configuration change (rotation) keeps it, a real
+    // process restart correctly shows it again.
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(SPLASH_MIN_DURATION_MS)
+        showSplash = false
+    }
+
     // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
     // runs while it is composed, so an ended call left in the pill would strand the
     // Activity-scoped FSM in ENDED and block the next call. The pill has already
@@ -288,7 +358,11 @@ fun MeeshyApp(
     // recomposition never re-navigates. An unauthenticated launch defers until
     // sign-in resolves (the route survives in Activity state across the login gate).
     LaunchedEffect(launchRoute, authState.isAuthenticated) {
-        if (launchRoute != null && authState.isAuthenticated) {
+        // La validation d'un magic link est la SEULE destination de lancement
+        // legitime hors session : c'est precisement elle qui en ouvre une. Tout le
+        // reste (chat, appel) attend l'authentification.
+        val isMagicLink = launchRoute?.startsWith("auth/magic-link") == true
+        if (launchRoute != null && (authState.isAuthenticated || isMagicLink)) {
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
         }
@@ -314,6 +388,11 @@ fun MeeshyApp(
         }
     }
 
+    // Outer Box: the branded splash (below) draws OVER the whole Scaffold — app chrome,
+    // system-bar padding included — the same "boot overlay on top of the still-mounted
+    // real UI" shape as iOS's ZStack (`MeeshyApp.swift`'s `showSplash` branch), rather
+    // than gating the NavHost's own composition on it.
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         // Pas de floatingActionButton ici : ce slot positionne LUI-MEME son contenu,
@@ -335,6 +414,38 @@ fun MeeshyApp(
                         }
                     },
                     onSignUp = { navController.navigate(Routes.REGISTRATION) },
+                    onForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
+                    onMagicLink = { navController.navigate(Routes.MAGIC_LINK) },
+                )
+            }
+            composable(Routes.FORGOT_PASSWORD) {
+                ForgotPasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.MAGIC_LINK) {
+                MagicLinkScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.MAGIC_LINK_VALIDATE,
+                arguments = listOf(
+                    navArgument(MagicLinkValidateViewModel.TOKEN_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                MagicLinkValidateScreen(
+                    onAuthenticated = {
+                        authViewModel.onExternalSessionOpened()
+                        navController.navigate(Routes.CONVERSATIONS) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onBackToLogin = {
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
                 )
             }
             composable(Routes.REGISTRATION) {
@@ -379,6 +490,8 @@ fun MeeshyApp(
                     },
                     onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
                     onContacts = { navController.navigate(Routes.CONTACTS) },
+                    onDashboard = { navController.navigate(Routes.DASHBOARD) },
+                    onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Routes.LOGIN) {
@@ -391,6 +504,29 @@ fun MeeshyApp(
                             onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
                         )
                     },
+                )
+            }
+            composable(Routes.GLOBAL_SEARCH) {
+                GlobalSearchScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
+                    onOpenUser = { userId ->
+                        navController.navigate(Routes.profile(userId))
+                    },
+                )
+            }
+            composable(Routes.DASHBOARD) {
+                DashboardScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
+                    onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
+                    onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
+                    onShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
+                    onContacts = { navController.navigate(Routes.CONTACTS) },
                 )
             }
             composable(
@@ -437,12 +573,14 @@ fun MeeshyApp(
                 route = Routes.CHAT,
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
+                    navArgument(ChatViewModel.DRAFT_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                 ),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SINGULAR_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.CONVERSATION_DRAFT_DEEP_LINK },
                 ),
             ) { entry ->
                 val conversationId = entry.arguments
@@ -527,9 +665,13 @@ fun MeeshyApp(
                     onOpenStarred = { navController.navigate(Routes.STARRED) },
                     onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
+                    onOpenTwoFactor = { navController.navigate(Routes.TWO_FACTOR) },
+                    onOpenAccountContact = { navController.navigate(Routes.ACCOUNT_CONTACT) },
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                    onOpenActiveSessions = { navController.navigate(Routes.ACTIVE_SESSIONS) },
+                    onOpenBlockedUsers = { navController.navigate(Routes.BLOCKED_USERS) },
                     onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
                     onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
@@ -546,6 +688,12 @@ fun MeeshyApp(
             }
             composable(Routes.CHANGE_PASSWORD) {
                 ChangePasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.TWO_FACTOR) {
+                TwoFactorScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACCOUNT_CONTACT) {
+                AccountContactScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.DELETE_ACCOUNT) {
                 AccountDeletionScreen(onBack = { navController.popBackStack() })
@@ -582,6 +730,15 @@ fun MeeshyApp(
             }
             composable(Routes.PRIVACY) {
                 PrivacySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACTIVE_SESSIONS) {
+                ActiveSessionsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BLOCKED_USERS) {
+                ContactsScreen(
+                    onBack = { navController.popBackStack() },
+                    initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
+                )
             }
             composable(Routes.STARRED) {
                 StarredMessagesScreen(
@@ -650,6 +807,7 @@ fun MeeshyApp(
                 ReelsScreen(
                     seed = entry.arguments?.getString("seed"),
                     onClose = { navController.popBackStack() },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
             }
             composable(
@@ -720,10 +878,11 @@ fun MeeshyApp(
                 rightPosition = rightButtonPosition,
                 onLeftPositionChange = { scope.launch { floatingButtonPositions.setLeftPosition(it) } },
                 onRightPositionChange = { scope.launch { floatingButtonPositions.setRightPosition(it) } },
-                // Tap : le Flux, par le NavHost et avec la meme semantique
+                // Tap : bascule Flux <-> Conversations (parite iOS
+                // `showFeed.toggle()`) via le NavHost, avec la meme semantique
                 // save/restore que les autres destinations de premier niveau.
                 onLeftTap = {
-                    navController.navigate(Routes.FEED) {
+                    navController.navigate(leftButtonTapTarget(currentRoute)) {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
@@ -745,29 +904,48 @@ fun MeeshyApp(
                 leftContentDescription = stringResource(R.string.tab_feed),
                 rightContentDescription = stringResource(R.string.a11y_floating_menu),
                 leftContent = {
+                    // Icone de FLUX, pas de maison : ce bouton mene au Feed (et aux
+                    // Reels par appui long), une maison promettait un "home" qui
+                    // n'existe pas. Filled quand le Flux est la destination active
+                    // (on peut taper pour en repartir), outline sinon (un tap y
+                    // mene) — le seul signal visuel de bascule que ce bouton porte.
                     Icon(
-                        imageVector = Icons.Filled.Home,
+                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.DynamicFeed else Icons.Outlined.DynamicFeed,
                         contentDescription = null,
                         tint = MeeshyPalette.Success,
                     )
                 },
                 rightContent = {
                     // Etat HISSE: le menu s'ouvre du premier tap, comme sur iOS.
-                    // Sans cela, MeeshyMenuFab garde son propre etat et il faut deux
-                    // taps — un pour l'afficher replie, un pour le deplier.
-                    if (menuExpanded) {
-                        MeeshyMenuFab(
-                            items = radialItems,
-                            expandedOverride = true,
-                            onExpandedChange = { menuExpanded = it },
-                        )
-                    } else {
-                        MeeshyInitialsButton(username = authState.username)
-                    }
+                    // Direction et cote de deploiement suivent la POSITION de la
+                    // pastille (geometrie pure core:model) : vers le haut si elle
+                    // est en bas, libelles tournes vers l'interieur de l'ecran.
+                    MeeshyMenuFab(
+                        items = radialItems,
+                        expanded = menuExpanded,
+                        onExpandedChange = { menuExpanded = it },
+                        unfoldUpward = menuUnfoldsUpward(rightButtonPosition),
+                        growRightward = menuGrowsRightward(rightButtonPosition),
+                        collapsedContent = { MeeshyInitialsButton(username = authState.username) },
+                    )
                 },
             )
         }
       }
+    }
+
+        if (showSplash) {
+            MeeshySplashScreen(
+                tagline = stringResource(R.string.splash_tagline),
+                versionLabel = stringResource(
+                    R.string.splash_version_label,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE.toString(),
+                ),
+                credit = stringResource(R.string.brand_signature_credit),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

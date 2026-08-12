@@ -6,6 +6,7 @@ import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
@@ -15,6 +16,8 @@ import {
 } from '../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -364,6 +367,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
       }
 
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs de la conversation. Ce transport — celui qu'emploie iOS —
+      // ne les ajustait pas. La liste vit dans `applyMessageEditEffects`, une
+      // fois pour les quatre transports.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: editedContent,
+      });
+
       // Ce que cette édition doit aux gens qu'elle NOMME. Ce transport — celui
       // que le client iOS emploie réellement (`MessageService.editMessage` →
       // `PUT /messages/:id`) — n'écrivait AUCUNE mention : ni ligne `Mention`,
@@ -516,18 +532,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               user: { select: { username: true } }
             }
           },
-          // Seules ces deux dates servent encore : la garde d'optimistic
-          // concurrency sur `lastMessageAt`, plus loin. L'appartenance n'est
-          // plus jointe ici — `admitMessageDelete` la lit lui-même, avec le
-          // filtre `isActive: true` que cette jointure n'avait jamais, et
-          // seulement quand l'acteur n'est PAS l'auteur. Le chemin nominal
-          // coûte donc une lecture de moins qu'avant.
-          conversation: {
-            select: { createdAt: true, lastMessageAt: true }
-          },
+          // Ni l'appartenance ni la conversation ne sont jointes ici :
+          // `admitMessageDelete` lit la première lui-même (avec le filtre
+          // `isActive: true` que cette jointure n'avait jamais, et seulement
+          // quand l'acteur n'est PAS l'auteur), et `applyMessageRemovalEffects`
+          // relit `lastMessageAt` au plus près de son écriture conditionnelle.
+          // Le chemin nominal coûte donc deux lectures de moins qu'avant.
+          // `mimeType` est capturé ICI, avec l'admission : les attachements
+          // sont supprimés quelques lignes plus bas, et le décompte des
+          // compteurs de conversation ne pourrait plus les relire.
           attachments: {
             select: {
-              id: true
+              id: true,
+              mimeType: true
             }
           }
         }
@@ -588,28 +605,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Mettre à jour le lastMessageAt de la conversation avec le dernier message non supprimé.
-      // Optimistic-concurrency guard: only write while lastMessageAt is still the
-      // value read at handler start. A message:new committing between the read
-      // and this write advances lastMessageAt; the guard then mismatches (0 rows
-      // updated) so the cursor never regresses backward onto the deleted message.
-      const lastNonDeletedMessage = await prisma.message.findFirst({
-        where: {
-          conversationId: message.conversationId,
-          deletedAt: null
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true }
-      });
-
-      await prisma.conversation.updateMany({
-        where: {
-          id: message.conversationId,
-          lastMessageAt: message.conversation.lastMessageAt
-        },
-        data: {
-          lastMessageAt: lastNonDeletedMessage?.createdAt || message.conversation.createdAt
-        }
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. La liste vit
+      // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
+      await applyMessageRemovalEffects(prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        messageType: message.messageType,
+        attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        metadata: message.metadata,
       });
 
       // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
@@ -708,10 +715,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
 
         // Diffuser le statut de lecture via Socket.IO
-        // Emit to the conversation room AND each registered participant's user
-        // room so message authors still receive updates when they've navigated
-        // away from the conversation view. Socket.IO deduplicates per-socket
-        // delivery when multiple rooms are chained on a single emit call.
+        // Emit to the conversation room AND each participant's personal room so
+        // message authors still receive updates when they've navigated away from
+        // the conversation view. Socket.IO deduplicates per-socket delivery when
+        // multiple rooms are chained on a single emit call.
         try {
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
@@ -719,7 +726,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               readStatusService.getLatestMessageSummary(message.conversationId),
               prisma.participant.findMany({
                 where: { conversationId: message.conversationId, isActive: true },
-                select: { userId: true }
+                // `id` NAMES the personal room of a participant with no `User`
+                // row — sans lui, l'identité de repli n'était pas ignorée, elle
+                // n'était jamais lue.
+                select: { id: true, userId: true }
               })
             ]);
             const payload = {
@@ -730,19 +740,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               updatedAt: new Date(),
               summary
             };
-            const io = socketIOManager.getIO();
-            const convRoom = ROOMS.conversation(message.conversationId);
-            let emitter: any = io.to(convRoom);
-            const seenRooms = new Set<string>([convRoom]);
-            for (const p of activeParticipants) {
-              if (!p.userId) continue;
-              const userRoom = ROOMS.user(p.userId);
-              if (seenRooms.has(userRoom)) continue;
-              seenRooms.add(userRoom);
-              emitter = emitter.to(userRoom);
-            }
-            emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-            emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+            // Quatrième copie verbatim de ce fan-out, et la dernière : les trois
+            // autres (MessageHandler auto-deliver, /message-read-status, la route
+            // conversations/messages) sont passées par cette unité partagée en
+            // adressant `userId ?? id`. Celle-ci était restée sur `userId` seul,
+            // donc un participant sans compte ne recevait aucun accusé de lecture.
+            emitToConversationParticipants({
+              io: socketIOManager.getIO(),
+              conversationId: message.conversationId,
+              participants: activeParticipants,
+              events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+              payload
+            });
           }
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
@@ -1038,13 +1047,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(attachment.message.conversationId);
+          const percentage = playPositionMs !== undefined && durationMs !== undefined && durationMs > 0
+            ? Math.min(100, Math.round((playPositionMs / durationMs) * 100))
+            : undefined;
           socketIOManager.getIO().to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
             messageId: attachment.messageId,
             conversationId: attachment.message.conversationId,
             userId,
             action,
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            ...(playPositionMs !== undefined && { playPositionMs }),
+            ...(durationMs !== undefined && { durationMs }),
+            ...(percentage !== undefined && { percentage })
           });
         }
       } catch (socketError) {

@@ -24,6 +24,7 @@ import {
   SendMessageInput
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
+import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
 
 /**
  * Corps d'un message de lien de partage, construit UNE fois par envoi.
@@ -269,7 +270,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null,
+          ...LIVE_MESSAGE_MARK,
           ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
@@ -349,6 +350,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           id: message.id,
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
+          // Un anonyme n'a pas d'utilisateur : les compteurs le créditent sous
+          // son `Participant.id`, exactement comme le fait `recompute()`.
+          senderUserId: null,
+          attachmentMimeTypes: [],
           content: message.content,
           messageType: message.messageType,
           replyToId: message.replyToId
@@ -561,7 +566,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null,
+          ...LIVE_MESSAGE_MARK,
           ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
@@ -631,6 +636,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           id: message.id,
           conversationId: shareLink.conversationId,
           senderId: participant.id,
+          // `participant` peut être SYNTHÉTIQUE (`{ id: userId }`) pour la
+          // conversation globale `meeshy` : nommer l'utilisateur explicitement
+          // est la seule façon de créditer la même clé que `recompute()`, qui
+          // lit `sender.userId` en base.
+          senderUserId: userId,
+          attachmentMimeTypes: [],
           content: message.content,
           messageType: message.messageType,
           replyToId: message.replyToId

@@ -40,6 +40,17 @@ import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
 // web caller. Aligned to 45s (2026-07-11, Vague 38) to match that convention.
 const CALL_TIMEOUT_MS = 45000; // 45 seconds
 
+// call:join ack timeout (Vague 88, 2026-08-10). Socket.IO client 4.8 does NOT
+// auto-reject a pending ack callback when the transport drops between the
+// emit and the response — mirrors the existing SOCKET_ACK_TIMEOUT_MS pattern
+// in use-post-mutations.ts / use-comment-mutations.ts. Without this, a
+// dropped ack (transient disconnect right after the emit, gateway restart
+// mid-request, mobile flakiness) left acceptOrJoinCall's promise pending
+// forever: acceptingCallIdRef never released (Accept became permanently
+// inert), the pre-authorized mic/camera stream never stopped, and no error
+// ever surfaced to the user.
+const CALL_JOIN_ACK_TIMEOUT_MS = 10_000;
+
 export function CallManager() {
   const { t } = useI18n('calls');
   const { user, isChecking } = useAuth();
@@ -334,6 +345,29 @@ export function CallManager() {
       // Explicitly decline the bumped call first, same call:end
       // reason=rejected path Decline/auto-timeout already use.
       if (incomingCall && incomingCall.callId !== event.callId) {
+        // Vague 90 (2026-08-10) — an Accept is already in flight for
+        // `incomingCall` (getUserMedia + call:join ack, up to
+        // CALL_JOIN_ACK_TIMEOUT_MS = 10s). isInCall/currentCall don't
+        // reflect that yet — acceptOrJoinCall's setInCall(true) is its LAST
+        // statement — so the busyInCall branch above hasn't triggered. Left
+        // unguarded, this branch would reject the very call the user just
+        // committed to accepting, racing a call:end against its own pending
+        // call:join for the SAME callId — the caller sees a spurious reject
+        // moments before the callee actually joins. Queue the new caller as
+        // a waiting call instead, same as the already-busy case — including
+        // the same "don't silently bump an existing waiting call" guard
+        // Vague 59 added to the sibling branch above.
+        if (acceptingCallIdRef.current === incomingCall.callId) {
+          if (waitingCall && waitingCall.callId !== event.callId) {
+            logger.info('[CallManager]', 'Third caller bumping waiting call ' + waitingCall.callId + ' — declining it for ' + event.callId + ' (accept in flight for ' + incomingCall.callId + ')');
+            clearWaitingTimeout();
+            rejectWaitingCall(waitingCall.callId);
+          }
+          logger.info('[CallManager]', 'Accept already in flight for ' + incomingCall.callId + ' — queuing ' + event.callId + ' as a waiting call instead of bumping it');
+          setWaitingCall(event);
+          startWaitingTimeout(event.callId);
+          return;
+        }
         logger.info('[CallManager]', 'Second incoming call bumping unanswered call ' + incomingCall.callId + ' — declining it for ' + event.callId);
         clearCallTimeout();
         rejectWaitingCall(incomingCall.callId);
@@ -373,12 +407,20 @@ export function CallManager() {
       // Add participant to call
       addParticipant(event.participant);
 
-      // Update call status to 'active' if it was 'initiated'
+      // Update call status to 'active' if it was 'initiated'. This is also
+      // the caller's true "answered" moment (Vague 110, 2026-08-12): the
+      // first participant to join a still-ringing call is the callee
+      // picking up. Stamp `answeredAt` here — it's what VideoCallInterface
+      // anchors the visible call-duration clock on, instead of `startedAt`
+      // (set at ring-start in use-video-call.ts), so the ring delay is never
+      // counted as talk time. Guarded by the same 'initiated' check so a
+      // later participant joining a group call never re-stamps it.
       const { currentCall } = useCallStore.getState();
       if (currentCall && currentCall.status === 'initiated') {
         setCurrentCall({
           ...currentCall,
           status: 'active',
+          answeredAt: new Date(),
         });
       }
 
@@ -454,6 +496,20 @@ export function CallManager() {
         return;
       }
 
+      // Same guard, pre-accept: before the user has answered anything,
+      // `trackedCall` is still null, so the guard above short-circuits and
+      // falls through — even though a DIFFERENT call is ringing
+      // (`incomingCall`, local state, distinct from the store). The gateway's
+      // call:ended fan-out reaches every conversation member's user room, not
+      // just call participants (so a still-ringing callee can learn a call it
+      // was never near ended — `callEndedFanout.ts`'s `resolveCallEndedRooms`),
+      // so this is a realistic delivery, not a contrived one. Mirrors how
+      // `handleAnsweredElsewhere` already scopes itself to
+      // `incomingCall?.callId === event.callId`.
+      if (!trackedCall && incomingCall && incomingCall.callId !== event.callId) {
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
 
@@ -509,7 +565,7 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall]
+    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall, incomingCall]
   );
 
   /**
@@ -647,7 +703,11 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
+      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('CALL_JOIN_ACK_TIMEOUT')),
+          CALL_JOIN_ACK_TIMEOUT_MS
+        );
         (socket as unknown).emit(
           CLIENT_EVENTS.CALL_JOIN,
           {
@@ -657,7 +717,10 @@ export function CallManager() {
               videoEnabled: params.isVideo,
             },
           },
-          resolve
+          (response: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+            clearTimeout(timer);
+            resolve(response);
+          }
         );
       });
 
@@ -672,14 +735,19 @@ export function CallManager() {
         setIceServers(ack.data.iceServers);
       }
 
-      // Create call session in store
+      // Create call session in store. `answeredAt` (Vague 110, 2026-08-12) is
+      // what VideoCallInterface anchors the visible call-duration clock on —
+      // for the callee this IS the answer moment, unlike the caller whose
+      // `startedAt` is stamped back at ring-start (use-video-call.ts).
+      const answeredAt = new Date();
       setCurrentCall({
         id: params.callId,
         conversationId: params.conversationId,
         mode: params.mode,
         status: 'active',
         initiatorId: params.initiatorId,
-        startedAt: new Date(),
+        startedAt: answeredAt,
+        answeredAt,
         participants: params.participants,
       } as CallSession);
 

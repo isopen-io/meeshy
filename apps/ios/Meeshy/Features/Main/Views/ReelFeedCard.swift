@@ -118,6 +118,10 @@ struct ReelFeedCard: View, Equatable {
     // Repost-aware: a republished reel has no media on the outer post — resolve
     // from the reposted reel so the card shows the original content, not blank.
     private var media: FeedMedia? { post.primaryReelDisplayMedia }
+    /// Visuel de fond — DISTINCT de `media`, qui porte le média JOUÉ (et donc
+    /// `kind`, l'autoplay et « Sauvegarder »). Un réel audio à couverture
+    /// affiche ainsi son image sans cesser d'être lu comme un audio.
+    private var backgroundMedia: FeedMedia? { post.reelBackgroundMedia }
     private var accentHex: String { post.authorColor }
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
@@ -205,7 +209,25 @@ struct ReelFeedCard: View, Equatable {
                 Color(hex: accentHex).opacity(0.5)
             }
         case .audio:
-            ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
+            // Un réel audio avec image de couverture montre sa couverture ; le
+            // dégradé animé n'est le repli que lorsqu'il n'y a aucun visuel.
+            if let cover = backgroundMedia,
+               cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil {
+                ProgressiveCachedImage(
+                    thumbHash: cover.thumbHash,
+                    thumbnailUrl: cover.thumbnailUrl,
+                    fullUrl: cover.url,
+                    autoLoad: true
+                ) {
+                    Color(hex: cover.thumbnailColor)
+                        .shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: width, height: height)
+                .clipped()
+            } else {
+                ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
+            }
         case .imageOnly:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
                 ProgressiveCachedImage(
@@ -431,7 +453,7 @@ struct ReelFeedCard: View, Equatable {
             Button {
                 requestSaveMedia()
             } label: {
-                Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "bookmark")
+                Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
             }
         }
         if let onPin {

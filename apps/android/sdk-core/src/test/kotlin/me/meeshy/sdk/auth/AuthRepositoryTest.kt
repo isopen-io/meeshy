@@ -38,10 +38,32 @@ class AuthRepositoryTest {
         override suspend fun register(body: RegisterRequest) = response
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
+        override suspend fun forgotPassword(body: me.meeshy.sdk.net.api.ForgotPasswordRequest) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
+        override suspend fun listSessions() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+        override suspend fun revokeSession(sessionId: String) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun revokeOtherSessions() =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.AuthSession>(success = false)
         override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?): ApiResponse<AvailabilityResult> {
             availabilityCalls += Triple(username, email, phoneNumber)
             return availabilityResponse
         }
+        override suspend fun getTwoFactorStatus() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorStatusInfo>(success = false)
+        override suspend fun beginTwoFactorSetup() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorSetupInfo>(success = false)
+        override suspend fun enableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+        override suspend fun disableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorDisableRequest) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
     }
 
     private fun session() = AuthSession(

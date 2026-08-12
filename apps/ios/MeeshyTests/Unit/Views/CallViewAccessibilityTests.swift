@@ -349,6 +349,30 @@ final class CallViewAccessibilityTests: XCTestCase {
         XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
     }
 
+    // MARK: - hasActiveEffects — advanced filters without a colorimetry preset
+
+    func test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone() throws {
+        // Regression guard — `hasActiveEffects` used to read `config.isEnabled`
+        // alone. `isEnabled` is only ever set true by picking a colorimetry
+        // preset; a user who enables background blur or skin smoothing
+        // WITHOUT ever picking a preset left `isEnabled` false, so the
+        // "Filtres" toolbar glyph never lit up even though a filter was
+        // silently active (VideoFilterPipeline.process has the same fix).
+        let source = try callViewSource()
+        guard let range = source.range(of: "private var hasActiveEffects: Bool {") else {
+            XCTFail("CallView must declare hasActiveEffects")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let block = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            block.contains("hasAdvancedFilters"),
+            "hasActiveEffects must also check config.hasAdvancedFilters, not just " +
+            "config.isEnabled, or it misses background blur/skin smoothing enabled " +
+            "without a colorimetry preset."
+        )
+    }
+
     // MARK: - End call button accessibility
 
     func test_endCallButton_hasDestructiveTrait() throws {

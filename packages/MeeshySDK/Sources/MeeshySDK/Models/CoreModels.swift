@@ -123,11 +123,23 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// the list row can resolve the preview in the viewer's preferred
     /// language without a per-row GRDB lookup.
     ///
-    /// Currently populated by the in-memory message cache attach path
-    /// (see `ConversationListViewModel.attachLastMessageTranslations`).
-    /// When the gateway starts shipping these in `/conversations` it will
-    /// be wired through the API → domain converter; until then the field
-    /// stays `nil` and the list falls back to the raw `lastMessagePreview`.
+    /// Deux sources, désormais :
+    /// - REST — `GET /conversations` expédie `lastMessageTranslations`, déjà
+    ///   restreint par le gateway aux langues du prisme du lecteur et tronqué au
+    ///   plafond d'aperçu ; `APIConversation.toDomain()` le câble ici. C'est le
+    ///   chemin du démarrage à froid, celui où la ligne n'avait AUCUNE
+    ///   traduction disponible et retombait toujours sur le texte de
+    ///   l'expéditeur.
+    /// - Socket — `ConversationSyncEngine.previewTranslations(from:viewerLanguages:)`
+    ///   dérive la même carte du `message:new` reçu, via `LastMessageFacet`, en
+    ///   appliquant les MÊMES quatre exclusions que le gateway (hors prisme,
+    ///   langue d'origine, traduction chiffrée, texte inexploitable) et le même
+    ///   plafond d'aperçu. Sans cette parité, le texte de la ligne dépendrait du
+    ///   transport qui l'a apportée.
+    ///
+    /// `nil` reste un état normal (aucune traduction vers une langue du prisme,
+    /// ou message déjà dans cette langue) : la liste affiche alors
+    /// `lastMessagePreview` brut, ce qui EST la règle #3 du Prisme.
     ///
     /// `[String: String]` (not `[APITextTranslation]`) is intentional:
     /// `APITextTranslation` is `Decodable`-only, but `MeeshyConversation`
@@ -202,15 +214,18 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     /// B1 — applies the Prisme Linguistique to `lastMessagePreview`.
     ///
-    /// Resolution mirrors `resolveUserLanguage` in
-    /// `packages/shared/utils/conversation-helpers.ts`:
+    /// Twin of `resolveLastMessagePreview` in
+    /// `packages/shared/utils/conversation-helpers.ts` — both platforms render
+    /// the same row from the same REST payload, so any divergence here would
+    /// show one account two different texts depending on the client.
     ///
-    /// 1. Walk the viewer's preferred languages in order.
-    /// 2. Return the first matching translation found in
+    /// 1. Walk the viewer's preferred languages IN ORDER.
+    /// 2. The original language competes at its own RANK: reaching it returns
+    ///    the raw preview (the message already IS in that language).
+    /// 3. Otherwise, return the first matching translation found in
     ///    `lastMessageTranslations`.
-    /// 3. If no preferred language matches, return the original
-    ///    `lastMessagePreview` (which is the message in its source
-    ///    language).
+    /// 4. If no preferred language is served, return the original
+    ///    `lastMessagePreview` (the message in its source language).
     ///
     /// **Critical Prisme rule**: never fall back to `translations.first`.
     /// The absence of a preferred-language translation means the content
@@ -225,13 +240,26 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             return lastMessagePreview
         }
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        // If the message is already in one of the preferred languages, the
-        // raw preview is canonical — no translation needed.
-        if let original = lastMessageOriginalLanguage?.lowercased(),
-           preferred.contains(original) {
-            return lastMessagePreview
-        }
+        let original = lastMessageOriginalLanguage?.lowercased()
+        // The prism is ORDERED, and the original language competes at its own
+        // RANK — never as a global short-circuit. Walking the reader's
+        // languages in order, the first one that is served wins, whether by a
+        // translation or because the message is already written in it.
+        //
+        // This used to read "if the original language appears anywhere in the
+        // preferred list, the raw preview is canonical", which silently demoted
+        // the reader's PRIMARY language whenever the original language sat
+        // lower in their prism. `CLAUDE.md` states the opposite outright: "a
+        // French-speaking user with an English iPhone ALWAYS sees their
+        // messages in French (priority 1); the English locale only kicks in
+        // when no French translation is available". With prism ["fr", "en"], an
+        // English message and a French translation available, the old rule
+        // returned the English original. Device locale enters at rank 4 — it
+        // never supersedes an in-app preference.
         for lang in preferred {
+            if let original, lang == original {
+                return lastMessagePreview
+            }
             if let translated = translations[lang] {
                 return translated
             }
@@ -253,10 +281,35 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageIsViewOnce)
         h.combine(lastMessageExpiresAt)
         // B1 — make the row re-render when a fresh translation arrives.
+        //
+        // La VALEUR est repliée, pas seulement la clé : c'est elle que la ligne
+        // affiche (`resolvedLastMessagePreview`). Le gateway ne ré-émet
+        // `conversation:updated` qu'aux lecteurs dont la carte porte la langue
+        // qui vient d'atterrir (`PreviewUpdateScope.onlyIfPreviewCarriesLanguage`),
+        // et une RETRADUCTION garde le même `lastMessageId`, le même
+        // `lastMessagePreview` (l'original ne bouge pas), le même
+        // `lastMessageAt` et le même jeu de clés. Hasher les seules clés gelait
+        // donc la ligne sur la traduction d'avant, définitivement : le portillon
+        // `.equatable()` renvoyait `true` et SwiftUI n'appelait pas `body`.
+        //
+        // Tri par clé : `Dictionary` n'a pas d'ordre d'itération stable, et un
+        // hash non déterministe ouvrirait le portillon au hasard. Chaque clé et
+        // chaque valeur sont combinées SÉPARÉMENT — une concaténation confondrait
+        // `["a": "bc"]` et `["ab": "c"]`.
         if let translations = lastMessageTranslations {
-            h.combine(translations.keys.sorted().joined(separator: ","))
+            for key in translations.keys.sorted() {
+                h.combine(key)
+                h.combine(translations[key])
+            }
         }
         h.combine(lastMessageOriginalLanguage)
+        // Position hissée : un message position-seule a un `lastMessagePreview`
+        // vide par construction et la ligne compose son libellé depuis ce champ
+        // (`ThemedConversationRow`, branche `.standard`, + label VoiceOver). La
+        // présence est repliée en plus du nom : une position sans nom affiche
+        // quand même « Position », que `name` seul (nil des deux côtés) raterait.
+        h.combine(lastMessageLocation != nil)
+        h.combine(lastMessageLocation?.name)
         h.combine(name)
         h.combine(userState.isMuted)
         h.combine(userState.isPinned)

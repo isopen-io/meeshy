@@ -1,5 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { protectedPreview, type NotificationActorProfile } from '../notifications/NotificationService';
+import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import {
+  retractMessageNotifications,
+  type RetractedNotificationAnnouncer,
+} from './retractMessageNotifications';
 
 export type { NotificationActorProfile };
 
@@ -29,7 +34,7 @@ export interface FanOutMessage {
 }
 
 /**
- * La seule surface Prisma que l'éventail touche — six délégués, énumérés pour
+ * La seule surface Prisma que l'éventail touche — sept délégués, énumérés pour
  * qu'un appelant sache exactement ce que cette unité lit, et pour qu'elle ne
  * puisse pas dériver vers des lectures qu'il n'aurait pas prévues.
  *
@@ -40,7 +45,13 @@ export interface FanOutMessage {
  */
 export type FanOutPrisma = Pick<
   PrismaClient,
-  'participant' | 'user' | 'conversation' | 'message' | 'messageAttachment' | 'userConversationPreferences'
+  | 'participant'
+  | 'user'
+  | 'conversation'
+  | 'message'
+  | 'messageAttachment'
+  | 'userConversationPreferences'
+  | 'notification'
 >;
 
 /**
@@ -160,7 +171,7 @@ const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio'
  * libellé.
  */
 async function runLot<T>(
-  name: 'reply' | 'mentions' | 'regular',
+  name: 'reply' | 'mentions' | 'regular' | 'retraction',
   onError: ((error: unknown) => void) | undefined,
   whenLost: T,
   run: () => Promise<T>
@@ -230,11 +241,13 @@ async function listeningRegularRecipients(
  * `runMessagePostSaveEffects`, `emitUnreadCountsToRecipients`) : un point
  * d'appel public que tout écrivain peut atteindre.
  *
- * `validatedMentionUserIds` est OPTIONNEL et vaut `[]` par défaut, parce que
- * les routes de lien n'extraient pas encore les mentions (`Message.validatedMentions`
- * n'est écrit que par `MessageProcessor.processMentionsInDB`). Un lot de
- * mentions vide n'empêche ni la notification de réponse ni celle de message
- * régulier : c'est exactement la dégradation gracieuse voulue.
+ * `validatedMentionUserIds` est OPTIONNEL et vaut `[]` par défaut, pour tout
+ * écrivain qui n'a pas de mentions à déclarer. Les deux routes de lien, elles,
+ * le remplissent : elles appellent `resolveMessageMentions` avant cet éventail
+ * (cette phrase disait l'inverse et ne le dit plus — le trou a été bouché, la
+ * note ne l'avait pas suivi). Un lot de mentions vide n'empêche ni la
+ * notification de réponse ni celle de message régulier : c'est exactement la
+ * dégradation gracieuse voulue.
  *
  * Best-effort de bout en bout — ne lève jamais. Le message est committé quand
  * cette fonction tourne ; une panne de notification ne doit pas transformer un
@@ -251,6 +264,13 @@ export async function notifyMessageRecipients(params: {
   validatedMentionUserIds?: readonly string[];
   onError?: (error: unknown) => void;
   /**
+   * À qui annoncer les lignes qu'un rappel concurrent emporte. Même défaut et
+   * même raison qu'`applyMessageRemovalEffects` : le service PARTAGÉ du
+   * processus est le seul câblé avec `io`. Absent — worker, script, test — le
+   * retrait a lieu quand même ; seule l'annonce est optionnelle.
+   */
+  retractionAnnouncer?: RetractedNotificationAnnouncer;
+  /**
    * Compte-rendu de l'éventail, pour que l'appelant journalise dans SON
    * contexte. Même contrat que `onError` et que les trois unités sœurs : une
    * unité partagée ne choisit pas le logger de ses appelants.
@@ -266,6 +286,7 @@ export async function notifyMessageRecipients(params: {
     processedContent,
     onError,
     onFanOut,
+    retractionAnnouncer = getSharedNotificationService(),
   } = params;
   if (!notificationService) return;
 
@@ -381,6 +402,7 @@ export async function notifyMessageRecipients(params: {
             messagePreview: notificationPreview,
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
+            messageExpiresAt: message.expiresAt ?? null,
           });
           return created != null;
         })
@@ -396,6 +418,12 @@ export async function notifyMessageRecipients(params: {
               messageContent: notificationPreview,
               conversationId,
               messageId: message.id,
+              // L'éventail tient déjà l'échéance du message : la transmettre
+              // évite une relecture PAR MENTIONNÉ, et `Message.expiresAt` étant
+              // écrit à l'insertion et jamais modifié, cette copie ne dérive
+              // pas. Le chemin `new_message`, lui, la prend de sa propre
+              // relecture vivante — il en fait une de toute façon.
+              messageExpiresAt: message.expiresAt ?? null,
             },
             memberIds
           )
@@ -452,6 +480,51 @@ export async function notifyMessageRecipients(params: {
     });
 
     onFanOut?.({ mentions, regular, reply });
+
+    // Le rappel qui a couru CONTRE cet éventail.
+    //
+    // `applyMessageRemovalEffects` retire les notifications d'un message rappelé
+    // en filtrant sur `messageId` : il emporte donc tout ce qui existe à
+    // l'instant de son `deleteMany`. Ce qui naît APRÈS lui, il ne peut par
+    // construction pas le voir — et une ligne `Notification` détient une COPIE
+    // de l'extrait, qu'aucun filtre à la lecture ne rattrape.
+    //
+    // Une garde d'ADMISSION en tête d'éventail — celle que porte déjà
+    // `createMessageNotification` — rétrécit cette fenêtre sans la fermer :
+    // `deletedAt` peut être committé entre la relecture et la création. La
+    // relecture d'APRÈS la ferme, elle, entièrement. Soit D l'instant du commit
+    // de `deletedAt`, X celui du `deleteMany` du rappel (X > D, les effets
+    // tournent après le commit), [c1..cn] nos créations, R cette relecture :
+    //   - X > cn : le rappel voit toutes nos lignes, rien ne survit ;
+    //   - X < cn : alors D < X < cn < R, donc R lit `deletedAt` et nous
+    //     retirons nous-mêmes.
+    // Aucun troisième cas.
+    //
+    // Placée ICI, après `onFanOut`, elle ne coûte rien au chemin de latence du
+    // push — les notifications sont déjà parties — là où une garde d'admission
+    // aurait allongé TOUS les envois d'un aller-retour.
+    // La garde porte sur l'audience VISÉE, pas sur le compte rendu de ce qui
+    // est parti : un créateur qui écrit sa ligne puis jette la laisserait
+    // derrière lui avec un compteur à zéro. Un éventail sans aucun destinataire,
+    // lui, n'a rien pu écrire — et ne paie donc pas la relecture.
+    const attemptedFanOut =
+      owesReplyNotification ||
+      validatedMentionUserIds.length > 0 ||
+      candidateRegularRecipients.length > 0;
+    if (attemptedFanOut) {
+      await runLot('retraction', onError, undefined, async () => {
+        const live = await prisma.message.findUnique({
+          where: { id: message.id },
+          select: { deletedAt: true },
+        });
+        // `deletedAt` non nul est la SEULE preuve d'un rappel. Une ligne absente
+        // ne prouve rien, et aucun chemin de la gateway ne supprime un message
+        // physiquement : retirer sur une non-preuve viderait des inboxes.
+        if (!live?.deletedAt) return;
+
+        await retractMessageNotifications(prisma, message.id, retractionAnnouncer);
+      });
+    }
   } catch (error) {
     onError?.(error);
   }

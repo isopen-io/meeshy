@@ -5,7 +5,6 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -23,6 +22,8 @@ import {
 } from '../../services/messaging/messageLinks';
 import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -318,7 +319,12 @@ export function registerMessagesAdvancedRoutes(
         prisma,
         mentionService: fastify.mentionService,
         notificationService: fastify.notificationService,
-        message: { id: messageId, conversationId, senderId: existingMessage.senderId },
+        message: {
+          id: messageId,
+          conversationId,
+          senderId: existingMessage.senderId,
+          expiresAt: existingMessage.expiresAt,
+        },
         content: processedContent,
         editorUserId: userId,
         onError: (err) => logger.error('Edit - Error processing mentions', err)
@@ -390,9 +396,16 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
-      conversationMessageStatsService.onMessageEdited(
-        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '', processedContent
-      ).catch(err => logger.error('[MESSAGES] Stats edit update error:', err));
+      // Cet ajustement ne vivait qu'ICI, sur un transport parmi quatre. La
+      // liste vit désormais dans `applyMessageEditEffects`.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId,
+        senderId: existingMessage.senderId,
+        senderUserId: existingMessage.sender?.userId ?? null,
+        previousContent: existingMessage.content,
+        content: processedContent,
+      });
 
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
       // `translations` est stocké en MongoDB sous forme d'objet (clé = langue) mais le contrat API attend
@@ -558,17 +571,27 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      conversationMessageStatsService.onMessageDeleted(
-        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '',
-        (existingMessage.attachments ?? []).map(a => {
-          const mime = a.mimeType ?? '';
-          if (mime.startsWith('image/')) return 'image';
-          if (mime.startsWith('audio/')) return 'audio';
-          if (mime.startsWith('video/')) return 'video';
-          return 'file';
-        }),
-        existingMessage.messageType || 'text'
-      ).catch(err => logger.error('[MESSAGES] Stats delete update error:', err));
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. Cette route ne
+      // recalculait PAS `lastMessageAt`, alors que les deux autres chemins de
+      // suppression le faisaient mot pour mot : supprimer le dernier message
+      // depuis iOS ou depuis la vue web — les deux clients qui passent par ici
+      // — laissait la liste des conversations triée sur un message devenu
+      // invisible. La liste vit désormais dans `applyMessageRemovalEffects`.
+      // Le décompte des compteurs a rejoint cette même unité. Il ne vivait
+      // qu'ICI, alors que le COMPTAGE ne vivait que dans le handler socket :
+      // un message envoyé par REST puis supprimé depuis iOS décrémentait un
+      // compteur qu'il n'avait jamais incrémenté.
+      await applyMessageRemovalEffects(prisma, {
+        id: messageId,
+        conversationId,
+        senderId: existingMessage.senderId,
+        senderUserId: existingMessage.sender?.userId ?? null,
+        messageType: existingMessage.messageType,
+        attachmentMimeTypes: (existingMessage.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: existingMessage.content,
+        metadata: existingMessage.metadata,
+      });
 
       // Invalider et recalculer les stats
       const stats = await conversationStatsService.getOrCompute(
@@ -784,6 +807,17 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs. Même unité que les trois autres transports.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: processedContent,
+      });
+
       // Ce que cette édition doit aux gens qu'elle NOMME. Même unité que le
       // sibling PUT et que le chemin socket : le lot est RECOMPOSÉ, et seuls
       // les ENTRANTS sont notifiés. Ce transport ne touchait aucune mention —
@@ -793,7 +827,12 @@ export function registerMessagesAdvancedRoutes(
         prisma,
         mentionService: fastify.mentionService,
         notificationService: fastify.notificationService,
-        message: { id: messageId, conversationId: message.conversationId, senderId: message.senderId },
+        message: {
+          id: messageId,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          expiresAt: message.expiresAt,
+        },
         content: processedContent,
         editorUserId: userId,
         onError: (err) => logger.error('Patch edit - Error processing mentions', err)

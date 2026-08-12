@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Meeshy</string>
+    <string name="splash_tagline">Rompe la barrera del idioma</string>
+    <string name="splash_version_label">Meeshy %1$s · %2$s</string>
+    <string name="brand_signature_credit">Services CEO</string>
 
     <!-- Navigation tabs -->
     <string name="tab_messages">Mensajes</string>
     <string name="tab_feed">Novedades</string>
     <string name="tab_activity">Actividad</string>
     <string name="tab_profile">Perfil</string>
+    <string name="tab_calls">Llamadas</string>
     <string name="menu_new_conversation">Nuevo</string>
     <string name="menu_reels">Reels</string>
     <string name="menu_contacts">Contactos</string>
+    <string name="menu_settings">Ajustes</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bienvenido de nuevo</string>
@@ -57,4 +62,28 @@
     <string name="call_incoming_audio">Llamada entrante</string>
     <string name="call_incoming_video">Videollamada entrante</string>
     <string name="a11y_floating_menu">Menú de navegación</string>
+
+    <!-- Widget de pantalla de inicio: contador de no leídos -->
+    <string name="widget_unread_count_title">Mensajes no leídos</string>
+    <string name="widget_unread_count_description">Consulta de un vistazo tus mensajes no leídos</string>
+    <string name="widget_unread_label">No leídos</string>
+    <string name="widget_all_read_label">Todo leído</string>
+
+    <!-- Widget de pantalla de inicio: conversaciones recientes -->
+    <string name="widget_recent_conversations_title">Conversaciones recientes</string>
+    <string name="widget_recent_conversations_description">Consulta tus conversaciones recientes de un vistazo</string>
+    <string name="widget_recent_conversations_empty">Abre Meeshy para empezar</string>
+
+    <!-- Widget de pantalla de inicio: contactos favoritos -->
+    <string name="widget_favorite_contacts_title">Favoritos</string>
+    <string name="widget_favorite_contacts_description">Acceso rápido a tus contactos favoritos</string>
+    <string name="widget_favorite_contacts_empty">Fija una conversación directa para añadir un favorito</string>
+
+    <!-- Widget de pantalla de inicio: respuesta rápida -->
+    <string name="widget_quick_reply_title">Respuesta rápida</string>
+    <string name="widget_quick_reply_description">Responde rápidamente a los mensajes recientes</string>
+    <string name="widget_quick_reply_empty">Abre Meeshy para empezar</string>
+    <string name="widget_quick_reply_ok">OK</string>
+    <string name="widget_quick_reply_thanks">¡Gracias!</string>
+    <string name="widget_quick_reply_call_me">Llámame</string>
 </resources>

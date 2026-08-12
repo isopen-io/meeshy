@@ -14,17 +14,32 @@ jest.mock('../../../services/ConversationStatsService', () => ({
   },
 }));
 
+// Le singleton est doublé, mais `resolveAttachmentType` reste le VRAI : c'est
+// la table MIME → compteur que `recompute()` applique, et une copie locale dans
+// ce fichier prouverait la cohérence du double, jamais celle du système.
+const mockOnNewMessage = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
+  conversationMessageStatsService: {
+    onNewMessage: (...a: any[]) => mockOnNewMessage(...a),
+  },
+}));
+
 import { runMessagePostSaveEffects } from '../../../services/messaging/messagePostSaveEffects';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439044';
 const PART_ID = '507f1f77bcf86cd799439033';
 
+const USER_ID = '507f1f77bcf86cd799439055';
+
 function makeMessage(overrides: Record<string, unknown> = {}) {
   return {
     id: MSG_ID,
     conversationId: CONV_ID,
     senderId: PART_ID,
+    senderUserId: USER_ID,
+    attachmentMimeTypes: [] as readonly string[],
     content: 'Bonjour',
     messageType: 'text',
     replyToId: null,
@@ -34,7 +49,10 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
 
 function makePrisma() {
   return {
-    conversation: { update: jest.fn<any>().mockResolvedValue(undefined) },
+    conversation: {
+      update: jest.fn<any>().mockResolvedValue(undefined),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
   } as any;
 }
 
@@ -46,6 +64,8 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
   mockUpdateOnNewMessage.mockClear();
+  mockOnNewMessage.mockClear();
+  mockOnNewMessage.mockResolvedValue(undefined);
 });
 
 describe('runMessagePostSaveEffects — les trois effets', () => {
@@ -63,6 +83,30 @@ describe('runMessagePostSaveEffects — les trois effets', () => {
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: CONV_ID },
       data: { lastMessageAt: expect.any(Date) },
+    });
+  });
+
+  it('flippe firstMessageSentAt via un updateMany gardé, distinct du bump inconditionnel', async () => {
+    const prisma = makePrisma();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    // Le bump `update` reste inconditionnel — pas de `where.firstMessageSentAt`.
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: CONV_ID },
+      data: { lastMessageAt: expect.any(Date) },
+    });
+    // Le flip est un `updateMany` SÉPARÉ, gardé sur `firstMessageSentAt: null`
+    // (`count: 0` = pas le premier message ou conversation non concernée).
+    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: CONV_ID, firstMessageSentAt: null },
+      data: { firstMessageSentAt: expect.any(Date) },
     });
   });
 
@@ -103,6 +147,88 @@ describe('runMessagePostSaveEffects — les trois effets', () => {
       'de',
       expect.any(Function)
     );
+  });
+});
+
+/**
+ * Le comptage des messages est le quatrième effet, et le dernier arrivé : il
+ * vivait recopié dans le SEUL handler socket, si bien que tout message envoyé
+ * par REST — le chemin PRIMAIRE d'iOS — n'était jamais compté, pendant que sa
+ * suppression, elle, décrémentait. Les compteurs ne descendaient donc pas vers
+ * une erreur bornée : ils passaient sous zéro et y restaient, aucun recalcul
+ * périodique n'existant pour les relever.
+ */
+describe('runMessagePostSaveEffects — comptage des messages', () => {
+  it('compte le message quel que soit le tuyau qui l\'a apporté', async () => {
+    const prisma = makePrisma();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      message: makeMessage({ content: 'Bonjour le monde' }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(mockOnNewMessage).toHaveBeenCalledWith(
+      prisma,
+      CONV_ID,
+      USER_ID,
+      'Bonjour le monde',
+      [],
+      'fr',
+      'text'
+    );
+  });
+
+  it('crédite l\'utilisateur enregistré et non son Participant', async () => {
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      message: makeMessage({ senderUserId: USER_ID, senderId: PART_ID }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(mockOnNewMessage.mock.calls[0][2]).toBe(USER_ID);
+  });
+
+  it('retombe sur le Participant pour un expéditeur anonyme', async () => {
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      message: makeMessage({ senderUserId: null }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(mockOnNewMessage.mock.calls[0][2]).toBe(PART_ID);
+  });
+
+  it('traduit les MIME des pièces jointes en compteurs', async () => {
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      message: makeMessage({
+        attachmentMimeTypes: ['image/jpeg', 'audio/mp4', 'video/mp4', 'application/pdf'],
+      }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(mockOnNewMessage.mock.calls[0][4]).toEqual(['image', 'audio', 'video', 'file']);
+  });
+
+  it('transmet le messageType, seul porteur du compteur de lieux', async () => {
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      message: makeMessage({ messageType: 'location' }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(mockOnNewMessage.mock.calls[0][6]).toBe('location');
   });
 });
 
@@ -182,5 +308,50 @@ describe('runMessagePostSaveEffects — isolation des pannes', () => {
     expect(prisma.conversation.update).toHaveBeenCalled();
     expect(translationService.handleNewMessage).toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('stats', expect.any(Error));
+  });
+
+  it('bumpe et traduit quand même si le flip firstMessageSentAt échoue', async () => {
+    const prisma = {
+      conversation: {
+        update: jest.fn<any>().mockResolvedValue(undefined),
+        updateMany: jest.fn<any>().mockRejectedValue(new Error('flip down')),
+      },
+    } as any;
+    const translationService = makeTranslationService();
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('firstMessageSentAt', expect.any(Error));
+  });
+
+  it('signale la panne du comptage sans toucher aux trois autres effets', async () => {
+    mockOnNewMessage.mockRejectedValueOnce(new Error('counters down'));
+    const prisma = makePrisma();
+    const translationService = makeTranslationService();
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(mockUpdateOnNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('messageStats', expect.any(Error));
   });
 });

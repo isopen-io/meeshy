@@ -133,7 +133,7 @@ public struct LanguagePickerSheet: View {
     // Cap to a reasonable max so iPad (1024+pt height) doesn't get a sheet
     // that towers across the entire screen. 65% on iPhone, ~520pt on iPad.
     private var maxHeight: CGFloat {
-        min(UIScreen.main.bounds.height * 0.65, 620)
+        min(WindowMetrics.windowSize.height * 0.65, 620)
     }
 
     public init(
@@ -281,7 +281,7 @@ public struct LanguagePickerSheet: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 40)
         }
-        .frame(maxHeight: min(UIScreen.main.bounds.height * 0.52, 460))
+        .frame(maxHeight: min(WindowMetrics.windowSize.height * 0.52, 460))
     }
 
     private func languageCell(_ lang: TranslationLanguage) -> some View {

@@ -66,6 +66,15 @@ jest.mock('../../../services/posts/postVisibility', () => ({
     postId: 'post-1',
     post: { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] },
   }),
+  // Repost simple → racine (tâche 9) : par défaut, PAS un repost — la cible
+  // résolue est le post lui-même, avec le POST_ID passé par l'appelant. La
+  // redirection vers la racine elle-même est couverte, avec le vrai module,
+  // par `src/__tests__/unit/socketio/PostReactionHandler.test.ts`.
+  resolveInteractionTarget: jest.fn<(_p: unknown, postId: string) => Promise<unknown>>()
+    .mockImplementation((_prisma: unknown, postId: string) => Promise.resolve({
+      id: postId, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+      isQuote: false, repostOfId: null, originalRepostOfId: null,
+    })),
 }));
 
 const { validateSocketEvent } = require('../../../middleware/validation');

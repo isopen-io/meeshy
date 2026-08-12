@@ -57,6 +57,7 @@ dependencies {
     implementation(project(":feature:reels"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
@@ -74,11 +75,13 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
+    implementation(libs.androidx.glance.appwidget)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)

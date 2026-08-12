@@ -104,3 +104,32 @@ for ext in "${APP_PATH}/PlugIns"/*.appex; do
 done
 
 echo "[ci_post_xcodebuild] Strip complete. Distribution step will sign these frameworks fresh."
+
+# ─── Gate entitlements (incident builds 1744-1750) ───────────────────────────
+# L'app ARCHIVÉE doit être signée et porter ses entitlements produit. Une
+# archive non signée (ou signée par défaut) exporte avec SEULEMENT les 4
+# entitlements par défaut : le pipeline de distribution dérive les
+# entitlements de la signature EXISTANTE, pas du profil. C'est ainsi que les
+# builds TestFlight 1744-1750 sont partis sans aps-environment (push mort) ni
+# application-groups (crash-loop au boot sur iOS-on-Mac, build 1750). Un run
+# ROUGE ici vaut mieux qu'un build muet et amputé sur TestFlight.
+echo "[ci_post_xcodebuild] Verifying product entitlements on ${APP_PATH}"
+ENTITLEMENTS_XML=$(codesign -d --entitlements :- "${APP_PATH}" 2>/dev/null || true)
+
+MISSING=""
+case "${ENTITLEMENTS_XML}" in
+  *"com.apple.security.application-groups"*) ;;
+  *) MISSING="${MISSING} com.apple.security.application-groups" ;;
+esac
+case "${ENTITLEMENTS_XML}" in
+  *"aps-environment"*) ;;
+  *) MISSING="${MISSING} aps-environment" ;;
+esac
+
+if [ -n "${MISSING}" ]; then
+  echo "[ci_post_xcodebuild] ERROR: archived Meeshy.app is unsigned or missing product entitlements:${MISSING}" >&2
+  echo "[ci_post_xcodebuild] The distribution export derives entitlements from the archive's EXISTING signature — this archive would ship to TestFlight without push/app-group access. Failing the build." >&2
+  exit 1
+fi
+
+echo "[ci_post_xcodebuild] Entitlements OK (application-groups + aps-environment present in the archive signature)."

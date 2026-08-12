@@ -161,11 +161,21 @@ const mockAttachment = {
 
 function makeMockSocketIO() {
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit, to: jest.fn().mockReturnThis() });
+  // `rooms` collecte AUSSI les `.to()` chaînés : le fan-out des accusés de
+  // lecture n'appelle `io.to()` qu'une fois (la room conversation) puis chaîne
+  // les rooms personnelles sur l'objet rendu. Sans cela, aucune assertion ne
+  // peut voir la room d'un participant.
+  const rooms: string[] = [];
+  const chained: { emit: jest.Mock; to: jest.Mock } = {
+    emit: mockEmit,
+    to: jest.fn((room: string) => { rooms.push(room); return chained; }),
+  };
+  const mockTo = jest.fn((room: string) => { rooms.push(room); return chained; });
   const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   return {
     mockEmit,
     mockTo,
+    rooms,
     mockEnqueueOfflineMutation,
     manager: {
       getIO: () => ({ to: mockTo }),
@@ -206,8 +216,17 @@ async function buildApp(opts: {
       findFirst: jest.fn().mockResolvedValue(opts.attachmentOverride ?? mockAttachment),
     },
     conversation: {
+      // Voir messages.test.ts : `applyMessageRemovalEffects` relit
+      // `lastMessageAt` lui-même au lieu de le recevoir joint au message.
+      findUnique: jest.fn().mockResolvedValue({
+        lastMessageAt: mockMessage.conversation.lastMessageAt,
+        createdAt: mockMessage.conversation.createdAt,
+      }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    trackingLink: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   });
 
@@ -421,15 +440,17 @@ describe('POST /messages/:messageId/status — invalid status', () => {
 describe('POST /messages/:messageId/status — with socketIO manager', () => {
   let app: FastifyInstance;
   let mockEmit: jest.Mock;
+  let rooms: string[];
   beforeAll(async () => {
-    const { mockEmit: emit, manager } = makeMockSocketIO();
+    const { mockEmit: emit, rooms: r, manager } = makeMockSocketIO();
     mockEmit = emit;
+    rooms = r;
     app = await buildApp({ socketIOManager: manager });
   });
   afterAll(async () => { await app.close(); });
 
-  it('emits READ_STATUS_UPDATED via socketIO', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
+  function readMessage() {
+    return {
       ...mockMessage,
       senderId: 'other-part-id',
       conversation: {
@@ -437,7 +458,11 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
         createdAt: new Date(),
         participants: [{ id: PART_ID, userId: USER_ID }],
       },
-    });
+    };
+  }
+
+  it('emits READ_STATUS_UPDATED via socketIO', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
     const res = await app.inject({
       method: 'POST', url: '/messages/' + MSG_ID + '/status',
       payload: { status: 'read' },
@@ -445,6 +470,31 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
     expect(res.statusCode).toBe(200);
     expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
     expect(mockEmit).toHaveBeenCalledWith('message:read-status-updated', expect.any(Object));
+  });
+
+  // Cette route portait la QUATRIÈME copie verbatim du fan-out d'accusés, et la
+  // dernière encore adressée par `userId` seul : l'expéditeur sans compte du
+  // message qu'on vient de lire n'apprenait jamais qu'il avait été lu, sa bulle
+  // restant sur un tic « envoyé » indéfiniment.
+  it('adresse un participant sans compte par son participant id', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
+    (app as any).prisma.participant.findMany.mockResolvedValueOnce([
+      { id: PART_ID, userId: USER_ID },
+      { id: 'part-anonyme', userId: null },
+    ]);
+    rooms.length = 0;
+
+    const res = await app.inject({
+      method: 'POST', url: '/messages/' + MSG_ID + '/status',
+      payload: { status: 'read' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(rooms).toEqual([
+      `conversation:${CONV_ID}`,
+      `user:${USER_ID}`,
+      'user:part-anonyme',
+    ]);
   });
 });
 
@@ -506,6 +556,49 @@ describe('POST /attachments/:attachmentId/status — with socketIO manager', () 
     expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
       attachmentId: ATTACHMENT_ID,
       action: 'listened',
+    }));
+  });
+
+  it('emits playPositionMs/durationMs/percentage when both are reported', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', playPositionMs: 2500, durationMs: 10000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'listened',
+      playPositionMs: 2500,
+      durationMs: 10000,
+      percentage: 25,
+    }));
+  });
+
+  it('omits percentage when durationMs is not reported', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', playPositionMs: 2500 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'listened',
+      playPositionMs: 2500,
+    }));
+    const lastCall = mockEmit.mock.calls[mockEmit.mock.calls.length - 1];
+    expect(lastCall[1]).not.toHaveProperty('percentage');
+  });
+
+  it('clamps percentage to 100 when playPositionMs exceeds durationMs', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'watched', playPositionMs: 12000, durationMs: 10000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'watched',
+      percentage: 100,
     }));
   });
 });

@@ -91,7 +91,8 @@ enum CommentRecordFactory {
         content: String = "Test comment",
         changeVersion: Int64 = 0,
         reactionSummaryJson: Data? = nil,
-        locationJson: String? = nil
+        locationJson: String? = nil,
+        mediaJson: Data? = nil
     ) -> CommentRecord {
         CommentRecord(
             id: id, postId: postId, parentId: parentId,
@@ -101,7 +102,8 @@ enum CommentRecordFactory {
             translatedContent: nil, likeCount: 0, replyCount: 0,
             effectFlags: 0, createdAt: Date(), changeVersion: changeVersion,
             reactionSummaryJson: reactionSummaryJson,
-            locationJson: locationJson
+            locationJson: locationJson,
+            mediaJson: mediaJson
         )
     }
 }

@@ -752,6 +752,10 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
+        // de l'animation (spec scrub 2026-08-11).
+        || isScrubbingRail
+        || reactionFlight != nil
         // L'overlay commentaires ouvert met la story en pause : lire / répondre à
         // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
         // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
@@ -788,6 +792,11 @@ extension StoryViewerView {
         showFullLanguagePicker = false
         showEmojiStrip = false
         showFullEmojiPicker = false
+        // Reset seam for a scrub whose .onEnded never fires (competing
+        // recognizer / system interruption drops it, same hazard documented
+        // for gestureAxis above): without this, isScrubbingRail could stay
+        // stuck true and shouldPauseTimer would freeze the story forever.
+        isScrubbingRail = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []
@@ -2590,6 +2599,10 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Posé par le viewer sur l'overlay (`readerChromeScheme`, cf.
+    /// `StoryViewerView+Canvas.swift`) — suit la luminance du FOND de la story,
+    /// pas le thème de l'app. Pilote `legibleOverlayColor` ci-dessous.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showOriginal: Bool = false
 
     private var hasTranslation: Bool {
@@ -2630,6 +2643,7 @@ struct StoryCommentRowView: View, Equatable {
                     CommentMediaView(
                         media: media,
                         accentColor: comment.authorColor,
+                        commentId: comment.id,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,
@@ -2694,25 +2708,26 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var headerRow: some View {
-        HStack(spacing: 6) {
+        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
+        return HStack(spacing: 6) {
             Text(comment.author)
                 .font(MeeshyFont.relative(12.5, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
+                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
+            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
                 .font(MeeshyFont.relative(10))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(overlayColor.opacity(0.75))
         }
         // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
         // sur n'importe quel fond de story, clair comme foncé. Pas de box.
-        .storyOverlayLegible()
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
 
     private var languageSwitcher: some View {
@@ -2766,30 +2781,35 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var contentText: some View {
-        // Le viewer story épingle `.preferredColorScheme(.dark)` : les entités
-        // inline prennent donc les variantes `isDark: true`, jamais le thème app.
-        MessageTextRenderer.render(
+        // La couleur suit `readerChromeScheme` (posé par le viewer sur
+        // l'overlay) : blanc sur fond sombre, quasi-noir sur fond clair — un
+        // blanc fixe restait illisible sur une story à dominante claire/blanche
+        // (bug user 2026-08-11), le halo seul ne suffisant pas à cette extrémité.
+        let textColor = Self.legibleOverlayColor(for: colorScheme)
+        return MessageTextRenderer.render(
             displayContent,
             fontSize: 13.5,
-            color: .white,
-            mentionColor: MeeshyColors.mentionColor(isDark: true),
-            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-            accentColor: .white,
+            color: textColor,
+            mentionColor: MeeshyColors.mentionColor(isDark: colorScheme == .dark),
+            hashtagColor: MeeshyColors.hashtagColor(isDark: colorScheme == .dark),
+            accentColor: textColor,
             usesRelativeFont: true
         )
-            .tint(.white)
+            .tint(textColor)
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)
             .messageEffects(comment.effects, hasPlayedAppearance: true)
             // Halo renforcé sur le corps du commentaire — c'est le texte le plus
-            // long, donc le plus exposé à un fond clair/chargé. Blanc plein +
-            // double ombre = lisible partout sans cartouche.
-            .storyOverlayLegible(strong: true)
+            // long, donc le plus exposé à un fond clair/chargé. Le sens du halo
+            // suit `colorScheme` : noir pour détacher un texte clair d'un fond
+            // clair, blanc pour détacher un texte sombre d'un fond sombre/chargé.
+            .storyOverlayLegible(strong: true, isLightText: colorScheme == .dark)
     }
 
     private var actionRow: some View {
-        HStack(spacing: 16) {
+        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
+        return HStack(spacing: 16) {
             Button {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                     onToggleLike()
@@ -2798,12 +2818,12 @@ struct StoryCommentRowView: View, Equatable {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.92))
+                        .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.92))
                         .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.85))
+                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.85))
                     }
                 }
                 .contentShape(Rectangle())
@@ -2819,7 +2839,7 @@ struct StoryCommentRowView: View, Equatable {
                     Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
                 }
-                .foregroundColor(.white.opacity(0.88))
+                .foregroundColor(overlayColor.opacity(0.88))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2829,22 +2849,30 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.top, 2)
         // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
-        .storyOverlayLegible()
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
 }
 
 // MARK: - Story Overlay Legibility
 
 extension View {
-    /// Halo sombre pour le texte/les icônes qui flottent directement au-dessus
-    /// d'une story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
+    /// Halo pour le texte/les icônes qui flottent directement au-dessus d'une
+    /// story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
     /// traitement approuvé de la sidebar (`StoryActionButton`, 2026-06-03) : une
     /// ombre serrée pour des glyphes nets + une ombre plus diffuse pour détacher
     /// le contenu d'un fond clair ou chargé. `strong` pour les longs paragraphes.
-    func storyOverlayLegible(strong: Bool = false) -> some View {
-        self
-            .shadow(color: .black.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
-            .shadow(color: .black.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
+    ///
+    /// `isLightText` choisit le SENS du halo : un halo NOIR détache un texte
+    /// clair (blanc) d'un fond CLAIR — comportement historique, toujours le
+    /// défaut. Un texte SOMBRE (`StoryCommentRowView.legibleOverlayColor` sur
+    /// fond de story clair) a besoin de l'inverse : un halo BLANC pour se
+    /// détacher d'un fond sombre/chargé, sinon le halo se fond dans le texte
+    /// lui-même et redevient invisible (bug user 2026-08-11).
+    func storyOverlayLegible(strong: Bool = false, isLightText: Bool = true) -> some View {
+        let haloColor: Color = isLightText ? .black : .white
+        return self
+            .shadow(color: haloColor.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
+            .shadow(color: haloColor.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
     }
 }
 
@@ -2866,6 +2894,16 @@ extension StoryCommentRowView {
             blue: Double(b + (1 - b) * f)
         )
     }
+
+    /// Couleur du texte/icônes du corps du commentaire (contenu, séparateurs,
+    /// actions) — dérivée du SCHÉMA DE COULEUR du canvas de la story
+    /// (`readerChromeScheme`, posé sur l'overlay par le viewer), jamais d'un
+    /// blanc fixe. Bug user 2026-08-11 : un fond de story clair/blanc rendait
+    /// le texte blanc totalement illisible, le halo seul ne suffisant pas à
+    /// cette extrémité. Pure + testable.
+    static func legibleOverlayColor(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white : MeeshyColors.indigo950
+    }
 }
 
 // MARK: - Story Action Button
@@ -2886,12 +2924,37 @@ struct StoryActionButton: View {
     /// (non-nil) sélectionne la couleur du contour (cf. `body`).
     var accentOutline: String? = nil
     var accentOutlineColor: Color = .clear
+    /// Sites porteurs d'un geste séquencé longpress→drag (scrub) : le tap
+    /// interne d'un `Button` consomme le touch et la séquence posée en
+    /// `.highPriorityGesture` ne s'active JAMAIS — un maintien de 0,9 s
+    /// partait en ❤️ direct au relâchement au lieu d'ouvrir le strip
+    /// (reproduit au stream HID simulateur, 2026-08-11). `true` = vue plate
+    /// + `TapGesture` : le tap court reste servi (la séquence échoue sous
+    /// 0,25 s), le maintien laisse la séquence de l'appelant gagner.
+    /// VoiceOver est servi par une `accessibilityAction` explicite — VO ne
+    /// synthétise pas de TapGesture (leçon du bouton Sound, +Sidebar).
+    var handlesTapViaGesture: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button {
-            action()
-        } label: {
+        Group {
+            if handlesTapViaGesture {
+                buttonLabel
+                    .onTapGesture { action() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { action() }
+            } else {
+                Button(action: action) { buttonLabel }
+                    .buttonStyle(.plain)
+            }
+        }
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private var buttonLabel: some View {
+        Group {
             // Densité resserrée 2026-07-10 : spacing glyph→label 4→2 et padding
             // vertical 8→3 — le rail complet gagne ~30 % de compacité (parité
             // TikTok/IG) tout en gardant ≥ 44pt de hauteur tappable par bouton
@@ -2966,10 +3029,6 @@ struct StoryActionButton: View {
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
 
