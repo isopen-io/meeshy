@@ -13,6 +13,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
+import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -516,7 +517,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            // additionalProperties obligatoire : sans lui, fast-json-stringify
+            // sérialise chaque lien en `{}` (tous les champs sont éjectés).
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
             pagination: {
               type: 'object',
               properties: {
@@ -605,12 +608,16 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         fastify.prisma.conversationShareLink.count({ where })
       ]);
 
-      return sendPaginatedSuccess(reply, shareLinks, {
-        total: totalCount,
-        limit: limitNum,
-        offset: offsetNum,
-        hasMore: offsetNum + shareLinks.length < totalCount
-      });
+      return sendPaginatedSuccess(
+        reply,
+        await withAnonymousParticipantCounts(fastify.prisma, shareLinks),
+        {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + shareLinks.length < totalCount
+        }
+      );
 
     } catch (error) {
       logError(fastify.log, 'Get admin share links error:', error);

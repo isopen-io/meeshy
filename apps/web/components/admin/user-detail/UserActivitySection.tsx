@@ -38,7 +38,7 @@ interface ShareLink {
   expiresAt: string | null;
   createdAt: string;
   conversation: { id: string; identifier: string | null } | null;
-  _count: { anonymousParticipants: number };
+  _count?: { anonymousParticipants: number };
 }
 
 interface TrackingLink {
@@ -166,7 +166,7 @@ function ShareLinkCard({ link }: { link: ShareLink }) {
         </div>
         <div className="flex items-center gap-1">
           <UserPlus className="h-3 w-3" />
-          <span>{t('usersDetail.anonymousLabel', { count: String(link._count.anonymousParticipants) })}</span>
+          <span>{t('usersDetail.anonymousLabel', { count: String(link._count?.anonymousParticipants ?? 0) })}</span>
         </div>
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" />

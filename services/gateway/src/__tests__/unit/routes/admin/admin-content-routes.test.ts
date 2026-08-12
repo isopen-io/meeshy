@@ -56,6 +56,9 @@ const mockPrisma: any = {
     findMany: jest.fn<any>(),
     count: jest.fn<any>(),
   },
+  participant: {
+    groupBy: jest.fn<any>(),
+  },
 };
 
 function buildApp(role = 'ADMIN'): FastifyInstance {
@@ -820,6 +823,9 @@ describe('Admin content routes — GET /share-links', () => {
     };
     mockPrisma.conversationShareLink.findMany.mockResolvedValue([fakeLink]);
     mockPrisma.conversationShareLink.count.mockResolvedValue(1);
+    mockPrisma.participant.groupBy.mockResolvedValue([
+      { shareLinkId: VALID_MONGO_ID, _count: { _all: 3 } },
+    ]);
 
     const bigbossApp = buildApp('BIGBOSS');
     await bigbossApp.ready();
@@ -829,6 +835,8 @@ describe('Admin content routes — GET /share-links', () => {
     const body = JSON.parse(response.body);
     expect(body.success).toBe(true);
     expect(body.data).toHaveLength(1);
+    expect(body.data[0].linkId).toBe('abc123');
+    expect(body.data[0]._count).toEqual({ anonymousParticipants: 3 });
     expect(body.pagination.total).toBe(1);
     await bigbossApp.close();
   });
