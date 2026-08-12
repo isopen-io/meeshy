@@ -508,8 +508,8 @@ export function registerMessagesRoutes(
               description: 'Cursor pagination metadata (always present; authoritative for before/around modes). Must stay declared: fast-json-stringify strips undeclared fields, which silently killed client infinite scroll.',
               properties: {
                 limit: { type: 'integer', description: 'Page size limit' },
-                hasMore: { type: 'boolean', description: 'Whether older messages are available' },
-                nextCursor: { type: ['string', 'null'], description: 'Message id to pass as `before` for the next page (null when the page is empty)' }
+                hasMore: { type: 'boolean', description: 'Whether a further page exists — older messages in backward/around modes, newer ones in forward `after` mode' },
+                nextCursor: { type: ['string', 'null'], description: 'Message id to pass as `before` for the next page. Null when the page is empty, and always null in forward `after` mode: that mode resumes from the client-held `createdAt` watermark, never from a backward id cursor.' }
               }
             },
             hasNewer: { type: 'boolean', description: 'Around mode only: whether messages newer than the returned window exist' },
@@ -925,10 +925,13 @@ export function registerMessagesRoutes(
           // the client can advance its high-water mark contiguously; all other
           // modes return newest-first.
           orderBy: { createdAt: afterMode ? 'asc' : 'desc' },
-          // Cursor-based pagination (before): fetch limit+1 to detect hasMore
-          // without an extra COUNT query. The extra row is trimmed before
-          // returning to the client.
-          take: isAroundMode ? limit + 1 : (before ? limit + 1 : limit),
+          // Cursor reads (before / after): fetch limit+1 to MEASURE hasMore
+          // without an extra COUNT query. The probe row is trimmed before
+          // returning to the client. `after` was sized to `limit` and inferred
+          // hasMore from `length === limit`, which cannot tell an exactly-full
+          // FINAL page from a truncated one — every backfill that landed on the
+          // boundary claimed more and cost the client a round trip to disprove.
+          take: (before || isAroundMode || afterMode) ? limit + 1 : limit,
           skip: (before || isAroundMode || afterMode) ? 0 : offset
         }),
         // 3. Récupérer les préférences linguistiques (si authentifié)
@@ -1443,11 +1446,11 @@ export function registerMessagesRoutes(
       timings.markAsReceived = performance.now() - t0; // ~0 : dispatch non-bloquant désormais
 
       // Construire les métadonnées de cursor pagination
-      // When using cursor-based pagination (before), we fetched limit+1 rows.
-      // If we got more than `limit`, there are definitely more messages.
-      // Trim the extra row before returning to the client.
+      // Cursor reads (before / after) fetched limit+1 rows. More than `limit`
+      // back means the probe row exists and there IS more; trim it away.
+      const isProbedRead = Boolean(before) || afterMode;
       let cursorHasMore: boolean;
-      if (before && messages.length > limit) {
+      if (isProbedRead && messages.length > limit) {
         cursorHasMore = true;
         // Trim BOTH arrays: `messages` feeds the cursor meta below, but the
         // client receives `mappedMessages` (built before this block) — only
@@ -1455,13 +1458,21 @@ export function registerMessagesRoutes(
         messages.splice(limit);
         mappedMessages.splice(limit);
       } else {
-        cursorHasMore = before ? false : messages.length === limit;
+        cursorHasMore = isProbedRead ? false : messages.length === limit;
       }
+      // `nextCursor` is a message id the client passes back as `before` — a
+      // BACKWARD cursor. A forward-watermark page is ASCENDING, so its last row
+      // is the NEWEST one: handing it over under that contract pointed the
+      // client at everything OLDER than the page it had just consumed, and a
+      // client following the cursor generically would re-read the history
+      // instead of advancing. Forward reads resume from the `after` watermark,
+      // which the client already holds — there is no `before` continuation to
+      // publish, and claiming one was the lie.
       const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
       const cursorPaginationMeta = {
         limit,
         hasMore: cursorHasMore,
-        nextCursor: messages.length > 0 ? lastMessageId : null
+        nextCursor: afterMode ? null : lastMessageId
       };
 
       // Format optimisé: data directement = Message[], meta pour userLanguage
