@@ -7115,3 +7115,96 @@ Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : d
 string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
 ce sandbox. **Candidat pour la Vague 110** : un audit frais (gateway ou iOS) reste à mandater au
 prochain cycle.
+
+## Vague 110 — le chrono d'appel du CALLER comptait la durée de sonnerie comme temps de conversation (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche
+`claude/upbeat-dirac-njc6x6` remise à `origin/main` (`d368e989`, qui contient déjà la Vague 109 —
+PR #2871 mergée par cette même session avant de démarrer ce cycle), aucune autre PR ouverte de cette
+routine. Un audit frais (agent Explore, lecture readonly) a été mandaté avec la liste condensée des
+items déjà triés/fixés (Vagues 63-109) pour proposer un candidat neuf ; gateway lu en entier
+(`CallEventsHandler.ts`, `CallService.ts`, `CallCleanupService.ts`, `TURNCredentialService.ts`,
+`call-push-mirroring.ts`) sans rien trouver de nouveau — la stack gateway calls est désormais très
+densément auditée. Le candidat retenu vient du client web, jamais touché par les 109 cycles
+précédents.
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/conversations/use-video-call.ts:207-215`,
+  surfaçant via `apps/web/components/video-calls/VideoCallInterface.tsx:73-75` et
+  `apps/web/components/video-call/CallManager.tsx`) : `startCall()` (le CALLER) stampe
+  `currentCall.startedAt = new Date()` à l'instant où l'ack `call:initiate` réussit — c'est-à-dire
+  quand le téléphone du destinataire commence à sonner, pas quand il décroche.
+  `CallManager.tsx` monte `VideoCallInterface` dès que `isInCall && currentCall` (aucune garde sur
+  `status`), et `VideoCallInterface` injectait ce même `startedAt` directement dans
+  `useCallDuration()`, dont le résultat (`CallInfoOverlay`) s'affiche sans condition. Le champ partagé
+  `CallSession.answeredAt` (`packages/shared/types/video-call.ts:81`) existe précisément pour éviter
+  ça — c'est ce sur quoi le gateway ancre déjà `duration` côté serveur pour les appels terminés
+  (Vagues 25/27/30/105/106) — mais n'était référencé **nulle part** sous `apps/web` (`rg answeredAt`
+  ne remonte que gateway/iOS/Android/shared, jamais web).
+  Scénario concret : l'appelant compose, le téléphone du destinataire sonne 12s avant décroché. Le
+  chrono à l'écran de l'appelant affiche déjà « 0:12 » à l'instant même où l'appel se connecte, et
+  chaque seconde suivante hérite de ce décalage pour toute la durée de l'appel — exactement la classe
+  de bug déjà corrigée côté serveur à plusieurs reprises, jamais adressée côté chrono client. Le côté
+  CALLEE n'a pas ce défaut (`acceptOrJoinCall`, `CallManager.tsx`, stampe déjà `startedAt` au moment
+  précis de l'acceptation) — asymétrie confirmée par lecture des deux chemins.
+- **Fix** : le champ `answeredAt`, déjà défini dans `CallSession` et déjà lu nulle part côté web, est
+  maintenant écrit aux deux points où un appel devient réellement actif, et lu à l'unique endroit qui
+  alimente le chrono visible :
+  - `CallManager.tsx`, `handleParticipantJoined` (CALLER — `call:participant-joined`, le premier
+    participant qui rejoint un appel encore `'initiated'` EST le décroché) : ajoute
+    `answeredAt: new Date()` au même `setCurrentCall` qui bascule `status` vers `'active'`, sous la
+    même garde `status === 'initiated'` — un second/troisième participant rejoignant un appel de
+    groupe déjà actif ne réécrit jamais `answeredAt`.
+  - `CallManager.tsx`, `acceptOrJoinCall` (CALLEE) : ajoute `answeredAt` (même valeur que `startedAt`,
+    le décroché EST l'instant présent pour ce côté).
+  - `VideoCallInterface.tsx` : `useCallDuration(currentCall?.startedAt)` →
+    `useCallDuration(currentCall?.answeredAt)`. Avant décroché, `answeredAt` est `undefined` →
+    `useCallDuration` (déjà correct, jamais modifié) affiche `0:00` ; le chrono ne démarre qu'au
+    décroché réel, avec la bonne origine.
+- **Tests** (TDD, RED confirmé en exécutant réellement les 5 nouveaux cas AVANT le fix — tous rouges
+  avec le message d'assertion attendu, jamais un skip silencieux) :
+  - `CallManager.answeredAt.test.tsx` (nouveau) : CALLEE — `acceptOrJoinCall` stampe
+    `answeredAt` (instance `Date`) au décroché ; CALLER — `answeredAt` reste `undefined` tant que
+    `status === 'initiated'`, puis devient une `Date` à `call:participant-joined` ; un second
+    participant rejoignant un appel de groupe déjà `'active'` ne réécrit PAS `answeredAt` (égalité
+    stricte avec la valeur capturée au premier join).
+  - `VideoCallInterface.test.tsx` (2 nouveaux cas) : `answeredAt` non défini + `startedAt` vieux de
+    12s → chrono affiche `0:00` (pas `0:12`) ; `answeredAt` vieux de 5s + `startedAt` vieux de 17s →
+    chrono affiche `0:05` (pas `0:17`).
+  - Sweep complet `--testPathPatterns="[Cc]all"` — **49 suites / 418 tests verts**, 0 régression.
+  - `npx tsc --noEmit` : 1224 erreurs pré-existantes, **identiques bit pour bit avec et sans ce diff**
+    (vérifié par `git stash` des deux fichiers de prod touchés puis nouveau run — même compte exact,
+    aucune ligne citée dans les deux fichiers modifiés) ; le sandbox n'avait pas
+    `packages/shared/dist` généré avant ce cycle (prérequis CLAUDE.md `npx prisma generate` +
+    `bun run build`), désormais fait, sans changer ce compte — bruit de configuration sandbox
+    préexistant, aucun rapport avec ce diff.
+- **Portée volontairement non étendue** : la branche `isInitiator` de `CallManager.tsx`
+  (`setCurrentCall` vers la ligne 292, `status: 'initiated'`) reste inchangée — un commentaire déjà en
+  place dans `use-video-call.ts` confirme cette branche **inatteignable** côté web (le gateway ne
+  réémet jamais `call:initiated` vers le socket de l'initiateur lui-même) ; y ajouter `answeredAt`
+  n'aurait aucune valeur de test et sort du scope. Le runner-up de l'audit (`handleParticipantJoined`
+  bascule `status` vers `'active'` sur un simple early-join, potentiellement avant un vrai décroché —
+  trouvaille déjà notée Vague 104 côté gateway pour un problème distinct) n'est pas traité ici : il
+  concerne la SÉMANTIQUE du statut `'active'`, pas l'ancre du chrono, et mériterait son propre cycle
+  d'investigation dédié plutôt qu'un fix couplé à celui-ci.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé côté gateway ce cycle, audit dédié effectué) : dead code /
+god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
+ce sandbox. **Candidats pour la Vague 111** (runners-up de l'audit web de ce cycle, non traités,
+confiance moindre — à vérifier avant fix) :
+- `CallControls.tsx` `handleSpeakerToggle` bascule un booléen local `speakerEnabled` sans jamais
+  appeler d'API de routage audio (`setSinkId` ou équivalent) — bouton potentiellement cosmétique ;
+  vérifier s'il s'agit d'une limitation navigateur intentionnelle avant de le traiter comme un bug.
+- `handleParticipantJoined` bascule `status` vers `'active'` sur le premier `call:participant-joined`,
+  qui peut survenir pendant un early-join/ringing plutôt qu'un vrai décroché (cf. Vague 104 côté
+  gateway pour le même symptôme sur un chemin différent) — distinct du fix de ce cycle (qui ne touche
+  que l'ancre du chrono, pas la sémantique de `status`).
+- `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
+  — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
+  sévérité, probablement pas suffisant pour son propre cycle isolément.

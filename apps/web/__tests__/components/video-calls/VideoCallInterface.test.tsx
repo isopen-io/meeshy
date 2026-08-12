@@ -148,6 +148,37 @@ describe('VideoCallInterface (container)', () => {
     expect(screen.getByTestId('call-duration')).toBeInTheDocument();
   });
 
+  // --- Vague 110 (2026-08-12): the visible clock must anchor on answeredAt,
+  // never startedAt (ring delay bleeding into "call duration") -------------
+
+  it('shows 0:00 while a call has been ringing but not yet answered (answeredAt unset)', () => {
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date(Date.now() - 12000).toISOString(), // rang 12s ago
+      answeredAt: undefined,
+      initiatorId: 'other',
+      participants: [
+        { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+      ],
+    };
+    render(<VideoCallInterface callId="call1" />);
+    expect(screen.getByTestId('call-duration')).toHaveTextContent('0:00');
+  });
+
+  it('ticks from answeredAt, not from the earlier startedAt ring-start', () => {
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date(Date.now() - 17000).toISOString(), // rang 17s ago
+      answeredAt: new Date(Date.now() - 5000).toISOString(), // answered 5s ago
+      initiatorId: 'other',
+      participants: [
+        { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+      ],
+    };
+    render(<VideoCallInterface callId="call1" />);
+    expect(screen.getByTestId('call-duration')).toHaveTextContent('0:05');
+  });
+
   // --- watchdog de connexion : un appel jamais connecté est borné à 45 s ---
   // (parité iOS connectingFailSeconds / Android CallConnectingWatchdog — un
   // échec ICE ne produisait qu'un toast, l'UI d'appel restait à vie)

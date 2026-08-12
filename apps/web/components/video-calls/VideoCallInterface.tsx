@@ -70,8 +70,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
     initial: { x: 20, y: 20 },
   });
+  // Vague 110 (2026-08-12): anchor on `answeredAt`, never `startedAt`.
+  // `startedAt` is stamped at ring-start (use-video-call.ts, CallManager's
+  // acceptOrJoinCall) — for the CALLER specifically, that's the instant the
+  // callee's device starts ringing, not when they pick up. Feeding it
+  // straight into the ticking clock baked the entire ring delay into every
+  // subsequent second of "call duration" shown on screen. `answeredAt` is
+  // unset until the call is actually answered (CallManager's
+  // handleParticipantJoined / acceptOrJoinCall), so the clock correctly
+  // reads 0:00 while ringing and only starts ticking once picked up.
   const { seconds: callDuration, label: callDurationLabel } = useCallDuration(
-    currentCall?.startedAt
+    currentCall?.answeredAt
   );
 
   // New state for fullscreen mode and disconnected participants
