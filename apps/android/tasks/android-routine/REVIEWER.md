@@ -43,7 +43,11 @@ FAIL blocks the merge and the slice is marked ⚠ blocked in `PROGRESS.md`.
 
 ## 5. Verification evidence
 - [ ] `./apps/android/meeshy.sh check` is green in this run (paste the result in
-      the PR / run log).
+      the PR / run log) — **or**, when the environment cannot install the
+      Android SDK (`dl.google.com` denied; see `ROUTINE.md` §CI reality), the
+      **Android** CI check is green on the PR and the run log states plainly
+      that the local gate was unavailable, not skipped. One of the two must
+      hold: an unverified slice is a FAIL, never a PASS with a caveat.
 - [ ] New test count and what they cover is recorded in `PROGRESS.md`.
 
 ## Verdict

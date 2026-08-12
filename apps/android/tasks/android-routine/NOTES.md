@@ -446,3 +446,26 @@ Append-only log of gotchas and decisions that save time next run.
   parallel rule next to it — this is the same "check whether an adjacent mechanism is already
   complete and just unreachable" lesson from the `outbox-message-lane-discovery` slice, applied to
   a much smaller case.
+- **A merge gate that only exists on someone's laptop is not a gate, and the routine ran seven
+  weeks without noticing.** `ROUTINE.md` had tracked "add an Android CI workflow" as a follow-up
+  for weeks, filed under housekeeping because the local `meeshy.sh check` was believed to cover
+  it. It did not: the containers this routine actually runs in cannot install the Android SDK at
+  all (`dl.google.com` denied by egress policy), so for every containerised slice the gate was not
+  *skipped*, it was *impossible* — and the merge criterion silently degraded to "the agent says it
+  passed". The tell was visible in the state files the whole time: a fully written-up, verified
+  `StoryCacheSource` defect sitting undelivered at the head of `PROGRESS.md` with "no toolchain
+  here" as the reason. **Generalises: when a run reports "I could not verify X", that is a fact
+  about the toolchain, not about the slice — record it against the GATE, and when the same reason
+  blocks a second item, fix the gate instead of parking a third.**
+- **Do not derive an SDK package name from a version number.** `compileSdk = 37` does not imply
+  `platforms;android-37` exists. Since the minor SDK releases the catalogue publishes `android-36.1`,
+  `android-37.0`, `android-37.1`, `android-37.2-beta1` — and *no* bare `android-37`. The first CI
+  run died on precisely that guess. The fix was not a better guess (a canary-channel retry also
+  failed) but handing the mapping to AGP, which owns it. Same shape as the `Uri.decode`-in-JVM-test
+  lesson above: when a component already owns a mapping, wiring around it invents a second,
+  wronger one.
+- **`--stacktrace` is not free on a gate whose readers cannot download artifacts.** It buried
+  Gradle's own `What went wrong` under 100+ lines of executor internals, so a failing test run was
+  unreadable and its cause was never established (it did not recur). CI logs for agent consumption
+  should print the failing test names and messages *inline* — parsed from the JUnit XML — because
+  "see the report at `<html>`" is unactionable to a run that has no way to open it.

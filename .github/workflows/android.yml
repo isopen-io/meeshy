@@ -1,0 +1,185 @@
+# =============================================================================
+# MEESHY - Android CI
+# =============================================================================
+# The Android parity rebuild (`apps/android`) had NO CI gate until this
+# workflow. `apps/android/tasks/android-routine/ROUTINE.md` §"CI reality" stated
+# it plainly: the monorepo `ci.yml` never compiles a line of Kotlin, so the only
+# gate was `./apps/android/meeshy.sh check` run locally, and a slice was merged
+# on the author's word that it had passed.
+#
+# That gate is unavailable to the containerised agents that drive the routine:
+# `dl.google.com` (Android SDK command-line tools + platform packages) is denied
+# by the egress policy of those containers, so `sdkmanager` cannot bootstrap and
+# no Gradle task can run. Two verified defects have already been written up and
+# left undelivered for exactly this reason (see the candidate deposited on
+# 2026-08-12 at the head of `PROGRESS.md`).
+#
+# GitHub-hosted `ubuntu-latest` runners ship the Android SDK and reach
+# `dl.google.com` normally, so this workflow is both the missing merge gate and
+# the only Android toolchain those agents can reach.
+#
+# Scope: mirrors `./apps/android/meeshy.sh check` EXACTLY (`assembleDebug` +
+# `testDebugUnitTest`) and nothing more. Lint and instrumented tests are
+# deliberately excluded — a CI gate stricter than the documented local gate
+# would block slices on pre-existing debt the routine never agreed to fix.
+# =============================================================================
+
+name: Android
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Mandatory, not cosmetic: with LANG/LC_ALL unset the JVM boots with
+  # sun.jnu.encoding=ASCII and `:sdk-core` test compilation dies with an
+  # Internal compiler error (InvalidPathException) while writing a .class file
+  # whose backtick test-method name contains a non-ASCII em-dash.
+  # Documented in apps/android/tasks/android-routine/ROUTINE.md.
+  LANG: C.utf8
+  LC_ALL: C.utf8
+
+jobs:
+  android:
+    name: Android (assemble + unit tests)
+    runs-on: ubuntu-latest
+    # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
+    # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
+    # and testDebugUnitTest is ~2m10 (665 actionable tasks). 30 min is a hang
+    # guard with roughly 3x headroom against GitHub's 6h default, not a target.
+    # Raise it if the module graph grows, rather than letting a hung job sit.
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # JDK 21 matches the toolchain the routine documents; the modules
+      # themselves target JVM 17 via compileOptions/jvmTarget.
+      - name: Setup JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Derived from app/build.gradle.kts rather than hardcoded: a compileSdk
+      # bump must not require editing this workflow in lockstep and silently
+      # break the gate when it drifts.
+      # Best effort ONLY — never fails the job. AGP resolves and downloads the
+      # platform it actually wants (licences are accepted by setup-android
+      # above), and it is the authority on which package a given compileSdk
+      # maps to. This step exists to pre-warm the common case and to print what
+      # is published, so a resolution failure in Gradle below can be read
+      # against the real catalogue instead of guessed at.
+      #
+      # Why it cannot just install "platforms;android-$major": since the minor
+      # SDK releases (36.1, 37.0, 37.1 …) an API level is no longer guaranteed
+      # to be published under a bare `android-N` name. Run #1 of this workflow
+      # failed on exactly that — "Failed to find package 'platforms;android-37'"
+      # — while android-37.0 and android-37.1 both exist.
+      - name: Provision compileSdk platform (best effort)
+        continue-on-error: true
+        run: |
+          compile_sdk="$(grep -oE 'compileSdk[[:space:]]*=[[:space:]]*[0-9]+' app/build.gradle.kts | grep -oE '[0-9]+' | head -1)"
+          if [ -z "$compile_sdk" ]; then
+            echo "::warning::could not read compileSdk from app/build.gradle.kts; leaving provisioning to AGP"
+            exit 0
+          fi
+          echo "compileSdk = $compile_sdk"
+
+          if sdkmanager --install "platforms;android-${compile_sdk}"; then
+            echo "installed platforms;android-${compile_sdk}"
+            exit 0
+          fi
+
+          # Highest published minor for that major, excluding previews
+          # (-beta/-rc) and extension SDKs, across the preview channels too.
+          candidate="$(sdkmanager --channel=3 --list 2>/dev/null \
+            | grep -oE "platforms;android-${compile_sdk}\.[0-9]+" \
+            | sort -uV | tail -1)"
+
+          if [ -n "$candidate" ]; then
+            echo "::notice::no bare platforms;android-${compile_sdk}; installing ${candidate}"
+            sdkmanager --channel=3 --install "$candidate" || true
+          else
+            echo "::warning::no platform published for API ${compile_sdk}; AGP will have to resolve it"
+          fi
+
+          echo "Platforms published for API ${compile_sdk}:"
+          sdkmanager --channel=3 --list 2>/dev/null \
+            | grep -oE "platforms;android-${compile_sdk}[^ |]*" | sort -u
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Split from the test step on purpose: a failure here is a compile break,
+      # a failure below is a behavioural regression, and the routine's run log
+      # needs to tell them apart without reading the raw log.
+      - name: Assemble debug (./apps/android/meeshy.sh build)
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Unit tests (./apps/android/meeshy.sh test)
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      # Gradle only says "There were failing tests. See the report at ..." and
+      # points at an HTML file. The agents this gate exists for cannot download
+      # the artifact, so the failures have to be IN the log or they may as well
+      # not exist. --stacktrace is deliberately absent above for the same
+      # reason: it buries this signal under 100+ lines of Gradle internals.
+      - name: Summarise failing tests
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+
+          total = 0
+          for path in sorted(glob.glob('**/build/test-results/**/*.xml', recursive=True)):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              for case in root.iter('testcase'):
+                  bad = [c for c in case if c.tag in ('failure', 'error')]
+                  if not bad:
+                      continue
+                  total += 1
+                  print(f"\n=== {case.get('classname')}.{case.get('name')}")
+                  for c in bad:
+                      msg = (c.get('message') or '').strip()
+                      if msg:
+                          print(f"  {msg[:2000]}")
+                      body = (c.text or '').strip()
+                      if body:
+                          print('  ' + '\n  '.join(body.splitlines()[:20]))
+
+          print(f"\n{total} failing test case(s)." if total
+                else "\nNo failing test cases found — the failure was not a test assertion.")
+          PY
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-test-reports
+          path: apps/android/**/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 14

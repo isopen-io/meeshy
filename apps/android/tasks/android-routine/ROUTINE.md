@@ -37,10 +37,14 @@ minimum wiring to make it real (no dead ends, no orphan code).
 3. **TDD red → green.** Write behavioural tests first (no tautologies, no
    testing of implementation details). Then write the minimum production code.
    Cover the edge-case checklist in `REVIEWER.md`.
-4. **Verify locally** (no emulator in CI env):
+4. **Verify** (no emulator in CI env):
    - `./apps/android/meeshy.sh build`  — debug APK assembles
    - `./apps/android/meeshy.sh test`   — all JVM unit tests green
    - `./apps/android/meeshy.sh check`  — both at once (use before PR)
+
+   If the SDK cannot be installed in your environment (see §CI reality), say so
+   explicitly in the run log and let the **Android** CI check carry the same two
+   commands. Verified there counts; verified nowhere never does.
 5. **Reviewer gate.** Self-run `REVIEWER.md`. Must be PASS.
 6. **Update tracking:** `feature-parity.md` (check the boxes that are *verified*
    done), `PROGRESS.md` (state + next), `NOTES.md` (any new lesson), and the
@@ -82,12 +86,32 @@ export LANG=C.utf8 LC_ALL=C.utf8   # prefix every ./gradlew invocation with this
 
 ## CI reality
 
-There is **no Android-specific CI workflow** in this repo. The monorepo `ci.yml`
-runs on every PR to `main` and tests the JS/TS/Python stack; an `apps/android`-
-only diff keeps it green because it touches none of that production code. The
-**real Android gate is local**: `./apps/android/meeshy.sh check` must pass before
-merge. Adding a dedicated Android CI workflow is a tracked follow-up (it would
-touch `.github/`, i.e. outside `apps/android`, so it needs its own explicit run).
+`.github/workflows/android.yml` (**Android**) is the merge gate. It runs on every
+PR touching `apps/android/**`, on `ubuntu-latest`, and mirrors
+`./apps/android/meeshy.sh check` exactly — `assembleDebug` then
+`testDebugUnitTest`, nothing stricter (no lint, no instrumented tests: a CI gate
+harder than the documented local gate would block slices on debt this routine
+never agreed to take on). It was added on 2026-08-12 by the run
+`android-ci-workflow`; before that the only gate was local, and the paragraph
+here said so.
+
+The monorepo `ci.yml` also runs on every PR regardless of diff (it has no path
+filter) and stays green on an `apps/android`-only diff because it compiles no
+Kotlin — it is not an Android gate and never was.
+
+**This matters most for containerised runs.** The routine's own agents usually
+execute in containers whose egress policy denies `dl.google.com`, so
+`sdkmanager` cannot bootstrap and *no* Gradle task can run locally there
+(confirmed 2026-08-12: `CONNECT tunnel failed, response 403`; `maven.google.com`
+and Maven Central are reachable, but the platform packages are not on them). In
+such a run the local gate is not "skipped" — it is unavailable, and CI is the
+only Android toolchain you have. Push the branch, open the PR, and treat the
+**Android** check as the compiler: read its logs, fix, push again. Never merge
+on a red or a skipped Android check, and never write unverified Kotlin into a
+destructive path on the strength of a local build you could not run.
+
+`meeshy.sh check` remains the fast local gate wherever the SDK *is* installed;
+CI does not replace it, it makes it non-optional.
 
 ## Hard rules (never break)
 

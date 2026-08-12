@@ -1,5 +1,64 @@
 # Progress — state & what to do next
 
+> On 2026-08-12 **`apps/android` got its first CI gate ever** (run `android-ci-workflow`,
+> PR #2905). This is the follow-up `ROUTINE.md` §"CI reality" had been tracking explicitly as
+> needing its own run because it touches `.github/` rather than `apps/android`. **RE-PROVEN before
+> starting**: interrupted-run scan clean (one open PR, #2903, on an unrelated branch); the
+> `dl.google.com` denial was re-confirmed live in this container, not taken from the note — `curl`
+> returns `CONNECT tunnel failed, response 403` and the proxy status endpoint records the refusal
+> under `recentRelayFailures`. Also probed the neighbours so the write-up would be exact:
+> `maven.google.com` (301), `repo1.maven.org` (200), `services.gradle.org` (200),
+> `plugins.gradle.org` (200) are all reachable — it is specifically the SDK *platform packages*
+> that are unreachable, not the Maven artifacts, which is why "just use a mirror" is not an option.
+>
+> **Shipped**: `.github/workflows/android.yml`, mirroring `./apps/android/meeshy.sh check` exactly
+> (`assembleDebug` → `testDebugUnitTest`, nothing stricter — a gate harder than the documented
+> local one would block slices on unmeasured lint debt). Plus the two documents that described the
+> pre-CI world: `ROUTINE.md` §CI reality (what the gate is, what it deliberately omits, and that a
+> containerised run should push and treat the **Android** check as its compiler rather than write
+> unverified Kotlin) and `REVIEWER.md` §5 (which demanded a green local `meeshy.sh check` —
+> unsatisfiable in these containers, and an unsatisfiable gate invites a caveat instead of a
+> verdict; it now accepts a green CI check *provided* the log says the local gate was unavailable
+> rather than skipped, and states that unverified is a FAIL, never a PASS-with-caveat).
+>
+> **Evidence — the gate is green**: run #4 (`31630690093`), `BUILD SUCCESSFUL in 2m 10s`, 665
+> actionable tasks, `assembleDebug` and `testDebugUnitTest` both passing, 636 test-report files
+> uploaded. **This is the first time the 21-module Android graph has ever been compiled and
+> unit-tested in CI**, by anyone. Everything the routine has merged to date rested on a local
+> `check` that no container could reproduce.
+>
+> **Four findings the gate produced on its first four runs**:
+> 1. **`compileSdk = 37` has no bare `platforms;android-37` package.** Run #1 died in 45 s on
+>    `Failed to find package 'platforms;android-37'`. Since the minor SDK releases (36.1, 37.0,
+>    37.1 …) an API level is no longer guaranteed to publish under `android-N`: the catalogue holds
+>    `android-37.0`, `android-37.1`, `37.2-beta1/2`. Deriving the coordinate as `android-$major` is
+>    wrong *by construction*, on any channel. The workflow now pre-warms best-effort and lets **AGP**
+>    resolve the platform, because AGP is the authority on that mapping and we are not. All 21
+>    modules pin 37 and it does build — the API level was never the problem, the package name was.
+> 2. **One non-reproducing failure, root cause NOT captured.** Run #3's test task failed with a
+>    Gradle-internal exception (`LoadPreviousExecutionStateStep`/`HandleStaleOutputsStep`), and
+>    `--stacktrace` buried the actual `What went wrong` under 100+ lines of executor internals.
+>    Run #4 passed the same tests on the same tree. Do NOT record this as "flaky tests" — it was
+>    not shown to be a test assertion at all. It is an open question, and the reason the workflow
+>    now (a) drops `--stacktrace` and (b) parses the JUnit XML on failure to print each failing
+>    case inline. If it recurs, the next run will be able to read it.
+> 3. **`ci.yml` really does run its full matrix on an `apps/android`-only diff** — no path filter,
+>    16 checks. This corroborates what PR #2868 found for a `packages/MeeshySDK`-only diff. Never
+>    predict the check list; read it off the PR.
+> 4. **`ci.yml`'s Python jobs are flaky on infrastructure, not on code.** `uv python install 3.10`
+>    intermittently fails to fetch CPython from GitHub releases (`http2 error: stream error
+>    received: refused stream`). Observed rotating between jobs across rounds: `Test Python` failed
+>    then passed, `Audio Pipeline`/`TTS-STT` failed then passed, `Voice API` passed then failed —
+>    all in the same 20 minutes. `ci.yml` run #9710 on `83b5c160` (this branch's base) was fully
+>    green, so this is a window of GitHub-side flakiness, not a regression. Worth a retry/mirror on
+>    that setup step as its own item; note that `rerun-failed-jobs` is **403 for the bot**, so a
+>    flake costs a full re-push.
+>
+> **Next slice — now unblocked and highest value**: the `StoryCacheSource.revalidate()` pagination
+> truncation deposited at the top of this file on 2026-08-12. It was parked for exactly this
+> missing toolchain, it is the harmful variant already fixed on iOS (PR #2867) and web, and Android
+> is the last platform carrying it. It can now be written TDD-first and *verified* before merge.
+
 > **Candidat déposé le 2026-08-12 par la routine iOS/gateway (PR #2870) — défaut VÉRIFIÉ, non
 > livré, faute de toolchain.** `StoryCacheSource.revalidate()`
 > (`:sdk-core/src/main/kotlin/me/meeshy/sdk/story/StoryCacheSource.kt:55`) demande **une** page de
