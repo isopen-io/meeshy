@@ -29,14 +29,15 @@ import {
 export function useCallAnalyticsReporter(params: {
   callId: string | null;
   connectionState: string;
+  isReconnecting: boolean;
   qualityStats: ConnectionQualityStats | null;
   isVideo: boolean;
 }): void {
-  const { callId, connectionState, qualityStats, isVideo } = params;
+  const { callId, connectionState, isReconnecting, qualityStats, isVideo } = params;
 
   const accRef = useRef<CallAnalyticsAccumulator>(createCallAnalytics(Date.now()));
   const reportedRef = useRef(false);
-  const prevStateRef = useRef(connectionState);
+  const prevReconnectingRef = useRef(isReconnecting);
   // Latest identity for the teardown emit (kept in refs so the unmount effect
   // can run with empty deps and never fire early on an isVideo/callId change).
   const callIdRef = useRef(callId);
@@ -48,11 +49,18 @@ export function useCallAnalyticsReporter(params: {
     if (connectionState === 'connected') {
       accRef.current = markConnected(accRef.current, Date.now());
     }
-    if (connectionState === 'reconnecting' && prevStateRef.current !== 'reconnecting') {
+  }, [connectionState]);
+
+  // isReconnecting — not connectionState — is the real stall signal: an
+  // RTCPeerConnectionState never carries the literal 'reconnecting', so a
+  // connectionState-only check could never fire (use-webrtc-p2p.ts derives
+  // isReconnecting from its own stalledPeersRef mid-call ICE tracking).
+  useEffect(() => {
+    if (isReconnecting && !prevReconnectingRef.current) {
       accRef.current = markReconnecting(accRef.current);
     }
-    prevStateRef.current = connectionState;
-  }, [connectionState]);
+    prevReconnectingRef.current = isReconnecting;
+  }, [isReconnecting]);
 
   useEffect(() => {
     if (qualityStats) {

@@ -35,7 +35,7 @@ struct VideoEditorCaptionsPanel: View {
 
     private var languageRow: some View {
         HStack {
-            Text("Langue parlée")
+            Text(String(localized: "videoEditor.captions.spoken_language", defaultValue: "Langue parlée", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
@@ -45,7 +45,7 @@ struct VideoEditorCaptionsPanel: View {
                         languageCode = info.code
                         HapticFeedback.light()
                     } label: {
-                        Text("\(info.flag)  \(info.nativeName)")
+                        Text(verbatim: "\(info.flag)  \(info.nativeName)")
                     }
                 }
             } label: {
@@ -84,14 +84,14 @@ struct VideoEditorCaptionsPanel: View {
         HStack(spacing: 10) {
             ProgressView()
                 .tint(accent)
-            Text("Analyse de l'audio…")
+            Text(String(localized: "videoEditor.captions.analyzing", defaultValue: "Analyse de l'audio…", bundle: .module))
                 .font(.system(size: 12))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
             Button {
                 viewModel.cancelTranscription()
             } label: {
-                Text("Annuler")
+                Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(theme.error)
             }
@@ -103,14 +103,14 @@ struct VideoEditorCaptionsPanel: View {
     private var doneView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("\(viewModel.document.captions.count) sous-titres", systemImage: "captions.bubble.fill")
+                Label(String(localized: "videoEditor.captions.count", defaultValue: "\(viewModel.document.captions.count) sous-titres", bundle: .module), systemImage: "captions.bubble.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(accent)
                 Spacer()
                 Button {
                     viewModel.clearCaptions()
                 } label: {
-                    Text("Effacer")
+                    Text(String(localized: "videoEditor.captions.clear", defaultValue: "Effacer", bundle: .module))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(theme.error)
                 }

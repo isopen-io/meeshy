@@ -11,7 +11,7 @@ struct AchievementBadgeView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             ZStack {
                 Circle()
                     .stroke(
@@ -49,13 +49,13 @@ struct AchievementBadgeView: View {
                 .font(MeeshyFont.relative(9, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, MeeshySpacing.md)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: achievement.isUnlocked ? achievement.color : "808080"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(
                             achievement.isUnlocked
                                 ? Color(hex: achievement.color).opacity(0.3)

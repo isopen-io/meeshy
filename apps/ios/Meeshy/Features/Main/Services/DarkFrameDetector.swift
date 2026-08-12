@@ -1,6 +1,5 @@
 import CoreVideo
 import Accelerate
-import os
 
 // `nonisolated` : appelé depuis `VideoFilterCapturerDelegate.capturer(_:didCapture:)`
 // qui s'exécute sur la queue WebRTC `org.webrtc.cameravideocapturer.video`.
@@ -8,16 +7,7 @@ import os
 // les méthodes sont implicitement @MainActor et trap depuis le video thread
 // (`_swift_task_checkIsolatedSwift` → `dispatch_assert_queue_fail`).
 nonisolated final class DarkFrameDetector: @unchecked Sendable {
-    private var consecutiveDarkFrames = 0
-    private let darkThreshold: Float = 15.0
-    private let consecutiveThreshold = 30
-
-    var onDarkFrameDetected: (() -> Void)?
-    var onLightFrameRestored: (() -> Void)?
-
     private(set) var lastAverageBrightness: Float?
-
-    private var isDark = false
 
     func analyzeFrame(_ pixelBuffer: CVPixelBuffer) {
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
@@ -62,35 +52,10 @@ nonisolated final class DarkFrameDetector: @unchecked Sendable {
         }
 
         guard sampleCount > 0 else { return }
-        let avgLuminance = luminanceSum / sampleCount
-        lastAverageBrightness = avgLuminance
-
-        if avgLuminance < darkThreshold {
-            consecutiveDarkFrames += 1
-            if consecutiveDarkFrames >= consecutiveThreshold && !isDark {
-                isDark = true
-                onDarkFrameDetected?()
-                Logger.calls.info("Dark frame detected — camera may be covered (avg lum: \(avgLuminance))")
-            }
-        } else {
-            if isDark && consecutiveDarkFrames > 0 {
-                isDark = false
-                onLightFrameRestored?()
-                Logger.calls.info("Light frame restored (avg lum: \(avgLuminance))")
-            }
-            consecutiveDarkFrames = 0
-        }
+        lastAverageBrightness = luminanceSum / sampleCount
     }
 
     func reset() {
-        consecutiveDarkFrames = 0
-        isDark = false
         lastAverageBrightness = nil
     }
-}
-
-// MARK: - Logger Extension
-
-private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
 }

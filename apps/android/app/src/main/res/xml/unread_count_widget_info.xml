@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AppWidgetProviderInfo for UnreadCountWidget (me.meeshy.app.widget).
+  Small single-cell face — parity target: iOS MeeshyWidgets.UnreadCountWidget's
+  `.systemSmall` face. `initialLayout` uses Glance's own predefined loading
+  layout (no custom XML layout needed — Glance replaces it once composed).
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:maxResizeWidth="180dp"
+    android:maxResizeHeight="180dp"
+    android:updatePeriodMillis="1800000"
+    android:description="@string/widget_unread_count_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewImage="@mipmap/ic_launcher"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

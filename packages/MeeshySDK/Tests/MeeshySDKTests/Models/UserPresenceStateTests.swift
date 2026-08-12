@@ -2,15 +2,15 @@ import Testing
 import Foundation
 @testable import MeeshySDK
 
-/// Locks the canonical presence rule shared with the web
+/// Locks the canonical 1/3/5 presence rule shared with the web
 /// (`packages/shared/utils/user-presence.ts`) and Android (`Presence.kt`):
 /// - isOnline == true    -> online (GREEN + pulse) — the backend flag is
 ///   authoritative (kept alive for any active session), with an anti-stale
-///   guard: ignored when lastActiveAt is older than 30min
+///   guard: ignored when lastActiveAt is older than 5min
 /// - active <= 60s       -> online  (green, pulse)
-/// - active <= 5min      -> recent  (green)
-/// - active <= 30min     -> away    (orange)
-/// - > 30min / no data   -> offline (gray)
+/// - active <= 3min      -> away    (orange)
+/// - active <= 5min      -> idle    (gray, DISPLAYED)
+/// - > 5min / no data    -> offline (nothing rendered on avatar dots)
 @Suite("UserPresenceState")
 struct UserPresenceStateTests {
 
@@ -23,7 +23,7 @@ struct UserPresenceStateTests {
         )
     }
 
-    // MARK: - isOnline backend flag is authoritative
+    // MARK: - isOnline backend flag is authoritative (5min anti-stale guard)
 
     @Test("online with no lastActiveAt is online")
     func online_noLastActive_isOnline() {
@@ -35,16 +35,18 @@ struct UserPresenceStateTests {
         #expect(presence(isOnline: false).state(now: now) == .offline)
     }
 
-    @Test("connected user stays online even with minutes-old lastActiveAt")
-    func online_staleTimestamp_staysOnline() {
+    @Test("connected user stays online with minutes-old lastActiveAt up to 5min")
+    func online_staleTimestamp_staysOnlineWithinGuard() {
         #expect(presence(isOnline: true, activeSecondsAgo: 61).state(now: now) == .online)
-        #expect(presence(isOnline: true, activeSecondsAgo: 600).state(now: now) == .online)
-        #expect(presence(isOnline: true, activeSecondsAgo: 1800).state(now: now) == .online)
+        #expect(presence(isOnline: true, activeSecondsAgo: 240).state(now: now) == .online)
+        #expect(presence(isOnline: true, activeSecondsAgo: 299).state(now: now) == .online)
+        #expect(presence(isOnline: true, activeSecondsAgo: 300).state(now: now) == .online)
     }
 
-    @Test("anti-stale guard: isOnline is ignored when lastActiveAt is beyond 30min")
-    func online_beyond30min_isOffline() {
-        #expect(presence(isOnline: true, activeSecondsAgo: 1860).state(now: now) == .offline)
+    @Test("anti-stale guard: isOnline is ignored when lastActiveAt is beyond 5min")
+    func online_beyond5min_decays() {
+        #expect(presence(isOnline: true, activeSecondsAgo: 301).state(now: now) == .offline)
+        #expect(presence(isOnline: true, activeSecondsAgo: 1800).state(now: now) == .offline)
     }
 
     // MARK: - Time decay when disconnected
@@ -59,56 +61,56 @@ struct UserPresenceStateTests {
         #expect(presence(isOnline: false, activeSecondsAgo: 60).state(now: now) == .online)
     }
 
-    @Test("active 61 seconds ago is recent")
-    func active61s_isRecent() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 61).state(now: now) == .recent)
+    @Test("active 61 seconds ago is away")
+    func active61s_isAway() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 61).state(now: now) == .away)
     }
 
-    @Test("active 3 minutes ago is recent")
-    func active3min_isRecent() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 180).state(now: now) == .recent)
+    @Test("active 2 minutes ago is away")
+    func active2min_isAway() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 120).state(now: now) == .away)
     }
 
-    @Test("active exactly 5 minutes ago is recent (inclusive)")
-    func active5min_isRecent() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 300).state(now: now) == .recent)
+    @Test("active exactly 3 minutes ago is away (inclusive)")
+    func active3min_isAway() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 180).state(now: now) == .away)
     }
 
-    @Test("active 5min 1s ago is away")
-    func active5min1s_isAway() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 301).state(now: now) == .away)
+    @Test("active 3min 1s ago is idle")
+    func active3min1s_isIdle() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 181).state(now: now) == .idle)
     }
 
-    @Test("active 10 minutes ago is away")
-    func active10min_isAway() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 600).state(now: now) == .away)
+    @Test("active 4 minutes ago is idle")
+    func active4min_isIdle() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 240).state(now: now) == .idle)
     }
 
-    @Test("active exactly 30 minutes ago is away (inclusive)")
-    func active30min_isAway() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 1800).state(now: now) == .away)
+    @Test("active exactly 5 minutes ago is idle (inclusive)")
+    func active5min_isIdle() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 300).state(now: now) == .idle)
     }
 
-    @Test("active 31 minutes ago is offline")
-    func active31min_isOffline() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 1860).state(now: now) == .offline)
+    @Test("active 5min 1s ago is offline")
+    func active5min1s_isOffline() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 301).state(now: now) == .offline)
     }
 
-    // MARK: - Freshly disconnected users decay by time
-
-    @Test("disconnected but active 3 minutes ago is recent (green), not away")
-    func offline_active3minAgo_isRecent() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 180).state(now: now) == .recent)
+    @Test("active 10 minutes ago is offline")
+    func active10min_isOffline() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 600).state(now: now) == .offline)
     }
 
-    @Test("disconnected and active 10 minutes ago is away (orange)")
-    func offline_active10minAgo_isAway() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 600).state(now: now) == .away)
+    @Test("active 30 minutes ago is offline")
+    func active30min_isOffline() {
+        #expect(presence(isOnline: false, activeSecondsAgo: 1800).state(now: now) == .offline)
     }
 
-    @Test("disconnected past 30 minutes is offline (gray)")
-    func offline_active31minAgo_isOffline() {
-        #expect(presence(isOnline: false, activeSecondsAgo: 1860).state(now: now) == .offline)
+    // MARK: - Parity edge cases (mirror TS NaN / Kotlin parse-failure / future)
+
+    @Test("future lastActiveAt (clock skew) is online")
+    func futureTimestamp_isOnline() {
+        #expect(presence(isOnline: false, activeSecondsAgo: -30).state(now: now) == .online)
     }
 
     // MARK: - Codable

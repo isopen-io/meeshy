@@ -39,6 +39,11 @@ export const SocketMessageSendSchema = z.object({
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Forme non contrainte ici : la
+  // validation stricte des coordonnées / longueurs vit dans
+  // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
+  location: z.unknown().optional(),
 });
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
@@ -54,6 +59,20 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // Effets de message — parité avec SocketMessageSendSchema (path texte) et la
+  // route REST POST /messages. Sans ces champs, `z.object` strip un
+  // `isViewOnce` / `isBlurred` / `expiresAt` envoyé avec une photo sur le path
+  // PRINCIPAL d'envoi de pièces jointes, dégradant silencieusement le média en
+  // attachement normal non éphémère (une photo « view-once » reste rouvrable
+  // indéfiniment). `MessageProcessor.saveMessage` recompose le bitfield
+  // `effectFlags` depuis ces champs bruts.
+  isBlurred: z.boolean().optional(),
+  expiresAt: z.string().optional(),
+  effectFlags: z.number().int().optional(),
+  isViewOnce: z.boolean().optional(),
+  maxViewOnceCount: z.number().int().optional(),
+  // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
+  location: z.unknown().optional(),
 });
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;
@@ -115,6 +134,14 @@ export const SocketCommentReactionRemoveSchema = z.object({
 });
 
 export type SocketCommentReactionRemoveData = z.infer<typeof SocketCommentReactionRemoveSchema>;
+
+export const SocketCommentReactionRequestSyncSchema = z.object({
+  commentId: mongoId,
+});
+
+export type SocketCommentReactionRequestSyncData = z.infer<
+  typeof SocketCommentReactionRequestSyncSchema
+>;
 
 export const SocketPostRoomActionSchema = z.object({
   postId: mongoId,

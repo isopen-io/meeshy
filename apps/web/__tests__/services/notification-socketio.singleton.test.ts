@@ -727,5 +727,159 @@ describe('notificationSocketIO singleton', () => {
     it('is safe to call when never connected', () => {
       expect(() => notificationSocketIO.reset()).not.toThrow();
     });
+
+    it('clears sync-desync subscribers', async () => {
+      const desyncCb = jest.fn();
+      notificationSocketIO.onSyncDesync(desyncCb);
+
+      await notificationSocketIO.connect('tok');
+      notificationSocketIO.reset();
+
+      await notificationSocketIO.connect('tok2');
+      currentSocketMock!._emit('connect');
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 1 }));
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 9 }));
+
+      expect(desyncCb).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── SyncEngine — détection de trou `_seq` + resync au reconnect ───────────
+
+  describe('sync desync signalling', () => {
+    const connectAndOpen = async (token = 'tok') => {
+      await notificationSocketIO.connect(token);
+      currentSocketMock!._emit('connect');
+    };
+
+    it('signals a gap when a _seq skips ahead', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen();
+
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 91230 }));
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 91234 }));
+
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb).toHaveBeenCalledWith('gap');
+    });
+
+    it('stays silent on the very first _seq — there is no reference point yet', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen();
+
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 91230 }));
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('stays silent across a contiguous stream', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen();
+
+      [4, 5, 6].forEach((seq) =>
+        currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: seq }))
+      );
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when the gateway emits without _seq (degraded allocation / older gateway)', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen();
+
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 4 }));
+      currentSocketMock!._emit('notification:new', makeNotificationData());
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 5 }));
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('still delivers the notification itself when a gap is detected', async () => {
+      const notifCb = jest.fn();
+      notificationSocketIO.onNotification(notifCb);
+      notificationSocketIO.onSyncDesync(jest.fn());
+      await connectAndOpen();
+
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 1 }));
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 8 }));
+
+      expect(notifCb).toHaveBeenCalledTimes(2);
+    });
+
+    it('signals a reconnect on the SECOND connect, never on the first', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+
+      await connectAndOpen();
+      expect(cb).not.toHaveBeenCalled();
+
+      currentSocketMock!._emit('disconnect', 'transport close');
+      currentSocketMock!._emit('connect');
+
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb).toHaveBeenCalledWith('reconnect');
+    });
+
+    it('keeps the _seq cursor across a socket.io reconnect — that is what lets the hole show', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen();
+
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 40 }));
+      currentSocketMock!._emit('disconnect', 'transport close');
+      currentSocketMock!._emit('connect');
+      cb.mockClear(); // discard the reconnect signal — the cursor is what is under test
+
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 44 }));
+
+      expect(cb).toHaveBeenCalledWith('gap');
+    });
+
+    it('drops the cursor on an explicit disconnect — a _seq belongs to ONE account', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen('tok-alice');
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 91230 }));
+
+      notificationSocketIO.disconnect();
+      await connectAndOpen('tok-bob');
+      cb.mockClear();
+
+      // Bob's own counter starts wherever the server left it — never a gap.
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 3 }));
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('does not signal a reconnect on the first connect of a fresh session', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen('tok-alice');
+      currentSocketMock!._emit('disconnect', 'transport close');
+
+      notificationSocketIO.disconnect();
+      await connectAndOpen('tok-bob');
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('returns a cleanup function that stops desync signals', async () => {
+      const cb = jest.fn();
+      const unsub = notificationSocketIO.onSyncDesync(cb);
+      await connectAndOpen();
+
+      currentSocketMock!._emit('disconnect', 'transport close');
+      currentSocketMock!._emit('connect');
+      expect(cb).toHaveBeenCalledTimes(1);
+
+      unsub();
+      currentSocketMock!._emit('disconnect', 'transport close');
+      currentSocketMock!._emit('connect');
+      expect(cb).toHaveBeenCalledTimes(1);
+    });
   });
 });

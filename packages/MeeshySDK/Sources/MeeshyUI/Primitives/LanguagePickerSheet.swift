@@ -117,6 +117,12 @@ public struct LanguageUsageTracker {
 public struct LanguagePickerSheet: View {
     public enum Style { case dark, light }
     public var style: Style
+    /// Langues DÉJÀ traduites pour ce contenu. Elles remontent en tête et
+    /// portent une pastille : choisir l'une d'elles est instantané, tandis
+    /// qu'une langue absente déclenche une demande de traduction.
+    public var availableLanguageIds: Set<String>
+    /// Langue actuellement lue (`nil` = chaine préférée de l'utilisateur).
+    public var activeLanguageId: String?
     public var onSelect: ((TranslationLanguage) -> Void)?
     public var onDismiss: (() -> Void)?
 
@@ -127,21 +133,38 @@ public struct LanguagePickerSheet: View {
     // Cap to a reasonable max so iPad (1024+pt height) doesn't get a sheet
     // that towers across the entire screen. 65% on iPhone, ~520pt on iPad.
     private var maxHeight: CGFloat {
-        min(UIScreen.main.bounds.height * 0.65, 620)
+        min(WindowMetrics.windowSize.height * 0.65, 620)
     }
 
     public init(
         style: Style = .dark,
+        availableLanguageIds: Set<String> = [],
+        activeLanguageId: String? = nil,
         onSelect: ((TranslationLanguage) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
-        self.style = style; self.onSelect = onSelect; self.onDismiss = onDismiss
+        self.style = style
+        self.availableLanguageIds = availableLanguageIds
+        self.activeLanguageId = activeLanguageId
+        self.onSelect = onSelect; self.onDismiss = onDismiss
+    }
+
+    /// Les langues déjà traduites d'abord — sans réordonner, l'utilisateur
+    /// devrait chercher dans 40 drapeaux celles qui s'afficheront sans attendre.
+    /// `Set` et non tableau : l'appartenance est testée par cellule.
+    static func ordered(_ languages: [TranslationLanguage],
+                        available: Set<String>) -> [TranslationLanguage] {
+        guard !available.isEmpty else { return languages }
+        let ready = languages.filter { available.contains($0.id) }
+        let rest = languages.filter { !available.contains($0.id) }
+        return ready + rest
     }
 
     private var filtered: [TranslationLanguage] {
-        guard !searchText.isEmpty else { return TranslationLanguage.all }
+        let ordered = Self.ordered(TranslationLanguage.all, available: availableLanguageIds)
+        guard !searchText.isEmpty else { return ordered }
         let q = searchText.lowercased()
-        return TranslationLanguage.all.filter {
+        return ordered.filter {
             $0.name.lowercased().contains(q) ||
             $0.id.lowercased().contains(q) ||
             $0.flag.contains(q)
@@ -258,11 +281,15 @@ public struct LanguagePickerSheet: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 40)
         }
-        .frame(maxHeight: min(UIScreen.main.bounds.height * 0.52, 460))
+        .frame(maxHeight: min(WindowMetrics.windowSize.height * 0.52, 460))
     }
 
     private func languageCell(_ lang: TranslationLanguage) -> some View {
-        let isSelected = selectedId == lang.id
+        // `selectedId` = choix qui vient d'être fait dans cette feuille ;
+        // `activeLanguageId` = langue déjà lue à l'ouverture. Les deux doivent
+        // marquer la cellule, sinon rouvrir la feuille perd le repère.
+        let isSelected = selectedId == lang.id || (selectedId == nil && activeLanguageId == lang.id)
+        let isReady = availableLanguageIds.contains(lang.id)
         let accent = MeeshyColors.brandPrimary
 
         return Button {
@@ -278,6 +305,17 @@ public struct LanguagePickerSheet: View {
                     .font(.system(size: 28))
                     .scaleEffect(isSelected ? 1.15 : 1.0)
                     .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isSelected)
+                    .overlay(alignment: .topTrailing) {
+                        // Pastille « déjà traduit » : la distinction entre une
+                        // langue instantanée et une qui déclenchera une demande
+                        // de traduction doit être lisible AVANT le tap.
+                        if isReady {
+                            Circle()
+                                .fill(MeeshyColors.success)
+                                .frame(width: 7, height: 7)
+                                .offset(x: 3, y: -1)
+                        }
+                    }
 
                 Text(lang.name)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))

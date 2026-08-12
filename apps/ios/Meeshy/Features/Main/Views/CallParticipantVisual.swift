@@ -3,13 +3,20 @@ import MeeshySDK
 import MeeshyUI
 
 /// Visuel partagé du correspondant d'appel — flux vidéo distant si actif,
-/// sinon avatar (cache-first, `resolveRemoteProfile`). Utilisé à 44pt dans
-/// `FloatingCallPillView` et à 56pt dans `CallBubbleView` : extrait pour ne
-/// pas dupliquer ni le layout ni la résolution de profil entre les deux
-/// sites de montage (spec 2026-07-07-call-banner-swipe-collapse-design.md,
-/// § CallBubbleView). Toujours circulaire.
+/// sinon avatar (cache-first, `resolveRemoteProfile`). Utilisé à 44pt
+/// (cercle) dans `FloatingCallPillView`, et à 56pt (cercle) ou aux paliers
+/// rectangle small/medium/large dans `CallBubbleView` : extrait pour ne pas
+/// dupliquer ni le layout ni la résolution de profil entre les sites de
+/// montage (spec 2026-07-07-call-banner-swipe-collapse-design.md, §
+/// CallBubbleView). `RoundedRectangle(cornerRadius:)` rend un cercle parfait
+/// quand `cornerRadius == min(width, height) / 2` — l'initialiseur
+/// `diameter:` s'appuie sur cette identité pour garder ses sites d'appel
+/// circulaires existants visuellement inchangés (spec
+/// 2026-08-03-call-bubble-pip-resize-morph-design.md).
 struct CallParticipantVisual: View {
-    let diameter: CGFloat
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
 
     // Audit P1-16 parity (see CallView.swift / FloatingCallPillView.swift /
     // CallBubbleView.swift) — injected by the caller instead of a
@@ -21,14 +28,35 @@ struct CallParticipantVisual: View {
     @ObservedObject var callManager: CallManager
     @State private var remoteProfile: MeeshyUser?
 
+    /// Initialiseur circulaire — les deux sites d'appel préexistants (avatar
+    /// de la pilule, palier cercle de la bulle) continuent de passer un seul
+    /// `diameter:`.
+    init(diameter: CGFloat, callManager: CallManager) {
+        self.width = diameter
+        self.height = diameter
+        self.cornerRadius = diameter / 2
+        self.callManager = callManager
+    }
+
+    /// Initialiseur rectangle — paliers small/medium/large de `CallBubbleView`,
+    /// où largeur et hauteur divergent et le rayon de coin ne dérive plus
+    /// d'un diamètre unique.
+    init(width: CGFloat, height: CGFloat, cornerRadius: CGFloat, callManager: CallManager) {
+        self.width = width
+        self.height = height
+        self.cornerRadius = cornerRadius
+        self.callManager = callManager
+    }
+
     var body: some View {
         Group {
             if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
                 CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
-                    .frame(width: diameter, height: diameter)
-                    .clipShape(Circle())
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .overlay(
-                        Circle().stroke(Color.white.opacity(0.25), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
                     )
                     .accessibilityHidden(true)
             } else {
@@ -41,31 +69,27 @@ struct CallParticipantVisual: View {
     }
 
     private var avatarView: some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(MeeshyColors.brandGradient)
-
-            Text(initial)
-                .font(.system(.callout, design: .rounded).weight(.bold))
-                .foregroundColor(.white)
-
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: diameter, height: diameter),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: diameter, height: diameter)
-                .clipShape(Circle())
+        // CachedAvatarImage : échec silencieux (initiales 2 lettres + accent
+        // indigo), zéro bouton retry sur un cercle d'appel 44-56pt — la
+        // résolution du profil reste cache-first via resolveRemoteProfile.
+        // Aux paliers rectangle (width != height), l'avatar reste à sa
+        // taille naturelle (min(width, height)) et centré sur un fond
+        // assorti à la forme, plutôt que d'étirer un portrait carré hors de
+        // son ratio.
+        ZStack {
+            if width != height {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.55))
             }
+            CachedAvatarImage(
+                urlString: remoteProfile?.avatar,
+                thumbHash: remoteProfile?.avatarThumbHash,
+                name: callManager.remoteUsername ?? "?",
+                size: min(width, height),
+                accentColor: MeeshyColors.brandPrimaryHex
+            )
         }
-        .frame(width: diameter, height: diameter)
+        .frame(width: width, height: height)
         .accessibilityHidden(true)
     }
 

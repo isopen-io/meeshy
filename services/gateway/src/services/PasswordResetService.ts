@@ -24,6 +24,7 @@ import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -233,9 +234,17 @@ export class PasswordResetService {
   /**
    * Complete password reset - Step 2
    */
+  /**
+   * `userId` is present on success ONLY, and exists for one reason: the
+   * transaction below invalidates EVERY session of that user, and the caller is
+   * the only layer that can also cut their live Socket.IO channels
+   * (`disconnectRevokedSessions`). Without it the route has no idea whose
+   * sockets to close, and a reset password left an intruder's socket streaming.
+   * It is never echoed to the client — the route returns `message` alone.
+   */
   async completePasswordReset(
     request: PasswordResetCompletion
-  ): Promise<{ success: boolean; message?: string; error?: string }> {
+  ): Promise<{ success: boolean; message?: string; error?: string; userId?: string }> {
     const {
       token,
       newPassword,
@@ -442,7 +451,8 @@ export class PasswordResetService {
 
       return {
         success: true,
-        message: 'Password reset successfully. All sessions have been invalidated.'
+        message: 'Password reset successfully. All sessions have been invalidated.',
+        userId: user.id
       };
 
     } catch (error) {
@@ -602,13 +612,20 @@ export class PasswordResetService {
     await this.cache.del(lockKey);
   }
 
+  /**
+   * `usedAt: null` n'atteignait AUCUN jeton : `create` ne renseigne pas la
+   * colonne, elle est donc absente du document de tout jeton encore vierge — soit
+   * exactement ceux que cette révocation existe pour annuler. Chaque demande
+   * laissait la précédente cliquable jusqu'à son expiration, et `revokedReason:
+   * 'NEW_REQUEST'` n'a jamais été écrit. Voir `utils/prisma-unset.ts`.
+   */
   private async revokeExistingTokens(userId: string): Promise<void> {
     await this.prisma.passwordResetToken.updateMany({
       where: {
         userId,
-        usedAt: null,
         isRevoked: false,
-        expiresAt: { gt: new Date() }
+        expiresAt: { gt: new Date() },
+        ...unsetOrNull('usedAt')
       },
       data: {
         isRevoked: true,

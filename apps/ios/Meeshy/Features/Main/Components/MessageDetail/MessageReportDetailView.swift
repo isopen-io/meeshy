@@ -75,6 +75,11 @@ struct MessageReportDetailView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(MeeshyColors.error)
                 )
+                // While submitting, the label is a bare `ProgressView`: the button
+                // loses its accessible name at the exact moment it is busy, on a
+                // destructive action. Pin the name to the action, as the doctrine
+                // in StatusComposerView:258 requires. Reuses the visible key.
+                .accessibilityLabel(String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main))
                 .disabled(isSubmittingReport)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -110,6 +115,9 @@ struct MessageReportDetailView: View {
                     .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
+                    // Decorative — the reason label immediately restates it; keep
+                    // VoiceOver from announcing the raw SF Symbol name.
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
@@ -128,6 +136,9 @@ struct MessageReportDetailView: View {
                         .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
+                        // Selection affordance — its meaning is now carried by the
+                        // .isSelected trait below, so hide the glyph from VoiceOver.
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
@@ -141,5 +152,9 @@ struct MessageReportDetailView: View {
                     )
             )
         }
+        // The chosen report reason is otherwise signalled by color + checkmark
+        // alone — expose it to VoiceOver via the trait so non-sighted users know
+        // which reason is active (HIG: never rely on color to convey state).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

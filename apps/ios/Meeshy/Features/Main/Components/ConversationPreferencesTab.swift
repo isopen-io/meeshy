@@ -156,16 +156,16 @@ struct ConversationPreferencesTab: View {
     // MARK: - Sections
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "My display", bundle: .main), icon: "paintbrush.fill", color: "A855F7") {
+        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "My display", bundle: .main), icon: "paintbrush.fill", color: accentColor) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed (86i doctrine:
                         // a scalable glyph would overflow the fixed frame) + hidden (the label carries the meaning).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "A855F7"))
+                        .foregroundColor(accent)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "A855F7").opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(accent.opacity(0.12)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Custom name", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .semibold))
@@ -190,6 +190,7 @@ struct ConversationPreferencesTab: View {
                                 .foregroundColor(theme.textMuted)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "conversation.prefs.custom-name.clear", defaultValue: "Clear custom name", bundle: .main))
                     }
                 }
                 .padding(12)
@@ -210,7 +211,7 @@ struct ConversationPreferencesTab: View {
             Button {
                 showEmojiPicker = true
             } label: {
-                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
+                settingsRow(icon: "heart.fill", iconColor: accentColor, title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
                     HStack(spacing: 6) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
                             Text(r).font(MeeshyFont.relative(24))
@@ -219,9 +220,10 @@ struct ConversationPreferencesTab: View {
                                 .font(MeeshyFont.relative(14))
                                 .foregroundColor(theme.textMuted)
                         }
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
                     }
                 }
             }
@@ -241,16 +243,18 @@ struct ConversationPreferencesTab: View {
     }
 
     private var organizationSection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.organization", defaultValue: "Organisation", bundle: .main), icon: "folder.fill", color: "3B82F6") {
+        settingsSection(title: String(localized: "conversation.prefs.section.organization", defaultValue: "Organisation", bundle: .main), icon: "folder.fill", color: MeeshyColors.infoHex) {
             // Pin toggle
-            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: String(localized: "conversation.prefs.pin", defaultValue: "Pin", bundle: .main)) {
-                Toggle("", isOn: Binding(
+            settingsToggleRow(
+                icon: "pin.fill",
+                iconColor: MeeshyColors.infoHex,
+                title: String(localized: "conversation.prefs.pin", defaultValue: "Pin", bundle: .main),
+                tint: MeeshyColors.info,
+                isOn: Binding(
                     get: { viewModel.prefs.isPinned ?? false },
                     set: { val in viewModel.setPinned(val) }
-                ))
-                .labelsHidden()
-                .tint(MeeshyColors.info)
-            }
+                )
+            )
 
             Divider().padding(.leading, 54).opacity(0.3)
 
@@ -317,25 +321,28 @@ struct ConversationPreferencesTab: View {
 
     private var notificationsSection: some View {
         settingsSection(title: String(localized: "conversation.prefs.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: "FF6B6B") {
-            settingsRow(icon: "bell.slash.fill", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.muted", defaultValue: "Muet", bundle: .main)) {
-                Toggle("", isOn: Binding(
+            settingsToggleRow(
+                icon: "bell.slash.fill",
+                iconColor: "FF6B6B",
+                title: String(localized: "conversation.prefs.muted", defaultValue: "Muet", bundle: .main),
+                tint: MeeshyColors.error,
+                isOn: Binding(
                     get: { viewModel.prefs.isMuted ?? false },
                     set: { val in viewModel.setMuted(val) }
-                ))
-                .labelsHidden()
-                .tint(MeeshyColors.error)
-            }
+                )
+            )
             Divider().padding(.leading, 54).opacity(0.3)
-            settingsRow(icon: "at", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main)) {
-                Toggle("", isOn: Binding(
+            settingsToggleRow(
+                icon: "at",
+                iconColor: "FF6B6B",
+                title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main),
+                tint: MeeshyColors.error,
+                isEnabled: !(viewModel.prefs.isMuted ?? false),
+                isOn: Binding(
                     get: { viewModel.prefs.mentionsOnly ?? false },
                     set: { val in viewModel.setMentionsOnly(val) }
-                ))
-                .labelsHidden()
-                .tint(MeeshyColors.error)
-                .disabled(viewModel.prefs.isMuted ?? false)
-            }
-            .opacity((viewModel.prefs.isMuted ?? false) ? 0.4 : 1)
+                )
+            )
         }
     }
 
@@ -414,6 +421,25 @@ struct ConversationPreferencesTab: View {
                     )
             )
         }
+    }
+
+    @ViewBuilder
+    private func settingsToggleRow(
+        icon: String,
+        iconColor: String,
+        title: String,
+        tint: Color,
+        isEnabled: Bool = true,
+        isOn: Binding<Bool>
+    ) -> some View {
+        settingsRow(icon: icon, iconColor: iconColor, title: title) {
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(tint)
+                .disabled(!isEnabled)
+                .accessibilityLabel(title)
+        }
+        .opacity(isEnabled ? 1 : 0.4)
     }
 
     @ViewBuilder

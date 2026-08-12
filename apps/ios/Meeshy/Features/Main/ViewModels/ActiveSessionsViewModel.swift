@@ -47,7 +47,7 @@ final class ActiveSessionsViewModel: ObservableObject {
             HapticFeedback.error()
             errorMessage = String(
                 localized: "sessions_revoke_error",
-                defaultValue: "Impossible de revoquer la session"
+                defaultValue: "Impossible de révoquer la session"
             )
             showError = true
         }
@@ -64,7 +64,7 @@ final class ActiveSessionsViewModel: ObservableObject {
             HapticFeedback.error()
             errorMessage = String(
                 localized: "sessions_revoke_all_error",
-                defaultValue: "Impossible de revoquer les sessions"
+                defaultValue: "Impossible de révoquer les sessions"
             )
             showError = true
         }

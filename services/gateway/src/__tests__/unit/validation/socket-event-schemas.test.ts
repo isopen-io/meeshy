@@ -102,6 +102,32 @@ describe('SocketMessageSendWithAttachmentsSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // Effect-field parity with SocketMessageSendSchema (text path) and the REST
+  // POST /messages route. Zod's z.object strips undeclared keys, so without
+  // these fields a view-once / blurred / expiring photo sent over the PRIMARY
+  // WebSocket attachment path is silently downgraded to a normal, non-ephemeral
+  // attachment (the recipient can re-open a "view-once" photo forever, a
+  // "blurred" spoiler renders unblurred, a disappearing message never expires).
+  // They must survive validation here exactly as they do on the text path.
+  it('preserves message-effect fields (isViewOnce / isBlurred / expiresAt / effectFlags / maxViewOnceCount)', () => {
+    const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+    const result = SocketMessageSendWithAttachmentsSchema.safeParse({
+      ...base,
+      isViewOnce: true,
+      isBlurred: true,
+      expiresAt,
+      effectFlags: 3,
+      maxViewOnceCount: 1,
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.isViewOnce).toBe(true);
+    expect(result.data.isBlurred).toBe(true);
+    expect(result.data.expiresAt).toBe(expiresAt);
+    expect(result.data.effectFlags).toBe(3);
+    expect(result.data.maxViewOnceCount).toBe(1);
+  });
 });
 
 describe('SocketMessageEditSchema', () => {

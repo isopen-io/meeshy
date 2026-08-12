@@ -22,6 +22,13 @@ export interface CommentThreadProps {
   onUnlikeComment?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onReply?: (commentId: string) => void;
+  /** Contrôle externe de l'expansion (ciblage d'une réponse depuis une
+   *  notification, déclencheur « n replies » de CommentItem). Non fourni =
+   *  état interne avec bouton d'expansion propre. En mode contrôlé replié,
+   *  le thread ne rend rien : le déclencheur vit chez l'appelant. */
+  expanded?: boolean;
+  /** Réponse à surligner (cible d'une navigation depuis une notification). */
+  highlightedReplyId?: string | null;
   className?: string;
 }
 
@@ -39,16 +46,22 @@ function CommentThread({
   onUnlikeComment,
   onDeleteComment,
   onReply,
+  expanded,
+  highlightedReplyId,
   className,
 }: CommentThreadProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isControlled = expanded !== undefined;
+  const isExpanded = isControlled ? expanded : internalExpanded;
 
   const handleExpand = useCallback(() => {
-    setExpanded(true);
+    setInternalExpanded(true);
     onLoadMore?.();
   }, [onLoadMore]);
 
-  if (!expanded && parentComment.replyCount > 0) {
+  if (!isExpanded && isControlled) return null;
+
+  if (!isExpanded && parentComment.replyCount > 0) {
     return (
       <div className={cn('', className)} data-testid={`comment-thread-${parentComment.id}`}>
         <button
@@ -65,7 +78,7 @@ function CommentThread({
     );
   }
 
-  if (!expanded) return null;
+  if (!isExpanded) return null;
 
   return (
     <div className={cn('', className)} data-testid={`comment-thread-${parentComment.id}`}>
@@ -99,6 +112,7 @@ function CommentThread({
           onReply={onReply}
           onDelete={onDeleteComment}
           depth={1}
+          isHighlighted={highlightedReplyId === reply.id}
         />
       ))}
 

@@ -56,7 +56,27 @@ jest.mock('../../../../middleware/auth', () => ({
 }));
 
 jest.mock('../../../../routes/auth/types', () => ({
-  formatUserResponse: jest.fn((user: any) => ({ id: user.id, username: user.username })),
+  formatUserResponse: jest.fn((user: any) => ({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    displayName: user.displayName,
+    bio: user.bio,
+    avatar: user.avatar,
+    banner: user.banner,
+    phoneNumber: user.phoneNumber,
+    role: user.role,
+    isActive: user.isActive,
+    systemLanguage: user.systemLanguage,
+    regionalLanguage: user.regionalLanguage,
+    customDestinationLanguage: user.customDestinationLanguage,
+    isOnline: user.isOnline,
+    lastActiveAt: user.lastActiveAt,
+    emailVerifiedAt: user.emailVerifiedAt,
+    profileCompletionRate: user.profileCompletionRate,
+  })),
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -253,6 +273,38 @@ describe('GET /me — unknown auth type', () => {
   });
 });
 
+describe('GET /me — registered user includes profile fields', () => {
+  it('returns 200 with user profile including bio, phoneNumber, banner, profileCompletionRate', async () => {
+    const userWithProfileFields = {
+      ...mockUser,
+      bio: 'This is my bio',
+      phoneNumber: '+33612345678',
+      banner: 'https://example.com/banner.jpg',
+      profileCompletionRate: 75,
+      emailVerifiedAt: new Date(),
+    };
+    const app = await buildApp({
+      authContext: {
+        isAuthenticated: true,
+        type: 'user',
+        userId: USER_ID,
+        registeredUser: userWithProfileFields as any,
+        displayName: 'Alice Smith',
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/me' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.user).toBeDefined();
+    expect(body.data.user.bio).toBe('This is my bio');
+    expect(body.data.user.phoneNumber).toBe('+33612345678');
+    expect(body.data.user.banner).toBe('https://example.com/banner.jpg');
+    expect(body.data.user.profileCompletionRate).toBe(75);
+    await app.close();
+  });
+});
+
 // ─── POST /refresh ────────────────────────────────────────────────────────────
 
 describe('POST /refresh — valid token', () => {
@@ -297,6 +349,62 @@ describe('POST /refresh — invalid token no userId', () => {
       payload: { token: 'invalid-jwt-token' },
     });
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('POST /refresh — signature forgée', () => {
+  // `jwt.decode` désérialise sans rien vérifier. Tant que la garde en aval ne
+  // testait que la PRÉSENCE de `userId`, un jeton portant n'importe quelle
+  // signature suffisait à obtenir un JWT valide signé par le serveur pour le
+  // compte visé, plus le profil complet — usurpation d'identité en une requête,
+  // sur une route publique d'un service joignable depuis l'Internet.
+  it('refuse un jeton dont la signature ne vérifie pas, sans session de confiance', async () => {
+    const jwt = await import('jsonwebtoken');
+    (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
+      throw new Error('invalid signature');
+    });
+    (jwt.decode as jest.Mock<any>).mockReturnValueOnce({
+      userId: USER_ID, username: 'victime', role: 'USER',
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'jeton-forge-avec-signature-bidon' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    // Et surtout : aucun jeton signé par le serveur n'est renvoyé.
+    expect(res.json().data?.token).toBeUndefined();
+    await app.close();
+  });
+
+  it('accepte une signature invalide UNIQUEMENT si une session de confiance la couvre', async () => {
+    const jwt = await import('jsonwebtoken');
+    (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
+      throw new Error('invalid signature');
+    });
+    (jwt.decode as jest.Mock<any>).mockReturnValueOnce({
+      userId: USER_ID, username: 'alice', role: 'USER',
+    });
+
+    const prisma = makePrisma({
+      userSession: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 'sess-1', userId: USER_ID, expiresAt: new Date() }),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'jeton-perime', sessionToken: 'session-de-confiance' },
+    });
+
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

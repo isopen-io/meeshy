@@ -280,6 +280,16 @@ public enum MessageDatabaseMigrations {
         // message-send-failure-retry-flow) — une ligne par tentative de
         // transport, clé `localId` = clientMessageId. Conservé après succès
         // pour la carte « Historique d'envoi » de la vue détails.
+        // Lieu partagé (JSON `SharedPlace`) — sans cette colonne, une position
+        // affichée en ligne (REST/socket) disparaît au relaunch : le pipeline
+        // ne stocke jamais l'`APIMessage` brut, seulement des colonnes
+        // dérivées (même principe que `callSummaryJson` ci-dessus).
+        migrator.registerMigration("messages_location") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "locationJson", .text)
+            }
+        }
+
         migrator.registerMigration("messages_send_attempts") { db in
             try db.create(table: "send_attempts") { t in
                 t.autoIncrementedPrimaryKey("id")

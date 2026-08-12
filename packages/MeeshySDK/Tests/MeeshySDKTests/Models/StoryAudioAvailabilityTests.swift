@@ -157,4 +157,64 @@ final class StoryAudioAvailabilityTests: XCTestCase {
         let effects = StoryEffects(mediaObjects: [makeVideo(id: "v1", volume: 1.0)])
         XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
     }
+
+    func test_hasBackgroundAudioTrack_recordedBackgroundAudioObject_returnsTrue() {
+        // Piste enregistrée/importée posée en FOND via l'éditeur (isBackground) :
+        // c'est un fond audio au même titre qu'une piste de bibliothèque — la
+        // note musicale du header doit la signaler.
+        var audio = makeAudioObject(id: "a1", volume: 1.0)
+        audio.isBackground = true
+        let effects = StoryEffects(audioPlayerObjects: [audio])
+        XCTAssertTrue(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
+
+    func test_hasBackgroundAudioTrack_recordedBackgroundAudioObject_mutedVolume_returnsFalse() {
+        var audio = makeAudioObject(id: "a1", volume: 0)
+        audio.isBackground = true
+        let effects = StoryEffects(audioPlayerObjects: [audio])
+        XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
+
+    func test_hasBackgroundAudioTrack_foregroundAudioObjectOnly_returnsFalse() {
+        // Les pistes foreground ont leur propre chip dans le reader — elles ne
+        // doivent toujours pas déclencher l'indicateur de FOND audio.
+        let effects = StoryEffects(audioPlayerObjects: [makeAudioObject(id: "a1", volume: 1.0)])
+        XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
+}
+
+// MARK: - Fusion des résultats de probe
+
+/// Un probe qui échoue ne doit JAMAIS être enregistré comme « vidéo muette » :
+/// les appelants sautent toute clé déjà présente, donc un `false` transitoire
+/// condamnait le bouton son pour toute la session du viewer.
+extension StoryAudioAvailabilityTests {
+
+    func test_merging_probeFailure_leavesTableUntouched() {
+        let table = StoryAudioAvailability.merging([:], id: "v1", probedTrackCount: nil)
+        XCTAssertNil(table["v1"])
+    }
+
+    func test_merging_probeFailure_doesNotOverwriteKnownValue() {
+        let table = StoryAudioAvailability.merging(["v1": true], id: "v1", probedTrackCount: nil)
+        XCTAssertEqual(table["v1"], true)
+    }
+
+    func test_merging_withAudioTrack_recordsTrue() {
+        let table = StoryAudioAvailability.merging([:], id: "v1", probedTrackCount: 1)
+        XCTAssertEqual(table["v1"], true)
+    }
+
+    /// Probe réussi ET zéro piste = vidéo réellement muette : on grave `false`,
+    /// ce qui évite de la reprober indéfiniment.
+    func test_merging_withoutAudioTrack_recordsFalse() {
+        let table = StoryAudioAvailability.merging([:], id: "v1", probedTrackCount: 0)
+        XCTAssertEqual(table["v1"], false)
+    }
+
+    func test_merging_keepsOtherEntries() {
+        let table = StoryAudioAvailability.merging(["other": true], id: "v1", probedTrackCount: 0)
+        XCTAssertEqual(table["other"], true)
+        XCTAssertEqual(table["v1"], false)
+    }
 }

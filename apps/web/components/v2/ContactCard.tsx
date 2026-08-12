@@ -101,9 +101,9 @@ export const ContactCard = memo(function ContactCard({
           <Badge size="sm" className={`${PRESENCE_BADGE_CLASS[presence]} text-white border-transparent`}>
             {presence === 'online'
               ? t('status.online')
-              : presence === 'recent'
-                ? t('status.recent', { defaultValue: 'Actif récemment' })
-                : t('status.away', { defaultValue: 'Absent' })}
+              : presence === 'away'
+                ? t('status.away', { defaultValue: 'Absent' })
+                : t('status.idle', { defaultValue: 'Inactif' })}
           </Badge>
         )}
 

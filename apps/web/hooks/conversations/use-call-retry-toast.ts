@@ -21,7 +21,7 @@ export function useCallRetryToast(
   conversationId: string | null,
   onRetry: (type: CallMediaType) => void,
 ): void {
-  const pendingRetry = useCallStore((s) => s.pendingRetry);
+  const pendingRetryMap = useCallStore((s) => s.pendingRetry);
   const clearCallRetry = useCallStore((s) => s.clearCallRetry);
   const { t } = useI18n('calls');
 
@@ -31,11 +31,13 @@ export function useCallRetryToast(
   useEffect(() => { onRetryRef.current = onRetry; }, [onRetry]);
 
   useEffect(() => {
-    if (!pendingRetry || !conversationId || pendingRetry.conversationId !== conversationId) return;
+    if (!conversationId) return;
+    const pendingRetry = pendingRetryMap[conversationId];
+    if (!pendingRetry) return;
     const type = pendingRetry.type;
-    // Consume the offer immediately: the toast now owns the retry; leaving it
-    // set would re-fire on the next render.
-    clearCallRetry();
+    // Consume only THIS conversation's offer: other conversations' offers
+    // (map keyed by conversationId) must survive to be surfaced later.
+    clearCallRetry(conversationId);
     toast.error(t('calls.toasts.callFailed'), {
       duration: 10_000,
       action: {
@@ -43,5 +45,5 @@ export function useCallRetryToast(
         onClick: () => onRetryRef.current(type),
       },
     });
-  }, [pendingRetry, conversationId, clearCallRetry, t]);
+  }, [pendingRetryMap, conversationId, clearCallRetry, t]);
 }

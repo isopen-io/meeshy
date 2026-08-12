@@ -27,6 +27,8 @@ export type PostReplySnapshotablePost = {
   shareCount: number | null;
   createdAt: Date;
   media: ReadonlyArray<{ thumbnailUrl: string | null }>;
+  /** Auteur du post cité. `null` tolère un appelant qui ne l'a pas chargé. */
+  author: { id: string; username: string; displayName: string | null } | null;
 };
 
 /** Forme servie au client (et stockée telle quelle dans `metadata.postReplyTo`). */
@@ -43,9 +45,29 @@ export type PostReplyTo = {
   shareCount: number;
   /** ISO 8601 — date de publication du post citée, figée. */
   createdAt: string;
+  /** Identifiant de l'auteur du post cité, figé. `null` sur snapshot legacy. */
+  authorId: string | null;
+  /**
+   * Nom d'affichage de l'auteur, figé. Chaîne vide sur snapshot legacy — le
+   * client retombe alors sur son libellé générique (« Humeur »).
+   */
+  authorName: string;
 };
 
 const PREVIEW_MAX = 80;
+
+/**
+ * Nom affiché pour l'auteur d'un post cité.
+ *
+ * `displayName ?? username` — même convention que `messageMentions.ts:148`,
+ * avec en plus le rejet des `displayName` blancs, qui produiraient une citation
+ * au titre vide.
+ */
+function resolveAuthorName(author: PostReplySnapshotablePost['author']): string {
+  if (!author) return '';
+  const display = (author.displayName ?? '').trim();
+  return display.length > 0 ? display : author.username;
+}
 
 /** Gèle les champs d'un Post en un `postReplyTo` sérialisable (Json Prisma). */
 export function buildPostReplyTo(post: PostReplySnapshotablePost): PostReplyTo {
@@ -59,6 +81,8 @@ export function buildPostReplyTo(post: PostReplySnapshotablePost): PostReplyTo {
     commentCount: post.commentCount ?? 0,
     shareCount: post.shareCount ?? 0,
     createdAt: post.createdAt.toISOString(),
+    authorId: post.author?.id ?? null,
+    authorName: resolveAuthorName(post.author),
   };
 }
 
@@ -73,6 +97,7 @@ export const POST_REPLY_SNAPSHOT_SELECT = Object.freeze({
   shareCount: true,
   createdAt: true,
   media: { select: { thumbnailUrl: true }, orderBy: { order: 'asc' as const }, take: 1 },
+  author: { select: { id: true, username: true, displayName: true } },
 });
 
 /**
@@ -95,6 +120,10 @@ export function normalizePostReplyTo(raw: unknown): PostReplyTo | null {
     commentCount: typeof s.commentCount === 'number' ? s.commentCount : 0,
     shareCount: typeof s.shareCount === 'number' ? s.shareCount : 0,
     createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date(0).toISOString(),
+    // Absents des snapshots antérieurs au 2026-08-10 : on les DÉGRADE, on ne
+    // rejette pas. Invalider ferait disparaître toutes les citations en base.
+    authorId: typeof s.authorId === 'string' ? s.authorId : null,
+    authorName: typeof s.authorName === 'string' ? s.authorName : '',
   };
 }
 

@@ -23,13 +23,54 @@ struct ConversationMediaGalleryView: View {
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
-    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
+    // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
+    // drive this root's rendering (`videoTransportLayer`) — the manager also
+    // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
+    // gallery root continuously. Scoped via onReceive($activeURL/$player).
+    private let videoManager = SharedAVPlayerManager.shared
+    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var videoManagerPlayer: AVPlayer?
 
     /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
     private var saveStateAccessibilityValue: String {
         saveCoordinator.isProcessing
             ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
             : ""
+    }
+
+    /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
+    /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
+    private var galleryPositionAccessibilityLabel: String {
+        String(
+            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
+            currentIndex + 1,
+            allAttachments.count
+        )
+    }
+
+    /// Libellé VoiceOver d'une image plein écran : la légende si le call site en
+    /// fournit une, sinon un libellé générique (l'image ne doit jamais être muette).
+    private func imageAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        if let caption = captionMap[attachment.id], !caption.isEmpty {
+            return caption
+        }
+        return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
+    }
+
+    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
+    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
+    private func mediaMetadataAccessibilityLabel(_ att: MessageAttachment) -> String {
+        var parts: [String] = []
+        if let w = att.width, let h = att.height, w > 0, h > 0 {
+            parts.append(String(
+                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
+                w, h
+            ))
+        }
+        if att.fileSize > 0 {
+            parts.append(att.fileSizeFormatted)
+        }
+        return ListFormatter.localizedString(byJoining: parts)
     }
 
     var body: some View {
@@ -59,6 +100,8 @@ struct ConversationMediaGalleryView: View {
             cacheAttachment(allAttachments.first(where: { $0.id == startAttachmentId }))
         }
         .animation(.easeInOut(duration: 0.2), value: showControls)
+        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
+        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
     }
 
     // MARK: - Pager
@@ -247,6 +290,10 @@ struct ConversationMediaGalleryView: View {
                     offset = .zero
                 }
             }
+            // Sans label, l'image plein écran est un élément VoiceOver muet quand
+            // on balaie la galerie. Caption si fournie, sinon libellé générique.
+            .accessibilityLabel(imageAccessibilityLabel(attachment))
+            .accessibilityAddTraits(.isImage)
         } else {
             // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
             Image(systemName: "photo")
@@ -300,6 +347,7 @@ struct ConversationMediaGalleryView: View {
                         .adaptiveGlass(in: Capsule())
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.3), value: currentIndex)
+                        .accessibilityLabel(galleryPositionAccessibilityLabel)
                 }
 
                 Spacer()
@@ -356,8 +404,8 @@ struct ConversationMediaGalleryView: View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             if att.type == .video,
-               videoManager.activeURL == att.fileUrl,
-               videoManager.player != nil {
+               videoManagerActiveURL == att.fileUrl,
+               videoManagerPlayer != nil {
                 VideoTransportControls(
                     manager: videoManager,
                     accentColor: accentColor,
@@ -414,6 +462,11 @@ struct ConversationMediaGalleryView: View {
                 }
                 Spacer()
             }
+            // Regroupe dimensions + poids en un seul arrêt VoiceOver et remplace
+            // le « × » (lu « multiplication ») par un « par » localisé.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
+            .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -501,7 +554,14 @@ private struct GalleryVideoPage: View {
     let accentColor: String
     var onCacheActivation: () -> Void
 
-    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
+    // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
+    // `isPlaying` drive this page's rendering — the manager also publishes
+    // `currentTime` at 5-10Hz, which used to re-render EVERY gallery page
+    // continuously. Scoped via onReceive($activeURL/$player/$isPlaying).
+    private let videoManager = SharedAVPlayerManager.shared
+    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var videoManagerPlayer: AVPlayer?
+    @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
     @State private var resolvedAvailability: VideoAvailability = .needsDownload
     @StateObject private var downloader = AttachmentDownloader()
 
@@ -516,11 +576,11 @@ private struct GalleryVideoPage: View {
     }
 
     private var isPlayerActive: Bool {
-        videoManager.activeURL == attachment.fileUrl && videoManager.isPlaying
+        videoManagerActiveURL == attachment.fileUrl && videoManagerIsPlaying
     }
 
     private var isPlayerAttached: Bool {
-        videoManager.activeURL == attachment.fileUrl
+        videoManagerActiveURL == attachment.fileUrl
     }
 
     private func resolveAvailability() async {
@@ -548,7 +608,7 @@ private struct GalleryVideoPage: View {
             }
 
             if isPlayerActive || isPlayerAttached {
-                if let player = videoManager.player {
+                if let player = videoManagerPlayer {
                     FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
                         .ignoresSafeArea()
                 }
@@ -578,6 +638,9 @@ private struct GalleryVideoPage: View {
                 }
             }
         }
+        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
+        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
     }
 
     @ViewBuilder
@@ -600,7 +663,12 @@ private struct GalleryVideoPage: View {
         Button {
             switch availability {
             case .ready:
-                videoManager.load(urlString: attachment.fileUrl)
+                // Défense en profondeur : la galerie n'exprime jamais de mute
+                // forcé — si une autre surface (le feed) a laissé `isForceMuted`
+                // activé (elle le relâche normalement d'elle-même en perdant
+                // l'activité), on ne veut jamais en hériter silencieusement ici.
+                videoManager.isForceMuted = false
+                videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
                 videoManager.play()
                 onCacheActivation()
                 HapticFeedback.light()

@@ -1,11 +1,7 @@
 // Conversation queries
 export {
-  useConversationsQuery,
-  useConversationsWithPagination,
   useConversationQuery,
   useInfiniteConversationsQuery,
-  useCreateConversationMutation,
-  useDeleteConversationMutation,
 } from './use-conversations-query';
 
 // Conversation pagination wrapper (drop-in replacement)
@@ -35,14 +31,6 @@ export {
   useDeleteNotificationMutation,
   useDeleteAllReadNotificationsMutation,
 } from './use-notifications-query';
-
-// Message mutations
-export {
-  useSendMessageMutation,
-  useEditMessageMutation,
-  useDeleteMessageMutation,
-  useMarkAsReadMutation,
-} from './use-send-message-mutation';
 
 // Socket cache sync
 export {

@@ -14,9 +14,11 @@ import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
+import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import javax.inject.Singleton
 
 @Module
@@ -69,6 +71,14 @@ internal object DatabaseModule {
     @Provides
     fun providesProfileStatsCacheDao(database: MeeshyDatabase): ProfileStatsCacheDao =
         database.profileStatsCacheDao()
+
+    @Provides
+    fun providesStatusBarCacheDao(database: MeeshyDatabase): StatusBarCacheDao =
+        database.statusBarCacheDao()
+
+    @Provides
+    fun providesTusUploadCheckpointDao(database: MeeshyDatabase): TusUploadCheckpointDao =
+        database.tusUploadCheckpointDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }

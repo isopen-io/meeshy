@@ -33,7 +33,7 @@ final class TabNavigationTests: XCTestCase {
     func test_switch_hubToDeepToAnotherHub_keepsStack() {
         let router = Router()
         router.push(.profile)
-        router.push(.editProfile)
+        router.push(.userStats)
         XCTAssertTrue(router.isDeepRoute)
 
         router.push(.settings)

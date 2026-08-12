@@ -262,7 +262,18 @@ extension StoryCanvasUIView {
         // démarrent ensemble une fois tous les médias chargés. Réutilise les
         // entry points canoniques pour ne pas dupliquer la session/setup
         // logic.
-        if pendingBackgroundActivation {
+        // Le « GO » ne se consomme PAS sous pause. Ce chemin est asynchrone (il
+        // attend la fin du chargement des médias) : quand l'hôte a gelé la
+        // lecture entre-temps — interstitiel d'identité, overlay commentaires,
+        // appel — le démarrer ici faisait jouer la story sous le gel. On
+        // entendait la story PENDANT l'interlude alors même que le canvas était
+        // né en pause (bug user 2026-07-25).
+        //
+        // L'intention reste ARMÉE (`pendingBackgroundActivation` non consommé) :
+        // `setStoryPlaybackPaused(false)` la reprend à la reprise, rien n'est
+        // perdu. La progression de contenu, elle, continue d'être notifiée plus
+        // bas — l'overlay de chargement doit se fermer même sous gel.
+        if pendingBackgroundActivation, !isPlaybackPaused {
             pendingBackgroundActivation = false
             if mode == .play {
                 // Cale les players sur le playhead courant AVANT de lever les

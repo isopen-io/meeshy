@@ -320,8 +320,11 @@ describe('StatusHandler', () => {
       const deps = makeDeps();
       const handler = new StatusHandler(deps);
       const socket = makeSocket();
+      // A stop retracts a start: the start is what makes this socket's stop
+      // addressable at all (see the tracking-state contract in StatusHandler).
+      await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
       await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
-      const emit = (socket.to as jest.Mock).mock.results[0].value.emit;
+      const emit = (socket.to as jest.Mock).mock.results[1].value.emit;
       expect(emit).toHaveBeenCalledWith('typing:stop', expect.objectContaining({ isTyping: false }));
     });
 
@@ -330,6 +333,7 @@ describe('StatusHandler', () => {
       const deps = makeDeps({ prisma });
       const handler = new StatusHandler(deps);
       const socket = makeSocket();
+      await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
       await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
       expect(socket.to).not.toHaveBeenCalled();
     });
@@ -339,8 +343,26 @@ describe('StatusHandler', () => {
       const deps = makeDeps({ prisma });
       const handler = new StatusHandler(deps);
       const socket = makeSocket();
+      await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
       await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
       expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    it('does nothing at all for a stop with no matching start', async () => {
+      // typing:start is rate-limited, typing:stop is not. An unmatched stop
+      // must therefore cost nothing — no participant lookup, no blocked-viewer
+      // query, no room fan-out — or one unthrottled client packet buys three
+      // DB round-trips and a broadcast to every socket in the conversation.
+      const prisma = makePrisma();
+      const privacyService = makePrivacyService(true);
+      const deps = makeDeps({ prisma, privacyService });
+      const handler = new StatusHandler(deps);
+      const socket = makeSocket();
+      await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(prisma.participant.findFirst).not.toHaveBeenCalled();
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+      expect(privacyService.shouldShowTypingIndicator).not.toHaveBeenCalled();
     });
   });
 

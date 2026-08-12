@@ -159,4 +159,78 @@ final class OutboxRetrySchedulerTests: XCTestCase {
         // Immediately cancel — should not crash
         OutboxRetryScheduler.shared.schedule(at: nil)
     }
+
+    // MARK: - startObservingMutationEnqueued (outbox-04)
+
+    func test_startObservingMutationEnqueued_whenMutationFires_callsFlushOnce() async {
+        let subject = PassthroughSubject<Void, Never>()
+        var count = 0
+        let exp = expectation(description: "flush called once")
+
+        OutboxRetryScheduler.shared.startObservingMutationEnqueued(
+            mutationPublisher: subject.eraseToAnyPublisher(),
+            flush: { @MainActor in
+                count += 1
+                if count == 1 { exp.fulfill() }
+            }
+        )
+
+        subject.send(())
+
+        await fulfillment(of: [exp], timeout: 1.0)
+        XCTAssertEqual(count, 1)
+    }
+
+    /// Une rafale de mutations (double-tap like, commentaires d'affilée) doit
+    /// se coalescer en UN seul flush groupé après le débounce.
+    func test_startObservingMutationEnqueued_burstOfMutations_debouncesToSingleFlush() async throws {
+        let subject = PassthroughSubject<Void, Never>()
+        var count = 0
+        let exp = expectation(description: "single debounced flush")
+
+        OutboxRetryScheduler.shared.startObservingMutationEnqueued(
+            mutationPublisher: subject.eraseToAnyPublisher(),
+            flush: { @MainActor in
+                count += 1
+                if count == 1 { exp.fulfill() }
+            }
+        )
+
+        subject.send(())
+        subject.send(())
+        subject.send(())
+
+        await fulfillment(of: [exp], timeout: 2.0)
+        try await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertEqual(count, 1, "3 mutations dans la fenêtre de débounce = 1 seul flush")
+    }
+
+    /// Garde-fou anti-pollution inter-tests du singleton : un second appel
+    /// remplace la souscription précédente.
+    func test_startObservingMutationEnqueued_whenCalledTwice_previousSubscriptionIsCancelled() async {
+        let firstSubject = PassthroughSubject<Void, Never>()
+        let secondSubject = PassthroughSubject<Void, Never>()
+        var firstCount = 0
+        var secondCount = 0
+        let exp = expectation(description: "second subscription flushes")
+
+        OutboxRetryScheduler.shared.startObservingMutationEnqueued(
+            mutationPublisher: firstSubject.eraseToAnyPublisher(),
+            flush: { @MainActor in firstCount += 1 }
+        )
+        OutboxRetryScheduler.shared.startObservingMutationEnqueued(
+            mutationPublisher: secondSubject.eraseToAnyPublisher(),
+            flush: { @MainActor in
+                secondCount += 1
+                if secondCount == 1 { exp.fulfill() }
+            }
+        )
+
+        firstSubject.send(())
+        secondSubject.send(())
+
+        await fulfillment(of: [exp], timeout: 2.0)
+        XCTAssertEqual(firstCount, 0, "la première souscription doit être annulée par la seconde")
+        XCTAssertEqual(secondCount, 1)
+    }
 }

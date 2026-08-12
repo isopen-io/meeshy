@@ -15,11 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -198,7 +198,7 @@ data class StoryComposerUiState(
 class StoryComposerViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
     private val sessionRepository: SessionRepository,
-    private val mediaRepository: MediaRepository,
+    private val mediaUploader: StoryMediaUploader,
     private val mediaUploadQueue: MediaUploadQueue,
     private val workManager: WorkManager,
 ) : ViewModel() {
@@ -590,7 +590,7 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(isUploadingMedia = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                when (val result = mediaRepository.upload(accepted)) {
+                when (val result = mediaUploader.upload(accepted)) {
                     is NetworkResult.Success -> applyUploaded(result.data)
                     is NetworkResult.Failure -> onUploadFailed(accepted, result.error)
                 }
@@ -634,7 +634,7 @@ class StoryComposerViewModel @Inject constructor(
      */
     private suspend fun queueDurably(items: List<MediaUploadItem>) {
         items.forEach { item ->
-            val cmid = mediaUploadQueue.enqueue(item)
+            val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
             _state.update {
                 it.copy(
                     deck = it.deck.addMediaToSelected(cmid),

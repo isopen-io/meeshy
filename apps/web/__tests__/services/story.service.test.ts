@@ -41,16 +41,17 @@ describe('storyService', () => {
   // ── getStories ─────────────────────────────────────────────────────────────
 
   describe('getStories', () => {
+    function page(stories: Post[], pagination?: { hasMore: boolean; nextCursor?: string | null }) {
+      return { success: true, data: { success: true, data: stories, pagination } };
+    }
+
     it('returns the data array from the response', async () => {
       const story = makePost();
-      mockApi.get.mockResolvedValue({
-        success: true,
-        data: { success: true, data: [story] },
-      });
+      mockApi.get.mockResolvedValue(page([story], { hasMore: false }));
 
       const result = await storyService.getStories();
 
-      expect(mockApi.get).toHaveBeenCalledWith('/posts/feed/stories');
+      expect(mockApi.get).toHaveBeenCalledWith('/posts/feed/stories', { limit: 50, cursor: undefined });
       expect(result).toEqual([story]);
     });
 
@@ -61,6 +62,64 @@ describe('storyService', () => {
       const result = await storyService.getStories();
 
       expect(result).toEqual([]);
+      expect(mockApi.get).toHaveBeenCalledTimes(1);
+    });
+
+    // La route plafonne `limit` à 50 et annonce la suite par
+    // `pagination.hasMore`/`nextCursor`. Sans drain, le tray web restait coupé à
+    // 50 stories — même défaut qu'iOS avant le cycle 80, pour la même raison.
+    it('drains the following pages while hasMore, chaining nextCursor', async () => {
+      mockApi.get
+        .mockResolvedValueOnce(page([makePost({ id: 's1' })], { hasMore: true, nextCursor: 'c1' }))
+        .mockResolvedValueOnce(page([makePost({ id: 's2' })], { hasMore: true, nextCursor: 'c2' }))
+        .mockResolvedValueOnce(page([makePost({ id: 's3' })], { hasMore: false }));
+
+      const result = await storyService.getStories();
+
+      expect(result.map(s => s.id)).toEqual(['s1', 's2', 's3']);
+      expect(mockApi.get).toHaveBeenNthCalledWith(1, '/posts/feed/stories', { limit: 50, cursor: undefined });
+      expect(mockApi.get).toHaveBeenNthCalledWith(2, '/posts/feed/stories', { limit: 50, cursor: 'c1' });
+      expect(mockApi.get).toHaveBeenNthCalledWith(3, '/posts/feed/stories', { limit: 50, cursor: 'c2' });
+    });
+
+    // Un serveur qui annonce `hasMore` sans fin ne doit pas faire boucler le
+    // client indéfiniment (même borne que le drain iOS).
+    it('stops at the page cap even when the server keeps saying hasMore', async () => {
+      mockApi.get.mockResolvedValue(page([makePost()], { hasMore: true, nextCursor: 'always-more' }));
+
+      const result = await storyService.getStories();
+
+      expect(mockApi.get).toHaveBeenCalledTimes(6);
+      expect(result).toHaveLength(6);
+    });
+
+    // `hasMore: true` sans curseur est une page suivante qu'on ne sait pas
+    // demander : boucler dessus rejouerait la même page (cycle 80, D2).
+    it('stops when hasMore carries no cursor', async () => {
+      mockApi.get.mockResolvedValue(page([makePost()], { hasMore: true, nextCursor: null }));
+
+      const result = await storyService.getStories();
+
+      expect(mockApi.get).toHaveBeenCalledTimes(1);
+      expect(result).toHaveLength(1);
+    });
+
+    it('stops when hasMore carries an empty cursor', async () => {
+      mockApi.get.mockResolvedValue(page([makePost()], { hasMore: true, nextCursor: '' }));
+
+      await storyService.getStories();
+
+      expect(mockApi.get).toHaveBeenCalledTimes(1);
+    });
+
+    // Rétro-compat : une réponse sans bloc `pagination` est une page unique.
+    it('treats a response without a pagination block as a single page', async () => {
+      mockApi.get.mockResolvedValue({ success: true, data: { success: true, data: [makePost()] } });
+
+      const result = await storyService.getStories();
+
+      expect(mockApi.get).toHaveBeenCalledTimes(1);
+      expect(result).toHaveLength(1);
     });
   });
 

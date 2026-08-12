@@ -4,7 +4,11 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
 import me.meeshy.sdk.model.ApiResponse
+import okhttp3.Headers
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
+import retrofit2.Response
 import java.io.IOException
 
 class ApiCallTest {
@@ -58,5 +62,71 @@ class ApiCallTest {
         assertThat(NetworkResult.Success(2).map { it * 3 }).isEqualTo(NetworkResult.Success(6))
         val failure = NetworkResult.Failure(ApiError("nope"))
         assertThat(failure.map { it }).isSameInstanceAs(failure)
+    }
+
+    // --- headerCall: raw retrofit2.Response calls that carry their result in a
+    // response header rather than the JSON body (TUS session creation) ---
+
+    @Test
+    fun headerCall_successfulResponse_extractsTheNamedHeader() = runTest {
+        val response = Response.success(Unit, Headers.headersOf("Location", "https://gate/api/v1/uploads/abc"))
+
+        val result = headerCall("Location") { response }
+
+        assertThat(result).isEqualTo(NetworkResult.Success("https://gate/api/v1/uploads/abc"))
+    }
+
+    @Test
+    fun headerCall_successfulResponseMissingHeader_isFailure() = runTest {
+        val result = headerCall("Location") { Response.success(Unit) }
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun headerCall_httpErrorResponse_isFailureCarryingTheStatus() = runTest {
+        val error = Response.error<Unit>(403, "denied".toResponseBody("text/plain".toMediaTypeOrNull()))
+
+        val result = headerCall("Location") { error }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.httpStatus).isEqualTo(403)
+    }
+
+    @Test
+    fun headerCall_ioException_isNetworkFailure() = runTest {
+        val result = headerCall<Unit>("Location") { throw IOException("offline") }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("NETWORK")
+    }
+
+    // --- chunkCall: raw retrofit2.Response<Unit> calls whose only signal is HTTP
+    // success/failure (an intermediate TUS chunk PATCH — 204 No Content, no body,
+    // no header payload the caller needs) ---
+
+    @Test
+    fun chunkCall_successfulResponse_isSuccess() = runTest {
+        val result = chunkCall { Response.success(Unit) }
+
+        assertThat(result).isEqualTo(NetworkResult.Success(Unit))
+    }
+
+    @Test
+    fun chunkCall_httpErrorResponse_isFailureCarryingTheStatus() = runTest {
+        val error = Response.error<Unit>(409, "offset mismatch".toResponseBody("text/plain".toMediaTypeOrNull()))
+
+        val result = chunkCall { error }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.httpStatus).isEqualTo(409)
+    }
+
+    @Test
+    fun chunkCall_ioException_isNetworkFailure() = runTest {
+        val result = chunkCall { throw IOException("offline") }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("NETWORK")
     }
 }

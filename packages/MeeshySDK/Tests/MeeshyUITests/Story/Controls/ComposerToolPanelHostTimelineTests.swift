@@ -18,7 +18,9 @@ final class ComposerToolPanelHostTimelineTests: XCTestCase {
     }
 
     func test_defaultPanelHeight_timeline_isNoLongerZero() {
-        XCTAssertEqual(ComposerToolPanelHost.defaultPanelHeight(for: .timeline), 320)
+        // 392 = opérations + transport + scrubber + 3 pistes compactes + footer
+        // (2026-07-20 : +72 pour la bande d'opérations — cf. defaultPanelHeight source).
+        XCTAssertEqual(ComposerToolPanelHost.defaultPanelHeight(for: .timeline), 392)
     }
 
     func test_defaultPanelHeight_otherTools_unchanged() {
