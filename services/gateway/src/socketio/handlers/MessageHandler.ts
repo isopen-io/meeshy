@@ -1050,6 +1050,22 @@ export class MessageHandler {
         (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })
       );
 
+      // Le badge de non-lus doit ce retrait aux mêmes destinataires.
+      //
+      // `conversation:unread-updated` n'était émis que par les chemins d'ENVOI :
+      // aucun chemin de suppression ne le repoussait, et la pastille continuait
+      // de compter un message que le lecteur voit disparaître. Le décompte est
+      // déjà juste côté service (`getUnreadCountsForParticipants` filtre
+      // `deletedAt: null`) — il ne manquait que de le redemander.
+      //
+      // L'exclusion porte sur l'AUTEUR (`message.senderId`), pas sur l'acteur :
+      // c'est la seule identité dont le compteur ne peut pas bouger ici (ses
+      // propres messages ne comptent jamais dans ses non-lus), tandis qu'un
+      // modérateur qui supprime le message d'un autre est, lui, un destinataire
+      // à rafraîchir. C'est exactement le contrat de l'unité partagée avec les
+      // trois transports d'envoi.
+      await this._updateUnreadCounts(message.senderId, message.conversationId);
+
       // Skip the DELETER, not the author. A moderator/admin may delete another
       // user's message (`message.senderId` is the author's participant id, not
       // the actor's) — passing the author here skipped the offline author, who
@@ -1397,7 +1413,7 @@ export class MessageHandler {
       );
 
       // Mettre à jour unread counts (re-uses the participant list already fetched above)
-      await this._updateUnreadCounts(message, normalizedId, sharedParticipants);
+      await this._updateUnreadCounts(message.senderId, normalizedId, sharedParticipants);
 
       // Auto-mark delivered for online recipients so the sender's checkmark
       // upgrades from "sent" (✓) to "delivered" (✓✓ gray) immediately, even
@@ -1912,9 +1928,13 @@ export class MessageHandler {
    * `preloadedParticipants` est transmis tel quel — `broadcastNewMessage` a déjà
    * chargé cette liste pour la file hors ligne, et un second aller-retour sur le
    * chemin le plus chaud du service n'est pas acceptable.
+   *
+   * Ne prend que le `senderId` — la seule chose que l'unité lise du message.
+   * Exiger un `Message` complet obligeait les appelants qui n'en ont qu'une
+   * projection (la SUPPRESSION lit un `select` étroit) à mentir par cast.
    */
   private async _updateUnreadCounts(
-    message: Message,
+    senderId: string,
     conversationId: string,
     preloadedParticipants?: { id: string; userId: string | null; joinedAt: Date }[]
   ): Promise<void> {
@@ -1923,7 +1943,7 @@ export class MessageHandler {
       prisma: this.prisma,
       readStatusService: this.readStatusService,
       conversationId,
-      senderId: message.senderId,
+      senderId,
       participants: preloadedParticipants,
       onError: (error) => handlerLogger.warn('unread count update failed', { error }),
     });

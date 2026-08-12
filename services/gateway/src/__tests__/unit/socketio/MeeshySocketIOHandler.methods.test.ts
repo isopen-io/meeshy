@@ -1,7 +1,7 @@
 /**
  * Unit tests for MeeshySocketIOHandler — methods other than broadcastMessage.
- * Covers: getManager, broadcastMessage (delegated/no-manager/error),
- * getConnectedUsers (no manager, with manager, error).
+ * Covers: getManager, broadcastMessage, getConnectedUsers (no manager, with
+ * manager, error).
  *
  * @jest-environment node
  */
@@ -53,27 +53,13 @@ describe('getManager', () => {
   });
 });
 
-// ─── broadcastMessage ─────────────────────────────────────────────────────────
-
-describe('broadcastMessage', () => {
-  it('does nothing when the manager is not initialized', async () => {
-    const handler = makeHandlerNoManager();
-    await expect(handler.broadcastMessage({ id: 'm-1' }, 'conv-1')).resolves.toBeUndefined();
-  });
-
-  it('delegates to manager.broadcastMessage with the message and conversation id', async () => {
-    const { handler, manager } = makeHandler();
-    await handler.broadcastMessage({ id: 'm-1' }, 'conv-42');
-    expect(manager.broadcastMessage).toHaveBeenCalledWith({ id: 'm-1' }, 'conv-42');
-  });
-
-  it('catches and swallows errors thrown by the manager', async () => {
-    const { handler } = makeHandler({
-      broadcastMessage: jest.fn<any>().mockRejectedValue(new Error('crash')),
-    });
-    await expect(handler.broadcastMessage({ id: 'm-1' }, 'conv-1')).resolves.toBeUndefined();
-  });
-});
+// `sendNotificationToUser` n'a jamais existé sur `MeeshySocketIOHandler` — ni
+// dans l'histoire du fichier, ni ailleurs dans le service, et aucun appelant ne
+// la nomme. Le bloc qui la décrivait a été retiré plutôt qu'accompagné d'une
+// production écrite pour lui : ajouter une méthode que rien n'appelle pour
+// satisfaire un test imaginé, c'est écrire du code mort sous garantie. Les
+// notifications passent par `NotificationService` et, pour le transport,
+// `MeeshySocketIOManager.sendToUser`.
 
 // ─── getConnectedUsers ────────────────────────────────────────────────────────
 

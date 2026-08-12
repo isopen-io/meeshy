@@ -158,12 +158,17 @@ function makePrisma(overrides: Record<string, any> = {}) {
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(makeUser()),
     },
+    // Le plafond de tentatives est consommé par un `updateMany` CONDITIONNEL
+    // (`{ attempts: { lt: MAX } }` + `$inc`), une seule écriture atomique : un
+    // `if (attempts >= MAX)` suivi d'un incrément serait un TOCTOU que des
+    // requêtes concurrentes franchiraient toutes. C'est le compte rendu par
+    // cette écriture — 0 = plafond atteint — qui décide, jamais la valeur lue
+    // avec le token. Un double sans `updateMany` faisait lever la méthode
+    // entière, et chaque cas mesuré rendait `internal_error`.
     phonePasswordResetToken: {
       create: jest.fn<any>().mockResolvedValue({ id: 'token-1' }),
       findUnique: jest.fn<any>().mockResolvedValue(makeToken()),
       update: jest.fn<any>().mockResolvedValue({}),
-      // Consommation atomique des tentatives (garde conditionnelle `< MAX` +
-      // increment) : count 1 = tentative accordée, count 0 = cap atteint.
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     passwordResetToken: {
@@ -356,9 +361,7 @@ describe('PhonePasswordResetService.verifyIdentity', () => {
     expect(result.error).toBe('invalid_step');
   });
 
-  it('returns max_attempts_exceeded when the atomic attempt reservation is refused', async () => {
-    // Le cap n'est plus un `if (attempts >= MAX)` lu puis incrémenté (TOCTOU) :
-    // c'est l'updateMany conditionnel qui tranche — count 0 = cap atteint.
+  it('returns max_attempts_exceeded when the conditional consume matches nothing', async () => {
     const prisma = makePrisma();
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockResolvedValue(
       makeToken({ identityAttempts: 3 })
@@ -481,8 +484,7 @@ describe('PhonePasswordResetService.verifyCode', () => {
     expect(result.error).toBe('invalid_step');
   });
 
-  it('returns max_attempts_exceeded when the atomic attempt reservation is refused', async () => {
-    // Même garde atomique que verifyIdentity : count 0 = cap de codes atteint.
+  it('returns max_attempts_exceeded when the conditional consume matches nothing', async () => {
     const prisma = makePrisma();
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockResolvedValue(
       makeCodeReadyToken({ codeAttempts: 5 })

@@ -81,15 +81,16 @@ describe('resolveParticipant', () => {
     expect(result).toBeNull();
   });
 
-  // La résolution anonyme n'est PLUS purement mémoire : elle revérifie en base
-  // que le participant est actif dans la conversation DEMANDÉE — sans quoi un
-  // socket anonyme pourrait passer un conversationId arbitraire à n'importe
-  // quel handler gaté participant et diffuser dans une room étrangère.
-  it('verifies the anonymous participant against the requested conversation in DB', async () => {
+  // Le chemin anonyme LIT la base, et ce n'est pas une dépense évitable : sans
+  // cette vérification, une socket anonyme pouvait passer un `conversationId`
+  // arbitraire à n'importe quel handler gardé par l'appartenance (typing,
+  // réactions…) et diffuser dans un salon dont elle ne fait pas partie. La
+  // lecture re-teste aussi `isActive` : un invité banni depuis sa connexion est
+  // rejeté. Ce bloc verrouillait la version qui faisait confiance à l'identité
+  // en mémoire.
+  it('vérifie en base que l\'invité appartient à la conversation DEMANDÉE', async () => {
     const anon = makeAnonymousUser();
-    const prisma = makePrisma({
-      participant: { id: 'part-anon-1', displayName: 'Anonymous Alice', nickname: null },
-    });
+    const prisma = makePrisma({ participant: { id: 'part-anon-1', displayName: 'Anon', nickname: null } });
 
     const result = await resolveParticipant({
       prisma: prisma as any,
@@ -105,29 +106,26 @@ describe('resolveParticipant', () => {
     expect(prisma.participant.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'part-anon-1', conversationId: 'conv-1', isActive: true },
-      }),
+      })
     );
   });
 
-  it('returns null when the anonymous participant is not active in the requested conversation', async () => {
+  it('rejette l\'invité qui n\'a pas de ligne active dans la conversation demandée', async () => {
     const anon = makeAnonymousUser();
-    const prisma = makePrisma({ participant: null });
 
     const result = await resolveParticipant({
-      prisma: prisma as any,
+      prisma: makePrisma({ participant: null }) as any,
       userIdOrToken: anon.id,
-      conversationId: 'conv-other',
+      conversationId: 'conv-etrangere',
       connectedUsers: makeConnectedUsers(anon),
     });
 
     expect(result).toBeNull();
   });
 
-  it('falls back to user.id as the participant lookup key when participantId is missing', async () => {
+  it('cherche sous user.id quand le participantId manque en mémoire', async () => {
     const anon = makeAnonymousUser({ participantId: undefined });
-    const prisma = makePrisma({
-      participant: { id: anon.id, displayName: 'Anonymous Alice', nickname: null },
-    });
+    const prisma = makePrisma({ participant: { id: anon.id, displayName: 'Anon', nickname: null } });
 
     const result = await resolveParticipant({
       prisma: prisma as any,
@@ -136,19 +134,15 @@ describe('resolveParticipant', () => {
       connectedUsers: makeConnectedUsers(anon),
     });
 
-    expect(prisma.participant.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: anon.id }),
-      }),
-    );
     expect(result!.participantId).toBe(anon.id);
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: anon.id }) })
+    );
   });
 
-  it('uses "Anonymous User" display name when neither DB row nor socket carry one', async () => {
+  it('uses "Anonymous User" display name when anonymous user has no displayName', async () => {
     const anon = makeAnonymousUser({ displayName: undefined });
-    const prisma = makePrisma({
-      participant: { id: 'part-anon-1', displayName: '', nickname: null },
-    });
+    const prisma = makePrisma({ participant: { id: 'part-anon-1', displayName: null, nickname: null } });
 
     const result = await resolveParticipant({
       prisma: prisma as any,
