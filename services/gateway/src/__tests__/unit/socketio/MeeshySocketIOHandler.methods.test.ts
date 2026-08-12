@@ -1,7 +1,6 @@
 /**
  * Unit tests for MeeshySocketIOHandler — methods other than broadcastMessage.
- * Covers: getManager, sendNotificationToUser (sent/not-connected/error),
- * getConnectedUsers (no manager, with manager, error).
+ * Covers: getManager, getConnectedUsers (no manager, with manager, error).
  *
  * @jest-environment node
  */
@@ -53,30 +52,16 @@ describe('getManager', () => {
   });
 });
 
-// ─── sendNotificationToUser ───────────────────────────────────────────────────
-
-describe('sendNotificationToUser', () => {
-  it('does nothing when the manager is not initialized', async () => {
-    const handler = makeHandlerNoManager();
-    await expect(handler.sendNotificationToUser('u-1', { type: 'test' })).resolves.toBeUndefined();
-  });
-
-  it('calls manager.sendToUser with the correct event and payload', async () => {
-    const { handler, manager } = makeHandler();
-    await handler.sendNotificationToUser('u-42', { type: 'message' });
-    expect(manager.sendToUser).toHaveBeenCalledWith('u-42', expect.any(String), { type: 'message' });
-  });
-
-  it('does not throw when the user is not connected (sendToUser returns false)', async () => {
-    const { handler } = makeHandler({ sendToUser: jest.fn<any>().mockReturnValue(false) });
-    await expect(handler.sendNotificationToUser('u-offline', {})).resolves.toBeUndefined();
-  });
-
-  it('catches and swallows errors thrown by the manager', async () => {
-    const { handler } = makeHandler({ sendToUser: jest.fn<any>().mockImplementation(() => { throw new Error('crash'); }) });
-    await expect(handler.sendNotificationToUser('u-1', {})).resolves.toBeUndefined();
-  });
-});
+// `sendNotificationToUser` — TÉMOINS RETIRÉS (2026-08-12).
+//
+// Ils testaient une méthode qui n'existe NULLE PART : `MeeshySocketIOHandler`
+// expose `setupSocketIO`, `getManager`, `broadcastMessage` et
+// `getConnectedUsers`, et `sendNotificationToUser` n'apparaissait dans tout le
+// dépôt que dans ce fichier — aucune implémentation, aucun appelant. Le fichier
+// vient d'une branche de tests de JUIN fusionnée en août avec « prefer theirs
+// for conflicts » : ces 4 témoins figeaient une API imaginée, jamais livrée.
+// L'implémenter pour les satisfaire aurait créé de la surface morte — on retire
+// donc les témoins, pas le produit.
 
 // ─── getConnectedUsers ────────────────────────────────────────────────────────
 
