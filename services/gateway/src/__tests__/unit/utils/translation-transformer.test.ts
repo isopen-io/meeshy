@@ -1,3 +1,13 @@
+/**
+ * Unit tests for translation-transformer utilities.
+ * Covers: transformTranslationsToArray (null/empty/full/filtered),
+ * createTranslationJSON (all fields, defaults, preserveCreatedAt),
+ * getTranslationFromJSON (found, not found, null translations).
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect } from '@jest/globals';
 import {
   transformTranslationsToArray,
   createTranslationJSON,
@@ -5,203 +15,209 @@ import {
 } from '../../../utils/translation-transformer';
 import type { MessageTranslationJSON } from '../../../utils/translation-transformer';
 
-const MSG_ID = 'aaaaaa000000000000000001';
+// ─── Fixture ──────────────────────────────────────────────────────────────────
 
-function makeEntry(overrides: Partial<MessageTranslationJSON> = {}): MessageTranslationJSON {
-  return {
-    text: 'Hello',
-    translationModel: 'basic',
-    confidenceScore: 0.9,
-    isEncrypted: false,
-    encryptionKeyId: null,
-    encryptionIv: null,
-    encryptionAuthTag: null,
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    ...overrides,
-  };
-}
+const EN_ENTRY: MessageTranslationJSON = {
+  text: 'Hello',
+  translationModel: 'premium',
+  confidenceScore: 0.95,
+  isEncrypted: false,
+  encryptionKeyId: null,
+  encryptionIv: null,
+  encryptionAuthTag: null,
+  createdAt: new Date('2024-01-01T00:00:00Z'),
+  updatedAt: new Date('2024-01-01T00:01:00Z'),
+};
+
+const ES_ENTRY: MessageTranslationJSON = {
+  text: 'Hola',
+  translationModel: 'basic',
+  createdAt: new Date('2024-01-01T00:00:00Z'),
+};
+
+// ─── transformTranslationsToArray ─────────────────────────────────────────────
 
 describe('transformTranslationsToArray', () => {
-  it('returns empty array for null input', () => {
-    expect(transformTranslationsToArray(MSG_ID, null)).toEqual([]);
+  it('returns [] for null input', () => {
+    expect(transformTranslationsToArray('msg-1', null)).toEqual([]);
   });
 
-  it('returns empty array for undefined input', () => {
-    expect(transformTranslationsToArray(MSG_ID, undefined)).toEqual([]);
+  it('returns [] for undefined input', () => {
+    expect(transformTranslationsToArray('msg-1', undefined)).toEqual([]);
   });
 
-  it('returns empty array for empty object', () => {
-    expect(transformTranslationsToArray(MSG_ID, {})).toEqual([]);
+  it('returns [] for empty object', () => {
+    expect(transformTranslationsToArray('msg-1', {})).toEqual([]);
   });
 
-  it('maps a single language entry to MessageTranslation', () => {
-    const entry = makeEntry({ text: 'Bonjour' });
-    const result = transformTranslationsToArray(MSG_ID, { fr: entry });
+  it('maps a single language entry to API shape', () => {
+    const result = transformTranslationsToArray('msg-1', { en: EN_ENTRY });
+
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: `${MSG_ID}-fr`,
-      messageId: MSG_ID,
-      targetLanguage: 'fr',
-      translatedContent: 'Bonjour',
-      translationModel: 'basic',
-      confidenceScore: 0.9,
+      id: 'msg-1-en',
+      messageId: 'msg-1',
+      targetLanguage: 'en',
+      translatedContent: 'Hello',
+      translationModel: 'premium',
+      confidenceScore: 0.95,
       isEncrypted: false,
+      createdAt: EN_ENTRY.createdAt,
+      updatedAt: EN_ENTRY.updatedAt,
     });
   });
 
   it('maps multiple language entries', () => {
-    const translations = {
-      en: makeEntry({ text: 'Hello' }),
-      es: makeEntry({ text: 'Hola' }),
-    };
-    const result = transformTranslationsToArray(MSG_ID, translations);
+    const result = transformTranslationsToArray('msg-2', { en: EN_ENTRY, es: ES_ENTRY });
     expect(result).toHaveLength(2);
-    const langs = result.map((r) => r.targetLanguage);
-    expect(langs).toContain('en');
-    expect(langs).toContain('es');
+    const langs = result.map((r) => r.targetLanguage).sort();
+    expect(langs).toEqual(['en', 'es']);
   });
 
-  it('filters to only requested languages when options.languages is set', () => {
-    const translations = {
-      en: makeEntry({ text: 'Hello' }),
-      es: makeEntry({ text: 'Hola' }),
-      fr: makeEntry({ text: 'Bonjour' }),
-    };
-    const result = transformTranslationsToArray(MSG_ID, translations, { languages: ['en', 'fr'] });
-    expect(result).toHaveLength(2);
-    expect(result.map((r) => r.targetLanguage)).not.toContain('es');
+  it('filters to specific languages when options.languages is provided', () => {
+    const result = transformTranslationsToArray('msg-3', { en: EN_ENTRY, es: ES_ENTRY }, { languages: ['en'] });
+    expect(result).toHaveLength(1);
+    expect(result[0].targetLanguage).toBe('en');
   });
 
-  it('language filter comparison is case-insensitive', () => {
-    const translations = { EN: makeEntry({ text: 'Hello' }) };
-    const result = transformTranslationsToArray(MSG_ID, translations, { languages: ['en'] });
+  it('filter is case-insensitive', () => {
+    const result = transformTranslationsToArray('msg-4', { en: EN_ENTRY }, { languages: ['EN'] });
     expect(result).toHaveLength(1);
   });
 
-  it('returns all languages when options.languages is empty array', () => {
-    const translations = {
-      en: makeEntry(),
-      es: makeEntry(),
-    };
-    const result = transformTranslationsToArray(MSG_ID, translations, { languages: [] });
+  it('returns [] when filter matches no languages', () => {
+    const result = transformTranslationsToArray('msg-5', { en: EN_ENTRY }, { languages: ['fr'] });
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns all languages when empty filter array is provided', () => {
+    const result = transformTranslationsToArray('msg-6', { en: EN_ENTRY, es: ES_ENTRY }, { languages: [] });
     expect(result).toHaveLength(2);
   });
 
-  it('sets encryptionKeyId, encryptionIv, encryptionAuthTag from entry', () => {
-    const entry = makeEntry({
-      isEncrypted: true,
-      encryptionKeyId: 'key-1',
-      encryptionIv: 'iv-1',
-      encryptionAuthTag: 'tag-1',
-    });
-    const result = transformTranslationsToArray(MSG_ID, { fr: entry });
-    expect(result[0]).toMatchObject({
-      isEncrypted: true,
-      encryptionKeyId: 'key-1',
-      encryptionIv: 'iv-1',
-      encryptionAuthTag: 'tag-1',
-    });
-  });
-
-  it('defaults isEncrypted to false when absent', () => {
-    const entry = makeEntry({ isEncrypted: undefined });
-    const result = transformTranslationsToArray(MSG_ID, { fr: entry });
+  it('sets isEncrypted=false when absent in source', () => {
+    const result = transformTranslationsToArray('msg-7', { es: ES_ENTRY });
     expect(result[0].isEncrypted).toBe(false);
   });
 
-  it('preserves createdAt and updatedAt', () => {
-    const createdAt = new Date('2023-05-01T12:00:00Z');
-    const updatedAt = new Date('2023-05-02T08:00:00Z');
-    const entry = makeEntry({ createdAt, updatedAt });
-    const result = transformTranslationsToArray(MSG_ID, { en: entry });
-    expect(result[0].createdAt).toEqual(createdAt);
-    expect(result[0].updatedAt).toEqual(updatedAt);
+  it('encryptionKeyId is undefined when source is null', () => {
+    const result = transformTranslationsToArray('msg-8', { en: EN_ENTRY });
+    expect(result[0].encryptionKeyId).toBeUndefined();
+  });
+
+  it('propagates encryption fields when set', () => {
+    const encrypted: MessageTranslationJSON = {
+      ...EN_ENTRY,
+      isEncrypted: true,
+      encryptionKeyId: 'key-1',
+      encryptionIv: 'iv-1',
+      encryptionAuthTag: 'tag-1',
+    };
+    const result = transformTranslationsToArray('msg-9', { en: encrypted });
+    expect(result[0].isEncrypted).toBe(true);
+    expect(result[0].encryptionKeyId).toBe('key-1');
+    expect(result[0].encryptionIv).toBe('iv-1');
+    expect(result[0].encryptionAuthTag).toBe('tag-1');
   });
 });
 
+// ─── createTranslationJSON ───────────────────────────────────────────────────
+
 describe('createTranslationJSON', () => {
-  it('creates a translation with required fields', () => {
-    const result = createTranslationJSON({ text: 'Hello', translationModel: 'basic' });
-    expect(result.text).toBe('Hello');
-    expect(result.translationModel).toBe('basic');
-    expect(result.isEncrypted).toBe(false);
-    expect(result.encryptionKeyId).toBeNull();
-    expect(result.encryptionIv).toBeNull();
-    expect(result.encryptionAuthTag).toBeNull();
-    expect(result.createdAt).toBeInstanceOf(Date);
-    expect(result.updatedAt).toBeInstanceOf(Date);
+  it('returns an object with all required fields', () => {
+    const json = createTranslationJSON({ text: 'Bonjour', translationModel: 'basic' });
+
+    expect(json.text).toBe('Bonjour');
+    expect(json.translationModel).toBe('basic');
+    expect(json.createdAt).toBeInstanceOf(Date);
+    expect(json.updatedAt).toBeInstanceOf(Date);
   });
 
-  it('sets confidenceScore when provided', () => {
-    const result = createTranslationJSON({ text: 'x', translationModel: 'premium', confidenceScore: 0.95 });
-    expect(result.confidenceScore).toBe(0.95);
+  it('defaults isEncrypted to false', () => {
+    const json = createTranslationJSON({ text: 'x', translationModel: 'basic' });
+    expect(json.isEncrypted).toBe(false);
   });
 
-  it('sets isEncrypted and encryption fields when provided', () => {
-    const result = createTranslationJSON({
-      text: 'x',
-      translationModel: 'medium',
+  it('defaults encryptionKeyId to null', () => {
+    const json = createTranslationJSON({ text: 'x', translationModel: 'medium' });
+    expect(json.encryptionKeyId).toBeNull();
+  });
+
+  it('includes confidenceScore when provided', () => {
+    const json = createTranslationJSON({ text: 'Hi', translationModel: 'premium', confidenceScore: 0.9 });
+    expect(json.confidenceScore).toBe(0.9);
+  });
+
+  it('uses preserveCreatedAt when provided', () => {
+    const ts = new Date('2023-06-15T12:00:00Z');
+    const json = createTranslationJSON({ text: 'Hi', translationModel: 'basic', preserveCreatedAt: ts });
+    expect(json.createdAt).toBe(ts);
+  });
+
+  it('propagates encryption fields when provided', () => {
+    const json = createTranslationJSON({
+      text: 'secret',
+      translationModel: 'premium',
       isEncrypted: true,
       encryptionKeyId: 'k',
       encryptionIv: 'iv',
       encryptionAuthTag: 'tag',
     });
-    expect(result.isEncrypted).toBe(true);
-    expect(result.encryptionKeyId).toBe('k');
-    expect(result.encryptionIv).toBe('iv');
-    expect(result.encryptionAuthTag).toBe('tag');
-  });
-
-  it('preserves createdAt when preserveCreatedAt is set', () => {
-    const original = new Date('2020-01-01T00:00:00Z');
-    const result = createTranslationJSON({ text: 'x', translationModel: 'basic', preserveCreatedAt: original });
-    expect(result.createdAt).toEqual(original);
-  });
-
-  it('uses a fresh date when preserveCreatedAt is absent', () => {
-    const before = new Date();
-    const result = createTranslationJSON({ text: 'x', translationModel: 'basic' });
-    const after = new Date();
-    expect(result.createdAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(result.createdAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    expect(json.isEncrypted).toBe(true);
+    expect(json.encryptionKeyId).toBe('k');
+    expect(json.encryptionIv).toBe('iv');
+    expect(json.encryptionAuthTag).toBe('tag');
   });
 });
 
+// ─── getTranslationFromJSON ──────────────────────────────────────────────────
+
 describe('getTranslationFromJSON', () => {
-  it('returns undefined when translations is null', () => {
-    expect(getTranslationFromJSON(MSG_ID, null, 'fr')).toBeUndefined();
+  it('returns undefined for null translations', () => {
+    expect(getTranslationFromJSON('msg-1', null, 'en')).toBeUndefined();
   });
 
-  it('returns undefined when translations is undefined', () => {
-    expect(getTranslationFromJSON(MSG_ID, undefined, 'fr')).toBeUndefined();
+  it('returns undefined for undefined translations', () => {
+    expect(getTranslationFromJSON('msg-1', undefined, 'en')).toBeUndefined();
   });
 
-  it('returns undefined when targetLanguage is not present', () => {
-    const translations = { en: makeEntry({ text: 'Hello' }) };
-    expect(getTranslationFromJSON(MSG_ID, translations, 'fr')).toBeUndefined();
+  it('returns undefined when target language is absent', () => {
+    expect(getTranslationFromJSON('msg-1', { es: ES_ENTRY }, 'en')).toBeUndefined();
   });
 
-  it('returns the correct MessageTranslation when found', () => {
-    const entry = makeEntry({ text: 'Bonjour', translationModel: 'premium' });
-    const result = getTranslationFromJSON(MSG_ID, { fr: entry }, 'fr');
+  it('returns the matching translation in API shape', () => {
+    const result = getTranslationFromJSON('msg-1', { en: EN_ENTRY }, 'en');
+
     expect(result).toBeDefined();
-    expect(result!.id).toBe(`${MSG_ID}-fr`);
-    expect(result!.messageId).toBe(MSG_ID);
-    expect(result!.targetLanguage).toBe('fr');
-    expect(result!.translatedContent).toBe('Bonjour');
+    expect(result!.id).toBe('msg-1-en');
+    expect(result!.messageId).toBe('msg-1');
+    expect(result!.targetLanguage).toBe('en');
+    expect(result!.translatedContent).toBe('Hello');
     expect(result!.translationModel).toBe('premium');
+    expect(result!.confidenceScore).toBe(0.95);
   });
 
-  it('sets isEncrypted from entry data', () => {
-    const entry = makeEntry({ isEncrypted: true, encryptionKeyId: 'key-x' });
-    const result = getTranslationFromJSON(MSG_ID, { en: entry }, 'en');
-    expect(result!.isEncrypted).toBe(true);
-    expect(result!.encryptionKeyId).toBe('key-x');
-  });
-
-  it('defaults isEncrypted to false when not set', () => {
-    const entry = makeEntry({ isEncrypted: undefined });
-    const result = getTranslationFromJSON(MSG_ID, { en: entry }, 'en');
+  it('sets isEncrypted=false when absent', () => {
+    const result = getTranslationFromJSON('msg-2', { es: ES_ENTRY }, 'es');
     expect(result!.isEncrypted).toBe(false);
+  });
+
+  it('encryptionKeyId is undefined when source is null', () => {
+    const result = getTranslationFromJSON('msg-3', { en: EN_ENTRY }, 'en');
+    expect(result!.encryptionKeyId).toBeUndefined();
+  });
+
+  it('propagates encryption fields when set', () => {
+    const encrypted: MessageTranslationJSON = {
+      ...EN_ENTRY,
+      isEncrypted: true,
+      encryptionKeyId: 'k',
+      encryptionIv: 'iv',
+      encryptionAuthTag: 'tag',
+    };
+    const result = getTranslationFromJSON('msg-4', { en: encrypted }, 'en');
+    expect(result!.encryptionKeyId).toBe('k');
+    expect(result!.encryptionIv).toBe('iv');
+    expect(result!.encryptionAuthTag).toBe('tag');
   });
 });

@@ -265,16 +265,36 @@ NotificationService: notifier auteur message
 
 ### 4. Typing Indicator
 ```
-Client: typing:start
+Client: typing:start                      Client: typing:stop
+  ↓                                         ↓
+StatusHandler: handleTypingStart()        StatusHandler: handleTypingStop()
+  ↓                                         ↓
+Limite de débit (TYPING_INDICATOR)        activeTypers[socket.id] ?
+  ↓                                         ↓        ↓
+Vérification participation                 non      oui
+  ↓                                          ↓        ↓
+Vérification préférences confidentialité   RETOUR   Retrait du suivi + de la fenêtre de throttle
+  ↓                                        (0 I/O,   ↓
+Récupération nom d'affichage                0 emit)  Broadcast: typing:stop (identité du start)
   ↓
-StatusHandler: handleTypingStart()
-  ↓
-Vérification préférences confidentialité
-  ↓
-Récupération nom d'affichage
+Suivi dans activeTypers (AVANT le throttle d'émission)
   ↓
 Broadcast: typing:start (vers conversation room, sauf émetteur)
 ```
+
+**`activeTypers` est la seule autorité du chemin `typing:stop`.** Un stop retracte un start que CE
+socket a diffusé ; `_trackTyping` n'inscrit que les starts ayant franchi les portes participation et
+confidentialité, donc l'entrée de suivi vaut à la fois autorisation, audience et charge utile.
+
+- **Pas d'entrée ⇒ rien n'a jamais été montré, donc rien à reprendre.** Le retour est immédiat,
+  AVANT toute I/O : `typing:start` est limité en débit, `typing:stop` ne l'est pas, et re-vérifier
+  participation + préférence + viewers bloqués faisait payer 3 requêtes base et un fan-out N-way à
+  chaque paquet non apparié.
+- **Une entrée ⇒ ne jamais re-vérifier ces portes.** Le start est déjà parti ; les re-vérifier ne
+  peut que refuser de le reprendre — c'est ainsi qu'un participant retiré en cours de frappe laissait
+  un « X écrit… » fantôme jusqu'à sa déconnexion.
+- **L'identité diffusée est celle capturée au start** (`username`/`displayName` portés par l'entrée),
+  pour que la retraction désigne exactement qui les pairs ont vu, même après un renommage.
 
 ---
 
@@ -449,6 +469,43 @@ Il est le seul a passer un `scope`, et les deux bornes sont obligatoires :
 doit se demander si le message touche est le DERNIER de sa conversation — et si
 oui, appeler `emitConversationPreviewUpdate`. Un champ d'apercu qui n'est jamais
 reservi n'est pas « en retard », il est faux definitivement.
+
+---
+
+## `message:attachment-updated` — l'enrichissement asynchrone doit TROIS audiences
+
+Whisper finit de transcrire une note vocale une a deux secondes apres l'envoi ;
+NLLB+Chatterbox rendent l'audio traduit langue par langue, plus tard encore.
+Chaque etape ecrit la piece jointe en base et diffuse un delta
+`message:attachment-updated` (`emitAttachmentUpdated.ts`, appele par
+`MeeshySocketIOManager._broadcastAttachmentUpdated`).
+
+Ce delta doit **les memes trois audiences que toute mutation de conversation** :
+
+| Audience | Canal | Ce qu'elle perdait |
+|---|---|---|
+| lecteurs DANS le fil | room `conversation:<id>` | rien — c'etait la seule servie |
+| lecteurs sur la LISTE | rooms personnelles, chainees | iOS ne joint `conversation:<id>` qu'a l'**ouverture** du fil (`roomsToRejoinOnConnect`) : au lancement de l'app, un lecteur reste sur la liste n'est dans AUCUNE room de conversation |
+| lecteurs HORS LIGNE | file de remise, `eventType: 'attachment-updated'` | le `message:new` mis en file a l'ENVOI porte la piece jointe **sans** transcription ni audio traduit — sans rejeu, la copie rejouee reste celle-la |
+
+Le defaut etait de la meme classe que l'apercu de liste qui ne se retraduisait
+jamais : le Prisme (« il s'applique a TOUT le contenu, transcriptions audio
+comprises ») devenait fonction de la **route** du lecteur — avoir le fil ouvert
+au moment ou Whisper a fini — et non de ses preferences de langue.
+
+Deux points qui ne se devinent pas :
+
+1. **`dedupKey` = l'id de la PIECE JOINTE**, pas du message. L'identite par
+   defaut `(messageId, eventType)` ferait superseder l'enrichissement de la
+   premiere piece jointe par celui de la seconde sur un message a deux audios.
+   Par piece jointe, en revanche, la regle « le dernier payload gagne » est
+   exactement la bonne : le payload porte l'etat COMPLET de la piece jointe.
+2. **Le payload n'est PAS filtre par langue du destinataire**, contrairement a
+   `message:new` (`filterMessagePayloadForLanguages`). Les clients REMPLACENT la
+   carte de traductions de la piece jointe par celle que porte l'evenement (iOS
+   `handleAttachmentUpdated`, web `use-socket-cache-sync`) : un sous-ensemble par
+   lecteur EFFACERAIT les langues qu'un fetch REST anterieur avait mises en
+   cache.
 
 ---
 

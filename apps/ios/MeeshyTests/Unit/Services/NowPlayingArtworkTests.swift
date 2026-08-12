@@ -84,6 +84,35 @@ final class NowPlayingArtworkTests: XCTestCase {
         XCTAssertNil(NowPlayingArtwork.compose(avatar: nil, appIcon: nil))
     }
 
+    // MARK: - Artwork handler isolation (regression: build 1746 crash)
+    //
+    // MediaPlayer.framework invokes an `MPMediaItemArtwork`'s `requestHandler`
+    // lazily, asynchronously, from ITS OWN private serial queue (observed in
+    // 14/14 crash logs as thread `*/accessQueue`) — never from the main
+    // thread, and never through Swift Concurrency. A closure literal written
+    // directly inside a `@MainActor` context (this app target compiles under
+    // `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`) infers `@MainActor`
+    // isolation by default; when MediaPlayer then invokes it off-main, the
+    // Swift runtime's executor check (`swift_task_isCurrentExecutorImpl`)
+    // fails and traps via `dispatch_assert_queue` (EXC_BREAKPOINT/SIGTRAP).
+    // `NowPlayingArtwork.makeArtwork` must build the handler from this
+    // `nonisolated enum` so it carries NO actor isolation — safely callable
+    // from any thread, exactly as MediaPlayer requires.
+    func test_makeArtwork_requestHandler_invokedFromBackgroundThread_doesNotRequireMainActor() {
+        let image = Self.solidImage(color: .red)
+        let artwork = NowPlayingArtwork.makeArtwork(image: image)
+
+        let expectation = expectation(description: "requestHandler invoked off-main")
+        var resolvedSize: CGSize?
+        DispatchQueue.global(qos: .utility).async {
+            resolvedSize = artwork.image(at: CGSize(width: 40, height: 40))?.size
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 2.0)
+
+        XCTAssertEqual(resolvedSize, image.size)
+    }
+
     // MARK: - Helpers
 
     private enum Channel { case red, green, blue }

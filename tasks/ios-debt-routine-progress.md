@@ -151,19 +151,101 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    étendre, il faudrait d'abord concevoir l'API unifiée (le rapport suppose une consolidation
    "layers" qui n'existe pas encore). Reporté : nécessite une décision de conception avant tout
    fix mécanique.
-6. **[BLOQUÉ — décision produit/architecture, PAS tenté]** Observation Macro —
+6. **[FERMÉ — décision utilisateur 2026-08-11 : « on reste à iOS 16 »]** Observation Macro —
    `ObservableObject` → macro `@Observable`. **118 classes** `ObservableObject` au 2026-08-09,
    **0** migrées vers `@Observable`. `@Observable` (framework Observation) nécessite
    **iOS 17+/macOS 14+** ; `apps/ios/CLAUDE.md` fixe le plancher de déploiement à **iOS 16.0+**
-   (`MeeshyWidgets` seule extension à iOS 17+). Une migration totale casserait la compatibilité
-   iOS 16 ; une migration partielle par-vue avec `#available` biseauté est une décision
-   d'architecture non triviale (double maintenance ObservableObject/`@Observable` dans les
-   ViewModels partagés). Ne PAS tenter sans validation utilisateur explicite sur : (a) relever le
-   plancher à iOS 17, ou (b) accepter un split d'implémentation par version d'OS.
+   (`MeeshyWidgets` seule extension à iOS 17+). Les deux options qui bloquaient l'item étaient
+   (a) relever le plancher à iOS 17, ou (b) accepter un split d'implémentation
+   `ObservableObject`/`@Observable` par version d'OS (double maintenance dans les ViewModels
+   partagés). **Tranché explicitement** : le plancher reste iOS 16.0+ (option a écartée) ; le
+   split par-OS-version (option b) n'a pas été demandé et ajouterait de la complexité de
+   maintenance sans bénéfice utilisateur clair — en cohérence avec le principe « Simplicity
+   First » de `CLAUDE.md` racine, cet item est donc **fermé, pas seulement reporté** : aucune
+   migration `@Observable` ne sera tentée tant que le plancher de déploiement n'est pas
+   explicitement relevé à iOS 17+ dans une décision future et séparée. Retiré du backlog actif —
+   ne plus re-proposer sans qu'une nouvelle décision utilisateur relève le plancher.
+
+7. **[PARTIELLEMENT FAIT — sous-lot SDK-side livré 2026-08-12, PR #2868, `2762362b0`]**
+   `UIScreen.main` deprecated (iOS 16+, remplaçant : `@Environment(\.displayScale)` pour
+   `.scale` en contexte View, la fenêtre active pour `.bounds`). **25 fichiers matchent le grep,
+   mais l'écrasante majorité N'EST PAS un vrai gap** — triage complet effectué avant de conclure
+   quoi que ce soit (ne PAS re-grep sans lire ce triage) :
+   - **Faux positifs (commentaires seuls, zéro usage réel)** : `StatusBubbleOverlay.swift`,
+     `RecentMediaStrip.swift`, `StoryViewerView.swift`, `StoryViewerView+Content.swift`,
+     `ConversationListView.swift`, `CallManager.swift`, `StoryBackdropCapture.swift`,
+     `StoryAVCompositor.swift` — ces fichiers ONT DÉJÀ migré vers la fenêtre active et laissent un
+     commentaire expliquant pourquoi ils évitent `UIScreen.main` ; le nom de l'API apparaît dans
+     le commentaire, jamais dans du code exécuté.
+   - **Contrainte MainActor/CALayer délibérée et documentée — NE PAS TOUCHER** :
+     `StoryMediaLayer.swift`, `StoryRenderer.swift`, `StoryLocationLayer.swift`,
+     `StoryTextLayer.swift`, `StoryStickerLayer.swift` — toutes utilisent `UIScreen.main.scale`
+     comme **valeur par défaut d'un paramètre** sur un type `nonisolated`/CALayer, précisément
+     parce qu'un défaut de paramètre ne peut ni être `async` ni lire un `@Environment` (accessible
+     seulement depuis une `View`/`ViewModifier`). `StoryTextLayer.swift:67-69` documente la
+     contrainte exacte en détail. Aller contre cette conception casserait la compilation ou
+     réintroduirait le bug de concurrence que le design évite — cf. `NOTES.md`/mémoire projet sur
+     la fragilité connue du canvas story (grappe `index_swiftui_ui.md`).
+   - **Usage réel en contexte NON-View (fonction statique / utilitaire hors body)** — nécessite un
+     **threading de paramètre** (changement de signature, pas un remplacement mécanique) :
+     `ImageDownsamplingConfig.maxPixelSize(for:)` (`enum` public, appelé potentiellement hors
+     contexte `View` par le pipeline `DiskCacheStore`), `CachedAsyncImage.pixelSize(for:)`
+     (`@MainActor private static func` — `@MainActor` ne donne PAS accès à `@Environment`, qui
+     exige une `View`/`ViewModifier` réelle), `VideoFilmstrip.swift` (utilitaire
+     `AVAssetImageGenerator`, hors `View`), `AudioWaveform.swift` (traitement de waveform hors
+     `View`).
+   - **Vérifiés ce run et confirmés budget de décodage — NE PAS TOUCHER (même famille que la
+     contrainte MainActor/CALayer ci-dessus, raisonnement différent)** :
+     `ConversationMediaGalleryView.swift:251` et `Bubble/BubbleStandardLayout.swift:612`
+     (`targetPx = bounds.width * scale`, budget max de pixels à décoder — sur-décoder est invisible,
+     sous-décoder ne l'est pas, et la fenêtre peut grandir jusqu'à l'écran sous Stage Manager après
+     le choix de la variante ; commentaire explicite ligne 612 de `BubbleStandardLayout.swift`) ;
+     `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift:377`
+     (`max(width, height) * scale`, même raisonnement, trouvé pendant le triage SDK de ce run —
+     n'était pas dans le grep original côté `apps/ios`).
+   - **[LIVRÉ 2026-08-12, PR #2868]** Sous-ensemble SDK-side confirmé être des contraintes de
+     LAYOUT (pas des budgets de décodage — `.frame(maxWidth:/maxHeight:)` ou largeur de skeleton,
+     jamais un calcul de pixels cible) : `packages/MeeshySDK/Sources/MeeshyUI/Primitives/
+     SkeletonView.swift` (3 occurrences), `LanguagePickerSheet.swift` (2 occurrences),
+     `Media/ImageViewerView.swift:50` (confirmé via son seul call site,
+     `.frame(maxWidth: maxWidth, maxHeight: maxHeight)` — pas un budget), `Story/
+     StoryComposerView+Canvas.swift.composerScreenHeight` (déjà un repli `?? UIScreen.main.bounds
+     .height`, converti en simple délégation à la SSOT). Le SDK ne pouvant pas dépendre de
+     `DeviceLayout` (target app), nouveau type SDK-local `WindowMetrics.windowSize`
+     (`Sources/MeeshyUI/Utilities/WindowMetrics.swift`) — même algorithme (scène active par
+     `activationState`, jamais `.first` sur le `Set` non ordonné `connectedScenes`). Bonus :
+     `composerScreenHeight` choisissait la scène par `.first` — la conversion corrige aussi ce
+     défaut (même classe de bug que le fix app-side `DeviceLayout`), pas seulement un DRY. Garde de
+     source dédiée `WindowMetricsSourceGuardTests.swift` (miroir SDK de `WindowMetricsSSOTTests`
+     app-side), mutation-prouvée localement (un site remis à `UIScreen.main.bounds` → exactement ce
+     test échoue). Vérifié : suite `MeeshyUITests` complète verte, `./apps/ios/meeshy.sh build`
+     vert, CI PR #2868 verte (17 checks — cf. correction de doc au §Livrer de ce fichier prompt :
+     un diff `packages/MeeshySDK`-only déclenche en réalité TOUTE la matrice `ci.yml`, pas
+     seulement `sdk-tests`).
+   - **Reste ouvert, différé** : `Bubble/BubbleStandardLayout+Media.swift:548` (app,
+     `UIScreen.main.scale` seul — PAS `.bounds`, donc hors scope de ce sous-lot ; candidat propre
+     pour `@Environment(\.displayScale)` mais nécessite de vérifier si `BubbleGridImageView` a déjà
+     accès à un `@Environment` dans son contexte body, pas fait ce run).
+   Prochain run qui reprend cet item : traiter `BubbleStandardLayout+Media.swift:548` seul —
+   c'est la dernière pièce du groupe "candidats View confirmés" du run précédent, scope différent
+   des swaps `WindowMetrics` (nécessite `@Environment`, pas une simple substitution).
+
+**[NOUVEAU FINDING, 2026-08-12, PAS CORRIGÉ CE RUN]** `StoryComposerView+Canvas.swift:1440`
+(`safeAreaBottomInset`) partage le même défaut que corrigeait `composerScreenHeight` avant ce
+run — la scène est choisie par `.compactMap { $0 as? UIWindowScene }.first`, PAS par
+`activationState == .foregroundActive`, donc potentiellement une scène en arrière-plan sous
+multi-fenêtre. Ce n'est PAS un usage `UIScreen.main` (donc hors scope de l'item 7 tel que titré) —
+c'est la MÊME classe de bug que celle que `DeviceLayout`/`WindowMetrics` résolvent, mais sur
+`safeAreaInsets.bottom` plutôt que `windowSize`. `WindowMetrics` (nouvellement créé) n'expose pour
+l'instant que `windowSize` — lui ajouter `safeAreaBottom` réglerait ce site en un remplacement
+mécanique, mais aussi `MeeshyImageEditorView.swift:118-120` et `MeeshyVideoEditorView.swift:45-47`
+qui dupliquent le même pattern hors contexte `.first` non ordonné pour `safeAreaInsets`. Candidat
+pour un futur item 8 dédié (extension de `WindowMetrics`), pas un mécanique à enchaîner dans ce
+run.
 
 Le backlog sera réapprovisionné (grep `print(`, `DispatchQueue.main.async`, `#file\b`,
 `.system(size:` restants + dernières entrées de `tasks/lessons.md`) quand les items ouverts
-restants (3, 4, 5) auront été soit décomposés en sous-slices exécutables, soit clos.
+restants (3, 4, 5, 7) auront été soit décomposés en sous-slices exécutables, soit clos.
 
 ## Journal d'itération
 
@@ -654,9 +736,6 @@ suivi). Pas de branche `claude/apps/ios/*` créée (rien à committer sous `apps
 - **Item 5 — Modern Date Parsers** : nécessite une décision de conception (l'API `Date.ParseStrategy`
   unifiée n'existe pas encore dans le repo ; 20 sites `DateFormatter()` à faire converger vers un
   socle à concevoir).
-- **Item 6 — Observation Macro (`@Observable`)** : nécessite une décision produit — soit relever le
-  plancher de déploiement iOS 16.0+ → iOS 17.0+ (`apps/ios/CLAUDE.md`), soit accepter un split
-  d'implémentation `ObservableObject`/`@Observable` par version d'OS dans les ViewModels partagés.
 - **Item 4 (résidu, hors backlog actif) — 9 sites « escape SwiftUI »** : migrables uniquement après
   une session dédiée de vérification interactive sur simulateur/device (login démo, déclencher
   chaque flux concerné, observer la console avant/après pour le warning SwiftUI « Publishing changes
@@ -699,3 +778,130 @@ seulement épuisé des items déjà identifiés par le grep original. Un audit �
 du document source, pas juste les motifs déjà connus) a trouvé une nouvelle catégorie en un seul
 passage. Prochain run IOS_DETTE : appliquer la même discipline d'élargissement avant de conclure à
 un backlog vide.
+
+## Run — 2026-08-11 (bascule streak=5, audit élargi #2 — backlog item 7 trouvé, PAS de code livré)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5 last_run=dynamic-launcher-shortcuts`
+— règle d'alternance (streak ≥ 5) déclenchée, bascule vers `IOS_DETTE`. Scan de reprise (Étape 0
+point 5) : `gh pr list --state open --search "apps/android OR apps/ios"` = 2 PR, `#2849`/`#2851`,
+toutes deux `apps/web` (branches `claude/keen-hamilton-*`, naming ne matchant pas cette routine) —
+pas de run interrompu à terminer.
+
+**RE-PROUVÉ le backlog avant de choisir** : items 1/2 toujours FAIT/ÉCARTÉ (inchangés). Item 3
+(`ConversationLoadingPhase`) toujours FAIT/M2 conclu. Item 4 résiduel toujours hors mandat autonome
+(vérification interactive requise). Items 5/6 toujours BLOQUÉS — aucune décision utilisateur
+n'est arrivée entre temps (aucune trace dans `tasks/lessons.md`/`tasks/todo.md` ni dans la
+conversation). Re-grep des 4 motifs mécaniques standards : `print(` → 0 (toujours propre) ;
+`DispatchQueue.main.async` → 53 fichiers (le résidu "item 4", toujours hétérogène, toujours hors
+mandat mécanique sans décomposition dédiée) ; `#file\b` hors `#filePath` → 8 matches, mais **tous
+dans les commentaires/la regex-en-string-littérale de `Swift6TestFileArgSourceGuardTests.swift`
+lui-même** (le guard s'exclut explicitement, cf. son propre commentaire ligne 46) — zéro violation
+réelle, confirmé faux positif, item 1 reste clos ; `.system(size:` → 1029 matches (bruit trop
+massif pour être un signal exploitable tel quel, jamais été un item du backlog original — ignoré
+comme dans les runs précédents).
+
+**Audit élargi (note du run précédent appliquée)** : plutôt que conclure à un backlog vide après le
+zéro-résultat des 4 greps mécaniques, recherché une nouvelle catégorie d'API dépréciée sur le modèle
+de `NavigationView` (run précédent). Trouvé `UIScreen.main` (deprecated iOS 16+) — grep initial : 25
+fichiers. **Triage complet fichier par fichier avant toute conclusion** (voir Backlog item 7
+ci-dessus pour le détail) : 8 fichiers sont des faux positifs (commentaire seul, la migration vers la
+fenêtre active a déjà eu lieu et le commentaire ne fait que référencer l'ancienne API par son nom) ;
+5 fichiers (`Story*Layer.swift`/`StoryRenderer.swift`) utilisent `UIScreen.main.scale` comme valeur
+par défaut d'un paramètre sur un type `nonisolated`/CALayer — contrainte MainActor documentée
+explicitement dans le code (`StoryTextLayer.swift:67-69` en détail), à ne PAS toucher ; 4 fichiers
+(`ImageDownsamplingConfig`, `CachedAsyncImage.pixelSize`, `VideoFilmstrip`, `AudioWaveform`) vivent
+dans des fonctions statiques/utilitaires hors contexte `View` où `@Environment(\.displayScale)`
+n'est structurellement pas accessible — un vrai fix demanderait un threading de paramètre
+(changement de signature en cascade), pas un remplacement mécanique ; il reste 7 fichiers dont
+l'usage semble être en contexte `View` (candidats les plus probables pour un futur slice), **mais
+leur contexte exact (méthode d'instance `View` vs helper `static func`) n'a pas été vérifié
+individuellement ce run** — RE-PROUVER cette dernière hypothèse est le point de départ explicite du
+prochain run qui reprend cet item, pas un mécanique à lancer tel quel.
+
+**Décision : aucun code livré ce run.** Comme l'entrée « Item 4 closed — backlog exhausted »
+précédente, cette itération conclut qu'aucun item du backlog n'est à la fois réel, borné et
+mécaniquement sûr sans étude/décision supplémentaire — mais CONTRAIREMENT à cette entrée-là (qui
+avait conclu à un backlog vide), celle-ci enrichit le backlog d'un item 7 concret et précisément
+triagé, prêt à être repris sans redevoir refaire cette investigation. Forcer un fix sur un
+sous-ensemble non vérifié du groupe "candidats View" aurait risqué soit de casser la compilation
+(si l'un d'eux s'avère être une `static func` comme `CachedAsyncImage.pixelSize`), soit d'introduire
+une régression de rendu — le filtre de sûreté de la routine (« mécanique/à risque borné ») n'est pas
+satisfait tant que ce dernier tri n'est pas fait.
+
+**Vérification** : aucune (aucun code applicatif touché — seule cette mise à jour de fichier de
+suivi). Pas de branche `claude/apps/ios/*` créée, pas de PR, pas de CI.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-uiscreen-main-audit-triage`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`, cf. §Choix de
+  la lane — même commit que cette mise à jour de `tasks/ios-debt-routine-progress.md`, les deux
+  fichiers vivant hors `apps/android/`/`apps/ios/`).
+
+### 2026-08-12 — Run #7 (reprise de l'item 7, sous-lot SDK-side livré)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5
+last_run=conversation-list-live-presence` — règle d'alternance (streak ≥ 5) déclenchée, bascule
+vers `IOS_DETTE`. Scan de reprise (Étape 0 point 5) : aucune branche `claude/apps/ios/*` ni
+`claude/apps/android/*` ouverte en attente — pas de run interrompu à terminer.
+
+**Reprise exacte du point de départ laissé par le run précédent** : re-vérifié individuellement
+chacun des 7 candidats "contexte `View`, non vérifiés" de l'item 7 plutôt que de re-grep à
+l'aveugle. Résultat du tri fichier par fichier :
+- `ConversationMediaGalleryView.swift:251` et `BubbleStandardLayout.swift:612` : lecture du code
+  réel confirme un calcul `targetPx = bounds.width * scale` — budget de décodage, pas du layout.
+  Reclassés dans le groupe "NE PAS TOUCHER" (ils y étaient déjà implicitement via le test app-side
+  `WindowMetricsSSOTTests.test_displayMeasurements_areConfinedToTheDeliberateSites`, lu pendant ce
+  run — il les liste déjà en exceptions délibérées).
+- `BubbleStandardLayout+Media.swift:548` : usage `UIScreen.main.scale` seul (pas `.bounds`) —
+  candidat `@Environment(\.displayScale)`, mais différé (scope différent des swaps `WindowMetrics`,
+  nécessite de vérifier l'accès `@Environment` dans le contexte body de `BubbleGridImageView`).
+- `SkeletonView.swift` (3×), `LanguagePickerSheet.swift` (2×), `ImageViewerView.swift:50` (1×,
+  confirmé via son unique call site `.frame(maxWidth: maxWidth, maxHeight: maxHeight)` — une
+  contrainte de layout, pas un budget), `StoryComposerView+Canvas.swift.composerScreenHeight` (1×) :
+  confirmés être des contraintes de LAYOUT — candidats sûrs.
+
+**Obstacle découvert et résolu avant de coder** : ces 4 fichiers vivent tous sous
+`packages/MeeshySDK/Sources/MeeshyUI/`, mais `DeviceLayout` (la SSOT `windowSize` app-side) vit
+dans `apps/ios/Meeshy/Core/` — le SDK ne peut pas en dépendre (mauvais sens de dépendance). Plutôt
+que dupliquer l'algorithme une 4e fois (le SDK en avait déjà 3 copies non convergées :
+`StoryComposerView+Canvas.swift` ×2, `MeeshyImageEditorView.swift`, `MeeshyVideoEditorView.swift`),
+créé un type SDK-local unique `WindowMetrics.windowSize`
+(`Sources/MeeshyUI/Utilities/WindowMetrics.swift`) — miroir exact de l'algorithme `DeviceLayout`
+(scène active par `activationState == .foregroundActive`, jamais `.first` sur `connectedScenes`).
+Câblé les 4 fichiers dessus. Bonus non cherché : `composerScreenHeight` choisissait la scène par
+`.first` sur un `Set` non ordonné — la conversion vers `WindowMetrics` corrige aussi ce défaut
+(même classe de bug que le fix app-side d'origine), pas seulement une déduplication.
+
+**TDD** : garde de source `WindowMetricsSourceGuardTests.swift` écrite avant les 4 substitutions
+(miroir SDK de `NavigationViewDeprecatedAPISourceGuardTests`/`WindowMetricsSSOTTests` app-side,
+assertion en ÉGALITÉ contre un ensemble délibéré `{WindowMetrics.swift, CachedAsyncImage.swift}` —
+`CachedAsyncImage.swift` trouvé pendant ce triage, budget de décodage `max(width,height)*scale`,
+absent du grep original côté `apps/ios` car jamais audité côté SDK avant ce run). Rouge avant les
+substitutions (détectait `SkeletonView.swift`/`LanguagePickerSheet.swift`/`ImageViewerView.swift`/
+`StoryComposerView+Canvas.swift` en trop), vert après.
+
+**Mutation-proof** : `SkeletonView.swift` remis temporairement à `UIScreen.main.bounds.width`
+(copie de secours, jamais `git checkout --`) → exactement `test_meeshyUI_confinesDisplayBounds...`
+échoue, les 3 autres tests de la garde restent verts. Restauré, re-vérifié vert.
+
+**Vérifié** : `xcodebuild test -scheme MeeshySDK-Package -only-testing:MeeshyUITests` (suite
+complète) vert ; `./apps/ios/meeshy.sh build` vert (93s).
+
+**Livré** : PR #2868 (`claude/apps/ios/debt-windowmetrics-sdk-migration`), squash-mergée
+(`2762362b0`). CI : 17 checks, tous verts — **découverte en cours de route** : un diff
+`packages/MeeshySDK`-only déclenche en réalité TOUTE la matrice `ci.yml` (gateway/web/shared/
+translator/audio/voice), pas seulement `sdk-tests`/`sdk-tests.yml` comme l'affirmait
+`tasks/android-parity-ios-debt-agent-prompt.md` §Livrer — section corrigée dans ce même run
+(commit direct, avec ce fichier).
+
+**Reste ouvert dans le backlog** (voir item 7 mis à jour ci-dessus, section Backlog) :
+`BubbleStandardLayout+Media.swift:548` (différé, `@Environment(\.displayScale)`) et un NOUVEAU
+finding hors scope `UIScreen.main` — `StoryComposerView+Canvas.swift:1440` (`safeAreaBottomInset`)
+partage le même défaut `.first` sur `Set` non ordonné que corrigeait `composerScreenHeight` avant
+ce run, plus `MeeshyImageEditorView.swift`/`MeeshyVideoEditorView.swift` qui dupliquent le même
+pattern pour `safeAreaInsets` — candidat pour un futur item 8 (extension de `WindowMetrics` avec
+`safeAreaBottom`), pas traité ce run.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-windowmetrics-sdk-migration`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main` — même commit que
+  cette mise à jour et la correction de `tasks/android-parity-ios-debt-agent-prompt.md`, les trois
+  fichiers vivant hors `apps/android/`/`apps/ios/`).

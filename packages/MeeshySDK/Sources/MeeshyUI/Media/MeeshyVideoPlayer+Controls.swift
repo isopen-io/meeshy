@@ -30,6 +30,16 @@ internal struct _InlineOverlayControls: View {
         return isSeeking ? seekValue : manager.currentTime / manager.duration
     }
 
+    /// Décision pure extraite pour la testabilité — `_InlineOverlayControls`
+    /// est une `View` SwiftUI, pas un point d'entrée décidable en soi. Même
+    /// pattern que `_InlineRenderer.shouldAutoplayOnAppear`. `isPipSupported`
+    /// est injecté : le body passe
+    /// `AVPictureInPictureController.isPictureInPictureSupported()`, donc le
+    /// test ne dépend jamais de l'environnement (faux en CI/simulateur).
+    nonisolated static func showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool {
+        controls.contains(.pip) && isPipSupported
+    }
+
     var body: some View {
         ZStack {
             scrimGradients
@@ -71,39 +81,66 @@ internal struct _InlineOverlayControls: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - Top Bar (expand + speed)
+    // MARK: - Top Bar (plein écran + PiP + AirPlay + vitesse)
     //
-    // Cluster centrée horizontalement (au lieu de deux ancres opposées
-    // top-leading/top-trailing) — parité visuelle avec le pattern
-    // TikTok/Reels d'un petit groupe de contrôles flottant centré en haut
-    // du canvas vidéo. Les deux boutons restent inchangés (icônes, taps,
-    // style) ; seul le positionnement change.
+    // Lifting Liquid Glass 2026-08-11 (§ B) : un unique `AdaptiveGlassContainer`
+    // regroupe jusqu'à 4 boutons circulaires 28×28 (taille INCHANGÉE — c'est la
+    // taille inline réelle, pas celle du plein écran 36×36). Budget :
+    // 4 × 28 + 3 × 10 = 142pt, tient sur iPhone SE. Le PiP est MASQUÉ (pas
+    // désactivé) hors support device — cf. `showsPipButton`. Cluster centrée
+    // horizontalement via `.frame(maxWidth: .infinity)`, comme avant.
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            if controls.contains(.expand), let onExpand {
-                Button {
-                    onExpand()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+        AdaptiveGlassContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                if controls.contains(.expand), let onExpand {
+                    Button {
+                        onExpand()
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
                 }
-            }
-            if controls.contains(.speed) {
-                Button {
-                    manager.cycleSpeed()
-                    HapticFeedback.light()
-                } label: {
-                    Text(manager.playbackSpeed.label)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(accent))
+                if Self.showsPipButton(controls: controls, isPipSupported: AVPictureInPictureController.isPictureInPictureSupported()) {
+                    Button {
+                        if manager.isPipActive {
+                            manager.stopPip()
+                        } else {
+                            manager.startPip()
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: manager.isPipActive ? "pip.exit" : "pip.enter")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
+                    .accessibilityLabel(manager.isPipActive
+                        ? String(localized: "media.video.pip.exit", defaultValue: "Quitter le Picture in Picture", bundle: .module)
+                        : String(localized: "media.video.pip.enter", defaultValue: "Picture in Picture", bundle: .module))
+                }
+                if controls.contains(.airplay) {
+                    AirPlayRoutePicker(tintColor: .white)
+                        .frame(width: 28, height: 28)
+                        .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
+                }
+                if controls.contains(.speed) {
+                    Button {
+                        manager.cycleSpeed()
+                        HapticFeedback.light()
+                    } label: {
+                        Text(manager.playbackSpeed.label)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .adaptiveGlass(in: Capsule())
+                    }
                 }
             }
         }
@@ -112,16 +149,22 @@ internal struct _InlineOverlayControls: View {
 
     // MARK: - Center Controls (skip + play/pause)
     //
-    // Hierarchy visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
-    // clairement. Glass UI + accent tinté homogène à 0.3 sur tous les
-    // boutons. Le play porte une teinte d'accent plus marquée (0.55) pour
-    // tirer l'œil dessus.
+    // Hiérarchie visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
+    // clairement, tailles INCHANGÉES (l'inline reste plus compact que le
+    // plein écran 52/64pt, `VideoTransportControls.swift:87/105`). Lifting
+    // Liquid Glass 2026-08-11 (§ C) : migré vers
+    // `.adaptiveGlass`/`.adaptiveGlassProminent` sous `AdaptiveGlassContainer`
+    // — le double-fill `ultraThinMaterial` + `accent.opacity` + le stroke
+    // manuel disparaissent au profit des deux primitives partagées, comme
+    // `VideoTransportControls.centerControls`.
 
     private var centerControls: some View {
-        HStack(spacing: 24) {
-            skipButton(systemName: "gobackward.10", seconds: -10)
-            playPauseButton
-            skipButton(systemName: "goforward.10", seconds: 10)
+        AdaptiveGlassContainer(spacing: 24) {
+            HStack(spacing: 24) {
+                skipButton(systemName: "gobackward.10", seconds: -10)
+                playPauseButton
+                skipButton(systemName: "goforward.10", seconds: 10)
+            }
         }
     }
 
@@ -134,13 +177,7 @@ internal struct _InlineOverlayControls: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
-                .background(
-                    ZStack {
-                        Circle().fill(.ultraThinMaterial)
-                        Circle().fill(accent.opacity(0.30))
-                    }
-                )
-                .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 0.5))
+                .adaptiveGlass(in: Circle(), interactive: true)
         }
     }
 
@@ -149,14 +186,9 @@ internal struct _InlineOverlayControls: View {
             manager.togglePlayPause()
             HapticFeedback.light()
         } label: {
-            ZStack {
-                Circle().fill(.ultraThinMaterial)
-                Circle().fill(accent.opacity(0.55))
-                playPauseIcon
-            }
-            .frame(width: 54, height: 54)
-            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
-            .shadow(color: accent.opacity(0.35), radius: 10, y: 3)
+            playPauseIcon
+                .frame(width: 54, height: 54)
+                .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
         }
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)

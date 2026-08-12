@@ -116,7 +116,12 @@ internal struct _InlineRenderer: View {
             Color.black
 
             if isThisActive, let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: manager.isMuted)
+                MeeshyVideoSurface(
+                    player: p,
+                    gravity: .resizeAspect,
+                    isMuted: manager.isMuted,
+                    enablesPip: Self.surfaceEnablesPip(controls: player.controls)
+                )
                     .onTapGesture { toggleControls() }
                 if isLoadingAsset {
                     loadingIndicator
@@ -362,6 +367,16 @@ internal struct _InlineRenderer: View {
         isCallActive: Bool
     ) -> Bool {
         autoplayOnAppear && isReady && isOnScreen && !isCallActive
+    }
+
+    /// Décision pure (§ B.2) : une surface sans bouton PiP visible ne doit
+    /// jamais configurer le PiP — `configurePip` arme implicitement
+    /// `canStartPictureInPictureAutomaticallyFromInline`. Miroir de
+    /// `ReelVideoSurface.enablesPip` ; source de vérité unique avec
+    /// `_InlineOverlayControls.showsPipButton` (même `ControlSet` pilote les
+    /// deux — impossible d'avoir l'un sans l'autre).
+    nonisolated static func surfaceEnablesPip(controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        controls.contains(.pip)
     }
 
     private func autoplayIfNeeded() {

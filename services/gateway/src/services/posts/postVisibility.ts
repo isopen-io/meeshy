@@ -235,3 +235,98 @@ export async function canUserInteractWithPost(
   if (!userId) return false;
   return canUserViewPost(prisma, post, userId);
 }
+
+/**
+ * Tranche ACL + redirection d'un post CANDIDAT à une interaction sociale
+ * (like/réaction, commentaire). Porte, en plus de `PostVisibilityRecord`, les
+ * trois champs qui décident SI ce post redirige vers sa racine.
+ */
+export type PostRedirectRecord = PostVisibilityRecord & {
+  id: string;
+  isQuote: boolean;
+  repostOfId: string | null;
+  originalRepostOfId: string | null;
+};
+
+const POST_REDIRECT_SELECT = {
+  id: true,
+  authorId: true,
+  visibility: true,
+  visibilityUserIds: true,
+  isQuote: true,
+  repostOfId: true,
+  originalRepostOfId: true,
+} as const;
+
+async function loadPostRedirectRecord(
+  prisma: PostAclPrisma,
+  postId: string,
+): Promise<PostRedirectRecord | null> {
+  const post = await prisma.post.findFirst({
+    where: { id: postId, deletedAt: NOT_DELETED },
+    select: POST_REDIRECT_SELECT,
+  });
+  return post ?? null;
+}
+
+/**
+ * Résout la cible RÉELLE d'une interaction sociale portée par `postId` : un
+ * repost SIMPLE (`isQuote:false`, `repostOfId` renseigné) n'a pas de vie
+ * sociale propre — sa cible est sa RACINE (`originalRepostOfId ??
+ * repostOfId`), jamais le parent intermédiaire d'une chaîne de reposts. Une
+ * CITATION (`isQuote:true`) ou un post qui n'est pas un repost garde sa
+ * propre cible.
+ *
+ * POINT UNIQUE de cette redirection (chantier reposts cohérents & watermark,
+ * tâche 9) : REST (`routes/posts/interactions.ts`, `routes/posts/comments.ts`)
+ * et socket (`PostReactionHandler`) l'appellent tous les deux au lieu de
+ * dupliquer la règle chacun de leur côté — un seul endroit décide qui gagne
+ * un like/commentaire quand plusieurs reposts du même original coexistent.
+ *
+ * `verdict` sélectionne l'audience appliquée (`canUserInteractWithPost` pour
+ * écrire/réagir, `canUserConsumePost` pour lire) — c'est la SEULE différence
+ * entre `resolveInteractionTarget` et `resolveConsumptionTarget` ci-dessous.
+ *
+ * Renvoie `null` — refus indistinct, comme `loadPostAcl` — quand : le post
+ * visé est absent/supprimé/invisible pour l'acteur, OU quand la racine d'un
+ * repost simple est elle-même absente/supprimée/invisible pour lui. La
+ * redirection ne doit JAMAIS outrepasser la visibilité de la racine : pas de
+ * crédit silencieux sur un post que l'acteur ne peut pas voir.
+ */
+async function resolveRedirectTarget(
+  prisma: PostAclPrisma,
+  postId: string,
+  userId: string | undefined,
+  verdict: (prisma: PostAclPrisma, post: PostVisibilityRecord, userId?: string) => Promise<boolean>,
+): Promise<PostRedirectRecord | null> {
+  const post = await loadPostRedirectRecord(prisma, postId);
+  if (!post || !(await verdict(prisma, post, userId))) return null;
+
+  const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId);
+  if (!isSimpleRepost) return post;
+
+  const rootId = post.originalRepostOfId ?? post.repostOfId!;
+  if (rootId === post.id) return post;
+
+  const root = await loadPostRedirectRecord(prisma, rootId);
+  if (!root || !(await verdict(prisma, root, userId))) return null;
+  return root;
+}
+
+/** Redirection pour ÉCRIRE/RÉAGIR (like, réaction, commentaire) — amis stricts. */
+export function resolveInteractionTarget(
+  prisma: PostAclPrisma,
+  postId: string,
+  userId: string,
+): Promise<PostRedirectRecord | null> {
+  return resolveRedirectTarget(prisma, postId, userId, canUserInteractWithPost);
+}
+
+/** Redirection pour LIRE (fil de commentaires) — amis ∪ contacts DM. */
+export function resolveConsumptionTarget(
+  prisma: PostAclPrisma,
+  postId: string,
+  userId?: string,
+): Promise<PostRedirectRecord | null> {
+  return resolveRedirectTarget(prisma, postId, userId, canUserConsumePost);
+}

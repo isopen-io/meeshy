@@ -253,6 +253,47 @@ Append-only log of gotchas and decisions that save time next run.
   convention is about UI glue, not already-fully-generic pure logic; a pure type with zero
   feature-specific fields is a SSOT from the first reuse, not the third.
 
+## Slice `widget-recent-conversations` (2026-08-11)
+- **A `GlanceAppWidget` update can run in a cold app process that never executed the app's
+  normal startup flow — any in-memory-only session state silently reads as absent, not stale.**
+  `SessionRepository.currentUserId` is populated exclusively by `AuthRepository.restoreSession()`,
+  itself called from `MainActivity`'s/a ViewModel's own startup path. `AppWidgetManager` can spawn
+  the app's process purely to service `APPWIDGET_UPDATE` (via `GlanceAppWidgetReceiver.onUpdate`)
+  without ever launching an Activity — that process never runs `restoreSession()`, so
+  `SessionRepository.currentUserId` is `null` even though the user IS signed in on the device.
+  Any widget decision needing the current user's identity (here: resolving a direct conversation's
+  *other* participant) must read from something actually persisted across process death — added
+  `TokenStore.userId`, mirroring the existing `jwt`/`sessionToken` persistence exactly, rather than
+  reaching for the in-memory `SessionRepository` a first instinct suggests since it's the "obvious"
+  place identity lives everywhere else in the app.
+- **`androidx.glance.action.actionStartActivity` (the base `glance` artifact) has NO overload
+  accepting a raw `Intent` — only `ComponentName` or a reified `Class<T : Activity>`, both paired
+  with `ActionParameters` (an extras-like bundle, not a `data` URI).** The `Intent`-accepting
+  overload lives in a DIFFERENT package/artifact: `androidx.glance.appwidget.action.actionStartActivity(Intent, ActionParameters)`
+  (from `glance-appwidget`, imported under an alias to avoid colliding with the base package's
+  same-named function when both are needed in one file — the empty-state tap still wants the typed
+  `actionStartActivity<MainActivity>()` form). Verified via `javap` against the actual jars in
+  `~/.gradle/caches/*/transforms/*/transformed/glance-appwidget-1.1.1-api.jar` BEFORE writing any
+  code — there is no JDK on `$PATH` by default on this machine (`java_home -V` empty), but
+  `brew list` had `openjdk@21` already installed unlinked; `export JAVA_HOME="$(brew --prefix
+  openjdk@21)/libexec/openjdk.jdk/Contents/Home"` unblocks `javap`/Gradle without any install step.
+  This class of "does the API even have the overload I'm about to write against" doubt is cheap to
+  resolve by decompiling the actual dependency jar rather than guessing from memory or Android
+  documentation that may describe a different Glance version.
+- **Navigation-Compose 2.8.3 (this repo's pinned version) auto-consumes the hosting Activity's
+  launching `Intent` for registered `navDeepLink`s — no manual `NavController.handleDeepLink()`
+  call needed**, confirmed by `libs.versions.toml` (`navigationCompose = "2.8.3"`, the version that
+  added this) plus the total absence of any `handleDeepLink` call anywhere in `apps/android/app`.
+  Older Navigation-Compose versions require that call explicitly in `onNewIntent`; don't assume the
+  older requirement without checking the pinned version first — it would have led to writing dead
+  manual-wiring code for a mechanism this version already handles automatically.
+- **A Hilt `@EntryPoint` interface meant for a class of callers (not one specific caller) is worth
+  renaming the moment a second caller needs it, not accreting a misleadingly-scoped name.**
+  `UnreadWidgetEntryPoint` (singular-widget name) already generalizes cleanly to any
+  `GlanceAppWidget` needing a `@Singleton` binding — renamed to `WidgetEntryPoint` via `git mv` the
+  moment this second widget needed `tokenStore()` alongside the existing `conversationRepository()`,
+  rather than leaving the misnomer or spawning a near-duplicate second entry-point interface.
+
 ## Slice `conversation-hardpress-preview` (2026-08-11)
 - **A high-load host can trigger a genuine, single, real `ActivityManager` ANR on the emulator
   that has NOTHING to do with the diff under test — distinguish it from an app hang via the
@@ -297,3 +338,111 @@ Append-only log of gotchas and decisions that save time next run.
   recent one, so this is an inherited pre-existing quirk of the reused formatter, not a new
   regression — refactoring `lastMessagePreview`'s fallback semantics is out of scope for a slice
   whose job was reusing it, not rewriting it.
+
+## Slice `widget-favorite-contacts` (2026-08-11)
+- **A `private val` constant becomes worth hoisting to `internal` at its SECOND call site, not
+  its third, when it encodes a correctness-sensitive business rule rather than disposable UI
+  glue.** `directConversationTypes = setOf("direct", "dm")` lived `private` in
+  `RecentConversationsWidgetPresentation.kt`. This slice's `FavoriteContactsWidgetPresentation`
+  needed the exact same "is this a 1:1 chat" gate. The codebase's own established convention
+  (`MagicLinkCountdown`, documented in an earlier slice's note) is to keep duplicating small UI
+  glue until a 3rd call site forces a shared abstraction — but that convention exists because UI
+  glue drifting apart at 2 call sites is cheap to notice and cheap to fix. A `setOf("direct",
+  "dm")` string-literal duplicate is different: if the canonical set of "direct" type strings
+  ever changes (a new value added server-side, a rename), two independently-maintained copies can
+  silently drift apart with no compiler signal — a correctness bug, not a style inconsistency.
+  Changing `private val` to `internal val` plus one import is a strictly smaller diff than
+  duplicating the literal, so there was no actual cost to avoiding the duplication here either.
+  Rule of thumb going forward: duplicate-until-3rd-site applies to disposable glue; anything that
+  encodes "what counts as X" business logic gets hoisted at the 2nd site regardless of size.
+- **`ApiConversation.participants` (`ApiParticipant`) carries no presence fields
+  (`isOnline`/`lastActiveAt`) anywhere in this codebase — confirmed by reading the full model,
+  not assumed.** iOS's `FavoriteContactsWidget` shows an online/offline status line per contact
+  (`MeeshyConversation.lastSeenText`), sourced from a richer conversation snapshot iOS's main app
+  publishes into the widget's App Group. Android's widget architecture is structurally different
+  (a live Room read via a Hilt `EntryPoint`, not an App-Group snapshot the main app pre-publishes)
+  and its `ApiParticipant` model was never given presence fields at all — this is a real, load-
+  bearing platform gap for ANY future participant-facing Android surface that wants a presence
+  dot without first threading a `PresenceRepository`/cache through to that surface, not specific
+  to widgets. Grepped for a `PresenceRepository`/presence-cache class before concluding this —
+  none exists; `isOnline` today only appears on `Friend`/`MeeshyUser`/`Participant` models used by
+  the contacts/profile surfaces, never joined onto a conversation's participant list.
+- **The "mark-read widget action" candidate, twice flagged as the natural next widget sub-slice
+  in two consecutive prior runs' notes, turned out to have almost no new pure decision logic to
+  TDD once actually scoped.** Investigated before picking a slice this run: the only "decision"
+  involved (show the affordance only on an unread row) is already the existing, already-tested
+  `row.isUnread` field — the `ActionCallback.onAction` body itself would be pure Android-framework
+  glue (`Context`/`GlanceId`/`ActionParameters` → a one-line delegate to the already-tested
+  `ConversationRepository.markReadOptimistic(id)` → `GlanceAppWidget().updateAll(context)`),
+  structurally identical in kind to `provideGlance()` itself, which has zero direct JVM tests in
+  either shipped widget (only its downstream pure `*Presentation.from(...)` is covered — the
+  established, `TDD-COVERAGE.md`-sanctioned exemption for Compose/framework glue). A slice that
+  would ship with genuinely zero new unit tests breaks this routine's own evidence rhythm (every
+  prior `PROGRESS.md` entry cites N new mutation-proven tests) even though nothing about it is
+  technically wrong — picked `FavoriteContactsWidget` instead, which had real new filter/sort/cap
+  decision logic to cover. Worth re-surfacing "mark-read" once either (a) a second `ActionCallback`
+  use case exists to justify the framework-glue investment across more than one call site, or
+  (b) someone explicitly decides thin, near-untestable wiring is still worth a slice on its own.
+
+## Slice `dynamic-launcher-shortcuts` (2026-08-11)
+- **"Port this iOS widget/intent" is not a safe default without first checking whether the iOS
+  side's own deep link is actually wired to anything.** iOS's `QuickReplyWidget` ships 4 canned-
+  reply buttons that deep-link via `meeshy://quickreply/{id}?text=...`, and its
+  `FavoriteContactsWidget` uses `meeshy://contact/{id}` — both look like real, intentional URI
+  contracts from the widget file alone. Grepping the FULL app-side router
+  (`DeepLinkRouter.swift`'s complete `switch` over recognized `host` values) found **neither
+  `quickreply` nor `contact` is a case anywhere** — both widgets' primary interaction is dead in
+  production iOS today, not a hidden/obscure fallback path this session simply didn't find. The
+  lesson generalizes past this one file: before treating an iOS widget/intent/extension's own URI
+  scheme as a spec to port, grep the MAIN APP's router for that exact host string, not just the
+  widget/extension file that emits it — a URI can be perfectly well-formed and still go nowhere.
+  Two consequences this run: (1) retroactively confirmed the PRIOR slice's own independent choice
+  (reusing `meeshy://conversation/{id}` instead of inventing a matching `contact` host on Android)
+  was the right call, not just a defensible one; (2) this run's own first candidate (Quick Reply)
+  was disqualified as "port this" and reclassified as "needs a genuinely new mechanism to be worth
+  building" — see `PROGRESS.md` for the pivot.
+- **A single iOS "App Shortcuts" provider can bundle voice-driven (Siri/Assistant NL parameter
+  resolution) and purely-navigational (open a fixed destination) intents under one umbrella —
+  splitting them before scoping an Android port avoids conflating a small, safe slice with a much
+  bigger one.** `MeeshyAppShortcuts` (`MeeshyAppIntents.swift`) lists 5 phrases; 4 need `AppIntents`
+  natural-language parameter resolution against a contact/language with no Android equivalent
+  short of Google Assistant App Actions (external indexing/review, not locally verifiable), while
+  the 5th (`OpenRecentConversationIntent`) is a plain "open this URL" action with a direct,
+  fully-local Android analogue (`ShortcutManagerCompat` dynamic launcher shortcuts). Read the
+  intent bodies, not just the shortcut list, before deciding whether "port the App Shortcuts
+  epic" is one slice or several.
+
+## Slice `chat-composer-prefill-draft` (2026-08-11)
+- **`android.net.Uri.decode(...)` silently returns `null` — not a thrown exception — in a plain
+  JVM unit test module (no Robolectric), which turns a real decode call into a quiet no-op rather
+  than a visible crash.** Wrote `initialDraft = savedStateHandle.get<String>(DRAFT_ARG)
+  ?.let(Uri::decode)?.takeIf { it.isNotBlank() }` first; the RED test failed with `expected:
+  Thanks! but was an empty string` — no stack trace, no exception, just a plain assertion mismatch
+  that looked exactly like a logic bug in the seeding code itself. The actual cause: this app
+  module's unit-test config runs under Android Gradle Plugin's default `returnDefaultValues`
+  posture for un-mocked framework classes, so `Uri.decode("Thanks!")` returns `null` (the "default
+  value" for a `String?`-returning method) instead of either working or throwing — silently
+  collapsing the whole `?.let{}` chain to `null`. Switching to `java.net.URLDecoder.decode(text,
+  "UTF-8")` (a real JVM class, not an Android framework stub) fixed it immediately and made the
+  decode step itself unit-testable without Robolectric. **Lesson generalizes**: any
+  `android.*`-package call inside code that's exercised by a plain (non-Robolectric) JVM test
+  class is a candidate for this exact silent-null trap — prefer a `java.*`/Kotlin-stdlib
+  equivalent when one exists (here, `URLDecoder` vs `Uri.decode` — near-identical behavior for
+  plain percent-encoded text, the only real difference being `+`-as-space handling, irrelevant for
+  this call site's short canned-reply text), rather than reaching for Robolectric just to make one
+  static call resolve.
+- **`DraftAutosave.restore`'s existing idle guard (`currentDraft.isNotBlank() -> null`) already
+  encodes the exact precedence rule a new "seed the composer from elsewhere" feature needs, with
+  zero changes.** Wanted an incoming deep-link draft (a future Quick Reply tap) to win over
+  whatever a stale per-conversation persisted draft would otherwise restore. Before writing a new
+  precedence decision, re-read `DraftAutosave.restore`'s own doc comment: it already refuses to
+  restore over a non-blank composer ("never clobbers an in-flight edit nor text the user has
+  already begun typing"). Seeding the ViewModel's INITIAL `_state.draft` value from the nav arg
+  (before the async `draftStore.load()` restore coroutine ever runs) means that guard does 100% of
+  the precedence work for free — the incoming draft simply IS the "already begun typing" state
+  from the guard's own point of view. Zero new branches added to `DraftAutosave`; the only new
+  code is the wiring that populates the initial value. Worth checking whether an existing pure
+  decision function's guard already covers a new feature's precedence need before writing a
+  parallel rule next to it — this is the same "check whether an adjacent mechanism is already
+  complete and just unreachable" lesson from the `outbox-message-lane-discovery` slice, applied to
+  a much smaller case.

@@ -8,6 +8,10 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
+import {
+  rebuildInfiniteConversationPages,
+  type InfiniteConversationData,
+} from '@/lib/conversations/infinite-cache';
 import { extractPreviewTranslations } from '@/services/conversations/transformers.service';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
@@ -96,11 +100,6 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
   return patch as Partial<Conversation>;
 }
 
-type InfiniteConversationData = {
-  pages: { conversations: Conversation[]; pagination: any }[];
-  pageParams: number[];
-};
-
 function updateInfiniteConversationCache(
   queryClient: ReturnType<typeof useQueryClient>,
   updater: (conversations: Conversation[]) => Conversation[]
@@ -112,54 +111,7 @@ function updateInfiniteConversationCache(
       const allConversations = old.pages.flatMap(page => page.conversations);
       const updated = updater(allConversations);
       if (updated === allConversations) return old;
-
-      // PRESERVE PAGE STRUCTURE. Previously this code collapsed every
-      // existing page into a single synthetic page with `pageParams: [0]`
-      // and `pagination.offset: 0` — meaning the next `fetchNextPage`
-      // call recomputed `getNextPageParam` against that single fused
-      // page and either re-fetched offset=0 (re-loading already-loaded
-      // conversations as duplicates) or stalled if the synthetic
-      // `hasMore` didn't propagate. By rebuilding the original page
-      // boundaries from the updated array, `pageParams` stay intact and
-      // infinite scroll keeps advancing past the last real page.
-      const rebuiltPages: typeof old.pages = [];
-      let cursor = 0;
-      for (let i = 0; i < old.pages.length; i++) {
-        const originalPage = old.pages[i];
-        const originalLength = originalPage.conversations.length;
-        const slice = updated.slice(cursor, cursor + originalLength);
-        rebuiltPages.push({
-          conversations: slice,
-          pagination: {
-            // Keep the original pagination metadata so `getNextPageParam`
-            // continues to see correct offsets/limits.
-            ...originalPage.pagination,
-            // `total` is the only field worth refreshing — the global
-            // count grows when a brand-new conversation is prepended.
-            total: i === old.pages.length - 1 ? updated.length : originalPage.pagination.total,
-          },
-        });
-        cursor += originalLength;
-      }
-      // Tail: any items the updater added beyond the original total
-      // length (e.g. a brand-new conversation prepended via fetch
-      // fallback). Append them as an extra page so they're not lost.
-      if (cursor < updated.length) {
-        const last = old.pages[old.pages.length - 1];
-        rebuiltPages.push({
-          conversations: updated.slice(cursor),
-          pagination: {
-            ...last.pagination,
-            offset: cursor,
-            total: updated.length,
-          },
-        });
-      }
-
-      return {
-        pages: rebuiltPages,
-        pageParams: old.pageParams,
-      };
+      return rebuildInfiniteConversationPages(old, updated);
     }
   );
 }
@@ -180,10 +132,6 @@ function advanceConversationPreviewOnDelete(
       ? { ...conv, lastMessage: replacement, lastMessageAt: replacement.createdAt }
       : conv;
 
-  queryClient.setQueriesData<Conversation[]>(
-    { queryKey: queryKeys.conversations.lists() },
-    (old) => (old ? old.map(replace) : old)
-  );
   updateInfiniteConversationCache(queryClient, (convs) => convs.map(replace));
 }
 
@@ -355,32 +303,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         });
       }
 
-      // Update ALL conversation list variants with latest message AND move to top
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-
-          let updated: Conversation | null = null;
-          const rest: Conversation[] = [];
-          for (const conv of old) {
-            if (conv.id === targetConversationId) {
-              updated = {
-                ...conv,
-                lastMessage: message,
-                lastMessageAt: message.createdAt,
-                updatedAt: message.createdAt,
-              };
-            } else {
-              rest.push(conv);
-            }
-          }
-
-          if (!updated) return old;
-          return [updated, ...rest];
-        }
-      );
-
       // Update infinite conversations query (paginated cache used by ConversationList)
       let conversationFoundInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
@@ -467,23 +389,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         queryClient.setQueryData(key, applyEdit);
       }
 
-      // Update lastMessage in ALL conversation list variants if this edited message is the last one
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-          return old.map((conv) => {
-            if (
-              conv.id === targetConversationId &&
-              conv.lastMessage?.id === message.id &&
-              !isStaleEdit(conv.lastMessage, message)
-            ) {
-              return { ...conv, lastMessage: message };
-            }
-            return conv;
-          });
-        }
-      );
       updateInfiniteConversationCache(queryClient, (convs) =>
         convs.map((conv) =>
           conv.id === targetConversationId &&
@@ -771,10 +676,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             ? { ...conv, memberCount: resolve(conv.memberCount ?? 0) }
             : conv
         );
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => old ? updater(old) : old
-      );
       updateInfiniteConversationCache(queryClient, updater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(conversationId),
@@ -1005,17 +906,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const linkLastMessage = linkMsg as unknown as Message;
       const linkLastMessageAt = toDate(linkMsg.createdAt) ?? new Date();
 
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => {
-          if (!old) return old;
-          const idx = old.findIndex((c) => c.id === linkConvId);
-          if (idx === -1) return old;
-          const updated: Conversation = { ...old[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
-          return [updated, ...old.filter((_, i) => i !== idx)];
-        }
-      );
-
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
@@ -1029,10 +919,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const { conversationId: rejectedId, reason } = data;
       if (!rejectedId) return;
       updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) => (old ? old.filter((c) => c.id !== rejectedId) : old)
-      );
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
       queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
       if (typeof window !== 'undefined') {

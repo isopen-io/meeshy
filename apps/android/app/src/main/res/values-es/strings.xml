@@ -68,4 +68,22 @@
     <string name="widget_unread_count_description">Consulta de un vistazo tus mensajes no leídos</string>
     <string name="widget_unread_label">No leídos</string>
     <string name="widget_all_read_label">Todo leído</string>
+
+    <!-- Widget de pantalla de inicio: conversaciones recientes -->
+    <string name="widget_recent_conversations_title">Conversaciones recientes</string>
+    <string name="widget_recent_conversations_description">Consulta tus conversaciones recientes de un vistazo</string>
+    <string name="widget_recent_conversations_empty">Abre Meeshy para empezar</string>
+
+    <!-- Widget de pantalla de inicio: contactos favoritos -->
+    <string name="widget_favorite_contacts_title">Favoritos</string>
+    <string name="widget_favorite_contacts_description">Acceso rápido a tus contactos favoritos</string>
+    <string name="widget_favorite_contacts_empty">Fija una conversación directa para añadir un favorito</string>
+
+    <!-- Widget de pantalla de inicio: respuesta rápida -->
+    <string name="widget_quick_reply_title">Respuesta rápida</string>
+    <string name="widget_quick_reply_description">Responde rápidamente a los mensajes recientes</string>
+    <string name="widget_quick_reply_empty">Abre Meeshy para empezar</string>
+    <string name="widget_quick_reply_ok">OK</string>
+    <string name="widget_quick_reply_thanks">¡Gracias!</string>
+    <string name="widget_quick_reply_call_me">Llámame</string>
 </resources>

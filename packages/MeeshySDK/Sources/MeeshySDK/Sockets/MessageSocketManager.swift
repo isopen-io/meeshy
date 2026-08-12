@@ -1274,6 +1274,9 @@ public protocol MessageSocketProviding: Sendable {
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
+    /// `user:updated` — profil public d'un CONTACT. Dans le protocole parce que
+    /// `ConversationSyncEngine` ne détient qu'un `MessageSocketProviding`.
+    var userUpdated: PassthroughSubject<UserUpdatedEvent, Never> { get }
     /// `conversation:participant-joined` — l'adhésion d'un tiers, distincte de
     /// `conversationJoined` (ack de room, cf. `ParticipantJoinedEvent`).
     var participantJoined: PassthroughSubject<ParticipantJoinedEvent, Never> { get }

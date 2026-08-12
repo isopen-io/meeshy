@@ -226,12 +226,19 @@ describe('PostReactionHandler', () => {
       visibilityUserIds: [],
       deletedAt: null,
     });
-    // Même post vu par la garde d'audience (tranche ACL, sans deletedAt : le
-    // soft-delete vit dans le `where` de `loadPostAcl`).
+    // Même post vu par la garde d'audience + la redirection repost simple →
+    // racine (`resolveInteractionTarget`, tâche 9) : `id` doit matcher
+    // `POST_ID` pour que les assertions `toHaveBeenCalledWith({ postId:
+    // POST_ID, ... })` restent vraies, et `isQuote:false, repostOfId:null`
+    // signale « pas un repost » — aucune redirection par défaut.
     mockPrisma.post.findFirst.mockResolvedValue({
+      id: POST_ID,
       authorId: ANOTHER_USER_ID,
       visibility: 'PUBLIC',
       visibilityUserIds: [],
+      isQuote: false,
+      repostOfId: null,
+      originalRepostOfId: null,
     });
 
     handler = new PostReactionHandler({
@@ -1034,9 +1041,13 @@ describe('PostReactionHandler', () => {
 
       mockValidate.mockReturnValue({ success: true, data });
       mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'PRIVATE',
         visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
 
       await handler.handleAddReaction(socket as any, data, callback);
@@ -1052,9 +1063,13 @@ describe('PostReactionHandler', () => {
 
       mockValidate.mockReturnValue({ success: true, data });
       mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'FRIENDS',
         visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
       mockPrisma.friendRequest.findFirst.mockResolvedValue(null);
 
@@ -1070,9 +1085,13 @@ describe('PostReactionHandler', () => {
 
       mockValidate.mockReturnValue({ success: true, data });
       mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'FRIENDS',
         visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
       mockPrisma.friendRequest.findFirst.mockResolvedValue({ id: 'fr-1' });
       mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
@@ -1104,14 +1123,153 @@ describe('PostReactionHandler', () => {
 
       mockValidate.mockReturnValue({ success: true, data });
       mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'PRIVATE',
         visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
 
       await handler.handleRemoveReaction(socket as any, data, callback);
 
       expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+  });
+
+  describe('repost simple → redirection vers la racine (tâche 9)', () => {
+    const ROOT_ID = '507f1f77bcf86cd799439fff';
+    const OTHER_REPOST_ID = '507f1f77bcf86cd799439eee';
+
+    function repostAcl(overrides: Record<string, unknown> = {}) {
+      return {
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: ROOT_ID,
+        originalRepostOfId: ROOT_ID,
+        ...overrides,
+      };
+    }
+
+    function rootAcl(overrides: Record<string, unknown> = {}) {
+      return {
+        id: ROOT_ID,
+        authorId: 'root-author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+        ...overrides,
+      };
+    }
+
+    function byId(map: Record<string, unknown | null>) {
+      return ({ where }: { where: { id: string } }) => Promise.resolve(map[where.id] ?? null);
+    }
+
+    it('handleAddReaction pose la réaction sur la RACINE, pas sur le repost affiché', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(byId({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() }));
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenCalledWith({
+        postId: ROOT_ID,
+        userId: USER_ID,
+        emoji: EMOJI,
+      });
+    });
+
+    it('idempotence : réagir via deux reposts distincts du MÊME original cible la racine les deux fois', async () => {
+      const socket = createMockSocket();
+      const callback = jest.fn();
+
+      mockValidate.mockImplementation((_schema: unknown, data: unknown) => ({ success: true, data }));
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl({ id: POST_ID }),
+        [OTHER_REPOST_ID]: repostAcl({ id: OTHER_REPOST_ID }),
+        [ROOT_ID]: rootAcl(),
+      }));
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, { postId: POST_ID, emoji: EMOJI }, callback);
+      await handler.handleAddReaction(socket as any, { postId: OTHER_REPOST_ID, emoji: EMOJI }, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(1, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI });
+      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(2, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI });
+    });
+
+    it('handleRemoveReaction retire la réaction posée sur la RACINE via un AUTRE repost du même original', async () => {
+      const socket = createMockSocket();
+      const callback = jest.fn();
+
+      mockValidate.mockImplementation((_schema: unknown, data: unknown) => ({ success: true, data }));
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl({ id: POST_ID }),
+        [OTHER_REPOST_ID]: repostAcl({ id: OTHER_REPOST_ID }),
+        [ROOT_ID]: rootAcl(),
+      }));
+      mockReactionService.removeReaction.mockResolvedValue(true);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleRemoveReaction(socket as any, { postId: OTHER_REPOST_ID, emoji: EMOJI }, callback);
+
+      expect(mockReactionService.removeReaction).toHaveBeenCalledWith({
+        postId: ROOT_ID,
+        userId: USER_ID,
+        emoji: EMOJI,
+      });
+    });
+
+    it('une CITATION garde sa vie sociale propre — addReaction cible la citation elle-même', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl({ isQuote: true }),
+        [ROOT_ID]: rootAcl(),
+      }));
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenCalledWith({
+        postId: POST_ID,
+        userId: USER_ID,
+        emoji: EMOJI,
+      });
+    });
+
+    it('racine devenue invisible pour l’acteur → refus standard, jamais un crédit silencieux', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl(),
+        [ROOT_ID]: rootAcl({ visibility: 'PRIVATE' }),
+      }));
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
   });

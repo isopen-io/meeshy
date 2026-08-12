@@ -89,6 +89,64 @@ function restoreReelsCaches(
   for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
 }
 
+// A liked/unliked post can appear NESTED as `repostOf` on any number of other
+// cache entries (every displayed repost of it). `withRepostOfLikeDelta`
+// mirrors the SAME delta onto the matched entry's own `repostOf.likeCount`
+// (the number PostCard/PostDetail/ReelPlayer render for a simple repost) —
+// `patchRepostOfLikeCountInFeed`/`InReelsCaches` mirror it onto every OTHER
+// entry embedding this post as `repostOf`. Quotes render their own counter,
+// never `repostOf`'s, so they're excluded from the first helper.
+
+function withRepostOfLikeDelta(post: Post, delta: number): Post {
+  if (!post.repostOf || post.isQuote) return post;
+  return {
+    ...post,
+    repostOf: {
+      ...post.repostOf,
+      likeCount: Math.max(0, (post.repostOf.likeCount ?? 0) + delta),
+    },
+  };
+}
+
+function patchRepostOfLikeCountInFeed(
+  old: InfiniteFeedData | undefined,
+  originalId: string,
+  delta: number,
+): InfiniteFeedData | undefined {
+  if (!old) return old;
+  return {
+    ...old,
+    pages: old.pages.map((page) => ({
+      ...page,
+      data: page.data.map((p) =>
+        p.repostOf && p.repostOf.id === originalId
+          ? { ...p, repostOf: { ...p.repostOf, likeCount: Math.max(0, (p.repostOf.likeCount ?? 0) + delta) } }
+          : p,
+      ),
+    })),
+  };
+}
+
+function patchRepostOfLikeCountInReelsCaches(
+  queryClient: QueryClientLike,
+  originalId: string,
+  delta: number,
+) {
+  queryClient.setQueriesData<ReelsInfinite>({ queryKey: reelsFeedKey() }, (old) => {
+    if (!old?.pages) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        data: (page.data ?? []).map((p) =>
+          p.repostOf && p.repostOf.id === originalId
+            ? { ...p, repostOf: { ...p.repostOf, likeCount: Math.max(0, (p.repostOf.likeCount ?? 0) + delta) } }
+            : p,
+        ),
+      })),
+    };
+  });
+}
 
 function removePostFromFeed(
   old: InfiniteFeedData | undefined,
@@ -316,7 +374,7 @@ export function useLikePostMutation() {
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
       const previousReels = snapshotReelsCaches(queryClient);
 
-      const patcher = (p: Post): Post => ({
+      const patcher = (p: Post): Post => withRepostOfLikeDelta({
         ...p,
         likeCount: p.likeCount + 1,
         reactionSummary: {
@@ -326,13 +384,14 @@ export function useLikePostMutation() {
         currentUserReactions: (p.currentUserReactions ?? []).includes(emoji)
           ? p.currentUserReactions
           : [...(p.currentUserReactions ?? []), emoji],
-      });
+      }, 1);
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, patcher),
+        (old) => patchRepostOfLikeCountInFeed(patchPostInFeed(old, postId, patcher), postId, 1),
       );
       patchPostInReelsCaches(queryClient, postId, patcher);
+      patchRepostOfLikeCountInReelsCaches(queryClient, postId, 1);
 
       return { previous, previousReels };
     },
@@ -380,18 +439,19 @@ export function useUnlikePostMutation() {
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
       const previousReels = snapshotReelsCaches(queryClient);
 
-      const patcher = (p: Post): Post => ({
+      const patcher = (p: Post): Post => withRepostOfLikeDelta({
         ...p,
         likeCount: Math.max(0, p.likeCount - 1),
         reactionSummary: decrementReactionSummary(p.reactionSummary, emoji),
         currentUserReactions: (p.currentUserReactions ?? []).filter((e) => e !== emoji),
-      });
+      }, -1);
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, patcher),
+        (old) => patchRepostOfLikeCountInFeed(patchPostInFeed(old, postId, patcher), postId, -1),
       );
       patchPostInReelsCaches(queryClient, postId, patcher);
+      patchRepostOfLikeCountInReelsCaches(queryClient, postId, -1);
 
       return { previous, previousReels };
     },

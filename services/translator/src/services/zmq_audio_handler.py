@@ -479,17 +479,6 @@ class AudioHandler:
 
                     logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
 
-                if audio_bytes:
-                    binary_frames.append(audio_bytes)
-                    audio_key = f"audio_{t.language}"
-                    binary_frames_info[audio_key] = {
-                        'index': frame_index,
-                        'size': len(audio_bytes),
-                        'mimeType': t.audio_mime_type or 'audio/mp3'
-                    }
-                    frame_index += 1
-                    logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
-
                 # Metadata sans base64 (contient juste le mapping vers le frame)
                 translated_audio_dict = {
                     'targetLanguage': t.language,
