@@ -29,5 +29,22 @@ Branch & suivi
 
 Notes
 - Le plan plus complet existe déjà dans le document référencé; ce fichier est un résumé actionnable pour reprise rapide par un dev iOS.
+Étendue supplémentaire — posts / reels / post detail / feeds
+
+- Contexte: la fonctionnalité doit couvrir non seulement la sauvegarde depuis l'UI "Mes stories" mais aussi les chemins "Enregistrer" depuis les cartes de feed, les vues détail de post, les readers de reels et les players (ReelFeedCard, ReelsPlayerView, FeedPostCard, PostDetailView).
+- Points d'intégration principaux:
+	- `MediaSaveCoordinator` / `requestSaveMedia()` — point central à câbler pour déclencher la logique de watermark avant d'appeler `PhotoLibraryManager`.
+	- `ReelFeedCard`, `ReelsPlayerView`, `FeedPostCard`, `PostDetailView` — appeler `requestSaveMedia()` et fournir le `StoryExportWatermark` / `ImageWatermarkComposer` selon le média.
+	- `MeeshyExportWatermark.make(username:)` doit rester la source de vérité du rendu watermark pour les vidéos.
+	- Pour images, utiliser `ImageWatermarkComposer.compose(image:logo:username:) -> UIImage` (statique, sans animation) avant la sauvegarde.
+	- Pour audio attaché aux posts/reels, choisir la concaténation d'un jingle court en tête du fichier audio avant écriture dans Documents/Files ou la librairie appropriée.
+
+- Tests d'intégration à ajouter:
+	- Sauvegarde depuis `ReelFeedCard` d'une vidéo: exporter via `StoryVideoExportServiceProviding.prepareExport(..., watermark:)` puis `PhotoLibraryManager.saveVideo(at:)` et vérifier watermark présent dans le MP4 (pixel/audio RMS ou métadatas).
+	- Sauvegarde d'une image depuis `FeedPostCard`: vérifier que l'image sauvegardée contient le logo + pseudo (pixel sample ou comparaison hash).
+	- Sauvegarde audio: vérifier durée/présence du jingle en tête.
+
+Branch & suivi
+- Mettre à jour la même branche `feat/media-watermark-plan` avec ce complément et ouvrir une PR dédiée.
 
 
