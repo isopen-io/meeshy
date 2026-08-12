@@ -49,7 +49,13 @@ function buildPrisma(overrides: Record<string, unknown> = {}) {
       updateMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
     },
-    postMedia: { deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }) },
+    // `findMany` : la récupération des octets lit les fichiers AVANT de
+    // détruire les lignes (cf. `reclaimPostMediaBytes`). Sans ce double, la
+    // passe rejette — ce qui est le comportement voulu en production.
+    postMedia: {
+      findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
+      deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    },
     trackingLink: {
       updateMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),
     },

@@ -1,15 +1,11 @@
-# Tête instruite pour le cycle 96 — la chaîne de destruction est complète jusqu'aux OCTETS ; ce qui reste n'est plus un trou, c'est un compromis
+# Tête instruite pour le cycle 97 — la famille POST a rejoint la famille message au niveau de l'OCTET ; le reste de sa chaîne de destruction, lui, n'existe toujours pas
 
-*Le cycle 95 a fermé le dernier maillon de la veine ouverte au cycle 92 : les routes qui rendent
-les octets ignoraient toute la chaîne que les cycles 92, 93 et 94 avaient bâtie. Elles la
-respectent. Ce que le cycle 95 a EN PLUS établi, en vérifiant au lieu de supposer, c'est que le
-défaut annoncé par la tête du cycle 95 n'avait pas la forme qu'elle lui prêtait.*
+*Le cycle 96 a fait ce que la tête du cycle 95 demandait — porter à Story/Post la question posée
+quatre fois à la famille message — et la réponse était la plus nette de la série : **personne**.
+Ce que le cycle 96 a établi EN PLUS, et qui commande le cycle 97, c'est que fermer les octets a
+mis à nu un trou plus large que lui.*
 
 > ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
->
-> Le cycle 90 a fait son `git fetch` d'ouverture, lu la tête, puis passé une heure à implémenter
-> les trois défauts du pipeline de traduction — pendant qu'une session parallèle livrait les
-> **mêmes trois**, mieux, et les mergeait (PR #2890).
 >
 > ```bash
 > git fetch origin main && git log --oneline -5 origin/main
@@ -19,48 +15,170 @@ défaut annoncé par la tête du cycle 95 n'avait pas la forme qu'elle lui prêt
 > depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
 > contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
 > Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
-> COUVERTURE, pas l'intitulé.** Un doublon de défaut n'est pas un doublon de correctif.
+> COUVERTURE, pas l'intitulé.**
 
-> ## La leçon que le cycle 95 ajoute, et elle est la plus chère du lot
+> ## La leçon que le cycle 96 ajoute : le commentaire qui NOMME un suivi est une promesse, au même
+> titre qu'un champ de schéma
 >
-> **Une tête de cycle peut désigner un vrai défaut ET se tromper sur sa forme. Vérifier la forme
-> AVANT de dimensionner le correctif.**
+> Le défaut du cycle 96 n'a pas été trouvé en lisant `schema.prisma` : il était **écrit en toutes
+> lettres dans le code**, depuis des mois, au futur — « *Disk-file reclamation is a separate
+> follow-up (fileUrl→path resolution, prod caution)* ». Un suivi nommé dans un commentaire se lit
+> exactement comme un champ qui promet un comportement : *qui, côté serveur, le fait respecter ?*
+> Ici, personne — et le commentaire tenait lieu de fermeture depuis si longtemps qu'aucun audit ne
+> le relisait comme une dette ouverte.
 >
-> La tête du cycle 95 annonçait que le budget de vue unique « se contourne par un simple GET », et
-> que le fermer serait « le chantier le plus rentable ouvert à ce jour ». Les deux moitiés étaient
-> vraies à moitié :
->
-> - **Le défaut existait**, mais pas comme un contournement du COMPTEUR : comme une absence totale
->   de garde de CYCLE DE VIE. La route ne regardait ni `deletedAt`, ni `expiresAt` — donc elle
->   servait aussi les messages rappelés et les éphémères expirés, pas seulement la vue unique.
->   Le correctif juste est trois fois plus large que celui qui était demandé, et trois fois plus
->   simple : il ne compte rien, il lit deux colonnes.
-> - **Le chantier annoncé — « décider ce qui compte comme une vue côté serveur », avec ses
->   sous-questions vignettes/Range/rejeu — n'avait pas lieu d'être.** Il se dissout entièrement
->   dès qu'on remarque que `scheduleViewOnceBurn` écrit le budget épuisé SOUS FORME d'échéance.
->   L'échéance EST la brûlure : une garde qui lit `expiresAt` couvre la vue unique sans connaître
->   un seul de ses champs. Trois sous-questions épineuses, zéro ligne de code.
->
-> **Le motif à retenir** : quand une tête décrit un chantier coûteux, chercher d'abord si une
-> pièce déjà écrite ne le rend pas sans objet. Ici `scheduleViewOnceBurn`, livré au cycle 93,
-> portait déjà la réponse.
+> **Le corollaire, plus dur** : le suivi annoncé était sous-dimensionné par son propre auteur. Il
+> disait « le balayage laisse des fichiers » ; il en laissait aussi **par l'édition d'un post**,
+> un chemin bien plus fréquent que le balayage, et que le commentaire ne mentionnait pas. Ne pas
+> prendre le périmètre d'un TODO pour le périmètre du défaut : chercher TOUS les écrivains de la
+> destruction, comme la leçon du cycle 95 le demandait déjà pour les lecteurs.
 
-> ## La méthode, validée quatre fois : chercher la PROMESSE, pas l'événement
+> ## La méthode, validée cinq fois : chercher la PROMESSE, pas l'événement
 >
-> **La question à poser à chaque champ de `schema.prisma` qui promet un comportement :**
-> *qui, côté serveur, fait respecter cette promesse ?* Si la réponse est « les clients », la
-> promesse est cosmétique.
->
-> Quatre pour quatre : `expiresAt` (92), `isViewOnce`/`maxViewOnceCount` (93), le transfert (94),
-> et les OCTETS eux-mêmes (95).
->
-> **Le corollaire que le cycle 95 ajoute : poser la question au DERNIER maillon, pas seulement au
-> premier.** Les cycles 92 à 94 ont chacun vérifié qui fait respecter la promesse au niveau du
-> MODÈLE. Aucun n'a demandé qui la fait respecter au niveau de l'OCTET — et c'est là qu'elle ne
-> l'était pas. Pour toute promesse déjà « fermée », se demander une fois de plus : *et la route
-> qui sert le fichier, elle la connaît ?*
+> Cinq pour cinq : `expiresAt` (92), `isViewOnce`/`maxViewOnceCount` (93), le transfert (94), les
+> OCTETS de message (95), les OCTETS de post (96). Poser la question au DERNIER maillon, celui qui
+> rend le fichier — c'est là qu'elle n'est jamais tenue.
 
-## Livré au cycle 94 — **mergé sur `main` le 2026-08-12 (PR #2902, merge `4ecd765e`)**
+## Livré au cycle 95 — **mergé sur `main`**. Détail complet : section « Cycle 95 » plus bas — elle contient l'analyse de l'URL-capacité `/attachments/file/*`, qui reste le dossier de référence sur ce compromis.
+
+## Livré au cycle 96
+
+1. **`reclaimPostMediaBytes` / `reclaimMediaRowBytes`** (`services/posts/reclaimPostMediaBytes.ts`)
+   — les octets d'un média de post suivent la destruction de sa ligne, sur les DEUX chemins qui
+   détruisent des lignes `PostMedia` :
+   - `ExpiredStoriesCleanupService` (balayage du contenu éphémère), qui annonçait la récupération
+     disque comme un suivi et l'a attendue depuis ;
+   - `PostService.updatePost` (retrait d'un média par l'édition), que le suivi annoncé ne
+     mentionnait même pas — et qui est le chemin le plus fréquent des deux.
+2. **Une seule garde, et elle est nécessaire** : un fichier encore référencé par un `Sound` vivant
+   n'est pas effacé. L'audio d'un son est COPIÉ dans son propre dossier par `SoundCaptureService`,
+   donc il ne partage aucun octet — mais `coverUrl` est **dénormalisé** à la capture depuis
+   `PostMedia.thumbnailUrl ?? fileUrl`, et le son SURVIT au post dont il est né.
+3. **Deux ordres opposés, chacun forcé par son chemin, aucun choisi** :
+   - balayage → octets AVANT lignes (la ligne est le seul chemin vers le fichier), et **rejet** sur
+     requête en échec, comme ses voisins `deactivatePostTrackingLinks` et `releasePosts` ;
+   - édition → octets APRÈS le commit (la transaction peut encore échouer), et **absorption** des
+     échecs (les lignes sont déjà parties ; rejeter ferait un 500 sans rien récupérer).
+4. **Un `unlink` récalcitrant est toujours absorbé**, dans les deux sens : rejeter dessus bloquerait
+   la MÊME fournée à chaque passe, indéfiniment — le piège que la borne de fournée documente déjà.
+5. **Coût nul en requêtes sur le chemin d'édition** : `fileUrl`/`thumbnailUrl` sont ajoutés au
+   `select` du `post.findFirst` qui partait de toute façon.
+
+Tests : 14 sur le module (`reclaimPostMediaBytes.test.ts`), 4 sur le balayage
+(`ExpiredStoriesCleanupService.mediaBytes.test.ts`), 7 sur l'édition
+(`PostService.mediaByteReclamation.test.ts`). RED prouvé sur le chemin d'édition (3 rouges avec la
+récupération désactivée, les 4 gardes négatives restant vertes — elles doivent l'être).
+
+## Ce que le cycle 96 a VÉRIFIÉ et qui corrige le dossier
+
+### 1. La récupération disque était le SEUL chemin de retour ; il n'y a pas de filet
+
+Vérifié avant d'écrire une ligne : une fois la ligne `PostMedia` détruite, **aucun** balayage ne
+retrouve le fichier. `MaintenanceService.cleanupOrphanedAttachments` ne ramasse que les
+`MessageAttachment` sans `messageId` — jamais un `PostMedia`. `OrphanMediaCleanupService` ne
+connaît que sa propre boîte d'envoi (`OrphanMediaCleanup`), alimentée par les uploads en échec, et
+ne balaie pas le volume. Le fichier n'était donc pas « en retard de nettoyage » : il était
+**définitivement hors de portée**, et servi par une route sans authentification.
+
+### 2. Aucun `PostMedia` ne partage son fichier avec un autre `PostMedia`
+
+`postMedia.create` n'a qu'UN site (`routes/uploads/tus-handler.ts`) et les reposts de source
+éphémère **dupliquent** l'octet (`MediaService.duplicate`, fichier neuf sous `snapshots/`). Le
+motif qui gâte la famille message — `copyForwardedAttachments` copie `filePath` VERBATIM, cf.
+cycle 94, suivi 4 — **n'existe pas** côté post. C'est ce qui rend la récupération sûre sans
+compteur de références.
+
+### 3. Ce que le cycle 96 n'a PAS fait, et qui n'est pas un oubli
+
+**Un post supprimé par son auteur ne perd toujours pas ses octets** — parce qu'il ne perd pas non
+plus ses lignes : `deletePost` pose `deletedAt`, et le hard-delete ne balaie que
+`SWEPT_POST_TYPES` (STATUS depuis le 2026-08-12) avec une échéance. Un POST/REEL supprimé garde
+donc ses lignes `PostMedia` ET ses fichiers **pour toujours**. Y toucher n'est pas une extension
+du cycle 96 : c'est décider une rétention, et il faut d'abord répondre à la question ci-dessous.
+
+## Ce que le cycle 97 doit faire
+
+### 1. La rétention des posts supprimés — le trou que le cycle 96 a mis à nu, et le plus large
+
+Un `Message` supprimé perd ses octets IMMÉDIATEMENT (`deleteAttachment` sur les quatre écrivains
+de `deletedAt`). Un `Post` supprimé ne perd rien, jamais : ni lignes, ni fichiers. L'asymétrie
+n'est écrite nulle part comme une décision — elle est le résidu d'un balayage dont le périmètre
+s'est rétréci aux STATUS.
+
+**La question à trancher AVANT d'écrire du code** : la suppression d'un post est-elle réversible ?
+Aucune route de restauration n'a été trouvée au cycle 96 (à revérifier), ce qui rendrait la
+rétention illimitée sans objet. Si elle ne l'est pas, le geste juste est une **passe de rétention
+générique** — soft-delete + N jours → destruction des lignes, `reclaimPostMediaBytes` étant déjà
+écrit et déjà branché sur ce motif. Attention : un repost SIMPLE d'un post permanent ne duplique
+rien et rend le média de l'original par la relation `repostOf` (aucun filtre `deletedAt` possible
+sur une relation to-one) — détruire l'original casserait l'affichage du repost. C'est la garde
+qu'il faudra ajouter, jumelle de la garde `Sound`.
+
+### 2. La famille CALL — jamais prospectée
+
+Story et Post viennent d'être instruits. `Call` ne l'a jamais été : enregistrements, médias
+d'appel, métadonnées de session. Même filtre, mêmes deux questions (qui fait respecter la
+promesse ? et au niveau de l'octet ?).
+
+### 3. L'index MongoDB non appliqué — inchangé, et toujours le maillon faible
+
+`expiresAt_ephemeral_partial` (cycle 92) est fourni mais **jamais appliqué** — aucun déploiement ne
+joue les migrations MongoDB manuelles. Sans lui, le balayage fait un COLLSCAN par minute sur
+`Message`, et c'est ce balayage qui `unlink`. Le cycle 96 y ajoute un second dépendant : la
+récupération des octets de post s'exécute dans la passe horaire du balayage éphémère.
+
+### 4. Les constats non instruits des cycles 93 à 95 (inchangés)
+
+- `maxViewOnceCount: null` veut dire « 1 » dans le code et « tous les membres » dans le schéma.
+- Le passif en base de `scheduleViewOnceBurn` ne se rattrape pas tout seul.
+- Aucun client ne masque `.forward` sur un message à vue unique (iOS : toolchain absente ici).
+- `copyForwardedAttachments` copie `filePath` VERBATIM — la copie transférée et l'original
+  partagent l'octet. **Le cycle 96 confirme que ce motif est propre à la famille message** ; côté
+  post, la duplication est réelle.
+- `MessageAttachment.isViewOnce` n'a aucun écrivain : soit le retirer, soit le câbler.
+- Veine « événement socket manqué » : modération admin, rattrapage à la reconnexion.
+- `tsc --noEmit` sur `apps/web` rend 1 224 diagnostics, tous dans `__tests__/**`, tous
+  pré-existants. Signal éteint ; assainir est un chantier en soi.
+
+
+## Ce qui reste ouvert des cycles précédents
+
+- **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
+  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
+  la routine** — inchangé aux cycles 86 à 95. Exige une machine macOS.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
+  `push --delete` non. Les branches mergées s'accumulent — à purger depuis un contexte qui a le
+  droit (cf. `tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
+  n'existe toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
+  charge** (cycle 87). Non reproduit aux cycles 88 à 95.
+
+## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
+
+| Cible | Exécutable ici ? | Note |
+|---|---|---|
+| suites Swift / iOS | ✗ | aucune toolchain |
+| build web (Next.js) | ⚠ | dépend du réseau Google Fonts (cf. cycle 88) |
+| gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
+
+`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
+et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+**Ordre exact vérifié au cycle 95** (sans lui, `tsc --noEmit` rend un faux positif
+`Cannot find module '@meeshy/shared'` sur `utils/sanitize.ts`) :
+
+```bash
+bun install --ignore-scripts
+cd packages/shared && npx prisma generate --generator client && bun run build
+cd services/gateway && npx tsc --noEmit && bun run test
+```
+---
+
+# Cycle 95 — Les octets d'une pièce jointe ignoraient la destruction du message porteur
+
+## Rappel — livré au cycle 94 — **mergé sur `main` le 2026-08-12 (PR #2902, merge `4ecd765e`)**
 
 *Gate local avant merge : 683/683 suites, 16 902/16 902 tests, `tsc --noEmit` propre,
 `forwardAdmission.ts` à 100 % de lignes couvertes, total gateway 95,93 %. Réintégration de `main`
@@ -68,7 +186,7 @@ après merge (PR #2900, calls/video-call) : sans conflit, périmètres disjoints
 
 Le détail du garde de transfert est consigné au CHANGELOG et dans la section « Cycle 94 » plus bas.
 
-## Livré au cycle 95
+## Livré au cycle 95 (détail)
 
 1. **`carrierMessageStillServesBytes` — les octets suivent la vie du message porteur.** Prédicat
    pur dans `services/attachments/carrierMessageLifecycle.ts`, appelé depuis
@@ -146,113 +264,6 @@ immutable, et les trois clients. À instruire comme tel, pas à improviser.
 - « décider ce qui compte comme une vue touche les vignettes, les requêtes Range et le rejeu » —
   **sans objet**, cf. la leçon en tête.
 
-## Ce que le cycle 96 doit faire
-
-### 1. La prospection Story / Post / Call — désormais en tête de file
-
-La famille message est close pour de bon (92 → 95). C'est la suite naturelle et elle n'a jamais
-été instruite. **Attention : `ExpiredStoriesCleanupService` existe déjà**, donc la famille
-story/post est PARTIELLEMENT couverte — chercher ce qu'il ne balaie PAS plutôt que de supposer le
-vide. Le bon filtre reste celui du cycle 93 : *un client déduit un comportement d'un champ dont
-AUCUN code serveur ne lit la valeur pour agir* — pas « le champ ressemble à une promesse ».
-
-**Et poser la question du cycle 95 en plus de celle du cycle 92** : pour chaque promesse trouvée,
-demander AUSSI qui la fait respecter au niveau de l'octet. `PostMedia` a son propre chemin de
-téléchargement (`__tests__/posts-media-download-route.test.ts` existe) — il mérite exactement
-l'audit que `download.ts` vient de recevoir.
-
-### 2. L'index MongoDB non appliqué — devenu le maillon faible de TOUTE la chaîne
-
-**Ce point change de rang : il n'est plus une dette d'exploitation, c'est la dépendance dont
-dépendent maintenant les cycles 92, 93, 94 ET 95.**
-
-`expiresAt_ephemeral_partial` (cycle 92) est fourni mais **jamais appliqué** — aucun déploiement ne
-joue les migrations MongoDB manuelles. Sans lui, le balayage fait un COLLSCAN par minute sur
-`Message`. Or c'est le balayage qui `unlink` les fichiers, donc c'est LUI qui ferme la seule
-fenêtre restante sur `/attachments/file/*`. Un balayage en retard rallonge cette fenêtre
-proportionnellement.
-
-À jouer à la main sur la production, ou à automatiser — et l'automatiser serait un chantier utile
-en soi, puisque le problème est générique (aucune migration Mongo manuelle n'est jouée nulle part).
-
-### 3. Les deux constats du cycle 93, toujours non instruits
-
-- **`maxViewOnceCount: null` veut dire « 1 » partout dans le code et « tous les membres » dans le
-  commentaire du schéma** (la route fait `?? 1`). C'est le commentaire du schéma qui est faux, ou la
-  route ; trancher demande de savoir ce que les composeurs iOS/web envoient réellement.
-- **Le passif en base ne se rattrape pas tout seul.** `scheduleViewOnceBurn` n'est appelé que depuis
-  la route de consommation : un message épuisé AVANT la mise en service de ce chemin n'obtient
-  jamais son échéance. Une passe de rattrapage unique (`viewOnceCount >= maxViewOnceCount ?? 1` ET
-  `expiresAt` absent) fermerait le passif ; elle n'est toujours pas écrite. **Le cycle 95 la rend
-  plus utile qu'avant** : l'échéance est désormais ce qui coupe l'accès aux octets, donc un message
-  du passif reste lisible là où un message récent ne l'est plus.
-
-### 4. Les deux suivis ouverts par le cycle 94
-
-- **Aucun client ne masque `.forward` sur un message à vue unique.** L'action est offerte puis
-  refusée par le serveur — correct pour la sécurité, médiocre pour l'UX. Côté iOS le correctif est
-  contenu et purement logique : ajouter `isViewOnce` à `MessageMenuContext` (avec une valeur par
-  défaut, pour ne casser aucun site de construction) et filtrer `.forward` — et `.share`, qui est
-  la même sortie sous un autre nom — dans `MessageActionResolver.moreSections`.
-  **Toujours pas faisable ici faute de toolchain Swift** : le fichier est PARTAGÉ par tous les
-  worktrees iOS et une édition non compilée y est un risque net.
-- **`copyForwardedAttachments` copie `filePath` VERBATIM** : la copie et l'original partagent le
-  fichier sur disque, donc la destruction de l'original (`deleteAttachment` → `fs.unlink`) emporte
-  le média de la copie avant sa propre échéance. Défaut ANTÉRIEUR au cycle 94, qui ne fuit rien —
-  il dégrade. Le fermer demande de dupliquer l'octet ou de compter les références.
-  **Le cycle 95 y ajoute une conséquence** : maintenant que la garde de cycle de vie existe, la
-  copie transférée dont l'original a brûlé rendra un 404 cohérent sur la route authentifiée — mais
-  le fichier manquant reste un 404 « File not found on disk » sur l'autre. Symptôme identique,
-  causes distinctes : ne pas confondre les deux en diagnostic.
-
-### 5. `MessageAttachment.isViewOnce` — seconde promesse cosmétique, toujours non traitée
-
-Constatée au cycle 94 : aucun écrivain sur le chemin d'envoi (le champ n'est que LU, par
-`attachmentIncludes` et les mappings d'`AttachmentService`). La vue unique vit entièrement au
-niveau `Message`. Soit le retirer, soit le câbler — mais ne jamais s'y fier.
-
-### 6. La veine « événement socket manqué », toujours ouverte
-
-- **La modération admin** reste le candidat restant parmi les chemins qui rendent un message
-  invisible sans repousser la pastille de non-lus.
-- **Le rattrapage à la reconnexion** vaut d'être cherché ailleurs : réactions, épinglages, présence.
-- **`tsc --noEmit` sur `apps/web` rend 1 224 diagnostics**, tous dans `__tests__/**` et tous
-  pré-existants. Signal éteint ; assainir est un chantier en soi.
-
-## Ce qui reste ouvert des cycles précédents
-
-- **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
-  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
-  la routine** — inchangé aux cycles 86 à 95. Exige une machine macOS.
-- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
-- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
-  `push --delete` non. Les branches mergées s'accumulent — à purger depuis un contexte qui a le
-  droit (cf. `tasks/branch-purge-*.sh`).
-- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
-  n'existe toujours pas.
-- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
-  charge** (cycle 87). Non reproduit aux cycles 88 à 95.
-
-## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
-
-| Cible | Exécutable ici ? | Note |
-|---|---|---|
-| suites Swift / iOS | ✗ | aucune toolchain |
-| build web (Next.js) | ⚠ | dépend du réseau Google Fonts (cf. cycle 88) |
-| gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
-
-`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
-et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
-
-**Ordre exact vérifié au cycle 95** (sans lui, `tsc --noEmit` rend un faux positif
-`Cannot find module '@meeshy/shared'` sur `utils/sanitize.ts`) :
-
-```bash
-bun install --ignore-scripts
-cd packages/shared && npx prisma generate --generator client && bun run build
-cd services/gateway && npx tsc --noEmit && bun run test
-```
----
 
 # Cycle 93 — La vue unique ne se consommait nulle part, et « ce n'est pas le contenu » était faux
 
