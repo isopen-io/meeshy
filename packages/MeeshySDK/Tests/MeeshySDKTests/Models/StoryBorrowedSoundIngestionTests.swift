@@ -74,7 +74,11 @@ final class StoryBorrowedSoundIngestionTests: XCTestCase {
 
         let item = groups.first?.stories.first
         XCTAssertNotNil(item?.expiresAt)
-        let expected = Calendar.current.date(byAdding: .hour, value: 20, to: createdAt)
+        // La MÊME constante que la prod (pas un Calendar local, dépendant du
+        // fuseau du runner) : le fallback est un intervalle absolu depuis
+        // createdAt, SSOT `StoryItem.defaultExpiryInterval` ↔ serveur
+        // `EPHEMERAL_POST_TTL_HOURS.STORY`.
+        let expected = createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)
         XCTAssertEqual(item?.expiresAt, expected)
         XCTAssertEqual(item?.isExpired(at: createdAt), false)
     }

@@ -2150,8 +2150,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// avatars/text on every cold start, but the *content* must not be
     /// rendered).
     /// G6 — durée de vie d'une story SANS `expiresAt` explicite : alignée sur
-    /// la constante serveur `STORY_EXPIRY_HOURS = 21` (PostService.ts) et sur
-    /// le fallback client de `toStoryGroups`/`pinDeadline` (createdAt + 20 h).
+    /// la constante serveur `EPHEMERAL_POST_TTL_HOURS.STORY` (ephemeralPosts.ts)
+    /// et consommée par les fallbacks client `toStoryGroups`/`pinDeadline`.
     /// L'ancien défaut interne de 24 h était un piège dormant : sans effet
     /// tant que le serveur pose toujours `expiresAt`, mais une story au
     /// fallback aurait survécu plus longtemps que sa vie serveur.
@@ -2383,8 +2383,11 @@ extension Array where Element == APIPost {
             let storyTranslations: [StoryTranslation]? = post.translations.map { dict in
                 dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
             }
+            // Fallback aligné sur la SSOT serveur (EPHEMERAL_POST_TTL_HOURS.STORY,
+            // 20 h depuis 2026-08-12) via l'unique constante iOS — le `Calendar`
+            // à 21 h d'avant divergeait ET dépendait du fuseau du process.
             let effectiveExpiresAt = post.expiresAt
-                ?? Calendar.current.date(byAdding: .hour, value: 21, to: post.createdAt)
+                ?? post.createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)
             let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
             let item = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: hasOwnContent ? post.storyEffects : repostSource?.storyEffects,
@@ -2569,7 +2572,7 @@ extension StorySlide {
             media: mediaEntries,
             storyEffects: effects,
             createdAt: Date(),
-            expiresAt: Calendar.current.date(byAdding: .hour, value: 21, to: Date()),
+            expiresAt: Date().addingTimeInterval(StoryItem.defaultExpiryInterval),
             isViewed: false
         )
     }

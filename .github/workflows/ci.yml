@@ -10,8 +10,7 @@ name: CI
 
 on:
   push:
-    # claude/ios-analysis-corrections-1329ae : temporaire, retiré avant merge
-    branches: [main, dev, develop, claude/ios-analysis-corrections-1329ae]
+    branches: [main, dev, develop]
   pull_request:
     branches: [main, dev, develop]
   workflow_dispatch:
@@ -281,6 +280,11 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
+          # Cache du toolchain CPython lui-même : l'étape « Setup Python via
+          # uv » ne touche plus GitHub Releases sur cache chaud — c'est ce
+          # téléchargement (python-build-standalone) qui flake par « http2
+          # error: refused stream » (2 occurrences le 2026-08-12).
+          cache-python: true
 
       - name: Setup Python via uv (with retry)
         run: |
@@ -291,12 +295,19 @@ jobs:
           # sort en échec après la 3e tentative : une boucle qui se termine
           # sans `exit 1` rendrait la panne invisible et ferait tomber les
           # étapes suivantes sur une erreur sans rapport.
-          for i in 1 2 3; do
+          # Backoff exponentiel : les incidents GitHub Releases observés
+          # durent plus que les 30 s couvertes par 3 × 10 s — 5 tentatives
+          # sur ~2,5 min (10/20/40/80 s) traversent un blip complet. Le
+          # cache-python ci-dessus rend de toute façon cette étape no-op
+          # réseau sur cache chaud.
+          delay=10
+          for i in 1 2 3 4 5; do
             uv python install ${{ env.PYTHON_VERSION }} && exit 0
-            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
-            sleep 10
+            echo "Tentative $i échouée, nouvelle tentative dans $delay s..."
+            sleep "$delay"
+            delay=$((delay * 2))
           done
-          echo "::error::uv python install a échoué après 3 tentatives."
+          echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
@@ -400,6 +411,11 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
+          # Cache du toolchain CPython lui-même : l'étape « Setup Python via
+          # uv » ne touche plus GitHub Releases sur cache chaud — c'est ce
+          # téléchargement (python-build-standalone) qui flake par « http2
+          # error: refused stream » (2 occurrences le 2026-08-12).
+          cache-python: true
 
       - name: Setup Python via uv (with retry)
         run: |
@@ -410,12 +426,19 @@ jobs:
           # sort en échec après la 3e tentative : une boucle qui se termine
           # sans `exit 1` rendrait la panne invisible et ferait tomber les
           # étapes suivantes sur une erreur sans rapport.
-          for i in 1 2 3; do
+          # Backoff exponentiel : les incidents GitHub Releases observés
+          # durent plus que les 30 s couvertes par 3 × 10 s — 5 tentatives
+          # sur ~2,5 min (10/20/40/80 s) traversent un blip complet. Le
+          # cache-python ci-dessus rend de toute façon cette étape no-op
+          # réseau sur cache chaud.
+          delay=10
+          for i in 1 2 3 4 5; do
             uv python install ${{ env.PYTHON_VERSION }} && exit 0
-            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
-            sleep 10
+            echo "Tentative $i échouée, nouvelle tentative dans $delay s..."
+            sleep "$delay"
+            delay=$((delay * 2))
           done
-          echo "::error::uv python install a échoué après 3 tentatives."
+          echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
@@ -531,6 +554,11 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
+          # Cache du toolchain CPython lui-même : l'étape « Setup Python via
+          # uv » ne touche plus GitHub Releases sur cache chaud — c'est ce
+          # téléchargement (python-build-standalone) qui flake par « http2
+          # error: refused stream » (2 occurrences le 2026-08-12).
+          cache-python: true
 
       - name: Setup Python via uv (with retry)
         run: |
@@ -541,12 +569,19 @@ jobs:
           # sort en échec après la 3e tentative : une boucle qui se termine
           # sans `exit 1` rendrait la panne invisible et ferait tomber les
           # étapes suivantes sur une erreur sans rapport.
-          for i in 1 2 3; do
+          # Backoff exponentiel : les incidents GitHub Releases observés
+          # durent plus que les 30 s couvertes par 3 × 10 s — 5 tentatives
+          # sur ~2,5 min (10/20/40/80 s) traversent un blip complet. Le
+          # cache-python ci-dessus rend de toute façon cette étape no-op
+          # réseau sur cache chaud.
+          delay=10
+          for i in 1 2 3 4 5; do
             uv python install ${{ env.PYTHON_VERSION }} && exit 0
-            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
-            sleep 10
+            echo "Tentative $i échouée, nouvelle tentative dans $delay s..."
+            sleep "$delay"
+            delay=$((delay * 2))
           done
-          echo "::error::uv python install a échoué après 3 tentatives."
+          echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
@@ -658,6 +693,11 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
+          # Cache du toolchain CPython lui-même : l'étape « Setup Python via
+          # uv » ne touche plus GitHub Releases sur cache chaud — c'est ce
+          # téléchargement (python-build-standalone) qui flake par « http2
+          # error: refused stream » (2 occurrences le 2026-08-12).
+          cache-python: true
 
       - name: Setup Python via uv (with retry)
         run: |
@@ -668,12 +708,19 @@ jobs:
           # sort en échec après la 3e tentative : une boucle qui se termine
           # sans `exit 1` rendrait la panne invisible et ferait tomber les
           # étapes suivantes sur une erreur sans rapport.
-          for i in 1 2 3; do
+          # Backoff exponentiel : les incidents GitHub Releases observés
+          # durent plus que les 30 s couvertes par 3 × 10 s — 5 tentatives
+          # sur ~2,5 min (10/20/40/80 s) traversent un blip complet. Le
+          # cache-python ci-dessus rend de toute façon cette étape no-op
+          # réseau sur cache chaud.
+          delay=10
+          for i in 1 2 3 4 5; do
             uv python install ${{ env.PYTHON_VERSION }} && exit 0
-            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
-            sleep 10
+            echo "Tentative $i échouée, nouvelle tentative dans $delay s..."
+            sleep "$delay"
+            delay=$((delay * 2))
           done
-          echo "::error::uv python install a échoué après 3 tentatives."
+          echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
 
       - name: Install Node.js dependencies (bun with retry)

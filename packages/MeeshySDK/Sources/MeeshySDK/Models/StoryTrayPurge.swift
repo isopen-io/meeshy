@@ -3,7 +3,8 @@ import Foundation
 // MARK: - Réconciliation locale des stories mortes
 //
 // Le cache du tray (TTL 24 h) survit délibérément à la fenêtre de visibilité
-// d'une story (21 h) : on évite ainsi de re-télécharger avatars et métadonnées
+// d'une story (20 h — `StoryItem.defaultExpiryInterval`, SSOT serveur
+// `EPHEMERAL_POST_TTL_HOURS.STORY`) : on évite ainsi de re-télécharger avatars et métadonnées
 // à chaque démarrage à froid. La contrepartie, c'est que le cache continue de
 // porter des stories que le serveur ne renverra plus — expirées, ou supprimées
 // par leur auteur.

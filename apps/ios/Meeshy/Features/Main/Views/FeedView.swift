@@ -54,6 +54,8 @@ struct FeedView: View {
     /// Set to false to keep the existing SwiftUI ScrollView path.
     @State private var useUIKitList = false
     @State private var searchText = ""
+    /// Carte plein écran des posts géolocalisés (bouton `map` du header).
+    @State private var showPostsMap = false
     @State var showComposer = false
     @FocusState var isComposerFocused: Bool
     @State private var composerBounce: Bool = false
@@ -548,6 +550,11 @@ struct FeedView: View {
                     titleColor: theme.textPrimary,
                     backArrowColor: MeeshyColors.indigo500,
                     backgroundColor: theme.backgroundPrimary,
+                    // Entrée de la carte des posts (retour user 2026-08-12) :
+                    // un bouton toujours visible dans le header — basculement
+                    // liste ↔ carte à un tap, cf. FeedPostsMapView pour le
+                    // raisonnement UX complet.
+                    trailing: { postsMapButton },
                     accessory: {
                         AnyView(
                             // Lancement unifié via StoryViewerCoordinator (cf.
@@ -570,6 +577,36 @@ struct FeedView: View {
                     .task { await recoverStuckPostDraftIfNeeded() }
             }
         }
+        .fullScreenCover(isPresented: $showPostsMap) {
+            FeedPostsMapView(posts: locatedPosts) { post in
+                showPostsMap = false
+                router.push(.postDetail(post.id, post))
+            }
+        }
+    }
+
+    // MARK: - Carte des posts
+
+    /// Posts du feed porteurs d'une position — la même source alimente le
+    /// badge du bouton d'entrée et les pins de la carte.
+    private var locatedPosts: [FeedPost] {
+        viewModel.posts.filter { $0.location != nil }
+    }
+
+    private var postsMapButton: some View {
+        Button {
+            HapticFeedback.light()
+            showPostsMap = true
+        } label: {
+            Image(systemName: "map")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
+        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
     }
 
     // MARK: - Composer Placeholder

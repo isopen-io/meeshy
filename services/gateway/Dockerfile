@@ -7,6 +7,16 @@
 # =============================================================================
 
 # ===== BASE STAGE =====
+# ===== BUN DIST =====
+# Binaire bun copié depuis l'image officielle (Docker Hub, variante alpine —
+# la base est node:22-alpine/musl) plutôt que téléchargé via bun.sh/install :
+# l'installateur tire GitHub Releases, dont le transport meurt par
+# intermittence (release v1.25.9 échouée le 2026-08-12 malgré 3 tentatives ×
+# 5 essais curl). Docker Hub est déjà l'origine authentifiée des images de
+# base — plus aucun téléchargement GitHub dans le chemin de build.
+ARG BUN_VERSION=1.1.38
+FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS bun-dist
+
 FROM node:22-alpine AS base
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
@@ -59,24 +69,11 @@ COPY services/gateway/package.json ./
 COPY packages/shared/ ./packages/shared/
 
 # Setup workspace config and install dependencies
-# Le binaire bun vient de GitHub Releases : son téléchargement meurt par
-# intermittence en transport — « curl: (56) Connection died, tried 5 times »
-# sur l'étage arm64, qui a fait échouer les images de la release v1.25.9 le
-# 2026-08-12 alors que le tag et les versions étaient déjà publiés.
-# L'installateur a déjà épuisé ses propres essais curl quand il rend la main,
-# d'où une boucle par-dessus. Sous-shell : `exit` n'en sort que la boucle, la
-# chaîne `&&` du RUN reste intacte, et l'échec des trois tentatives fait bien
-# tomber le build au lieu de le laisser continuer sans bun.
+COPY --from=bun-dist /usr/local/bin/bun /usr/local/bin/bun
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Configuring bun workspace ===" && \
       node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
       printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
-      ( for i in 1 2 3; do \
-          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && exit 0; \
-          echo "bun: tentative $i échouée, nouvelle tentative dans 5 s..."; \
-          sleep 5; \
-        done; exit 1 ) && \
-      ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
       bun install --no-save; \
     else \
       echo "=== Configuring pnpm workspace ===" && \
@@ -146,16 +143,11 @@ COPY services/gateway/package.json ./
 COPY packages/shared/package.json ./packages/shared/
 
 # Setup workspace and install production dependencies only
+COPY --from=bun-dist /usr/local/bin/bun /usr/local/bin/bun
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Installing production deps with bun ===" && \
       node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
       printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
-      ( for i in 1 2 3; do \
-          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && exit 0; \
-          echo "bun: tentative $i échouée, nouvelle tentative dans 5 s..."; \
-          sleep 5; \
-        done; exit 1 ) && \
-      ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
       bun install --production --no-save; \
     else \
       echo "=== Installing production deps with pnpm ===" && \
