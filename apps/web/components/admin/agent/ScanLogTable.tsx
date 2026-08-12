@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { List, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { agentAdminService, type ScanLogSummary, type ScanLogsFilters } from '@/services/agent-admin.service';
 import { useI18n } from '@/hooks/useI18n';
+import { formatCompactTimeAgo } from '@/utils/relative-time-format';
 import dynamic from 'next/dynamic';
 
 const ScanLogDetail = dynamic(() => import('./ScanLogDetail'), {
@@ -25,7 +26,7 @@ type ScanLogTableProps = {
   conversationId?: string;
 };
 
-export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps = {}) {
+export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps) {
   const { t } = useI18n('admin');
   const [logs, setLogs] = useState<ScanLogSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,15 +35,11 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [filters, setFilters] = useState<ScanLogsFilters>({ limit: 15, conversationId });
 
-  const formatTimeAgo = useCallback((dateStr: string): string => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t('timeAgo.now');
-    if (mins < 60) return `${mins}${t('timeAgo.minutes')}`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}${t('timeAgo.hours')}`;
-    return `${Math.floor(hours / 24)}${t('timeAgo.days')}`;
-  }, [t]);
+  const formatTimeAgo = useCallback(
+    (dateStr: string): string =>
+      formatCompactTimeAgo(new Date(dateStr).getTime(), Date.now(), t, 'timeAgo'),
+    [t]
+  );
 
   const getTriggerLabel = useCallback((trigger: string): string => {
     const labels: Record<string, string> = {
@@ -68,6 +65,7 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
+  /* istanbul ignore next -- filters.limit is always initialized to 15; ?? 15 fallback is unreachable */
   const limit = filters.limit ?? 15;
   const hasMore = page * limit < total;
 

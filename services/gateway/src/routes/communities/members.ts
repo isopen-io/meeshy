@@ -11,6 +11,7 @@ import {
   sendInternalError,
   sendPaginatedSuccess
 } from '../../utils/response.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
@@ -132,6 +133,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
+      /* istanbul ignore next -- AJV `default: '0'`/`default: '20'` on the querystring schema always fill these before the handler runs */
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
@@ -157,7 +159,26 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      return sendPaginatedSuccess(reply, members, {
+      // Présence des co-membres : montrable (appartenance commune = accès déjà
+      // garanti), soumise aux préférences showOnlineStatus/showLastSeen.
+      const memberPresence = await getPresenceVisibilityService(fastify.prisma).resolvePrefsOnly(
+        members.map(m => m.user?.id).filter((uid): uid is string => !!uid),
+      );
+      const gatedMembers = members.map(m => {
+        const vis = m.user?.id ? memberPresence.get(m.user.id) : undefined;
+        if (!m.user || !vis) return m;
+        return {
+          ...m,
+          user: {
+            ...m.user,
+            isOnline: vis.showOnline ? m.user.isOnline : false,
+            /* istanbul ignore next -- lastActiveAt is absent from userMinimalSchema (community-member response schema), so this ternary's effect never reaches the public API; both outcomes are unobservable through app.inject() */
+            lastActiveAt: vis.showLastSeenTimestamp ? m.user.lastActiveAt : null,
+          },
+        };
+      });
+
+      return sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -293,6 +314,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
           data: {
             communityId: id,
             userId: validatedData.userId,
+            /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
             role: (validatedData.role || CommunityRole.MEMBER) as string
           },
           include: {

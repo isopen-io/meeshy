@@ -16,11 +16,11 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.transport.zoomOut",
         "story.timeline.transport.zoomReset",
         "story.timeline.transport.timeReadout",
-        // Mode
-        "story.timeline.mode.quick",
-        "story.timeline.mode.pro",
-        "story.timeline.mode.switchToQuick",
-        "story.timeline.mode.switchToPro",
+        // Export
+        "story.timeline.export.button",
+        "story.timeline.export.exporting",
+        "story.timeline.export.failedTitle",
+        "story.timeline.export.previewTitle",
         // Toolbar
         "story.timeline.toolbar.snap",
         "story.timeline.toolbar.undo",
@@ -50,6 +50,14 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.clip.tooltip.duration",
         "story.timeline.clip.tooltip.fadeIn",
         "story.timeline.clip.tooltip.fadeOut",
+        // Fiche d'édition — découpe (ex-double tap sur la barre vidéo)
+        "story.timeline.inspector.split",
+        "story.timeline.inspector.split.hint",
+        // Fiche d'édition — place de la piste dans le plan
+        "story.timeline.inspector.transform",
+        "story.timeline.inspector.scale",
+        "story.timeline.inspector.rotation",
+        "story.timeline.inspector.zIndex",
         // Transition
         "story.timeline.transition.crossfade",
         "story.timeline.transition.dissolve",
@@ -58,6 +66,7 @@ final class TimelineLocalizationTests: XCTestCase {
         // Keyframe
         "story.timeline.keyframe.add",
         "story.timeline.keyframe.delete",
+        "story.timeline.keyframe.time",
         "story.timeline.keyframe.position",
         "story.timeline.keyframe.scale",
         "story.timeline.keyframe.opacity",
@@ -88,7 +97,6 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.a11y.transition",
         "story.timeline.a11y.keyframe",
         "story.timeline.a11y.playhead",
-        "story.timeline.a11y.durationHandle",
         "story.timeline.a11y.snap.on",
         "story.timeline.a11y.snap.off",
         // Transition kind labels
@@ -97,6 +105,9 @@ final class TimelineLocalizationTests: XCTestCase {
         // Clip a11y time ranges
         "story.timeline.a11y.clip.timeRange",
         "story.timeline.a11y.clip.displayedRange",
+        // Bandeaux éphémères
+        "story.timeline.toast.durationAdjusted",
+        "story.timeline.toast.queuedOffline",
         // Track section uppercase labels
         "story.timeline.track.section.video",
         "story.timeline.track.section.audio",

@@ -30,10 +30,14 @@ jest.mock('../../../validation/socket-event-schemas', () => ({
   SocketPostRoomActionSchema: {
     safeParse: jest.fn(),
   },
+  SocketPostReactionRequestSyncSchema: {
+    safeParse: jest.fn(),
+  },
 }));
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+  isValidationFailure: jest.fn((r) => !r.success),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -118,8 +122,22 @@ function createMockPrisma() {
   return {
     post: {
       findUnique: jest.fn(),
+      // Tranche ACL lue par `loadPostAcl` — la garde d'audience de
+      // handleAddReaction / handleRemoveReaction.
+      findFirst: jest.fn(),
+    },
+    postComment: {
+      findFirst: jest.fn(),
     },
     friendRequest: {
+      findFirst: jest.fn(),
+    },
+    communityMember: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    participant: {
+      findMany: jest.fn(),
       findFirst: jest.fn(),
     },
   } as any;
@@ -162,6 +180,7 @@ const sampleReactionData = {
   emoji: EMOJI,
   createdAt: new Date(),
   updatedAt: new Date(),
+  unchanged: false,
 };
 
 // ===== TESTS =====
@@ -206,6 +225,20 @@ describe('PostReactionHandler', () => {
       visibility: 'PUBLIC',
       visibilityUserIds: [],
       deletedAt: null,
+    });
+    // Même post vu par la garde d'audience + la redirection repost simple →
+    // racine (`resolveInteractionTarget`, tâche 9) : `id` doit matcher
+    // `POST_ID` pour que les assertions `toHaveBeenCalledWith({ postId:
+    // POST_ID, ... })` restent vraies, et `isQuote:false, repostOfId:null`
+    // signale « pas un repost » — aucune redirection par défaut.
+    mockPrisma.post.findFirst.mockResolvedValue({
+      id: POST_ID,
+      authorId: ANOTHER_USER_ID,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
+      isQuote: false,
+      repostOfId: null,
+      originalRepostOfId: null,
     });
 
     handler = new PostReactionHandler({
@@ -285,13 +318,57 @@ describe('PostReactionHandler', () => {
           likeCount: 7,
           reactionSummary: { '❤️': 7 },
         }),
-        ANOTHER_USER_ID
+        ANOTHER_USER_ID,
+        // Visibility-aware fan-out (audit C1-bis): the post's visibility is
+        // forwarded so a non-PUBLIC post never leaks the like to all friends.
+        expect.anything(),
+        expect.anything(),
       );
       // Pas de double-émission par-emoji pour le ❤️ (sinon double-comptage client).
       expect(mockIO._toEmit).not.toHaveBeenCalledWith(
         SERVER_EVENTS.POST_REACTION_ADDED,
         expect.anything()
       );
+    });
+
+    it('test_handleAddReaction_unchanged_noBroadcastNoNotification', async () => {
+      // Idempotent no-op: the user already reacted with exactly this emoji (a like
+      // re-fire — optimistic double-fire, socket retry after a lost ACK, or a second
+      // device echoing the same tap). addReaction returns `unchanged: true` and the
+      // handler MUST reply success (the desired end-state is already achieved) but
+      // MUST NOT re-broadcast `post:liked` nor re-notify the author — re-emitting
+      // spams every feed/post-room socket and re-notifies the author for a reaction
+      // that never changed state. Mirrors ReactionHandler.handleReactionAdd's
+      // `unchanged` guard.
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: '❤️' };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue({ ...sampleReactionData, emoji: '❤️', unchanged: true });
+      mockReactionService.createUpdateEvent.mockResolvedValue({ ...sampleUpdateEvent, emoji: '❤️' });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        type: 'POST',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+        likeCount: 7,
+        reactionSummary: { '❤️': 7 },
+      });
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      // ACK success preserved (idempotent add is a success from the client's view).
+      expect(callback).toHaveBeenCalledWith({ success: true, data: { ...sampleUpdateEvent, emoji: '❤️' } });
+      // No redundant fan-out, no redundant notification.
+      expect(mockSocialEvents.broadcastPostLiked).not.toHaveBeenCalled();
+      expect(mockIO._toEmit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.POST_REACTION_ADDED,
+        expect.anything()
+      );
+      expect(mockNotificationService.createPostLikeNotification).not.toHaveBeenCalled();
     });
 
     it('test_handleAddReaction_heartOnStory_keepsReactionAdded_noPostLiked', async () => {
@@ -492,6 +569,70 @@ describe('PostReactionHandler', () => {
       );
     });
 
+    it('test_handleAddReaction_reactionOnStory_forwardsRealTypeAndEphemeralContext', async () => {
+      // Sibling-drift guard: the socket path must forward the real post type +
+      // ephemeral context (mirror of the REST like route), NOT hardcode 'POST'.
+      // Without it, a STORY reaction yields a generic post_like notification and
+      // loses expiry context.
+      const reactorSocketToUser = new Map<string, string>();
+      reactorSocketToUser.set(SOCKET_ID, ANOTHER_USER_ID);
+
+      const reactorConnectedUsers = new Map();
+      reactorConnectedUsers.set(ANOTHER_USER_ID, {
+        id: ANOTHER_USER_ID,
+        socketId: SOCKET_ID,
+        isAnonymous: false,
+        language: 'fr',
+        userId: ANOTHER_USER_ID,
+      });
+
+      const storyCreatedAt = new Date('2026-07-04T10:00:00.000Z');
+      const storyExpiresAt = new Date('2026-07-05T10:00:00.000Z');
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: USER_ID,
+        type: 'STORY',
+        content: 'my ephemeral story caption',
+        createdAt: storyCreatedAt,
+        expiresAt: storyExpiresAt,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+      });
+
+      const storyHandler = new PostReactionHandler({
+        io: mockIO as any,
+        prisma: mockPrisma,
+        notificationService: mockNotificationService,
+        postReactionService: mockReactionService,
+        connectedUsers: reactorConnectedUsers as any,
+        socketToUser: reactorSocketToUser,
+        socialEvents: mockSocialEvents,
+      });
+
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      const reactorUpdateEvent = { ...sampleUpdateEvent, userId: ANOTHER_USER_ID };
+      const reactorReactionData = { ...sampleReactionData, userId: ANOTHER_USER_ID };
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue(reactorReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(reactorUpdateEvent);
+
+      await storyHandler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockNotificationService.createPostLikeNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          postType: 'STORY',
+          postPreview: 'my ephemeral story caption',
+          postCreatedAt: storyCreatedAt,
+          postExpiresAt: storyExpiresAt,
+        })
+      );
+    });
+
     it('test_handleAddReaction_rateLimitExceeded_callbackError', async () => {
       const socket = createMockSocket();
       const data = { postId: POST_ID, emoji: EMOJI };
@@ -547,7 +688,11 @@ describe('PostReactionHandler', () => {
       });
     });
 
-    it('test_handleRemoveReaction_notFound_callbackError', async () => {
+    it('test_handleRemoveReaction_alreadyAbsent_isIdempotent_callbackSuccessNoBroadcast', async () => {
+      // The reaction is already gone (concurrent removal, retry of an applied
+      // remove, double-tap un-like). `{ success: false }` would make the client
+      // roll the optimistic un-like back, re-showing a like that is gone.
+      // Mirrors ReactionHandler.handleReactionRemove (message reactions).
       const socket = createMockSocket();
       const data = { postId: POST_ID, emoji: EMOJI };
       const callback = jest.fn();
@@ -559,8 +704,8 @@ describe('PostReactionHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({
-        success: false,
-        error: 'Reaction not found',
+        success: true,
+        data: { message: 'Reaction already absent' },
       });
     });
 
@@ -616,6 +761,7 @@ describe('PostReactionHandler', () => {
       };
 
       mockReactionService.getPostReactions.mockResolvedValue(syncData as any);
+      mockValidate.mockReturnValue({ success: true, data });
 
       await handler.handleRequestSync(socket as any, data, callback);
 
@@ -630,10 +776,32 @@ describe('PostReactionHandler', () => {
       });
     });
 
+    it('test_handleRequestSync_malformedPostId_validationErrorNoServiceCall', async () => {
+      const socket = createMockSocket();
+      const data = {} as { postId: string };
+      const callback = jest.fn();
+
+      // A malformed sync payload (missing/invalid postId) must be rejected at the
+      // socket boundary with the clean schema error — never fall through to the
+      // service, whose `validatePostId` would throw an opaque
+      // `TypeError: Cannot read properties of undefined (reading 'substring')`.
+      mockValidate.mockReturnValue({ success: false, error: 'Invalid postId format' });
+
+      await handler.handleRequestSync(socket as any, data, callback);
+
+      expect(mockReactionService.getPostReactions).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Invalid postId format',
+      });
+    });
+
     it('test_handleRequestSync_unauthenticated_callbackError', async () => {
       const socket = { ...createMockSocket(), id: 'unknown-socket' };
       const data = { postId: POST_ID };
       const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
 
       await handler.handleRequestSync(socket as any, data, callback);
 
@@ -854,6 +1022,255 @@ describe('PostReactionHandler', () => {
         success: false,
         error: 'User not authenticated',
       });
+    });
+  });
+  // ===== Audience du post — réagir est une INTERACTION =====
+
+  describe('audience du post', () => {
+    /**
+     * `post:join` refusait déjà l'abonnement à la room d'un post restreint
+     * (`canUserViewPost`), mais `post:reaction-add` / `-remove` n'ont jamais
+     * consulté la visibilité : réagir ne passe pas par la room, il suffit de
+     * connaître le `postId`. La réaction persistée remontait ensuite dans les
+     * agrégats du post et notifiait son auteur.
+     */
+    it('test_handleAddReaction_privatePost_deniesAndNeverReachesService', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PRIVATE',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+      });
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    it('test_handleAddReaction_friendsPostOfNonFriend_denies', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'FRIENDS',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+      });
+      mockPrisma.friendRequest.findFirst.mockResolvedValue(null);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+    });
+
+    it('test_handleAddReaction_friendsPostOfFriend_allows', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'FRIENDS',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+      });
+      mockPrisma.friendRequest.findFirst.mockResolvedValue({ id: 'fr-1' });
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenCalled();
+    });
+
+    it('test_handleAddReaction_deletedOrMissingPost_denies', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue(null);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    it('test_handleRemoveReaction_privatePost_deniesAndNeverReachesService', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PRIVATE',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+      });
+
+      await handler.handleRemoveReaction(socket as any, data, callback);
+
+      expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+  });
+
+  describe('repost simple → redirection vers la racine (tâche 9)', () => {
+    const ROOT_ID = '507f1f77bcf86cd799439fff';
+    const OTHER_REPOST_ID = '507f1f77bcf86cd799439eee';
+
+    function repostAcl(overrides: Record<string, unknown> = {}) {
+      return {
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: ROOT_ID,
+        originalRepostOfId: ROOT_ID,
+        ...overrides,
+      };
+    }
+
+    function rootAcl(overrides: Record<string, unknown> = {}) {
+      return {
+        id: ROOT_ID,
+        authorId: 'root-author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+        ...overrides,
+      };
+    }
+
+    function byId(map: Record<string, unknown | null>) {
+      return ({ where }: { where: { id: string } }) => Promise.resolve(map[where.id] ?? null);
+    }
+
+    it('handleAddReaction pose la réaction sur la RACINE, pas sur le repost affiché', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(byId({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() }));
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenCalledWith({
+        postId: ROOT_ID,
+        userId: USER_ID,
+        emoji: EMOJI,
+      });
+    });
+
+    it('idempotence : réagir via deux reposts distincts du MÊME original cible la racine les deux fois', async () => {
+      const socket = createMockSocket();
+      const callback = jest.fn();
+
+      mockValidate.mockImplementation((_schema: unknown, data: unknown) => ({ success: true, data }));
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl({ id: POST_ID }),
+        [OTHER_REPOST_ID]: repostAcl({ id: OTHER_REPOST_ID }),
+        [ROOT_ID]: rootAcl(),
+      }));
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, { postId: POST_ID, emoji: EMOJI }, callback);
+      await handler.handleAddReaction(socket as any, { postId: OTHER_REPOST_ID, emoji: EMOJI }, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(1, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI });
+      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(2, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI });
+    });
+
+    it('handleRemoveReaction retire la réaction posée sur la RACINE via un AUTRE repost du même original', async () => {
+      const socket = createMockSocket();
+      const callback = jest.fn();
+
+      mockValidate.mockImplementation((_schema: unknown, data: unknown) => ({ success: true, data }));
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl({ id: POST_ID }),
+        [OTHER_REPOST_ID]: repostAcl({ id: OTHER_REPOST_ID }),
+        [ROOT_ID]: rootAcl(),
+      }));
+      mockReactionService.removeReaction.mockResolvedValue(true);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleRemoveReaction(socket as any, { postId: OTHER_REPOST_ID, emoji: EMOJI }, callback);
+
+      expect(mockReactionService.removeReaction).toHaveBeenCalledWith({
+        postId: ROOT_ID,
+        userId: USER_ID,
+        emoji: EMOJI,
+      });
+    });
+
+    it('une CITATION garde sa vie sociale propre — addReaction cible la citation elle-même', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl({ isQuote: true }),
+        [ROOT_ID]: rootAcl(),
+      }));
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).toHaveBeenCalledWith({
+        postId: POST_ID,
+        userId: USER_ID,
+        emoji: EMOJI,
+      });
+    });
+
+    it('racine devenue invisible pour l’acteur → refus standard, jamais un crédit silencieux', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(byId({
+        [POST_ID]: repostAcl(),
+        [ROOT_ID]: rootAcl({ visibility: 'PRIVATE' }),
+      }));
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
   });
 });

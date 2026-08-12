@@ -31,17 +31,20 @@ struct CommunityLinkDetailView: View {
         VStack(spacing: 10) {
             ZStack {
                 Circle().fill(MeeshyColors.communityAccent.opacity(0.15)).frame(width: 60, height: 60)
+                // Glyphe héros dans un cercle de dimension fixe 60×60 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "person.3.fill").font(.system(size: 26))
                     .foregroundColor(MeeshyColors.communityAccent)
+                    .accessibilityHidden(true)
             }
-            Text(link.name).font(.system(size: 20, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(link.joinUrl).font(.system(size: 12, design: .monospaced))
+            Text(link.name).font(MeeshyFont.relative(20, weight: .bold)).foregroundColor(theme.textPrimary)
+            Text(link.joinUrl).font(MeeshyFont.relative(12, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
             .overlay(RoundedRectangle(cornerRadius: 20)
                 .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
+        .accessibilityElement(children: .combine)
     }
 
     private var actionsBar: some View {
@@ -53,22 +56,7 @@ struct CommunityLinkDetailView: View {
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            communityActionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.communityAccent) {
-                guard let url = URL(string: link.joinUrl) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                      let window = scene.windows.first,
-                      let root = window.rootViewController else { return }
-                var topVC = root
-                while let presented = topVC.presentedViewController { topVC = presented }
-                // iPad: UIActivityViewController needs a popover anchor or -present crashes.
-                if let popover = av.popoverPresentationController {
-                    popover.sourceView = topVC.view
-                    popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                    popover.permittedArrowDirections = []
-                }
-                topVC.present(av, animated: true)
-            }
+            shareActionButton
             communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
                 UIPasteboard.general.string = link.identifier
                 HapticFeedback.light()
@@ -76,17 +64,44 @@ struct CommunityLinkDetailView: View {
         }
     }
 
+    // Native share: ShareLink handles the activity sheet, iPad popover anchoring
+    // and top-VC presentation for free — no manual UIActivityViewController /
+    // window-hierarchy traversal (doctrine: prefer first-party SwiftUI over UIKit).
+    @ViewBuilder
+    private var shareActionButton: some View {
+        let shareLabel = String(localized: "common.share", defaultValue: "Share", bundle: .main)
+        if let url = URL(string: link.joinUrl) {
+            ShareLink(item: url) {
+                communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)
+            }
+            .simultaneousGesture(TapGesture().onEnded { HapticFeedback.light() })
+            .accessibilityLabel(shareLabel)
+        } else {
+            communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)
+                .opacity(0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
     private func communityActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
-                        .frame(width: 52, height: 52)
-                    Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
-                }
-                Text(label).font(.system(size: 10, weight: .medium)).foregroundColor(theme.textSecondary)
+            communityActionButtonLabel(label, icon: icon, color: color)
+        }
+        .accessibilityLabel(label)
+    }
+
+    private func communityActionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                    .frame(width: 52, height: 52)
+                // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
+                Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+                    .accessibilityHidden(true)
             }
-        }.frame(maxWidth: .infinity)
+            Text(label).font(MeeshyFont.relative(10, weight: .medium)).foregroundColor(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var statsSection: some View {
@@ -105,16 +120,18 @@ struct CommunityLinkDetailView: View {
 
     private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(MeeshyFont.relative(22)).foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(value).font(.system(size: 22, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                Text(value).font(MeeshyFont.relative(22, weight: .bold)).foregroundColor(theme.textPrimary)
+                Text(label).font(MeeshyFont.relative(12)).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
         .padding(14).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+        .accessibilityElement(children: .combine)
     }
 
     private var infoSection: some View {
@@ -122,6 +139,7 @@ struct CommunityLinkDetailView: View {
             Text(String(localized: "communityLink.informations", defaultValue: "INFORMATIONS", bundle: .main))
                 .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
             VStack(spacing: 0) {
                 infoRow(String(localized: "communityLink.identifier", defaultValue: "Identifiant", bundle: .main), value: link.identifier)
                 Divider().padding(.leading, 16)
@@ -136,10 +154,11 @@ struct CommunityLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 14)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(14)).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(MeeshyFont.relative(13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 }

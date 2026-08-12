@@ -8,7 +8,25 @@ public struct APIAuthor: Codable, Sendable {
     public let displayName: String?
     public let avatar: String?
 
+    /// Présence auteur — servie UNIQUEMENT par le chemin stories du gateway
+    /// (`storyAuthorSelect` : feed complet + projection tray) pour que
+    /// l'interstitiel d'identité du viewer résolve la présence AU moment du
+    /// switch de groupe. `nil` sur tous les autres payloads (posts, comments,
+    /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
+    public let isOnline: Bool?
+    public let lastActiveAt: Date?
+
     public var name: String { displayName ?? username ?? "Anonymous" }
+
+    public init(id: String, username: String?, displayName: String?, avatar: String?,
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.isOnline = isOnline
+        self.lastActiveAt = lastActiveAt
+    }
 }
 
 public struct APIPostMedia: Codable, Sendable {
@@ -74,6 +92,9 @@ public struct APIRepostOf: Codable, Sendable {
     public let likeCount: Int?
     public let commentCount: Int?
     public let isQuote: Bool?
+    /// Lieu du post SOURCE, hissé par le gateway comme sur le post porteur.
+    /// `nil` sur les payloads antérieurs — décodage synthétisé tolérant.
+    public let location: SharedPlace?
 }
 
 public struct APIPostComment: Decodable, Sendable {
@@ -92,6 +113,11 @@ public struct APIPostComment: Decodable, Sendable {
     /// `APIPostMedia` (mêmes champs Prisme : transcription/translations). Un commentaire
     /// ne porte qu'un seul média ; le tableau reste pour parité avec les posts.
     public let media: [APIPostMedia]?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que sur `APIMessage`/`APIPost`. Décodage synthétisé (pas de
+    /// `CodingKeys` custom sur ce type). `var`/`= nil` : source-compatible
+    /// avec le memberwise init déjà utilisé par les tests existants.
+    public var location: SharedPlace? = nil
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -105,11 +131,32 @@ public struct APIPost: Sendable {
     public let id: String
     public let type: String?
     public let visibility: String?
+    /// Ids ciblés (`ONLY`) ou exclus (`EXCEPT`). Renvoyé par le gateway pour
+    /// tous les posts (`include: postInclude` ne filtre aucun scalaire).
+    /// `nil` sur les payloads antérieurs au champ — le picker d'audience
+    /// s'ouvre alors vierge plutôt que de casser le décodage. Défaut
+    /// memberwise `= nil`, même patron que `postOpenCount` et les compteurs
+    /// juste en dessous : permet la construction runtime/test sans le
+    /// fournir explicitement. Décodage INCHANGÉ — `init(from:)` ci-dessous
+    /// lit toujours la clé via `decodeIfPresent` (le défaut ne sert qu'à
+    /// l'init memberwise, pas au décodage).
+    public var visibilityUserIds: [String]? = nil
     public let content: String?
     public let originalLanguage: String?
     public let createdAt: Date
     public let updatedAt: Date?
+    /// Horodatage de la dernière édition de CONTENU (texte / storyEffects /
+    /// médias) — distinct d'`updatedAt` qui bouge sur chaque écriture
+    /// (compteurs inclus). Sert à céder la garde « viewed monotone » après
+    /// une édition de story. Défaut memberwise `= nil`, même patron que
+    /// `postOpenCount` : décodage via `decodeIfPresent` ci-dessous.
+    public var contentEditedAt: Date? = nil
     public let expiresAt: Date?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que sur `APIMessage`. `var`/`= nil` : même patron que
+    /// `trackingLinks` plus bas, pour rester source-compatible avec le
+    /// memberwise init déjà utilisé par les tests existants.
+    public var location: SharedPlace? = nil
     public let author: APIAuthor
     public let likeCount: Int?
     public let commentCount: Int?
@@ -157,7 +204,7 @@ public struct APIPost: Sendable {
 
 extension APIPost: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case id, type, visibility, content, originalLanguage, createdAt, updatedAt, expiresAt
+        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt, location
         case author, likeCount, commentCount, repostCount, viewCount
         case postOpenCount, qualifiedViewCount, playCount, impressionCount
         case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
@@ -179,11 +226,14 @@ extension APIPost: Decodable {
         id = try c.decode(String.self, forKey: .id)
         type = try c.decodeIfPresent(String.self, forKey: .type)
         visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        visibilityUserIds = try c.decodeIfPresent([String].self, forKey: .visibilityUserIds)
         content = try c.decodeIfPresent(String.self, forKey: .content)
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        contentEditedAt = try c.decodeIfPresent(Date.self, forKey: .contentEditedAt)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         author = try c.decode(APIAuthor.self, forKey: .author)
         likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount)
         commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount)
@@ -206,7 +256,17 @@ extension APIPost: Decodable {
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         audioDuration = try c.decodeIfPresent(Int.self, forKey: .audioDuration)
-        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        // Resilience: a single malformed `storyEffects` payload (a type mismatch
+        // on a present nested field of another user's story) must NOT fail the
+        // whole `APIPost` decode — the story feed is decoded as a strict array,
+        // so one throwing post would drop the ENTIRE batch ("0 stories loaded").
+        // Degrade this post to no effects (it still renders content/media) and
+        // keep the rest of the list intact.
+        do {
+            storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        } catch {
+            storyEffects = nil
+        }
         translations = try c.decodeIfPresent([String: APIPostTranslationEntry].self, forKey: .translations)
         isLikedByMe = try c.decodeIfPresent(Bool.self, forKey: .isLikedByMe)
         isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe)
@@ -344,42 +404,11 @@ extension APIPost {
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
                         currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() })
+                        media: (c.media ?? []).map { $0.toFeedMedia() },
+                        location: c.location)
         }
 
-        var repost: RepostContent?
-        if let r = repostOf {
-            let repostMedia: [FeedMedia] = (r.media ?? []).map { m in
-                FeedMedia(
-                    id: m.id, type: m.mediaType, url: m.fileUrl,
-                    thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                    thumbnailColor: thumbnailColorForMime(m.mimeType),
-                    width: m.width, height: m.height,
-                    duration: m.duration.map { $0 / 1000 },
-                    fileName: m.originalName ?? m.fileName,
-                    fileSize: m.fileSize.map { formatFileSize($0) }
-                )
-            }
-            let repostTranslations: [String: PostTranslation]? = r.translations?.mapValues { entry in
-                PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
-            }
-            repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
-                                   authorUsername: r.author.username,
-                                   authorAvatarURL: r.author.avatar,
-                                   content: r.content ?? "",
-                                   timestamp: r.createdAt, likes: r.likeCount ?? 0,
-                                   isQuote: r.isQuote ?? false,
-                                   type: r.type,
-                                   originalLanguage: r.originalLanguage,
-                                   audioUrl: r.audioUrl,
-                                   moodEmoji: r.moodEmoji,
-                                   storyEffects: r.storyEffects,
-                                   media: repostMedia,
-                                   translations: repostTranslations,
-                                   originalRepostOfId: r.originalRepostOfId,
-                                   visibility: nil,
-                                   expiresAt: nil)
-        }
+        let repost: RepostContent? = repostOf?.toRepostContent()
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
@@ -424,6 +453,9 @@ extension APIPost {
         // stable signature, so we set these post-construction like the counters.
         feedPost.storyEffects = storyEffects
         feedPost.audioUrl = audioUrl
+        // Lieu partagé — décodé sur APIPost depuis toujours, mais jeté ici
+        // jusqu'au 2026-07-30 : aucun post du feed ne portait sa position.
+        feedPost.location = location
         // Outbound-link tracking map (runtime-only, like the counters above).
         feedPost.trackedLinkMap = trackedLinkMap
         return feedPost
@@ -431,7 +463,9 @@ extension APIPost {
 
     /// Prisme Linguistique resolution: walk preferred languages in order.
     /// If original is already in a preferred language, return nil (no translation needed).
-    private static func resolveTranslation(
+    /// Internal (pas private) : `PostRecord.toFeedPost` réutilise la MÊME
+    /// règle — jamais de résolution de langue dupliquée (stores-05).
+    static func resolveTranslation(
         translations: [String: APIPostTranslationEntry]?,
         originalLanguage: String?,
         preferredLanguages: [String]
@@ -446,5 +480,44 @@ extension APIPost {
             }
         }
         return nil
+    }
+}
+
+extension APIRepostOf {
+    /// Conversion partagée `APIRepostOf` → `RepostContent` — utilisée par
+    /// `APIPost.toFeedPost` (réseau) ET `PostRecord.toFeedPost` (cache GRDB,
+    /// stores-05) : une seule projection, pas deux qui divergent.
+    func toRepostContent() -> RepostContent {
+        let repostMedia: [FeedMedia] = (media ?? []).map { m in
+            FeedMedia(
+                id: m.id, type: m.mediaType, url: m.fileUrl,
+                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                thumbnailColor: thumbnailColorForMime(m.mimeType),
+                width: m.width, height: m.height,
+                duration: m.duration.map { $0 / 1000 },
+                fileName: m.originalName ?? m.fileName,
+                fileSize: m.fileSize.map { formatFileSize($0) }
+            )
+        }
+        let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
+            PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
+        }
+        return RepostContent(id: id, author: author.name, authorId: author.id,
+                             authorUsername: author.username,
+                             authorAvatarURL: author.avatar,
+                             content: content ?? "",
+                             timestamp: createdAt, likes: likeCount ?? 0,
+                             isQuote: isQuote ?? false,
+                             type: type,
+                             originalLanguage: originalLanguage,
+                             audioUrl: audioUrl,
+                             moodEmoji: moodEmoji,
+                             storyEffects: storyEffects,
+                             media: repostMedia,
+                             translations: repostTranslations,
+                             originalRepostOfId: originalRepostOfId,
+                             visibility: nil,
+                             expiresAt: nil,
+                             location: location)
     }
 }

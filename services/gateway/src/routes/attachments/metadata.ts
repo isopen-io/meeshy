@@ -160,7 +160,11 @@ export async function registerMetadataRoutes(
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
 
-        if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
+        // `isAnonymous` vaut `true` sur le contexte d'un VISITEUR NU : la garde
+        // `!isAuthenticated && !isAnonymous` était donc toujours fausse et ne
+        // rejetait personne. Un participant anonyme réellement identifié par un
+        // jeton de session porte `isAuthenticated: true` — c'est le seul test utile.
+        if (!authContext || !authContext.isAuthenticated) {
           return sendUnauthorized(reply, 'Authentication required');
         }
 
@@ -279,26 +283,23 @@ export async function registerMetadataRoutes(
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
 
-        if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
+        // `isAnonymous` vaut `true` sur le contexte d'un VISITEUR NU : la garde
+        // `!isAuthenticated && !isAnonymous` était donc toujours fausse et ne
+        // rejetait personne. Un participant anonyme réellement identifié par un
+        // jeton de session porte `isAuthenticated: true` — c'est le seul test utile.
+        if (!authContext || !authContext.isAuthenticated) {
           return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { conversationId } = request.params as ConversationParams;
         const query = request.query as ConversationAttachmentsQuery;
 
-        if (authContext.isAuthenticated) {
-          const member = await prisma.participant.findFirst({
-            where: {
-              conversationId,
-              userId: authContext.userId,
-              isActive: true,
-            },
-          });
-
-          if (!member) {
-            return sendForbidden(reply, 'Access denied to this conversation');
-          }
-        } else if (authContext.isAnonymous && authContext.participantId) {
+        // Le discriminant est le TYPE d'identité, pas `isAuthenticated` : un
+        // participant anonyme muni d'un jeton de session est authentifié lui
+        // aussi. Tester `isAuthenticated` en premier le faisait tomber dans la
+        // branche « utilisateur enregistré », où la recherche par `userId`
+        // échoue — et rendait la branche anonyme ci-dessous inatteignable.
+        if (authContext.isAnonymous && authContext.participantId) {
           const participant = await prisma.participant.findUnique({
             where: { id: authContext.participantId },
             select: {
@@ -324,6 +325,18 @@ export async function registerMetadataRoutes(
             if (!shareLink?.allowViewHistory) {
               return sendForbidden(reply, 'History viewing not allowed on this link');
             }
+          }
+        } else {
+          const member = await prisma.participant.findFirst({
+            where: {
+              conversationId,
+              userId: authContext.userId,
+              isActive: true,
+            },
+          });
+
+          if (!member) {
+            return sendForbidden(reply, 'Access denied to this conversation');
           }
         }
 

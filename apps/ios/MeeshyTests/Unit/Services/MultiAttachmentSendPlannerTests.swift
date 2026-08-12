@@ -2,6 +2,7 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
+@MainActor
 final class MultiAttachmentSendPlannerTests: XCTestCase {
 
     private func audio(_ id: String) -> MeeshyMessageAttachment {

@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
 import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
-import type { StatusItem, StoryVisibility } from '@/components/v2';
-import { PostComposer } from '@/components/v2/PostComposer';
+import type { StoryVisibility } from '@/components/v2';
+import { PostComposer, type PostPublishPayload } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
 import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
@@ -16,19 +16,29 @@ import { Skeleton } from '@/components/v2/Skeleton';
 // Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
-import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
+import { postToStoryData, groupStoriesByAuthor, groupToStoryItem } from '@/lib/story-transforms';
 import { useStoryPreferences } from '@/stores/user-preferences-store';
+
+// Statuses / moods (real API — STATUS posts, real-time via usePostSocketCacheSync)
+import { useStatusesFeedQuery, useStatusesList, useCreateStatusMutation } from '@/hooks/social/use-statuses';
+import { postToStatusItem } from '@/lib/status-transforms';
 
 // Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
+import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
 import type { MobileTranscription } from '@/services/posts.service';
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostVisibility } from '@meeshy/shared/types/post';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { shareLink } from '@/lib/share-utils';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -36,13 +46,12 @@ type TFunc = (key: string, paramsOrFallback?: Record<string, unknown> | string) 
 
 function formatRelativeTime(date: string | Date, t: TFunc): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  const diff = Date.now() - d.getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return t('time.now', 'Just now');
-  if (minutes < 60) return t('time.minutes', { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('time.hours', { count: hours });
-  const days = Math.floor(hours / 24);
+  // beyondDays: Infinity → always falls in now/minutes/hours/days (no absolute date tail).
+  const bucket = classifyRelativeTime(d.getTime(), Date.now(), { beyondDays: Infinity });
+  if (bucket.unit === 'now') return t('time.now', 'Just now');
+  if (bucket.unit === 'minutes') return t('time.minutes', { count: bucket.value });
+  if (bucket.unit === 'hours') return t('time.hours', { count: bucket.value });
+  const days = bucket.unit === 'days' ? bucket.value : Math.floor((Date.now() - d.getTime()) / 86_400_000);
   return t('time.days', { count: days });
 }
 
@@ -56,27 +65,6 @@ function postToTranslations(post: Post) {
       content: v.text!,
     }));
 }
-
-// ─── Mock Data (Statuses - to be replaced in future phase) ──────────────
-//
-// Mood/status entries are still mocked client-side because the gateway
-// surface for ephemeral statuses isn't wired into the web composer yet.
-// Stories and Posts below are 100% real.
-
-const mockStatuses: StatusItem[] = [
-  {
-    id: 'st1', author: { name: 'Marie D.' }, moodEmoji: '🎉', content: 'Trop contente !',
-    originalLanguage: 'fr',
-    translations: [{ languageCode: 'en', languageName: 'English', content: 'So happy!' }],
-    expiresAt: new Date(Date.now() + 2400000).toISOString(), isOwn: true,
-  },
-  {
-    id: 'st2', author: { name: 'Yuki T.' }, moodEmoji: '☕', content: 'コーヒータイム',
-    originalLanguage: 'ja',
-    translations: [{ languageCode: 'fr', languageName: 'Francais', content: "C'est l'heure du café" }],
-    expiresAt: new Date(Date.now() + 1800000).toISOString(), isOwn: false,
-  },
-];
 
 // ─── Feed tabs ───────────────────────────────────────────────────────────────
 
@@ -163,11 +151,14 @@ export function PostsFeedScreen() {
 
   usePostSocketCacheSync();
 
+  // Impression reporting: each post card that scrolls into view is recorded
+  // once per session and batched to the gateway (source: 'feed').
+  const { observe: observeImpression } = useImpressionTracking({ source: 'feed' });
+
   // Post mutations
   const createPostMutation = useCreatePostMutation();
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
-  const shareMutation = useSharePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const translateMutation = useTranslatePostMutation();
@@ -217,37 +208,74 @@ export function PostsFeedScreen() {
   const { recordView } = useRecordStoryViewMutation();
   useStoriesRealtime();
 
+  // Statuses / moods — real STATUS posts. Real-time refresh is handled by
+  // usePostSocketCacheSync (mounted below), which invalidates the same key on
+  // status:created / updated / deleted / reacted.
+  const statusesQuery = useStatusesFeedQuery();
+  const statuses = useStatusesList(statusesQuery);
+  const createStatusMutation = useCreateStatusMutation();
+
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
+  const [activeStoryAuthorId, setActiveStoryAuthorId] = useState<string | null>(null);
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
   const viewedStoryIdsRef = useRef(new Set<string>());
 
-  const storyItems = useMemo(
-    () => (stories ?? []).map((s) => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
-    [stories, currentUserId],
+  // One tray bubble per author: collapse each author's stories into a single
+  // group, preserving first-appearance order.
+  const storyGroups = useMemo(
+    () => Array.from(groupStoriesByAuthor(stories ?? []).values()),
+    [stories],
   );
 
-  const storyDataList = useMemo(() => (stories ?? []).map(postToStoryData), [stories]);
+  const storyItems = useMemo(
+    () => storyGroups.map((group) => groupToStoryItem(group, currentUserId, viewedStoryIdsRef.current)),
+    [storyGroups, currentUserId],
+  );
+
+  const statusItems = useMemo(
+    () => statuses.map((status) => postToStatusItem(status, currentUserId)),
+    [statuses, currentUserId],
+  );
+
+  // The viewer is scoped to the tapped author's stories only.
+  const activeStoryData = useMemo(() => {
+    if (!activeStoryAuthorId) return [];
+    const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
+    return group ? group.map(postToStoryData) : [];
+  }, [activeStoryAuthorId, storyGroups]);
+
+  // PostService.repostPost (gateway) 403s on any non-PUBLIC original, and the
+  // web default story visibility is FRIENDS (user-preferences-store.ts) — the
+  // "Republier" entry is withheld unless every story in the open session is
+  // PUBLIC, or it fails into "Couldn't repost" in the common case.
+  const activeStoryGroupIsRepostable = useMemo(() => {
+    if (!activeStoryAuthorId) return false;
+    const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
+    return !!group && group.every((p) => p.visibility === 'PUBLIC');
+  }, [activeStoryAuthorId, storyGroups]);
 
   const handleStoryPress = useCallback(
-    (storyId: string) => {
-      const idx = storyDataList.findIndex((s) => s.id === storyId);
-      if (idx >= 0) {
-        setStoryViewerIndex(idx);
-        setStoryViewerOpen(true);
-      }
+    (groupId: string) => {
+      const group = storyGroups.find((g) => g[0]?.authorId === groupId);
+      if (!group || group.length === 0) return;
+      const firstUnviewed = group.findIndex((p) => !viewedStoryIdsRef.current.has(p.id));
+      setActiveStoryAuthorId(groupId);
+      setStoryViewerIndex(firstUnviewed >= 0 ? firstUnviewed : 0);
+      setStoryViewerOpen(true);
     },
-    [storyDataList],
+    [storyGroups],
   );
 
   const handleStoryPublish = useCallback(
-    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
+    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; visibilityUserIds?: string[]; mediaIds?: string[] }) => {
       setStoryComposerOpen(false);
       createStoryMutation.mutate(
         {
           content: story.content,
           storyEffects: story.storyEffects,
           visibility: story.visibility,
+          visibilityUserIds: story.visibilityUserIds,
           mediaIds: story.mediaIds,
           originalLanguage: userLanguage,
         },
@@ -284,19 +312,74 @@ export function PostsFeedScreen() {
     [deleteStoryMutation, showToast, t],
   );
 
-  const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
+  const handleShareStory = useCallback(
+    async (storyId: string) => {
+      const story = activeStoryData.find((s) => s.id === storyId);
+      const localUrl = `${window.location.origin}/story/${storyId}`;
+      const title = story?.author.name ?? 'Meeshy';
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+      try {
+        const { shortUrl } = await postsService.sharePost(storyId, { generateLink: true });
+        const shared = await shareLink(shortUrl ?? localUrl, title, story?.content ?? '');
+        if (shared) {
+          showToast(t('toast.shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
+      } catch {
+        showToast(t('toast.error', 'Error'), 'error', t('toast.shareError', "Couldn't share the story."));
+      }
+    },
+    [activeStoryData, showToast, t],
+  );
+
+  const handleRepostStory = useCallback(
+    (storyId: string) => {
+      repostMutation.mutate(
+        { postId: storyId, data: { isQuote: false } },
+        {
+          onSuccess: () => showToast(t('toast.reposted', 'Reposted!'), 'success'),
+          onError: () => showToast(t('toast.error', 'Error'), 'error'),
+        },
+      );
+    },
+    [repostMutation, showToast, t],
+  );
+
+  const handleStoryViewerClose = useCallback(() => {
+    setStoryViewerOpen(false);
+    setActiveStoryAuthorId(null);
+  }, []);
   const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
+
+  const createCommentMutation = useCreateCommentMutation();
   const handleStoryReply = useCallback(
-    (_id: string, text: string) => showToast(t('toast.replySent', 'Reply sent'), 'success', text),
-    [showToast, t],
+    (storyId: string, text: string) => {
+      createCommentMutation.mutate(
+        { postId: storyId, content: text },
+        {
+          onSuccess: () => showToast('Réponse envoyée', 'success'),
+          onError: () => showToast('Erreur', 'error', 'Impossible d\'envoyer la réponse'),
+        }
+      );
+    },
+    [createCommentMutation, showToast],
   );
 
   // ─── Post handlers ────────────────────────────────────────────────────
 
   const handlePublish = useCallback(
-    (data: { content: string; type: 'POST' | 'STORY' | 'STATUS'; visibility: string }) => {
+    (data: PostPublishPayload) => {
       createPostMutation.mutate(
-        { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        {
+          content: data.content || undefined,
+          type: data.type,
+          visibility: data.visibility,
+          visibilityUserIds: data.visibilityUserIds,
+          mediaIds: data.mediaIds,
+          optimisticMedia: data.optimisticMedia,
+        },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
           onError: () => showToast(t('toast.error', 'Error'), 'error', t('toast.postPublishError', "Couldn't publish the post.")),
@@ -328,19 +411,42 @@ export function PostsFeedScreen() {
     [likeMutation, unlikeMutation],
   );
 
-  const handleComment = useCallback((postId: string) => router.push(`/feeds/post/${postId}`), [router]);
+  const handleComment = useCallback(
+    (postId: string) => {
+      const post = posts.find((p) => p.id === postId);
+      if (post?.type === 'REEL') {
+        router.push(`/reel/${postId}`);
+      } else {
+        router.push(`/feeds/post/${postId}`);
+      }
+    },
+    [router, posts],
+  );
 
   const handleShare = useCallback(
     async (postId: string) => {
+      const post = posts.find((p) => p.id === postId);
+      const localUrl =
+        post?.type === 'REEL'
+          ? `${window.location.origin}/reel/${postId}`
+          : `${window.location.origin}/feeds/post/${postId}`;
+      const title = post?.author?.displayName ?? post?.author?.username ?? 'Meeshy';
+
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
       try {
-        await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${postId}`);
-        shareMutation.mutate({ postId });
-        showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        const { shortUrl } = await postsService.sharePost(postId, { generateLink: true });
+        const shared = await shareLink(shortUrl ?? localUrl, title, post?.content ?? '');
+        if (shared) {
+          showToast(t('toast.shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
       } catch {
-        showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't copy the link."));
+        showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't share the post."));
       }
     },
-    [shareMutation, showToast, t],
+    [showToast, posts, t],
   );
 
   const handleBookmark = useCallback(
@@ -359,6 +465,10 @@ export function PostsFeedScreen() {
     [translateMutation, userLanguage],
   );
 
+  const handleDownloadMedia = useCallback((postId: string, mediaId: string) => {
+    postsService.recordMediaDownloads(postId, [mediaId], 'feed');
+  }, []);
+
   const handleDeletePost = useCallback(
     (postId: string) => {
       deletePostMutation.mutate(postId, {
@@ -366,6 +476,28 @@ export function PostsFeedScreen() {
       });
     },
     [deletePostMutation, showToast, t],
+  );
+
+  const handleReportPost = useCallback(
+    (postId: string) => {
+      if (!window.confirm(t('post.reportConfirm', 'Report this post?'))) return;
+      reportService
+        .reportPost(postId, 'inappropriate', '')
+        .then(() => showToast(t('toast.postReported', 'Post reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the post.")));
+    },
+    [showToast, t],
+  );
+
+  const handleReportStory = useCallback(
+    (storyId: string) => {
+      if (!window.confirm(t('story.reportConfirm', 'Report this story?'))) return;
+      reportService
+        .reportStory(storyId, 'inappropriate', '')
+        .then(() => showToast(t('toast.storyReported', 'Story reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the story.")));
+    },
+    [showToast, t],
   );
 
   const handlePinPost = useCallback(
@@ -446,20 +578,36 @@ export function PostsFeedScreen() {
   }, []);
 
   const handleAudioPublish = useCallback(
-    async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+    async (data: {
+      audioFile: File;
+      transcription: MobileTranscription | null;
+      content?: string;
+      visibility: PostVisibility;
+      visibilityUserIds?: string[];
+    }) => {
       try {
         const tusService = new TusUploadService();
         const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
-        const mediaId = results[0]?.id;
-        if (!mediaId) throw new Error('Upload failed');
+        const media = results[0];
+        if (!media?.id) throw new Error('Upload failed');
 
         createPostMutation.mutate(
           {
             content: data.content,
             type: 'POST',
-            visibility: 'PUBLIC',
-            mediaIds: [mediaId],
+            visibility: data.visibility,
+            visibilityUserIds: data.visibilityUserIds,
+            mediaIds: [media.id],
             mobileTranscription: data.transcription ?? undefined,
+            originalLanguage: data.transcription?.language,
+            optimisticMedia: [{
+              id: media.id,
+              mimeType: media.mimeType,
+              fileUrl: media.fileUrl,
+              thumbnailUrl: media.thumbnailUrl,
+              duration: media.duration,
+              order: 0,
+            }],
           },
           {
             onSuccess: () => {
@@ -476,7 +624,7 @@ export function PostsFeedScreen() {
     [createPostMutation, showToast, t],
   );
 
-  // ─── Status (mock) ────────────────────────────────────────────────────
+  // ─── Status / mood ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
   const handleStatusPress = useCallback(
@@ -487,9 +635,16 @@ export function PostsFeedScreen() {
   const handleStatusPublish = useCallback(
     (status: { moodEmoji: string; content?: string }) => {
       setStatusComposerOpen(false);
-      showToast(t('toast.moodPublished', 'Mood published!'), 'success', `${status.moodEmoji} ${status.content || ''}`);
+      createStatusMutation.mutate(
+        { moodEmoji: status.moodEmoji, content: status.content, originalLanguage: userLanguage },
+        {
+          onSuccess: () =>
+            showToast(t('toast.moodPublished', 'Mood published!'), 'success', `${status.moodEmoji} ${status.content || ''}`),
+          onError: () => showToast(t('toast.moodPublishError', "Couldn't publish your mood"), 'error'),
+        },
+      );
     },
-    [showToast, t],
+    [createStatusMutation, showToast, t, userLanguage],
   );
 
   // ─── Render ──────────────────────────────────────────────────────────
@@ -516,10 +671,11 @@ export function PostsFeedScreen() {
         <section aria-label={t('sections.moods', 'Moods')}>
           <h2 className="sr-only">{t('sections.moods', 'Moods')}</h2>
           <StatusBar
-            statuses={mockStatuses}
+            statuses={statusItems}
             onStatusPress={handleStatusPress}
             onAddStatus={() => setStatusComposerOpen(true)}
             userLanguage={userLanguage}
+            isLoading={statusesQuery.isLoading}
             className="mb-6"
           />
         </section>
@@ -610,7 +766,11 @@ export function PostsFeedScreen() {
               const isBookmarked = !!post.bookmarkedAt;
               const userReaction = postReactions[0];
               return (
-                <article key={post.id} onMouseEnter={() => prefetchPost(post.id)}>
+                <article
+                  key={post.id}
+                  ref={(el) => observeImpression(el, post.id)}
+                  onMouseEnter={() => prefetchPost(post.id)}
+                >
                   <PostCard
                     author={{
                       name: post.author?.displayName ?? post.author?.username ?? t('unknownAuthor', 'Unknown'),
@@ -630,6 +790,8 @@ export function PostsFeedScreen() {
                     reactionSummary={post.reactionSummary ?? undefined}
                     userReaction={userReaction}
                     media={post.media}
+                    repostOf={post.repostOf}
+                    isQuote={post.isQuote}
                     onLike={() => handleLike(post.id, isLiked)}
                     onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
                     onComment={() => handleComment(post.id)}
@@ -640,7 +802,17 @@ export function PostsFeedScreen() {
                     onEdit={() => handleEditPost(post.id)}
                     onDelete={() => handleDeletePost(post.id)}
                     onPin={() => handlePinPost(post.id, post.isPinned)}
-                    onClick={() => router.push(`/feeds/post/${post.id}`)}
+                    onReport={() => handleReportPost(post.id)}
+                    onDownloadMedia={(mediaId) => handleDownloadMedia(post.id, mediaId)}
+                    onDownloadRepostMedia={(mediaId) => post.repostOf?.id && handleDownloadMedia(post.repostOf.id, mediaId)}
+                    onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
+                    onClick={() => {
+                      if (post.type === 'REEL') {
+                        router.push(`/reel/${post.id}`);
+                      } else {
+                        router.push(`/feeds/post/${post.id}`);
+                      }
+                    }}
                   />
                 </article>
               );
@@ -664,9 +836,9 @@ export function PostsFeedScreen() {
       </div>
 
       {/* Story Viewer */}
-      {storyViewerOpen && storyDataList.length > 0 && (
+      {storyViewerOpen && activeStoryData.length > 0 && (
         <StoryViewer
-          stories={storyDataList}
+          stories={activeStoryData}
           initialIndex={storyViewerIndex}
           userLanguage={userLanguage}
           currentUserId={currentUserId}
@@ -674,6 +846,9 @@ export function PostsFeedScreen() {
           onView={handleStoryView}
           onReply={handleStoryReply}
           onDelete={handleStoryDelete}
+          onReport={handleReportStory}
+          onShare={handleShareStory}
+          onRepost={activeStoryGroupIsRepostable ? handleRepostStory : undefined}
         />
       )}
 

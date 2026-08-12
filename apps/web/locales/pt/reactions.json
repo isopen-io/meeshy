@@ -60,5 +60,11 @@
       "peopleReacted": "{count} pessoa",
       "peopleReacted_plural": "{count} pessoas"
     }
+  },
+  "picker": {
+    "clearSearch": "Limpar pesquisa",
+    "categories": {
+      "label": "Categorias de emojis"
+    }
   }
 }

@@ -57,6 +57,51 @@ export interface RepostRequest {
   readonly isQuote?: boolean;
 }
 
+export interface SharePostOptions {
+  readonly platform?: string;
+  /**
+   * Mints a per-caller tracking link (`meeshy.me/l/<token>`) the gateway can
+   * attribute clicks back to, mirroring iOS `POST /posts/:id/share
+   * {generateLink:true}`. Reusing an existing link does NOT re-increment
+   * `shareCount` — the counter tracks unique sharers, not repeated taps.
+   */
+  readonly generateLink?: boolean;
+}
+
+export interface SharePostResponse {
+  readonly shared: boolean;
+  readonly shareCount: number;
+  readonly shortUrl?: string;
+  readonly token?: string;
+}
+
+/**
+ * Surface a post impression originates from. Mirrors the gateway's accepted
+ * `source` enum (`/posts/:postId/impression` + `/posts/impressions/batch`) and
+ * iOS `PostService.recordImpression(s)`. `feed` is used for both the posts feed
+ * and the reels thread; `detail` additionally bumps `postOpenCount` server-side.
+ */
+export type ImpressionSource =
+  | 'feed'
+  | 'profile'
+  | 'search'
+  | 'shared_link'
+  | 'notification'
+  | 'detail'
+  | 'story'
+  | 'status';
+
+/** Max impression OCCURRENCES the gateway accepts per `/posts/impressions/batch`
+ * call. Repeated ids are legitimate (one impression per appearance) and each
+ * consumes a slot — the gateway groups them and increments by the count. */
+const IMPRESSION_BATCH_LIMIT = 50;
+
+/**
+ * Surface a media download originates from. Mirrors the gateway's
+ * `DOWNLOAD_SURFACES` (`services/gateway/src/routes/posts/types.ts`).
+ */
+export type DownloadSurface = 'feed' | 'detail' | 'reel';
+
 export interface FeedFilters {
   readonly cursor?: string;
   readonly limit?: number;
@@ -127,6 +172,20 @@ export const postsService = {
     return unwrap(response);
   },
 
+  async getPostsByHashtag(tag: string, filters: { cursor?: string; limit?: number } = {}): Promise<CursorPaginatedResponse<Post>> {
+    const params = new URLSearchParams();
+    if (filters.cursor) params.set('cursor', filters.cursor);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const qs = params.toString();
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/hashtag/${tag}${qs ? `?${qs}` : ''}`);
+    return unwrap(response);
+  },
+
+  async getTrendingHashtags(limit: number = 20): Promise<{ tag: string; usageCount: number }[]> {
+    const response = await apiService.get<{ success: boolean; data: { tag: string; usageCount: number }[] }>(`/hashtags/trending?limit=${limit}`);
+    return unwrap(unwrap(response));
+  },
+
   async getReelsFeed(filters: ReelFeedFilters = {}): Promise<ReelsFeedResponse> {
     const params = new URLSearchParams();
     if (filters.cursor) params.set('cursor', filters.cursor);
@@ -134,11 +193,6 @@ export const postsService = {
     if (filters.seed) params.set('seed', filters.seed);
     const qs = params.toString();
     const response = await apiService.get<ReelsFeedResponse>(`/posts/feed/reels${qs ? `?${qs}` : ''}`);
-    return unwrap(response);
-  },
-
-  async getStories(): Promise<{ success: boolean; data: Post[] }> {
-    const response = await apiService.get<{ success: boolean; data: Post[] }>('/posts/feed/stories');
     return unwrap(response);
   },
 
@@ -218,10 +272,19 @@ export const postsService = {
     return unwrap(response);
   },
 
-  async sharePost(postId: string, platform?: string): Promise<{ shared: boolean; shareCount: number }> {
-    const response = await apiService.post<{ shared: boolean; shareCount: number }>(
+  /**
+   * `platform` accepts either the legacy bare string (backward-compatible
+   * with `useSharePostMutation`) or a {@link SharePostOptions} object to also
+   * request a tracking link (`generateLink: true`) — see {@link SharePostResponse}.
+   */
+  async sharePost(postId: string, platform?: string | SharePostOptions): Promise<SharePostResponse> {
+    const options: SharePostOptions = typeof platform === 'string' ? { platform } : (platform ?? {});
+    const body: Record<string, unknown> = {};
+    if (options.platform) body.platform = options.platform;
+    if (options.generateLink) body.generateLink = true;
+    const response = await apiService.post<SharePostResponse>(
       `/posts/${postId}/share`,
-      platform ? { platform } : undefined,
+      Object.keys(body).length > 0 ? body : undefined,
     );
     return unwrap(response);
   },
@@ -249,6 +312,42 @@ export const postsService = {
       `/posts/${postId}/views?limit=${limit}&offset=${offset}`,
     );
     return unwrap(response);
+  },
+
+  // ── Impressions ─────────────────────────────────────────────────────────
+  // A lightweight "this post entered the viewport" reach signal feeding
+  // `impressionCount`, distinct from `viewPost` (`viewCount`). Mirrors iOS
+  // `PostService.recordImpressions` / `recordImpression`. The batch endpoint
+  // caps at IMPRESSION_BATCH_LIMIT ids, so longer runs are chunked here.
+
+  async recordImpressions(postIds: readonly string[], source: ImpressionSource = 'feed'): Promise<void> {
+    if (postIds.length === 0) return;
+    for (let i = 0; i < postIds.length; i += IMPRESSION_BATCH_LIMIT) {
+      const chunk = postIds.slice(i, i + IMPRESSION_BATCH_LIMIT);
+      await apiService.post('/posts/impressions/batch', { postIds: chunk, source });
+    }
+  },
+
+  async recordImpression(postId: string, source: ImpressionSource = 'detail'): Promise<void> {
+    await apiService.post(`/posts/${postId}/impression`, { source });
+  },
+
+  // ── Downloads ────────────────────────────────────────────────────────────
+  // Best-effort analytics ping for "Save media" (PostCard/PostDetail/ReelPlayer,
+  // lightbox `<a download>` pattern) — never throws, a failed ping must not
+  // block the download the browser already triggered.
+
+  async recordMediaDownloads(
+    postId: string,
+    mediaIds: readonly string[],
+    surface: DownloadSurface = 'detail',
+  ): Promise<void> {
+    if (mediaIds.length === 0) return;
+    try {
+      await apiService.post(`/posts/${postId}/downloads`, { mediaIds, surface });
+    } catch {
+      // fire-and-forget : ne jamais bloquer le téléchargement
+    }
   },
 
   // ── Translation ─────────────────────────────────────────────────────────
@@ -296,22 +395,6 @@ export const postsService = {
     return unwrap(response);
   },
 
-  // ── Story Background Audio ──────────────────────────────────────────────
-
-  async getStoryAudioLibrary(query?: string, limit = 20): Promise<{ id: string; title: string; duration: number; fileUrl: string; usageCount: number }[]> {
-    const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    params.set('limit', String(limit));
-    const qs = params.toString();
-    const response = await apiService.get<{ id: string; title: string; duration: number; fileUrl: string; usageCount: number }[]>(
-      `/stories/audio${qs ? `?${qs}` : ''}`,
-    );
-    return unwrap(response);
-  },
-
-  async trackStoryAudioUse(audioId: string): Promise<void> {
-    await apiService.post(`/stories/audio/${audioId}/use`);
-  },
 };
 
 /**

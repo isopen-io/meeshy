@@ -25,6 +25,8 @@
 		<string>de</string>
 		<string>es</string>
 		<string>pt-BR</string>
+		<string>it</string>
+		<string>ar</string>
 	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
@@ -46,7 +48,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1190</string>
+	<string>1746</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -107,7 +109,6 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 		<string>processing</string>
-		<string>bluetooth-peripheral</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<false/>

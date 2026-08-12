@@ -10,12 +10,14 @@ import type {
   MessageResponseMetadata
 } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
-import { conversationStatsService } from '../ConversationStatsService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
+import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -96,6 +98,9 @@ export class MessagingService {
       let participant = await performanceLogger.withTiming(
         'messaging.participantLookup',
         async () => {
+          const cached = getCachedParticipant(participantId, conversationId);
+          if (cached) return cached;
+
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
             select: { id: true, conversationId: true, isActive: true }
@@ -110,6 +115,9 @@ export class MessagingService {
           if (!p) {
             p = await this.ensureParticipantFromMember(participantId, conversationId);
           }
+          if (p) {
+            cacheParticipant(participantId, conversationId, p);
+          }
           return p;
         },
         { ...corr, conversationId }
@@ -122,6 +130,58 @@ export class MessagingService {
         );
       }
 
+      // 3.5. Early dedup — runs after participant verification (security gate
+      //      stays intact) but before language detection, link processing, and
+      //      encryption context. Handles sequential retries with one DB read.
+      //      Concurrent retries still resolve via the P2002 catch in saveMessage.
+      if (request.clientMessageId) {
+        const earlyHit = await performanceLogger.withTiming(
+          'messaging.earlyDedupCheck',
+          () => this.prisma.message.findFirst({
+            where: { conversationId, clientMessageId: request.clientMessageId },
+            // Fetch the sender relation so `createSuccessResponse` resolves
+            // `senderId` to the User.id (clients compare it to their own
+            // userId). Without it a sequential retry would return the raw
+            // Participant.id — the concurrent P2002 dedup path in
+            // MessageProcessor.saveMessage already carries this same shape.
+            include: {
+              sender: {
+                select: {
+                  id: true, displayName: true, avatar: true, type: true,
+                  nickname: true, userId: true,
+                  user: {
+                    select: {
+                      id: true, username: true, displayName: true,
+                      firstName: true, lastName: true, avatar: true
+                    }
+                  }
+                }
+              }
+            }
+          }),
+          corr
+        );
+        if (earlyHit) {
+          // Flag the in-process dedup marker so the caller (MessageHandler)
+          // suppresses the `message:new` re-broadcast / agent-notify / stats
+          // side effects. Without it, a sequential retry on the same
+          // clientMessageId re-broadcasts the bubble to every recipient. This
+          // mirrors the P2002 concurrent-retry path in MessageProcessor.saveMessage.
+          (earlyHit as { isDuplicate?: boolean }).isDuplicate = true;
+          const translations = (earlyHit as { translations?: unknown }).translations;
+          if (this.isTranslationsEmpty(translations)) {
+            void this.queueTranslation(earlyHit, earlyHit.originalLanguage ?? 'fr').catch((err) =>
+              logger.error('background re-translation failed on early dedup', err as Error)
+            );
+          }
+          logger.info('perf:messaging.handleMessage', {
+            ...corr, step: 'messaging.handleMessage', phase: 'end',
+            durationMs: Date.now() - startTime, messageId: earlyHit.id, earlyDedupHit: true
+          });
+          return this.createSuccessResponse(earlyHit, requestId, startTime, undefined, PENDING_TRANSLATION_STATUS);
+        }
+      }
+
       // 4. Détection de langue — trust the client's `originalLanguage` when
       //    provided. iOS detects it locally (ConversationViewModel:
       //    detectKeyboardLanguage()) and the web via navigator.language ;
@@ -131,8 +191,28 @@ export class MessagingService {
       //    claim in observed prod traffic. The detector is now ONLY invoked
       //    when the client omits `originalLanguage` entirely (anon flows,
       //    legacy clients).
-      const originalLanguage = request.originalLanguage
-        ?? (request.content
+      //
+      //    The socket schema is `originalLanguage: z.string().optional()`, so an
+      //    EMPTY / whitespace-only string is a valid payload (common when
+      //    client-side detection fails). A nullish (`??`) guard would let `''`
+      //    through and persist `Message.originalLanguage = ''`, which downstream
+      //    broadcasts as `'fr'` (Prisme corruption). Trim-then-truthy is what
+      //    forces those blank claims back onto the detector.
+      //
+      //    Canonicalise the trusted claim at this WRITE boundary (SSOT
+      //    `normalizeLanguageCode`): clients send the raw platform locale — iOS
+      //    `Locale.current` ('fr_FR'), web `navigator.language` ('fr-FR'), or a
+      //    bare 'FR'. Persisting that verbatim fragments every downstream
+      //    consumer keyed on `Message.originalLanguage` (NLLB source, translation
+      //    cache key, per-language stats, admin analytics) and forced each of
+      //    them to re-normalise defensively on read. Normalising once here makes
+      //    the DB the single source of truth. Codes the SSOT cannot reduce
+      //    (irreducible ISO 639-3 like 'bas', unknown 2-letter) are kept verbatim
+      //    via the fallback — the claim is still trusted, never dropped.
+      const claimedLanguage = request.originalLanguage?.trim();
+      const originalLanguage = claimedLanguage
+        ? (normalizeLanguageCode(claimedLanguage) ?? claimedLanguage)
+        : (request.content
             ? await performanceLogger.withTiming(
                 'messaging.detectLanguage',
                 () => this.validator.detectLanguage(request.content!),
@@ -240,12 +320,22 @@ export class MessagingService {
   }
 
   /**
-   * Effets de bord post-save qui ne doivent JAMAIS retarder l'ACK client :
-   * bump du timestamp de conversation, marquage du message comme lu pour son
-   * propre expéditeur, mise en file de la traduction, et mise à jour des
-   * statistiques. Chacun s'exécute indépendamment avec sa propre capture
-   * d'erreur — une défaillance n'empêche pas les autres, et aucun ne bloque
-   * la réponse qui fait passer la coche de l'expéditeur.
+   * Effets de bord post-save qui ne doivent JAMAIS retarder l'ACK client.
+   *
+   * Les trois que TOUT message committé doit à sa conversation — bump du
+   * timestamp, mise en file de la traduction, statistiques de langue — vivent
+   * dans `runMessagePostSaveEffects`, hors de cette classe : les routes de lien
+   * de partage la contournent entièrement, et une obligation produit enfermée
+   * dans un `private` n'est honorable que par les appelants de sa classe.
+   *
+   * Le quatrième reste ICI : l'avancement du curseur de lecture de l'auteur
+   * demande un vrai `Participant`, ce que seul ce chemin garantit (la route de
+   * lien authentifiée peut porter `{ id: userId }` synthétique pour la
+   * conversation globale). Cf. le docstring de l'unité partagée.
+   *
+   * Chaque effet s'exécute indépendamment avec sa propre capture d'erreur — une
+   * défaillance n'empêche pas les autres, et aucune ne bloque la réponse qui
+   * fait passer la coche de l'expéditeur.
    */
   private runPostSaveSideEffects(args: {
     message: Message;
@@ -255,33 +345,37 @@ export class MessagingService {
   }): void {
     const { message, conversationId, senderParticipantId, originalLanguage } = args;
 
-    void this.updateConversation(conversationId).catch((err) =>
-      logger.error('post-save updateConversation failed', err as Error)
-    );
+    // `sender` et `attachments` viennent de l'`include` de `saveMessage` — les
+    // seconds RAFRAÎCHIS après `handleAttachments` (ÉTAPE 4 bis), sans quoi le
+    // comptage verrait la liste vide capturée par `message.create`.
+    const saved = message as typeof message & {
+      sender?: { userId?: string | null } | null;
+      attachments?: Array<{ mimeType?: string | null }> | null;
+    };
+
+    runMessagePostSaveEffects({
+      prisma: this.prisma,
+      translationService: this.translationService,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: saved.sender?.userId ?? null,
+        attachmentMimeTypes: (saved.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        messageType: message.messageType,
+        replyToId: message.replyToId
+      },
+      originalLanguage,
+      onError: (effect, err) =>
+        logger.error(`post-save ${effect} failed`, err as Error)
+    });
 
     void this.readStatusService
       .markMessagesAsRead(senderParticipantId, conversationId, message.id)
       .catch((err) =>
         logger.error('post-save markMessagesAsRead failed', err as Error)
       );
-
-    void this.queueTranslation(message, originalLanguage).catch((err) =>
-      logger.error('post-save queueTranslation failed', err as Error)
-    );
-
-    void this.updateStats(conversationId, originalLanguage).catch((err) =>
-      logger.error('post-save updateStats failed', err as Error)
-    );
-  }
-
-  /**
-   * Met à jour le timestamp de dernière activité de la conversation
-   */
-  private async updateConversation(conversationId: string): Promise<void> {
-    await this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: { lastMessageAt: new Date() }
-    });
   }
 
   /**
@@ -317,14 +411,10 @@ export class MessagingService {
       };
     }
     try {
-      await this.translationService.handleNewMessage({
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        content: message.content,
-        originalLanguage,
-        messageType: message.messageType,
-        replyToId: message.replyToId
+      await queueMessageTranslation({
+        translationService: this.translationService,
+        message,
+        originalLanguage
       });
 
       return {
@@ -343,23 +433,6 @@ export class MessagingService {
         languagesCompleted: [],
         languagesFailed: ['unknown']
       };
-    }
-  }
-
-  /**
-   * Met à jour les statistiques de conversation
-   */
-  private async updateStats(conversationId: string, language: string): Promise<any> {
-    try {
-      return await conversationStatsService.updateOnNewMessage(
-        this.prisma,
-        conversationId,
-        language,
-        () => []
-      );
-    } catch (error) {
-      logger.error('Error updating stats', error as Error);
-      return undefined;
     }
   }
 

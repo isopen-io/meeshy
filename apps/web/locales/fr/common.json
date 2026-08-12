@@ -181,6 +181,7 @@
       "messageDeletedByOther": "Un message a été supprimé",
       "modifyError": "Erreur lors de la modification du message",
       "editError": "Erreur lors de la modification du message",
+      "contentRequired": "Contenu requis",
       "deleteError": "Erreur lors de la suppression du message",
       "replyTo": "Répondre à ce message",
       "messageFound": "Message trouvé !",
@@ -220,6 +221,7 @@
     "imageLoadError": "Impossible de charger l'image",
     "downloadAnyway": "Télécharger quand même",
     "lightboxKeyboardHelp": "Utilisez les flèches ← → pour naviguer • +/- pour zoomer • R pour pivoter • Échap pour fermer",
+    "videoLightboxKeyboardHelp": "Utilisez les flèches ← → pour naviguer • Espace pour lecture/pause • M pour couper le son • F pour le plein écran • Échap pour fermer",
     "clearSearch": "Effacer la recherche",
     "backToList": "Retour à la liste",
     "backToConversations": "Retour aux conversations",
@@ -267,7 +269,17 @@
     "storyVisibility": {
       "public": "Public",
       "friends": "Amis",
+      "community": "Communauté",
+      "except": "Tous sauf…",
+      "only": "Seulement…",
       "private": "Privé"
+    },
+    "audiencePicker": {
+      "searchPlaceholder": "Rechercher des personnes…",
+      "exceptHint": "Votre story sera masquée aux personnes sélectionnées.",
+      "onlyHint": "Seules les personnes sélectionnées verront votre story.",
+      "empty": "Aucun résultat",
+      "remove": "Retirer"
     },
     "postComposer": {
       "contentLabel": "Contenu du post",
@@ -280,6 +292,11 @@
         "except": "Amis sauf...",
         "only": "Seulement...",
         "private": "Privé"
+      },
+      "reelToggle": {
+        "groupLabel": "Type de publication",
+        "reel": "Reel",
+        "post": "Post"
       }
     },
     "audioUnavailable": "URL audio non disponible",
@@ -297,5 +314,14 @@
     "anonymousUser": "Utilisateur anonyme"
   },
   "copied": "Copié",
-  "never": "Jamais"
+  "never": "Jamais",
+  "offlineMessage": "Vous êtes hors ligne — les messages seront envoyés à la reconnexion",
+  "updateAvailable": "Une nouvelle version de Meeshy est disponible !",
+  "updateNow": "Mettre à jour",
+  "wait": "Attendre",
+  "languageSelector": {
+    "selectLanguage": "Sélectionner une langue",
+    "searchLanguage": "Rechercher une langue...",
+    "noLanguageFound": "Aucune langue trouvée"
+  }
 }

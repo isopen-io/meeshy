@@ -719,9 +719,14 @@ export class VoiceProfileService extends EventEmitter {
       }
 
       // Update database
+      // NOTE: audioCount/totalDurationMs/version must be atomic Prisma operators, not
+      // values computed from `voiceModel` (read before the ZMQ await above) — two
+      // concurrent calibrations for the same user would otherwise both compute from
+      // the same stale snapshot and the second write would silently clobber the
+      // first's increment (lost update).
       const updateData: any = {
         qualityScore: response.quality_score || voiceModel.qualityScore,
-        version: voiceModel.version + 1,
+        version: { increment: 1 },
         voiceCharacteristics: response.voice_characteristics || voiceModel.voiceCharacteristics,
         fingerprint: response.fingerprint || voiceModel.fingerprint,
         signatureShort: response.signature_short || voiceModel.signatureShort,
@@ -735,13 +740,13 @@ export class VoiceProfileService extends EventEmitter {
       }
 
       if (request.replaceExisting) {
-        // Replace: reset counts
+        // Replace: reset counts (explicit user action, absolute values are correct here)
         updateData.audioCount = 1;
         updateData.totalDurationMs = response.audio_duration_ms || 0;
       } else {
-        // Add: increment counts
-        updateData.audioCount = voiceModel.audioCount + 1;
-        updateData.totalDurationMs = voiceModel.totalDurationMs + (response.audio_duration_ms || 0);
+        // Add: atomic increments
+        updateData.audioCount = { increment: 1 };
+        updateData.totalDurationMs = { increment: response.audio_duration_ms || 0 };
       }
 
       const updated = await this.prisma.userVoiceModel.update({

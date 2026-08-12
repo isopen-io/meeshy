@@ -75,11 +75,12 @@ describe('HeaderAvatar presence', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Absent')).not.toBeInTheDocument();
   });
 
   it('recomputes status decay on the store tick without any user mutation', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
       useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() })]);
     });
@@ -91,12 +92,12 @@ describe('HeaderAvatar presence', () => {
       const state = useUserStore.getState();
       const user = state.usersMap.get('user-1');
       if (user) {
-        (user as { lastActiveAt?: Date }).lastActiveAt = sixMinutesAgo;
+        (user as { lastActiveAt?: Date }).lastActiveAt = twoMinutesAgo;
       }
       state.triggerStatusTick();
     });
 
-    expect(screen.getByTitle('Inactif')).toBeInTheDocument();
+    expect(screen.getByTitle('Absent')).toBeInTheDocument();
   });
 
   it('falls back to the conversation payload presence when the store is empty', () => {

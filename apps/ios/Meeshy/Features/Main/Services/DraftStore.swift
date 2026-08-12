@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 /// Per-conversation draft state preserved across kills and navigation so the
 /// user never loses an in-progress message. Mirrors the WhatsApp/iMessage
@@ -14,6 +15,37 @@ import MeeshySDK
 /// user A dans le compose box. Migration ascendante des clés legacy
 /// (`meeshy_draft_<convId>`) au premier `load()` du user courant.
 /// Voir `docs/superpowers/specs/2026-05-26-user-session-migration-design.md`.
+/// Référence d'une pièce jointe de brouillon dont le fichier a été copié
+/// dans le dossier DURABLE de drafts (`MessageDraftMediaStore`) — les
+/// fichiers du composer vivent dans `tmp/`, purgeable par iOS, donc une
+/// simple référence ne survivrait pas.
+public struct DraftAttachmentRef: Codable, Equatable, Sendable {
+    public var attachmentId: String
+    /// Nom de fichier RELATIF dans le dossier draft de la conversation.
+    public var storedFileName: String
+    public var originalName: String
+    public var mimeType: String
+    public var fileSize: Int
+    public var duration: Int?
+    public var width: Int?
+    public var height: Int?
+    public var thumbnailColor: String
+
+    public init(attachmentId: String, storedFileName: String, originalName: String,
+                mimeType: String, fileSize: Int = 0, duration: Int? = nil,
+                width: Int? = nil, height: Int? = nil, thumbnailColor: String = "4ECDC4") {
+        self.attachmentId = attachmentId
+        self.storedFileName = storedFileName
+        self.originalName = originalName
+        self.mimeType = mimeType
+        self.fileSize = fileSize
+        self.duration = duration
+        self.width = width
+        self.height = height
+        self.thumbnailColor = thumbnailColor
+    }
+}
+
 public struct MessageDraft: Codable, Equatable, Sendable {
     public var text: String
     public var replyToId: String?
@@ -29,6 +61,10 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     public var isBlurEnabled: Bool
     public var ephemeralDurationRawValue: Int?
     public var updatedAt: Date
+    /// Pièces jointes copiées dans le dossier draft durable. Optionnel pour
+    /// la rétro-compatibilité de décodage des brouillons persistés avant ce
+    /// champ (clé absente → nil).
+    public var attachments: [DraftAttachmentRef]?
 
     public init(
         text: String = "",
@@ -40,7 +76,8 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         effectFlags: UInt32 = 0,
         isBlurEnabled: Bool = false,
         ephemeralDurationRawValue: Int? = nil,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        attachments: [DraftAttachmentRef]? = nil
     ) {
         self.text = text
         self.replyToId = replyToId
@@ -52,6 +89,7 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         self.isBlurEnabled = isBlurEnabled
         self.ephemeralDurationRawValue = ephemeralDurationRawValue
         self.updatedAt = updatedAt
+        self.attachments = attachments
     }
 
     /// `true` when the draft is effectively empty and can be removed from
@@ -64,6 +102,7 @@ public struct MessageDraft: Codable, Equatable, Sendable {
             && effectFlags == 0
             && !isBlurEnabled
             && ephemeralDurationRawValue == nil
+            && (attachments?.isEmpty ?? true)
     }
 
     /// `true` when the draft carries actual unsent TEXT (after trimming). The
@@ -128,7 +167,7 @@ final class DraftStore: @unchecked Sendable {
         }
         var stamped = draft
         stamped.updatedAt = Date()
-        guard let data = try? encoder.encode(stamped) else { return }
+        guard let data = encoder.encodeOrLog(stamped, field: "message draft", id: conversationId, logger: Logger.drafts) else { return }
         defaults.set(data, forKey: key(for: conversationId))
         changed.send()
     }
@@ -137,7 +176,7 @@ final class DraftStore: @unchecked Sendable {
         let userKey = key(for: conversationId)
         // 1) Per-user encoded blob (current format)
         if let data = defaults.data(forKey: userKey),
-           let draft = try? decoder.decode(MessageDraft.self, from: data) {
+           let draft = decoder.decodeOrLog(MessageDraft.self, from: data, field: "message draft", logger: Logger.drafts) {
             return draft
         }
         // 2) Q4 migration : legacy key without userId prefix.
@@ -149,7 +188,7 @@ final class DraftStore: @unchecked Sendable {
         let legacy = legacyKey(for: conversationId)
         if legacy != userKey {
             if let data = defaults.data(forKey: legacy),
-               let draft = try? decoder.decode(MessageDraft.self, from: data) {
+               let draft = decoder.decodeOrLog(MessageDraft.self, from: data, field: "message draft", logger: Logger.drafts) {
                 defaults.set(data, forKey: userKey)
                 defaults.removeObject(forKey: legacy)
                 return draft
@@ -157,7 +196,7 @@ final class DraftStore: @unchecked Sendable {
             // Very old legacy : raw string (pré-MessageDraft)
             if let str = defaults.string(forKey: legacy), !str.isEmpty {
                 let migrated = MessageDraft(text: str)
-                if let encoded = try? encoder.encode(migrated) {
+                if let encoded = encoder.encodeOrLog(migrated, field: "migrated draft", logger: Logger.drafts) {
                     defaults.set(encoded, forKey: userKey)
                 }
                 defaults.removeObject(forKey: legacy)
@@ -269,7 +308,7 @@ final class DraftStore: @unchecked Sendable {
         let allKeys = defaults.dictionaryRepresentation().keys
         for k in allKeys where k.hasPrefix(prefix) {
             guard let data = defaults.data(forKey: k),
-                  let draft = try? decoder.decode(MessageDraft.self, from: data) else { continue }
+                  let draft = decoder.decodeOrLog(MessageDraft.self, from: data, field: "message draft", logger: Logger.drafts) else { continue }
             if draft.updatedAt < cutoff {
                 defaults.removeObject(forKey: k)
             }
@@ -292,4 +331,10 @@ final class DraftStore: @unchecked Sendable {
     private func legacyKey(for conversationId: String) -> String {
         "\(prefix)\(conversationId)"
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let drafts = Logger(subsystem: "me.meeshy.app", category: "draft-store")
 }

@@ -174,8 +174,14 @@ struct ThemedConversationRow: View {
                             .accessibilityHidden(true)
                     }
 
-                    // Timestamp — layoutPriority(1) pour ne jamais être écrasé
-                    Text(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
+                    // Timestamp — layoutPriority(1) pour ne jamais être écrasé.
+                    // `RelativeTimestampText` fait ticker CE texte une fois par
+                    // minute via `TimelineView` — le reste de la row reste gelé
+                    // derrière `.equatable()` (aucune composante temporelle dans
+                    // sa comparaison), donc sans ce wrapper l'horodatage relatif
+                    // ne se rafraîchissait plus jamais après le montage initial
+                    // (audit 2026-07-20, "Horodatages relatifs figés").
+                    RelativeTimestampText(date: conversation.lastMessageAt)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
@@ -240,11 +246,25 @@ struct ThemedConversationRow: View {
             : "")
         .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
         .accessibilityAddTraits(.isButton)
+        // iPad/macOS split-view : la ligne active est signalée par le VISUEL seul
+        // (teinte accent + barre latérale + bordure) — invisible pour VoiceOver.
+        // Trait `.isSelected` pour annoncer « …, sélectionné » (WCAG 1.4.1).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private var conversationAccessibilityLabel: String {
+    // Internal (not `private`): unit-tested directly from
+    // MeeshyTests/Unit/Views (same pattern as the cross-file access fix
+    // documented in apps/ios/CLAUDE.md — a stored/computed property read by
+    // a test target via `@testable import` needs at least `internal`).
+    var conversationAccessibilityLabel: String {
         var parts: [String] = []
         parts.append(String(format: String(localized: "accessibility.conversation_with", bundle: .main), conversation.name))
+        // B1 (Prisme Linguistique) — VoiceOver must read exactly what the
+        // visible preview shows (`standardMessageContent`, below), which
+        // already resolves through `resolvedLastMessagePreview`. Reading
+        // the raw `lastMessagePreview` here always announced the ORIGINAL
+        // language even when the row visibly displayed a translation.
+        let resolvedPreview = conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages)
         switch lastMessageSummary {
         case .expired:
             parts.append(String(localized: "accessibility.last_message_expired", bundle: .main))
@@ -253,12 +273,17 @@ struct ThemedConversationRow: View {
         case .viewOnce:
             parts.append(String(localized: "accessibility.last_message_view_once", bundle: .main))
         case .ephemeralActive:
-            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append(String(format: String(localized: "accessibility.last_message_ephemeral", bundle: .main), preview))
             }
         case .standard:
-            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), preview))
+            } else if let place = conversation.lastMessageLocation {
+                // Parité avec le visuel : VoiceOver annonce la position que la
+                // ligne affiche, nom du lieu compris quand il existe.
+                parts.append(place.name
+                    ?? String(localized: "conversation.summary.location", defaultValue: "Position", bundle: .main))
             }
         }
         parts.append(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
@@ -351,8 +376,8 @@ struct ThemedConversationRow: View {
     // MARK: - Unread Badge
     private var unreadBadge: some View {
         let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
-        return Text("\(min(conversation.userState.unreadCount, 99))")
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+        return Text(NotificationBadge.displayed(conversation.userState.unreadCount))
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
             .foregroundColor(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
@@ -372,10 +397,35 @@ struct ThemedConversationRow: View {
         unreadCount > 0 ? MeeshyColors.error : accent
     }
 
+    // MARK: - Relative Timestamp (live tick)
+
+    /// Wraps the relative-time label in a `TimelineView(.periodic)` so it
+    /// re-renders once a minute on its own schedule — independent of the
+    /// row's `.equatable()` gate (which deliberately has NO temporal
+    /// component in `ThemedConversationRow.==`, otherwise every row would
+    /// invalidate on every tick). Without this, a row's timestamp froze at
+    /// whatever relative string it showed on first mount ("5 min") until
+    /// something else forced the row to rebuild.
+    private struct RelativeTimestampText: View {
+        let date: Date
+
+        var body: some View {
+            TimelineView(.periodic(from: date, by: 60)) { _ in
+                Text(RelativeTimeFormatter.shortString(for: date))
+            }
+        }
+    }
+
     // MARK: - Typing Indicator
 
     private struct TypingDotsView: View {
         let accentColor: String
+        // These dots pulse with `.repeatForever` — an animation that never ends
+        // on its own — right in the conversation list. Sustained motion of that
+        // kind is what Reduce Motion exists to stop (vestibular disorders), so
+        // the setting has to reach here. `@Environment` and not an observed
+        // singleton: this is a leaf view rendered once per row.
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var isAnimating = false
 
         var body: some View {
@@ -384,12 +434,17 @@ struct ThemedConversationRow: View {
                     Circle()
                         .fill(Color(hex: accentColor))
                         .frame(width: 5, height: 5)
-                        .scaleEffect(isAnimating ? 1.0 : 0.5)
-                        .opacity(isAnimating ? 1.0 : 0.4)
+                        // Motion off rests at the animation's HIGH phase, never
+                        // its low one: frozen at 0.5 scale / 0.4 opacity the
+                        // dots would read as disabled rather than as "typing".
+                        .scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))
+                        .opacity(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.4))
                         .animation(
-                            .easeInOut(duration: 0.5)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.18),
+                            reduceMotion
+                                ? nil
+                                : Animation.easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.18),
                             value: isAnimating
                         )
                 }
@@ -403,7 +458,7 @@ struct ThemedConversationRow: View {
     private var typingIndicatorView: some View {
         HStack(spacing: 5) {
             Text(typingUsername.map { name in
-                String(localized: "typing.named", bundle: .main)
+                String(format: String(localized: "typing.named", bundle: .main), name)
             } ?? String(localized: "typing.anonymous", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
                 .foregroundColor(accent)
@@ -520,6 +575,20 @@ struct ThemedConversationRow: View {
                 let attachments = conversation.lastMessageAttachments
                 if hasText || !attachments.isEmpty {
                     standardMessageContent(showEphemeralIcon: false)
+                } else if let place = conversation.lastMessageLocation {
+                    // Message position-seule : `content` vide par construction
+                    // (le serveur ne fabrique aucun texte de repli) — la ligne
+                    // compose son libellé depuis la position hissée.
+                    HStack(spacing: 4) {
+                        senderLabel
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(accent)
+                        Text(place.name ?? String(localized: "conversation.summary.location", defaultValue: "Position"))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                            .foregroundColor(textSecondary)
+                            .lineLimit(1)
+                    }
                 } else {
                     Text("")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
@@ -603,11 +672,38 @@ extension ThemedConversationRow: @MainActor Equatable {
     }
 }
 
+// MARK: - Avatar context menu (pure, testable)
+
+/// Rôles des entrées du menu contextuel de l'avatar d'une ligne de conversation.
+enum AvatarMenuRole: Equatable {
+    case conversationInfo
+    case profile
+    case shareLink
+}
+
+/// Construction PURE des rôles du menu contextuel de l'avatar. Isolée ici pour
+/// garantir qu'un DM n'expose QU'UNE entrée profil : le doublon historique
+/// « Voir le profil » venait de l'auto-injection SDK (`MeeshyAvatar`) combinée à
+/// l'entrée localisée de l'app. On coupe l'auto-injection (voir le câblage
+/// `onViewProfile: nil` plus bas) et cette entrée devient l'unique source.
+enum ConversationAvatarMenu {
+    /// DM : détails de la conversation puis profil (entrée profil unique).
+    static func directRoles() -> [AvatarMenuRole] {
+        [.conversationInfo, .profile]
+    }
+
+    /// Groupe : détails de la conversation, plus le lien de partage si éligible.
+    /// Jamais d'entrée profil (un avatar de groupe n'ouvre pas un profil unique).
+    static func groupRoles(canShare: Bool) -> [AvatarMenuRole] {
+        canShare ? [.conversationInfo, .shareLink] : [.conversationInfo]
+    }
+}
+
 // MARK: - Conversation Avatar View (extracted struct to avoid PAC issues with @State + escaping closures)
 
 private struct ConversationAvatarView: View {
     let conversation: Conversation
-    let presenceState: PresenceState
+    let presenceState: PresenceState?
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -621,28 +717,33 @@ private struct ConversationAvatarView: View {
     private var isDirect: Bool { conversation.type == .direct }
 
     private var directContextMenuItems: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: String(localized: "Conversation", bundle: .main), icon: "info.circle.fill") {
-            onViewConversationInfo?()
-        })
-        items.append(AvatarContextMenuItem(label: String(localized: "Voir le profil", bundle: .main), icon: "person.circle.fill") {
-            onViewProfile?()
-        })
-        return items
+        ConversationAvatarMenu.directRoles().map { menuItem(for: $0) }
     }
 
     private var groupContextMenuItems: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main), icon: "info.circle.fill") {
-            onViewConversationInfo?()
-        })
         let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
-        if sharableTypes.contains(conversation.type), let handler = onCreateShareLink {
-            items.append(AvatarContextMenuItem(label: String(localized: "menu.create_share_link", bundle: .main), icon: "link.badge.plus") {
-                handler()
-            })
+        let canShare = sharableTypes.contains(conversation.type) && onCreateShareLink != nil
+        return ConversationAvatarMenu.groupRoles(canShare: canShare).map { menuItem(for: $0) }
+    }
+
+    private func menuItem(for role: AvatarMenuRole) -> AvatarContextMenuItem {
+        switch role {
+        case .conversationInfo:
+            return AvatarContextMenuItem(
+                label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main),
+                icon: "info.circle.fill"
+            ) { onViewConversationInfo?() }
+        case .profile:
+            return AvatarContextMenuItem(
+                label: String(localized: "Voir le profil", bundle: .main),
+                icon: "person.circle.fill"
+            ) { onViewProfile?() }
+        case .shareLink:
+            return AvatarContextMenuItem(
+                label: String(localized: "menu.create_share_link", bundle: .main),
+                icon: "link.badge.plus"
+            ) { onCreateShareLink?() }
         }
-        return items
     }
 
     var body: some View {
@@ -655,11 +756,15 @@ private struct ConversationAvatarView: View {
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (isDirect && moodStatus == nil) ? presenceState : .offline,
-                // DM : tap → story (si non lu) ou profil via la logique MeeshyAvatar handleTap()
-                // Groupe : tap → infos conversation directement via onTap
-                onTap: isDirect ? nil : onViewConversationInfo,
-                onViewProfile: isDirect ? onViewProfile : nil,
+                presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
+                // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
+                //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour
+                //   préserver le tap-vers-profil sans déclencher l'auto-injection d'une
+                //   entrée « Voir le profil » codée en dur par MeeshyAvatar. L'entrée
+                //   profil localisée est fournie une seule fois par `directContextMenuItems`.
+                // Groupe : tap → infos conversation directement via onTap.
+                onTap: isDirect ? onViewProfile : onViewConversationInfo,
+                onViewProfile: nil,
                 onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
                 onMoodTap: onMoodBadgeTap,
                 onOnlineTap: {

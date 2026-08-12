@@ -46,6 +46,7 @@ extension Route {
         case .settings: return "Settings"
         case .profile: return "Profile"
         case .contacts: return "Contacts"
+        case .peopleDiscovery: return "PeopleDiscovery"
         case .communityList: return "CommunityList"
         case .communityDetail: return "CommunityDetail"
         case .communityCreate: return "CommunityCreate"
@@ -61,10 +62,10 @@ extension Route {
         case .communityLinks: return "CommunityLinks"
         case .dataExport: return "DataExport"
         case .postDetail: return "PostDetail"
+        case .hashtagResults: return "HashtagResults"
         case .bookmarks: return "Bookmarks"
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"
-        case .editProfile: return "EditProfile"
         case .storyNotificationTarget: return "StoryNotificationTarget"
         }
     }

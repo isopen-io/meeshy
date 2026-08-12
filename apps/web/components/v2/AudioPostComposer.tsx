@@ -5,8 +5,11 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useUser } from '@/stores/auth-store';
 import { resolveUserPreferredLanguage } from '@/utils/user-language-preferences';
 import { cn } from '@/lib/utils';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { Button } from './Button';
+import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
+import type { PostVisibility } from '@meeshy/shared/types/post';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +22,8 @@ export interface AudioPostComposerProps {
     audioFile: File;
     transcription: MobileTranscription | null;
     content?: string;
+    visibility: PostVisibility;
+    visibilityUserIds?: string[];
   }) => void;
   onClose: () => void;
   disabled?: boolean;
@@ -26,16 +31,19 @@ export interface AudioPostComposerProps {
 
 type Phase = 'idle' | 'recording' | 'transcribing' | 'preview';
 
+const VISIBILITY_OPTIONS: { value: PostVisibility; labelKey: string; icon: string }[] = [
+  { value: 'PUBLIC', labelKey: 'postComposer.visibility.public', icon: '🌍' },
+  { value: 'FRIENDS', labelKey: 'postComposer.visibility.friends', icon: '👥' },
+  { value: 'EXCEPT', labelKey: 'postComposer.visibility.except', icon: '🚫' },
+  { value: 'ONLY', labelKey: 'postComposer.visibility.only', icon: '🎯' },
+  { value: 'PRIVATE', labelKey: 'postComposer.visibility.private', icon: '🔒' },
+];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDuration(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, '0')}`;
-}
+const formatDuration = (ms: number): string => formatClock(ms / 1000);
 
 function getSupportedMimeType(): string {
   const candidates = [
@@ -90,6 +98,9 @@ function AudioPostComposer({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
+  const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -129,6 +140,9 @@ function AudioPostComposer({
       setAudioBlob(null);
       setAudioUrl(null);
       setError(null);
+      setVisibility('PUBLIC');
+      setVisibilityUserIds([]);
+      setShowVisibilityPicker(false);
     }
   }, [open, cleanup]);
 
@@ -296,6 +310,7 @@ function AudioPostComposer({
 
   const handlePublish = useCallback(() => {
     if (!audioBlob || disabled) return;
+    if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
 
     const mimeType = audioBlob.type || getSupportedMimeType();
     const ext = getFileExtension(mimeType);
@@ -315,8 +330,14 @@ function AudioPostComposer({
       audioFile: file,
       transcription,
       content: caption.trim() || undefined,
+      visibility,
+      visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
+        ? visibilityUserIds
+        : undefined,
     });
-  }, [audioBlob, disabled, transcript, transcriptLang, transcriptConfidence, duration, transcriptSegments, caption, onPublish]);
+  }, [audioBlob, disabled, transcript, transcriptLang, transcriptConfidence, duration, transcriptSegments, caption, visibility, visibilityUserIds, onPublish]);
+
+  const selectedVisibility = VISIBILITY_OPTIONS.find((v) => v.value === visibility) ?? VISIBILITY_OPTIONS[0];
 
   if (!open) return null;
 
@@ -441,12 +462,64 @@ function AudioPostComposer({
                 aria-label="Caption"
               />
 
+              {/* Audience / visibility picker */}
+              <div className="relative mb-4">
+                <button
+                  onClick={() => setShowVisibilityPicker(!showVisibilityPicker)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
+                  aria-label={t('postComposer.changeVisibility')}
+                >
+                  <span>{selectedVisibility.icon}</span>
+                  <span>{t(selectedVisibility.labelKey)}</span>
+                </button>
+
+                {showVisibilityPicker && (
+                  <div className="absolute bottom-full left-0 mb-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[160px]">
+                    {VISIBILITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          setVisibility(opt.value);
+                          if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.value)) {
+                            setVisibilityUserIds([]);
+                          }
+                          setShowVisibilityPicker(false);
+                        }}
+                        className={cn(
+                          'flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-[var(--gp-parchment)] transition-colors first:rounded-t-xl last:rounded-b-xl',
+                          visibility === opt.value && 'text-[var(--gp-terracotta)] font-medium',
+                        )}
+                      >
+                        <span>{opt.icon}</span>
+                        <span>{t(opt.labelKey)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
+                <div className="mb-4">
+                  <AudienceUserPicker
+                    mode={visibility as 'EXCEPT' | 'ONLY'}
+                    selectedIds={visibilityUserIds}
+                    onChange={setVisibilityUserIds}
+                  />
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex gap-3">
                 <Button variant="ghost" size="sm" onClick={handleRetry} className="flex-1">
                   Retry
                 </Button>
-                <Button variant="primary" size="sm" onClick={handlePublish} disabled={disabled} className="flex-1">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handlePublish}
+                  disabled={disabled || isAudienceIncomplete(visibility, visibilityUserIds.length)}
+                  className="flex-1"
+                >
                   Publish
                 </Button>
               </div>

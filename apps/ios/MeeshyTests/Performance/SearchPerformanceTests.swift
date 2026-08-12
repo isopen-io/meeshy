@@ -12,6 +12,7 @@ import XCTest
 import GRDB
 @testable import MeeshySDK
 
+@MainActor
 final class SearchPerformanceTests: XCTestCase {
 
     // MARK: - Setup

@@ -457,18 +457,25 @@ class TestTranslationPriorityQueue:
         assert data["type"] == "high"
 
     def test_pop_fifo_same_priority(self):
-        """Teste FIFO pour éléments de même priorité."""
+        """Teste FIFO stable pour éléments de même priorité.
+
+        Régression: avec un simple @dataclass(order=True) ne comparant que
+        `priority`, les éléments de priorité égale comparent égaux et heapq ne
+        garantit PAS l'ordre d'insertion (cassé dès N>=5). L'ordonnancement doit
+        rester FIFO strict grâce au tiebreaker `sequence`.
+        """
         queue = TranslationPriorityQueue()
 
-        queue.push("first", {"order": 1}, priority=Priority.HIGH)
-        time.sleep(0.001)  # Small delay to ensure different timestamps
-        queue.push("second", {"order": 2}, priority=Priority.HIGH)
+        count = 8
+        for i in range(count):
+            queue.push(f"text{i}", {"order": i}, priority=Priority.HIGH)
 
-        _, data1 = queue.pop()
-        _, data2 = queue.pop()
+        popped = []
+        for _ in range(count):
+            _, data = queue.pop()
+            popped.append(data["order"])
 
-        assert data1["order"] == 1
-        assert data2["order"] == 2
+        assert popped == list(range(count))
 
     def test_peek_empty(self):
         """Teste peek sur queue vide."""
@@ -517,23 +524,22 @@ class TestPriorityItem:
 
     def test_ordering_by_priority(self):
         """Teste que les PriorityItems sont ordonnés par priorité."""
-        item1 = PriorityItem(priority=1, timestamp=time.time(), data={}, task_id="1")
-        item2 = PriorityItem(priority=2, timestamp=time.time(), data={}, task_id="2")
+        item1 = PriorityItem(priority=1, sequence=1, timestamp=time.time(), data={}, task_id="1")
+        item2 = PriorityItem(priority=2, sequence=2, timestamp=time.time(), data={}, task_id="2")
 
         assert item1 < item2
 
-    def test_ordering_same_priority_by_timestamp(self):
-        """Teste l'ordre par timestamp pour même priorité."""
-        t1 = time.time()
-        t2 = t1 + 1
+    def test_ordering_same_priority_by_sequence(self):
+        """Teste l'ordre FIFO (par sequence) pour même priorité."""
+        t = time.time()
 
-        item1 = PriorityItem(priority=1, timestamp=t1, data={}, task_id="1")
-        item2 = PriorityItem(priority=1, timestamp=t2, data={}, task_id="2")
+        # sequence, not timestamp, is the tiebreaker within a priority level.
+        item_early = PriorityItem(priority=1, sequence=1, timestamp=t + 100, data={}, task_id="1")
+        item_late = PriorityItem(priority=1, sequence=2, timestamp=t, data={}, task_id="2")
 
-        # With same priority, items compare equal (only priority is compared)
-        # This is expected behavior - heapq maintains insertion order for equal items
-        assert (item1 < item2) is False
-        assert (item2 < item1) is False
+        # Lower sequence (inserted first) sorts first, regardless of timestamp.
+        assert item_early < item_late
+        assert (item_late < item_early) is False
 
 
 # =============================================================================

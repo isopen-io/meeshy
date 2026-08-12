@@ -238,7 +238,9 @@ public final class ReaderAudioMixer {
     // MARK: - Volume / mute
 
     public func setVolume(_ volume: Float, for audioId: String) {
-        let clamped = max(0, min(1, volume))
+        // Plafond partagé : un gain au-delà de 100 % doit survivre jusqu'au
+        // chemin d'amplification, le borner ici le rendrait inaudible.
+        let clamped = max(0, min(StoryVolume.maxGain, volume))
         guard var entry = entries[audioId] else { return }
         entry.targetVolume = clamped
         entries[audioId] = entry
@@ -255,6 +257,21 @@ public final class ReaderAudioMixer {
         }
     }
 
+    /// Volume courant du clip de fond, indépendant du mute global.
+    ///
+    /// Le mixer n'exposait que `setVolume(_:for:)`, réservé aux clips
+    /// d'avant-plan indexés par id : le slot de fond, unique et sans id
+    /// exposé, restait figé sur la valeur posée à `configureBackground`.
+    /// L'automation de volume a besoin de le piloter à chaque tick.
+    public func setBackgroundVolume(_ volume: Float) {
+        guard var bg = backgroundEntry else { return }
+        let clamped = min(StoryVolume.maxGain, max(0, volume))
+        guard bg.targetVolume != clamped else { return }
+        bg.targetVolume = clamped
+        backgroundEntry = bg
+        bg.player.volume = isMuted ? 0 : clamped
+    }
+
     /// Mute / unmute a single foreground clip without touching the global
     /// `isMuted` flag (used by the per-chip tap action in the reader). The
     /// background slot is not exposed here — the bg has no dedicated chip.
@@ -267,6 +284,19 @@ public final class ReaderAudioMixer {
 
     public func isMuted(audioId: String) -> Bool {
         entries[audioId]?.isUserMuted ?? false
+    }
+
+    /// Volume CIBLE d'un clip d'avant-plan tel que le mixer le tient (avant
+    /// mute global / per-piste). Miroir de `AudioMixer.intendedVolume(for:)` —
+    /// seam d'observation : c'est ce qui permet de prouver qu'un mute d'auteur
+    /// (`volume = 0` dans le modèle) atteint réellement le moteur.
+    public func intendedVolume(for audioId: String) -> Float? {
+        entries[audioId]?.targetVolume
+    }
+
+    /// Volume cible du slot de fond (nil si aucun fond configuré).
+    public func intendedBackgroundVolume() -> Float? {
+        backgroundEntry?.targetVolume
     }
 
     private func effectiveVolume(for entry: Entry) -> Float {
@@ -366,12 +396,22 @@ public final class ReaderAudioMixer {
             // inférée comme valeur de retour (`() -> Task`), incompatible avec
             // le type `@Sendable () -> Void` attendu par `scheduleFile`.
             _ = Task { @MainActor [weak self] in
-                guard let self, let entry = self.entries[audioId], entry.node.isPlaying else { return }
-                entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
+                self?.rescheduleLoopedEntry(audioId)
             }
         } : nil
 
         entry.node.scheduleFile(entry.file, at: scheduleAt, completionHandler: completion)
+    }
+
+    /// Ré-arme la lecture d'un node loopé depuis le completion handler de la
+    /// passe précédente. **Synchrone à dessein** (et non `async`) : appeler
+    /// `scheduleFile(_:at:completionHandler:)` hors d'un contexte `async` évite
+    /// le diagnostic « consider using asynchronous alternative ». L'overload
+    /// `async` suspendrait jusqu'à la FIN de lecture du segment — incompatible
+    /// avec le ré-armement fire-and-forget requis pour boucler sans gap audible.
+    private func rescheduleLoopedEntry(_ audioId: String) {
+        guard let entry = entries[audioId], entry.node.isPlaying else { return }
+        entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
     }
 
     /// Schedule fade-in and fade-out volume ramps. node.volume is sampled by
@@ -540,6 +580,15 @@ extension ReaderAudioMixer {
     /// `true` once `play(originHost:slideKey:)` has scheduled the engine for a
     /// slide. Reset on `teardown()` / `configureBackground(...)` / `stop()`.
     public var hasStartedPlayback: Bool { startedSlideKey != nil }
+
+    /// `true` once `play(originHost:slideKey:)` has scheduled the engine for
+    /// THIS specific slide key. The unkeyed `hasStartedPlayback` cannot tell a
+    /// fresh slide (audio still caching) apart from the previous slide's pass
+    /// that has not been torn down yet — the timeline audio gate (R1) needs the
+    /// keyed answer.
+    public func hasStartedPlayback(slideKey: String) -> Bool {
+        startedSlideKey == slideKey
+    }
 
     /// Configures a single background audio source. Replaces any prior bg entry.
     /// `looping=true` schedules the buffer to repeat sample-accurately.

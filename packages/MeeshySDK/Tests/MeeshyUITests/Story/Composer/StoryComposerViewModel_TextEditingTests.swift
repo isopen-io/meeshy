@@ -80,6 +80,21 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
         XCTAssertNil(vm.textEditingMode.expandedTool)
     }
 
+    /// Refermer un panneau rend la main aux bulles — il ne quitte PAS l'édition.
+    /// C'est ce que fait le tap hors du panneau ; seul « Terminé » sort. Le test
+    /// voisin ne vérifiait que la remise à zéro de l'outil, si bien qu'un
+    /// `setExpandedTool(nil)` qui aurait fermé l'éditeur entier serait passé vert.
+    func test_setExpandedTool_nil_keepsEditingTheSameText() {
+        let vm = makeSubject()
+        let text = vm.addText()!
+        vm.enterTextEditingMode(textId: text.id)
+        vm.setExpandedTool(.frame)
+
+        vm.setExpandedTool(nil)
+
+        XCTAssertEqual(vm.textEditingMode, .active(textId: text.id, expandedTool: nil))
+    }
+
     func test_setExpandedTool_whileInactive_isNoOp() {
         let vm = makeSubject()
         vm.setExpandedTool(.style)
@@ -94,7 +109,21 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
         XCTAssertEqual(vm.textEditingMode, .inactive)
     }
 
-    func test_textEditTool_hasSixCases() {
-        XCTAssertEqual(TextEditTool.allCases.count, 6)
+    /// L'ordre est celui de la barre d'outils : le verrouiller documente la
+    /// disposition et fait échouer le test avec le nom de l'outil ajouté ou
+    /// déplacé, là où un simple compte disait seulement « 9 au lieu de 8 ».
+    ///
+    /// `language` a rejoint la liste le 2026-07-25 : la langue d'écriture se
+    /// règle à côté des attributs visuels parce qu'une langue source fausse ne
+    /// se voit pas à l'écriture — elle ne se paie qu'à la traduction.
+    /// Taille et graisse ont quitté la liste le 2026-07-28 : ce sont des
+    /// valeurs continues, réglées par curseur dans le panneau Police. Les
+    /// loger derrière une bulle chacune coûtait deux places sur une rangée
+    /// dont la largeur est comptée.
+    func test_textEditTool_hasAllCases() {
+        XCTAssertEqual(
+            TextEditTool.allCases,
+            [.style, .color, .align, .background, .frame, .border, .language]
+        )
     }
 }

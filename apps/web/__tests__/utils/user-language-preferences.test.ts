@@ -5,6 +5,9 @@ jest.mock('@meeshy/shared/utils/languages', () => ({
     { code: 'es', name: 'Spanish', flag: 'ES' },
     { code: 'de', name: 'German', flag: 'DE' },
   ],
+  // normalizeLanguageCode (via language-normalize) reads the supported-code set
+  // from this module — keep it in sync with the mock catalog above.
+  getSupportedLanguageCodes: () => ['fr', 'en', 'es', 'de'],
 }));
 
 const mockGetDeviceLocale = jest.fn();
@@ -165,6 +168,65 @@ describe('getUserLanguageChoices', () => {
       expect(choices[1].code).toBe('es');
     });
   });
+
+  describe('case-insensitive catalog lookup', () => {
+    it('resolves an uppercase stored code identically to its lowercase form (emits lowercase)', () => {
+      const upper = getUserLanguageChoices(makeUser({ systemLanguage: 'EN' }))[0];
+      const lower = getUserLanguageChoices(makeUser({ systemLanguage: 'en' }))[0];
+
+      // 'EN' must resolve the same catalog entry as 'en' (no 🇫🇷 fallback) and emit lowercase.
+      expect(upper.code).toBe('en');
+      expect(upper.description).toBe(lower.description);
+      expect(upper.flag).toBe(lower.flag);
+    });
+
+    it('collapses a regional entry that differs from system only by case', () => {
+      const user = makeUser({ systemLanguage: 'en', regionalLanguage: 'EN' });
+      expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+  });
+
+  describe('normalized emitted code (BCP-47 subtags stripped — SSOT with translation targets)', () => {
+    it('emits the canonical code for a region-subtagged systemLanguage', () => {
+      const choices = getUserLanguageChoices(makeUser({ systemLanguage: 'en-US' }));
+
+      // 'en-US' must surface as 'en' (translation target), not 'en-us', and still
+      // resolve its catalog name/flag via the normalized code.
+      expect(choices[0].code).toBe('en');
+      expect(choices[0].description).toBe('English');
+    });
+
+    it('normalizes an underscore-separated systemLanguage', () => {
+      const choices = getUserLanguageChoices(makeUser({ systemLanguage: 'fr_FR' }));
+      expect(choices[0].code).toBe('fr');
+      expect(choices[0].description).toBe('French');
+    });
+
+    it('normalizes regional and custom codes', () => {
+      const choices = getUserLanguageChoices(makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en-GB',
+        customDestinationLanguage: 'es_419',
+      }));
+
+      expect(choices[1].code).toBe('en');
+      expect(choices[2].code).toBe('es');
+    });
+
+    it('collapses a regional entry that differs from system only by region subtag', () => {
+      const user = makeUser({ systemLanguage: 'en', regionalLanguage: 'en-US' });
+      expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+
+    it('collapses a custom entry that normalizes to the same code as system', () => {
+      const user = makeUser({
+        systemLanguage: 'de',
+        regionalLanguage: 'en',
+        customDestinationLanguage: 'de-AT',
+      });
+      expect(getUserLanguageChoices(user)).toHaveLength(2);
+    });
+  });
 });
 
 describe('resolveUserPreferredLanguage', () => {
@@ -293,6 +355,56 @@ describe('getUserLanguagePreferences', () => {
       customDestinationLanguage: '',
     });
     expect(getUserLanguagePreferences(user)).toEqual(['fr', 'en']);
+  });
+
+  it('lowercases and deduplicates codes that differ only by case', () => {
+    const user = makeUser({ systemLanguage: 'EN', regionalLanguage: 'en' });
+    expect(getUserLanguagePreferences(user)).toEqual(['en']);
+  });
+
+  describe('deviceLocale as 4th priority (Prisme étendu)', () => {
+    it('appends persisted deviceLocale after in-app preferences', () => {
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        deviceLocale: 'it',
+      } as Partial<User>);
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'en', 'it']);
+    });
+
+    it('falls back to navigator.language when deviceLocale is not persisted', () => {
+      mockGetDeviceLocale.mockReturnValue('pt-BR');
+      const user = makeUser({ systemLanguage: 'fr', regionalLanguage: '' });
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'pt']);
+    });
+
+    it('prefers persisted deviceLocale over navigator.language', () => {
+      mockGetDeviceLocale.mockReturnValue('es-ES');
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: '',
+        deviceLocale: 'it',
+      } as Partial<User>);
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'it']);
+    });
+
+    it('surfaces deviceLocale as the sole preference when in-app prefs are empty', () => {
+      mockGetDeviceLocale.mockReturnValue('de-DE');
+      const user = makeUser({
+        systemLanguage: undefined as unknown as string,
+        regionalLanguage: '',
+      });
+      expect(getUserLanguagePreferences(user)).toEqual(['de']);
+    });
+
+    it('deduplicates deviceLocale when it matches an in-app preference', () => {
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        deviceLocale: 'EN',
+      } as Partial<User>);
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'en']);
+    });
   });
 });
 

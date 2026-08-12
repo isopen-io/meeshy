@@ -84,4 +84,14 @@ describe('broadcastToUser', () => {
   test('resolveSocketIO returns null without handler', () => {
     expect(resolveSocketIO(makeFastify(undefined))).toBeNull();
   });
+
+  test('resolveSocketIO returns null when handler has no io and getManager is not a function', () => {
+    const fastify = makeFastify({ getManager: 'not-a-function' });
+    expect(resolveSocketIO(fastify)).toBeNull();
+  });
+
+  test('resolveSocketIO returns null when handler has getManager returning no io and no direct io', () => {
+    const fastify = makeFastify({ getManager: () => ({}) });
+    expect(resolveSocketIO(fastify)).toBeNull();
+  });
 });

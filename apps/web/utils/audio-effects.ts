@@ -33,7 +33,7 @@ export interface AudioEffectProcessor {
 /**
  * Musical scales for auto-tune
  */
-const SCALES = {
+export const SCALES = {
   chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], // All notes
   major: [0, 2, 4, 5, 7, 9, 11], // Major scale
   minor: [0, 2, 3, 5, 7, 8, 10], // Natural minor
@@ -75,19 +75,24 @@ function midiToFrequency(midi: number): number {
 /**
  * Find closest note in scale
  */
-function snapToScale(midiNote: number, scale: number[], transpose: number = 0): number {
+export function snapToScale(midiNote: number, scale: number[], transpose: number = 0): number {
   const noteInOctave = ((midiNote % 12) + 12) % 12;
   const octave = Math.floor(midiNote / 12);
 
-  // Find closest note in scale
+  // Find the closest scale note on the pitch CIRCLE: a note near the top of the
+  // octave (e.g. B, 11) can be closer to a scale note in the octave above (C, 0
+  // → 12) than to any note in its own octave, so each scale note is also tested
+  // wrapped ±12 semitones.
   let closestNote = scale[0];
-  let minDistance = Math.abs(noteInOctave - closestNote);
+  let minDistance = Infinity;
 
   for (const scaleNote of scale) {
-    const distance = Math.abs(noteInOctave - scaleNote);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestNote = scaleNote;
+    for (const candidate of [scaleNote - 12, scaleNote, scaleNote + 12]) {
+      const distance = Math.abs(noteInOctave - candidate);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestNote = candidate;
+      }
     }
   }
 
@@ -261,11 +266,42 @@ export class VoiceCoderProcessor implements AudioEffectProcessor {
     }
   }
 
+  /**
+   * Tracks whether THIS effect is currently part of the active audio graph.
+   * `disconnect()` alone can't be that signal: `rebuildAudioGraph()` calls it
+   * on every processor on EVERY effect toggle (including toggling a
+   * *different* effect), not only when voice-coder itself is turned off. Left
+   * unguarded, the FFT pitch-detection rAF loop kept running indefinitely
+   * after the user toggled voice-coder off — continuous analyser reads +
+   * pitch-detection math with no audible effect, pure CPU/battery waste for
+   * the rest of the call. The hook calls this with the effect's own enabled
+   * state after every rebuild.
+   */
+  setActive(active: boolean): void {
+    if (active) {
+      if (this.animationFrame === null) {
+        this.startPitchDetection();
+      }
+    } else {
+      this.stopPitchDetection();
+    }
+  }
+
   connect(destination: Tone.ToneAudioNode | AudioNode): void {
     this.outputNode.connect(destination as any);
   }
 
   disconnect(): void {
+    // Pure audio-graph teardown — does NOT touch the pitch-detection loop.
+    // setActive() is the sole authority over starting/stopping it (see its
+    // doc comment). rebuildAudioGraph() calls disconnect() on every
+    // processor on every effect toggle, including toggling a *different*
+    // effect while this one stays enabled, immediately followed by
+    // setActive(enabled) for every processor — if disconnect() also stopped
+    // the loop, that unrelated toggle would cancel and instantly reschedule
+    // a fresh rAF chain for a voice-coder that never actually turned off.
+    // Callers that actually mean to stop the background work for good (e.g.
+    // destroy()) call stopPitchDetection() themselves.
     this.outputNode.disconnect();
   }
 
@@ -503,14 +539,18 @@ export class BackSoundProcessor implements AudioEffectProcessor {
         this.player.dispose();
       }
 
-      // Create new player
+      // Create new player. Do NOT chain .toDestination() here — that would
+      // route the background track straight to the local speakers in
+      // addition to the peer-bound mix below, which the user would hear
+      // directly (and, without headphones, have re-captured by their own
+      // mic into a second, echoed copy of the outgoing stream).
       this.player = new Tone.Player({
         url,
         loop: true,
         volume: -10, // Reduce volume to blend better
         fadeIn: 0.5,
         fadeOut: 0.5,
-      }).toDestination();
+      });
 
       // Connect player to gain
       this.player.connect(this.playerGain);

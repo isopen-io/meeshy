@@ -1,62 +1,33 @@
 /**
- * Language flag mappings and utilities.
- * Extracted from MessageBubble for reuse across TranslationToggle, PostCard, etc.
+ * Language flag and name helpers for the v2 surface.
+ *
+ * Thin adapters over the shared language SSOT (`packages/shared/utils/languages.ts`)
+ * so the chat bubbles, orbs, media cards and post/status headers render the exact
+ * same flag and native name as the rest of the app. Identifiers are resolved
+ * through `normalizeLanguageCode` first (BCP-47 `fr-FR`, ISO 639-2/3 `swe`/`ger`,
+ * supported 3-letter codes `bas`) before the SSOT lookup.
+ *
+ * This replaces a local 21-language `FLAG_MAP` / romanized-ASCII `LANGUAGE_NAMES`
+ * that had diverged from the SSOT: 40+ supported languages fell back to the globe
+ * on every bubble/card, and native names were accent-stripped (`Español` ->
+ * `Espanol`, `日本語` -> `Nihongo`). `getLanguageInfo` covers 60+ languages and
+ * returns a synthetic `flag: '🌐'` entry for unsupported codes, so the globe
+ * fallback survives exactly where it should.
  */
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
-export const FLAG_MAP: Record<string, string> = {
-  fr: '\u{1F1EB}\u{1F1F7}',
-  en: '\u{1F1EC}\u{1F1E7}',
-  es: '\u{1F1EA}\u{1F1F8}',
-  zh: '\u{1F1E8}\u{1F1F3}',
-  ja: '\u{1F1EF}\u{1F1F5}',
-  ar: '\u{1F1F8}\u{1F1E6}',
-  de: '\u{1F1E9}\u{1F1EA}',
-  pt: '\u{1F1E7}\u{1F1F7}',
-  ko: '\u{1F1F0}\u{1F1F7}',
-  it: '\u{1F1EE}\u{1F1F9}',
-  ru: '\u{1F1F7}\u{1F1FA}',
-  hi: '\u{1F1EE}\u{1F1F3}',
-  nl: '\u{1F1F3}\u{1F1F1}',
-  pl: '\u{1F1F5}\u{1F1F1}',
-  tr: '\u{1F1F9}\u{1F1F7}',
-  vi: '\u{1F1FB}\u{1F1F3}',
-  th: '\u{1F1F9}\u{1F1ED}',
-  id: '\u{1F1EE}\u{1F1E9}',
-  sv: '\u{1F1F8}\u{1F1EA}',
-  uk: '\u{1F1FA}\u{1F1E6}',
-};
-
-export const LANGUAGE_NAMES: Record<string, string> = {
-  fr: 'Francais',
-  en: 'English',
-  es: 'Espanol',
-  zh: 'Zhongwen',
-  ja: 'Nihongo',
-  ar: 'Arabiya',
-  de: 'Deutsch',
-  pt: 'Portugues',
-  ko: 'Hangugeo',
-  it: 'Italiano',
-  ru: 'Russkiy',
-  hi: 'Hindi',
-  nl: 'Nederlands',
-  pl: 'Polski',
-  tr: 'Turkce',
-  vi: 'Tieng Viet',
-  th: 'Thai',
-  id: 'Bahasa',
-  sv: 'Svenska',
-  uk: 'Ukrainska',
-};
+const GLOBE = '\u{1F310}';
 
 export function getFlag(code: string | undefined | null): string {
-  if (!code) return '\u{1F310}';
-  const normalized = code.toLowerCase().slice(0, 2);
-  return FLAG_MAP[normalized] || '\u{1F310}';
+  const normalized = normalizeLanguageCode(code);
+  if (!normalized) return GLOBE;
+  return getLanguageInfo(normalized).flag;
 }
 
 export function getLanguageName(code: string | undefined | null): string {
-  if (!code) return 'Unknown';
-  const normalized = code.toLowerCase().slice(0, 2);
-  return LANGUAGE_NAMES[normalized] || code.toUpperCase();
+  const normalized = normalizeLanguageCode(code);
+  if (!normalized) return code ? code.toUpperCase() : 'Unknown';
+  const info = getLanguageInfo(normalized);
+  return info.nativeName ?? info.name;
 }

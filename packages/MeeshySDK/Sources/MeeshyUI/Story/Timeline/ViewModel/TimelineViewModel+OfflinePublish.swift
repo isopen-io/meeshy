@@ -2,51 +2,21 @@ import Foundation
 import os
 import MeeshySDK
 
-// MARK: - TimelineOnlinePublishing protocol
+// MARK: - Offline-publish payload builder (Task 72)
+//
+// `handlePublishTap` (the online/offline orchestration entry point),
+// `TimelineOnlinePublishing` and `StubOnlinePublisher` were removed S6 (dead
+// code cleanup — confirmed zero call sites outside their own 3 test files,
+// across all of `apps/ios` and `packages/MeeshySDK/Sources`). What survives
+// below is `buildOfflineQueueItem` (+ its `audioClipIds` helper and the
+// `StoryVisibility` enum it takes as a parameter): it is NOT dead — it is
+// exercised directly by `TimelineOfflinePayloadSchemaTests`, which pins a
+// real production bug (WS5.2 — the composed story was permanently dropped on
+// offline flush before this payload shape existed). Removing it alongside
+// `handlePublishTap` would have deleted live regression coverage for a bug
+// that actually shipped.
 
-/// Thin protocol that decouples the online publish path from `StoryPublishQueue`'s
-/// concrete API surface. A real conformer will bridge `StoryOfflineQueueItem` to
-/// the `StoryPublishQueue.onPublish` handler; the default `StubOnlinePublisher`
-/// always throws so the offline-queue fallback path runs until that wiring lands.
-public protocol TimelineOnlinePublishing: Sendable {
-    func publishTimelineItem(_ item: StoryOfflineQueueItem) async throws
-}
-
-// MARK: - StubOnlinePublisher
-
-/// Default placeholder that makes the online-publish contract EXPLICIT instead of
-/// a silent no-op. It throws immediately so the caller's catch path enqueues the
-/// item in the offline queue — ensuring the user's work is never silently discarded.
-///
-/// Replace this default with a real `StoryPublishQueue`-backed adapter once the
-/// API upload pipeline is wired (follow-up task).
-public struct StubOnlinePublisher: TimelineOnlinePublishing {
-    public init() {}
-
-    public func publishTimelineItem(_ item: StoryOfflineQueueItem) async throws {
-        throw NSError(
-            domain: "TimelineOnlinePublishing",
-            code: -1,
-            userInfo: [NSLocalizedDescriptionKey:
-                "Online publish pipeline not yet wired — falling back to offline queue"]
-        )
-    }
-}
-
-// MARK: - Offline-first publish extension (Task 72)
-
-/// Adds offline-aware publish behaviour to `TimelineViewModel`.
-///
-/// When the network monitor reports `!isOnline`, tapping "Publish" enqueues a
-/// `StoryOfflineQueueItem` into `StoryOfflineQueue` instead of throwing or
-/// showing an error dialog. The transient `showOfflineQueuedConfirmation` flag
-/// (declared directly on `TimelineViewModel`) signals the view to show a brief
-/// snackbar.
-///
-/// Dependency injection mirrors the pattern used in CLAUDE.md:
-///   - `networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared`
-///   - `offlineQueue: OfflineQueueProviding = StoryOfflineQueue.shared`
-///   - `onlinePublisher: TimelineOnlinePublishing = StubOnlinePublisher()`
+/// Adds the offline-queue payload builder to `TimelineViewModel`.
 extension TimelineViewModel {
 
     // MARK: - Logger
@@ -55,63 +25,11 @@ extension TimelineViewModel {
         Logger(subsystem: "me.meeshy.app", category: "media")
     }
 
-    // MARK: - Offline publish action
-
-    /// Handles the user tapping "Publish" in the composer.
-    ///
-    /// - If online: attempts `onlinePublisher.publishTimelineItem(_:)`. On failure
-    ///   (including the default stub), falls back to enqueuing in `offlineQueue`
-    ///   so the user's work is never silently lost.
-    /// - If offline: enqueues a `StoryOfflineQueueItem` into the provided
-    ///   `offlineQueue` and sets `showOfflineQueuedConfirmation = true`.
-    ///
-    /// In either case, `errorMessage` is NOT set — this is the OFFLINE-FIRST
-    /// contract: the user sees confirmation, not failure.
-    ///
-    /// - Parameter originalLanguage: BCP-47 source language tag stamped onto
-    ///   the queued item. Required by the Prisme Linguistique pipeline so the
-    ///   gateway can route NLLB-200 translations correctly when the item
-    ///   flushes after reconnect. Defaults to `StoryComposerViewModel
-    ///   .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)`
-    ///   which honours the user's in-app `systemLanguage` / `regionalLanguage`
-    ///   preference (NEVER the device locale). Callers should pass an explicit
-    ///   value when the composer's source language is already known.
-    public func handlePublishTap(
-        visibility: StoryVisibility,
-        originalLanguage: String = StoryComposerViewModel
-            .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser),
-        networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
-        offlineQueue: OfflineQueueProviding = StoryOfflineQueue.shared,
-        onlinePublisher: TimelineOnlinePublishing = StubOnlinePublisher()
-    ) async {
-        if networkMonitor.isOnline {
-            // Online path: hand off to the injected online publisher with the
-            // serialised project payload. Fall back to offline queue if the
-            // attempt fails so the user's work is never silently discarded.
-            let item = buildOfflineQueueItem(visibility: visibility,
-                                             originalLanguage: originalLanguage)
-            do {
-                try await onlinePublisher.publishTimelineItem(item)
-                errorMessage = nil
-            } catch {
-                await offlineQueue.enqueue(item)
-                showOfflineQueuedConfirmation = true
-                offlinePublishLogger.error(
-                    "Online publish failed, queued for retry: \(error.localizedDescription)"
-                )
-            }
-            return
-        }
-
-        // Offline path: enqueue silently, set confirmation flag.
-        let item = buildOfflineQueueItem(visibility: visibility,
-                                         originalLanguage: originalLanguage)
-        await offlineQueue.enqueue(item)
-        errorMessage = nil
-        showOfflineQueuedConfirmation = true
-    }
-
     /// Resets the snackbar confirmation flag after the view has shown it.
+    /// Still called in production by `TimelineBanner.swift` even though the
+    /// only writer of `showOfflineQueuedConfirmation` (`handlePublishTap`)
+    /// was removed S6 — the flag can no longer flip `true` in practice, but
+    /// the reset stays a live compile-time surface `TimelineBanner` depends on.
     public func dismissOfflineQueuedConfirmation() {
         showOfflineQueuedConfirmation = false
     }
@@ -134,7 +52,7 @@ extension TimelineViewModel {
     /// the persisted item so the gateway can route NLLB-200 translations on
     /// flush — passing `nil` would break the Prisme Linguistique pipeline
     /// (P0 data-integrity regression). The caller is expected to resolve the
-    /// language up-front via `StoryComposerViewModel.resolveComposerSourceLanguage`
+    /// language up-front (défaut : `StoryComposerViewModel.defaultSourceLanguage`)
     /// so that this helper stays a pure transformer of `project` + inputs.
     internal func buildOfflineQueueItem(
         visibility: StoryVisibility,
@@ -159,15 +77,36 @@ extension TimelineViewModel {
             }
         }
 
-        // Serialize the full TimelineProject as JSON so the queue can replay it
-        // with the same media + transitions + keyframes + text on reconnect.
+        // Serialize the project as a single-element `[StorySlide]` so the queue
+        // can replay it through the ONE executor (`StoryViewModel
+        // .executeQueuedPublish`), which decodes `[StorySlide].self`. Encoding a
+        // bare `TimelineProject` here would fail that decode → the composed story
+        // is dropped as unrecoverable. `TimelineProject.apply` carries the
+        // mediaObjects / audioPlayerObjects / textObjects / clipTransitions onto
+        // the slide so no timeline content is lost on reconnect.
+        //
+        // SCOPE LIMITATION (F5): the slide is seeded FRESH (`StorySlide(id:)`),
+        // not from the originally-edited `StorySlide`, because `TimelineViewModel`
+        // only retains the derived `TimelineProject` — the source slide is not
+        // reachable at this call site. `TimelineProject` models ONLY the timeline
+        // fields (mediaObjects / audio / text / clipTransitions / duration), so a
+        // timeline slide carrying non-timeline effects (`effects.background`,
+        // `filter`, `drawingStrokes`, `stickers`, slide `content`) loses them on
+        // offline flush. This is NO WORSE than pre-WS5.2 (which THREW and dropped
+        // the whole story); the proper fix threads the source slide into the
+        // composer→timeline boot so it can be seeded here. The encode/decode of
+        // the timeline fields themselves (mediaObjects / audio / text /
+        // clipTransitions) is round-trip-pinned by
+        // `TimelineOfflinePayloadSchemaTests`.
         let payloadJSON: String = {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            guard let data = try? encoder.encode(project),
+            var slide = StorySlide(id: project.slideId)
+            project.apply(to: &slide)
+            guard let data = try? encoder.encode([slide]),
                   let json = String(data: data, encoding: .utf8) else {
                 offlinePublishLogger.error(
-                    "Failed to serialise TimelineProject for offline queue — falling back to empty payload"
+                    "Failed to serialise timeline slide for offline queue — falling back to empty payload"
                 )
                 return "{}"
             }

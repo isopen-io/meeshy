@@ -91,6 +91,20 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("notifications.syncNow") {
             await NotificationCoordinator.shared.syncNow()
         }
+        // grdb-05 — dernier step, le plus sacrifiable si l'OS expire le
+        // budget. DOIT rester sous CETTE garde beginBackgroundTask :
+        // incremental_vacuum tient un verrou d'écriture sur le fichier SQLite
+        // App Group partagé avec la NSE — un verrou encore tenu à la
+        // suspension est le motif documenté du kill 0xdead10cc.
+        await withBudget("db.maintenance") {
+            let pool = DependencyContainer.shared.dbPool
+            do {
+                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                try DatabaseMaintenance.runOptimize(on: pool)
+            } catch {
+                logger.error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
 
         endBackgroundTask()
     }
@@ -101,6 +115,17 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         logger.info("Foreground resume starting")
         await withBudget("nse.consumePending") {
             await NSEPendingMessageConsumer.shared.consumeAll()
+        }
+        await withBudget("nse.consumePendingPosts") {
+            await NSEPendingPostConsumer.shared.consumeAll()
+        }
+        // Partages que l'extension n'a pas pu envoyer (hors-ligne, jeton
+        // périmé) : ils rejoignent l'outbox, qui les rejouera. Republier
+        // l'environnement au passage garde l'extension alignée si l'utilisateur
+        // a changé de gateway pendant la session.
+        await withBudget("share.consumePendingSends") {
+            WidgetDataManager.shared.publishAPIBaseURL()
+            await SharePendingSendConsumer.shared.consumeAll()
         }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
@@ -114,22 +139,22 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 SocialSocketManager.shared.resumeFromBackground()
             }
         }
-        // Sync presence dots with the gateway runtime state. We may have missed
-        // `user:status` events while suspended, and `presence:snapshot` only
-        // fires on the next socket auth — which can lag by a few seconds after
-        // the resume. This REST refresh closes the gap so the conversation
-        // list lights up correctly the instant the user looks at it.
-        await withBudget("presence.refresh") {
-            PresenceService.shared.refreshKnownUsers()
-        }
         await withBudget("audio.resume") {
             await MediaLifecycleBridge.shared.resumeFromBackground()
         }
         await withBudget("sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
+        await withBudget("conversationStore.flushOutbox") {
+            await ConversationStore.shared.flushOutbox()
+        }
         await withBudget("push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
+            // PendingStatusQueue is also flushed on socket reconnect via
+            // ConversationSocketHandler.triggerSyncIfNeeded(), but that observer
+            // only exists while a conversation is open. Flush here to cover the
+            // case where the user returns to the foreground on the list screen.
+            await PendingStatusQueue.shared.flush()
         }
         await withBudget("outbox.recovery") {
             // Récupère les records orphelins laissés en `.inflight` si le
@@ -139,7 +164,13 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // `pendingCount` — bannière « Synchronisation… » bloquée — mais
             // jamais repris par `flush()` qui ne SELECT que les `.pending`.
             // On le remet donc `.pending` ici aussi, avant le flush.
-            _ = try? await OfflineQueue.shared.bootRecovery()
+            do {
+                _ = try await OfflineQueue.shared.bootRecovery()
+            } catch {
+                // Les lignes bloquées ne sont pas réarmées : elles le seront au
+                // prochain passage au premier plan.
+                Logger.backgroundTransition.error("Boot recovery failed on background transition: \(error.localizedDescription, privacy: .public)")
+            }
         }
         await withBudget("outbox.flush") {
             let pool = DependencyContainer.shared.dbPool
@@ -158,7 +189,40 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
         await withBudget("engagement.flush") {
-            await EngagementFlushTrigger.flushNow()
+            // Engagement rows are durable (SQLite) and retried by
+            // EngagementRetryScheduler + the network-reconnect observer, so this
+            // flush is NON-critical. Bound it: a slow network (serial dispatch +
+            // 429 retries, observed 15-35s) must never hold the background-task
+            // budget hostage and trip the 0x8BADF00D watchdog.
+            let completed = await Self.runBounded(seconds: Self.engagementFlushBudget) {
+                await EngagementFlushTrigger.flushNow()
+            }
+            if !completed {
+                logger.info("Step engagement.flush exceeded \(Self.engagementFlushBudget, privacy: .public)s budget — deferred to retry scheduler (durable)")
+            }
+        }
+    }
+
+    /// Max time the non-critical engagement flush may consume during a
+    /// background transition before it is abandoned to the retry scheduler.
+    private static let engagementFlushBudget: Double = 8
+
+    /// Races `operation` against a `seconds` timeout. Returns `true` if it
+    /// completed, `false` if it timed out — cancelling the still-running work so
+    /// a bounded, durable step can never block the background-task budget.
+    nonisolated static func runBounded(
+        seconds: Double,
+        _ operation: @escaping @Sendable () async -> Void
+    ) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await operation(); return true }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return false
+            }
+            let finishedFirst = await group.next() ?? false
+            group.cancelAll()
+            return finishedFirst
         }
     }
 
@@ -192,22 +256,50 @@ final class MediaLifecycleBridge {
     private init() {}
 
     func prepareForBackground() async {
-        if ConversationAudioCoordinator.sharedForTesting.isPlaying
-            || PlaybackCoordinator.shared.isAnyPlaying {
-            // Audio Meeshy en cours -> on ne coupe rien. UIBackgroundModes "audio"
-            // autorise l'OS a continuer la lecture en background. On considere
-            // TOUTE lecture active (coordinator conversation OU lecteur plein
-            // ecran via son propre AudioPlaybackManager, OU video), pas seulement
-            // celle pilotee par le coordinator de conversation.
+        let video = SharedAVPlayerManager.shared
+        // L'auto-PiP système démarre PENDANT la transition — ce garde court
+        // contre son animation. Quand une surface a opté pour le PiP
+        // (`isPipConfigured`, jamais vrai sur simulateur), on lui laisse une
+        // fenêtre bornée pour s'engager avant de trancher, sinon un `pause()`
+        // prématuré avorterait la fenêtre que le système ouvrait.
+        var pipEngaged = video.isPipEngaged
+        if video.isPlaying, !pipEngaged, video.isPipConfigured {
+            pipEngaged = await video.waitForPipEngagement(timeout: 0.4)
+        }
+        let decision = MediaBackgroundPolicy.decide(
+            audioQueuePlaying: ConversationAudioCoordinator.sharedForTesting.isPlaying,
+            audioQueueActive: ConversationAudioCoordinator.sharedForTesting.activeContext != nil,
+            anyAudioEnginePlaying: PlaybackCoordinator.shared.isAnyAudioPlaying,
+            videoPlaying: video.isPlaying,
+            pipEngaged: pipEngaged
+        )
+        // Une vidéo (réel) hors PiP ne survit jamais à l'arrière-plan : le
+        // mode background "audio" couvre les messages vocaux et posts audio,
+        // pas la bande-son d'un réel. `pause()` (pas `stop()`) : ne touche pas
+        // à la session AVAudioSession qu'une file audio en pause peut encore
+        // tenir, et le retour en avant-plan retrouve la frame figée. Si
+        // l'auto-PiP a engagé la fenêtre pendant la transition, la vidéo lui
+        // appartient et continue.
+        if decision.pausesVideo {
+            video.pause()
+        }
+        if decision.keepsSessionAlive {
+            // Audio en lecture OU file en pause OU PiP -> on ne coupe rien.
+            // UIBackgroundModes "audio" couvre la lecture ; une file en PAUSE
+            // garde sa session active pour rester l'app Now Playing : la carte
+            // lock screen survit et son bouton play réveille l'app (parité
+            // WhatsApp).
             return
         }
         #if DEBUG
         PlaybackCoordinator.shared.testStopAllProbe?.stopAllCount += 1
         #endif
         PlaybackCoordinator.shared.stopAll()
-        #if DEBUG
-        MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
-        #endif
+        // `deactivateForBackground()` self-increments `deactivateCount` after its
+        // `callActive` guard, so the probe counts only real deactivations. Pre-
+        // counting here would double-count (and over-count when a call is active
+        // and the guard skips the actual teardown). `stopAll()` does NOT self-count,
+        // which is why its probe increment above stays external.
         await MediaSessionCoordinator.shared.deactivateForBackground()
     }
 
@@ -215,4 +307,10 @@ final class MediaLifecycleBridge {
         // No-op for now — players re-activate their session on next play().
         // Kept as an extension point if we later want to resume downloads.
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let backgroundTransition = Logger(subsystem: "me.meeshy.app", category: "background-transition")
 }

@@ -38,6 +38,10 @@ import type {
   CallTranslationEnabledEvent,
   CallTranscriptionResultEvent,
   CallAlreadyAnsweredEvent,
+  CallForceLeaveClientEvent,
+  CallForceLeaveServerEvent,
+  CallRequestIceServersEvent,
+  CallIceServersRefreshedEvent,
 } from './video-call.js';
 
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -118,8 +122,9 @@ export const SERVER_EVENTS = {
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   AUTHENTICATED: 'authenticated',
+  AUTH_TOKEN_EXPIRED: 'auth:token-expired',
+  AUTH_SESSION_REVOKED: 'auth:session-revoked',
   ERROR: 'error',
-  NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
   NOTIFICATION_DELETED: 'notification:deleted',
@@ -159,7 +164,19 @@ export const SERVER_EVENTS = {
   CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
   CALL_ALREADY_ANSWERED: 'call:already-answered',
   CALL_SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
+  /** Server-side GC/admin forced the call to end — clients should dismiss call UI. */
+  CALL_FORCE_LEAVE: 'call:force-leave',
+  /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
+  CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
   READ_STATUS_UPDATED: 'read-status:updated',
+  /**
+   * Same payload as `READ_STATUS_UPDATED`, correctly namespaced under the
+   * `message:` entity per the `entity:action-word` convention (the legacy
+   * name hyphenates the entity itself, `read-status`, which violates it).
+   * Emitted in parallel with `READ_STATUS_UPDATED` for ~3 months so clients
+   * can migrate independently; see tasks/socketio-events-cleanup.md #3.
+   */
+  MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
@@ -174,9 +191,67 @@ export const SERVER_EVENTS = {
    * so older clients keep working during rollout.
    */
   CONVERSATION_NEW: 'conversation:new',
+  /**
+   * Emitted to the OTHER party's user-room when a pending friend request is
+   * removed via `DELETE /friend-requests/:id` — either the sender cancelling
+   * their own outgoing request, or the receiver declining/removing it without
+   * an explicit accept/reject. Previously this path emitted NOTHING, leaving
+   * the counterpart's pending-request list stale until their next full
+   * refetch (same class of gap `CONVERSATION_NEW` fixed for conversation
+   * creation). Realtime-only signal — no persisted `Notification` row.
+   */
+  FRIEND_REQUEST_CANCELLED: 'friend-request:cancelled',
+  /**
+   * Emitted to the RECEIVER's user-room when `POST /friend-requests`
+   * creates a new pending request. Same rationale as `CONVERSATION_NEW`:
+   * replaces string-discrimination on `NOTIFICATION_NEW(type=friend_request)`
+   * with a typed, domain-specific event. The legacy `notification:new` is
+   * kept emitted in parallel for ~3 months so older clients keep working.
+   */
+  FRIEND_REQUEST_NEW: 'friend-request:new',
+  /**
+   * Emitted to the ORIGINAL SENDER's user-room when the receiver accepts
+   * via `PATCH /friend-requests/:id`. Typed counterpart of
+   * `NOTIFICATION_NEW(type=friend_accepted)`, emitted in parallel.
+   */
+  FRIEND_REQUEST_ACCEPTED: 'friend-request:accepted',
+  /**
+   * Emitted to the ORIGINAL SENDER's user-room when the receiver rejects
+   * via `PATCH /friend-requests/:id`. Typed counterpart of the legacy
+   * system notification, emitted in parallel.
+   */
+  FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
+  /**
+   * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
+   * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
+   * event that carries that fact unambiguously.
+   *
+   * `CONVERSATION_JOINED` cannot serve here: it carries the same
+   * `{ conversationId, userId }` shape for a completely different fact — the
+   * self-only ack a socket receives after JOINING THE ROOM
+   * (`ConversationHandler`), which every thread opening produces and which
+   * changes no membership. A client counting members off `conversation:joined`
+   * would inflate its count on every thread opening; that ambiguity is why no
+   * client ever incremented, and why the count could only ever drift DOWN.
+   */
+  CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
+  /**
+   * GLOBAL soft-delete by the creator/an admin (`DELETE /conversations/:id`):
+   * `Conversation.isActive` is set to `false` (with `closedAt`/`closedBy`)
+   * and the conversation disappears from every member's list. Broadcast to
+   * the **conversation room** (`ROOMS.conversation`) so all members react —
+   * contrast with `CONVERSATION_DELETED` below.
+   */
   CONVERSATION_CLOSED: 'conversation:closed',
+  /**
+   * PER-USER "delete for me" (`DELETE /conversations/:id/delete-for-me`):
+   * removes the conversation from the caller's own device list only — the
+   * conversation stays active for every other participant. Broadcast to the
+   * caller's **user room** (`ROOMS.user`) only, so their other devices stay
+   * in sync — contrast with `CONVERSATION_CLOSED` above.
+   */
   CONVERSATION_DELETED: 'conversation:deleted',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
@@ -213,6 +288,36 @@ export const SERVER_EVENTS = {
    * Transcription originale prête (avant traductions)
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
+  /**
+   * Emitted when a server-side translation attempt (text or audio) has
+   * permanently failed — e.g. the translator service rejected the request
+   * or the ZMQ pipeline returned an error after all retries.  Lets clients
+   * clear any "translating…" spinner and surface a retry affordance
+   * instead of waiting indefinitely for a result that will never arrive.
+   *
+   * Emitted to the conversation room so all participants on any device
+   * receive the failure at the same time.
+   *
+   * Payload: `TranslationFailedEventData`
+   */
+  TRANSLATION_FAILED: 'translation:failed',
+  /**
+   * Emitted when audio translation processing has permanently failed for a
+   * specific attachment (ZMQ translator returned an error code after all
+   * retries). Lets clients clear any "processing…" spinner on the audio
+   * bubble and surface a retry affordance.
+   *
+   * Payload: `AudioTranslationFailedEventData`
+   */
+  AUDIO_TRANSLATION_FAILED: 'audio:translation-failed',
+  /**
+   * Emitted when audio transcription has permanently failed for a specific
+   * attachment. Lets clients render a "transcription unavailable" state
+   * rather than keeping the transcript placeholder visible forever.
+   *
+   * Payload: `TranscriptionFailedEventData`
+   */
+  TRANSCRIPTION_FAILED: 'audio:transcription-failed',
 
   /**
    * --- Message pinning ---
@@ -229,7 +334,6 @@ export const SERVER_EVENTS = {
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
 
   // --- Location sharing ---
-  LOCATION_SHARED: 'location:shared',
   LOCATION_LIVE_STARTED: 'location:live-started',
   LOCATION_LIVE_UPDATED: 'location:live-updated',
   LOCATION_LIVE_STOPPED: 'location:live-stopped',
@@ -283,6 +387,9 @@ export const SERVER_EVENTS = {
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
 
+  // --- User Profile (realtime propagation to conversation partners) ---
+  USER_UPDATED: 'user:updated',
+
   // --- Conversation Categories ---
   CATEGORY_CREATED: 'category:created',
   CATEGORY_UPDATED: 'category:updated',
@@ -291,6 +398,15 @@ export const SERVER_EVENTS = {
 
   // --- Agent admin dashboard (room admin:agent) ---
   AGENT_ADMIN_EVENT: 'agent:admin-event',
+
+  // --- Connection health ---
+  /**
+   * Emitted in response to a client `heartbeat` event.
+   * Lets clients measure round-trip latency and detect server-side processing
+   * stalls (socket connected but gateway event loop starved).
+   * Payload: { serverTime: ISO-string, latencyMs: number }
+   */
+  HEARTBEAT_ACK: 'heartbeat:ack',
 } as const;
 
 // Événements du client vers le serveur
@@ -304,6 +420,13 @@ export const CLIENT_EVENTS = {
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   USER_STATUS: 'user:status',
+  /**
+   * Transition foreground/background du device — le gateway s'en sert pour
+   * router la sonnerie d'appel (socket au premier plan = event socket,
+   * backgroundé = push). Émis par iOS (MessageSocketManager) et écouté dans
+   * CallEventsHandler ; était un literal hors contrat (audit 2026-07-11 #6).
+   */
+  PRESENCE_APP_STATE: 'presence:app-state',
   AUTHENTICATE: 'authenticate',
   REQUEST_TRANSLATION: 'translation:request',
   REACTION_ADD: 'reaction:add',
@@ -325,6 +448,19 @@ export const CLIENT_EVENTS = {
   CALL_BACKGROUNDED: 'call:backgrounded',
   CALL_FOREGROUNDED: 'call:foregrounded',
   CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
+  /**
+   * --- Reserved: abandoned leader/follower transcription design ---
+   * Built for an earlier "one device transcribes both streams, negotiates
+   * who leads and whether to translate" architecture. The shipped design
+   * (docs/superpowers/specs/2026-07-10-live-call-transcription-design.md)
+   * sidesteps it entirely: each device transcribes ONLY its own microphone
+   * locally and relays finals over CALL_TRANSCRIPTION_SEGMENT instead. The
+   * gateway has no handler for these five and no client emits them — kept
+   * declared (not deleted, matching the CALL_TRANSLATION_REQUESTED-style
+   * reserved block above) so nobody assumes the gateway already relays
+   * capability/role negotiation or raw audio chunks. Delete only if the
+   * leader/follower design is formally abandoned rather than shelved.
+   */
   CALL_TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
   CALL_TRANSCRIPTION_ROLE: 'call:transcription-role',
   CALL_TRANSLATION_REQUEST: 'call:translation-request',
@@ -332,9 +468,14 @@ export const CLIENT_EVENTS = {
   CALL_AUDIO_CHUNK: 'call:audio-chunk',
   CALL_QUALITY_FEEDBACK: 'call:quality-feedback',
   CALL_SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+  /** Preflight sent before `call:initiate` to evict zombie call sessions. */
+  CALL_FORCE_LEAVE: 'call:force-leave',
+  /** Reconnect probe: client asks gateway if an active call still exists. */
+  CALL_CHECK_ACTIVE: 'call:check-active',
+  /** Request fresh TURN credentials before the current TTL expires. */
+  CALL_REQUEST_ICE_SERVERS: 'call:request-ice-servers',
 
   // --- Location sharing ---
-  LOCATION_SHARE: 'location:share',
   LOCATION_LIVE_START: 'location:live-start',
   LOCATION_LIVE_UPDATE: 'location:live-update',
   LOCATION_LIVE_STOP: 'location:live-stop',
@@ -385,6 +526,12 @@ export interface MessageDeletedEventData {
 export interface ConversationParticipationEventData {
   readonly conversationId: string;
   readonly userId: string;
+  // PAS d'effectif ici, et c'est délibéré : `conversation:joined` /
+  // `conversation:left` sont des accusés de ROOM (`ConversationHandler`),
+  // réémis à chaque ouverture et à chaque fermeture de fil, sans qu'aucune
+  // appartenance change. L'adhésion et le départ réels ont leurs propres
+  // événements — `CONVERSATION_PARTICIPANT_JOINED` / `_LEFT` — et ce sont eux
+  // qui portent `memberCount`.
 }
 
 /**
@@ -402,6 +549,34 @@ export interface AuthenticatedEventData {
 export interface ErrorEventData {
   readonly message: string;
   readonly code?: string;
+}
+
+export interface AuthTokenExpiredEventData {
+  readonly code: 'token_expired';
+  readonly message: string;
+}
+
+export interface AuthSessionRevokedEventData {
+  readonly code: 'session_revoked';
+  readonly message: string;
+  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke';
+}
+
+/**
+ * Payload emitted by the server in response to a client `heartbeat` event.
+ * Clients can measure RTT = (received at) - clientTime, and detect stalled
+ * gateway event loops even while the WebSocket connection appears healthy.
+ */
+export interface HeartbeatAckEventData {
+  /** ISO-8601 timestamp of the server's response — use for clock-skew diagnostics */
+  readonly serverTime: string;
+  /**
+   * Round-trip latency hint computed by the gateway when the client includes
+   * a `clientTime` in the heartbeat payload (optional, for backwards compat
+   * with older clients that emit bare `heartbeat` with no payload).
+   * Undefined when the client did not supply `clientTime`.
+   */
+  readonly latencyHintMs?: number;
 }
 
 /**
@@ -470,6 +645,78 @@ export interface ConversationNewEventData {
 }
 
 /**
+ * Payload de `FRIEND_REQUEST_CANCELLED` — émis à l'user-room de l'AUTRE
+ * partie (pas l'auteur de l'action) lors d'un `DELETE /friend-requests/:id`.
+ */
+export interface FriendRequestCancelledEventData {
+  readonly friendRequestId: string;
+  readonly cancelledBy: string; // userId de qui a déclenché la suppression
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_NEW` — émis à l'user-room du DESTINATAIRE
+ * lors d'un `POST /friend-requests`.
+ */
+export interface FriendRequestNewEventData {
+  readonly friendRequestId: string;
+  readonly senderId: string;
+  readonly receiverId: string;
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_ACCEPTED` — émis à l'user-room de l'EXPÉDITEUR
+ * original lors d'un `PATCH /friend-requests/:id` avec `status=accepted`.
+ */
+export interface FriendRequestAcceptedEventData {
+  readonly friendRequestId: string;
+  readonly accepterId: string;
+  readonly conversationId?: string;
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_REJECTED` — émis à l'user-room de l'EXPÉDITEUR
+ * original lors d'un `PATCH /friend-requests/:id` avec `status=rejected`.
+ */
+export interface FriendRequestRejectedEventData {
+  readonly friendRequestId: string;
+  readonly rejecterId: string;
+}
+
+/**
+ * Payload de `USER_UPDATED` — émis aux user-rooms de tous les contacts
+ * (utilisateurs partageant au moins une conversation avec `userId`) quand un
+ * profil change (displayName, avatar, banner, username). Delta léger : seuls
+ * les champs modifiés sont présents dans `changes`, pas le user complet.
+ * Voir tasks/socketio-events-cleanup.md #6.
+ *
+ * **Exception : les quatre composants du nom voyagent en GROUPE.** Dès que
+ * `displayName`, `firstName`, `lastName` OU `username` change, les quatre sont
+ * présents. Le nom RENDU par un client est `displayName > « Prénom Nom » >
+ * username` ; un client ne stocke que le nom déjà composé, donc un delta
+ * partiel (« firstName vaut désormais Bob ») est irrecomposable chez lui — il
+ * lui manque toujours les autres composants. Le groupe entier lui permet
+ * d'appliquer SON résolveur (`getUserDisplayName` web,
+ * `APIConversationUser.name` iOS) sans qu'une quatrième copie de la règle
+ * apparaisse côté serveur. La présence de `username` est donc le marqueur du
+ * groupe : `avatar`/`banner` changent seuls, le nom jamais.
+ *
+ * `null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ, et c'est le
+ * seul moyen pour le client de faire retomber le nom sur le composant suivant.
+ * `username` est obligatoire côté base, donc jamais `null`.
+ */
+export interface UserUpdatedEventData {
+  readonly userId: string;
+  readonly changes: Readonly<{
+    displayName?: string | null;
+    avatar?: string | null;
+    banner?: string | null;
+    username?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  }>;
+}
+
+/**
  * Notification marquée comme lue
  */
 export interface NotificationReadEventData {
@@ -503,6 +750,9 @@ export interface AttachmentStatusUpdatedEventData {
   readonly userId: string;
   readonly action: string;
   readonly updatedAt: Date;
+  readonly playPositionMs?: number;
+  readonly durationMs?: number;
+  readonly percentage?: number;
 }
 
 /**
@@ -562,6 +812,13 @@ export interface ReactionUpdateEventData {
   readonly messageId: string;
   readonly conversationId: string;
   readonly participantId: string;
+  /**
+   * User.id du réacteur (distinct de `participantId`, un Participant.id scopé
+   * conversation). Requis pour que les autres appareils du même utilisateur
+   * reconnaissent leur propre réaction — un Participant.id n'égale jamais un
+   * User.id. Toujours émis ; optionnel pour la compat des payloads rejoués.
+   */
+  readonly userId?: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
   readonly aggregation: {
@@ -621,10 +878,45 @@ export interface ReadStatusSummary {
 export interface ReadStatusUpdatedEventData {
   readonly conversationId: string;
   readonly participantId: string;
-  readonly userId: string;
+  /**
+   * `User.id` de l'acteur, ou `null` quand c'est un participant ANONYME — il
+   * n'a pas de ligne `User`, et `participantId` est alors sa seule identité.
+   * Le cas se produit sur l'accusé de livraison automatique d'une conversation
+   * ouverte par lien de partage, où les anonymes sont la population dominante.
+   *
+   * Un consommateur qui compare cette valeur à sa propre identité (synchro
+   * multi-appareils du curseur de lecture) n'a rien à changer : `null` ne
+   * correspond à personne, ce qui est le comportement voulu. `summary`, lui,
+   * est porté par `conversationId` seul et reste applicable.
+   */
+  readonly userId: string | null;
   readonly type: 'read' | 'received';
   readonly updatedAt: Date;
   readonly summary: ReadStatusSummary;
+  /**
+   * Read frontier of `userId` (the actor) AT broadcast time, read from
+   * `ConversationReadCursor.lastReadAt`. Scoped to `userId`: it lets that
+   * user's OTHER devices sync their own read cursor (multi-device read
+   * sync). Recipients whose id differs from `userId` MUST ignore it — a
+   * peer reading does not move your own cursor. Read receipts are monotone,
+   * so a client applies it only when strictly newer than its local cursor.
+   * `null` when the actor has no read cursor yet.
+   *
+   * Present ONLY on `type: 'read'` broadcasts — the sole action that advances
+   * a read cursor. ABSENT (`undefined`) on `type: 'received'` (delivery never
+   * moves `lastReadAt`) and on the bulk auto-deliver broadcast
+   * (`MessageHandler._autoDeliverToOnlineRecipients`), which carries only the
+   * aggregate `summary` for sender checkmarks. Travels paired with
+   * `unreadCount`: a consumer applies them together or not at all.
+   */
+  readonly lastReadAt?: Date | null;
+  /**
+   * Server-authoritative unread count for `userId` in this conversation
+   * after the read/receive action. Same `userId` scoping and same
+   * present-on-dedicated-routes / absent-on-auto-deliver semantics as
+   * `lastReadAt`; applied as-is by the actor's devices when accepted.
+   */
+  readonly unreadCount?: number;
 }
 
 /**
@@ -721,30 +1013,39 @@ export interface TranscriptionReadyEventData {
   readonly processingTimeMs?: number;
 }
 
-// ===== LOCATION SHARING EVENTS =====
-
-export interface LocationShareData {
-  readonly conversationId: string;
-  readonly latitude: number;
-  readonly longitude: number;
-  readonly altitude?: number;
-  readonly accuracy?: number;
-  readonly placeName?: string;
-  readonly address?: string;
-}
-
-export interface LocationSharedEventData {
+/**
+ * Emitted when a server-side translation attempt has permanently failed.
+ * Lets clients clear any "translating…" spinner and surface a retry
+ * affordance instead of waiting indefinitely for a result that will
+ * never arrive. Emitted to the conversation room so all participants
+ * receive the failure at the same time.
+ */
+export interface TranslationFailedEventData {
   readonly messageId: string;
   readonly conversationId: string;
-  readonly userId: string;
-  readonly latitude: number;
-  readonly longitude: number;
-  readonly altitude?: number;
-  readonly accuracy?: number;
-  readonly placeName?: string;
-  readonly address?: string;
-  readonly timestamp: Date;
+  readonly error: string;
+  readonly taskId?: string;
 }
+
+export interface AudioTranslationFailedEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly errorCode?: string;
+  readonly taskId?: string;
+}
+
+export interface TranscriptionFailedEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly errorCode?: string;
+  readonly taskId?: string;
+}
+
+// ===== LOCATION SHARING EVENTS =====
 
 export interface LocationLiveStartData {
   readonly conversationId: string;
@@ -856,9 +1157,16 @@ export interface UserPreferencesCategoryUpdatedEventData {
 }
 
 /**
- * Variante "préférences scope conversation" : émis par
- * `PUT/DELETE /user-preferences/conversations/:id`. Payload complet
- * incluant `version` pour la résolution optimistic vs socket.
+ * Variante "préférences scope conversation" : émis par TOUT écrivain de
+ * `UserConversationPreferences` — `PUT/DELETE /user-preferences/conversations/:id`
+ * ET les routes de suppression par utilisateur (`delete-for-me`,
+ * `restore-for-me`, `clear-history`), qui écrivent `deletedForUserAt` /
+ * `clearHistoryBefore`. La ligne étant par UTILISATEUR et non par appareil,
+ * un écrivain qui n'émet pas laisse les autres appareils sur un état périmé.
+ * Côté gateway, `writeConversationPreferences` est le point unique qui
+ * garantit l'incrément de `version` et cette diffusion.
+ *
+ * Payload complet incluant `version` pour la résolution optimistic vs socket.
  */
 export interface UserPreferencesConversationUpdatedEventData {
   readonly userId: string;
@@ -871,12 +1179,47 @@ export interface UserPreferencesConversationUpdatedEventData {
 }
 
 /**
- * Union des deux scopes possibles. La présence de `conversationId`
- * discrimine côté client.
+ * Snapshot complet des préférences user/communauté envoyé dans les
+ * événements `USER_PREFERENCES_UPDATED` (scope communauté). Reflète
+ * `UserCommunityPreferences` côté Prisma.
+ *
+ * @see schema.prisma model UserCommunityPreferences
+ */
+export interface CommunityPreferencesPayload {
+  readonly isPinned: boolean;
+  readonly isMuted: boolean;
+  readonly isArchived: boolean;
+  readonly isHidden: boolean;
+  readonly notificationLevel: 'all' | 'mentions' | 'none';
+  readonly customName: string | null;
+  readonly categoryId: string | null;
+  readonly orderInCategory: number | null;
+}
+
+/**
+ * Variante "préférences scope communauté" : émis par
+ * `PUT/DELETE /user-preferences/communities/:id`. Sibling de
+ * `UserPreferencesConversationUpdatedEventData` (pas de `version` :
+ * `UserCommunityPreferences` n'a pas ce champ — le client réagit en
+ * invalidant son cache plutôt qu'en réconciliant un snapshot optimiste).
+ */
+export interface UserPreferencesCommunityUpdatedEventData {
+  readonly userId: string;
+  readonly communityId: string;
+  /** true si l'événement résulte d'un DELETE (reset aux defaults). */
+  readonly reset: boolean;
+  /** null si reset === true (le client applique ses defaults locaux). */
+  readonly preferences: CommunityPreferencesPayload | null;
+}
+
+/**
+ * Union des trois scopes possibles. La présence de `conversationId` /
+ * `communityId` discrimine côté client (sinon c'est le scope `category`).
  */
 export type UserPreferencesUpdatedEventData =
   | UserPreferencesCategoryUpdatedEventData
-  | UserPreferencesConversationUpdatedEventData;
+  | UserPreferencesConversationUpdatedEventData
+  | UserPreferencesCommunityUpdatedEventData;
 
 /**
  * Émis par `POST /user-preferences/conversations/reorder` après mise
@@ -963,7 +1306,6 @@ export interface MentionCreatedEventData {
   readonly conversationId: string;
   readonly senderId: string;
   readonly mentionedUserId: string;
-  readonly mentionedParticipantId?: string;
   readonly content: string;
   readonly timestamp: string;
 }
@@ -973,11 +1315,64 @@ export interface ConversationParticipantBannedEventData {
   readonly userId: string;
   readonly bannedBy: { readonly id: string };
   readonly bannedAt: string;
+  /**
+   * Faux quand la cible avait DÉJÀ quitté la conversation — bannir un ancien
+   * membre reste possible, c'est ce qui l'empêche de revenir par un lien de
+   * partage, mais ce bannissement-là ne retire aucune appartenance.
+   *
+   * Un compteur de membres doit suivre ce champ, jamais la seule réception de
+   * l'événement. Absent des serveurs antérieurs à ce contrat : le lire comme
+   * `true` y reproduit leur comportement, puisqu'ils ne bannissaient qu'en
+   * retirant.
+   */
+  readonly membershipEnded?: boolean;
+  /**
+   * Effectif ACTIF APRÈS le bannissement, absolu. Quand il est là, il tranche
+   * le cas ci-dessus de lui-même : bannir un ex-membre ne retire personne, donc
+   * le compte est simplement inchangé. `membershipEnded` reste pour les clients
+   * qui décomptent encore.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationParticipantUnbannedEventData {
   readonly conversationId: string;
   readonly userId: string;
+  /**
+   * Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
+   * que si le bannissement l'avait prise. Faux quand la personne était partie
+   * d'elle-même AVANT d'être bannie : elle redevient libre de revenir par une
+   * porte d'entrée, mais n'est pas réintégrée.
+   *
+   * Même lecture que `membershipEnded` côté bannissement — absent ⇒ `true`.
+   */
+  readonly membershipRestored?: boolean;
+  /**
+   * Effectif ACTIF APRÈS la levée, absolu — à poser plutôt qu'à incrémenter.
+   */
+  readonly memberCount?: number;
+}
+
+export interface ConversationParticipantJoinedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly joinedAt: string;
+  /**
+   * Effectif ACTIF APRÈS l'adhésion, absolu — à POSER, pas à incrémenter.
+   *
+   * Un delta ne converge pas : l'événement manqué (hors room, hors ligne, trou
+   * de reconnexion) laisse une dérive que rien ne rattrape, et que les deux
+   * clients PERSISTENT — cache disque iOS (`schedulePersist`), `staleTime:
+   * Infinity` côté web. Un total se rattrape à l'événement suivant.
+   *
+   * Le compte INCLUT l'arrivant, alors même que l'éventail l'écarte : son
+   * propre écran reçoit l'effectif par `conversation:new`.
+   *
+   * Absent des serveurs antérieurs à ce contrat, où l'incrément reste le seul
+   * repli disponible.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationParticipantLeftEventData {
@@ -985,12 +1380,34 @@ export interface ConversationParticipantLeftEventData {
   readonly userId: string;
   readonly displayName: string;
   readonly leftAt: string;
+  /**
+   * Effectif ACTIF APRÈS le départ, absolu — à POSER, pas à soustraire. Un
+   * client qui décrémente ne se rattrape jamais d'un événement manqué.
+   * Absent des serveurs antérieurs à ce contrat, où le décrément reste le
+   * seul repli disponible.
+   */
+  readonly memberCount?: number;
 }
 
 export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
+  /**
+   * Prisme Linguistique de la ligne de liste, résolu POUR CE destinataire —
+   * jumeaux des champs que `GET /conversations` pose déjà sur la conversation.
+   *
+   * Les trois champs d'aperçu (`lastMessagePreview` + ces deux-ci) s'appliquent
+   * EN GROUPE : le client préfère la traduction à l'aperçu brut, donc poser l'un
+   * sans les autres laisse la ligne rendre l'ANCIEN texte traduit après une
+   * édition. `null` est une VALEUR, pas une absence — une édition remet
+   * `Message.translations` à null dans la même écriture tout en gardant le même
+   * `lastMessageId`, et c'est ce `null` reçu qui périme la carte du client.
+   * Seul le serveur sait que la carte a été périmée ; le client ne peut pas le
+   * déduire.
+   */
+  readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
+  readonly lastMessageOriginalLanguage?: string | null;
   readonly [key: string]: unknown;
 }
 
@@ -1000,8 +1417,41 @@ export interface ConversationClosedEventData {
   readonly closedAt: string;
 }
 
+/**
+ * `conversationId` et `senderId` sont OBLIGATOIRES : Socket.IO ne transporte pas
+ * le nom de la room côté réception, donc la charge utile est le seul routage dont
+ * dispose le client. Un message sans `conversationId` est indélivrable — aucun
+ * cache ne peut l'accueillir.
+ */
+export interface LinkMessagePayload {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly senderId: string;
+  readonly [key: string]: unknown;
+}
+
 export interface LinkMessageNewEventData {
-  readonly message: Record<string, unknown>;
+  readonly message: LinkMessagePayload;
+}
+
+/**
+ * Corps `data` de la réponse 201 des deux routes d'envoi via lien de partage
+ * (`POST /links/:identifier/messages[/auth]`).
+ *
+ * Il porte le MÊME message que `link:message:new`, à un champ près :
+ * `clientMessageId`. C'est la seule clé qui relie le message serveur à la ligne
+ * optimiste déjà affichée chez l'auteur, et elle ne revient qu'à lui — le
+ * payload servi aux pairs en est dépouillé, pour qu'un tiers n'apprenne pas
+ * l'espace d'ids de la file d'attente de l'expéditeur (Phase 4 §6.2, même
+ * règle que le chemin nominal `message:send` / `message:new`).
+ *
+ * Un client qui envoie par cette route DOIT lire `message.clientMessageId`
+ * pour réconcilier : sans lui, sa ligne optimiste et la copie serveur
+ * coexistent et le message apparaît deux fois.
+ */
+export interface LinkMessageSendResponseData {
+  readonly messageId: string;
+  readonly message: LinkMessagePayload & { readonly clientMessageId?: string };
 }
 
 export const AGENT_ADMIN_EVENT_KINDS = ['delivery-queue', 'scan', 'config', 'topics'] as const;
@@ -1028,8 +1478,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
+  [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
+  [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
-  [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_ONLINE_STATS]: (data: ConversationOnlineStatsEventData) => void;
@@ -1054,14 +1505,24 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT]: (data: CallTranscriptionResultEvent) => void;
   [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: CallAlreadyAnsweredEvent) => void;
   [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
+  [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveServerEvent) => void;
+  [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED]: (data: FriendRequestCancelledEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
+  [SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
+  [SERVER_EVENTS.TRANSLATION_FAILED]: (data: TranslationFailedEventData) => void;
+  [SERVER_EVENTS.AUDIO_TRANSLATION_FAILED]: (data: AudioTranslationFailedEventData) => void;
+  [SERVER_EVENTS.TRANSCRIPTION_FAILED]: (data: TranscriptionFailedEventData) => void;
 
   // Mentions
   [SERVER_EVENTS.MENTION_CREATED]: (data: MentionCreatedEventData) => void;
@@ -1071,7 +1532,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_UNPINNED]: (data: MessageUnpinnedEventData) => void;
 
   // Location sharing
-  [SERVER_EVENTS.LOCATION_SHARED]: (data: LocationSharedEventData) => void;
   [SERVER_EVENTS.LOCATION_LIVE_STARTED]: (data: LocationLiveStartedEventData) => void;
   [SERVER_EVENTS.LOCATION_LIVE_UPDATED]: (data: LocationLiveUpdatedEventData) => void;
   [SERVER_EVENTS.LOCATION_LIVE_STOPPED]: (data: LocationLiveStoppedEventData) => void;
@@ -1123,6 +1583,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
   [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
 
+  // User Profile
+  [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
+
   // Conversation Categories
   [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;
   [SERVER_EVENTS.CATEGORY_UPDATED]: (data: CategoryUpdatedEventData) => void;
@@ -1138,13 +1601,14 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_DELETED]: (data: NotificationDeletedEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 
-  // Delivery queue
-  [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number }) => void;
+  // Delivery queue — includes affected conversationIds so clients can scope invalidation
+  [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number; conversationIds: string[] }) => void;
 
   // Conversation lifecycle
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;
@@ -1154,6 +1618,9 @@ export interface ServerToClientEvents {
 
   // Share link messages
   [SERVER_EVENTS.LINK_MESSAGE_NEW]: (data: LinkMessageNewEventData) => void;
+
+  // Connection health
+  [SERVER_EVENTS.HEARTBEAT_ACK]: (data: HeartbeatAckEventData) => void;
 }
 
 /**
@@ -1330,9 +1797,12 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_AUDIO_CHUNK]: (data: CallAudioChunkEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_FEEDBACK]: (data: CallQualityFeedbackEvent) => void;
   [CLIENT_EVENTS.CALL_SCREEN_CAPTURE_DETECTED]: (data: CallScreenCaptureEvent) => void;
+  [CLIENT_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveClientEvent) => void;
+  [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
+  [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
+  [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing
-  [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;
   [CLIENT_EVENTS.LOCATION_LIVE_START]: (data: LocationLiveStartData, callback?: (response: SocketIOResponse<LocationLiveStartedEventData>) => void) => void;
   [CLIENT_EVENTS.LOCATION_LIVE_UPDATE]: (data: LocationLiveUpdateData) => void;
   [CLIENT_EVENTS.LOCATION_LIVE_STOP]: (data: LocationLiveStopData) => void;
@@ -1355,8 +1825,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.POST_REACTION_REMOVE]: (data: PostReactionRemoveData, callback?: (response: SocketIOResponse<PostReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC]: (data: { postId: string }, callback?: (response: SocketIOResponse<PostReactionSyncEventData>) => void) => void;
 
-  // Presence
-  [CLIENT_EVENTS.HEARTBEAT]: () => void;
+  // Presence — optionally carries clientTime (ms since epoch) for RTT measurement
+  [CLIENT_EVENTS.HEARTBEAT]: (data?: { clientTime?: number }) => void;
 
   // Agent admin dashboard
   [CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;

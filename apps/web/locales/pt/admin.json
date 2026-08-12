@@ -355,6 +355,46 @@
       "added": "Adicionado",
       "noResults": "Nenhum usuário encontrado",
       "minChars": "Digite pelo menos 2 caracteres"
+    },
+    "conversationsTab": {
+      "deleteConfirm": "Excluir esta configuração de agente?",
+      "title": "Configurações de agente",
+      "count": "{count} conversas configuradas",
+      "searchPlaceholder": "Pesquisar...",
+      "configure": "Configurar",
+      "empty": "Nenhuma conversa configurada para o agente",
+      "viewMessages": "Ver mensagens do agente",
+      "triggerScheduler": "Agendador de gatilhos",
+      "columns": {
+        "conversation": "Conversa",
+        "status": "Status",
+        "triggers": "Gatilhos",
+        "controlled": "Controlados",
+        "messages": "Mensagens",
+        "confidence": "Confiança",
+        "lastResponse": "Última resp.",
+        "actions": "Ações"
+      }
+    },
+    "conversationPicker": {
+      "searchPlaceholder": "Pesquisar por título, ID ou identificador...",
+      "searching": "Pesquisando nas salas...",
+      "untitled": "Sem título",
+      "noResults": "Nenhuma conversa encontrada para «{term}»",
+      "minChars": "Digite pelo menos 2 caracteres para pesquisar"
+    },
+    "rolesSection": {
+      "empty": "Nenhum papel observado para esta conversa",
+      "origin": {
+        "observed": "Observado",
+        "archetype": "Arquétipo",
+        "hybrid": "Híbrido"
+      },
+      "locked": "Bloqueado",
+      "unlock": "Desbloquear",
+      "messagesAnalyzed": "{count} msg analisadas",
+      "confidence": "Confiança",
+      "assignArchetype": "Atribuir um arquétipo..."
     }
   },
   "agentLive": {
@@ -927,7 +967,8 @@
     "clickColReferrer": "Referrer",
     "clickColSource": "Fonte",
     "clickColStatus": "Status",
-    "fieldNamePlaceholder": "Promo verão"
+    "fieldNamePlaceholder": "Promo verão",
+    "copyError": "Erro ao copiar o link"
   },
   "users": {
     "newUser": {
@@ -1720,6 +1761,11 @@
   "usersDetail": {
     "viewMembers": "Ver membros",
     "membersModalTitle": "Membros",
+    "viewMessages": "Ver mensagens",
+    "messagesModalTitle": "Mensagens",
+    "noMessages": "Sem mensagens",
+    "editedBadge": "Editado",
+    "deletedBadge": "Eliminado",
     "mediaTitle": "Mídia",
     "loadingMedia": "A carregar mídia...",
     "noMedia": "Nenhuma mídia",
@@ -1756,7 +1802,6 @@
     "noConversations": "Nenhuma conversa",
     "noPosts": "Nenhuma publicação",
     "loadMore": "Carregar mais",
-    "deletedBadge": "Eliminado",
     "membersWord": "membros",
     "filterAll": "Todos",
     "postTypePost": "Publicação",
@@ -1928,7 +1973,8 @@
     "next": "Próximo",
     "deleteTitle": "Excluir link de compartilhamento",
     "deleteDescription": "Esta ação é irreversível. O link de compartilhamento e todos os seus acessos serão excluídos permanentemente.",
-    "deleteConfirm": "Excluir"
+    "deleteConfirm": "Excluir",
+    "copyError": "Erro ao copiar o link"
   },
   "translationsPage": {
     "loadError": "Erro ao carregar traduções",

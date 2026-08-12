@@ -181,6 +181,7 @@
       "messageDeletedByOther": "Uma mensagem foi excluída",
       "modifyError": "Erro ao modificar mensagem",
       "editError": "Erro ao editar mensagem",
+      "contentRequired": "Conteúdo obrigatório",
       "deleteError": "Erro ao excluir mensagem",
       "replyTo": "Responder a esta mensagem",
       "messageFound": "Mensagem encontrada!",
@@ -220,6 +221,7 @@
     "imageLoadError": "Não foi possível carregar a imagem",
     "downloadAnyway": "Baixar mesmo assim",
     "lightboxKeyboardHelp": "Use as setas ← → para navegar • +/- para zoom • R para girar • Esc para fechar",
+    "videoLightboxKeyboardHelp": "Use as setas ← → para navegar • Espaço para reproduzir/pausar • M para silenciar • F para tela cheia • Esc para fechar",
     "clearSearch": "Limpar pesquisa",
     "backToList": "Voltar à lista",
     "backToConversations": "Voltar às conversas",
@@ -267,7 +269,17 @@
     "storyVisibility": {
       "public": "Público",
       "friends": "Amigos",
+      "community": "Comunidade",
+      "except": "Todos exceto…",
+      "only": "Somente…",
       "private": "Privado"
+    },
+    "audiencePicker": {
+      "searchPlaceholder": "Pesquisar pessoas…",
+      "exceptHint": "Sua história ficará oculta para as pessoas selecionadas.",
+      "onlyHint": "Somente as pessoas selecionadas verão sua história.",
+      "empty": "Ninguém encontrado",
+      "remove": "Remover"
     },
     "postComposer": {
       "contentLabel": "Conteúdo da publicação",
@@ -280,6 +292,11 @@
         "except": "Amigos exceto...",
         "only": "Apenas...",
         "private": "Privado"
+      },
+      "reelToggle": {
+        "groupLabel": "Tipo de publicação",
+        "reel": "Reel",
+        "post": "Publicação"
       }
     },
     "audioUnavailable": "URL de áudio indisponível",
@@ -297,5 +314,14 @@
     "anonymousUser": "Usuário anônimo"
   },
   "copied": "Copiado",
-  "never": "Nunca"
+  "never": "Nunca",
+  "offlineMessage": "Você está offline — as mensagens serão enviadas ao reconectar",
+  "updateAvailable": "Uma nova versão do Meeshy está disponível!",
+  "updateNow": "Atualizar",
+  "wait": "Aguardar",
+  "languageSelector": {
+    "selectLanguage": "Selecionar um idioma",
+    "searchLanguage": "Buscar idioma...",
+    "noLanguageFound": "Nenhum idioma encontrado"
+  }
 }

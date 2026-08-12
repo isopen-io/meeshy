@@ -31,6 +31,7 @@ import { conversationsCrudService } from '@/services/conversations/crud.service'
 import type { Conversation } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface AgentConfigDialogProps {
   open: boolean;
@@ -210,7 +211,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <button
                     className="font-mono text-gray-600 dark:text-gray-300 hover:text-indigo-600 transition-colors truncate max-w-full text-left"
                     title={tCommon('copy')}
-                    onClick={() => { navigator.clipboard.writeText(convMeta.id); toast.success(tCommon('copied')); }}
+                    onClick={async () => { const { success } = await copyToClipboard(convMeta.id); if (success) toast.success(tCommon('copied')); }}
                   >
                     {convMeta.id}
                   </button>
@@ -459,15 +460,25 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 <div className="flex flex-wrap gap-2 pt-1">
                   {['USER', 'ADMIN', 'MODO', 'AUDIT', 'ANALYST', 'BIGBOSS'].map(role => {
                     const isExcluded = (form.excludedRoles ?? []).includes(role);
+                    const toggleRole = () => {
+                      const current = form.excludedRoles ?? [];
+                      const next = isExcluded ? current.filter(r => r !== role) : [...current, role];
+                      updateField('excludedRoles', next);
+                    };
                     return (
                       <Badge
                         key={role}
                         variant={isExcluded ? 'destructive' : 'outline'}
-                        className="cursor-pointer select-none py-1 px-3"
-                        onClick={() => {
-                          const current = form.excludedRoles ?? [];
-                          const next = isExcluded ? current.filter(r => r !== role) : [...current, role];
-                          updateField('excludedRoles', next);
+                        className="cursor-pointer select-none py-1 px-3 focus-visible:outline-none"
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isExcluded}
+                        onClick={toggleRole}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleRole();
+                          }
                         }}
                       >
                         {role}

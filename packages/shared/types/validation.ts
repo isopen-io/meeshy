@@ -85,8 +85,7 @@ export const bioSchema = z.string()
 /**
  * Validation de l'URL d'avatar
  */
-export const avatarSchema = z.string()
-  .url('URL d\'avatar invalide')
+export const avatarSchema = z.url('URL d\'avatar invalide')
   .max(2048, 'URL trop longue')
   .optional();
 

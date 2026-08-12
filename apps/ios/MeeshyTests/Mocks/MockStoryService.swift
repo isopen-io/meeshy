@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockStoryService: StoryServiceProviding {
+final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -11,6 +11,9 @@ final class MockStoryService: StoryServiceProviding {
         {"success":true,"data":[],"pagination":null,"error":null}
         """)
     )
+    /// Pages servies dans l'ordre, une par appel à `list`. Prioritaire sur
+    /// `listResult` tant qu'elle n'est pas épuisée.
+    var listResults: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
     var markViewedResult: Result<Void, Error> = .success(())
     var deleteResult: Result<Void, Error> = .success(())
     var reactResult: Result<Void, Error> = .success(())
@@ -30,8 +33,12 @@ final class MockStoryService: StoryServiceProviding {
     // MARK: - Call Tracking
 
     var listCallCount = 0
+    /// Curseur reçu à CHAQUE appel, dans l'ordre — `lastListCursor` seul ne peut
+    /// pas dire si la pagination a bien enchaîné les bons curseurs.
+    var listCursors: [String?] = []
     var lastListCursor: String?
     var lastListLimit: Int?
+    var lastListUpdatedSince: Date?
 
     var markViewedCallCount = 0
     var lastMarkViewedStoryId: String?
@@ -56,12 +63,24 @@ final class MockStoryService: StoryServiceProviding {
     var fetchPostCallCount = 0
     var lastFetchPostId: String?
 
+    var cacheCallCount = 0
+    var lastCachedPost: APIPost?
+
     // MARK: - Protocol Conformance
 
-    func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+    func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]> {
         listCallCount += 1
         lastListCursor = cursor
         lastListLimit = limit
+        lastListUpdatedSince = updatedSince
+        listCursors.append(cursor)
+        // File de pages : le tray suit `nextCursor` tant que le serveur annonce
+        // `hasMore`, donc un témoin de pagination doit pouvoir répondre
+        // DIFFÉREMMENT à chaque appel. Vide → `listResult`, inchangé pour les
+        // témoins mono-page.
+        if !listResults.isEmpty {
+            return try listResults.removeFirst().get()
+        }
         return try listResult.get()
     }
 
@@ -109,13 +128,26 @@ final class MockStoryService: StoryServiceProviding {
         return try fetchPostResult.get()
     }
 
+    func cache(post: APIPost) {
+        cacheCallCount += 1
+        lastCachedPost = post
+    }
+
+    private(set) var invalidatedPostIds: Set<String> = []
+
+    func invalidate(postIds: Set<String>) {
+        invalidatedPostIds.formUnion(postIds)
+    }
+
     // MARK: - Reset
 
     func reset() {
         listResult = .success(JSONStub.decode("""
         {"success":true,"data":[],"pagination":null,"error":null}
         """))
+        listResults = []
         listCallCount = 0
+        listCursors = []
         lastListCursor = nil
         lastListLimit = nil
 
@@ -152,5 +184,8 @@ final class MockStoryService: StoryServiceProviding {
         """))
         fetchPostCallCount = 0
         lastFetchPostId = nil
+
+        cacheCallCount = 0
+        lastCachedPost = nil
     }
 }

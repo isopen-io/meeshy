@@ -35,13 +35,13 @@ export class AdminAgentHandler {
       return;
     }
 
-    socket.join(ROOMS.adminAgent());
+    Promise.resolve(socket.join(ROOMS.adminAgent())).catch(() => { /* best-effort */ });
     logger.debug('admin agent room joined', { socketId: socket.id, userId });
     callback?.({ success: true });
   }
 
   handleUnsubscribe(socket: Socket, callback?: (response: SocketIOResponse) => void): void {
-    socket.leave(ROOMS.adminAgent());
+    Promise.resolve(socket.leave(ROOMS.adminAgent())).catch(() => { /* best-effort */ });
     callback?.({ success: true });
   }
 }

@@ -1,5 +1,25 @@
 import Foundation
 
+// MARK: - List Preview Truncation
+
+public extension String {
+    /// Cap (in grapheme clusters) for list-row message previews
+    /// (`lastMessagePreview` and its translations). Rows render at most
+    /// 2 lines, but CoreText typesets the FULL string on every measurement
+    /// (cost is O(total length); `lineLimit` does not bound it) — an
+    /// unbounded preview multiplied across rows starves the main thread.
+    /// Mirrors the gateway-side `LAST_MESSAGE_PREVIEW_MAX_LENGTH`
+    /// (`services/gateway/src/routes/conversations/utils/last-message-preview.ts`,
+    /// qui plafonne AUSSI chaque aperçu traduit de `lastMessageTranslations`).
+    static let meeshyPreviewMaxLength = 300
+
+    /// `prefix` walks Characters (grapheme clusters), so the cut never
+    /// splits an emoji or a combining sequence.
+    var meeshyPreviewTruncated: String {
+        String(prefix(Self.meeshyPreviewMaxLength))
+    }
+}
+
 // MARK: - API Conversation Models
 
 public struct APIConversationUserNested: Decodable, Sendable {
@@ -9,6 +29,7 @@ public struct APIConversationUserNested: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let avatar: String?
+    public let banner: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
 }
@@ -21,6 +42,7 @@ public struct APIConversationUser: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let avatar: String?
+    public let banner: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
     public let type: String?
@@ -32,6 +54,10 @@ public struct APIConversationUser: Decodable, Sendable {
 
     public var resolvedAvatar: String? {
         nonEmpty(avatar) ?? nonEmpty(user?.avatar)
+    }
+
+    public var resolvedBanner: String? {
+        nonEmpty(banner) ?? nonEmpty(user?.banner)
     }
 
     public var resolvedUserId: String? {
@@ -60,11 +86,15 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     public let isBlurred: Bool?
     public let isViewOnce: Bool?
     public let expiresAt: Date?
+    /// Position hissée par le gateway (message géolocalisé). Un message
+    /// position-seule a un `content` vide : c'est ce champ qui permet à la
+    /// ligne d'aperçu de composer son libellé côté client.
+    public let location: SharedPlace?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
-        case isBlurred, isViewOnce, expiresAt
+        case isBlurred, isViewOnce, expiresAt, location
     }
 }
 
@@ -131,6 +161,19 @@ public struct APIConversation: Decodable, Sendable {
     public let lastMessageAt: Date?
     public let participants: [APIParticipant]?
     public let lastMessage: APIConversationLastMessage?
+    /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
+    /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
+    /// au même plafond que `lastMessage.content`.
+    ///
+    /// Vit au niveau conversation, pas dans `lastMessage`, pour deux raisons :
+    /// c'est la clé que `MeeshyConversation` décode depuis toujours pour son
+    /// cache disque, et la carte compacte n'a pas la forme d'un
+    /// `[APITextTranslation]` (deux formes sous un même nom auraient dérivé).
+    public let lastMessageTranslations: [String: String]?
+    /// Langue d'origine du dernier message — celle de `lastMessage.content`.
+    /// Sans elle, `resolvedLastMessagePreview` ne peut pas distinguer « pas de
+    /// traduction vers ma langue » de « le message EST déjà dans ma langue ».
+    public let lastMessageOriginalLanguage: String?
     public let recentMessages: [APIConversationLastMessage]?
     public let userPreferences: [APIConversationPreferences]?
     public let unreadCount: Int?
@@ -149,7 +192,10 @@ public struct APIConversation: Decodable, Sendable {
         isAnnouncementChannel: Bool? = nil, defaultWriteRole: String? = nil,
         slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil,
         lastMessageAt: Date? = nil, participants: [APIParticipant]? = nil,
-        lastMessage: APIConversationLastMessage? = nil, recentMessages: [APIConversationLastMessage]? = nil,
+        lastMessage: APIConversationLastMessage? = nil,
+        lastMessageTranslations: [String: String]? = nil,
+        lastMessageOriginalLanguage: String? = nil,
+        recentMessages: [APIConversationLastMessage]? = nil,
         userPreferences: [APIConversationPreferences]? = nil, unreadCount: Int? = nil,
         updatedAt: Date? = nil, encryptionMode: String? = nil,
         currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil,
@@ -162,7 +208,10 @@ public struct APIConversation: Decodable, Sendable {
         self.isAnnouncementChannel = isAnnouncementChannel; self.defaultWriteRole = defaultWriteRole
         self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
         self.lastMessageAt = lastMessageAt; self.participants = participants
-        self.lastMessage = lastMessage; self.recentMessages = recentMessages
+        self.lastMessage = lastMessage
+        self.lastMessageTranslations = lastMessageTranslations
+        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.recentMessages = recentMessages
         self.userPreferences = userPreferences; self.unreadCount = unreadCount
         self.updatedAt = updatedAt; self.encryptionMode = encryptionMode
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
@@ -240,6 +289,7 @@ extension APIConversation {
         }()
 
         let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
+        let participantBanner: String? = otherParticipant?.resolvedBanner ?? otherUser?.resolvedBanner
         let participantUsername: String? = otherUser?.username ?? otherParticipant?.user?.username
         let currentRole = currentUserRole ?? participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
@@ -287,7 +337,7 @@ extension APIConversation {
             )
         }
 
-        return MeeshyConversation(
+        var conversation = MeeshyConversation(
             id: id, identifier: identifier ?? id, type: convType, title: displayName,
             description: description, avatar: convType != .direct ? avatar : nil,
             banner: banner, communityId: communityId,
@@ -296,7 +346,7 @@ extension APIConversation {
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
-            unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content,
+            unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content?.meeshyPreviewTruncated,
             lastMessageAttachments: lastMsgAttachments,
             lastMessageAttachmentCount: lastMsgAttCount,
             lastMessageId: lastMessage?.id,
@@ -304,6 +354,7 @@ extension APIConversation {
             lastMessageIsBlurred: lastMessage?.isBlurred ?? false,
             lastMessageIsViewOnce: lastMessage?.isViewOnce ?? false,
             lastMessageExpiresAt: lastMessage?.expiresAt,
+            lastMessageLocation: lastMessage?.location,
             recentMessages: recentPreviews,
             tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
             defaultWriteRole: defaultWriteRole,
@@ -318,11 +369,33 @@ extension APIConversation {
             participantUserId: otherParticipant?.userId,
             participantUsername: participantUsername,
             participantAvatarURL: participantAvatar,
+            participantBanner: participantBanner,
             closedAt: closedAt,
             closedBy: closedBy,
             currentUserRole: currentRole,
             currentUserJoinedAt: currentUserJoinedAt,
             reaction: prefs?.reaction
         )
+
+        // Prisme de l'aperçu. Ces deux champs ne passent pas par l'init
+        // memberwise — ils sont arrivés APRÈS lui et l'élargir aurait touché
+        // chacun de ses appelants. La doc de `lastMessageTranslations` annonçait
+        // ce câblage (« when the gateway starts shipping these in
+        // /conversations it will be wired through the API → domain converter »)
+        // ; le gateway les expédie désormais.
+        //
+        // Clés minuscules comme sur le chemin socket
+        // (`ConversationSyncEngine.previewTranslations`) : `resolvedLastMessagePreview`
+        // compare en minuscules, et deux conventions divergentes rendraient la
+        // résolution dépendante du chemin par lequel la ligne est arrivée.
+        if let translations = lastMessageTranslations, !translations.isEmpty {
+            conversation.lastMessageTranslations = Dictionary(
+                translations.map { ($0.key.lowercased(), $0.value) },
+                uniquingKeysWith: { _, latest in latest }
+            )
+        }
+        conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+
+        return conversation
     }
 }

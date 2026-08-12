@@ -2,6 +2,7 @@ import XCTest
 import Combine
 @testable import Meeshy
 
+@MainActor
 final class DraftStoreTests: XCTestCase {
 
     private func makeSUT() -> DraftStore {

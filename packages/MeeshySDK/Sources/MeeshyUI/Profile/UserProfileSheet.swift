@@ -18,6 +18,14 @@ public struct UserProfileSheet: View {
     public var onSendMessage: (() -> Void)?
     public var moodEmoji: String? = nil
     public var onMoodTap: ((CGPoint) -> Void)? = nil
+    /// Source temps réel de présence injectée par l'app (paramètre opaque —
+    /// le SDK n'encode aucune règle produit). Appelée avec le userId résolu ;
+    /// retourner `nil` (utilisateur non suivi) fait retomber l'avatar sur le
+    /// snapshot REST `isOnline` du profil chargé. `nil` (défaut) conserve le
+    /// comportement legacy (snapshot uniquement). Doit pointer vers la MÊME
+    /// source que la liste de conversations (PresenceManager côté app) pour
+    /// que la pastille du profil reste synchronisée avec celle de la liste.
+    public var presenceProvider: ((String) -> PresenceState?)? = nil
     /// État réel de l'anneau story de l'utilisateur, fourni par l'app
     /// (paramètre opaque — le SDK n'encode aucune règle produit). `nil`
     /// conserve l'anneau décoratif historique du sheet.
@@ -73,6 +81,7 @@ public struct UserProfileSheet: View {
         onSendMessage: (() -> Void)? = nil,
         moodEmoji: String? = nil,
         onMoodTap: ((CGPoint) -> Void)? = nil,
+        presenceProvider: ((String) -> PresenceState?)? = nil,
         storyRingState: StoryRingState? = nil,
         onViewStory: (() -> Void)? = nil,
         postsContent: ((String) -> AnyView)? = nil
@@ -83,6 +92,7 @@ public struct UserProfileSheet: View {
         self.onSendMessage = onSendMessage
         self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap
+        self.presenceProvider = presenceProvider
         self.storyRingState = storyRingState
         self.onViewStory = onViewStory
         self.postsContent = postsContent
@@ -146,6 +156,7 @@ public struct UserProfileSheet: View {
         .onReceive(FriendshipCache.shared.objectWillChange) { _ in
             resolveConnectionStatus()
         }
+        .adaptiveWideSheet()
     }
 
     /// Layout shown when the current user blocked the target — no tabs, just
@@ -501,19 +512,19 @@ public struct UserProfileSheet: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(hex: "2ECC71").opacity(0.12))
+        .background(MeeshyColors.success.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(hex: "2ECC71").opacity(0.3), lineWidth: 1.5)
+                .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1.5)
         )
     }
 
@@ -590,13 +601,13 @@ public struct UserProfileSheet: View {
             .padding(.vertical, compact ? 10 : 14)
             .background(
                 LinearGradient(
-                    colors: [MeeshyColors.pink, MeeshyColors.cyan],
+                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
-            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
+            .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
     }
@@ -689,10 +700,7 @@ public struct UserProfileSheet: View {
     }
 
     func formatRegistrationDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.locale = Locale(identifier: "fr_FR")
-        return formatter.string(from: date)
+        date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))
     }
 
     func openFullscreenImage(url: String?, fallback: String) {

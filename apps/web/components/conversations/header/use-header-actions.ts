@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
 
-export function useHeaderActions(conversationId: string, t: (key: string) => string) {
+export function useHeaderActions(conversationId: string, t: (key: string, fallback?: string) => string) {
   const [isImageUploadDialogOpen, setIsImageUploadDialogOpen] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -21,7 +22,7 @@ export function useHeaderActions(conversationId: string, t: (key: string) => str
           avatar: imageUrl
         });
 
-        toast.success(t('conversationHeader.imageUpdated') || 'Image de la conversation mise à jour');
+        toast.success(t('conversationHeader.imageUpdated', 'Conversation image updated'));
         setIsImageUploadDialogOpen(false);
 
         window.location.reload();
@@ -30,7 +31,7 @@ export function useHeaderActions(conversationId: string, t: (key: string) => str
       }
     } catch (error) {
       console.error('Erreur lors de l\'upload de l\'image:', error);
-      toast.error(t('conversationHeader.imageUploadError') || 'Erreur lors de l\'upload de l\'image');
+      toast.error(t('conversationHeader.imageUploadError', 'Error uploading image'));
     } finally {
       setIsUploadingImage(false);
     }
@@ -47,15 +48,19 @@ export function useHeaderActions(conversationId: string, t: (key: string) => str
           text: fullMessage,
         });
       } else {
-        await navigator.clipboard.writeText(fullMessage);
-        toast.success(t('conversationHeader.linkCopied') || 'Lien copié !');
+        const { success } = await copyToClipboard(fullMessage);
+        if (success) {
+          toast.success(t('conversationHeader.linkCopied', 'Link copied!'));
+        } else {
+          toast.error(t('conversationHeader.linkCopyError', 'Error copying link'));
+        }
       }
     } catch (error: unknown) {
       if (error.name === 'AbortError') {
         return;
       }
       console.error('Erreur lors du partage:', error);
-      toast.error(t('conversationHeader.linkCopyError') || 'Erreur lors de la copie du lien');
+      toast.error(t('conversationHeader.linkCopyError', 'Error copying link'));
     }
   }, [conversationId, t]);
 

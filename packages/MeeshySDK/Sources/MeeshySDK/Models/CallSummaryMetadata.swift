@@ -48,6 +48,14 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
     /// `true` when `bytesTotal` was estimated from duration rather than measured.
     public let bytesEstimated: Bool
     public let networkQuality: NetworkQuality?
+    /// `true` for the LIVE message posted at `call:initiate` (`kind:
+    /// "call-live"`), while the call is still ongoing. A live summary's
+    /// `outcome` is a neutral placeholder — check `isLive` BEFORE `outcome`.
+    public let isLive: Bool
+    /// Present (`true`) only on a missed call that was never answered and was
+    /// ended by its own initiator — "cancelled" from the initiator's viewpoint.
+    /// `nil` on every other summary (the gateway omits the key entirely).
+    public let endedByInitiator: Bool?
 
     public init(
         callId: String,
@@ -57,7 +65,9 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         durationSeconds: Int,
         bytesTotal: Int?,
         bytesEstimated: Bool,
-        networkQuality: NetworkQuality?
+        networkQuality: NetworkQuality?,
+        isLive: Bool = false,
+        endedByInitiator: Bool? = nil
     ) {
         self.callId = callId
         self.initiatorId = initiatorId
@@ -67,37 +77,46 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         self.bytesTotal = bytesTotal
         self.bytesEstimated = bytesEstimated
         self.networkQuality = networkQuality
+        self.isLive = isLive
+        self.endedByInitiator = endedByInitiator
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, callId, initiatorId, callType, outcome, durationSeconds
-        case bytesTotal, bytesEstimated, networkQuality
+        case bytesTotal, bytesEstimated, networkQuality, endedByInitiator
     }
 
-    /// Decodes only when `kind == "call"`, so unrelated structured metadata on a
-    /// message is ignored rather than mis-decoded into a call bubble.
+    /// Decodes only when `kind` is `"call"` (terminal summary) or `"call-live"`
+    /// (ongoing call), so unrelated structured metadata on a message is ignored
+    /// rather than mis-decoded into a call bubble. A live payload tolerates a
+    /// missing `outcome` (it is a placeholder anyway); a terminal payload keeps
+    /// requiring it.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try c.decodeIfPresent(String.self, forKey: .kind)
-        guard kind == "call" else {
+        guard kind == "call" || kind == "call-live" else {
             throw DecodingError.dataCorruptedError(
                 forKey: .kind, in: c,
-                debugDescription: "metadata.kind is not 'call' (\(kind ?? "nil"))"
+                debugDescription: "metadata.kind is not 'call'/'call-live' (\(kind ?? "nil"))"
             )
         }
+        isLive = kind == "call-live"
         callId = try c.decode(String.self, forKey: .callId)
         initiatorId = try c.decode(String.self, forKey: .initiatorId)
         callType = try c.decode(MediaType.self, forKey: .callType)
-        outcome = try c.decode(Outcome.self, forKey: .outcome)
+        outcome = isLive
+            ? try c.decodeIfPresent(Outcome.self, forKey: .outcome) ?? .completed
+            : try c.decode(Outcome.self, forKey: .outcome)
         durationSeconds = try c.decodeIfPresent(Int.self, forKey: .durationSeconds) ?? 0
         bytesTotal = try c.decodeIfPresent(Int.self, forKey: .bytesTotal)
         bytesEstimated = try c.decodeIfPresent(Bool.self, forKey: .bytesEstimated) ?? false
         networkQuality = try c.decodeIfPresent(NetworkQuality.self, forKey: .networkQuality)
+        endedByInitiator = try c.decodeIfPresent(Bool.self, forKey: .endedByInitiator)
     }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode("call", forKey: .kind)
+        try c.encode(isLive ? "call-live" : "call", forKey: .kind)
         try c.encode(callId, forKey: .callId)
         try c.encode(initiatorId, forKey: .initiatorId)
         try c.encode(callType, forKey: .callType)
@@ -106,6 +125,7 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         try c.encodeIfPresent(bytesTotal, forKey: .bytesTotal)
         try c.encode(bytesEstimated, forKey: .bytesEstimated)
         try c.encodeIfPresent(networkQuality, forKey: .networkQuality)
+        try c.encodeIfPresent(endedByInitiator, forKey: .endedByInitiator)
     }
 }
 
@@ -116,6 +136,12 @@ public extension CallSummaryMetadata {
     /// initiator; otherwise they received it (incoming).
     func isOutgoing(currentUserId: String) -> Bool {
         !currentUserId.isEmpty && initiatorId == currentUserId
+    }
+
+    /// A missed call ended by its own initiator renders as "Appel annulé" — but
+    /// ONLY in the initiator's view. The callee keeps the plain "Appel manqué".
+    func isCancelled(viewerIsInitiator: Bool) -> Bool {
+        viewerIsInitiator && outcome == .missed && endedByInitiator == true
     }
 
     /// "M:SS" (or "H:MM:SS" past an hour), minutes zero-padded — mirrors the

@@ -1,4 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Meeshy" parent="Theme.Material3.DayNight.NoActionBar" />
+
+    <!--
+      System pre-Compose splash (androidx.core:core-splashscreen — works down to
+      minSdk 26, not just the native API 31+ SplashScreen). Bridges the truly-first
+      frame before Compose has drawn anything, so a cold start never flashes a blank
+      white/black window. `postSplashScreenTheme` hands control back to the normal
+      `Theme.Meeshy` once the first Compose frame is ready; the branded, ANIMATED
+      splash (`MeeshySplashScreen`, :sdk-ui) then takes over inside the Compose tree
+      for the minimum display duration (`MeeshyApp.kt`), matching iOS's
+      OS-launch-screen -> in-app animated splash handoff.
+
+      Reuses the launcher icon's foreground glyph (white stacked-dashes, transparent
+      background) — see `drawable/ic_launcher_foreground.xml` — so the two brand
+      surfaces never drift. A single dark-indigo background regardless of the
+      system's light/dark setting is a deliberate simplification for this
+      few-hundred-ms OS-level flash; the Compose splash is the theme-aware one.
+    -->
+    <style name="Theme.Meeshy.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Meeshy</item>
+    </style>
 </resources>

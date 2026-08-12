@@ -91,7 +91,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <AlertTriangle className="w-12 h-12" />
                 <span className="text-sm">{errorMessage}</span>
               </div>
-            ) : null}
+            ) : /* istanbul ignore next -- unreachable: outer (isLoading || hasError) guards this block */ null}
           </div>
         )}
 

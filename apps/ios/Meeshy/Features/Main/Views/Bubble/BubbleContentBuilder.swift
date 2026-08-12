@@ -19,7 +19,13 @@ extension BubbleContent {
         timeString: String? = nil,
         isEditSaving: Bool = false,
         hasEditHistory: Bool = false,
-        recipientCount: Int = 1
+        recipientCount: Int = 1,
+        // 4th axis of the Prisme étendu (2026-05-26) — device locale, gated
+        // identically to `regional`/`custom` in `buildAvailableFlags` (only
+        // surfaced when a translation actually exists for it). Default `nil`
+        // keeps every existing call site (none of which pass this yet)
+        // unchanged. See CLAUDE.md "Prisme Linguistique" for resolution order.
+        deviceLocale: String? = nil
     ) {
         self.messageId = message.id
         self.isMe = message.isMe
@@ -45,6 +51,12 @@ extension BubbleContent {
             self.kind = .standard
         }
 
+        // Resolved once — the compact call bubble and the standard bubble's meta
+        // row share the exact same clock label.
+        let resolvedTimeString = timeString
+            ?? message.cachedTimeString
+            ?? MessageRecord.computeTimeString(for: message.createdAt)
+
         // --- Call notice (rich call-summary system message) ---
         // When a system message carries structured call metadata, resolve the
         // per-viewer direction now (outgoing iff the current user initiated) so
@@ -54,7 +66,9 @@ extension BubbleContent {
             self.callNotice = CallNotice(
                 summary: summary,
                 isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
-                fallbackText: message.content
+                fallbackText: message.content,
+                timeString: resolvedTimeString,
+                timestamp: message.createdAt
             )
         } else {
             self.callNotice = nil
@@ -81,8 +95,13 @@ extension BubbleContent {
         // no reply → free-floating large emoji (no bubble); reply → emoji
         // hosted in the bubble above the quoted-reply card, large & centered.
         let emojiResult: EmojiDetector.EmojiOnlyResult = {
+            // `message.location` compte comme une pièce jointe pour cette
+            // détection : un emoji accompagné d'un lieu doit rendre la bulle
+            // (qui héberge LocationMessageView), pas l'emoji libre hors bulle —
+            // même sémantique qu'avec l'ancienne pièce jointe `.location`.
             guard !message.content.isEmpty,
-                  message.attachments.isEmpty else {
+                  message.attachments.isEmpty,
+                  message.location == nil else {
                 return .notEmojiOnly
             }
             return EmojiDetector.analyze(message.content)
@@ -116,6 +135,7 @@ extension BubbleContent {
                 preferredLang: preferredTranslation?.targetLanguage.lowercased(),
                 regional: userLanguages.regional?.lowercased(),
                 custom: userLanguages.custom?.lowercased(),
+                deviceLocale: deviceLocale?.lowercased(),
                 translations: translations,
                 translatedAudios: translatedAudios
             )
@@ -144,10 +164,24 @@ extension BubbleContent {
             self.reply = nil
         }
 
+        // --- Lieu partagé ---
+        // `message.location` est la voie serveur actuelle (colonne
+        // `locationJson`, hissée par le gateway) : `MessageAttachment` n'a
+        // aucun champ géographique en Prisma, le serveur ne peut plus produire
+        // de pièce jointe `.location`. Celles-ci ne subsistent que dans
+        // d'anciennes lignes du cache local — la branche par pièce jointe
+        // reste donc en place pour elles (filtre `nonMedia` ci-dessous).
+        self.location = message.location
+
         // --- Attachments ---
         let visual = message.attachments.filter { $0.type == .image || $0.type == .video }
         let audio = message.attachments.filter { $0.type == .audio }
-        let nonMedia = message.attachments.filter { $0.type == .file || $0.type == .location }
+        // Exclusivité du rendu de lieu : quand `message.location` est présent,
+        // une éventuelle pièce jointe `.location` (doublon hérité du cache)
+        // est écartée pour que le lieu ne soit rendu qu'UNE fois.
+        let nonMedia = message.attachments.filter {
+            $0.type == .file || ($0.type == .location && message.location == nil)
+        }
 
         // Pure single-category cases route to dedicated enum variants. Anything
         // mixing two-or-more categories falls into `.mixed` which carries audio
@@ -187,9 +221,6 @@ extension BubbleContent {
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
         // --- Meta ---
-        let resolvedTimeString = timeString
-            ?? message.cachedTimeString
-            ?? MessageRecord.computeTimeString(for: message.createdAt)
         // The footer checkmark must EXACTLY represent the real state of every
         // other interlocutor. `message.deliveryStatus` is promoted to
         // delivered/read as soon as a SINGLE recipient does so — correct for a
@@ -205,7 +236,14 @@ extension BubbleContent {
                     readCount: message.readCount,
                     recipientCount: recipientCount,
                     deliveredToAllAt: message.deliveredToAllAt,
-                    readByAllAt: message.readByAllAt)
+                    readByAllAt: message.readByAllAt,
+                    // Réciprocité, appliquée UNIQUEMENT ici : c'est le site
+                    // d'AFFICHAGE. Les deux autres appelants du résolveur
+                    // (ConversationSyncEngine, ConversationSocketHandler) sont
+                    // des chemins de persistance — les gater corromprait l'état
+                    // stocké, qui doit rester vrai quelle que soit la préférence.
+                    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts)
                 : nil
         )
     }
@@ -229,13 +267,12 @@ extension BubbleContent {
            pref.targetLanguage.lowercased() == active {
             return pref.translatedContent
         }
-        // TODO(prisme): the last-resort fallback to `preferredTranslation?.translatedContent`
-        // diverges from the Prisme rule #1 ("if no translation matches the preferred
-        // language, return the original content — never tomber sur translations.first").
-        // We mirror legacy ThemedMessageBubble.effectiveContent for visual fidelity
-        // during the bubble-decompose refactor; align with `resolveUserLanguage()`
-        // in a separate audit. Source: apps/ios/CLAUDE.md "Régles critiques du Prisme".
-        return preferredTranslation?.translatedContent ?? message.content
+        // Prisme rule #1 — no translation matches the active language, which means
+        // the content is already in that language (or no translation exists for it):
+        // return the ORIGINAL. Never fall back to the preferred-language translation,
+        // which would show content in a language the user did not select.
+        // Source: apps/ios/CLAUDE.md "Régles critiques du Prisme".
+        return message.content
     }
 
     static func buildAvailableFlags(
@@ -244,6 +281,10 @@ extension BubbleContent {
         preferredLang: String?,
         regional: String?,
         custom: String?,
+        // 4th axis of the Prisme étendu (2026-05-26) — gated identically to
+        // `regional`/`custom`: only surfaced when a translation (text or
+        // audio) actually exists for it. Never supplants the first 3 axes.
+        deviceLocale: String? = nil,
         translations: [MessageTranslation],
         translatedAudios: [MessageTranslatedAudio]
     ) -> [String] {
@@ -261,6 +302,9 @@ extension BubbleContent {
         }
         if let c = custom, !seen.contains(c), hasTranslation(c) {
             all.append(c); seen.insert(c)
+        }
+        if let d = deviceLocale, !seen.contains(d), hasTranslation(d) {
+            all.append(d); seen.insert(d)
         }
         return all.filter { $0 != activeLang }
     }

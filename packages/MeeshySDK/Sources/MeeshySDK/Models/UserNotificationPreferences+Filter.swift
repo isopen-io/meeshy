@@ -53,7 +53,7 @@ public struct FocusFilterSnapshot: Sendable, Equatable {
         case .postComment, .legacyPostComment, .postRepost, .commentReply, .legacyStoryReply:
             return allowSocial
 
-        case .missedCall, .legacyCallMissed, .incomingCall, .callEnded, .callDeclined, .legacyCallIncoming:
+        case .missedCall, .legacyCallMissed, .incomingCall, .incomingCallAlert, .callEnded, .callDeclined, .legacyCallIncoming:
             return allowCalls
 
         default:
@@ -96,8 +96,10 @@ public extension UserNotificationPreferences {
             return replyEnabled
         case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             return newMessageEnabled
-        case .missedCall, .legacyCallMissed, .incomingCall, .callEnded, .callDeclined, .legacyCallIncoming:
+        case .missedCall, .legacyCallMissed, .callEnded, .callDeclined:
             return missedCallEnabled
+        case .incomingCall, .incomingCallAlert, .legacyCallIncoming:
+            return callsEnabled
         case .userMentioned, .mention, .legacyMention:
             return mentionEnabled
         case .messageReaction, .reaction, .legacyMessageReaction:
@@ -106,7 +108,8 @@ public extension UserNotificationPreferences {
             return contactRequestEnabled
         case .contactAccepted, .friendAccepted, .legacyFriendAccepted:
             return contactRequestEnabled
-        case .newConversation, .addedToConversation, .removedFromConversation:
+        case .newConversation, .newConversationDirect, .newConversationGroup,
+             .addedToConversation, .removedFromConversation:
             return conversationEnabled
         case .communityInvite, .legacyGroupInvite:
             return groupInviteEnabled
@@ -125,8 +128,12 @@ public extension UserNotificationPreferences {
             return storyReactionEnabled
         case .commentReply:
             return commentReplyEnabled
-        case .commentLike:
+        case .commentLike, .commentReaction:
             return commentLikeEnabled
+        case .storyNewComment, .friendStoryComment, .storyThreadReply:
+            return postCommentEnabled
+        case .friendNewPost, .friendNewStory, .friendNewMood:
+            return friendContentEnabled
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged,
              .twoFactorEnabled, .twoFactorDisabled, .system, .maintenance, .updateAvailable:
             return systemEnabled
@@ -135,8 +142,6 @@ public extension UserNotificationPreferences {
             return true  // power-user features: no toggle yet, always allow
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned,
              .legacyStatusUpdate, .legacyAffiliateSignup:
-            return true
-        @unknown default:
             return true
         }
     }

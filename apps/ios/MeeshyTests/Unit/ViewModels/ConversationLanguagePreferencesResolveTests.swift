@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class ConversationLanguagePreferencesResolveTests: XCTestCase {
     func test_resolved_frPrimaryEnRegional_ordersFrFirst() {
         let prefs = ConversationLanguagePreferences(

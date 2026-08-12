@@ -93,6 +93,7 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
 
 // MARK: - Tests
 
+@MainActor
 final class ConversationSocketHandlerTests: XCTestCase {
 
     private let conversationId = "000000000000000000000099"
@@ -226,9 +227,14 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // 2. UI signals on delegate are still expected.
         XCTAssertNotNil(delegate.lastUnreadMessage)
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "newmsg")
+        // Read-exactness (2026-07-24 read-exactness-design): "Lu = affiché".
+        // The socket handler no longer marks a message read on arrival — a
+        // bubble is reported read only once actually displayed
+        // (MessageListViewController willDisplay → SeenMessageAccumulator →
+        // markAsRead(messageIds:)). The arrival path must NOT fire markAsRead.
         XCTAssertEqual(
-            delegate.markAsReadCallCount, 1,
-            "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
+            delegate.markAsReadCallCount, 0,
+            "Inbound message must NOT be marked read on arrival — the visibility layer owns read receipts (read-exactness)"
         )
     }
 
@@ -446,6 +452,78 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(updated?.content, "Edited content", "Edited content must propagate to DB")
         XCTAssertTrue(updated?.isEdited == true, "isEdited flag must be set after socket edit")
         XCTAssertNotNil(updated?.editedAt)
+    }
+
+    /// Message d'appel (metadata call) : l'édition serveur est la transition
+    /// live → terminal. Elle doit ré-appliquer content ET callSummaryJson via
+    /// `applyCallNoticeUpdate`, SANS poser isEdited/editedAt — une transition
+    /// d'état n'est pas une édition utilisateur (pas de badge « modifié »).
+    func test_messageEdited_withCallSummary_reappliesMetadata_withoutEditFlags() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        var record = MessageRecord(
+            localId: "msg-call", serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Appel audio en cours", originalLanguage: "fr",
+            messageType: "system", messageSource: "system", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        record.callSummaryJson = try JSONSerialization.data(withJSONObject: [
+            "kind": "call-live", "callId": "call_1", "initiatorId": otherUserId,
+            "callType": "audio", "outcome": "completed", "durationSeconds": 0,
+            "bytesEstimated": false,
+        ])
+        try await actor.insertOptimistic(record)
+
+        let editedApiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-call",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
+            "content":"Appel audio · 04:32",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "updatedAt":"2026-03-06T12:05:00.000Z",
+            "metadata":{"kind":"call","callId":"call_1","initiatorId":"\(otherUserId)","callType":"audio","outcome":"completed","durationSeconds":272,"bytesEstimated":false}
+        }
+        """)
+        socket.simulateMessageEdited(editedApiMsg)
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let updated = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg-call")
+        }
+        XCTAssertEqual(updated?.content, "Appel audio · 04:32")
+        XCTAssertFalse(updated?.isEdited ?? true, "une transition d'état n'est pas une édition utilisateur")
+        XCTAssertNil(updated?.editedAt)
+        let stored = try XCTUnwrap(updated?.callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive, "la métadonnée stockée doit être passée au terminal")
+        XCTAssertEqual(decoded.durationSeconds, 272)
     }
 
     func test_messageEdited_unknownMessage_noEffect() async throws {
@@ -717,13 +795,38 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_typingStopped_removesUsernameFromDelegate() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Alice"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         socket.typingStopped.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(delegate.typingUsernames.isEmpty)
+    }
+
+    // Regression test: the typing roster is keyed by `userId`, not display
+    // name. Two participants sharing a display name (e.g. two uncustomized
+    // "John Smith"s in a group) must be tracked independently — one user's
+    // typing:stop must not clear the other's still-active entry.
+    func test_typingStopped_sameDisplayName_differentUsers_doesNotClearOther() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let userA = "same-name-user-a"
+        let userB = "same-name-user-b"
+
+        socket.typingStarted.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+        socket.typingStarted.send(TypingEvent(userId: userB, username: "john.b", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith", "John Smith"], "Both same-name users should be tracked independently")
+
+        socket.typingStopped.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith"], "User B must still show as typing after User A stops")
     }
 
     // MARK: - readStatusUpdated
@@ -949,12 +1052,122 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .read, "Should not downgrade from read to delivered")
     }
 
+    // MARK: - attachmentStatusUpdated — media consumption tracking
+
+    func test_attachmentStatusUpdated_withPositionFields_recordsMediaConsumptionFraction() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":2500,
+            "durationMs":10000,
+            "percentage":25
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.fraction(for: attachmentId), 0.25)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_completedPlayback_recordsCompleteConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"watched",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":10000,
+            "durationMs":10000,
+            "percentage":100
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.consumption(for: attachmentId)?.complete, true)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_withoutPositionFields_doesNotRecordConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"downloaded",
+            "updatedAt":"2099-12-31T23:59:59.000Z"
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(MediaConsumptionStore.shared.fraction(for: attachmentId))
+    }
+
+    func test_attachmentStatusUpdated_fromOtherParticipant_doesNotRecordMediaConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":8000,
+            "durationMs":10000,
+            "percentage":80
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(
+            MediaConsumptionStore.shared.fraction(for: attachmentId),
+            "Another participant's playback progress must never tint the local user's own view of this attachment"
+        )
+    }
+
     // MARK: - messageReceived clears typing indicator for sender
 
     func test_messageReceived_clearsTypingForSender() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Bob"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "bob", displayName: "Bob", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, senderUsername: "bob", senderDisplayName: "Bob")
         socket.simulateMessage(apiMsg)
@@ -1088,9 +1301,65 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(delegate.syncMissedCalled)
     }
 
+    func test_reconnect_clearsStaleTypingIndicators() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.typingUsernames = ["Alice", "Bob"]
+
+        socket.simulateReconnect()
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(delegate.typingUsernames.isEmpty,
+            "Reconnect must clear stale typing indicators (remote peers will re-emit if still typing)")
+    }
+
+    func test_deinit_clearsStaleTypingIndicatorsOnDelegate() async throws {
+        // Regression test: `deinit` used to launch `Task { @MainActor [weak
+        // self] in self?.delegate?.typingUsernames.removeAll() }` — capturing
+        // `self` weakly from inside its OWN `deinit` is dead code, because
+        // ARC has already zeroed weak references to `self` by the time the
+        // Task body runs. The delegate's typing roster was therefore never
+        // actually cleared when a handler was torn down mid-"typing…".
+        let delegate = MockConversationSocketDelegate()
+        do {
+            let socket = MockMessageSocket()
+            let sut = ConversationSocketHandler(
+                conversationId: conversationId,
+                currentUserId: currentUserId,
+                messageSocket: socket,
+                isApplicationActive: { true }
+            )
+            sut.delegate = delegate
+            sut.armSocketSubscriptions()
+            delegate.typingUsernames = ["Alice"]
+            _ = sut
+        }
+        // `sut` has no other strong referrers, so it deallocates here.
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertTrue(delegate.typingUsernames.isEmpty,
+            "Handler teardown must clear stale typing indicators on the delegate")
+    }
+
+    func test_willEnterForeground_triggersSyncMissedMessages() async throws {
+        let (sut, delegate, _) = makeSUT()
+        _ = sut
+
+        NotificationCenter.default.post(
+            name: UIApplication.willEnterForegroundNotification, object: nil)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(delegate.syncMissedCalled,
+            "Foreground backfill path must call syncMissedMessages when app returns from background")
+    }
+
     // MARK: - armSocketSubscriptions idempotency
 
     func test_armSocketSubscriptions_calledTwice_doesNotDuplicate() async throws {
+        let (db, actor) = try makeDB()
         let socket = MockMessageSocket()
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
@@ -1100,6 +1369,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
+        sut.persistence = actor
+        await actor.start()
         sut.armSocketSubscriptions()
         sut.armSocketSubscriptions()
 
@@ -1111,12 +1382,19 @@ final class ConversationSocketHandlerTests: XCTestCase {
         socket.simulateMessage(apiMsg)
 
         await Task.yield()
-        try await Task.sleep(nanoseconds: 500_000_000)
+        try await Task.sleep(nanoseconds: 800_000_000)
 
-        // Post Sprint 2: delegate.messages is no longer mutated. `markAsRead`
-        // fires exactly once per inbound message — `armSocketSubscriptions`
-        // early-returns on the second call so only one subscription is wired.
-        XCTAssertEqual(delegate.markAsReadCallCount, 1, "Should receive message only once despite double armSocketSubscriptions()")
+        // `armSocketSubscriptions` early-returns on the second call
+        // (guard cancellables.isEmpty), so only one subscription is wired and
+        // the inbound message is processed exactly once. Read-exactness moved
+        // read receipts off the arrival path, so single delivery is asserted on
+        // the persistence side: exactly one row lands in GRDB, never a duplicate.
+        let records = try await db.read { db in
+            try MessageRecord.filter(Column("localId") == "duptest").fetchAll(db)
+        }
+        XCTAssertEqual(records.count, 1, "Inbound message must be persisted exactly once despite double armSocketSubscriptions()")
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "duptest", "The message must still be delivered as an unread anchor")
+        _ = sut
     }
 
     // MARK: - Persistence Actor Integration
@@ -1152,10 +1430,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 800_000_000)
 
         // Post Sprint 2: delegate.messages is no longer appended to. The
-        // socket handler emits UI signals (lastUnreadMessage, markAsRead) and
-        // writes the full APIMessage through persistence — the view layer
-        // surfaces it via store observation. We verify the persistence side.
-        XCTAssertEqual(delegate.markAsReadCallCount, 1, "inbound message must auto-fire markAsRead")
+        // socket handler emits the UI signal (lastUnreadMessage) and writes the
+        // full APIMessage through persistence — the view layer surfaces it via
+        // store observation. Read-exactness moved read receipts off the arrival
+        // path, so markAsRead must NOT fire here. We verify the persistence side.
+        XCTAssertEqual(delegate.markAsReadCallCount, 0, "read-exactness: arrival must NOT mark read — the visibility layer does")
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "persist_new", "lastUnreadMessage must be set")
 
         // Verify the record was written to the database
@@ -1394,9 +1673,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 600_000_000)
 
+        let conversationId = self.conversationId
         let rows = try await db.read { db in
             try MessageRecord
-                .filter(Column("conversationId") == self.conversationId)
+                .filter(Column("conversationId") == conversationId)
                 .fetchAll(db)
         }
         XCTAssertEqual(rows.count, 1,
@@ -1464,9 +1744,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 600_000_000)
 
+        let conversationId = self.conversationId
         let rows = try await db.read { db in
             try MessageRecord
-                .filter(Column("conversationId") == self.conversationId)
+                .filter(Column("conversationId") == conversationId)
                 .fetchAll(db)
         }
         XCTAssertEqual(rows.count, 1,
@@ -1611,5 +1892,145 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // Dedup scoped to (attachmentId, targetLanguage): one entry, latest wins.
         XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.count, 1)
         XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.first?.url, "https://x/new.mp3")
+    }
+
+    // MARK: - Deduplication Window Tests
+
+    func test_messageReceived_duplicateId_droppedByDedup() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let msg = makeAPIMessage(id: "dup1", senderId: otherUserId, content: "Hello")
+        delegate.invalidateIndex()
+
+        socket.messageReceived.send(msg)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "dup1", "First delivery should surface the message")
+
+        // Send exact same ID again — should be dropped by dedup
+        delegate.lastUnreadMessage = nil
+        socket.messageReceived.send(msg)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertNil(delegate.lastUnreadMessage, "Duplicate message ID should be suppressed by dedup window")
+    }
+
+    func test_messageReceived_differentIds_bothDelivered() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let msg1 = makeAPIMessage(id: "unique1", senderId: otherUserId, content: "First")
+        let msg2 = makeAPIMessage(id: "unique2", senderId: otherUserId, content: "Second")
+        delegate.invalidateIndex()
+
+        socket.messageReceived.send(msg1)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let first = delegate.lastUnreadMessage
+        XCTAssertEqual(first?.id, "unique1")
+
+        socket.messageReceived.send(msg2)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "unique2", "Different ID should always be delivered")
+    }
+
+    // MARK: - Typing Safety Timer Cap
+
+    func test_typingStarted_safetyTimerCap_handlesExceedingCap() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        // Fill to the 200-entry timer cap, each a distinct user.
+        for i in 0..<200 {
+            socket.typingStarted.send(
+                TypingEvent(userId: "timer_user_\(i)", username: "TimerUser\(i)", conversationId: conversationId)
+            )
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.typingUsernames.count, 200, "All 200 users should be tracked")
+
+        // 201st user: the safety timer is not scheduled (cap exceeded) but the
+        // username MUST still be added to the typing list — cap only gates timers.
+        socket.typingStarted.send(
+            TypingEvent(userId: "timer_user_overflow", username: "TimerUserOverflow", conversationId: conversationId)
+        )
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(
+            delegate.typingUsernames.contains("TimerUserOverflow"),
+            "201st typing user must still appear in typingUsernames even though no safety timer is scheduled"
+        )
+        XCTAssertEqual(delegate.typingUsernames.count, 201)
+    }
+
+    func test_typingStarted_safetyTimerCap_existingUserRefreshedEvenAtCap() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        // Fill to the cap.
+        for i in 0..<200 {
+            socket.typingStarted.send(
+                TypingEvent(userId: "cap_user_\(i)", username: "CapUser\(i)", conversationId: conversationId)
+            )
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Re-sending an EXISTING user (already has a timer) is always accepted;
+        // the guard only blocks NEW users once the cap is reached.
+        socket.typingStarted.send(
+            TypingEvent(userId: "cap_user_0", username: "CapUser0", conversationId: conversationId)
+        )
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Count must not grow — "CapUser0" was already in the list.
+        XCTAssertEqual(delegate.typingUsernames.count, 200, "Re-sending existing user must not duplicate the entry")
+    }
+
+    // MARK: - Dedup Size Eviction
+
+    func test_dedup_sizeBasedEviction_doesNotCrashOnHighVolume() async throws {
+        // Verifies that sending many unique messages does not crash or leak,
+        // and that the dedup table stays bounded (evictDedup fires at 10,001st entry).
+        // We use 250 messages here to exercise the eviction call path without
+        // the overhead of 10 k socket events in a unit test.
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.invalidateIndex()
+
+        let batchSize = 250
+        for i in 0..<batchSize {
+            socket.messageReceived.send(
+                makeAPIMessage(id: "volume_msg_\(i)", senderId: otherUserId, content: "msg \(i)")
+            )
+        }
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        // Last message must have landed (no crash, no lost delivery).
+        XCTAssertEqual(
+            delegate.lastUnreadMessage?.id, "volume_msg_\(batchSize - 1)",
+            "Last message in high-volume burst must be delivered"
+        )
+    }
+
+    func test_dedup_duplicatesSuppressedAfterHighVolumeBurst() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.invalidateIndex()
+
+        // Send 50 unique messages so the dedup table is non-trivial.
+        for i in 0..<50 {
+            socket.messageReceived.send(
+                makeAPIMessage(id: "burst_msg_\(i)", senderId: otherUserId, content: "burst \(i)")
+            )
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        // Re-send the very first message — dedup must suppress it.
+        delegate.lastUnreadMessage = nil
+        socket.messageReceived.send(
+            makeAPIMessage(id: "burst_msg_0", senderId: otherUserId, content: "burst 0")
+        )
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertNil(
+            delegate.lastUnreadMessage,
+            "Duplicate message after high-volume burst must still be suppressed by dedup"
+        )
     }
 }

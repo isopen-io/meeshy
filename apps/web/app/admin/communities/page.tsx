@@ -356,6 +356,8 @@ export default function AdminCommunitiesPage() {
                             <img
                               src={community.avatar}
                               alt={community.name}
+                              loading="lazy"
+                              decoding="async"
                               className="h-14 w-14 rounded-full object-cover ring-2 ring-green-500/20"
                             />
                           ) : (

@@ -24,4 +24,18 @@ final class StoryOpeningTests: XCTestCase {
         StoryRenderer.applyOpening(nil, rootLayer: layer, elapsed: 0)
         XCTAssertNil(layer.mask)
     }
+
+    func test_applyOpening_zoom_addsScaleAnimation() {
+        let layer = CALayer()
+        layer.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        StoryRenderer.applyOpening(.zoom, rootLayer: layer, elapsed: 0)
+        XCTAssertEqual(layer.animationKeys()?.contains(where: { $0 == "opening-zoom" }), true)
+    }
+
+    func test_applyOpening_slide_addsTranslationAnimation() {
+        let layer = CALayer()
+        layer.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        StoryRenderer.applyOpening(.slide, rootLayer: layer, elapsed: 0)
+        XCTAssertEqual(layer.animationKeys()?.contains(where: { $0 == "opening-slide" }), true)
+    }
 }

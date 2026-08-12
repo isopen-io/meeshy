@@ -227,7 +227,7 @@ public final class MessageStore: ObservableObject {
                 // REST-refresh path. Window transitions (jump / restore /
                 // paginate) bypass this notification and call refreshFromDB()
                 // directly with a straight replace.
-                await store.refreshFromDB(mergeInMemory: true)
+                await store.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
             }
         }
         // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
@@ -255,7 +255,7 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Off-main DB read + progressive decrypt
 
-    func refreshFromDB(mergeInMemory: Bool = false) async {
+    func refreshFromDB(mergeInMemory: Bool = false, skipRunLoopYield: Bool = false) async {
         let convId = conversationId
         let mode = windowMode
         let anchor = windowAnchor
@@ -288,11 +288,15 @@ public final class MessageStore: ObservableObject {
         // and silently shows an empty bubble list. The dispatch hop forces
         // the mutation onto a fresh runloop tick AFTER the current view
         // update completes.
-        await yieldToRunLoop()
-
-        // Re-check: state could have changed during the runloop yield (e.g.,
-        // a socket message arrived and another refresh wrote first).
-        guard newRecords != messages else { return }
+        // skipRunLoopYield: notification-driven paths already run inside a
+        // `Task { @MainActor in }` that was created outside any view-update
+        // cycle — the yield is unnecessary there and adds ~16ms per event.
+        if !skipRunLoopYield {
+            await yieldToRunLoop()
+            // Re-check: state could have changed during the runloop yield (e.g.,
+            // a socket message arrived and another refresh wrote first).
+            guard newRecords != messages else { return }
+        }
 
         publish(records: newRecords, mergeInMemory: mergeInMemory)
     }

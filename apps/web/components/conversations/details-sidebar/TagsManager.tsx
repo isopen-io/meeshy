@@ -134,7 +134,7 @@ export function TagsManager({ conversationId, currentUser, onTagsUpdated }: Tags
     !allUserTags.some(tag => tag.toLowerCase() === searchQuery.toLowerCase());
 
   if (isLoading) {
-    return <div className="text-xs text-muted-foreground italic">{t('common.loading') || 'Loading...'}</div>;
+    return <div className="text-xs text-muted-foreground italic">{t('common.loading', 'Loading...')}</div>;
   }
 
   return (

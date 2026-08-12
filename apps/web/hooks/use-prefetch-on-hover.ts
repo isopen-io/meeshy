@@ -3,9 +3,10 @@
 import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
-import { conversationsService } from '@/services/conversations.service';
+import { fetchMessagesFromService } from '@/hooks/queries/use-conversation-messages-rq';
 
 const HOVER_DEBOUNCE_MS = 200;
+const PREFETCH_MESSAGE_LIMIT = 20;
 
 /**
  * Précharge les messages d'une conversation au survol.
@@ -22,14 +23,16 @@ export function usePrefetchOnHover(conversationId: string) {
     }
 
     timeoutRef.current = setTimeout(() => {
-      const queryKey = queryKeys.messages.list(conversationId);
+      const queryKey = queryKeys.messages.infinite(conversationId);
       const cached = queryClient.getQueryData(queryKey);
 
       if (cached !== undefined) return;
 
-      queryClient.prefetchQuery({
+      queryClient.prefetchInfiniteQuery({
         queryKey,
-        queryFn: () => conversationsService.getMessages(conversationId, 1, 20),
+        queryFn: ({ pageParam, signal }) =>
+          fetchMessagesFromService(conversationId, pageParam, PREFETCH_MESSAGE_LIMIT, undefined, signal),
+        initialPageParam: 1 as number | string,
       });
     }, HOVER_DEBOUNCE_MS);
   }, [conversationId, queryClient]);

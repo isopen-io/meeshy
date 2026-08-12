@@ -35,6 +35,8 @@ dev.db
 
 # Testing
 coverage/
+coverage-*/
+.coverage*/
 .nyc_output/
 
 # Temporary files

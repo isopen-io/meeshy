@@ -17,11 +17,6 @@ final class ConversationStateStore: ObservableObject {
     /// on an active conversation. A plain stored property serves the readers
     /// without that churn.
     var messages: [Message] = []
-    @Published var isLoadingInitial = false
-    @Published var isLoadingOlder = false
-    @Published var isLoadingNewer = false
-    @Published var isRevalidating = false
-    @Published var editInProgress: Set<String> = []
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
@@ -38,7 +33,6 @@ final class ConversationStateStore: ObservableObject {
     @Published var preferredLanguageRevision: Int = 0
     @Published var activeLiveLocations: [ActiveLiveLocation] = []
     @Published var lastUnreadMessage: Message?
-    @Published var currentConversationUnreadCount: Int = 0
     @Published var otherConversationsUnread: Int = 0
     
     @Published var reactionDetails: [ReactionGroup] = []
@@ -64,13 +58,6 @@ final class ConversationStateStore: ObservableObject {
     var isProgrammaticScroll = false
     var pendingServerIds: [String: String] = [:]
 
-    // MARK: - Cached derived data
-
-    @Published var topActiveMembers: [ConversationActiveMember] = []
-    @Published var allAudioItems: [AudioItem] = []
-    @Published var mediaCaptionMap: [String: String] = [:]
-    @Published var mediaSenderInfoMap: [String: MediaSenderInfo] = [:]
-    
     init() {}
 }
 

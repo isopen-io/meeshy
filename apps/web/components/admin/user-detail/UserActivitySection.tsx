@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { isExpired } from '@/utils/time-remaining';
 import { Badge } from '@/components/ui/badge';
 import {
   Activity,
@@ -21,6 +22,7 @@ import {
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 interface ShareLink {
   id: string;
@@ -96,7 +98,7 @@ function formatDate(date: string | null, locale: string) {
       month: 'short',
       year: 'numeric',
     });
-  } catch {
+  } /* istanbul ignore next -- toLocaleDateString never throws in practice */ catch {
     return 'N/A';
   }
 }
@@ -108,9 +110,6 @@ function StatusBadge({ active, expired }: { active: boolean; expired: boolean })
   return <Badge variant="secondary" className="text-xs">{t('usersDetail.inactiveBadge')}</Badge>;
 }
 
-function isExpired(expiresAt: string | null): boolean {
-  return !!expiresAt && new Date(expiresAt) < new Date();
-}
 
 function CollapsibleSection({
   title,
@@ -288,7 +287,7 @@ function ContactCard({ request, direction }: { request: ContactRequest; directio
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium">
           {person.avatar ? (
-            <img src={person.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+            <img src={buildAttachmentUrl(person.avatar) ?? undefined} alt="" loading="lazy" decoding="async" className="w-8 h-8 rounded-full object-cover" />
           ) : (
             (person.displayName || person.username).charAt(0).toUpperCase()
           )}

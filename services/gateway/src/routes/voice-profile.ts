@@ -15,7 +15,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthContext, UnifiedAuthRequest} fr
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized } from '../utils/response';
+import { sendSuccess, sendError, sendUnauthorized, sendBadRequest } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'VoiceProfileRoutes' });
 
@@ -127,10 +127,10 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.updateConsent(auth.registeredUser.id, consent);
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendError(reply, 400, result.error as string, { code: (result as any).errorCode });
     }
 
-    return reply.send(result);
+    return sendSuccess(reply, (result as any).data);
   });
 
   /**
@@ -196,10 +196,10 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.getConsentStatus(auth.registeredUser.id);
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendError(reply, 400, result.error as string, { code: (result as any).errorCode });
     }
 
-    return reply.send(result);
+    return sendSuccess(reply, (result as any).data);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -460,12 +460,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
 
       if (!audioData || !audioFormat) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          errorCode: 'MISSING_AUDIO',
-          message: 'Audio file is required'
-        });
+        return sendBadRequest(reply, 'Audio file is required');
       }
 
       registerRequest = {
@@ -482,12 +477,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
 
     // Validate required fields
     if (!registerRequest.audioData || !registerRequest.audioFormat) {
-      return reply.status(400).send({
-        success: false,
-        error: 'INVALID_REQUEST',
-        errorCode: 'MISSING_AUDIO',
-        message: 'audioData and audioFormat are required'
-      });
+      return sendBadRequest(reply, 'audioData and audioFormat are required');
     }
 
     const result = await voiceProfileService.registerProfile(auth.registeredUser.id, registerRequest);
@@ -495,10 +485,10 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     if (!result.success) {
       const statusCode = result.errorCode === 'CONSENT_REQUIRED' ? 403 :
                          result.errorCode === 'PROFILE_EXISTS' ? 409 : 400;
-      return reply.status(statusCode).send(result);
+      return sendError(reply, statusCode, result.error, { code: result.errorCode });
     }
 
-    return reply.status(201).send(result);
+    return sendSuccess(reply, result.data, { statusCode: 201 });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -606,10 +596,10 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     if (!result.success) {
       const statusCode = result.errorCode === 'PROFILE_NOT_FOUND' ? 404 :
                          result.errorCode === 'PROFILE_MISMATCH' ? 403 : 400;
-      return reply.status(statusCode).send(result);
+      return sendError(reply, statusCode, result.error, { code: result.errorCode });
     }
 
-    return reply.send(result);
+    return sendSuccess(reply, result.data);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -767,17 +757,11 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     }
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendError(reply, 400, result.error as string, { code: (result as any).errorCode });
     }
 
     // Add exists flag to indicate profile exists
-    return reply.send({
-      ...result,
-      data: {
-        ...result.data,
-        exists: true
-      }
-    });
+    return sendSuccess(reply, { ...result.data, exists: true });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -837,10 +821,10 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.deleteProfile(auth.registeredUser.id);
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendError(reply, 400, result.error as string, { code: (result as any).errorCode });
     }
 
-    return reply.send(result);
+    return sendSuccess(reply, (result as any).data);
   });
 
   logger.info('VoiceProfile routes registered');

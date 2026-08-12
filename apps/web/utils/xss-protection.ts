@@ -14,6 +14,8 @@
  * @version 1.0.0
  */
 
+import { isValidEmail as canonicalIsValidEmail } from '@meeshy/shared/utils/email-validator';
+
 // Server-side fallback: DOMPurify requires a window object
 // On the server, we'll use a simple regex-based sanitization
 const isBrowser = typeof window !== 'undefined';
@@ -72,7 +74,13 @@ export function sanitizeText(input: string | null | undefined): string {
 
   // Remove control characters and zero-width chars
   const cleaned = sanitized
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width chars
+    // Strip only the truly-invisible zero-width space (U+200B) and BOM/ZWNBSP
+    // (U+FEFF). Do NOT strip ZWNJ (U+200C) or ZWJ (U+200D): they are
+    // semantically significant \u2014 ZWJ joins emoji sequences (family, flags,
+    // profession emoji), ZWNJ is orthographically required in Persian/Farsi,
+    // and both drive conjunct formation in Indic scripts. Stripping them
+    // corrupts legitimate user content in a multilingual product.
+    .replace(/[\u200B\uFEFF]/g, '') // Zero-width space + BOM only
     // Keep \t (U+0009), \n (U+000A) and \r (U+000D): they are legitimate text
     // whitespace (message line breaks), NOT dangerous control characters.
     // Stripping the whole C0 range silently deleted every line break on edit.
@@ -281,14 +289,16 @@ export function truncateText(
 /**
  * Validate email address
  *
+ * Délègue à la source unique RFC 5322 `@meeshy/shared/utils/email-validator`
+ * (la même utilisée par les schémas Zod et les flux d'inscription) — pas de
+ * réimplémentation locale de la validation d'email.
+ *
  * @param email - Email string
  * @returns true if valid email format
  */
 export function isValidEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 254;
+  return canonicalIsValidEmail(email);
 }
 
 /**

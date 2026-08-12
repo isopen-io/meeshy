@@ -41,12 +41,17 @@ import { StreamHeader, StreamComposer, StreamSidebar } from '@/components/bubble
 import { ConversationMessages } from '@/components/conversations/ConversationMessages';
 import { AttachmentGallery } from '@/components/attachments/AttachmentGallery';
 import { LoadingState } from '@/components/common/LoadingStates';
+import { useSeenMessages } from '@/hooks/use-seen-messages';
+import { useQueryClient } from '@tanstack/react-query';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
+import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 
 // Services et utils
 import { getAuthToken } from '@/utils/token-utils';
 import { conversationsService } from '@/services';
 import { detectLanguage } from '@/utils/language-detection';
 import { getMaxMessageLength } from '@/lib/constants/languages';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 // Types et constantes
 import type { User, Message } from '@meeshy/shared/types';
@@ -78,6 +83,7 @@ export function BubbleStreamPage({
   // Router
   // Refs
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
   const messageComposerRef = useRef<unknown>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const conversationObjectIdRef = useRef<string | null>(null);
@@ -153,7 +159,9 @@ export function BubbleStreamPage({
   const [isTyping, setIsTyping] = useState(false);
   const [, setDetectedLanguage] = useState<string>('fr');
   const [userLanguage, setUserLanguage] = useState<string>(resolveUserPreferredLanguage());
-  const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(user.systemLanguage || 'fr');
+  // Canonical (normalized) system code — must match languageChoices[0].code so the
+  // selection-validation effect below never treats the default as out-of-range.
+  const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(normalizeLanguageCode(user.systemLanguage) || 'fr');
   const [activeUsers, setActiveUsers] = useState<User[]>(initialParticipants || []);
 
   // États de chargement
@@ -328,7 +336,10 @@ export function BubbleStreamPage({
     tCommon,
   });
 
-  // Écouter la conversation active pour les notifications
+  // Écouter la conversation active pour les notifications + consommer
+  // l'ouverture (reset optimiste du badge + notifications de la conversation
+  // marquées lues), comme le fait ConversationLayout pour /conversations.
+  // Sans cela, le compteur de la conversation d'accueil ne redescendait JAMAIS.
   useEffect(() => {
     console.log('🔍 [BubbleStreamPage] normalizedConversationId changed:', {
       normalizedConversationId,
@@ -337,12 +348,31 @@ export function BubbleStreamPage({
 
     if (normalizedConversationId) {
       setActiveConversationId(normalizedConversationId);
+      setConversationUnreadInCache(queryClient, normalizedConversationId, 0);
+      markScopeNotificationsRead(queryClient, {
+        kind: 'conversation',
+        conversationId: normalizedConversationId,
+      });
     }
 
     return () => {
       setActiveConversationId(null);
     };
-  }, [normalizedConversationId, setActiveConversationId]);
+  }, [normalizedConversationId, setActiveConversationId, queryClient]);
+
+  // Suivi de lecture exact : rapporte au serveur les messages RÉELLEMENT
+  // affichés (curseur de lecture + badge). Ce hook n'était monté que par
+  // ConversationView — la page d'accueil n'émettait donc jamais de
+  // mark-as-read et son compteur croissait indéfiniment. `conversationId`
+  // n'est fourni qu'une fois l'initialisation finie : le conteneur scrollable
+  // est alors monté, et le changement de dépendance ré-attache les observers.
+  // Sessions ANONYMES exclues : la route mark-as-read est JWT-only
+  // (allowAnonymous: false) — chaque flush partirait en 401.
+  useSeenMessages({
+    containerRef: messagesContainerRef,
+    conversationId:
+      isInitializing || isAnonymousMode ? null : (normalizedConversationId || null),
+  });
 
   // Détection automatique de langue
   useEffect(() => {
@@ -362,9 +392,9 @@ export function BubbleStreamPage({
   useEffect(() => {
     const availableLanguageCodes = languageChoices.map(choice => choice.code);
     if (!availableLanguageCodes.includes(selectedInputLanguage)) {
-      setSelectedInputLanguage(user.systemLanguage || 'fr');
+      setSelectedInputLanguage(languageChoices[0]?.code ?? 'fr');
     }
-  }, [languageChoices, selectedInputLanguage, user.systemLanguage]);
+  }, [languageChoices, selectedInputLanguage]);
 
   // Chargement parallèle des messages et utilisateurs
   useEffect(() => {

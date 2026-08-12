@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class ComposeLanguageTests: XCTestCase {
     func test_composeLanguage_detectsEnglishContent() {
         let lang = ConversationViewModel.composeLanguage(

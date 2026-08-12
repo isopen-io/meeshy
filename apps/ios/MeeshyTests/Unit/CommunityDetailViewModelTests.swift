@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 import SwiftUI
-import MeeshyUI
+@testable import MeeshyUI
 
 @MainActor
 final class CommunityDetailViewModelTests: XCTestCase {

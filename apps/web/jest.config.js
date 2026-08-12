@@ -85,7 +85,6 @@ const customJestConfig = {
     '/.next/',
     '/__tests__/integration/',
     '\\.md$',
-    '/_archived/',
     '/e2e/',
   ],
 

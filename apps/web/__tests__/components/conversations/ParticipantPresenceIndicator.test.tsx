@@ -57,7 +57,9 @@ describe('ParticipantPresenceIndicator', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    // Au-dela de 30min (offline) : plus aucun indicateur de presence.
+    expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Hors ligne/)).not.toBeInTheDocument();
   });
 
   it('falls back to the provided user when the store does not know the user yet', () => {
@@ -71,16 +73,17 @@ describe('ParticipantPresenceIndicator', () => {
     expect(screen.getByTitle('En ligne')).toBeInTheDocument();
   });
 
-  it('renders offline when neither the store nor the fallback resolve a user', () => {
-    render(<ParticipantPresenceIndicator userId="unknown-user" />);
+  it('renders nothing (offline) when neither the store nor the fallback resolve a user', () => {
+    const { container } = render(<ParticipantPresenceIndicator userId="unknown-user" />);
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    // offline => aucun indicateur affiché.
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('recomputes relative status decay on the store tick (online → away without any user mutation)', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
-      // isOnline indéterminé → statut purement temporel : 6 min = away
+      // isOnline indéterminé → statut purement temporel : 2 min = away (1/3/5)
       useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() })]);
     });
 
@@ -92,9 +95,9 @@ describe('ParticipantPresenceIndicator', () => {
       // guarantees Zustand notifies all selectors watching this user's data.
       // Direct mutation of the map object is unreliable (same reference → selector
       // equality check in useSyncExternalStore skips re-render).
-      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: sixMinutesAgo });
+      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: twoMinutesAgo });
     });
 
-    expect(screen.getByTitle('Inactif')).toBeInTheDocument();
+    expect(screen.getByTitle('Absent')).toBeInTheDocument();
   });
 });

@@ -29,8 +29,19 @@ export type ResolveUserLanguageOpts = {
  *   4. deviceLocale             (locale appareil — Prisme étendu 2026-05-26)
  *   5. 'fr'                     (fallback ultime)
  *
+ * Les préférences in-app sont normalisées à la lecture via
+ * {@link normalizeInAppLanguage} — parité stricte avec le niveau `deviceLocale`
+ * et avec {@link resolveUserLanguagesOrdered}. Les prefs sont persistées verbatim
+ * (`z.string().optional()`, aucune normalisation à l'écriture) : un
+ * `systemLanguage: 'EN'` devient `'en'`, et un `'pt-BR'` (produit par le web ou
+ * iOS) devient `'pt'`. Sans cette normalisation, `meta.userLanguage` renverrait
+ * `'EN'`/`'pt-br'` alors que le pipeline de traduction stocke ses cibles en
+ * minuscules 2-lettres (`'en'`, `'pt'`) — le client manquerait la traduction et
+ * retomberait sur l'original (violation du Prisme).
+ *
  * L'option `deviceLocale` est facultative — les call sites legacy qui passent
- * un seul argument restent valides.
+ * un seul argument restent valides. `normalizeLanguageCode` retourne déjà un
+ * code lowercase pour la locale appareil.
  *
  * @see resolveUserLanguagesOrdered pour la liste complète (sans fallback 'fr')
  */
@@ -42,12 +53,48 @@ export function resolveUserLanguage(
   },
   opts: ResolveUserLanguageOpts = {}
 ): string {
-  if (user.systemLanguage) return user.systemLanguage;
-  if (user.regionalLanguage) return user.regionalLanguage;
-  if (user.customDestinationLanguage) return user.customDestinationLanguage;
+  const system = normalizeInAppLanguage(user.systemLanguage);
+  if (system) return system;
+  const regional = normalizeInAppLanguage(user.regionalLanguage);
+  if (regional) return regional;
+  const custom = normalizeInAppLanguage(user.customDestinationLanguage);
+  if (custom) return custom;
   const normalized = normalizeLanguageCode(opts.deviceLocale);
   if (normalized) return normalized;
   return 'fr';
+}
+
+/**
+ * Normalise un niveau de préférence in-app avec parité stricte vis-à-vis du
+ * niveau `deviceLocale`. Les prefs in-app sont persistées verbatim
+ * (`z.string().optional()`, aucune normalisation à l'écriture), donc une valeur
+ * BCP-47 (`'pt-BR'`, `'en-US'`, `'fr_FR'`) produite par le web
+ * (`Accept-Language`) ou iOS (`Locale.current.identifier`) peut atteindre le
+ * resolver. Un simple `.toLowerCase()` donnerait `'pt-br'`, qui ne matche jamais
+ * les clés de traduction 2-lettres lowercase (`'pt'`) — violation du Prisme,
+ * exactement le bug que {@link normalizeLanguageCode} corrige déjà côté
+ * deviceLocale.
+ *
+ * Retourne `undefined` quand la préférence est absente OU structurellement
+ * invalide (vide/espaces après trim, séparateurs seuls, sous-tag primaire de
+ * moins de 2 lettres alphabétiques) : une telle valeur n'est PAS un code de
+ * langue et doit être traitée comme NON DÉFINIE pour laisser la résolution
+ * tomber sur le niveau suivant du Prisme. La ressusciter verbatim (`'  '`,
+ * `'-'`, `'e'`) renverrait un code qui ne matche aucune traduction et forcerait
+ * le client sur l'original alors qu'une préférence valide de priorité inférieure
+ * existe — violation directe du Prisme.
+ *
+ * Repli `.toLowerCase()` du sous-tag primaire : zéro régression pour les codes
+ * que `normalizeLanguageCode` ne sait pas canoniser mais qui restent des codes
+ * plausibles (ISO 639-3 inconnu irréductible, `'ZZZ'` → `'zzz'`) — ils sont
+ * conservés comme avant, seul le repli des valeurs NON-CODE change.
+ */
+function normalizeInAppLanguage(code: string | null | undefined): string | undefined {
+  if (!code) return undefined;
+  const normalized = normalizeLanguageCode(code);
+  if (normalized) return normalized;
+  const primary = code.split(/[-_]/)[0]?.trim().toLowerCase();
+  return primary && /^[a-z]{2,}$/.test(primary) ? primary : undefined;
 }
 
 /**
@@ -71,9 +118,9 @@ export function resolveUserLanguagesOrdered(
   opts: ResolveUserLanguageOpts = {}
 ): string[] {
   const candidates: Array<string | null | undefined> = [
-    user.systemLanguage,
-    user.regionalLanguage,
-    user.customDestinationLanguage,
+    normalizeInAppLanguage(user.systemLanguage),
+    normalizeInAppLanguage(user.regionalLanguage),
+    normalizeInAppLanguage(user.customDestinationLanguage),
     normalizeLanguageCode(opts.deviceLocale),
   ];
   const seen = new Set<string>();
@@ -89,17 +136,84 @@ export function resolveUserLanguagesOrdered(
 }
 
 /**
- * Collecte toutes les langues cibles pour la traduction automatique d'un utilisateur.
- * autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
+ * Applique le Prisme Linguistique à l'aperçu du dernier message d'une ligne de
+ * liste de conversations.
+ *
+ * Jumeau TypeScript de
+ * `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift`). Les deux
+ * plateformes rendent la même ligne depuis la même charge REST — la carte
+ * `lastMessageTranslations` et `lastMessageOriginalLanguage` posées par
+ * `GET /conversations`. Toute divergence de résolution ferait afficher deux
+ * textes différents pour un même compte selon le client.
+ *
+ * Le prisme est ORDONNÉ, et la langue d'origine y concourt **à son propre
+ * rang** — jamais comme court-circuit global. On descend les langues du lecteur
+ * dans l'ordre ; la première qui est servie gagne, qu'elle le soit par une
+ * traduction ou parce que le message est déjà écrit dedans :
+ *
+ *   pour chaque langue L du prisme, dans l'ordre :
+ *     L est la langue d'origine  ⇒ l'aperçu brut (le message EST en L)
+ *     une traduction existe en L ⇒ cette traduction
+ *   aucune ⇒ l'aperçu brut
+ *
+ * **Pourquoi le rang, et pas « la langue d'origine est quelque part dans le
+ * prisme ⇒ l'original »** — cette seconde formulation (celle que portait iOS,
+ * et le premier jet de ce jumeau) rétrograde silencieusement la langue PRIMAIRE
+ * du lecteur dès que la langue d'origine apparaît plus bas dans son prisme.
+ * C'est exactement le cas décrit par `CLAUDE.md` : « un utilisateur francophone
+ * avec un iPhone en anglais voit TOUJOURS ses messages en français (priorité 1) ;
+ * la locale anglaise n'intervient que si aucune traduction française n'est
+ * disponible ». Prisme `['fr', 'en']`, message anglais, traduction française
+ * disponible : la formulation par appartenance rend « Hello », la formulation
+ * par rang rend « Bonjour ». Seule la seconde respecte la règle produit, et
+ * c'est aussi ce que fait déjà le chemin du CORPS des messages
+ * (`use-message-translations`, qui compare la langue d'origine à la SEULE
+ * langue de tête). La ligne de liste était la dernière à en diverger.
+ *
+ * **Règle critique du Prisme (#3) : ne JAMAIS retomber sur une traduction
+ * quelconque.** L'absence de traduction vers une langue du lecteur signifie que
+ * le contenu est déjà dans cette langue, ou qu'aucune traduction n'a été
+ * produite — servir une troisième langue serait pire que l'original.
+ *
+ * Les clés de la carte comme les langues du lecteur sont comparées en
+ * minuscules : iOS minuscule ses clés au décodage, le web consomme la charge
+ * telle quelle, et la normalisation doit donc vivre ici pour que les deux
+ * plateformes restent d'accord.
+ *
+ * `preferredLanguages` doit être ordonnée — c'est la sortie de
+ * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
  */
-export function resolveUserTranslationLanguages(user: {
-  systemLanguage?: string;
-  regionalLanguage?: string;
-}): string[] {
-  const languages: string[] = [];
-  if (user.systemLanguage) languages.push(user.systemLanguage);
-  if (user.regionalLanguage) languages.push(user.regionalLanguage);
-  return languages.length > 0 ? languages : ['fr'];
+export function resolveLastMessagePreview(params: {
+  preview: string | null | undefined;
+  translations?: Readonly<Record<string, string>> | null;
+  originalLanguage?: string | null;
+  preferredLanguages: readonly string[];
+}): string | null | undefined {
+  const { preview, translations, originalLanguage, preferredLanguages } = params;
+
+  if (!translations || typeof translations !== 'object') return preview;
+
+  const preferred = preferredLanguages
+    .filter((lang): lang is string => typeof lang === 'string' && lang.trim() !== '')
+    .map((lang) => lang.toLowerCase());
+  if (preferred.length === 0) return preview;
+
+  const original = originalLanguage?.toLowerCase();
+
+  const byLowercasedKey = new Map<string, string>();
+  for (const [lang, text] of Object.entries(translations)) {
+    if (typeof text !== 'string' || text.trim() === '') continue;
+    byLowercasedKey.set(lang.toLowerCase(), text);
+  }
+
+  for (const lang of preferred) {
+    if (original && lang === original) return preview;
+    const translated = byLowercasedKey.get(lang);
+    if (translated !== undefined) return translated;
+  }
+
+  return preview;
 }
 
 /**
@@ -176,16 +290,31 @@ type LanguageResolvable = {
 }
 
 export function resolveParticipantLanguage(participant: LanguageResolvable): string {
+  // Le fallback (langue déclarée par le call site) est normalisé comme les
+  // niveaux de resolveUserLanguagesOrdered : le docstring promet la « même
+  // normalisation que resolveUserLanguage » pour TOUS les chemins de retour.
+  // Ces niveaux réduisent la casse ET les sous-tags région/script via
+  // normalizeLanguageCode ('it-IT' → 'it', 'FR' → 'fr') : un fallback laissé
+  // région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
+  // traductions indexées en minuscules 2/3-lettres exactement comme une
+  // préférence in-app non normalisée (violation du Prisme). Le repli
+  // `?? .toLowerCase()` préserve le fallback terminal (jamais `undefined`) pour
+  // les codes que normalizeLanguageCode ne sait pas réduire — parité stricte
+  // avec le contrat normalizeLanguageForDedup, zéro régression sur les codes
+  // déjà canoniques.
+  const fallback =
+    normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
   if (participant.type !== 'user' || !participant.user) {
-    return participant.language
+    return fallback
   }
-  const user = participant.user
-  if (user.systemLanguage) return user.systemLanguage
-  if (user.regionalLanguage) return user.regionalLanguage
-  if (user.customDestinationLanguage) return user.customDestinationLanguage
-  const normalizedDevice = normalizeLanguageCode(user.deviceLocale)
-  if (normalizedDevice) return normalizedDevice
-  return participant.language
+  // Délègue à la source de vérité unique (SSOT) : mêmes 4 niveaux, même
+  // normalisation de casse que resolveUserLanguage — ne PAS ré-implémenter
+  // l'échelle ici (règle CLAUDE.md). Seul le fallback diffère : la langue
+  // déclarée par le call site plutôt que la default app 'fr'.
+  const [top] = resolveUserLanguagesOrdered(participant.user, {
+    deviceLocale: participant.user.deviceLocale ?? undefined,
+  })
+  return top ?? fallback
 }
 
 /**
@@ -196,28 +325,39 @@ export function isValidMongoId(id: string): boolean {
 }
 
 /**
- * Calcule si un message peut encore être modifié (1 heure max pour users normaux)
+ * Calcule si un message peut encore être modifié (SSOT de la fenêtre d'édition).
+ *
+ * Parité stricte avec les chemins autoritaires qui, aujourd'hui, réimplémentent
+ * la même règle chacun de leur côté :
+ *  - socket : `MessageHandler.handleMessageEdit` (`EDIT_WINDOW_MS = 24h`)
+ *  - REST   : `routes/conversations/messages-advanced.ts` (`twentyFourHoursInMs`)
+ *  - web    : `hooks/use-message-interactions` (`twentyFourHoursInMs`)
+ *
+ * Un utilisateur normal dispose de 24 heures ; le contournement de la fenêtre
+ * est un privilège de rôle GLOBAL (MODERATOR/ADMIN/BIGBOSS), jamais un rôle de
+ * conversation (admin/moderator/member) — comparé en majuscules car la DB peut
+ * stocker le rôle en minuscules. Un `createdAt` invalide (Date → NaN) ne bloque
+ * jamais : `NaN > window` est faux, exactement comme les trois sites ci-dessus.
  */
 export function canEditMessage(
   createdAt: Date | string,
   userRole: string = 'USER'
 ): { canEdit: boolean; reason?: string } {
-  // Admins et BIGBOSS peuvent toujours modifier
-  if (['ADMIN', 'BIGBOSS', 'MODERATOR', 'CREATOR'].includes(userRole)) {
+  if (['MODERATOR', 'ADMIN', 'BIGBOSS'].includes(userRole.toUpperCase())) {
     return { canEdit: true };
   }
-  
+
   const messageDate = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
   const messageAge = Date.now() - messageDate.getTime();
-  const oneHourInMs = 60 * 60 * 1000;
-  
-  if (messageAge > oneHourInMs) {
+  const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  if (messageAge > EDIT_WINDOW_MS) {
     return {
       canEdit: false,
       reason: 'MESSAGE_TOO_OLD',
     };
   }
-  
+
   return { canEdit: true };
 }
 
@@ -237,22 +377,29 @@ export function generateDefaultConversationTitle(
   if (otherMembers.length === 1) {
     const member = otherMembers[0];
     if (member) {
-      return member.displayName || member.username || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown User';
+      const fullName = [member.firstName, member.lastName]
+        .filter((p): p is string => !!p && p.trim().length > 0)
+        .map(p => p.trim())
+        .join(' ');
+      return member.displayName?.trim() || member.username?.trim() || fullName || 'Unknown User';
     }
     return 'Unknown User';
   }
   
+  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
+    const fullName = [m.firstName, m.lastName]
+      .filter((p): p is string => !!p && p.trim().length > 0)
+      .map(p => p.trim())
+      .join(' ');
+    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
+  };
+
   if (otherMembers.length === 2) {
-    const names = otherMembers.map(m => 
-      m.displayName || m.username || m.firstName || 'Unknown User'
-    );
-    return names.join(', ');
+    return otherMembers.map(resolveName).join(', ');
   }
-  
+
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(m => 
-    m.displayName || m.username || m.firstName || 'Unknown User'
-  );
+  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 
@@ -285,12 +432,10 @@ export function getRequiredLanguages(
   const languages = new Set<string>();
 
   conversationMembers.forEach(user => {
-    const lang = resolveUserLanguage(user, {
-      deviceLocale: user.deviceLocale ?? undefined,
-    });
-    if (lang) {
-      languages.add(lang);
-    }
+    // resolveUserLanguage retourne toujours une string non-vide (fallback 'fr').
+    languages.add(
+      resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined })
+    );
   });
 
   return Array.from(languages);

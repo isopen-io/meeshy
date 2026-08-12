@@ -53,7 +53,11 @@
     "deleteVideoNamed": "Supprimer la vidéo {name}",
     "deleteFileNamed": "Supprimer le fichier {name}",
     "openImageNamed": "Ouvrir l'image {name}",
-    "openFileNamed": "Ouvrir le fichier {name}"
+    "openFileNamed": "Ouvrir le fichier {name}",
+    "imagePreviewNamed": "Aperçu de l'image {name}",
+    "openVideoFullscreenNamed": "Ouvrir la vidéo {name} en plein écran",
+    "openPdfNamed": "Ouvrir le PDF : {name}",
+    "openTextFileNamed": "Ouvrir le fichier texte : {name}"
   },
   "contextMenu": {
     "close": "Fermer",

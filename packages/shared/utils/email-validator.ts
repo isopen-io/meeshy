@@ -152,6 +152,13 @@ export function getEmailValidationError(email: string): string | null {
     return 'Partie avant @ manquante';
   }
 
+  // Mirror isValidEmail's local-part length cap (RFC 5321): the shared
+  // EMAIL_REGEX below has an unbounded local part, so without this check a
+  // 65+ char local part would slip through here while isValidEmail rejects it.
+  if (localPart.length > 64) {
+    return 'Partie avant @ trop longue (maximum 64 caractères)';
+  }
+
   if (!domain) {
     return 'Domaine après @ manquant';
   }
@@ -183,7 +190,12 @@ export function getEmailValidationError(email: string): string | null {
     return 'Email ne peut pas contenir deux points consécutifs';
   }
 
-  if (!EMAIL_REGEX.test(trimmedEmail.toLowerCase())) {
+  // Final verdict delegates to the canonical validator (Single Source of Truth):
+  // getEmailValidationError must never return null for an email isValidEmail
+  // rejects, otherwise inline field validation and submit-gating disagree
+  // (see use-field-validation.ts vs use-register-form.ts). Delegating here keeps
+  // the two functions provably in lockstep even if isValidEmail's rules evolve.
+  if (!isValidEmail(email)) {
     return 'Format d\'email invalide';
   }
 
@@ -203,4 +215,6 @@ export function getEmailValidationError(email: string): string | null {
  * getEmailValidationError('debu@') // "Domaine après @ manquant"
  * getEmailValidationError('debute@email') // "Domaine doit contenir un point (ex: exemple.com)"
  * getEmailValidationError('user@example.com') // null (valide)
+ *
+ * Invariant: getEmailValidationError(x) === null  ⟺  isValidEmail(x) === true
  */

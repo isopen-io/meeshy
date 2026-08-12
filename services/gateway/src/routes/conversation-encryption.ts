@@ -19,6 +19,7 @@ import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { LIVE_MESSAGE_MARK } from '../services/messaging/liveMessage';
 const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
@@ -179,14 +180,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         // Check if encryption is already enabled (immutable)
         if (conversation.encryptionEnabledAt) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Encryption already enabled for this conversation (cannot be changed)',
-            data: {
-              currentMode: conversation.encryptionMode,
-              enabledAt: conversation.encryptionEnabledAt
-            }
-          });
+          return sendBadRequest(reply, 'Encryption already enabled for this conversation (cannot be changed)');
         }
 
         // Check permission to enable encryption
@@ -262,22 +256,18 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
               content: encryptionMessages[mode],
               originalLanguage: 'en',
               messageType: 'system',
-              deletedAt: null
+              ...LIVE_MESSAGE_MARK
             }
           });
         }
 
         logger.info('Encryption enabled for conversation', { conversationId, mode });
 
-        return reply.send({
-          success: true,
-          data: getEncryptionStatus({
-            encryptionEnabledAt: updatedConversation.encryptionEnabledAt,
-            encryptionMode: updatedConversation.encryptionMode,
-            encryptionEnabledBy: updatedConversation.encryptionEnabledBy,
-          }),
-          message: `${encryptionLabels[mode]} encryption enabled successfully`
-        });
+        return sendSuccess(reply, getEncryptionStatus({
+          encryptionEnabledAt: updatedConversation.encryptionEnabledAt,
+          encryptionMode: updatedConversation.encryptionMode,
+          encryptionEnabledBy: updatedConversation.encryptionEnabledBy,
+        }), { message: `${encryptionLabels[mode]} encryption enabled successfully` });
 
       } catch (error) {
         logger.error('Error enabling encryption', error as Error);

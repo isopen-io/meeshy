@@ -40,6 +40,7 @@ class FakeSender {
 class FakeTransceiver {
   sender: FakeSender;
   direction: string;
+  setCodecPreferences = jest.fn();
   constructor(track: unknown, direction: string) {
     this.sender = new FakeSender(track);
     this.direction = direction;
@@ -94,6 +95,9 @@ class FakeRTCPeerConnection {
     forEach: jest.fn(),
   }));
   close = jest.fn();
+  setConfiguration = jest.fn((config: unknown) => {
+    this.config = config;
+  });
   constructor(config: unknown) {
     this.config = config;
   }
@@ -103,12 +107,26 @@ class FakeRTCPeerConnection {
 // Track / stream factories
 // ---------------------------------------------------------------------------
 
-const makeTrack = (kind: 'audio' | 'video') => ({
-  kind,
-  enabled: true,
-  contentHint: '',
-  stop: jest.fn(),
-});
+let trackIdCounter = 0;
+
+const makeTrack = (kind: 'audio' | 'video'): {
+  kind: 'audio' | 'video';
+  id: string;
+  enabled: boolean;
+  contentHint: string;
+  stop: jest.Mock;
+  clone: jest.Mock;
+} => {
+  const track = {
+    kind,
+    id: `track-${++trackIdCounter}`,
+    enabled: true,
+    contentHint: '',
+    stop: jest.fn(),
+    clone: jest.fn((): ReturnType<typeof makeTrack> => makeTrack(kind)),
+  };
+  return track;
+};
 
 const makeStream = (opts: { audio?: boolean; video?: boolean }) => {
   const tracks: ReturnType<typeof makeTrack>[] = [];
@@ -140,6 +158,15 @@ const makeFakeMediaStream = () => {
 // ---------------------------------------------------------------------------
 
 let OrigRTCPeerConnection: unknown;
+let OrigRTCRtpSender: unknown;
+
+const FAKE_AUDIO_CAPABILITIES = {
+  codecs: [
+    { mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
+    { mimeType: 'audio/red', clockRate: 48000, channels: 2 },
+    { mimeType: 'audio/PCMU', clockRate: 8000, channels: 1 },
+  ],
+};
 
 beforeAll(() => {
   OrigRTCPeerConnection = (global as Record<string, unknown>).RTCPeerConnection;
@@ -150,10 +177,16 @@ beforeAll(() => {
   (global as Record<string, unknown>).RTCIceCandidate = jest
     .fn()
     .mockImplementation((init: unknown) => init);
+
+  OrigRTCRtpSender = (global as Record<string, unknown>).RTCRtpSender;
+  (global as Record<string, unknown>).RTCRtpSender = {
+    getCapabilities: jest.fn(() => FAKE_AUDIO_CAPABILITIES),
+  };
 });
 
 afterAll(() => {
   (global as Record<string, unknown>).RTCPeerConnection = OrigRTCPeerConnection;
+  (global as Record<string, unknown>).RTCRtpSender = OrigRTCRtpSender;
 });
 
 beforeEach(() => {
@@ -214,6 +247,27 @@ describe('setIceServers', () => {
     // createPeerConnection should use the stored servers
     const pc = service.createPeerConnection('p') as unknown as FakeRTCPeerConnection;
     expect(pc.config).toEqual({ iceServers: servers });
+  });
+
+  it('applies immediately via setConfiguration when TURN credentials arrive after the peer connection already exists', () => {
+    // Reproduces RC-1 (tasks/calls-fonctionnel-todo.md): a peer connection
+    // created before server TURN credentials resolve must not be stuck on
+    // STUN-only defaults for the rest of the call — a late/refreshed
+    // setIceServers() has to reach the live RTCPeerConnection.
+    const service = new WebRTCService();
+    const pc = service.createPeerConnection('p') as unknown as FakeRTCPeerConnection;
+    const servers: RTCIceServer[] = [
+      { urls: 'turn:example.com', username: 'u', credential: 'c' },
+    ];
+
+    service.setIceServers(servers);
+
+    expect(pc.setConfiguration).toHaveBeenCalledWith({ iceServers: servers });
+  });
+
+  it('does not throw when no peer connection has been created yet', () => {
+    const service = new WebRTCService();
+    expect(() => service.setIceServers([{ urls: 'stun:example.com' }])).not.toThrow();
   });
 });
 
@@ -918,6 +972,45 @@ describe('negotiate', () => {
     await service.negotiate({ iceRestart: false });
     expect(pc.createOffer).toHaveBeenCalledWith(undefined);
   });
+
+  it('defers an ICE restart that arrives while an unrelated offer is in flight, and replays it once that offer settles', async () => {
+    // Reproduces a real dead-call scenario: an A/V-switch renegotiation
+    // (onnegotiationneeded → negotiate()) is in flight when ICE transitions
+    // to 'failed' and fires restartIce() → negotiate({ iceRestart: true }).
+    // The re-entrancy guard used to drop the ICE restart on the floor with
+    // no retry — the connection then stays permanently 'failed'.
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    let resolveFirstOffer!: (v: RTCSessionDescriptionInit) => void;
+    pc.createOffer = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<RTCSessionDescriptionInit>((res) => {
+            resolveFirstOffer = res;
+          })
+      )
+      .mockResolvedValue({ type: 'offer' as RTCSdpType, sdp: 'v=0\r\n' });
+
+    const inFlight = service.negotiate();
+    const dropped = service.negotiate({ iceRestart: true });
+    await dropped;
+
+    // The ICE restart must not be silently discarded: it should not fire a
+    // second createOffer yet (the first is still in flight)...
+    expect(pc.createOffer).toHaveBeenCalledTimes(1);
+
+    resolveFirstOffer({ type: 'offer', sdp: 'v=0\r\n' });
+    await inFlight;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // ...but must be replayed automatically once the in-flight offer settles.
+    expect(pc.createOffer).toHaveBeenCalledTimes(2);
+    expect(pc.createOffer).toHaveBeenLastCalledWith({ iceRestart: true });
+  });
 });
 
 // ===========================================================================
@@ -1105,6 +1198,125 @@ describe('disableVideoSend — autoNegotiate=false', () => {
     await service.disableVideoSend();
     expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(null);
     expect(videoTx.direction).toBe('recvonly');
+  });
+});
+
+// ===========================================================================
+// switchVideoSendTrack — Vague 95
+//
+// handleSwitchCamera (VideoCallInterface.tsx) used to replace every peer
+// connection's video sender with a SINGLE shared track object, then stop and
+// remove only `localStream.getVideoTracks()[0]` — an assumption that breaks
+// the moment enableVideo() has handed a *different* per-peer clone to a
+// non-first peer in a group call (its established "one real track + N
+// clones" ownership model, exercised above by the `enableVideoSend` describe
+// blocks). This method gives camera-switch the same per-peer, bookkeeping-
+// aware replace that enableVideoSend/disableVideoSend already have.
+// ===========================================================================
+
+describe('switchVideoSendTrack', () => {
+  it('throws when no videoTransceiver initialized', async () => {
+    const service = new WebRTCService();
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await expect(service.switchVideoSendTrack(newTrack)).rejects.toThrow(
+      'Video transceiver not initialized'
+    );
+  });
+
+  it('replaces the sender track, updates localStream, and stops the previous track', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const previousTrack = videoTx.sender.track as ReturnType<typeof makeTrack>;
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.addTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.removeTrack).toHaveBeenCalledWith(previousTrack);
+    expect(previousTrack.stop).toHaveBeenCalled();
+  });
+
+  it('does not stop/remove anything when the sender had no previous track', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true });
+    // sendVideo: false → video transceiver reserved recvonly, sender.track is null
+    service.addLocalMedia(stream, { sendVideo: false });
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    const videoTx = pc._transceivers.find((t) => t.direction === 'recvonly')!;
+    expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.addTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.removeTrack).not.toHaveBeenCalled();
+  });
+
+  it('does not renegotiate — replaceTrack alone is sufficient once already sendrecv', async () => {
+    const { service, onLocalDescription } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+    onLocalDescription.mockClear();
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    expect(onLocalDescription).not.toHaveBeenCalled();
+  });
+
+  it("keeps a group call's independent per-peer track exclusive (mirrors enableVideoSend ownership)", async () => {
+    const { service: serviceA } = setup();
+    const serviceB = new WebRTCService();
+    serviceB.createPeerConnection('peer-2');
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    const newBaseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.switchVideoSendTrack(newBaseTrack);
+
+    // Only A's own previous track (baseTrack) is stopped/removed — B's clone,
+    // still live and attached to B's own sender, is left completely alone.
+    expect((baseTrack as unknown as { stop: jest.Mock }).stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    expect((cloneTrack as unknown as { stop: jest.Mock }).stop).not.toHaveBeenCalled();
+    expect(sharedStream.removeTrack).not.toHaveBeenCalledWith(cloneTrack);
+  });
+
+  it('close({ stopLocalTracks: false }) releases the NEW track after a switch, not the stale one', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const originalTrack = videoTx.sender.track as ReturnType<typeof makeTrack>;
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    service.close({ stopLocalTracks: false });
+
+    expect((newTrack as unknown as { stop: jest.Mock }).stop).toHaveBeenCalled();
+    expect(stream.removeTrack).toHaveBeenCalledWith(newTrack);
+    // The original track was already stopped/removed by switchVideoSendTrack
+    // itself, above — close() must not double-touch it via a stale ref.
+    expect(originalTrack.stop).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1669,6 +1881,114 @@ describe('close', () => {
     pc2.onnegotiationneeded!();
     expect(onLocalDesc).not.toHaveBeenCalled();
   });
+
+  // In a group call, use-webrtc-p2p.ts keeps ONE WebRTCService per remote
+  // participant but they all share the SAME local MediaStream reference
+  // (addLocalMedia is called with the store's single localStream on every
+  // peer connection). close({ stopLocalTracks: false }) is what
+  // removeParticipant() must use when a single participant leaves (or their
+  // negotiation fails) — stopping the shared hardware tracks there would
+  // kill local audio/video for every OTHER still-connected participant.
+  it('close({ stopLocalTracks: false }) tears down the peer connection without stopping shared local tracks', () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true, video: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: true });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: true });
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(sharedStream.getTracks()[1].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+    expect(serviceA.getCurrentStream()).toBeNull();
+
+    // serviceB's connection (and the shared stream) is unaffected.
+    expect(pcB.close).not.toHaveBeenCalled();
+    expect(serviceB.getCurrentStream()).toBe(sharedStream);
+  });
+
+  // enableVideoSend() attaches a track that is NEVER shared with another
+  // peer's sender in a group call — use-webrtc-p2p.ts's enableVideo() gives
+  // the first peer the literal camera track and every other peer a
+  // `.clone()` specifically so each sender owns an exclusive track object.
+  // close({ stopLocalTracks: false }) must still release THIS instance's own
+  // video track (stop it + remove it from the shared local preview stream)
+  // even though it must not touch the genuinely shared tracks — otherwise a
+  // departed group-call participant's clone (or the original, if peer index
+  // 0 leaves) is orphaned on the shared MediaStream forever.
+  it('close({ stopLocalTracks: false }) still releases the exclusive video track set by enableVideoSend', async () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(baseTrack.stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    // The genuinely shared track (audio) is untouched by a non-full teardown.
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+
+    // Peer B's own, independent clone track is unaffected.
+    expect(cloneTrack.stop).not.toHaveBeenCalled();
+    expect(pcB.close).not.toHaveBeenCalled();
+  });
+
+  it('close() with no options still stops local tracks (full-teardown default unchanged)', () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+
+    service.close();
+
+    expect(stream.getTracks()[0].stop).toHaveBeenCalled();
+    expect(stream.getTracks()[1].stop).toHaveBeenCalled();
+    expect(pc.close).toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// createPeerConnection — reused without an intervening close() (participant
+// leave→rejoin: use-webrtc-p2p.ts caches one WebRTCService per participantId
+// and only calls close() on full teardown, not on a single participant leave)
+// ===========================================================================
+
+describe('createPeerConnection — reused without close (participant rejoin)', () => {
+  it('resets autoNegotiate and other perfect-negotiation flags on reuse, even without close() first', async () => {
+    const { service } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer(); // sets autoNegotiate=true on the FIRST connection
+
+    // Participant rejoins: a new peer connection is built on the SAME
+    // service instance, with no close() call in between (mirrors
+    // use-webrtc-p2p.ts's per-participant service cache).
+    const pc2 = service.createPeerConnection('p2') as unknown as FakeRTCPeerConnection;
+
+    // A stale autoNegotiate=true would let onnegotiationneeded fire a second,
+    // racing offer concurrently with the explicit createOffer() the rejoin
+    // flow is about to await.
+    const onLocalDesc = jest.fn();
+    (service as unknown as { config: WebRTCServiceConfig }).config.onLocalDescription = onLocalDesc;
+    pc2.onnegotiationneeded!();
+    // negotiate() awaits createOffer() then setLocalDescription() before
+    // emitting onLocalDescription — flush those microtasks before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onLocalDesc).not.toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================
@@ -1728,8 +2048,21 @@ describe('enableSimulcast', () => {
 // SDP munging — exercised via createOffer / createAnswer
 // ===========================================================================
 
-describe('SDP munging — addAudioRedundancy', () => {
-  it('adds RED codec when opus is present and red is absent', async () => {
+describe('Audio codec preferences — applyAudioCodecPreferences (RED via setCodecPreferences)', () => {
+  it('applies Opus+RED codec preferences to the audio transceiver on addLocalMedia', () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    const audioTransceiver = pc._transceivers[0] as unknown as FakeTransceiver;
+    expect(audioTransceiver.setCodecPreferences).toHaveBeenCalledTimes(1);
+    const preferred = audioTransceiver.setCodecPreferences.mock.calls[0][0];
+    expect(preferred.map((c: { mimeType: string }) => c.mimeType)).toEqual([
+      'audio/opus',
+      'audio/red',
+    ]);
+  });
+
+  it('does not touch SDP (no more RED munging) — createOffer SDP is unaffected', async () => {
     const { service, pc } = setup();
     service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
 
@@ -1742,41 +2075,61 @@ describe('SDP munging — addAudioRedundancy', () => {
     });
 
     const offer = await service.createOffer();
-    expect(offer.sdp).toContain('red/48000');
-    expect(offer.sdp).toContain('a=rtpmap:63 red/48000/2');
+    expect(offer.sdp).not.toContain('red/48000');
   });
 
-  it('does NOT duplicate RED when already present in SDP', async () => {
+  it('no-ops when setCodecPreferences is not a function on the transceiver', () => {
     const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
-
-    pc.createOffer = jest.fn(async () => ({
-      type: 'offer' as RTCSdpType,
-      sdp: 'm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=rtpmap:63 red/48000/2\r\n',
-    }));
-    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
-      pc.localDescription = { type: 'offer', sdp: desc.sdp };
+    const audioTransceiver = new FakeTransceiver(null, 'sendrecv');
+    (audioTransceiver as unknown as { setCodecPreferences: unknown }).setCodecPreferences = undefined;
+    pc.addTransceiver = jest.fn(() => {
+      pc._transceivers.push(audioTransceiver);
+      return audioTransceiver;
     });
 
-    const offer = await service.createOffer();
-    const matches = offer.sdp!.match(/red\/48000/g);
-    expect(matches).toHaveLength(1);
+    expect(() => service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false })).not.toThrow();
   });
 
-  it('skips RED insertion when no opus codec in SDP', async () => {
-    const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+  it('no-ops when RTCRtpSender.getCapabilities is unavailable', () => {
+    const savedSender = (global as Record<string, unknown>).RTCRtpSender;
+    (global as Record<string, unknown>).RTCRtpSender = undefined;
+    try {
+      const { service, pc } = setup();
+      service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+      const audioTransceiver = pc._transceivers[0] as unknown as FakeTransceiver;
+      expect(audioTransceiver.setCodecPreferences).not.toHaveBeenCalled();
+    } finally {
+      (global as Record<string, unknown>).RTCRtpSender = savedSender;
+    }
+  });
 
-    pc.createOffer = jest.fn(async () => ({
-      type: 'offer' as RTCSdpType,
-      sdp: 'm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=rtpmap:0 PCMU/8000\r\n',
-    }));
-    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
-      pc.localDescription = { type: 'offer', sdp: desc.sdp };
+  it('no-ops when getCapabilities returns no codecs', () => {
+    const savedSender = (global as Record<string, unknown>).RTCRtpSender;
+    (global as Record<string, unknown>).RTCRtpSender = {
+      getCapabilities: jest.fn(() => ({ codecs: [] })),
+    };
+    try {
+      const { service, pc } = setup();
+      service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+      const audioTransceiver = pc._transceivers[0] as unknown as FakeTransceiver;
+      expect(audioTransceiver.setCodecPreferences).not.toHaveBeenCalled();
+    } finally {
+      (global as Record<string, unknown>).RTCRtpSender = savedSender;
+    }
+  });
+
+  it('swallows a setCodecPreferences throw (e.g. "Invalid codec")', () => {
+    const { service, pc } = setup();
+    const audioTransceiver = new FakeTransceiver(null, 'sendrecv');
+    audioTransceiver.setCodecPreferences = jest.fn(() => {
+      throw new Error('Invalid codec');
+    });
+    pc.addTransceiver = jest.fn(() => {
+      pc._transceivers.push(audioTransceiver);
+      return audioTransceiver;
     });
 
-    const offer = await service.createOffer();
-    expect(offer.sdp).not.toContain('red');
+    expect(() => service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false })).not.toThrow();
   });
 });
 
@@ -1877,7 +2230,7 @@ describe('SDP munging — mungeOpusSdp', () => {
 
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'v=0\r\na=fmtp:111 minptime=10;usedtx=1\r\n',
+      sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;usedtx=1\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
@@ -1897,7 +2250,7 @@ describe('SDP munging — mungeOpusSdp', () => {
     // A param without '=' (just a key, no value) should be skipped by the if (key && value) branch
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'v=0\r\na=fmtp:111 minptime=10;keyonly\r\n',
+      sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;keyonly\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
@@ -1907,52 +2260,37 @@ describe('SDP munging — mungeOpusSdp', () => {
     // Should still have the opus params (key-only param is simply skipped)
     expect(offer.sdp).toContain('maxaveragebitrate=128000');
   });
-});
 
-// ===========================================================================
-// addAudioRedundancy — m=audio line with redPT already in parts
-// ===========================================================================
-
-describe('addAudioRedundancy — m=audio with redPT already in parts', () => {
-  it('does not prepend redPT to m=audio when it is already listed', async () => {
+  it('does NOT pollute video fmtp lines with Opus-only params', async () => {
     const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
 
-    // m=audio that already has 63 (redPT) in the payload list — but no 'red/48000' rtpmap
-    // This exercises the `!parts.includes(redPT)` false branch in addAudioRedundancy
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'm=audio 9 UDP/TLS/RTP/SAVPF 63 111\r\na=rtpmap:111 opus/48000/2\r\n',
+      sdp:
+        'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n' +
+        'm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=fmtp:96 profile-level-id=42e01f;level-asymmetry-allowed=1\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
     });
 
     const offer = await service.createOffer();
-    // redPT (63) should only appear once in the m= line
-    const mLine = offer.sdp!.split('\r\n').find((l) => l.startsWith('m=audio'));
-    const parts = mLine!.split(' ');
-    expect(parts.filter((p) => p === '63')).toHaveLength(1);
-  });
+    const videoFmtpLine = offer.sdp!
+      .split('\r\n')
+      .find((line) => line.startsWith('a=fmtp:96'));
 
-  it('handles m=audio line with fewer than 4 parts (skips the prepend)', async () => {
-    const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
-
-    // m=audio with only 3 parts — exercises the parts.length < 4 branch
-    pc.createOffer = jest.fn(async () => ({
-      type: 'offer' as RTCSdpType,
-      sdp: 'm=audio 9 UDP\r\na=rtpmap:111 opus/48000/2\r\n',
-    }));
-    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
-      pc.localDescription = { type: 'offer', sdp: desc.sdp };
-    });
-
-    // Should not throw
-    const offer = await service.createOffer();
-    expect(offer.sdp).toBeDefined();
+    // addVideoBitrateHints legitimately appends x-google-{max,min}-bitrate to
+    // video fmtp lines — only the Opus-only params must stay off this line.
+    expect(videoFmtpLine).toContain('profile-level-id=42e01f;level-asymmetry-allowed=1');
+    expect(videoFmtpLine).not.toContain('maxaveragebitrate');
+    expect(videoFmtpLine).not.toContain('stereo=');
+    expect(videoFmtpLine).not.toContain('useinbandfec');
+    expect(videoFmtpLine).not.toContain('usedtx');
+    expect(videoFmtpLine).not.toContain('maxplaybackrate');
   });
 });
+
 
 // ===========================================================================
 // ICE restart failure handlers (catch callbacks)

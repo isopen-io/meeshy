@@ -290,7 +290,14 @@ describe('useConversationTyping', () => {
       expect(mockStartTyping).toHaveBeenCalled();
     });
 
-    it('should not call startTyping if already typing', () => {
+    it('should keep calling startTyping on every keystroke while already typing', () => {
+      // The underlying transport throttles the actual socket emit to ~1/2s;
+      // this hook must keep invoking startTyping() on every keystroke so
+      // that throttle can do its job of refreshing peers' safety timeout.
+      // Gating this call on the `isTyping` transition (old behavior) meant
+      // a long continuous typing session only ever sent a single
+      // `typing:start`, silently dropping the indicator on peers once their
+      // safety timeout elapsed.
       const { result } = renderTypingHook();
 
       act(() => {
@@ -303,7 +310,7 @@ describe('useConversationTyping', () => {
         result.current.handleTypingStart();
       });
 
-      expect(mockStartTyping).not.toHaveBeenCalled();
+      expect(mockStartTyping).toHaveBeenCalled();
     });
 
     it('should auto-stop after 3 seconds', () => {
@@ -519,6 +526,12 @@ describe('useConversationTyping', () => {
       expect(result.current.isTyping).toBe(false);
     });
 
+    // Quitter une conversation en cours de frappe DOIT retracter l'indicateur
+    // chez les pairs. Rien d'autre ne le fera : `conversation:leave` ne retracte
+    // pas côté gateway (seul `disconnecting` le fait), et le timer d'auto-stop
+    // local (3 s) est justement annulé par ce même nettoyage. Sans cette
+    // émission, les pairs gardent « X est en train d'écrire… » jusqu'au filet de
+    // sécurité de 8 s, à CHAQUE changement de conversation.
     it('should stop typing on conversation change if active', () => {
       const { result, rerender } = renderHook(
         ({ conversationId }) =>
@@ -540,9 +553,82 @@ describe('useConversationTyping', () => {
 
       rerender({ conversationId: 'conv-2' });
 
-      // Note: The cleanup effect may or may not call stopTyping depending on
-      // React's cleanup timing. The important behavior is that isTyping resets.
+      expect(mockStopTyping).toHaveBeenCalledTimes(1);
       expect(result.current.isTyping).toBe(false);
+    });
+
+    it('should not emit a stop on conversation change when not typing', () => {
+      const { rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      mockStopTyping.mockClear();
+
+      rerender({ conversationId: 'conv-2' });
+
+      expect(mockStopTyping).not.toHaveBeenCalled();
+    });
+
+    it('should not re-emit a stop on conversation change after an explicit stop', () => {
+      const { result, rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      act(() => {
+        result.current.handleTypingStart();
+      });
+      act(() => {
+        result.current.handleTypingStop();
+      });
+
+      mockStopTyping.mockClear();
+
+      rerender({ conversationId: 'conv-2' });
+
+      expect(mockStopTyping).not.toHaveBeenCalled();
+    });
+
+    it('should not re-emit a stop on conversation change after the auto-stop fired', () => {
+      const { result, rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      act(() => {
+        result.current.handleTypingStart();
+      });
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      mockStopTyping.mockClear();
+
+      rerender({ conversationId: 'conv-2' });
+
+      expect(mockStopTyping).not.toHaveBeenCalled();
     });
   });
 
@@ -573,9 +659,10 @@ describe('useConversationTyping', () => {
 
       unmount();
 
-      // Note: The cleanup effect runs on unmount
-      // Due to how the hook is structured, it may or may not call stopTyping
-      // depending on the exact cleanup logic
+      // Fermer l'onglet / démonter la vue pendant une frappe doit retracter
+      // l'indicateur comme un changement de conversation : le socket, lui, reste
+      // ouvert, donc la retraction de `disconnecting` côté gateway n'arrivera pas.
+      expect(mockStopTyping).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -613,6 +700,138 @@ describe('useConversationTyping', () => {
       });
 
       expect(result.current.typingUsers[0].displayName).toBe('Updated Name');
+    });
+  });
+
+  describe('Remote Typing Safety Timeout', () => {
+    it('should auto-remove a remote typing user if no stop event arrives', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(1);
+
+      // A dropped typing:stop event should not leave the indicator stuck
+      // forever — a safety timeout clears it well before the socket's own
+      // ping-timeout disconnect would.
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+
+    it('should refresh the safety timeout on repeated typing:true for the same user', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(6000);
+      });
+
+      // A fresh typing:true keepalive should reset the safety window.
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(6000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(1);
+
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+
+    it('should clear the safety timeout when an explicit stop event arrives', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+        result.current.handleUserTyping('user-456', 'otheruser', false, mockConversationId);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+
+      // Should not throw or resurrect the user once the safety timer would
+      // have fired.
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+
+    it('should not leak timers across independent typing users', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(4000);
+      });
+
+      act(() => {
+        result.current.handleUserTyping('user-789', 'anotheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(4000);
+      });
+
+      // user-456's 8s window has elapsed; user-789's has not.
+      expect(result.current.typingUsers.map(u => u.id)).toEqual(['user-789']);
+    });
+
+    it('should clear pending safety timeouts on unmount', () => {
+      const { result, unmount } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      unmount();
+
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+    });
+
+    it('should clear pending safety timeouts on conversation change', () => {
+      const { result, rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, 'conv-1');
+      });
+
+      rerender({ conversationId: 'conv-2' });
+
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
     });
   });
 
@@ -708,21 +927,20 @@ describe('useConversationTyping', () => {
 
       expect(result.current.isTyping).toBe(false);
 
-      // Multiple starts in sequence - the hook may call startTyping each time
-      // since we stopped in between, each start is a new session
+      // Multiple starts in sequence - startTyping is (re-)emitted on every
+      // call, whether it's the first of a new session or a keystroke while
+      // already typing (the transport layer throttles the actual network
+      // send, this hook just needs to keep asking).
       mockStartTyping.mockClear();
       act(() => {
         result.current.handleTypingStart();
       });
 
-      // If already typing, subsequent calls should not call startTyping again
       act(() => {
         result.current.handleTypingStart();
       });
 
-      // The first call in a new session will call startTyping
-      // Subsequent calls while still typing should not
-      expect(mockStartTyping).toHaveBeenCalled();
+      expect(mockStartTyping).toHaveBeenCalledTimes(2);
     });
   });
 });

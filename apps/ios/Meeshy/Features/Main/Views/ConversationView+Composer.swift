@@ -97,6 +97,12 @@ extension ConversationView {
             UniversalComposerBar(
             style: .light,
             mode: .message,
+            // Dépôt (Files / Finder) et collage d'URL `file://` résolus par la
+            // barre : chaque `.file` est DÉJÀ copié dans notre conteneur, cette
+            // surface en devient propriétaire et route vers ses pipelines
+            // existants (déclaré avant `accentColor` → doit apparaître ici pour
+            // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
+            onIngest: { items in handleComposerIngest(items) },
             accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
             // Hide file/photo attachments in the notification preview composer
@@ -120,12 +126,13 @@ extension ConversationView {
             editBanner: composerState.editingMessageId != nil
                 ? AnyView(composerEditBanner)
                 : nil,
-            replyBanner: composerState.pendingReplyReference != nil && composerState.editingMessageId == nil
-                ? AnyView(composerReplyBanner(composerState.pendingReplyReference!))
+            replyBanner: composerState.editingMessageId == nil
+                ? composerState.pendingReplyReference.map { AnyView(composerReplyBanner($0)) }
                 : nil,
             customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
                                         || !composerState.preparingAttachments.isEmpty
-                                        || composerState.isLoadingMedia)
+                                        || composerState.isLoadingMedia
+                                        || composerState.pendingPlace != nil)
                 ? AnyView(pendingAttachmentsRow)
                 : nil,
             isEditMode: composerState.editingMessageId != nil,
@@ -148,7 +155,18 @@ extension ConversationView {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
+            // `pendingPlace` inclus (parité PostDetailView / StoryViewerView) :
+            // sans lui le bouton d'envoi reste inactif pour un message
+            // « lieu seul », que les gardes acceptent pourtant désormais.
+            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording || composerState.pendingPlace != nil,
+            // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
+            // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
+            // bouton d'envoi serait mort ~22s par message en réseau dégradé
+            // (bug « ⏳ bloque le composer », 2026-07-02). Un vrai messenger
+            // enchaîne les envois : chaque message a sa bulle + horloge, l'outbox
+            // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
+            // synchrone (hasContent), guard isUploading (attachments), et le
+            // dedup par contenu du VM (duplicateSendDebounce).
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
@@ -167,6 +185,8 @@ extension ConversationView {
                 }
             },
             onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
+            onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
+            onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
             ephemeralDuration: $viewModel.ephemeralDuration,
             hideEphemeral: composerState.editingMessageId != nil,
@@ -190,7 +210,10 @@ extension ConversationView {
         .sheet(isPresented: $viewModel.showEffectsPicker) {
             EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
         }
-        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
+        // `photoLibrary: .shared()` est requis pour la présélection : les
+        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
+        // matchent les assets du picker que sur la photothèque partagée.
+        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
@@ -206,8 +229,8 @@ extension ConversationView {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { coordinate, address in
-                handleLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: accentColor) { place in
+                handleLocationSelection(place)
             }
         }
         .sheet(isPresented: $composerState.showContactPicker) {
@@ -223,6 +246,17 @@ extension ConversationView {
             handlePhotoSelection(items)
         }
         // C. Tap pending image → MeeshyImageEditorView
+        //
+        // Bug fix (2026-07-09): `isPresented` used to be driven solely by
+        // `editingPendingAttachmentId != nil` while the content required a
+        // SEPARATE `pendingThumbnails[id]` lookup to succeed. Whenever that
+        // dictionary lookup missed — a since-removed attachment, a thumbnail
+        // that failed to generate, any race between the tap and the
+        // dictionaries settling — the cover still presented (isPresented was
+        // already true) but its content body evaluated to nothing, which
+        // reads to the user as the composer "crashing" on tap: a full-screen
+        // cover appears with no way to dismiss it from inside. The two must
+        // share one source of truth so the cover can never present empty.
         .fullScreenCover(isPresented: Binding(
             get: { scrollState.editingPendingAttachmentId != nil },
             set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
@@ -255,6 +289,12 @@ extension ConversationView {
                         }
                     }
                 }
+            } else {
+                // The thumbnail vanished out from under the presentation
+                // (attachment removed mid-race, or generation never
+                // succeeded) — never present a silently-empty cover; give the
+                // user a dismissable state instead.
+                attachmentPreviewUnavailableFallback { scrollState.editingPendingAttachmentId = nil }
             }
         }
         // D. Tap pending video → VideoPreviewView
@@ -269,6 +309,39 @@ extension ConversationView {
                     accentColor: accentColor,
                     onComplete: { _ in scrollState.videoToEdit = nil },
                     onCancel: { scrollState.videoToEdit = nil }
+                )
+            }
+        }
+        // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
+        // staging; the edited output goes through the same preparation pipeline
+        // as a camera capture (the pre-edit original is never staged).
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.recentImageToEdit != nil },
+            set: { if !$0 { scrollState.recentImageToEdit = nil } }
+        )) {
+            if let image = scrollState.recentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .message, accentColor: accentColor, onAccept: { edited in
+                    scrollState.recentImageToEdit = nil
+                    handleCameraCapture(edited)
+                }, onCancel: {
+                    scrollState.recentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.recentVideoToEdit != nil },
+            set: { if !$0 { scrollState.recentVideoToEdit = nil } }
+        )) {
+            if let url = scrollState.recentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .message,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        scrollState.recentVideoToEdit = nil
+                        handleCameraVideo(result.url)
+                    },
+                    onCancel: { scrollState.recentVideoToEdit = nil }
                 )
             }
         }
@@ -303,6 +376,37 @@ extension ConversationView {
         case .image(let image): handleCameraCapture(image)
         case .video(let url): handleCameraVideo(url)
         }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is staged like a camera capture.
+    func editRecentMediaPick(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): scrollState.recentImageToEdit = image
+        case .video(let url): scrollState.recentVideoToEdit = url
+        }
+    }
+
+    /// Opens the full photo library with the strip's multi-selection already
+    /// checked. The picker binding is primed with identifier-based items
+    /// (`photoLibrary: .shared()` makes them match real assets); the priming
+    /// echo on the selection onChange is swallowed via `photoPickerPriming`.
+    /// The handoff is capped at the picker's `maxSelectionCount` (10). With no
+    /// strip selection, stale primed items from a cancelled run are dropped so
+    /// the picker opens clean.
+    func openPhotoLibraryPreselecting(_ assetIds: [String]) {
+        if !assetIds.isEmpty {
+            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            // Arm the echo-swallow ONLY when priming actually mutates the
+            // binding — an unchanged binding (same picks re-handed after a
+            // cancelled run) fires no onChange, and a stale armed flag would
+            // swallow the user's real confirmation instead.
+            composerState.photoPickerPriming = primed != composerState.selectedPhotoItems
+            composerState.selectedPhotoItems = primed
+        } else {
+            composerState.selectedPhotoItems = []
+        }
+        composerState.showPhotoPicker = true
     }
 
     // MARK: - Contact Selection Handler
@@ -357,33 +461,33 @@ extension ConversationView {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(composerReplyTitle(reply))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
 
                 HStack(spacing: 4) {
                     if let emoji = reply.moodEmoji {
                         // Réponse à un mood : emoji + contenu entier + date.
                         Text(emoji)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                         if let date = reply.storyPublishedAt {
                             Text(date, style: .relative)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)
                         }
                         if !reply.previewText.isEmpty {
                             Text(reply.previewText)
-                                .font(.system(size: 12))
+                                .font(MeeshyFont.relative(12))
                                 .foregroundColor(theme.textSecondary)
                                 .lineLimit(1)
                         }
                     } else {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
                         Text(reply.previewText)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
@@ -404,12 +508,13 @@ extension ConversationView {
                 }
             } label: {
                 Image(systemName: "xmark")
+                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 24×24 → figé.
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la reponse", bundle: .main))
+            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -433,16 +538,17 @@ extension ConversationView {
                 .frame(width: 3, height: 36)
 
             Image(systemName: "pencil")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
 
                 Text(composerState.editingOriginalContent ?? "")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -453,6 +559,7 @@ extension ConversationView {
                 cancelEdit()
             } label: {
                 Image(systemName: "xmark")
+                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 24×24 → figé.
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
@@ -543,8 +650,10 @@ extension ConversationView {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     Image(systemName: "play.circle.fill")
+                        // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
                         .font(.system(size: 18))
                         .foregroundStyle(.white, .black.opacity(0.4))
+                        .accessibilityHidden(true)
                 }
                 .onTapGesture {
                     if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
@@ -558,8 +667,10 @@ extension ConversationView {
         case "audio":
             HStack(spacing: 4) {
                 Image(systemName: "play.fill")
+                    // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(accent.opacity(0.6))
+                    .accessibilityHidden(true)
 
                 HStack(spacing: 1.5) {
                     ForEach(0..<8, id: \.self) { i in
@@ -605,8 +716,10 @@ extension ConversationView {
 
                 VStack(spacing: 1) {
                     Image(systemName: "mappin.circle.fill")
+                        // Doctrine 86i : glyphe décoratif borné par la vignette fixe 40×40 → figé + masqué.
                         .font(.system(size: 18))
                         .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
+                        .accessibilityHidden(true)
                     Circle()
                         .fill(MeeshyColors.success.opacity(0.3))
                         .frame(width: 6, height: 3)
@@ -632,8 +745,10 @@ extension ConversationView {
                         .stroke(color.opacity(0.2), lineWidth: 0.5)
                 )
             Image(systemName: icon)
+                // Doctrine 86i : glyphe décoratif borné par le badge fixe 40×40 → figé + masqué.
                 .font(.system(size: 16))
                 .foregroundColor(color.opacity(0.7))
+                .accessibilityHidden(true)
         }
     }
 
@@ -648,6 +763,9 @@ extension ConversationView {
                 }
                 ForEach(composerState.pendingAttachments) { attachment in
                     attachmentPreviewTile(attachment)
+                }
+                if let place = composerState.pendingPlace {
+                    pendingPlaceTile(place)
                 }
             }
             .padding(.horizontal, 12)
@@ -683,16 +801,20 @@ extension ConversationView {
 
                             if attachment.type == .video {
                                 Image(systemName: "play.circle.fill")
+                                    // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 20))
                                     .foregroundStyle(.white, .black.opacity(0.4))
+                                    .accessibilityHidden(true)
                             } else if attachment.type == .image {
                                 Image(systemName: "eye.fill")
+                                    // Doctrine 86i : indicateur décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(4)
                                     .background(Circle().fill(.black.opacity(0.4)))
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                                     .padding(3)
+                                    .accessibilityHidden(true)
                             }
                         } else if attachment.type == .audio {
                             audioTileFallback(attachment)
@@ -710,8 +832,11 @@ extension ConversationView {
                                 .frame(width: 56, height: 56)
 
                             Image(systemName: iconForAttachmentType(attachment.type))
+                                // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
+                                // (le libellé sous la tuile porte le nom du fichier).
                                 .font(.system(size: 22))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .frame(width: 56, height: 56)
@@ -719,18 +844,10 @@ extension ConversationView {
 
                 // Delete button — top-right corner
                 Button {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        let id = attachment.id
-                        if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
-                        composerState.pendingAttachments.removeAll { $0.id == id }
-                        if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
-                            try? FileManager.default.removeItem(at: url)
-                        }
-                        composerState.pendingThumbnails.removeValue(forKey: id)
-                    }
+                    removePendingAttachment(attachment)
                 } label: {
                     Image(systemName: "xmark")
+                        // Doctrine 82i : glyphe de suppression dans un cadre tap fixe 18×18 → figé.
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
@@ -745,10 +862,49 @@ extension ConversationView {
             }
 
             Text(labelForAttachment(attachment))
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 60)
+        }
+        // Long-press → full-screen quick-look (image enlarged / video playing),
+        // mirroring the recent-media strip's context-menu preview pattern
+        // (RecentMediaStrip.swift). Staged attachments already have their
+        // media locally (pendingMediaFiles), so this needs no PHAsset
+        // resolution — it's a much lighter version of the same idea.
+        .contextMenu {
+            Button(role: .destructive) {
+                removePendingAttachment(attachment)
+            } label: {
+                Label(
+                    String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main),
+                    systemImage: "trash"
+                )
+            }
+        } preview: {
+            if attachment.type == .image || attachment.type == .video {
+                AttachmentQuickLookPreview(
+                    kind: attachment.type == .video ? .video : .image,
+                    fileURL: composerState.pendingMediaFiles[attachment.id],
+                    thumbnail: composerState.pendingThumbnails[attachment.id]
+                )
+            }
+        }
+    }
+
+    /// Removes a staged attachment: drops it from the tray, deletes its temp
+    /// file, and stops playback if it was the currently-playing audio note.
+    /// Shared by the tile's delete button and its long-press menu action.
+    private func removePendingAttachment(_ attachment: MessageAttachment) {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            let id = attachment.id
+            if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
+            composerState.pendingAttachments.removeAll { $0.id == id }
+            if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
+                try? FileManager.default.removeItem(at: url)
+            }
+            composerState.pendingThumbnails.removeValue(forKey: id)
         }
     }
 
@@ -765,6 +921,12 @@ extension ConversationView {
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
         case .image:
+            // Guard at the source: only open the editor when a thumbnail
+            // genuinely exists to show. The fullScreenCover below has its own
+            // defense-in-depth fallback for the (rarer) case where the
+            // thumbnail vanishes AFTER presentation starts, but there is no
+            // reason to open the cover at all for an id that has none now.
+            guard composerState.pendingThumbnails[attachment.id] != nil else { return }
             scrollState.editingPendingAttachmentId = attachment.id
         case .video:
             if let url = composerState.pendingMediaFiles[attachment.id] {
@@ -776,6 +938,32 @@ extension ConversationView {
             }
         default:
             break
+        }
+    }
+
+    /// Dismissable full-screen fallback for the (rare) race where a pending
+    /// attachment's thumbnail is gone by the time its editor cover presents —
+    /// see the doc-comment on the "C. Tap pending image" fullScreenCover.
+    private func attachmentPreviewUnavailableFallback(onDismiss: @escaping () -> Void) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "photo.badge.exclamationmark")
+                    .font(.system(size: 40))
+                    .foregroundColor(.white.opacity(0.7))
+                Text(String(localized: "conversation.view.composer.attachmentUnavailable",
+                            defaultValue: "Pi\u{00E8}ce jointe indisponible", bundle: .main))
+                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .foregroundColor(.white)
+                Button(action: onDismiss) {
+                    Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(.white.opacity(0.15)))
+                }
+            }
         }
     }
 
@@ -807,8 +995,10 @@ extension ConversationView {
                 .frame(height: 20)
 
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -827,13 +1017,59 @@ extension ConversationView {
 
             VStack(spacing: 2) {
                 Image(systemName: "mappin.circle.fill")
+                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 22))
                     .foregroundStyle(.white, .white.opacity(0.3))
+                    .accessibilityHidden(true)
                 Circle()
                     .fill(Color.white.opacity(0.3))
                     .frame(width: 8, height: 4)
                     .scaleEffect(x: 1.8, y: 1)
             }
+        }
+    }
+
+    /// Tuile d'aperçu du lieu en attente d'envoi — même gabarit 56×56 que
+    /// `attachmentPreviewTile`, mais pour un `SharedPlace` : depuis la Task
+    /// 11/12 il ne vit plus dans `pendingAttachments`, donc sans cette tuile
+    /// dédiée le choix d'un lieu ne produirait plus aucun retour visuel dans
+    /// le composer (régression que l'ancien `MessageAttachment.location`
+    /// couvrait par accident).
+    private func pendingPlaceTile(_ place: SharedPlace) -> some View {
+        let label = place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
+        return VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                locationTileFallback()
+
+                Button {
+                    removePendingPlace()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.error)
+                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
+                        )
+                }
+                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(label)", bundle: .main))
+                .offset(x: 5, y: -5)
+            }
+
+            Text(label)
+                .font(MeeshyFont.relative(10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 60)
+        }
+    }
+
+    private func removePendingPlace() {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            composerState.pendingPlace = nil
         }
     }
 

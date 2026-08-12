@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Users, ArrowLeft, UserPlus, Search, Filter, ChevronLeft, ChevronRight, Eye, Ghost } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import type { User } from '@/services/admin.service';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
@@ -348,7 +349,7 @@ export default function AdminUsersPage() {
                 <div key={user.id} className="grid grid-cols-12 gap-4 p-3 border dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                   <div className="col-span-3 flex items-center space-x-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                      {user.displayName?.charAt(0) || user.username.charAt(0).toUpperCase()}
+                      {getUserInitials(user)}
                     </div>
                     <div className="min-w-0">
                       <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{user.displayName || user.username}</div>
@@ -398,7 +399,7 @@ export default function AdminUsersPage() {
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-3">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                        {user.displayName?.charAt(0) || user.username.charAt(0).toUpperCase()}
+                        {getUserInitials(user)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">

@@ -25,10 +25,49 @@ private class FakeConversationApi(
     var response: ApiResponse<List<ApiConversation>>,
 ) : ConversationApi {
     override suspend fun list(offset: Int?, limit: Int?) = response
+    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(
+        id: String,
+        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
+    ) = ApiResponse(success = true, data = Unit)
+
+    override suspend fun updateSettings(
+        id: String,
+        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
+    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
+}
+
+private class RecordingSettingsApi(
+    private val response: ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>,
+) : ConversationApi {
+    var lastId: String? = null
+    var lastBody: me.meeshy.sdk.model.UpdateConversationSettingsRequest? = null
+
+    override suspend fun list(offset: Int?, limit: Int?) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
+    override suspend fun create(body: CreateConversationRequest) =
+        ApiResponse<ApiConversation>(success = false)
+    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(
+        id: String,
+        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
+    ) = ApiResponse(success = true, data = Unit)
+    override suspend fun updateSettings(
+        id: String,
+        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
+    ): ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse> {
+        lastId = id
+        lastBody = body
+        return response
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -97,12 +136,207 @@ class ConversationRepositoryTest {
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
     }
 
+    @Test
+    fun `markUnreadOptimistic hints an unread count of 1 and queues a MARK_UNREAD`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 0)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markUnreadOptimistic("c1")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(1)
+        val row = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.MARK_UNREAD)
+    }
+
+    @Test
+    fun `markUnreadOptimistic is a no-op when the conversation is already unread`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markUnreadOptimistic("c1")
+
+        assertThat(applied).isFalse()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(4)
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
+
+    @Test
+    fun `markUnreadOptimistic returns false for an unknown conversation id`() = runTest {
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = emptyList())),
+        )
+        repo.refresh()
+
+        val applied = repo.markUnreadOptimistic("missing")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
+
+    @Test
+    fun `setPinnedOptimistic flips the cached pref and queues a snapshot mutation`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team")),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setPinnedOptimistic("c1", true)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.isPinned).isTrue()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+    }
+
+    @Test
+    fun `setPinnedOptimistic is a no-op when the pref is already in the target state`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setPinnedOptimistic("c1", false)
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
+    fun `successive pref mutations coalesce into one latest-wins snapshot`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+            ),
+        )
+        repo.refresh()
+
+        repo.setPinnedOptimistic("c1", true)
+        repo.setMutedOptimistic("c1", true)
+
+        val rows = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS)
+        assertThat(rows).hasSize(1)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(rows.single().payload)
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.isMuted).isTrue()
+        val cached = repo.conversationStream("c1").first()?.preferences
+        assertThat(cached?.isPinned).isTrue()
+        assertThat(cached?.isMuted).isTrue()
+    }
+
+    @Test
+    fun `setCategoryOptimistic assigns the cached category and queues a snapshot carrying it`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setCategoryOptimistic("c1", "work")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.categoryId).isEqualTo("work")
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        assertThat(payload.categoryId).isEqualTo("work")
+    }
+
+    @Test
+    fun `setCategoryOptimistic is a no-op when the conversation is already in that category`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))),
+        )
+        repo.refresh()
+
+        val applied = repo.setCategoryOptimistic("c1", "work")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
 
     @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
         val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "down")))
 
         assertThat(repo.conversationsStream().first()).isEqualTo(CacheResult.Empty)
+    }
+
+    @Test
+    fun `cachedConversations emits an empty list on a cold cache without touching the network`() = runTest {
+        val api = FakeConversationApi(ApiResponse(success = false, error = "should never be called"))
+        val repo = repository(api)
+
+        assertThat(repo.cachedConversations().first()).isEmpty()
+    }
+
+    @Test
+    fun `cachedConversations emits the locally-cached conversations after a refresh`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        ApiConversation(id = "c1", title = "Team", unreadCount = 3),
+                        ApiConversation(id = "c2", title = "Family", unreadCount = 2),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        assertThat(repo.cachedConversations().first().map { it.id }).containsExactly("c1", "c2")
+    }
+
+    @Test
+    fun `cachedConversations reflects a subsequent refresh without a caller re-subscribing`() = runTest {
+        val api = FakeConversationApi(
+            ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", unreadCount = 1))),
+        )
+        val repo = repository(api)
+        repo.refresh()
+        assertThat(repo.cachedConversations().first().single().unreadCount).isEqualTo(1)
+
+        api.response = ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", unreadCount = 9)))
+        repo.refresh()
+
+        assertThat(repo.cachedConversations().first().single().unreadCount).isEqualTo(9)
     }
 
     @Test
@@ -174,5 +408,47 @@ class ConversationRepositoryTest {
 
         assertThat(thrown).isInstanceOf(ConversationSyncException::class.java)
         assertThat(thrown).hasMessageThat().isEqualTo("Server down")
+    }
+
+    @Test
+    fun `updateSettings forwards the id and patch and returns the server payload`() = runTest {
+        val api = RecordingSettingsApi(
+            ApiResponse(
+                success = true,
+                data = me.meeshy.sdk.model.UpdateConversationResponse(
+                    id = "c1",
+                    defaultWriteRole = "admin",
+                    slowModeSeconds = 60,
+                ),
+            ),
+        )
+        val repo = repository(api)
+        val request = me.meeshy.sdk.model.UpdateConversationSettingsRequest(
+            defaultWriteRole = "admin",
+            slowModeSeconds = 60,
+        )
+
+        val result = repo.updateSettings("c1", request)
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastBody).isEqualTo(request)
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Success::class.java)
+        assertThat(result.getOrNull()?.defaultWriteRole).isEqualTo("admin")
+        assertThat(result.getOrNull()?.slowModeSeconds).isEqualTo(60)
+    }
+
+    @Test
+    fun `updateSettings folds an unsuccessful envelope into a Failure`() = runTest {
+        val repo = repository(
+            RecordingSettingsApi(ApiResponse(success = false, error = "Forbidden")),
+        )
+
+        val result = repo.updateSettings(
+            "c1",
+            me.meeshy.sdk.model.UpdateConversationSettingsRequest(isAnnouncementChannel = true),
+        )
+
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
+        assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message).isEqualTo("Forbidden")
     }
 }

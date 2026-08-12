@@ -4,8 +4,6 @@
  */
 
 export { NotificationService } from './NotificationService';
-export { FirebaseNotificationService, FirebaseStatusChecker } from './FirebaseNotificationService';
-export { SocketNotificationService } from './SocketNotificationService';
 export { NotificationFormatter } from './NotificationFormatter';
 
 export type {

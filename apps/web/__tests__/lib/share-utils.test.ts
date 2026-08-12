@@ -13,6 +13,12 @@ import {
   getShareStats,
   type ShareLinkOptions,
 } from '../../lib/share-utils';
+import { copyToClipboard } from '@/lib/clipboard';
+
+// Mock de la source unique presse-papiers (fallback de shareLink)
+jest.mock('@/lib/clipboard', () => ({
+  copyToClipboard: jest.fn(() => Promise.resolve({ success: true, message: '' })),
+}));
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -214,12 +220,8 @@ describe('Share Utils Module', () => {
     });
 
     it('should fallback to clipboard when Web Share unavailable', async () => {
-      const mockWriteText = jest.fn().mockResolvedValue(undefined);
       Object.defineProperty(global, 'navigator', {
-        value: {
-          share: undefined,
-          clipboard: { writeText: mockWriteText },
-        },
+        value: { share: undefined },
         configurable: true,
       });
 
@@ -229,7 +231,7 @@ describe('Share Utils Module', () => {
         'Test Description'
       );
 
-      expect(mockWriteText).toHaveBeenCalledWith('https://test.meeshy.me');
+      expect(copyToClipboard).toHaveBeenCalledWith('https://test.meeshy.me');
       expect(result).toBe(false); // Returns false to indicate copy, not share
     });
 

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type { User, Conversation } from '@/types';
@@ -86,7 +87,7 @@ export const dashboardService = {
         message: response.message
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des données du dashboard:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des données du dashboard', { error });
       throw error;
     }
   },
@@ -103,7 +104,7 @@ export const dashboardService = {
         message: response.message
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des liens de partage:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des liens de partage', { error });
       throw error;
     }
   },
@@ -126,7 +127,7 @@ export const dashboardService = {
         message: response.message
       };
     } catch (error) {
-      console.error('Erreur lors de la création du lien de partage:', error);
+      logger.error('[Service]', 'Erreur lors de la création du lien de partage', { error });
       throw error;
     }
   },
@@ -139,7 +140,7 @@ export const dashboardService = {
       const response = await apiService.patch<{ success: boolean }>(`/share-links/${linkId}/deactivate`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la désactivation du lien de partage:', error);
+      logger.error('[Service]', 'Erreur lors de la désactivation du lien de partage', { error });
       throw error;
     }
   },
@@ -152,7 +153,7 @@ export const dashboardService = {
       const response = await apiService.get<ShareLink>(`/share-links/${linkId}`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des informations du lien:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des informations du lien', { error });
       throw error;
     }
   },
@@ -165,7 +166,7 @@ export const dashboardService = {
       const response = await apiService.post<{ conversation: Conversation; message: string }>(`/share-links/${linkId}/join`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la tentative de rejoindre via le lien:', error);
+      logger.error('[Service]', 'Erreur lors de la tentative de rejoindre via le lien', { error });
       throw error;
     }
   }

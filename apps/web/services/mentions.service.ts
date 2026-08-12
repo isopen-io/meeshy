@@ -1,6 +1,7 @@
 import { apiService } from './api.service';
+import { logger } from '@/utils/logger';
 import type { ApiResponse } from '@meeshy/shared/types';
-import type { MentionSuggestion } from '@meeshy/shared/types/mention';
+import { hasMentions as hasMentionsShared, extractMentions as extractMentionsShared, type MentionSuggestion } from '@meeshy/shared/types/mention';
 
 export interface MentionSuggestionsParams {
   conversationId: string;
@@ -65,11 +66,11 @@ export const mentionsService = {
     query?: string
   ): Promise<MentionSuggestion[]> {
     try {
-      console.log('[MentionsService] Fetching suggestions', { conversationId, query });
+      logger.info('[Mentions]', 'Fetching suggestions', { conversationId, query });
 
       // Valider que conversationId est un ObjectId MongoDB valide (24 caractères hexadécimaux)
       if (!/^[a-f\d]{24}$/i.test(conversationId)) {
-        console.warn('[MentionsService] Invalid conversationId format:', conversationId);
+        logger.warn('[Mentions]', 'Invalid conversationId format', { conversationId });
         return [];
       }
 
@@ -83,7 +84,7 @@ export const mentionsService = {
         params
       );
 
-      console.log('[MentionsService] Suggestions received:', response.data);
+      logger.info('[Mentions]', 'Suggestions received', { data: response.data });
 
       if (response.data?.success && response.data?.data) {
         return response.data.data;
@@ -91,7 +92,7 @@ export const mentionsService = {
 
       return [];
     } catch (error) {
-      console.error('[MentionsService] Error fetching suggestions:', error);
+      logger.error('[Mentions]', 'Error fetching suggestions', { error });
       return [];
     }
   },
@@ -114,7 +115,7 @@ export const mentionsService = {
 
       return [];
     } catch (error) {
-      console.error('[MentionsService] Error fetching message mentions:', error);
+      logger.error('[Mentions]', 'Error fetching message mentions', { error });
       return [];
     }
   },
@@ -138,19 +139,22 @@ export const mentionsService = {
 
       return [];
     } catch (error) {
-      console.error('[MentionsService] Error fetching user mentions:', error);
+      logger.error('[Mentions]', 'Error fetching user mentions', { error });
       return [];
     }
   },
 
   /**
-   * Vérifie si un message contient des mentions (@username)
+   * Vérifie si un message contient des mentions (@username ou @DisplayName).
+   *
+   * Délègue à la détection partagée Unicode-aware (`@meeshy/shared`) — source de vérité unique,
+   * cohérente avec `parseMentions` (reconnaît `@Éric`, `@André`, etc.).
    *
    * @param content - Contenu du message
    * @returns true si le message contient des mentions
    */
   hasMentions(content: string): boolean {
-    return /@\w+/.test(content);
+    return hasMentionsShared(content);
   },
 
   /**
@@ -160,8 +164,7 @@ export const mentionsService = {
    * @returns Array des usernames (sans le @)
    */
   extractMentions(content: string): string[] {
-    const mentions = content.match(/@(\w+)/g);
-    return mentions ? mentions.map(mention => mention.substring(1)) : [];
+    return extractMentionsShared(content);
   },
 };
 

@@ -60,6 +60,20 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    # next 16 casse Turbopack contre @meeshy/shared transpilé (cf. PR #1542, #1676) —
+    # bloquer les majeures tant que la migration n'est pas vetée manuellement
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
+      # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 (compilateur natif) n'expose pas l'API compilateur JS
+      # requise par ts-jest → toutes les suites Jest échouent au chargement
+      # (#2524 reverté). Rester sur 6.x tant que ts-jest ne supporte pas TS 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Service Gateway (Node.js/gRPC)
   - package-ecosystem: "npm"
@@ -97,6 +111,22 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    ignore:
+      # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
+      # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/*"
+        update-types: ["version-update:semver-major"]
+      # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
+      # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 (compilateur natif) n'expose pas l'API compilateur JS
+      # requise par ts-jest → toutes les suites Jest échouent au chargement
+      # (#2524 reverté). Rester sur 6.x tant que ts-jest ne supporte pas TS 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Service Translator (Python/AI)
   - package-ecosystem: "pip"
@@ -134,6 +164,21 @@ updates:
     allow:
       - dependency-type: "direct"
       - dependency-type: "indirect"
+    ignore:
+      # espnet 202509+/202511 exigent numpy>=2.0, incompatible avec le pin
+      # numpy<1.24.0 (ESPnet 202412 + chatterbox-tts). Un bump casse le build
+      # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
+      - dependency-name: "espnet"
+      - dependency-name: "espnet-model-zoo"
+      # grpcio-tools/grpcio-reflection 1.76.0 (pin documenté dans requirements.txt)
+      # plafonnent protobuf <7.0.0 ; un bump 7.x casse l'install du translator
+      - dependency-name: "protobuf"
+        versions: [">=7.0.0"]
+      # pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0 + torch>=2.8.0,
+      # incompatibles avec numpy<1.24.0 et torch==2.6.0 (Dockerfile). Le bump
+      # Dependabot #1674 (3.4.0→4.0.7) a cassé le build Docker translator
+      # ("requirements are unsatisfiable"). Rester sur 3.4.0.
+      - dependency-name: "pyannote-audio"
 
   # Package Shared (Prisma/Types)
   - package-ecosystem: "npm"
@@ -165,6 +210,17 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    ignore:
+      # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
+      # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/*"
+        update-types: ["version-update:semver-major"]
+      # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
+      # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Racine du monorepo (turbo, outils globaux)
   - package-ecosystem: "npm"
@@ -195,6 +251,17 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    ignore:
+      # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
+      # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 (compilateur natif) n'expose pas l'API compilateur JS
+      # requise par ts-jest → toutes les suites Jest échouent au chargement
+      # (#2524 reverté, le groupe build-tools l'avait embarqué). Rester sur 6.x
+      # tant que ts-jest ne supporte pas TS 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # ===========================================================================
   # GITHUB ACTIONS - Workflows CI/CD

@@ -30,7 +30,7 @@ import MeeshySDK
 /// active glass backdrop via `setBackdropTexture(_:)`. The same hook will be
 /// reused by `StoryAVCompositor` per frame. Until that lands, the `CAFilter`
 /// fallback ships the user-facing effect.
-public final class StoryGlassBackdropLayer: CALayer, @unchecked Sendable {
+public final class StoryGlassBackdropLayer: CALayer {
 
     private var sigma: Float = 24
     private var backdropTexture: MTLTexture?

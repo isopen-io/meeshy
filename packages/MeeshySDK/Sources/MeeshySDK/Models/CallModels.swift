@@ -116,12 +116,13 @@ public extension APICallRecord {
     var isMissed: Bool { directionKind == .missed }
 
     /// Best display name: peer display name → peer username → conversation
-    /// title (group) → fallback.
-    var displayName: String {
+    /// title (group) → `fallback`, supplied by the caller so the SDK never
+    /// hardcodes UI copy (SDK Purity — localized strings are app-side).
+    func displayName(fallback: String) -> String {
         if let name = peer?.displayName, !name.isEmpty { return name }
         if let username = peer?.username, !username.isEmpty { return username }
         if let title = conversationTitle, !title.isEmpty { return title }
-        return "Inconnu"
+        return fallback
     }
 
     var avatarURL: String? { peer?.avatar ?? conversationAvatar }
@@ -144,5 +145,112 @@ public extension APICallRecord {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(total))
+    }
+}
+
+// MARK: - Active Call (crash/reconnect recovery)
+
+/// Minimal user reference embedded in `ActiveCallParticipant`. Mirrors the
+/// gateway's `userMinimalSchema` (packages/shared/types/api-schemas.ts) —
+/// intentionally narrower than `CallHistoryPeer` (no phoneNumber/isOnline,
+/// which the call-history route's own serializer adds but the raw call
+/// session schema does not).
+public struct ActiveCallParticipantUser: Codable, Sendable, Equatable {
+    public let id: String
+    public let username: String
+    public let displayName: String?
+    public let avatar: String?
+
+    public init(id: String, username: String, displayName: String? = nil, avatar: String? = nil) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+    }
+}
+
+public struct ActiveCallParticipant: Codable, Sendable, Equatable {
+    public let userId: String
+    public let user: ActiveCallParticipantUser?
+
+    public init(userId: String, user: ActiveCallParticipantUser? = nil) {
+        self.userId = userId
+        self.user = user
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId
+        case user
+    }
+
+    /// Resilient decode: `userId` is the gateway's top-level participant key
+    /// (P1-C, 2026-07-12), but fall back to the nested `user.id` when a payload
+    /// omits it or sends it empty. `userId` is non-optional, so without this a
+    /// single participant missing `userId` would throw and fail the decode of
+    /// the WHOLE `ActiveCallSession` — silently killing crash-recovery (the pill
+    /// disappears, `joinOngoingCall` catches and toasts "impossible de rejoindre").
+    /// This makes the client robust to a gateway regression re-dropping `userId`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let nestedUser = try container.decodeIfPresent(ActiveCallParticipantUser.self, forKey: .user)
+        self.user = nestedUser
+        if let topLevel = try container.decodeIfPresent(String.self, forKey: .userId), !topLevel.isEmpty {
+            self.userId = topLevel
+        } else if let fallback = nestedUser?.id {
+            self.userId = fallback
+        } else {
+            throw DecodingError.dataCorruptedError(
+                forKey: CodingKeys.userId,
+                in: container,
+                debugDescription: "ActiveCallParticipant: neither top-level userId nor nested user.id present"
+            )
+        }
+    }
+}
+
+/// A currently-active (not yet ended) call session, as returned by
+/// `GET /conversations/:conversationId/active-call` and `GET /calls/active`
+/// (mirrors `callSessionSchema`, packages/shared/types/api-schemas.ts). Used
+/// to reconcile a device's local call state with the server's after the
+/// device's own `CallManager` session was lost (app relaunch, crash) while
+/// the call itself is still ongoing — see `ActiveCallService`.
+public struct ActiveCallSession: Codable, Identifiable, Sendable, Equatable {
+    public let id: String
+    public let conversationId: String
+    public let mode: String
+    public let status: String
+    public let metadata: ActiveCallMetadata?
+    public let participants: [ActiveCallParticipant]
+
+    public init(id: String, conversationId: String, mode: String, status: String, metadata: ActiveCallMetadata? = nil, participants: [ActiveCallParticipant]) {
+        self.id = id
+        self.conversationId = conversationId
+        self.mode = mode
+        self.status = status
+        self.metadata = metadata
+        self.participants = participants
+    }
+
+    /// `metadata.type` is the REST source of the call's audio/video nature.
+    /// `mode` carries the WebRTC architecture (p2p|sfu) — it is never "video"
+    /// on the wire (bug 2026-07-12: a video call rejoined after crash resumed
+    /// as audio) and stays only as a forward-compatibility fallback.
+    public var isVideo: Bool { (metadata?.type ?? mode) == "video" }
+
+    /// The other participant in a direct call — the first entry whose
+    /// `userId` isn't `currentUserId`. `nil` for group calls or if the
+    /// participant list hasn't been populated.
+    public func remoteParticipant(currentUserId: String) -> ActiveCallParticipant? {
+        participants.first { $0.userId != currentUserId }
+    }
+}
+
+/// The whitelisted slice of `CallSession.metadata` the gateway serializes
+/// (`callSessionSchema` — every other metadata key is stripped for privacy).
+public struct ActiveCallMetadata: Codable, Sendable, Equatable {
+    public let type: String?
+
+    public init(type: String? = nil) {
+        self.type = type
     }
 }

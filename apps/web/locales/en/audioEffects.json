@@ -317,7 +317,21 @@
       "highConfidence": "High confidence",
       "mediumConfidence": "Medium confidence",
       "veryLowConfidence": "Very low",
-      "uncertain": "Uncertain"
+      "uncertain": "Uncertain",
+      "voiceProfile": {
+        "title": "Voice profile",
+        "titleYou": "Voice profile - You",
+        "pitch": "Average pitch:",
+        "range": "Range:",
+        "gender": "Gender:",
+        "age": "Age:",
+        "voiceType": "Voice type:",
+        "quality": "Quality (HNR):",
+        "speakingTime": "Speaking time: {seconds}s",
+        "primarySpeaker": "Primary speaker",
+        "unknownSpeaker": "Unknown speaker",
+        "createIdentity": "Create a voice identity to identify yourself and see the details"
+      }
     },
     "timeline": {
       "title": "Effects Timeline",
@@ -362,7 +376,8 @@
       "scrollRight": "Scroll right"
     },
     "closePanel": "Close audio effects panel",
-    "clonedVoice": "Cloned voice"
+    "clonedVoice": "Cloned voice",
+    "moreInfo": "More information"
   },
   "microphone": {
     "noMicDetected": "No microphone detected.",

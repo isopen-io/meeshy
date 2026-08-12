@@ -26,6 +26,8 @@
 // CONSTANTS - Security Limits
 // ============================================================================
 
+import { logger } from '@/utils/logger';
+
 const MAX_CONTENT_LENGTH = 1024 * 1024; // 1MB
 const MAX_URL_LENGTH = 2048;
 const MAX_HEADING_LEVEL = 6;
@@ -782,7 +784,7 @@ export const parseMarkdown = (content: string): MarkdownNode[] => {
 
   // CVE Fix: Validate input length
   if (content.length > MAX_CONTENT_LENGTH) {
-    console.warn(`Content exceeds maximum length of ${MAX_CONTENT_LENGTH} bytes`);
+    logger.warn('[MarkdownParser]', `Content exceeds maximum length of ${MAX_CONTENT_LENGTH} bytes`);
     return [{
       type: 'paragraph',
       children: [{
