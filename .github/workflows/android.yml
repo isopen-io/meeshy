@@ -56,10 +56,12 @@ jobs:
   android:
     name: Android (assemble + unit tests)
     runs-on: ubuntu-latest
-    # No prior measurement exists — this workflow is the first time the module
-    # graph is compiled in CI. 45 min is a hang guard against GitHub's 6h
-    # default, not a target; retune once a few runs have been observed.
-    timeout-minutes: 45
+    # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
+    # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
+    # and testDebugUnitTest is ~2m10 (665 actionable tasks). 30 min is a hang
+    # guard with roughly 3x headroom against GitHub's 6h default, not a target.
+    # Raise it if the module graph grows, rather than letting a hung job sit.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/android
