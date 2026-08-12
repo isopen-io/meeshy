@@ -65,6 +65,10 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         return result
     }
 
+    private func occurrences(of needle: String, in source: String) -> Int {
+        source.components(separatedBy: needle).count - 1
+    }
+
     private func source(of fileName: String, file: StaticString = #filePath, line: UInt = #line) throws -> String {
         // #filePath → .../apps/ios/MeeshyTests/Unit/Views/<ce fichier>
         let appRoot = URL(fileURLWithPath: "\(#filePath)")
@@ -100,19 +104,27 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         )
     }
 
-    /// Ancrée sur le CÂBLAGE (`onItemTap:` présent), pas sur la signature
-    /// complète : la bannière a depuis gagné `activeConversationId:`, et une
-    /// garde qui exigeait la parenthèse fermante serait devenue rouge sur un
-    /// changement sans rapport avec ce qu'elle protège.
-    func test_iPadPanels_connectionBanner_alwaysRoutesTaps() throws {
+    /// Le SyncPill iPad a migré vers un point de montage unique
+    /// (`iPadRootView+Sheets.swift`, `.overlay` chaîné avant
+    /// `.modifier(CallPresentationLayer())`) au lieu d'un montage par
+    /// panneau — cf. docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
+    /// Cette garde vérifie que le tap route toujours vers `handleSyncPillTap`
+    /// AU NOUVEL EMPLACEMENT, et que l'ancien montage par panneau n'est pas
+    /// revenu par erreur.
+    func test_iPadPanels_noLongerMountsConnectionBannerPerPanel() throws {
         let code = try source(of: "iPadRootView+Panels.swift")
-        XCTAssertFalse(
-            code.contains("ConnectionBanner()"),
-            "ConnectionBanner sans onItemTap rend les entrées de la pastille de sync non navigables sur iPad."
+        XCTAssertFalse(code.contains("ConnectionBanner("), "Le SyncPill ne doit plus être monté par panneau — un seul point de montage sur iPadRootView+Sheets.swift")
+    }
+
+    func test_iPadRootView_mountsConnectionBannerOnce_routingTapsToHandleSyncPillTap() throws {
+        let code = try source(of: "iPadRootView+Sheets.swift")
+        XCTAssertEqual(
+            occurrences(of: "ConnectionBanner(", in: code), 1,
+            "iPadRootView+Sheets.swift doit monter le SyncPill EXACTEMENT une fois — le point de montage est unique."
         )
         XCTAssertTrue(
-            code.contains("ConnectionBanner(onItemTap: handleSyncPillTap"),
-            "Les bannières du panneau iPad doivent router le tap comme RootView (iPhone)."
+            code.contains("onItemTap: handleSyncPillTap"),
+            "Le point de montage unique doit router le tap vers handleSyncPillTap, comme RootView (iPhone)."
         )
     }
 

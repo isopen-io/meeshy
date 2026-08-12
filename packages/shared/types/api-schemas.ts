@@ -2227,6 +2227,7 @@ export const callSessionSchema = {
 
     // Timestamps
     startedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Call start timestamp' },
+    answeredAt: { type: 'string', format: 'date-time', nullable: true, description: 'When the first participant answered (ring time excluded from talk-time clocks)' },
     endedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Call end timestamp' },
     duration: { type: 'number', nullable: true, description: 'Call duration in seconds' },
 

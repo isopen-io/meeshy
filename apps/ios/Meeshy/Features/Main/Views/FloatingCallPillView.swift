@@ -139,24 +139,32 @@ struct FloatingCallPillView: View {
         // Pleine largeur (façon barre d'appel WhatsApp) : la bannière s'étire
         // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
         .frame(maxWidth: .infinity)
-        // iOS 26 Liquid Glass surface (SDK Compatibility wrapper owns the
-        // gating + the .ultraThinMaterial fallback). The small inner controls stay
-        // as vibrancy fills ON the glass — Apple HIG: don't nest glass in glass.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MeeshyColors.glassBorderGradient(isDark: true), lineWidth: 1)
+        .background(
+            ZStack {
+                MeeshyColors.brandGradient
+                // Scrim calibré par test (CallBannerContrastTests) pour que
+                // tout le contenu (nom, durée, glyphes d'état, boutons)
+                // passe son seuil WCAG contre les deux arrêts du dégradé.
+                Color.black.opacity(CallBannerContrast.scrimOpacity)
+            }
         )
-        .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
-        // Plafond iPad/Mac : la barre reste un bandeau lisible et centré au
-        // lieu de s'étirer sur toute une fenêtre paysage ; sur iPhone (<560 pt)
-        // elle est pleine largeur.
-        .frame(maxWidth: 560)
-        .padding(.horizontal, 10)
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
         .simultaneousGesture(collapseDragGesture)
+        .overlay(alignment: .leading) {
+            Image(systemName: "chevron.left")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.35))
+                .padding(.leading, 4)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .trailing) {
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.35))
+                .padding(.trailing, 4)
+                .accessibilityHidden(true)
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()

@@ -43,7 +43,6 @@ struct FeedView: View {
     // by `iPadRootView`). FeedView is iPad-only, so these objects are always
     // injected by `iPadRootView`'s environment.
     @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     // Présentation unifiée du viewer de story (même coordinator que la story tray
     // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
@@ -975,9 +974,6 @@ struct FeedView: View {
                     // Composer placeholder
                     composerPlaceholder
                         .padding(.bottom, 8)
-
-                    // Connection status banner (banner manages its own socket observation)
-                    ConnectionBanner()
 
                     // Error state
                     if let error = viewModel.error {
