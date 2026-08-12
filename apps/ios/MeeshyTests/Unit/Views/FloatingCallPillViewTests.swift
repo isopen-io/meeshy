@@ -236,6 +236,36 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    // 2026-08-12 — retour user : le décor de la bannière doit se terminer en
+    // fondu vers le transparent en bas (6 % transparent + zone de dégradé
+    // 20–30 %), jamais en arête nette d'indigo complet.
+    func test_banner_backgroundFadesOutAtBottom() throws {
+        let source = try pillSource()
+        guard let backgroundRange = source.range(of: ".background("),
+              let offsetRange = source.range(of: ".offset(x: pillDragOffset)") else {
+            XCTFail("expected pillContent to keep its .background + .offset chain")
+            return
+        }
+        let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
+        XCTAssertTrue(
+            backgroundBlock.contains(".mask(CallBannerBottomFade.mask)"),
+            "The banner decor (brandGradient + scrim) must be masked by " +
+            "CallBannerBottomFade so the bar ends in a transparent fade at its " +
+            "bottom edge instead of a hard indigo line (user feedback 2026-08-12)."
+        )
+        guard let maskRange = backgroundBlock.range(of: ".mask(CallBannerBottomFade.mask)"),
+              let safeAreaRange = backgroundBlock.range(of: ".ignoresSafeArea(.container, edges: .top)") else {
+            XCTFail("expected both the fade mask and the safe-area bleed on the banner decor")
+            return
+        }
+        XCTAssertLessThan(
+            maskRange.lowerBound, safeAreaRange.lowerBound,
+            "The fade mask must wrap the decor BEFORE the safe-area bleed so the " +
+            "alpha gradient spans the full decor height (status-bar bleed included) " +
+            "— masking a sub-region would shift the 6%/24% fade bands."
+        )
+    }
+
     // 2026-08-12 — retrait des chevrons gauche/droite (retour user : inutiles ;
     // ils violaient aussi la garde RTL qui bannit les symboles nommés par un
     // côté physique, cf. RightToLeftLayoutGuardTests).
@@ -444,6 +474,41 @@ final class FloatingCallPillViewTests: XCTestCase {
             "pillContent must not force an exact height on the pill — that clips " +
             "userInfoSection's text at large accessibility text sizes."
         )
+    }
+}
+
+// MARK: - CallBannerBottomFade Value Tests
+
+// 2026-08-12 — retour user : « un dégradé transparent en bas avant d'atteindre
+// l'indigo complet — 6 % en bas de transparent, 20-30 % de dégradé ». Les
+// bandes du fondu sont des valeurs calibrées, gardées ici contre toute dérive.
+@MainActor
+final class CallBannerBottomFadeTests: XCTestCase {
+
+    func test_transparentBottomBand_is6PercentOfHeight() {
+        XCTAssertEqual(CallBannerBottomFade.transparentFraction, 0.06, accuracy: 0.0001,
+                       "le bas de la bannière doit être totalement transparent sur 6 % de la hauteur")
+    }
+
+    func test_gradientBand_isWithinRequested20To30PercentRange() {
+        XCTAssertGreaterThanOrEqual(CallBannerBottomFade.gradientFraction, 0.20,
+                                    "la zone de dégradé doit couvrir au moins 20 % de la hauteur")
+        XCTAssertLessThanOrEqual(CallBannerBottomFade.gradientFraction, 0.30,
+                                 "la zone de dégradé ne doit pas dépasser 30 % de la hauteur")
+    }
+
+    func test_maskLocations_areOrderedWithinUnitRange() {
+        XCTAssertGreaterThan(CallBannerBottomFade.fadeStartLocation, 0)
+        XCTAssertLessThan(CallBannerBottomFade.fadeStartLocation,
+                          CallBannerBottomFade.fullyTransparentLocation)
+        XCTAssertLessThan(CallBannerBottomFade.fullyTransparentLocation, 1)
+    }
+
+    func test_majorityOfBanner_staysFullIndigo() {
+        // Le fondu ne ronge que le bord bas : plus de la moitié de la hauteur
+        // reste à l'indigo complet, là où vivent nom, durée et contrôles —
+        // c'est le fond contre lequel CallBannerContrastTests calibre le scrim.
+        XCTAssertGreaterThanOrEqual(CallBannerBottomFade.fadeStartLocation, 0.5)
     }
 }
 

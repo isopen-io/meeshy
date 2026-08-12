@@ -73,6 +73,41 @@ enum CallPillStatus: Equatable {
     }
 }
 
+// MARK: - Call Banner Bottom Fade
+
+/// Fondu du bord bas de la bannière d'appel réduite (retour user 2026-08-12) :
+/// le décor indigo ne se termine pas en arête nette — les 6 % inférieurs de la
+/// hauteur sont totalement transparents, surmontés d'une zone de dégradé
+/// (~24 % de la hauteur, dans la fourchette 20–30 % demandée) qui remonte vers
+/// l'indigo complet. Appliqué en masque alpha sur le décor UNIQUEMENT
+/// (brandGradient + scrim) — le contenu (nom, durée, contrôles) reste opaque.
+enum CallBannerBottomFade {
+    /// Fraction inférieure de la hauteur totalement transparente.
+    nonisolated static let transparentFraction: CGFloat = 0.06
+    /// Hauteur de la zone de dégradé transparent → indigo complet.
+    nonisolated static let gradientFraction: CGFloat = 0.24
+    /// Emplacement (unité 0–1 depuis le HAUT) où l'opacité commence à décroître.
+    nonisolated static var fadeStartLocation: CGFloat { 1 - transparentFraction - gradientFraction }
+    /// Emplacement où l'opacité atteint zéro (début de la bande transparente).
+    nonisolated static var fullyTransparentLocation: CGFloat { 1 - transparentFraction }
+
+    /// Masque alpha vertical du décor : opaque du haut jusqu'à
+    /// `fadeStartLocation`, dégradé jusqu'à `fullyTransparentLocation`,
+    /// transparent jusqu'au bord bas.
+    static var mask: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: fadeStartLocation),
+                .init(color: .black.opacity(0), location: fullyTransparentLocation),
+                .init(color: .black.opacity(0), location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
 // MARK: - Floating Call Pill View
 
 /// Bannière d'appel réduite — pleine largeur façon WhatsApp, montée en tête
@@ -152,6 +187,12 @@ struct FloatingCallPillView: View {
                 // passe son seuil WCAG contre les deux arrêts du dégradé.
                 Color.black.opacity(CallBannerContrast.scrimOpacity)
             }
+            // Fondu bas (retour user 2026-08-12) : le décor se termine en
+            // dégradé vers le transparent au lieu d'une arête nette — 6 % du
+            // bas transparent, ~24 % de zone de dégradé, indigo complet
+            // au-dessus. Posé AVANT ignoresSafeArea pour que le masque couvre
+            // aussi le débord sous la status bar.
+            .mask(CallBannerBottomFade.mask)
             // Immersif façon WhatsApp : la bannière est posée en tête du
             // VStack de compression (CallPresentationLayer), donc SOUS la
             // status bar — seul son décor déborde jusqu'au bord haut du
