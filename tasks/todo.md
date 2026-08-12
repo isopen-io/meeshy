@@ -1,3 +1,159 @@
+# Tête instruite pour le cycle 84 — le gate compile existe ; ce qui reste à instruire est ce qu'il ne voit pas
+
+*Le cycle 83 a exécuté la consigne du cycle 82 : mesurer avant de câbler. La mesure a répondu, le
+gate est câblé, et pour la première fois depuis le 2026-07-27 une PR qui touche du Swift le compile.*
+
+## Ce que le cycle 84 hérite, et ne doit pas défaire
+
+Le gate est **compile seule**, délibérément. Il ne dit RIEN de :
+
+- **la suite `MeeshyTests`** — toujours sur `dev` uniquement. Un test qui compile mais échoue passe
+  le gate sans un mot. C'est le compromis assumé : les 8 min d'exécution sont exactement l'un des
+  deux postes qui avaient saturé la file en juillet ;
+- **la suite `MeeshySDK`** (`sdk-tests.yml`) — déjà déclenchée sur PR, mais gatée sur
+  `packages/MeeshySDK/**` seul. Une PR qui ne touche que `apps/ios` ne l'exerce pas ;
+- **les baselines de snapshot Timeline** — enregistrées sur iOS 18.2, donc invérifiables sans le
+  runtime que le gate saute exprès.
+
+## Ce que le cycle 84 devrait instruire
+
+1. **Relever le coût réel du gate après un mois.** Deux points de mesure réels existent désormais
+   (cf. rapport du cycle 83) : **10m02 à froid, 4m54 en régime permanent**. Le régime permanent
+   étant le cas courant, la projection tombe à 340 runs/mois × ~5 min ≈ **1 700 min de runner
+   macOS**, la moitié de l'estimation qui accompagnait le câblage. Cela reste une projection à
+   partir des horodatages de commits, pas un relevé de facturation — et le nombre de runs, lui,
+   n'a pas été re-mesuré. La mesurer pour de vrai, et si elle dérape, la première coupe évidente
+   est le filtre de chemins (aujourd'hui `apps/ios/**` entier, y compris les ressources et les
+   `.md`, qui ne changent rien à la compilation).
+2. **Vérifier que le cache DerivedData profite bien aux PR.** Les runs de PR écrivent maintenant
+   sous la même lignée de clés que `dev` (`ios-dd-macos15-xc26_1_1-…`). Deux hypothèses non
+   vérifiées : que les produits d'un build `generic/platform=iOS Simulator` (arm64 épinglé) se
+   réutilisent sans rebuild complet par un build `id=<sim>`, et l'inverse. Si elles sont fausses,
+   les deux modes se piétinent le cache et chaque run repart à froid — mesurable dans les logs à
+   la durée de l'étape `Build for testing` sur deux runs consécutifs.
+3. **La porte `actions: write` reste close** (cycle 82) et le reste : l'intégration GitHub App de la
+   routine ne peut toujours pas déclencher `workflow_dispatch`. Le gate compile la contourne pour le
+   Swift ; elle continue de bloquer tout lancement à la demande de la suite complète.
+
+Point d'entrée : `.github/workflows/ios-tests.yml` (en-tête « PR GATE RESTORED, COMPILE-ONLY ») et
+son garde `packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`.
+
+---
+
+# Cycle 83 — La routine cesse de merger du Swift que rien n'a compilé
+
+## La mesure que la tête du cycle 83 exigeait
+
+La consigne était explicite : *« combien de PR touchent `apps/ios/**` simultanément ? Si c'est 1-2,
+un job de 10-18 min ne sature rien. Si c'est 5-6, la réponse est encore non. Mesurer d'abord,
+câbler ensuite. »*
+
+Le clone de la session était **shallow** (82 commits de premier parent, ~1,5 jour) — la première
+mesure tentée portait donc sur 3 jours en se croyant sur 30. Approfondi
+(`git fetch --shallow-since="35 days ago"`, 2 178 commits, retour au 2026-07-08), puis : pour chaque
+merge de premier parent sur `main`, les commits propres au côté fusionné qui touchent
+`apps/ios/**` ou `packages/MeeshySDK/**` ; commits à moins de 5 min regroupés en une poussée ; chaque
+poussée ouvre une fenêtre de 18 min, tronquée par la poussée suivante sur la même PR — c'est ce que
+fait `cancel-in-progress`.
+
+**148 PR, 340 poussées sur 30 jours.** Concurrence pondérée par le temps :
+
+| runs iOS en vol | part du temps calendaire |
+|---|---|
+| ≥ 1 | 8,9 % (64,2 h / 720) |
+| ≥ 2 | 1,9 % (13,4 h) |
+| ≥ 3 | 0,7 % (5,1 h) |
+| ≥ 5 | 0,2 % (1,6 h) |
+
+**La réponse est 1-2, pas 5-6.** La fenêtre est vide 91 % du temps. Le chiffre de juillet est
+atteint 1,6 h par mois, et seulement dans des salves d'intégration groupée — dont les horodatages de
+commits SURESTIMENT les poussées réelles (une session humaine qui merge dix vieilles branches d'un
+coup produit dix commits rapprochés qui n'ont jamais été poussés séparément). Cette queue est donc
+un MAJORANT. Ce qui saturait le plafond macOS n'était pas le déclencheur : c'était la suite complète
+à 29-45 min derrière lui.
+
+## Le correctif
+
+Un seul job, un seul jeu d'étapes, une bascule nommée : `COMPILE_ONLY` vaut `'true'` sur le seul
+événement `pull_request`. Elle gate les deux étapes qui coûtent le plus et prouvent le moins au
+temps de la PR — celles que le fichier lui-même signalait comme « déjà séparées » :
+
+- **provisionnement du runtime iOS 18.2** (~7 min, borné par le réseau) — inutile :
+  `generic/platform=iOS Simulator` compile contre le SDK simulateur sans runtime installé ;
+- **exécution des tests** (~8 min) — c'est le poste qui a saturé la file en juillet.
+
+Reste `build-for-testing`, qui compile l'app **et les cibles de test** : un fichier de test qui ne
+compile pas rougit, ce qui couvre l'autre moitié du Swift que la routine écrit. ~18 min à froid,
+~10 min sur cache SPM chaud, sur le runner standard, au tarif standard.
+
+**Le piège évité, et il est réel** : une destination générique n'a PAS d'architecture active, donc
+`ONLY_ACTIVE_ARCH=YES` n'a rien à quoi se réduire et `xcodebuild` compile arm64 **et** x86_64 — le
+double du poste le plus cher du job, soit un gate plus lent que la suite qu'il remplace. Les runners
+`macos-15` sont Apple Silicon : l'architecture est épinglée explicitement (`ARCHS=arm64`) dans la
+branche compile-seule, et `ONLY_ACTIVE_ARCH=YES` reste inchangé dans la branche simulateur.
+
+Trois réglages de coût, chacun motivé sur place : `ready_for_review` ajouté aux `types` (sans lui,
+une PR ouverte en brouillon puis marquée prête n'émet plus aucun événement et le gate serait sauté
+en silence), les brouillons exclus par un `if` de job, et `timeout-minutes` ramené à 30 sur PR (50
+reste le plafond de la suite complète — une compilation qui déborde 30 min est bloquée, pas lente).
+
+## Vérification
+
+- **RED prouvé avant tout YAML** : le garde écrit en premier, 8 échecs sur 10 contre le workflow
+  d'origine. GREEN après câblage : 10/10.
+- **Mutation appliquée et vérifiée (leçon 117) — 7 réversions, 7 rouges** : déclencheur
+  `pull_request` retiré (3 témoins tombent), gate du simulateur retiré, gate des tests retiré,
+  `ARCHS=arm64` retiré, `ready_for_review` retiré, `COMPILE_ONLY` figé à `'false'`, destination
+  générique annulée. Restauré, re-vérifié vert.
+- **Suite `shared` complète** : 52 fichiers, 1 506 tests verts (vitest 4.1.10), contre 51/1 496 au
+  départ. `tsc --noEmit` : 0 erreur.
+- **YAML re-parsé après édition** (`yaml.safe_load`) : 3 déclencheurs, 12 étapes, 5 conditionnées ;
+  les expressions de `name`, `if`, `env` et `timeout-minutes` du job relues une à une.
+- **Les deux branches du script bash exécutées** : `COMPILE_ONLY=true` →
+  `generic/platform=iOS Simulator` + `ARCHS=arm64` ; `false` → `platform=iOS Simulator,id=<sim>` +
+  `ONLY_ACTIVE_ARCH=YES`. `bash -n` propre.
+- **Le gate s'est prouvé sur sa propre PR** (PR #2875, run #31564979638, job 94014846909) :
+  `.github/workflows/ios-tests.yml` fait partie du filtre de chemins, donc cette PR-là a déclenché le
+  job compile qu'elle introduisait. **Vert en 10m02**, cache SPM ET DerivedData froids, contre les
+  35 min de la baseline `dev` :
+
+  | étape | baseline `dev` | gate de PR |
+  |---|---|---|
+  | provision du runtime iOS 18.2 | 7m01 | **sautée (0 s)** |
+  | résolution SPM (froide dans les deux cas) | 8m07 | 2m02 |
+  | `build-for-testing` | 8m58 | **6m33** |
+  | sauvegarde DerivedData | 40 s | 32 s |
+  | `test-without-building` | 8m20 | **sautée (0 s)** |
+  | **total** | **~35 min** | **10m02** |
+
+  L'estimation d'avant câblage disait « ~18 min à froid, ~10 min à chaud » : le run FROID a fait le
+  temps prédit pour un run CHAUD. Et le compile est **plus rapide** que celui de la baseline, pas
+  plus lent — c'est la preuve observable que le pin `ARCHS=arm64` prend effet. Sa perte se verrait
+  ici comme un compile environ double, jamais comme un échec.
+- **Le régime permanent, mesuré au run suivant** (job 94017664432, caches SPM ET DerivedData
+  chauds) : **4m54**. Restauration SPM 18 s (hit), DerivedData 14 s (hit, semé par le run froid),
+  résolution SPM 23 s (contre 2m02), `build-for-testing` **3m19** en incrémental (contre 6m33),
+  sauvegarde 17 s. **Un gate froid coûte ~10 min, le régime permanent ~5** — le froid ne revient
+  que si la clé SPM (`project.yml`) change ou si la lignée DerivedData repart, pas à chaque PR.
+- **Une des deux hypothèses de cache est levée** : les produits DerivedData d'un run compile-seule
+  SONT réutilisés par le run compile-seule suivant (6m33 → 3m19). Reste non vérifié le cas
+  CROISÉ — `generic/platform` ↔ `id=<sim>` — dont l'échec ne coûterait qu'un compile froid sur
+  `dev`, jamais un résultat faux.
+- **Les 16 checks de la PR verts** (Quality, Security, Build, shared, web, gateway, agent, Prisma,
+  Python, audio, TTS, Voice API ; Trivy `neutral`, son état habituel).
+
+## Où vit le garde, et pourquoi là
+
+`packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`. La suite `shared` est celle que
+`ci.yml` exécute sur **chaque** PR : c'est donc la seule qui puisse constater la disparition du gate
+iOS. Le dépôt hébergeait déjà un garde d'hygiène sans rapport avec le runtime partagé au même
+endroit (`esm-relative-imports.test.ts`), et le précédent Swift (`ArchiveSignatureStripGuardTests`)
+ne s'exécuterait, lui, que sur `dev` — précisément le chemin qui ne surveille rien au bon moment.
+
+Le retrait du 2026-07-27 était juste et n'a rien signalé pendant six semaines. Celui-ci rougira.
+
+---
+
 # Tête instruite pour le cycle 83 — les deux portes du gate iOS sont instruites, l'une est close par un droit, l'autre par une dépense
 
 *Le cycle 82 a exécuté la consigne du cycle 81 : instruire une des deux portes avant tout Swift. Les
