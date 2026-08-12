@@ -27,7 +27,7 @@ export class ConversationsCrudService {
    * Obtenir toutes les conversations de l'utilisateur avec pagination et filtres
    */
   async getConversations(options: GetConversationsOptions = {}): Promise<GetConversationsResponse> {
-    const { limit = 20, offset = 0, type, withUserId, before } = options;
+    const { limit = 20, offset = 0, type, withUserId, before, updatedSince } = options;
 
     const queryParams: Record<string, string> = {
       limit: limit.toString(),
@@ -39,6 +39,7 @@ export class ConversationsCrudService {
     }
     if (type) queryParams.type = type;
     if (withUserId) queryParams.withUserId = withUserId;
+    if (updatedSince) queryParams.updatedSince = updatedSince;
 
     const response = await apiService.get<{
       success: boolean;

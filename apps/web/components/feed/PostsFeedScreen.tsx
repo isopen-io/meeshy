@@ -7,7 +7,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
 import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
 import type { StoryVisibility } from '@/components/v2';
-import { PostComposer } from '@/components/v2/PostComposer';
+import { PostComposer, type PostPublishPayload } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
 import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
@@ -25,7 +25,7 @@ import { postToStatusItem } from '@/lib/status-transforms';
 
 // Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
@@ -33,10 +33,12 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
+import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
 import type { MobileTranscription } from '@/services/posts.service';
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostVisibility } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { copyToClipboard } from '@/lib/clipboard';
+import { shareLink } from '@/lib/share-utils';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -157,7 +159,6 @@ export function PostsFeedScreen() {
   const createPostMutation = useCreatePostMutation();
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
-  const shareMutation = useSharePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const translateMutation = useTranslatePostMutation();
@@ -244,6 +245,16 @@ export function PostsFeedScreen() {
     return group ? group.map(postToStoryData) : [];
   }, [activeStoryAuthorId, storyGroups]);
 
+  // PostService.repostPost (gateway) 403s on any non-PUBLIC original, and the
+  // web default story visibility is FRIENDS (user-preferences-store.ts) — the
+  // "Republier" entry is withheld unless every story in the open session is
+  // PUBLIC, or it fails into "Couldn't repost" in the common case.
+  const activeStoryGroupIsRepostable = useMemo(() => {
+    if (!activeStoryAuthorId) return false;
+    const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
+    return !!group && group.every((p) => p.visibility === 'PUBLIC');
+  }, [activeStoryAuthorId, storyGroups]);
+
   const handleStoryPress = useCallback(
     (groupId: string) => {
       const group = storyGroups.find((g) => g[0]?.authorId === groupId);
@@ -301,6 +312,41 @@ export function PostsFeedScreen() {
     [deleteStoryMutation, showToast, t],
   );
 
+  const handleShareStory = useCallback(
+    async (storyId: string) => {
+      const story = activeStoryData.find((s) => s.id === storyId);
+      const localUrl = `${window.location.origin}/story/${storyId}`;
+      const title = story?.author.name ?? 'Meeshy';
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+      try {
+        const { shortUrl } = await postsService.sharePost(storyId, { generateLink: true });
+        const shared = await shareLink(shortUrl ?? localUrl, title, story?.content ?? '');
+        if (shared) {
+          showToast(t('toast.shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
+      } catch {
+        showToast(t('toast.error', 'Error'), 'error', t('toast.shareError', "Couldn't share the story."));
+      }
+    },
+    [activeStoryData, showToast, t],
+  );
+
+  const handleRepostStory = useCallback(
+    (storyId: string) => {
+      repostMutation.mutate(
+        { postId: storyId, data: { isQuote: false } },
+        {
+          onSuccess: () => showToast(t('toast.reposted', 'Reposted!'), 'success'),
+          onError: () => showToast(t('toast.error', 'Error'), 'error'),
+        },
+      );
+    },
+    [repostMutation, showToast, t],
+  );
+
   const handleStoryViewerClose = useCallback(() => {
     setStoryViewerOpen(false);
     setActiveStoryAuthorId(null);
@@ -324,9 +370,16 @@ export function PostsFeedScreen() {
   // ─── Post handlers ────────────────────────────────────────────────────
 
   const handlePublish = useCallback(
-    (data: { content: string; type: 'POST' | 'STORY' | 'STATUS'; visibility: string }) => {
+    (data: PostPublishPayload) => {
       createPostMutation.mutate(
-        { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        {
+          content: data.content || undefined,
+          type: data.type,
+          visibility: data.visibility,
+          visibilityUserIds: data.visibilityUserIds,
+          mediaIds: data.mediaIds,
+          optimisticMedia: data.optimisticMedia,
+        },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
           onError: () => showToast(t('toast.error', 'Error'), 'error', t('toast.postPublishError', "Couldn't publish the post.")),
@@ -373,20 +426,27 @@ export function PostsFeedScreen() {
   const handleShare = useCallback(
     async (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      const url =
+      const localUrl =
         post?.type === 'REEL'
           ? `${window.location.origin}/reel/${postId}`
           : `${window.location.origin}/feeds/post/${postId}`;
+      const title = post?.author?.displayName ?? post?.author?.username ?? 'Meeshy';
 
-      const { success } = await copyToClipboard(url);
-      if (success) {
-        shareMutation.mutate({ postId });
-        showToast(t('toast.linkCopied', 'Link copied!'), 'success');
-      } else {
-        showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't copy the link."));
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+      try {
+        const { shortUrl } = await postsService.sharePost(postId, { generateLink: true });
+        const shared = await shareLink(shortUrl ?? localUrl, title, post?.content ?? '');
+        if (shared) {
+          showToast(t('toast.shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          showToast(t('toast.linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
+      } catch {
+        showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't share the post."));
       }
     },
-    [shareMutation, showToast, posts],
+    [showToast, posts, t],
   );
 
   const handleBookmark = useCallback(
@@ -405,6 +465,10 @@ export function PostsFeedScreen() {
     [translateMutation, userLanguage],
   );
 
+  const handleDownloadMedia = useCallback((postId: string, mediaId: string) => {
+    postsService.recordMediaDownloads(postId, [mediaId], 'feed');
+  }, []);
+
   const handleDeletePost = useCallback(
     (postId: string) => {
       deletePostMutation.mutate(postId, {
@@ -412,6 +476,28 @@ export function PostsFeedScreen() {
       });
     },
     [deletePostMutation, showToast, t],
+  );
+
+  const handleReportPost = useCallback(
+    (postId: string) => {
+      if (!window.confirm(t('post.reportConfirm', 'Report this post?'))) return;
+      reportService
+        .reportPost(postId, 'inappropriate', '')
+        .then(() => showToast(t('toast.postReported', 'Post reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the post.")));
+    },
+    [showToast, t],
+  );
+
+  const handleReportStory = useCallback(
+    (storyId: string) => {
+      if (!window.confirm(t('story.reportConfirm', 'Report this story?'))) return;
+      reportService
+        .reportStory(storyId, 'inappropriate', '')
+        .then(() => showToast(t('toast.storyReported', 'Story reported'), 'success'))
+        .catch(() => showToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the story.")));
+    },
+    [showToast, t],
   );
 
   const handlePinPost = useCallback(
@@ -492,20 +578,36 @@ export function PostsFeedScreen() {
   }, []);
 
   const handleAudioPublish = useCallback(
-    async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+    async (data: {
+      audioFile: File;
+      transcription: MobileTranscription | null;
+      content?: string;
+      visibility: PostVisibility;
+      visibilityUserIds?: string[];
+    }) => {
       try {
         const tusService = new TusUploadService();
         const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
-        const mediaId = results[0]?.id;
-        if (!mediaId) throw new Error('Upload failed');
+        const media = results[0];
+        if (!media?.id) throw new Error('Upload failed');
 
         createPostMutation.mutate(
           {
             content: data.content,
             type: 'POST',
-            visibility: 'PUBLIC',
-            mediaIds: [mediaId],
+            visibility: data.visibility,
+            visibilityUserIds: data.visibilityUserIds,
+            mediaIds: [media.id],
             mobileTranscription: data.transcription ?? undefined,
+            originalLanguage: data.transcription?.language,
+            optimisticMedia: [{
+              id: media.id,
+              mimeType: media.mimeType,
+              fileUrl: media.fileUrl,
+              thumbnailUrl: media.thumbnailUrl,
+              duration: media.duration,
+              order: 0,
+            }],
           },
           {
             onSuccess: () => {
@@ -688,6 +790,8 @@ export function PostsFeedScreen() {
                     reactionSummary={post.reactionSummary ?? undefined}
                     userReaction={userReaction}
                     media={post.media}
+                    repostOf={post.repostOf}
+                    isQuote={post.isQuote}
                     onLike={() => handleLike(post.id, isLiked)}
                     onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
                     onComment={() => handleComment(post.id)}
@@ -698,6 +802,10 @@ export function PostsFeedScreen() {
                     onEdit={() => handleEditPost(post.id)}
                     onDelete={() => handleDeletePost(post.id)}
                     onPin={() => handlePinPost(post.id, post.isPinned)}
+                    onReport={() => handleReportPost(post.id)}
+                    onDownloadMedia={(mediaId) => handleDownloadMedia(post.id, mediaId)}
+                    onDownloadRepostMedia={(mediaId) => post.repostOf?.id && handleDownloadMedia(post.repostOf.id, mediaId)}
+                    onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
                     onClick={() => {
                       if (post.type === 'REEL') {
                         router.push(`/reel/${post.id}`);
@@ -738,6 +846,9 @@ export function PostsFeedScreen() {
           onView={handleStoryView}
           onReply={handleStoryReply}
           onDelete={handleStoryDelete}
+          onReport={handleReportStory}
+          onShare={handleShareStory}
+          onRepost={activeStoryGroupIsRepostable ? handleRepostStory : undefined}
         />
       )}
 

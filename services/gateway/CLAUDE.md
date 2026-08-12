@@ -75,10 +75,17 @@ Server → Client: message:new, reaction:added, typing:start
 ### Room Organization
 ```typescript
 ROOMS.conversation(id)  // conversation:${id}
-ROOMS.user(id)          // user:${id}
+ROOMS.user(id)          // user:${id} — id = participant.userId ?? participant.id
 ROOMS.feed(id)          // feed:${id}
 ROOMS.call(id)          // call:${id}
 ```
+
+**Room personnelle d'un participant : `userId ?? id`.** Un participant sans ligne
+`User` rejoint `ROOMS.user(participant.id)` — l'adresser par `userId` seul saute
+une room qui existe. Ne pas réécrire la règle : utiliser `participantUserRooms()`
+ou `emitToConversationParticipants()` (`socketio/emitToConversationParticipants.ts`).
+Le `select` Prisma doit charger `id` **et** `userId`. Détail et exceptions :
+`src/socketio/README.md` § « Quel `id` passer a `ROOMS.user()` ? ».
 
 ### Connection Maps
 ```typescript
@@ -222,7 +229,11 @@ Client sends `If-None-Match`, gateway responds 304 if unchanged.
 
 ### Response Format
 ALL routes MUST use `sendSuccess()`/`sendError()` from `utils/response.ts`.
-Pagination under `meta.pagination`, NOT top-level.
+Pagination is emitted at the ROOT of the response, NOT under `meta` — both
+`sendSuccess` (`utils/response.ts:33`) and `sendPaginatedSuccess` (`:56`) assign
+`pagination` as a top-level key, and the iOS/web decoders read it there. This
+line used to state the opposite, which no route could satisfy while using the
+mandated helper.
 Errors under `error: { code, message }`, NOT `error: "string"`.
 
 ### Language Resolution

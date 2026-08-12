@@ -47,10 +47,35 @@ final class StoryExportShareViewModel: ObservableObject {
     private let logger = Logger(subsystem: "me.meeshy.app", category: "story-export-share")
     private var exportTask: Task<Void, Never>?
 
-    init(exporter: StoryVideoExportServiceProviding? = nil) {
+    /// Identité gravée dans le préambule de marque. Injectable : la lire
+    /// directement dans `AuthManager.shared` rendait l'export dépendant d'une
+    /// session ambiante — sans session, `currentUserBrandIntro()` renvoyait `nil`
+    /// et le MP4 partait SANS interlude, silencieusement. C'est aussi ce qui
+    /// rendait les tests verts en local (session résiduelle du simulateur) et
+    /// rouges en CI (simulateur vierge).
+    private let brandIntro: @MainActor @Sendable () async -> StoryExportIntroContent?
+
+    /// Borne dure sur la résolution de `brandIntro` — LA MÊME que les deux
+    /// autres chemins d'export (`StoryPhotoSaveService.introTimeout`,
+    /// `TimelineExportController.introTimeout`), désormais domiciliée à côté du
+    /// mécanisme lui-même : `BoundedAsyncResolution.defaultTimeout`.
+    ///
+    /// Revue finale (item 4) : « Partager » était le SEUL des trois chemins à
+    /// attendre `brandIntro()` sans borne, et il le faisait avant même que
+    /// `exportTask` existe — donc premier partage après installation + réseau
+    /// lent = barre à 0 % pendant jusqu'à ~60 s, bouton « Annuler » sans effet
+    /// (il annule `exportTask`, encore `nil`), et fermer la sheet ne stoppait
+    /// pas le bake qui démarrait derrière.
+    private let introTimeout: Duration
+
+    init(exporter: StoryVideoExportServiceProviding? = nil,
+         introTimeout: Duration = BoundedAsyncResolution.defaultTimeout,
+         brandIntro: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil) {
         // `StoryVideoExportService.shared` is `@MainActor`-isolated so it
         // can't be a default arg expression; resolve inside the body.
         self.exporter = exporter ?? StoryVideoExportService.shared
+        self.introTimeout = introTimeout
+        self.brandIntro = brandIntro ?? StoryExportIntroFactory.currentUser
     }
 
     // MARK: - Public API
@@ -59,19 +84,12 @@ final class StoryExportShareViewModel: ObservableObject {
     /// `translations` array. The caller picks one (or leaves nil for
     /// "original") before `startExport`.
     func prepare(story: StoryItem) {
-        var langs: [String] = []
-        if let translations = story.translations {
-            for t in translations where !langs.contains(t.language) {
-                langs.append(t.language)
-            }
-        }
+        let langs = StoryExportLanguageResolver.availableLanguages(story: story)
         availableLanguages = langs
-        if let preferred = AuthManager.shared.currentUser?.preferredContentLanguages.first,
-           langs.contains(preferred) {
-            selectedLanguage = preferred
-        } else {
-            selectedLanguage = nil
-        }
+        selectedLanguage = StoryExportLanguageResolver.defaultLanguage(
+            available: langs,
+            preferred: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
     }
 
     /// Bakes an MP4 from `story` honouring `selectedLanguage` (Prisme
@@ -101,10 +119,28 @@ final class StoryExportShareViewModel: ObservableObject {
         // (AVAssetWriter), mais le résultat tardif est nettoyé ici.
         exportTask?.cancel()
         let exporter = self.exporter
+        // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur), baké sur
+        // chaque frame et alternant les coins toutes les 5 s. L'export est
+        // auteur-only, donc `currentUser` EST l'auteur de la story.
+        let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
+        let brandIntro = self.brandIntro
+        let introTimeout = self.introTimeout
         let task = Task { [weak self] in
+            // Résolue DANS le Task (`exportTask` existe donc pendant l'attente,
+            // et « Annuler » / la fermeture de la sheet ont enfin prise) et
+            // BORNÉE dans le temps par le MÊME mécanisme que les deux autres
+            // chemins — voir `BoundedAsyncResolution.resolve` et la doc de
+            // `introTimeout`. `brandIntro` est la closure injectée à l'init,
+            // pas le singleton : l'injection en test reste honorée.
+            let intro = await BoundedAsyncResolution.resolve(brandIntro, timeout: introTimeout)
+            // Sheet fermée ou « Annuler » tapé pendant la résolution : ne pas
+            // démarrer un bake derrière une surface déjà partie.
+            guard !Task.isCancelled else { return }
             let url = await exporter.prepareExport(
                 slide: slide,
                 languages: langs,
+                watermark: watermark,
+                intro: intro,
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction
                 },

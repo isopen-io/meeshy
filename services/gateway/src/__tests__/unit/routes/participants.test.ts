@@ -12,6 +12,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
     CONVERSATION_JOINED: 'conversation:joined',
+    CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   },
   ROOMS: {
@@ -49,7 +50,11 @@ function createMockPrisma() {
     },
     participant: {
       findFirst: jest.fn<any>(),
-      findMany: jest.fn<any>(),
+      // Vide par défaut : `resolveConversationEntry` lit ici TOUTES les lignes
+      // de la paire (conversation, utilisateur) — y compris celles qu'un départ
+      // ou un bannissement a laissées inactives — donc « aucune ligne » =
+      // primo-arrivant.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>(),
       update: jest.fn<any>(),
       updateMany: jest.fn<any>(),
@@ -75,22 +80,45 @@ function createMockNotificationService() {
   return {
     createAddedToConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
+    createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     createRemovedFromConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberRemovedNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberRoleChangedNotification: jest.fn<any>().mockResolvedValue(undefined),
   };
 }
 
+/**
+ * `.to()` rend un émetteur CHAÎNABLE, comme le vrai : `io.to(a).to(b).emit()`
+ * est la forme qu'utilise `emitToConversationParticipants` pour ne livrer
+ * qu'UNE copie par socket. Un `.to()` qui rend `{ emit }` sans `.to` faisait
+ * planter le second maillon — et un mock qui casse sur la forme de production
+ * est un témoin qui décrit un autre programme.
+ *
+ * `_roomsFor` rend les rooms de la chaîne qui a émis un événement donné :
+ * c'est la seule façon de prouver « la room personnelle a été adressée », que
+ * `expect(io.to).toHaveBeenCalledWith(...)` ne peut pas distinguer d'un simple
+ * appel isolé.
+ */
 function createMockIO() {
   const mockEmit = jest.fn<any>();
   const mockLeave = jest.fn<any>();
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
+  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: unknown) => {
+      sent.push({ rooms, event, payload });
+      mockEmit(event, payload);
+    },
+  });
   const io = {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
+    to: jest.fn<any>((room: string) => chain([room])),
     in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
     _leave: mockLeave,
     _fetchSockets: mockFetchSockets,
+    _roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    _payloadFor: (event: string) => sent.find((s) => s.event === event)?.payload,
   };
   return io;
 }
@@ -720,9 +748,10 @@ describe('registerParticipantsRoutes', () => {
 
     it('should return 400 when user is already an active participant', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
-      mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
-        .mockResolvedValueOnce(createParticipant({ userId: TARGET_USER_ID }));
+      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant({ role: 'admin' }));
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        createParticipant({ userId: TARGET_USER_ID, isActive: true, bannedAt: null }),
+      ]);
       mockPrisma.user.findFirst.mockResolvedValue({ id: TARGET_USER_ID, username: 'target' });
       const reply = createMockReply();
 
@@ -975,15 +1004,18 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(ns.createMemberJoinedNotification).toHaveBeenCalledTimes(2);
-      expect(ns.createMemberJoinedNotification).toHaveBeenCalledWith(
-        expect.objectContaining({
-          recipientUserId: member1Id,
+      // Une arrivée, un appel : le profil du nouveau membre, le titre de la
+      // conversation et l'effectif sont identiques pour tous les destinataires.
+      expect(ns.createMemberJoinedNotificationsBatch).toHaveBeenCalledTimes(1);
+      expect(ns.createMemberJoinedNotificationsBatch).toHaveBeenCalledWith(
+        [member1Id, member2Id],
+        {
           newMemberUserId: TARGET_USER_ID,
           conversationId: VALID_CONV_ID,
           joinMethod: 'invited',
-        })
+        }
       );
+      expect(ns.createMemberJoinedNotification).not.toHaveBeenCalled();
     });
 
     it('should not crash when notificationService is undefined', async () => {
@@ -1021,7 +1053,7 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(ns.createMemberJoinedNotification).not.toHaveBeenCalled();
+      expect(ns.createMemberJoinedNotificationsBatch).not.toHaveBeenCalled();
     });
 
     it('should handle notification errors gracefully (addedToConversation)', async () => {
@@ -1051,7 +1083,7 @@ describe('registerParticipantsRoutes', () => {
     it('should handle notification errors gracefully (memberJoined)', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
       const ns = createMockNotificationService();
-      ns.createMemberJoinedNotification.mockRejectedValue(new Error('push failed'));
+      ns.createMemberJoinedNotificationsBatch.mockRejectedValue(new Error('push failed'));
       const request = createPostRequest({ server: { notificationService: ns } });
       const memberId = '507f1f77bcf86cd799439066';
       mockPrisma.participant.findFirst

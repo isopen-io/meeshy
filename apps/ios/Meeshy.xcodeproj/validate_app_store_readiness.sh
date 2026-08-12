@@ -220,6 +220,25 @@ if [ -n "$ASSETS_PATH" ]; then
         else
             check_error "Icône 1024x1024 MANQUANTE (OBLIGATOIRE pour App Store)"
         fi
+
+        # Intégrité des variantes dark / tinted (iOS 18+).
+        # Contrôle de dépôt et non XCTest : dans le Assets.car compilé, AppIcon
+        # est de type "Icon Image" / "MultiSized Image", donc inatteignable par
+        # UIImage(named:) — le fichier sur disque est le seul sujet observable.
+        # Attrape le cas vécu : Icon-Dark livré en carré noir uni, sans glyphe.
+        VARIANT_CHECK="$(dirname "$0")/../scripts/check_appicon_variants.py"
+        if [ -f "$VARIANT_CHECK" ]; then
+            VARIANT_OUTPUT=$(python3 "$VARIANT_CHECK" "$ASSETS_PATH/AppIcon.appiconset" 2>&1)
+            if [ $? -eq 0 ]; then
+                check_success "Variantes AppIcon dark + tinted intègres"
+            else
+                while IFS= read -r line; do
+                    check_error "${line#FAIL  }"
+                done <<< "$VARIANT_OUTPUT"
+            fi
+        else
+            check_warning "check_appicon_variants.py absent — variantes dark/tinted non vérifiées"
+        fi
     else
         check_error "AppIcon.appiconset MANQUANT"
     fi

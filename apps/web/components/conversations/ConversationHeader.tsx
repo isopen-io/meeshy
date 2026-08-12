@@ -63,7 +63,7 @@ export function ConversationHeader({
     showCallBanner,
     handleJoinCall,
     handleDismissCallBanner,
-  } = useCallBanner(conversation.id, onStartCall);
+  } = useCallBanner(conversation.id);
 
   const { encryptionInfo } = useEncryptionInfo(conversation.encryptionMode, t);
 

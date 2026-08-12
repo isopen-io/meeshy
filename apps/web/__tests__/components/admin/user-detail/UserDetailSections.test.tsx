@@ -1925,7 +1925,15 @@ describe('UserMediaSection', () => {
     const item = makeMedia({ fileSize: 2097152 }); // 2 MB
     mockGet.mockResolvedValue(paginatedResponse([item]));
     render(<UserMediaSection userId="user-1" />);
-    await waitFor(() => expect(screen.getByText('2.0 MB')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('2 MB')).toBeInTheDocument());
+  });
+
+  it('shows GB size for files at or above a gigabyte (no MB overflow)', async () => {
+    const item = makeMedia({ fileSize: 2 * 1024 * 1024 * 1024 }); // 2 GB
+    mockGet.mockResolvedValue(paginatedResponse([item]));
+    render(<UserMediaSection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText('2 GB')).toBeInTheDocument());
+    expect(screen.queryByText('2048 MB')).not.toBeInTheDocument();
   });
 
   it('shows B size for tiny files', async () => {

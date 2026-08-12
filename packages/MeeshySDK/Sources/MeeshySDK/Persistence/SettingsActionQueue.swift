@@ -30,9 +30,11 @@ public struct SettingsAction: Codable, Identifiable, Sendable {
 /// preferences, language switches, ...) that survive offline moments and
 /// app restarts.
 ///
-/// Last-write-wins per `(endpoint, httpMethod)`: a fresh action replaces an
-/// earlier pending one for the same endpoint so that rapid edits don't pile
-/// up — the most recent submission carries the canonical state.
+/// Last-write-wins per `(endpoint, httpMethod)`, merged field-by-field: a
+/// fresh action for the same endpoint is combined with the pending one so
+/// rapid edits don't pile up, the newest value wins per JSON key, and a key
+/// the fresh action omits (untouched field) still survives from the pending
+/// action instead of being silently dropped.
 ///
 /// Pairs with the optimistic UI in `ProfileView.saveProfile` and friends:
 /// the local model already reflects the edit; the queue just makes sure
@@ -47,10 +49,22 @@ public actor SettingsActionQueue {
     private static let maxQueueSize = 50
     private static let queueFileName = "settings_action_queue.json"
 
+    /// Mirrors `OutboxFlusher`'s exhaustion budget (5 attempts) so a
+    /// permanently-failing action can't block the FIFO forever.
+    private static let maxAttempts = 5
+
     private var items: [SettingsAction] = []
     private var isFlushing = false
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+
+    /// In-memory failure counter per `SettingsAction.id`. Deliberately not
+    /// persisted alongside `items` (unlike `OutboxRecord.attempts`): a fresh
+    /// `enqueue()` for the same `(endpoint, httpMethod)` already replaces the
+    /// item with a new id, which naturally resets its count, and this avoids
+    /// a JSON schema migration for what is otherwise best-effort bookkeeping
+    /// scoped to the current process lifetime.
+    private var failureCounts: [String: Int] = [:]
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -74,14 +88,60 @@ public actor SettingsActionQueue {
     // MARK: - Enqueue
 
     public func enqueue(_ action: SettingsAction) {
+        let replaced = items.first { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
         items.removeAll { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
-        if items.count >= Self.maxQueueSize {
-            items.removeFirst()
+        if let replaced { failureCounts[replaced.id] = nil }
+
+        // Field-level merge, not wholesale replace: callers (e.g.
+        // `ProfileView.saveProfile`) diff each request against the pre-edit
+        // snapshot and OMIT untouched fields from the JSON body. If a still-
+        // pending action for this same endpoint already carries a field the
+        // fresh action never re-touches (a bio cleared by save #1, then only
+        // displayName edited in save #2 while still offline), a wholesale
+        // replace would silently discard save #1's field — the server never
+        // learns about it. Merging at the JSON-key level lets the newest
+        // submission win per-field while every other still-pending key
+        // survives, honouring the "most recent submission carries the
+        // canonical state" contract this type documents above.
+        let mergedAction: SettingsAction
+        if let replaced {
+            let payload = Self.mergeJSONPayloads(previous: replaced.payload, incoming: action.payload)
+            mergedAction = SettingsAction(endpoint: action.endpoint, httpMethod: action.httpMethod, payload: payload)
+        } else {
+            mergedAction = action
         }
-        items.append(action)
+
+        if items.count >= Self.maxQueueSize {
+            let evicted = items.removeFirst()
+            failureCounts[evicted.id] = nil
+        }
+        items.append(mergedAction)
         saveToDisk()
         pendingCountChanged.send(items.count)
-        logger.info("Enqueued settings action \(action.endpoint), queue size \(self.items.count)")
+        logger.info("Enqueued settings action \(mergedAction.endpoint), queue size \(self.items.count)")
+    }
+
+    /// Shallow-merges two JSON object payloads key-by-key, `incoming` winning
+    /// on conflicts and every key `incoming` doesn't mention falling back to
+    /// `previous`. Falls back to `incoming` verbatim if either side fails to
+    /// parse as a JSON object — every real settings payload is an object body
+    /// (`UpdateProfileRequest` and siblings), so this only guards against a
+    /// malformed/empty edge case rather than a real shape mismatch.
+    private static func mergeJSONPayloads(previous: Data, incoming: Data) -> Data {
+        guard let previousObject = try? JSONSerialization.jsonObject(with: previous) as? [String: Any],
+              let incomingObject = try? JSONSerialization.jsonObject(with: incoming) as? [String: Any] else {
+            return incoming
+        }
+        let merged = previousObject.merging(incomingObject) { _, new in new }
+        do {
+            return try JSONSerialization.data(withJSONObject: merged)
+        } catch {
+            // Le merge est perdu : la mutation précédente est écrasée par la
+            // nouvelle au lieu d'être fusionnée.
+            Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                .error("Merged settings payload could not be serialized, previous mutation dropped: \(error.localizedDescription, privacy: .public)")
+            return incoming
+        }
     }
 
     public var count: Int { items.count }
@@ -95,16 +155,35 @@ public actor SettingsActionQueue {
         isFlushing = true
         defer { isFlushing = false }
 
-        var successIds: [String] = []
+        var doneIds: [String] = []
         for item in items {
             if await handler(item) {
-                successIds.append(item.id)
-            } else {
-                break // FIFO: stop on first failure so order is preserved.
+                doneIds.append(item.id)
+                failureCounts[item.id] = nil
+                continue
             }
+
+            let attempts = (failureCounts[item.id] ?? 0) + 1
+            failureCounts[item.id] = attempts
+            if attempts >= Self.maxAttempts {
+                // Structural backstop: `onFlush` has no way to signal
+                // "permanent vs transient" failure to this actor, so a
+                // handler that keeps failing (e.g. a 4xx it can't tell apart
+                // from a 5xx) used to `break` here forever and wedge every
+                // action queued behind it. After `maxAttempts` consecutive
+                // failures on this item we drop it and keep processing the
+                // rest of the queue, mirroring `OutboxFlusher`'s
+                // maxAttempts + exhausted-drop pattern.
+                logger.error("Dropping settings action \(item.endpoint) after \(attempts) failed attempts")
+                doneIds.append(item.id)
+                failureCounts[item.id] = nil
+                continue
+            }
+            break // FIFO: stop on a not-yet-exhausted failure so order is preserved.
         }
 
-        for id in successIds {
+        guard !doneIds.isEmpty else { return }
+        for id in doneIds {
             items.removeAll { $0.id == id }
         }
         saveToDisk()
@@ -113,16 +192,30 @@ public actor SettingsActionQueue {
 
     public func clearAll() {
         items.removeAll()
+        failureCounts.removeAll()
         saveToDisk()
         pendingCountChanged.send(0)
     }
 
     // MARK: - Connection Observer
 
+    /// Vide la file à chaque fois qu'on est en ligne — Y COMPRIS à
+    /// l'abonnement.
+    ///
+    /// Il y avait un `.dropFirst()` ici, qui écartait la valeur COURANTE pour
+    /// ne garder que les fronts hors-ligne → en-ligne. Or cette file persiste
+    /// sur disque justement pour survivre à un kill : au relancement, ses
+    /// éléments étaient rechargés, l'observateur s'abonnait alors que l'appareil
+    /// était DÉJÀ en ligne, la valeur courante était jetée… et plus aucun front
+    /// ne venait. Les modifications de profil enregistrées hors ligne restaient
+    /// sur le disque indéfiniment. `flushIfPossible` est un no-op sur file vide,
+    /// donc écouter la valeur courante ne coûte rien dans le cas normal.
+    ///
+    /// Règle générale, verrouillée par `QueueDrainReachabilityGuardTests` : une
+    /// file qui survit à un kill ne peut pas dépendre d'un FRONT pour repartir.
     private func observeConnection() {
         NetworkMonitor.shared.$isOffline
             .removeDuplicates()
-            .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.global(qos: .utility))
             .sink { [weak self] _ in
@@ -141,7 +234,12 @@ public actor SettingsActionQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }

@@ -19,6 +19,7 @@ import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { LIVE_MESSAGE_MARK } from '../services/messaging/liveMessage';
 const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
@@ -255,7 +256,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
               content: encryptionMessages[mode],
               originalLanguage: 'en',
               messageType: 'system',
-              deletedAt: null
+              ...LIVE_MESSAGE_MARK
             }
           });
         }

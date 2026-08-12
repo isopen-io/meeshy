@@ -21,7 +21,8 @@
     "like": "Like",
     "comment": "Comment",
     "share": "Share",
-    "save": "Save"
+    "save": "Save",
+    "repostedFrom": "Reposted from"
   },
   "feed": {
     "loadingReels": "Loading reels…",

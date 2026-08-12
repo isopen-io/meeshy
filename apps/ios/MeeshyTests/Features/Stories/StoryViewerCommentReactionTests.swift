@@ -239,4 +239,31 @@ final class StoryViewerCommentReactionTests: XCTestCase {
             "Une couleur d'auteur déjà claire ne doit pas être modifiée"
         )
     }
+
+    // MARK: - StoryCommentRowView.legibleOverlayColor tests
+    //
+    // Bug user 2026-08-11 : le texte des réponses/commentaires restait blanc
+    // fixe sur le canvas de la story, illisible sur un fond clair/blanc (le
+    // halo seul ne suffit pas à cette extrémité). La couleur doit désormais
+    // suivre le `ColorScheme` posé par le viewer (`readerChromeScheme`, dérivé
+    // de la luminance du fond de la story courante).
+
+    func test_legibleOverlayColor_darkScheme_isWhite() {
+        XCTAssertEqual(
+            StoryCommentRowView.legibleOverlayColor(for: .dark), .white,
+            "Fond de story sombre → texte blanc, comportement historique inchangé"
+        )
+    }
+
+    func test_legibleOverlayColor_lightScheme_isNotWhite() {
+        let result = StoryCommentRowView.legibleOverlayColor(for: .light)
+        XCTAssertNotEqual(
+            result, .white,
+            "Fond de story clair/blanc → le texte ne doit plus être blanc (illisible, capture user 2026-08-11)"
+        )
+        XCTAssertLessThan(
+            result.luminance, 0.4,
+            "La couleur choisie pour un fond clair doit rester un texte SOMBRE, pas une teinte intermédiaire peu contrastée"
+        )
+    }
 }

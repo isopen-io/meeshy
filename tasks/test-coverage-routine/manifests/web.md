@@ -933,7 +933,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-accessibility.ts`
 - [~] `apps/web/hooks/use-active-peer-connection.ts`
 - [~] `apps/web/hooks/use-adaptive-degradation.ts`
-- [ ] `apps/web/hooks/use-anonymous-messages.ts`
+- [x] `apps/web/hooks/use-anonymous-messages.ts` — supprimé (code mort, cycle 9)
 - [ ] `apps/web/hooks/use-anonymous-session.ts`
 - [ ] `apps/web/hooks/use-app-badge.ts`
 - [ ] `apps/web/hooks/use-audio-effects-analysis.ts`

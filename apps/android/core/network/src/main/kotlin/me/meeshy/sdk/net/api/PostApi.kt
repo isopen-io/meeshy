@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.PostViewersResponse
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -28,6 +29,12 @@ data class CreatePostRequest(
     val mobileTranscription: MobileTranscriptionPayload? = null,
     val repostOfId: String? = null,
     val viaUsername: String? = null,
+    /**
+     * Optional attached location — the exact `{latitude, longitude, name, address,
+     * category}` shape the gateway's `parseSharedPlace` validates
+     * (`services/gateway/src/services/location/sharedPlace.ts`).
+     */
+    val location: SharedPlace? = null,
 )
 
 /** Mobile transcription payload — port of MobileTranscriptionPayload (ServiceModels.swift). */

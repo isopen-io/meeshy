@@ -41,6 +41,10 @@ const CLIENT_EVENTS_MOCK = {
 const mockConversationsServiceSendMessage = jest.fn();
 const mockConversationsServiceMarkAsReceived = jest.fn();
 
+// Mock for the share-link REST fallback (anonymous senders)
+const mockAnonymousCanSendViaLink = jest.fn();
+const mockAnonymousSendMessage = jest.fn();
+
 // ─── jest.mock() calls ────────────────────────────────────────────────────────
 jest.mock('@/utils/logger', () => ({
   logger: {
@@ -92,6 +96,15 @@ jest.mock('@/services/conversations', () => ({
   conversationsService: {
     sendMessage: (...args: unknown[]) => mockConversationsServiceSendMessage(...args),
     markAsReceived: (...args: unknown[]) => mockConversationsServiceMarkAsReceived(...args),
+  },
+}));
+
+// Mock dynamic import('@/services/anonymous-chat.service') used by the
+// share-link REST fallback
+jest.mock('@/services/anonymous-chat.service', () => ({
+  anonymousChatService: {
+    canSendViaLink: () => mockAnonymousCanSendViaLink(),
+    sendMessage: (...args: unknown[]) => mockAnonymousSendMessage(...args),
   },
 }));
 
@@ -177,6 +190,9 @@ describe('MessagingService', () => {
     jest.clearAllMocks();
     mockConversationsServiceSendMessage.mockReset();
     mockConversationsServiceMarkAsReceived.mockReset();
+    mockAnonymousSendMessage.mockReset();
+    // Default: a registered sender. The anonymous branch is opt-in per test.
+    mockAnonymousCanSendViaLink.mockReturnValue(false);
   });
 
   // ─── setCurrentUserId / isOwnMessage ──────────────────────────────────────
@@ -1538,6 +1554,84 @@ describe('MessagingService', () => {
           messageType: 'image',
         })
       );
+    });
+  });
+
+  // ─── REST fallback for anonymous (share-link) senders ─────────────────────
+  //
+  // An anonymous participant holds no JWT — only an `anon_*` session token,
+  // which `POST /conversations/:id/messages` cannot authenticate. Routing them
+  // there means the fallback answers 401 for every anonymous sender, so a
+  // WebSocket ack error loses the message outright. Their endpoint is the
+  // share-link route, which authenticates on `X-Session-Token`.
+
+  describe('sendMessageViaRest — anonymous share-link sender', () => {
+    function makeAckFailingSocket() {
+      const socket = makeSocket();
+      socket.emit.mockImplementation((_event: string, _data: unknown, cb: (r: unknown) => void) => {
+        cb({ success: false });
+      });
+      return socket;
+    }
+
+    function makeLinkResponse(overrides: Record<string, unknown> = {}) {
+      return {
+        messageId: 'srv-msg-1',
+        message: { id: 'srv-msg-1', conversationId: 'conv-1', senderId: 'part-1', clientMessageId: 'cid_test-1234' },
+        ...overrides,
+      };
+    }
+
+    it('falls back to the share-link route, never to the JWT-only conversations route', async () => {
+      mockAnonymousCanSendViaLink.mockReturnValue(true);
+      mockAnonymousSendMessage.mockResolvedValue(makeLinkResponse());
+
+      const svc = new MessagingService();
+      const result = await svc.sendMessage(makeAckFailingSocket() as unknown as TypedSocket, makeSendOptions());
+
+      expect(result).toEqual({ success: true, messageId: 'srv-msg-1', clientMessageId: 'cid_test-1234' });
+      expect(mockConversationsServiceSendMessage).not.toHaveBeenCalled();
+    });
+
+    it("carries the caller's clientMessageId so the optimistic row reconciles instead of duplicating", async () => {
+      mockAnonymousCanSendViaLink.mockReturnValue(true);
+      mockAnonymousSendMessage.mockResolvedValue(makeLinkResponse());
+
+      const svc = new MessagingService();
+      await svc.sendMessage(
+        makeAckFailingSocket() as unknown as TypedSocket,
+        makeSendOptions({ content: 'Bonjour', originalLanguage: 'fr', replyToId: 'msg-42' })
+      );
+
+      expect(mockAnonymousSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Bonjour',
+          originalLanguage: 'fr',
+          replyToId: 'msg-42',
+          clientMessageId: 'cid_test-1234',
+        })
+      );
+    });
+
+    it('reports failure when the share-link route also fails', async () => {
+      mockAnonymousCanSendViaLink.mockReturnValue(true);
+      mockAnonymousSendMessage.mockRejectedValue(new Error('link route 410'));
+
+      const svc = new MessagingService();
+      const result = await svc.sendMessage(makeAckFailingSocket() as unknown as TypedSocket, makeSendOptions());
+
+      expect(result).toEqual({ success: false });
+      expect(mockConversationsServiceSendMessage).not.toHaveBeenCalled();
+    });
+
+    it('leaves the registered-sender fallback on the conversations route', async () => {
+      mockConversationsServiceSendMessage.mockResolvedValue({ data: { id: 'rest-msg-9' } });
+
+      const svc = new MessagingService();
+      const result = await svc.sendMessage(makeAckFailingSocket() as unknown as TypedSocket, makeSendOptions());
+
+      expect(result.messageId).toBe('rest-msg-9');
+      expect(mockAnonymousSendMessage).not.toHaveBeenCalled();
     });
   });
 

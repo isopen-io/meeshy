@@ -90,6 +90,16 @@ export class ReactionService {
       throw new Error('Message not found');
     }
 
+    // A soft-deleted message (deletedAt set) still exists as a row, so !message
+    // does not catch it — but it is no longer reactable. Every sibling write
+    // path guards this identically (message edit/delete filter deletedAt: null);
+    // reactions were the outlier. Without this, the reaction would persist and
+    // the handler would broadcast REACTION_ADDED for a message clients have
+    // already rendered as deleted.
+    if (message.deletedAt) {
+      throw new Error('Cannot react to a deleted message');
+    }
+
     if (message.messageType === 'system') {
       throw new Error('Cannot react to a system message');
     }
@@ -352,7 +362,8 @@ export class ReactionService {
     emoji: string,
     action: 'add' | 'remove',
     participantId: string,
-    conversationId: string
+    conversationId: string,
+    userId: string
   ): Promise<ReactionUpdateEvent> {
     const aggregation = await this.getEmojiAggregation(
       messageId,
@@ -364,6 +375,7 @@ export class ReactionService {
       messageId,
       conversationId,
       participantId,
+      userId,
       emoji,
       action,
       aggregation,

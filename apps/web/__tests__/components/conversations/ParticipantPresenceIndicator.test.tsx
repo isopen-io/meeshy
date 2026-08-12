@@ -81,9 +81,9 @@ describe('ParticipantPresenceIndicator', () => {
   });
 
   it('recomputes relative status decay on the store tick (online → away without any user mutation)', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
-      // isOnline indéterminé → statut purement temporel : 6 min = away
+      // isOnline indéterminé → statut purement temporel : 2 min = away (1/3/5)
       useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() })]);
     });
 
@@ -95,7 +95,7 @@ describe('ParticipantPresenceIndicator', () => {
       // guarantees Zustand notifies all selectors watching this user's data.
       // Direct mutation of the map object is unreliable (same reference → selector
       // equality check in useSyncExternalStore skips re-render).
-      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: sixMinutesAgo });
+      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: twoMinutesAgo });
     });
 
     expect(screen.getByTitle('Absent')).toBeInTheDocument();

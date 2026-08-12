@@ -45,6 +45,12 @@ struct UniversalComposerBar: View {
     /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
     var onClipboardContent: ((ClipboardContent) -> Void)? = nil
 
+    /// Émis quand l'utilisateur dépose ou colle du contenu dans la bande du
+    /// composer. Chaque `.file` pointe un fichier DÉJÀ copié dans notre
+    /// conteneur : l'hôte en devient propriétaire (il le déplace ou le
+    /// supprime). Un `.text` est destiné au champ de saisie de l'hôte.
+    var onIngest: (([ComposerIngest]) -> Void)? = nil
+
     // MARK: - Configuration
 
     var placeholder: String = "Message..."
@@ -246,6 +252,14 @@ struct UniversalComposerBar: View {
     @State var sendBounce = false
     @State var focusBounce = false
     @State var showAttachOptions = false
+    /// Dernière sélection multiple reportée par `RecentMediaStrip`, pour que le
+    /// raccourci photothèque de la poignée préselectionne les mêmes assets.
+    /// Non-`private` : muté depuis `UniversalComposerBar+Attachments.swift`.
+    @State var recentStripSelectionIds: [String] = []
+    /// `true` pendant l'étirement qui précède la présentation de la photothèque
+    /// complète — cf. `ComposerLibraryHandoff`. Non-`private` : muté depuis
+    /// `UniversalComposerBar+Attachments.swift`.
+    @State var isExpandingToLibrary = false
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
     // Voice recording
@@ -292,7 +306,12 @@ struct UniversalComposerBar: View {
         // compact two-row floor since its screen is short.
         let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
-        return max(keyboard, contentFloor)
+        let resting = max(keyboard, contentFloor)
+        guard isExpandingToLibrary else { return resting }
+        return ComposerLibraryHandoff.expandedHeight(
+            resting: resting,
+            windowHeight: DeviceLayout.windowSize.height
+        )
     }
 
     // MARK: - Recording constants
@@ -407,6 +426,10 @@ struct UniversalComposerBar: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isMinimized)
+        // Cible de dépôt sur le conteneur externe : couvre toute la bande
+        // (champ, barre d'outils, bandeaux édition/réponse, tiroir
+        // d'attachements). Voir UniversalComposerBar+Drop.swift.
+        .modifier(ComposerDropTargetModifier(accentColor: accentColor, onIngest: onIngest))
         .onAppear {
             isMinimized = startMinimized
         }
@@ -776,19 +799,18 @@ struct UniversalComposerBar: View {
                 permanentEffectsToggleButton
             }
 
-            // Sentiment indicator
-            Button {
-                onAnyInteraction?()
-                HapticFeedback.light()
-            } label: {
-                Text(textAnalyzer.sentiment.emoji)
-                    .font(.callout)
-                    .frame(width: 30, height: 30)
-                    .contentShape(Circle())
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
-            .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
-            .accessibilityValue(textAnalyzer.sentiment.emoji)
+            // Sentiment indicator — LECTURE SEULE.
+            // C'était un `Button` dont l'action se limitait à un retour
+            // haptique : il se présentait comme actionnable (et comme tel à
+            // VoiceOver) sans mener nulle part. Rendu passif, il reste lisible
+            // par les technologies d'assistance via label + valeur.
+            Text(textAnalyzer.sentiment.emoji)
+                .font(.callout)
+                .frame(width: 30, height: 30)
+                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
+                .accessibilityValue(textAnalyzer.sentiment.emoji)
 
             // Language selector
             languageSelectorPill
@@ -1134,7 +1156,7 @@ struct UniversalComposerBar: View {
         }
         .accessibilityLabel(isActive
                             ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")", bundle: .main)
-                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode ephemere", bundle: .main))
+                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 

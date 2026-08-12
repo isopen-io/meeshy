@@ -39,7 +39,7 @@ struct MediaDownloadSettingsView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .medium))
@@ -108,7 +108,7 @@ struct MediaDownloadSettingsView: View {
                             .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
-                        Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand telecharger automatiquement chaque type de media selon votre connexion.", bundle: .main))
+                        Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand télécharger automatiquement chaque type de média selon votre connexion.", bundle: .main))
                             .font(MeeshyFont.relative(12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
