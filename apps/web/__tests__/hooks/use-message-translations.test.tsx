@@ -16,6 +16,13 @@ import { renderHook } from '@testing-library/react';
 import { useMessageTranslations } from '@/hooks/use-message-translations';
 import type { User, Message } from '@meeshy/shared/types';
 
+// Mock device-locale so navigator.language does not interfere with language resolution tests
+jest.mock('@/lib/device-locale', () => ({
+  getDeviceLocale: () => null,
+  getDeviceLocaleHeaders: () => ({}),
+  DEVICE_LOCALE_HEADER: 'X-Device-Locale',
+}));
+
 // Type for our test user that matches the expected User interface
 type TestUser = Pick<
   User,
@@ -72,12 +79,11 @@ describe('useMessageTranslations', () => {
   }) as unknown as Message & { translations?: readonly unknown[]; originalContent?: string; location?: string };
 
   describe('resolveUserPreferredLanguage', () => {
-    it('should return customDestinationLanguage when useCustomDestination is true', () => {
+    it('should return customDestinationLanguage when no systemLanguage or regionalLanguage is set', () => {
       const user = createTestUser({
-        useCustomDestination: true,
         customDestinationLanguage: 'fr',
-        systemLanguage: 'en',
-        regionalLanguage: 'es',
+        systemLanguage: null as unknown as string,
+        regionalLanguage: null as unknown as string,
       });
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
@@ -99,12 +105,9 @@ describe('useMessageTranslations', () => {
       expect(result.current.resolveUserPreferredLanguage()).toBe('de');
     });
 
-    it('should return regionalLanguage when translateToRegionalLanguage is true', () => {
+    it('should return regionalLanguage when no systemLanguage is set', () => {
       const user = createTestUser({
-        useCustomDestination: false,
-        translateToSystemLanguage: false,
-        translateToRegionalLanguage: true,
-        systemLanguage: 'en',
+        systemLanguage: null as unknown as string,
         regionalLanguage: 'pt',
       });
 
@@ -126,17 +129,15 @@ describe('useMessageTranslations', () => {
       expect(result.current.resolveUserPreferredLanguage()).toBe('ja');
     });
 
-    it('should prioritize custom destination over system language', () => {
+    it('should prioritize systemLanguage over customDestinationLanguage', () => {
       const user = createTestUser({
-        useCustomDestination: true,
         customDestinationLanguage: 'it',
-        translateToSystemLanguage: true,
         systemLanguage: 'en',
       });
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
-      expect(result.current.resolveUserPreferredLanguage()).toBe('it');
+      expect(result.current.resolveUserPreferredLanguage()).toBe('en');
     });
   });
 
@@ -403,6 +404,168 @@ describe('useMessageTranslations', () => {
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.content).toBe('Bonjour (premium)');
+    });
+
+    it('should keep the premium translation when a newer basic translation exists (quality over recency)', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const olderDate = new Date('2024-01-01T00:00:00Z').toISOString();
+      const newerDate = new Date('2024-01-02T00:00:00Z').toISOString();
+
+      const message = createTestMessage({
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (premium)',
+            translationModel: 'premium',
+            confidenceScore: 0.95,
+            createdAt: olderDate,
+          },
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (basic)',
+            translationModel: 'basic',
+            confidenceScore: 0.8,
+            createdAt: newerDate,
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.translations.filter(t => t.language === 'fr').length).toBe(1);
+      expect(processed.content).toBe('Bonjour (premium)');
+    });
+
+    it('should keep the medium translation when a newer basic translation exists (respects the model tier)', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const olderDate = new Date('2024-01-01T00:00:00Z').toISOString();
+      const newerDate = new Date('2024-01-02T00:00:00Z').toISOString();
+
+      const message = createTestMessage({
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (medium)',
+            translationModel: 'medium',
+            confidenceScore: 0.9,
+            createdAt: olderDate,
+          },
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (basic)',
+            translationModel: 'basic',
+            confidenceScore: 0.8,
+            createdAt: newerDate,
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.content).toBe('Bonjour (medium)');
+    });
+  });
+
+  describe('processMessageWithTranslations — cache keyed by preferred language', () => {
+    // Régression : le cache (useRef LRU) survit aux changements de currentUser.
+    // La langue préférée DOIT faire partie de la clé de cache, sinon un basculement
+    // de langue renvoie le contenu figé dans l'ancienne langue (violation du Prisme).
+    const makeMultilingualMessage = () =>
+      createTestMessage({
+        content: 'Hello world',
+        originalLanguage: 'en',
+        translations: [
+          { targetLanguage: 'fr', translatedContent: 'Bonjour le monde', createdAt: new Date('2024-01-01T00:00:00Z').toISOString() },
+          { targetLanguage: 'es', translatedContent: 'Hola mundo', createdAt: new Date('2024-01-01T00:00:00Z').toISOString() },
+        ],
+      });
+
+    it('should re-resolve display content after the user switches preferred language', () => {
+      const frUser = createTestUser({ systemLanguage: 'fr' });
+      const esUser = createTestUser({ systemLanguage: 'es' });
+      const message = makeMultilingualMessage();
+
+      const { result, rerender } = renderHook(
+        ({ currentUser }) => useMessageTranslations({ currentUser }),
+        { initialProps: { currentUser: frUser as unknown as User } }
+      );
+
+      // First pass populates the LRU cache for the French preference.
+      expect(result.current.processMessageWithTranslations(message).content).toBe('Bonjour le monde');
+
+      // Same message id / translations.length / updatedAt — only the language changed.
+      rerender({ currentUser: esUser as unknown as User });
+
+      expect(result.current.processMessageWithTranslations(message).content).toBe('Hola mundo');
+    });
+
+    it('should keep serving cached content within the same preferred language', () => {
+      const frUser = createTestUser({ systemLanguage: 'fr' });
+      const message = makeMultilingualMessage();
+
+      const { result } = renderHook(() =>
+        useMessageTranslations({ currentUser: frUser as unknown as User })
+      );
+
+      const first = result.current.processMessageWithTranslations(message);
+      const second = result.current.processMessageWithTranslations(message);
+
+      expect(second).toBe(first);
+      expect(second.content).toBe('Bonjour le monde');
+    });
+  });
+
+  describe('getUserLanguagePreferences — delegates to canonical util', () => {
+    it('should lowercase mixed-case configured codes', () => {
+      const user = createTestUser({
+        systemLanguage: 'EN',
+        regionalLanguage: 'FR',
+        translateToRegionalLanguage: true,
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+
+      expect(result.current.getUserLanguagePreferences()).toEqual(['en', 'fr']);
+    });
+
+    it('should not emit a junk entry when systemLanguage is unset', () => {
+      const user = createTestUser({
+        systemLanguage: undefined as unknown as string,
+        regionalLanguage: 'fr',
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+
+      const languages = result.current.getUserLanguagePreferences();
+      expect(languages).toEqual(['fr']);
+      expect(languages).not.toContain(undefined);
+    });
+
+    it('should not request a redundant translation for an already-present mixed-case language', () => {
+      const user = createTestUser({
+        systemLanguage: 'EN',
+        regionalLanguage: 'EN',
+        translateToRegionalLanguage: false,
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+
+      const message = {
+        id: 'msg-1',
+        content: 'Hallo',
+        originalLanguage: 'de',
+        translations: [{ language: 'en', content: 'Hello', status: 'completed' }],
+        isTranslated: false,
+        originalContent: 'Hallo',
+      };
+
+      expect(result.current.getRequiredTranslations(message as any)).toEqual([]);
     });
   });
 
@@ -799,7 +962,7 @@ describe('useMessageTranslations', () => {
       expect(processed.originalContent).toBe('Original Hello');
     });
 
-    it('should default location to Paris', () => {
+    it('should preserve undefined location when not set', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
@@ -807,7 +970,7 @@ describe('useMessageTranslations', () => {
       const message = createTestMessage({ location: undefined });
 
       const processed = result.current.processMessageWithTranslations(message);
-      expect(processed.location).toBe('Paris');
+      expect(processed.location).toBeUndefined();
     });
 
     it('should preserve existing location', () => {

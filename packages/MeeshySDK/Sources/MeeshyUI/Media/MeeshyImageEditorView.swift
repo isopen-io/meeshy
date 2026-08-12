@@ -1,5 +1,6 @@
 import MeeshySDK
 import SwiftUI
+import UIKit
 
 // MARK: - Editor Tool
 
@@ -107,6 +108,18 @@ public struct MeeshyImageEditorView: View {
     private var isDark: Bool { theme.mode.isDark }
     private var accent: Color { Color(hex: accentColor) }
 
+    /// VRAIS safe-area insets de la fenêtre. `.statusBarHidden(true)` (plus bas)
+    /// remet `safeAreaInsets = 0` dans l'environnement SwiftUI ; le chrome
+    /// (top bar, FABs, panneau) passerait alors sous la Dynamic Island / home
+    /// indicator. La fenêtre expose toujours les insets physiques réels — on les
+    /// applique au chrome, en laissant le canvas immersif. Même pattern que
+    /// `MeeshyVideoEditorView` et `StoryComposerView.safeAreaBottomInset`.
+    private var deviceSafeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -121,6 +134,7 @@ public struct MeeshyImageEditorView: View {
                 topBar
                 Spacer(minLength: 0)
             }
+            .padding(.top, deviceSafeAreaInsets.top)
 
             if activeTool == nil {
                 toolFABColumn
@@ -132,6 +146,7 @@ public struct MeeshyImageEditorView: View {
                     Spacer(minLength: 0)
                     controllerPanel(for: tool)
                 }
+                .padding(.bottom, deviceSafeAreaInsets.bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -305,7 +320,7 @@ public struct MeeshyImageEditorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(.leading, 16)
-        .padding(.bottom, 22)
+        .padding(.bottom, 22 + deviceSafeAreaInsets.bottom)
         .transition(.move(edge: .leading).combined(with: .opacity))
         .animation(.spring(response: 0.34, dampingFraction: 0.82), value: viewModel.mode)
     }
@@ -330,7 +345,7 @@ public struct MeeshyImageEditorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .padding(.trailing, 16)
-        .padding(.bottom, 22)
+        .padding(.bottom, 22 + deviceSafeAreaInsets.bottom)
         .transition(.move(edge: .trailing).combined(with: .opacity))
         .animation(.easeInOut(duration: 0.2), value: viewModel.hasEdits)
     }

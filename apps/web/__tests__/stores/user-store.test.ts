@@ -5,6 +5,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { useUserStore, useUserById, useUserStatusTick, UserStatusUpdate } from '../../stores/user-store';
+import { getUserStatus } from '../../lib/user-status';
 import type { User } from '@/types';
 
 describe('UserStore', () => {
@@ -221,6 +222,26 @@ describe('UserStore', () => {
       expect(newUser).toBeDefined();
       expect(newUser?.isOnline).toBe(true);
       expect(newUser?.username).toBe('newguy');
+    });
+
+    it('does not fabricate now() for an unknown, offline user with an absent lastActiveAt', () => {
+      // A contact whose "last seen" is hidden (gateway nulls lastActiveAt per
+      // privacy prefs) can reach the "new user" branch here before ever being
+      // seeded via mergeParticipants — e.g. onUserStatus forwarding
+      // {lastActiveAt: undefined} for a userId not yet in usersMap. Fabricating
+      // new Date() makes getUserStatus decay to 'online' for an offline contact.
+      act(() => {
+        useUserStore.getState().updateUserStatus('hidden-offline-user', {
+          isOnline: false,
+          lastActiveAt: undefined,
+          username: 'ghost',
+        });
+      });
+
+      const newUser = useUserStore.getState().usersMap.get('hidden-offline-user');
+      expect(newUser).toBeDefined();
+      expect(newUser?.lastActiveAt).toBeUndefined();
+      expect(getUserStatus(newUser!)).toBe('offline');
     });
 
     it('should preserve other user properties when updating status', () => {
@@ -467,6 +488,28 @@ describe('UserStore', () => {
 
       nowSpy.mockRestore();
       expect(result.current).toBe(initialTick + 1000);
+    });
+
+    it('triggerStatusTick changes _lastStatusUpdate even within the same millisecond as a prior update', () => {
+      // Regression : triggerStatusTick reliait le signal de re-render a Date.now().
+      // Quand un mergeParticipants et un tick tombaient dans la meme milliseconde,
+      // _lastStatusUpdate restait identique → useUserStatusTick ne re-rendait pas →
+      // le decay temporel des feuilles de presence n'etait jamais recalcule.
+      const frozen = 1_700_000_000_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(frozen);
+
+      act(() => {
+        useUserStore.getState().mergeParticipants([mockUser1]);
+      });
+      const afterMerge = useUserStore.getState()._lastStatusUpdate;
+
+      act(() => {
+        useUserStore.getState().triggerStatusTick();
+      });
+      const afterTick = useUserStore.getState()._lastStatusUpdate;
+
+      nowSpy.mockRestore();
+      expect(afterTick).toBeGreaterThan(afterMerge);
     });
   });
 });

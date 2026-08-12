@@ -9,6 +9,8 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
+import { viewerFromAuthContext } from './presence-gate';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 
 /**
@@ -151,6 +153,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             avatar: true,
             updatedAt: true,
             messages: {
+              where: {
+                deletedAt: null
+              },
               orderBy: { createdAt: 'desc' },
               take: 1,
               select: {
@@ -349,18 +354,14 @@ export async function getUserStats(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                messagesSent: { type: 'number', description: 'Total messages sent by user' },
-                messagesReceived: { type: 'number', description: 'Total messages received' },
-                conversationsCount: { type: 'number', description: 'Total conversations (all types)' },
-                groupsCount: { type: 'number', description: 'Group conversations only' },
-                totalConversations: { type: 'number', description: 'Total conversations (duplicate of conversationsCount)' },
-                averageResponseTime: { type: 'number', nullable: true, description: 'Average response time in seconds' },
-                lastActivity: { type: 'string', format: 'date-time', description: 'Last activity timestamp' }
-              }
-            }
+            // `additionalProperties: true` is REQUIRED here. The handler returns
+            // totalMessages / totalConversations / totalTranslations /
+            // friendRequestsReceived / languagesUsed / memberDays / languages /
+            // achievements, but a restrictive `properties` whitelist made Fastify
+            // silently STRIP every field whose name wasn't declared — only
+            // `totalConversations` survived, so the iOS profile sheet showed 0
+            // everywhere. See lesson: Fastify response schema strips undeclared fields.
+            data: { type: 'object', additionalProperties: true }
           }
         },
         401: errorResponseSchema,
@@ -410,8 +411,13 @@ export async function getUserStats(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: { sender: { userId }, deletedAt: null },
         }),
+        // Active memberships only: Participant rows are soft-deactivated on
+        // leave/ban/delete-for-me (isActive: false), never deleted. A bare
+        // `{ userId }` count over-reports `totalConversations` and can falsely
+        // unlock `connecteur`. Matches the `isActive: true` filter used for the
+        // profile-completion counts above and the `/users/me/stats` endpoint.
         fastify.prisma.participant.count({
-          where: { userId },
+          where: { userId, isActive: true },
         }),
         fastify.prisma.$runCommandRaw({
           count: 'Message',
@@ -456,6 +462,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       };
 
       const achievements = Object.entries(ACHIEVEMENT_THRESHOLDS).map(([key, config]) => {
+        /* istanbul ignore next — all ACHIEVEMENT_THRESHOLDS fields are keys of numericStats */
         const current = numericStats[config.field] ?? 0;
         const progress = Math.min(current / config.threshold, 1);
         return {
@@ -541,6 +548,7 @@ export async function searchUsers(fastify: FastifyInstance) {
         return sendUnauthorized(reply, 'Authentication required');
       }
 
+      /* istanbul ignore next — Fastify AJV schema default: fills offset/limit before handler; JS destructuring defaults unreachable */
       const { q, offset = '0', limit = '20' } = request.query as SearchQuery;
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
@@ -622,7 +630,27 @@ export async function searchUsers(fastify: FastifyInstance) {
         fastify.prisma.user.count({ where: whereClause })
       ]);
 
-      return sendPaginatedSuccess(reply, users, buildPaginationMeta(totalCount, offsetNum, limitNum, users.length));
+      // Gate de présence : un résultat de recherche n'expose lastActiveAt/isOnline
+      // que pour les contacts (ami/affilié) ou modérateur+ (critère strict).
+      const viewer = viewerFromAuthContext(
+        (request as FastifyRequest & {
+          authContext?: { type?: string; userId?: string; registeredUser?: { role?: string } | null };
+        }).authContext,
+      );
+      const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
+        viewer,
+        users.map(u => u.id),
+      );
+      const gatedUsers = users.map(u => {
+        const vis = visibilityMap.get(u.id);
+        return {
+          ...u,
+          isOnline: vis?.showOnline ? u.isOnline : false,
+          lastActiveAt: vis?.showLastSeenTimestamp ? u.lastActiveAt : null,
+        };
+      });
+
+      return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length));
     } catch (error) {
       logError(fastify.log, 'Error searching users', error);
       return sendInternalError(reply, 'Internal server error');

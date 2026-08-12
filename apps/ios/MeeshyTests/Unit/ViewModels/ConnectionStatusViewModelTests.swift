@@ -104,35 +104,77 @@ final class ConnectionStatusViewModelTests: XCTestCase {
     }
 }
 
-// MARK: - "En ligne" confirmation only when genuinely (re)connected
+// MARK: - "En ligne" confirmation only after a down state was actually surfaced
 
 @MainActor
 final class ConnectionBannerOnlineConfirmationTests: XCTestCase {
 
-    func test_confirm_offlineToConnected_isTrue() {
-        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(previous: .offline, new: .connected))
+    func test_confirm_downSurfaced_toConnected_isTrue() {
+        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(downWasSurfaced: true, new: .connected))
     }
 
-    func test_confirm_offlineToSyncing_isTrue() {
-        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(previous: .offline, new: .syncing))
+    func test_confirm_downSurfaced_toSyncing_isTrue() {
+        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(downWasSurfaced: true, new: .syncing))
     }
 
-    func test_confirm_disconnectedToConnected_isTrue() {
-        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(previous: .disconnected, new: .connected))
+    /// The bug we are fixing: at cold start (and on resume-from-background) the
+    /// socket blips through `.disconnected` before connecting, but the
+    /// "Reconnexion" pill was never surfaced (grace window not elapsed). No down
+    /// state was shown, so the green "En ligne" must NOT flash.
+    func test_confirm_noDownSurfaced_toConnected_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(downWasSurfaced: false, new: .connected))
     }
 
-    /// The bug: device network returns (`.offline → .disconnected`) but the socket
-    /// is still reconnecting. The green "En ligne" pill must NOT appear — the user
-    /// is not actually online yet.
-    func test_confirm_offlineToDisconnected_isFalse() {
-        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(previous: .offline, new: .disconnected))
+    func test_confirm_noDownSurfaced_toSyncing_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(downWasSurfaced: false, new: .syncing))
     }
 
-    func test_confirm_alreadyOnline_connectedToSyncing_isFalse() {
-        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(previous: .connected, new: .syncing))
+    func test_confirm_downSurfaced_toDisconnected_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(downWasSurfaced: true, new: .disconnected))
     }
 
-    func test_confirm_nilPrevious_isFalse() {
-        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(previous: nil, new: .connected))
+    func test_confirm_downSurfaced_toOffline_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(downWasSurfaced: true, new: .offline))
+    }
+}
+
+// MARK: - "Reconnexion" grace window (debounce so fast reconnects stay silent)
+
+@MainActor
+final class ConnectionBannerReconnectingGraceTests: XCTestCase {
+
+    func test_grace_startsWhenNewlyDisconnectedFromConnected() {
+        XCTAssertTrue(ConnectionBanner.shouldStartReconnectingGrace(previous: .connected, new: .disconnected))
+    }
+
+    func test_grace_startsWhenDisconnectedFromOffline() {
+        XCTAssertTrue(ConnectionBanner.shouldStartReconnectingGrace(previous: .offline, new: .disconnected))
+    }
+
+    /// Cold start: the banner mounts and the socket is connecting — the grace
+    /// window must still open so a *stalled* (> 3 s) connection is surfaced.
+    func test_grace_startsWhenDisconnectedFromNil() {
+        XCTAssertTrue(ConnectionBanner.shouldStartReconnectingGrace(previous: nil, new: .disconnected))
+    }
+
+    /// Staying disconnected must not restart the window (would push the pill
+    /// further away on every intermediate emission).
+    func test_grace_doesNotRestartWhenAlreadyDisconnected() {
+        XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .disconnected, new: .disconnected))
+    }
+
+    func test_grace_notStartedForNonDisconnectedTargets() {
+        XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .disconnected, new: .connected))
+        XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .connected, new: .syncing))
+        XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .connected, new: .offline))
+    }
+
+    /// At the deadline the "Reconnexion" pill is surfaced only if the socket is
+    /// STILL disconnected; a reconnect that landed during the window cancels it.
+    func test_surface_reconnecting_onlyWhenStillDisconnected() {
+        XCTAssertTrue(ConnectionBanner.shouldSurfaceReconnecting(statusAtDeadline: .disconnected))
+        XCTAssertFalse(ConnectionBanner.shouldSurfaceReconnecting(statusAtDeadline: .connected))
+        XCTAssertFalse(ConnectionBanner.shouldSurfaceReconnecting(statusAtDeadline: .syncing))
+        XCTAssertFalse(ConnectionBanner.shouldSurfaceReconnecting(statusAtDeadline: .offline))
     }
 }

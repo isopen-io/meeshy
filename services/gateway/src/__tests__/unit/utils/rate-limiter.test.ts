@@ -18,6 +18,29 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { enhancedLogger } from '../../../utils/logger-enhanced';
+
+// The rate limiter logs failures via the structured logger
+// (`enhancedLogger.child(...).error`), not console.error. Mock it with a
+// singleton child logger so error logging is assertable.
+jest.mock('../../../utils/logger-enhanced', () => {
+  const childLogger = {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  };
+  return {
+    enhancedLogger: { ...childLogger, child: () => childLogger },
+  };
+});
+
+const rateLimiterLogger = enhancedLogger.child({ module: 'RateLimiter' }) as unknown as {
+  error: jest.Mock;
+  warn: jest.Mock;
+  info: jest.Mock;
+  debug: jest.Mock;
+};
 
 // Mock Redis client
 class MockPipeline {
@@ -227,6 +250,7 @@ describe('RateLimiter', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    rateLimiterLogger.error.mockClear();
   });
 
   afterEach(() => {
@@ -465,7 +489,7 @@ describe('RateLimiter', () => {
       // Should not throw - error is caught and logged
       await middleware(request, reply);
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(rateLimiterLogger.error).toHaveBeenCalled();
     });
 
     it('should calculate reset time from TTL', async () => {
@@ -876,7 +900,7 @@ describe('RateLimiter', () => {
       // Should not throw
       await middleware(request, reply);
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(rateLimiterLogger.error).toHaveBeenCalled();
       // Request should continue without rate limit headers (error path)
     });
 

@@ -34,12 +34,15 @@ function PopoverContent({
         collisionPadding={collisionPadding}
         avoidCollisions={true}
         sticky="always"
-        style={{ 
-          zIndex: 99999, 
-          position: 'fixed',
-          // Garantir que le popover reste dans les limites de l'écran
+        style={{
+          zIndex: 99999,
+          // Largeur bornée au viewport. NE PAS forcer `position: fixed` ici : le
+          // positionnement et l'anti-collision sont gérés nativement par le wrapper
+          // Radix Popper. Forcer `fixed` sur le Content neutralisait l'anti-collision
+          // et faisait déborder le menu (ex. cloche notifications) hors écran en
+          // fenêtre réduite.
           maxWidth: 'calc(100vw - 24px)',
-          ...style 
+          ...style
         }}
         className={cn(
           "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[99999] w-72 origin-(--radix-popover-content-transform-origin) rounded-md border p-4 shadow-md outline-hidden",

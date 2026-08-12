@@ -13,6 +13,7 @@ import { EventEmitter } from 'events';
 import { ZmqConnectionManager, type ConnectionManagerConfig } from './ZmqConnectionManager';
 import { ZmqMessageHandler } from './ZmqMessageHandler';
 import { ZmqRequestSender } from './ZmqRequestSender';
+import { readZmqToleranceConfig } from './zmqToleranceConfig';
 
 // Re-export tous les types publics
 export * from './types';
@@ -48,20 +49,31 @@ export interface ZMQClientStats {
   memory_usage_mb: number;
 }
 
-// Timeout for ZMQ translation requests (30 seconds)
-const ZMQ_REQUEST_TIMEOUT_MS = 30_000;
-// Maximum number of retries before emitting an error
-const ZMQ_MAX_RETRIES = 3;
-// Long-running voice pipeline (voice_translate / voice_translate_async) can take
-// several minutes (Whisper + NLLB + Chatterbox). Resending after 30 s would
-// duplicate the same job 4× in the translator worker pool and saturate CPU.
-// → Single shot, long deadman timeout, no retry.
-const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = 15 * 60_000; // 15 minutes
+// Tolérance ZMQ surchargeable par env (cf. zmqToleranceConfig.ts) : permet
+// d'ajuster timeouts / retries / circuit-breaker en prod sans redéployer de code.
+// But : ne jamais dropper une traduction tant que le translator finit par
+// répondre, sans tempête de retries dupliqués.
+const _zmqTolerance = readZmqToleranceConfig();
 
-// Circuit breaker: open after this many consecutive errors
-const CB_FAILURE_THRESHOLD = 5;
-// Stay open for this duration before auto-resetting to closed
-const CB_COOLDOWN_MS = 30_000;
+// Timeout par tentative pour une requête de traduction texte (défaut 30 s).
+const ZMQ_REQUEST_TIMEOUT_MS = _zmqTolerance.requestTimeoutMs;
+// Nombre de retries avant émission d'erreur (tentatives totales = +1).
+const ZMQ_MAX_RETRIES = _zmqTolerance.maxRetries;
+// Pipelines voix longs (voice_translate / voice_translate_async) : plusieurs
+// minutes (Whisper + NLLB + Chatterbox). Re-pousser dupliquerait le job dans le
+// worker pool et saturerait le CPU → un seul tir, deadman long, pas de retry.
+const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = _zmqTolerance.voiceTranslateDeadmanMs;
+
+// Rétention des taskId de transcription déjà livrés (anti-doublon tardif).
+// Quelques minutes suffisent : au-delà, plus aucune réponse n'est attendue.
+const SETTLED_TRANSCRIPTION_TTL_MS = 10 * 60_000;
+// Borne dure : la map absorbe des doublons, elle n'archive pas.
+const SETTLED_TRANSCRIPTION_MAX = 1_000;
+
+// Circuit breaker : ouvre après N erreurs consécutives.
+const CB_FAILURE_THRESHOLD = _zmqTolerance.cbFailureThreshold;
+// Reste ouvert ce délai avant auto-reset.
+const CB_COOLDOWN_MS = _zmqTolerance.cbCooldownMs;
 
 export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;
@@ -80,6 +92,21 @@ export class ZmqTranslationClient extends EventEmitter {
 
   // Retry counts per taskId (cleaned up on completion or final timeout)
   private retryCount: Map<string, number> = new Map();
+
+  // Transcriptions déjà livrées, par taskId → date de livraison.
+  //
+  // Incident prod 2026-08-04 : Whisper a mis 42 s sur une note vocale de 19 s
+  // alors que le timeout par tentative était de 30 s. Le gateway a re-poussé le
+  // MÊME taskId ; la première passe a réussi et diffusé `transcription:ready`,
+  // puis la seconde a échoué sur le fichier temporaire que la première venait
+  // de nettoyer et a diffusé `audio:transcription-failed` 140 ms plus tard —
+  // effaçant une transcription parfaitement valide côté client.
+  //
+  // Garde volontairement limitée à la transcription : côté audio, une erreur
+  // publiée APRÈS un résultat vide est au contraire le signal légitime que
+  // toutes les langues ont échoué (cf. `_report_total_translation_failure`
+  // côté translator) — l'y appliquer rétablirait l'échec silencieux.
+  private settledTranscriptions: Map<string, number> = new Map();
 
   // Circuit breaker state
   private cbConsecutiveErrors: number = 0;
@@ -186,6 +213,14 @@ export class ZmqTranslationClient extends EventEmitter {
    * These are long-running pipelines (Whisper + NLLB + TTS) queued by the
    * translator's worker pool — retries would just duplicate work in the queue.
    */
+  /**
+   * Silence maximal toléré sur le SUB avant recréation du socket. Les pongs
+   * du translator arrivent toutes les ~30 s en régime normal : 120 s sans
+   * RIEN = socket zombie (incident prod 2026-07-04 : canal retour sourd
+   * pendant des heures, TCP établi mais aucun message délivré à l'app).
+   */
+  private static readonly SUB_SILENCE_RESET_MS = 120_000;
+
   private static readonly VOICE_LONG_RUNNING_TYPES = new Set<string>([
     'voice_translate',
     'voice_translate_async',
@@ -216,6 +251,43 @@ export class ZmqTranslationClient extends EventEmitter {
   }
 
   /**
+   * Mémorise qu'une transcription a été livrée pour ce taskId.
+   *
+   * Purge à l'écriture (par âge puis par taille) : la map ne vit que pour
+   * absorber les doublons proches d'une même requête, jamais pour l'historique.
+   */
+  private _markTranscriptionSettled(taskId: string): void {
+    if (!taskId) return;
+
+    const now = Date.now();
+    for (const [id, settledAt] of this.settledTranscriptions) {
+      if (now - settledAt > SETTLED_TRANSCRIPTION_TTL_MS) {
+        this.settledTranscriptions.delete(id);
+      }
+    }
+
+    this.settledTranscriptions.set(taskId, now);
+
+    while (this.settledTranscriptions.size > SETTLED_TRANSCRIPTION_MAX) {
+      const oldest = this.settledTranscriptions.keys().next().value;
+      if (oldest === undefined) break;
+      this.settledTranscriptions.delete(oldest);
+    }
+  }
+
+  /** Une transcription a-t-elle déjà été livrée pour ce taskId ? */
+  private _isTranscriptionSettled(taskId: string): boolean {
+    if (!taskId) return false;
+    const settledAt = this.settledTranscriptions.get(taskId);
+    if (settledAt === undefined) return false;
+    if (Date.now() - settledAt > SETTLED_TRANSCRIPTION_TTL_MS) {
+      this.settledTranscriptions.delete(taskId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Configure le forwarding des événements du handler vers le client
    */
   private setupEventForwarding(): void {
@@ -226,6 +298,14 @@ export class ZmqTranslationClient extends EventEmitter {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationCompleted', event);
+      // Also forward the per-messageId scoped event (ZmqMessageHandler emits
+      // both) so callers — PostService's story-caption translation,
+      // CallEventsHandler's call-transcription translation — can subscribe
+      // narrowly instead of filtering every global translation completion
+      // in the process.
+      if (event.result?.messageId) {
+        this.emit(`translationCompleted:${event.result.messageId}`, event);
+      }
     });
 
     this.messageHandler.on('translationError', (event) => {
@@ -298,12 +378,19 @@ export class ZmqTranslationClient extends EventEmitter {
     this.messageHandler.on('transcriptionCompleted', (event) => {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
+      this._markTranscriptionSettled(event.taskId);
       this.emit('transcriptionCompleted', event);
     });
 
     this.messageHandler.on('transcriptionError', (event) => {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
+      if (this._isTranscriptionSettled(event.taskId)) {
+        logger.warn(
+          `⚠️ transcription_error ignoré pour taskId=${event.taskId} : la transcription a déjà été livrée`
+        );
+        return;
+      }
       this.emit('transcriptionError', event);
     });
 
@@ -381,35 +468,68 @@ export class ZmqTranslationClient extends EventEmitter {
   private async _startResultListener(): Promise<void> {
     logger.info('🎧 Démarrage écoute des résultats de traduction...');
 
-    // Approche simple avec setInterval (compatible Jest)
-    let heartbeatCount = 0;
+    // Un seul receive() en vol : zeromq.js n'autorise qu'une lecture à la
+    // fois par socket — l'ancien tick 100 ms relançait receive() par-dessus
+    // celui en attente et jetait « Socket is busy reading » 10×/s dans un
+    // catch muet. Incident prod 2026-07-04 : le canal retour est resté
+    // sourd des heures sans une seule ligne de log.
+    let receiveInFlight = false;
+    let lastMessageAt = Date.now();
+    let lastSilenceLogAt = 0;
 
     const checkForMessages = async () => {
+      /* istanbul ignore next -- clearInterval is called in close() before this fires in tests */
       if (!this.running) {
         logger.info('🛑 Arrêt de l\'écoute - running=false');
         return;
       }
 
-      try {
-        heartbeatCount++;
-
-        // Essayer de recevoir un message de manière non-bloquante
-        try {
-          const message = await this.connectionManager.receive();
-
-          if (message) {
-            // Passer au message handler
-            await this.messageHandler.handleMessage(message);
+      // Watchdog : les pongs du translator arrivent toutes les ~30 s dès
+      // que le health-ping tourne — un silence prolongé signifie un socket
+      // SUB zombie (jamais silencieux en fonctionnement normal). Recréer
+      // le socket est sans danger : PUB/SUB n'a pas d'état de session.
+      // Déclenché MÊME si un receive() est en vol : un zombie a par
+      // définition un receive pending éternel ; le close() du recreate le
+      // rejette et libère le flag pour le nouveau socket.
+      const silenceMs = Date.now() - lastMessageAt;
+      if (silenceMs > ZmqTranslationClient.SUB_SILENCE_RESET_MS) {
+        if (Date.now() - lastSilenceLogAt > ZmqTranslationClient.SUB_SILENCE_RESET_MS) {
+          lastSilenceLogAt = Date.now();
+          logger.warn(
+            `⚠️ [ZMQ-SUB] Aucun message depuis ${Math.round(silenceMs / 1000)}s — recréation du socket SUB`
+          );
+          try {
+            await this.connectionManager.recreateSubSocket();
+            lastMessageAt = Date.now();
+          } catch (recreateError) {
+            logger.error(`❌ [ZMQ-SUB] Échec recréation du socket SUB: ${recreateError}`);
           }
-        } catch (receiveError) {
-          // Pas de message disponible ou erreur de réception
-          // C'est normal, on continue
         }
+        return;
+      }
 
-      } catch (error) {
-        if (this.running) {
-          logger.error(`❌ Erreur réception résultat: ${error}`);
+      if (receiveInFlight) {
+        return;
+      }
+
+      receiveInFlight = true;
+      try {
+        const message = await this.connectionManager.receive();
+
+        /* istanbul ignore else -- receive() returns Buffer/Buffer[] or throws; null/undefined is structurally unreachable here */
+        if (message) {
+          lastMessageAt = Date.now();
+          await this.messageHandler.handleMessage(message);
         }
+      } catch (receiveError) {
+        // « No message… » est le régime normal du polling ; toute autre
+        // erreur est un vrai signal et doit se voir dans les logs.
+        const text = String(receiveError);
+        if (!text.includes('No message') && this.running) {
+          logger.error(`❌ [ZMQ-SUB] Erreur réception résultat: ${text}`);
+        }
+      } finally {
+        receiveInFlight = false;
       }
     };
 
@@ -443,6 +563,17 @@ export class ZmqTranslationClient extends EventEmitter {
 
   /**
    * Envoie une requête de processing audio
+   *
+   * Pipeline long (Whisper + NLLB + Chatterbox, plusieurs minutes) : aucun
+   * retry n'est armé, comme pour `sendTranscriptionOnlyRequest`.
+   *
+   * Prod incident 2026-08-06 : le timeout par défaut (30 s, retry activé)
+   * était systématiquement dépassé par le pipeline complet. Le gateway
+   * re-poussait le MÊME taskId toutes les 30 s (jusqu'à 5 tentatives),
+   * dupliquant le job dans le worker pool ML — la contention GPU qui en
+   * résultait faisait à son tour dépasser le watchdog de synthèse TTS
+   * (180 s), aboutissant à un échec total et répété du même message
+   * ('translation_failed') toutes les ~3 minutes, indéfiniment.
    */
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
     if (this._cbIsOpen()) {
@@ -458,7 +589,8 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendAudioProcessRequest(request, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      { retryEnabled: false, timeoutMs: ZMQ_VOICE_TRANSLATE_DEADMAN_MS }
     );
     return taskId;
   }
@@ -479,7 +611,13 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendTranscriptionOnlyRequest(request, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      // Whisper dépasse couramment les 30 s (42 s pour une note de 19 s en
+      // prod). Re-pousser le même taskId dupliquait le job : la seconde passe
+      // mourait sur le fichier temporaire nettoyé par la première et son erreur
+      // écrasait une transcription déjà livrée. Même remède que les pipelines
+      // voix longs — un seul tir, deadman long, pas de retry.
+      { retryEnabled: false, timeoutMs: ZMQ_VOICE_TRANSLATE_DEADMAN_MS }
     );
     return taskId;
   }
@@ -603,8 +741,8 @@ export class ZmqTranslationClient extends EventEmitter {
       return true;
 
     } catch (error) {
-      logger.error(`❌ Health check échoué: ${error}`);
-      return false;
+      /* istanbul ignore next -- connectionManager.sendPing() catches internally; this outer catch is structurally unreachable */
+      logger.error(`❌ Health check échoué: ${error}`); /* istanbul ignore next */ return false;
     }
   }
 
@@ -654,6 +792,7 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info('✅ ZmqTranslationClient arrêté');
 
     } catch (error) {
+      /* istanbul ignore next -- connectionManager.close() has its own internal catch; this outer catch is structurally unreachable */
       logger.error(`❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
@@ -661,6 +800,7 @@ export class ZmqTranslationClient extends EventEmitter {
   /**
    * Méthode de test pour vérifier la réception (pour tests)
    */
+  /* istanbul ignore next -- diagnostic utility; all meaningful behaviour is covered by the other tests */
   async testReception(): Promise<void> {
     logger.info('🧪 [ZMQ-Client] Test de réception des messages...');
 

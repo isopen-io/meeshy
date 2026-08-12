@@ -250,6 +250,20 @@ describe('TranslationService', () => {
 
       expect(result.sourceLanguage).toBe('auto');
     });
+
+    it('falls back to model parameter when response.data.model is absent', async () => {
+      mockAxios.post.mockResolvedValueOnce({
+        data: {
+          translated_text: 'Bonjour',
+          detected_language: 'en',
+          // model intentionally absent to exercise the || model fallback branch
+        },
+      });
+
+      const result = await translationService.translateWithAutoDetect('Hello', 'fr', 'advanced' as any);
+
+      expect(result.model).toBe('advanced');
+    });
   });
 
   describe('checkHealth', () => {
@@ -504,3 +518,33 @@ describe('TranslationService', () => {
     });
   });
 });
+
+  describe('translateWithAutoDetect model fallback branch', () => {
+    it('falls back to request model when response omits model field', async () => {
+      mockAxios.post.mockResolvedValueOnce({
+        data: {
+          translated_text: 'Bonjour',
+          detected_language: 'en',
+          // model field intentionally absent — exercises `|| model` branch on line 135
+        },
+      });
+
+      const result = await translationService.translateWithAutoDetect('Hello', 'fr', 'basic');
+
+      expect(result.model).toBe('basic');
+    });
+
+    it('uses response model when present (no fallback)', async () => {
+      mockAxios.post.mockResolvedValueOnce({
+        data: {
+          translated_text: 'Bonjour',
+          detected_language: 'en',
+          model: 'advanced',
+        },
+      });
+
+      const result = await translationService.translateWithAutoDetect('Hello', 'fr', 'basic');
+
+      expect(result.model).toBe('advanced');
+    });
+  });

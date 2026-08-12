@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 /// In-memory + disk cache of `LinkMetadata` keyed by canonical URL.
 /// Lives in the app target (not the SDK) because it binds `LinkPreviewFetcher`
@@ -90,11 +91,36 @@ final class LinkPreviewStore: ObservableObject {
         }
     }
 
+    /// Awaitable resolution driving `LinkPreviewCard`'s LOCAL `@State` so the
+    /// card does NOT observe the global `@Published cache` — otherwise EVERY
+    /// link card in the conversation re-evaluates its body each time ANY URL's
+    /// metadata lands (the "recompute every time" the user reported; the
+    /// network fetch itself is already cached + deduped here). Returns the
+    /// cached metadata immediately, a known-failed `nil` without re-hitting the
+    /// network (30-min negative window), else fetches ONCE (the SDK fetcher
+    /// dedupes concurrent in-flight requests for the same URL) and records the
+    /// success on disk or the failure in the negative cache.
+    func resolvedMetadata(for urlString: String) async -> LinkMetadata? {
+        if let cached = cache[urlString] { return cached }
+        if let failedAt = negativeCache[urlString],
+           Date().timeIntervalSince(failedAt) < negativeCacheDuration {
+            return nil
+        }
+        let metadata = await fetcher.metadata(for: urlString)
+        if let metadata {
+            cache[urlString] = metadata
+            persist()
+        } else {
+            negativeCache[urlString] = Date()
+        }
+        return metadata
+    }
+
     func clearAll() {
         cache.removeAll()
         negativeCache.removeAll()
         pendingKeys.removeAll()
-        try? FileManager.default.removeItem(at: Self.fileURL(fileName))
+        FileManager.default.removeItemLogging(at: Self.fileURL(fileName), context: "link preview cache reset", logger: Logger.linkPreview)
     }
 
     // MARK: - Persistence
@@ -104,8 +130,12 @@ final class LinkPreviewStore: ObservableObject {
         let encoder = self.encoder
         let fileName = self.fileName
         Task.detached(priority: .utility) {
-            guard let data = try? encoder.encode(snapshot) else { return }
-            try? data.write(to: Self.fileURL(fileName), options: .atomic)
+            guard let data = encoder.encodeOrLog(snapshot, field: "link previews", logger: Logger.linkPreview) else { return }
+            do {
+                try data.write(to: Self.fileURL(fileName), options: .atomic)
+            } catch {
+                Logger.linkPreview.error("Link preview cache not written, previews will be refetched: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -113,19 +143,33 @@ final class LinkPreviewStore: ObservableObject {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            FileManager.default.createDirectoryLogging(at: cacheDir, context: "link preview cache dir", logger: Logger.linkPreview)
         }
         return cacheDir.appendingPathComponent(fileName)
     }
 
     private static func loadFromDisk(fileName: String, decoder: JSONDecoder, maxAge: TimeInterval) -> [String: LinkMetadata] {
         let url = fileURL(fileName)
-        guard FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url),
-              let decoded = try? decoder.decode([String: LinkMetadata].self, from: data) else {
+        // Le `fileExists` ci-dessus filtre le cas « pas encore de cache » :
+        // un échec de lecture ici est une vraie I/O.
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            Logger.linkPreview.error("Link preview cache present but unreadable: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
+        guard let decoded = decoder.decodeOrLog([String: LinkMetadata].self, from: data, field: "link previews", logger: Logger.linkPreview) else {
             return [:]
         }
         let cutoff = Date().addingTimeInterval(-maxAge)
         return decoded.filter { _, metadata in metadata.fetchedAt >= cutoff }
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let linkPreview = Logger(subsystem: "me.meeshy.app", category: "link-preview")
 }

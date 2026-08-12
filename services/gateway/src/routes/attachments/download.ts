@@ -11,7 +11,7 @@ import { stat } from 'fs/promises';
 import { resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
@@ -23,12 +23,56 @@ export async function registerDownloadRoutes(
   const attachmentService = new AttachmentService(prisma);
 
   /**
+   * L'appelant a-t-il le droit de lire cette pièce jointe ?
+   *
+   * Ces routes servaient le fichier à quiconque connaissait l'identifiant, sans
+   * aucune identité — et un ObjectId MongoDB n'est pas un secret : son entropie
+   * est faible et partiellement dérivable d'un horodatage.
+   *
+   * Le rattachement passe par le message : `messageId` → conversation →
+   * participation. Une pièce jointe pas encore rattachée à un message (envoi en
+   * cours) n'est lisible que par la personne qui l'a déposée.
+   */
+  async function callerMayReadAttachment(
+    request: FastifyRequest,
+    attachment: { messageId?: string | null; uploadedBy?: string | null }
+  ): Promise<boolean> {
+    const authContext = (request as unknown as { authContext?: {
+      isAuthenticated?: boolean; isAnonymous?: boolean; userId?: string; participantId?: string;
+    } }).authContext;
+
+    if (!authContext?.isAuthenticated) return false;
+
+    if (!attachment.messageId) {
+      // Pas encore rattachée : seul le déposant y accède.
+      const caller = authContext.participantId ?? authContext.userId;
+      return Boolean(caller) && caller === attachment.uploadedBy;
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: attachment.messageId },
+      select: { conversationId: true }
+    });
+    if (!message) return false;
+
+    // Le discriminant est le type d'identité : un participant anonyme muni
+    // d'un jeton de session est authentifié lui aussi.
+    const where = authContext.isAnonymous && authContext.participantId
+      ? { id: authContext.participantId, conversationId: message.conversationId, isActive: true }
+      : { userId: authContext.userId, conversationId: message.conversationId, isActive: true };
+
+    const participant = await prisma.participant.findFirst({ where, select: { id: true } });
+    return participant !== null;
+  }
+
+  /**
    * GET /attachments/:attachmentId
    * Stream le fichier original
    */
   fastify.get(
     '/attachments/:attachmentId',
     {
+      onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
       // Never compress this route: media is already compressed and text
       // attachments are served via Range (206) where re-compression would
       // corrupt Content-Range/Content-Length. Enforced at the proxy layer
@@ -71,6 +115,10 @@ export async function registerDownloadRoutes(
         const attachment = await attachmentService.getAttachment(attachmentId);
         if (!attachment) {
           return sendNotFound(reply, 'Attachment not found');
+        }
+
+        if (!(await callerMayReadAttachment(request, attachment))) {
+          return sendForbidden(reply, 'Access denied to this attachment');
         }
 
         const filePath = await attachmentService.getFilePath(attachmentId);
@@ -125,6 +173,7 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/:attachmentId/thumbnail',
     {
+      onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
       // already-compressed JPEG thumbnail — never recompressed (Traefik excludedContentTypes)
       schema: {
         description: 'Stream the thumbnail image for an attachment. Only available for image attachments. Thumbnails are JPEG format, optimized for fast loading in lists and previews. Supports CORS and aggressive caching.',
@@ -160,6 +209,16 @@ export async function registerDownloadRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { attachmentId } = request.params as AttachmentParams;
+
+        // Même contrôle que le fichier original : une miniature révèle le
+        // contenu de l'image, la protéger moins n'aurait aucun sens.
+        const thumbnailAttachment = await attachmentService.getAttachment(attachmentId);
+        if (!thumbnailAttachment) {
+          return sendNotFound(reply, 'Thumbnail not found');
+        }
+        if (!(await callerMayReadAttachment(request, thumbnailAttachment))) {
+          return sendForbidden(reply, 'Access denied to this attachment');
+        }
 
         const thumbnailPath = await attachmentService.getThumbnailPath(attachmentId);
         if (!thumbnailPath) {
@@ -232,10 +291,17 @@ export async function registerDownloadRoutes(
           }
         }
       },
-      onSend: async (request, reply, payload) => {
+      // SYNCHRONOUS on purpose. This route already carries the app-wide async
+      // `conditionalGetOnSend` onSend hook; a SECOND *async* onSend hook makes a
+      // void-returning handler (e.g. `return sendNotFound(reply, …)` when the
+      // file is missing) resolve `undefined`, so Fastify issues a duplicate
+      // `reply.send(undefined)` → `ERR_HTTP_HEADERS_SENT` crash bursts (frequent
+      // on missing avatars). Keeping this hook synchronous leaves cgo as the
+      // only async onSend hook — the proven-safe state every other route has.
+      onSend: (request, reply, payload, done) => {
         reply.removeHeader('X-Frame-Options');
         reply.header('Content-Security-Policy', "frame-ancestors *");
-        return payload;
+        done(null, payload);
       }
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -301,7 +367,15 @@ export async function registerDownloadRoutes(
         // originals which may legitimately change. Keep the long max-age
         // for browser cache reuse, but allow ETag revalidation.
         const etag = `W/"${fileSize}-${Math.floor(fileStats.mtimeMs)}"`;
-        const cacheControl = 'public, max-age=31536000';
+        // Stable-path files (legacy `avatars/user/<userId>.jpg`) keep the SAME
+        // URL when their content changes — a year-long max-age freezes the old
+        // image in every client/CDN cache. Serve them with `no-cache` so each
+        // use revalidates via ETag (cheap 304), while UUID-named uploads stay
+        // long-cacheable (their URL changes with every new upload).
+        const isStableProfilePath = decodedPath.startsWith('avatars/');
+        const cacheControl = isStableProfilePath
+          ? 'public, no-cache'
+          : 'public, max-age=31536000';
 
         const ifNoneMatch = request.headers['if-none-match'];
         if (ifNoneMatch && ifNoneMatch === etag) {
@@ -322,10 +396,7 @@ export async function registerDownloadRoutes(
             const match = /^bytes=(\d*)-(\d*)$/.exec(range);
             if (!match) {
               reply.header('Content-Range', `bytes */${fileSize}`);
-              return reply.status(416).send({
-                success: false,
-                error: 'Range Not Satisfiable',
-              });
+              return sendError(reply, 416, 'Range Not Satisfiable');
             }
             const startStr = match[1];
             const endStr = match[2];
@@ -339,10 +410,7 @@ export async function registerDownloadRoutes(
               || start > end
             ) {
               reply.header('Content-Range', `bytes */${fileSize}`);
-              return reply.status(416).send({
-                success: false,
-                error: 'Range Not Satisfiable',
-              });
+              return sendError(reply, 416, 'Range Not Satisfiable');
             }
             const chunkSize = (end - start) + 1;
 

@@ -58,6 +58,9 @@ extension UniversalComposerBar {
                     .padding(.vertical, 12)
                     .lineLimit(1...5)
                     .font(.callout)
+                    .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
+                    .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
+                    .accessibilityIdentifier(MeeshyA11yID.composerTextField)
                     .adaptiveOnChange(of: text) { _, newValue in
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))
@@ -129,7 +132,7 @@ extension UniversalComposerBar {
                 .contentShape(Rectangle())
             }
             .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Cancel recording", bundle: .main))
-            .accessibilityHint("Supprime le message vocal en cours")
+            .accessibilityHint(String(localized: "composer.recording.cancel.hint", defaultValue: "Deletes the current voice message", bundle: .main))
 
             // Live waveform — fills available horizontal space.
             // Marked accessibilityHidden: purely decorative, timer conveys state.
@@ -188,7 +191,7 @@ extension UniversalComposerBar {
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
             .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Stop and add to attachments", bundle: .main))
-            .accessibilityHint("Place le message vocal dans les pieces jointes pour l'editer avant l'envoi")
+            .accessibilityHint(String(localized: "composer.recording.stopAndAttach.hint", defaultValue: "Adds the voice message to attachments to edit before sending", bundle: .main))
 
             // Send button — stops recording and sends the message immediately
             // (raw, no preview). Disabled below the minimum duration to prevent

@@ -26,6 +26,7 @@ final class MessageServiceTests: XCTestCase {
             id: id, clientMessageId: nil, conversationId: "conv123", senderId: "user1",
             content: "Hello", originalLanguage: "en",
             messageType: "text", messageSource: "user", isEdited: false,
+            editedAt: nil,
             deletedAt: nil, replyToId: nil, storyReplyToId: nil, postReplyTo: nil,
             forwardedFromId: nil, forwardedFromConversationId: nil,
             pinnedAt: nil, pinnedBy: nil, isViewOnce: false, isBlurred: false,
@@ -36,7 +37,7 @@ final class MessageServiceTests: XCTestCase {
             forwardedFromConversation: nil, reactionSummary: nil,
             reactionCount: nil, currentUserReactions: nil,
             deliveredToAllAt: nil, readByAllAt: nil,
-            deliveredCount: nil, readCount: nil, effectFlags: nil, translations: nil,
+            deliveredCount: nil, readCount: nil, recipientCount: nil, effectFlags: nil, translations: nil,
             mentionedUsers: nil, callSummary: nil
         )
     }

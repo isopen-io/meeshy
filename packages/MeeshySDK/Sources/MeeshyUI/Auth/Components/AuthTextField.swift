@@ -10,6 +10,11 @@ public struct AuthTextField: View {
     var keyboardType: UIKeyboardType = .default
     var autocapitalization: TextInputAutocapitalization = .never
     var validation: ((String) -> String?)? = nil
+    /// Pilote l'AutoFill. `.newPassword` sur un champ de définition de mot de
+    /// passe est ce qui déclenche la proposition de mot de passe fort ET la
+    /// mise à jour de l'entrée au trousseau — sans lui, une réinitialisation
+    /// laissait l'ancien mot de passe enregistré dans le gestionnaire.
+    var textContentType: UITextContentType? = nil
 
     @State private var isShowingPassword = false
     @State private var validationError: String?
@@ -23,7 +28,8 @@ public struct AuthTextField: View {
     public init(title: String, icon: String, text: Binding<String>,
                 isSecure: Bool = false, keyboardType: UIKeyboardType = .default,
                 autocapitalization: TextInputAutocapitalization = .never,
-                validation: ((String) -> String?)? = nil) {
+                validation: ((String) -> String?)? = nil,
+                textContentType: UITextContentType? = nil) {
         self.title = title
         self.icon = icon
         self._text = text
@@ -31,23 +37,26 @@ public struct AuthTextField: View {
         self.keyboardType = keyboardType
         self.autocapitalization = autocapitalization
         self.validation = validation
+        self.textContentType = textContentType
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .foregroundStyle(isFocused ? Color(hex: "4ECDC4") : theme.textMuted)
+                    .foregroundStyle(isFocused ? MeeshyColors.brandPrimary : theme.textMuted)
                     .frame(width: 20)
 
                 if isSecure && !isShowingPassword {
                     SecureField(title, text: $text)
                         .focused($isFocused)
+                        .textContentType(textContentType)
                         .textInputAutocapitalization(autocapitalization)
                 } else {
                     TextField(title, text: $text)
                         .focused($isFocused)
                         .keyboardType(keyboardType)
+                        .textContentType(textContentType)
                         .textInputAutocapitalization(autocapitalization)
                         .autocorrectionDisabled()
                 }
@@ -70,7 +79,7 @@ public struct AuthTextField: View {
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .strokeBorder(
-                        isFocused ? Color(hex: "4ECDC4").opacity(0.6) :
+                        isFocused ? MeeshyColors.brandPrimary.opacity(0.6) :
                             validationError != nil ? Color.red.opacity(0.5) :
                             theme.inputBorder.opacity(0.3),
                         lineWidth: 1
@@ -84,7 +93,7 @@ public struct AuthTextField: View {
                     .padding(.leading, 4)
             }
         }
-        .onChange(of: text) { newValue in
+        .adaptiveOnChange(of: text) { _, newValue in
             if let validation {
                 validationError = validation(newValue)
             }

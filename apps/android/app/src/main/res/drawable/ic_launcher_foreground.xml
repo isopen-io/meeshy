@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon foreground layer — the brand "stacked-dashes" glyph, white on
+  transparent (CLAUDE.md "Design System & Visual Identity": light-mode logo =
+  gradient background + white stacked-dashes icon).
+
+  Port of the iOS AppIcon glyph (three horizontal rounded bars, decreasing
+  width, left-aligned) measured off
+  apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png
+  (bar bounding boxes in source px: [222,344]-[801,423], [222,472]-[701,551],
+  [222,600]-[601,679] on a 1024x1024 canvas, corner radius = half height on
+  every bar). Scaled 108/1024 onto the adaptive-icon viewport then shrunk by
+  0.85 so every bar corner stays inside the 66dp safe-zone circle (max corner
+  distance from center ~30dp, vs. the 33dp safe radius) — see
+  apps/android/scripts/generate_legacy_launcher_icons.py for the full
+  derivation, shared verbatim with the legacy PNG fallbacks so the vector and
+  raster renders never drift.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.588,38.984 L76.412,38.984 A3.541,3.541 0 0 1 76.412,46.066 L31.588,46.066 A3.541,3.541 0 0 1 31.588,38.984 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.588,50.459 L67.447,50.459 A3.541,3.541 0 0 1 67.447,57.541 L31.588,57.541 A3.541,3.541 0 0 1 31.588,50.459 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.588,61.934 L58.483,61.934 A3.541,3.541 0 0 1 58.483,69.016 L31.588,69.016 A3.541,3.541 0 0 1 31.588,61.934 Z" />
+</vector>

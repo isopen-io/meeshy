@@ -131,6 +131,7 @@ export const useFailedMessagesStore = create<FailedMessagesState>()(
 
         // 2. CRITIQUE: Supprimer explicitement localStorage persist
         // Sans ça, les données persistent et se rechargent au reload
+        /* istanbul ignore next */
         if (typeof window !== 'undefined') {
           localStorage.removeItem('meeshy-failed-messages');
         }

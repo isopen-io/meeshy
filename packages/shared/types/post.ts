@@ -11,6 +11,32 @@ export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
 
 // =====================================================
+// TRACKING LINKS (parité avec Message — metadata.trackingLinks)
+// =====================================================
+
+/**
+ * Mapping `{ url, token }` d'une URL brute détectée dans le contenu vers son
+ * lien tracé `/l/<token>`. Identique au mécanisme des messages : le client rend
+ * le lien (texte + façade vidéo) vers `/l/<token>` SANS réécrire l'URL d'origine
+ * (l'aperçu vidéo et l'URL lisible sont préservés).
+ * @see schema.prisma Post.metadata / PostComment.metadata
+ */
+export interface ContentTrackingLink {
+  readonly url: string;
+  readonly token: string;
+}
+
+/**
+ * Métadonnées structurées libres d'un post/commentaire (parité Message.metadata).
+ * `trackingLinks` est rempli automatiquement à la création quand le contenu
+ * contient des URLs brutes.
+ */
+export interface PostMetadata {
+  readonly trackingLinks?: readonly ContentTrackingLink[];
+  readonly [key: string]: unknown;
+}
+
+// =====================================================
 // CORE INTERFACES
 // =====================================================
 
@@ -19,6 +45,13 @@ export interface PostAuthor {
   readonly username: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
+  /**
+   * Présence — servie UNIQUEMENT sur le chemin stories (`storyAuthorSelect`
+   * gateway) pour que l'interstitiel d'identité du viewer résolve l'état de
+   * présence au moment du switch de groupe. Absent des payloads posts/feed.
+   */
+  readonly isOnline?: boolean;
+  readonly lastActiveAt?: Date | string | null;
 }
 
 export interface PostMedia {
@@ -45,6 +78,10 @@ export interface PostComment {
   readonly content: string;
   readonly originalLanguage?: string | null;
   readonly translations?: unknown;
+  /** Métadonnées structurées — porte `trackingLinks` (cf. {@link PostMetadata}). */
+  readonly metadata?: PostMetadata | null;
+  /** Copie hissée top-level de `metadata.trackingLinks` sur le payload socket. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
   readonly likeCount: number;
   readonly replyCount: number;
   readonly reactionSummary?: Record<string, number> | null;
@@ -54,6 +91,12 @@ export interface PostComment {
   readonly deletedAt?: string | Date | null;
   readonly createdAt: string | Date;
   readonly author?: PostAuthor;
+  /**
+   * Média unique attaché au commentaire (image/vidéo/audio). Réutilise le modèle
+   * {@link PostMedia} via le FK `commentId`. Un commentaire ne porte qu'un seul
+   * média ; la relation reste un tableau pour cohérence avec le pipeline posts.
+   */
+  readonly media?: readonly PostMedia[];
 }
 
 export interface Post {
@@ -65,6 +108,18 @@ export interface Post {
   readonly content?: string | null;
   readonly originalLanguage?: string | null;
   readonly translations?: unknown;
+  /**
+   * Métadonnées structurées (parité Message.metadata) — porte notamment
+   * `trackingLinks: [{ url, token }]` pour rendre les URLs brutes du contenu
+   * cliquables/tracées vers `/l/<token>` sans réécrire l'URL d'origine.
+   */
+  readonly metadata?: PostMetadata | null;
+  /**
+   * Copie hissée top-level de `metadata.trackingLinks` sur les payloads socket
+   * (`post:created`/`story:created`/`status:created`), miroir exact du hoist
+   * `trackingLinks` des messages. Les réponses REST exposent `metadata`.
+   */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
   readonly communityId?: string | null;
   readonly moodEmoji?: string | null;
   readonly audioUrl?: string | null;
@@ -84,6 +139,14 @@ export interface Post {
   readonly shareCount: number;
   readonly isPinned: boolean;
   readonly isEdited: boolean;
+  /**
+   * Horodatage de la dernière édition de CONTENU (texte / storyEffects /
+   * médias) — distinct de `updatedAt` qui bouge sur chaque écriture
+   * (compteurs inclus). null/absent = jamais édité en contenu. Les clients
+   * s'en servent pour céder la garde « viewed monotone » après une édition
+   * de story (reset d'engagement).
+   */
+  readonly contentEditedAt?: string | Date | null;
   readonly deletedAt?: string | Date | null;
   readonly isQuote?: boolean;
   readonly repostOfId?: string | null;
@@ -159,6 +222,13 @@ export interface PostRepostedEventData {
 export interface PostBookmarkedEventData {
   readonly postId: string;
   readonly bookmarked: boolean;
+  /**
+   * Absolute bookmark count AFTER the mutation — broadcast so the feed, reel
+   * viewer and post detail reconcile the displayed count without a reload
+   * (mirrors `likeCount` on {@link PostLikedEventData}). The bookmark event is
+   * personal (emitted only to the acting user's sockets via `emitToUser`).
+   */
+  readonly bookmarkCount: number;
 }
 
 export interface StoryCreatedEventData {
@@ -167,6 +237,13 @@ export interface StoryCreatedEventData {
 
 export interface StoryUpdatedEventData {
   readonly story: Post;
+  /**
+   * true when the edit was a CONTENT edit that wiped the story's engagement
+   * (views, reactions, impressions) server-side — clients must mark the story
+   * unseen again for every viewer. Absent/false on metadata-only updates
+   * (visibility changes). The publication date (createdAt) never moves.
+   */
+  readonly engagementReset?: boolean;
 }
 
 export interface StoryDeletedEventData {
@@ -227,6 +304,17 @@ export interface CommentAddedEventData {
 export interface CommentDeletedEventData {
   readonly postId: string;
   readonly commentId: string;
+  /**
+   * Le fil ENTIER retiré — la cible et tous ses descendants — car supprimer un
+   * commentaire soft-delete tout son sous-arbre de réponses côté serveur.
+   * Toujours non vide et toujours préfixé par `commentId` quand il est présent.
+   *
+   * Optionnel pour rester additif : les clients qui ne le lisent pas encore
+   * gardent le comportement d'avant (retirer la seule cible). Un client qui le
+   * lit DOIT se replier sur `[commentId]` quand il est absent — le rejeu
+   * idempotent d'une suppression ne peut plus reconstruire le sous-arbre.
+   */
+  readonly deletedCommentIds?: readonly string[];
   readonly commentCount: number;
 }
 
@@ -261,6 +349,17 @@ export interface CommentTranslationUpdatedEventData {
   };
 }
 
+/**
+ * Émis (`comment:media-updated`) quand le pipeline audio d'un média de commentaire
+ * a produit une transcription ou des traductions. Le client remplace le commentaire
+ * en cache par cette version enrichie (média transcrit/traduit).
+ */
+export interface CommentMediaUpdatedEventData {
+  readonly postId: string;
+  readonly commentId: string;
+  readonly comment: PostComment;
+}
+
 export interface CommentReactionAggregation {
   readonly emoji: string;
   readonly count: number;
@@ -280,6 +379,12 @@ export interface CommentReactionUpdateEventData {
 
 export interface CommentReactionSyncEventData {
   readonly commentId: string;
+  /**
+   * Owning post id. Required so a client can locate the comment in the
+   * post-scoped comment caches (`comments(postId)` → both the top-level list
+   * and any `replies` sub-caches). The comment id alone is NOT a cache key.
+   */
+  readonly postId: string;
   readonly reactions: readonly CommentReactionAggregation[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];

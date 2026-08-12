@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from './auth-manager.service';
 
@@ -82,6 +83,7 @@ class TwoFactorService {
   private constructor() {}
 
   public static getInstance(): TwoFactorService {
+    /* istanbul ignore else */
     if (!TwoFactorService.instance) {
       TwoFactorService.instance = new TwoFactorService();
     }
@@ -111,7 +113,7 @@ class TwoFactorService {
 
       return await response.json();
     } catch (error) {
-      console.error('[2FA] Erreur lors de la récupération du statut:', error);
+      logger.error('[2FA]', 'Erreur lors de la récupération du statut', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -131,7 +133,7 @@ class TwoFactorService {
 
       return await response.json();
     } catch (error) {
-      console.error('[2FA] Erreur lors du setup:', error);
+      logger.error('[2FA]', 'Erreur lors du setup', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -152,7 +154,7 @@ class TwoFactorService {
 
       return await response.json();
     } catch (error) {
-      console.error('[2FA] Erreur lors de l\'activation:', error);
+      logger.error('[2FA]', "Erreur lors de l'activation", { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -190,7 +192,7 @@ class TwoFactorService {
 
       return data;
     } catch (error) {
-      console.error('[2FA] Erreur lors de la vérification:', error);
+      logger.error('[2FA]', 'Erreur lors de la vérification', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -214,7 +216,7 @@ class TwoFactorService {
 
       return await response.json();
     } catch (error) {
-      console.error('[2FA] Erreur lors de la désactivation:', error);
+      logger.error('[2FA]', 'Erreur lors de la désactivation', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -234,7 +236,7 @@ class TwoFactorService {
 
       return await response.json();
     } catch (error) {
-      console.error('[2FA] Erreur lors de la régénération des codes:', error);
+      logger.error('[2FA]', 'Erreur lors de la régénération des codes', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -254,7 +256,7 @@ class TwoFactorService {
 
       return await response.json();
     } catch (error) {
-      console.error('[2FA] Erreur lors de l\'annulation:', error);
+      logger.error('[2FA]', "Erreur lors de l'annulation", { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',

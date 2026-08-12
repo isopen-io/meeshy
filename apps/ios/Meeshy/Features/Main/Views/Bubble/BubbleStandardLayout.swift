@@ -25,6 +25,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Enveloppe `Identifiable` d'un `SharedPlace` pour `.fullScreenCover(item:)` —
+/// `SharedPlace` (SDK) n'est pas `Identifiable` et n'a pas à l'être : l'identité
+/// d'un lieu affiché est sa paire de coordonnées.
+struct BubbleFullscreenPlace: Identifiable {
+    let place: SharedPlace
+    var id: String { "\(place.latitude),\(place.longitude)" }
+}
+
 struct BubbleStandardLayout: View {
     // MARK: - Inputs (data + visual context)
 
@@ -49,7 +57,7 @@ struct BubbleStandardLayout: View {
     let textTranslations: [MessageTranslation]
     let preferredTranslation: MessageTranslation?
     let showAvatar: Bool
-    let presenceState: PresenceState
+    let presenceState: PresenceState?
     let senderMoodEmoji: String?
     let senderStoryRingState: StoryRingState
     let allAudioItems: [ConversationViewModel.AudioItem]
@@ -94,6 +102,13 @@ struct BubbleStandardLayout: View {
     /// unchanged.
     let onPlayAudio: ((String) -> Void)?
     let onScrollToMessage: ((String) -> Void)?
+    /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
+    /// tels quels jusqu'à `AudioMediaView.conversationName` /
+    /// `.audioQueueTailProvider` (single-track ET carousel), pour que le
+    /// plein écran audio ouvert SANS lecture déjà active porte la même
+    /// carte Now Playing / avance auto que le chemin `playAudio` existant.
+    let conversationName: String?
+    let audioQueueTailProvider: ((String) -> [QueuedAudio])?
 
     // MARK: - Bindings (state owned by ThemedMessageBubble wrapper)
 
@@ -112,6 +127,12 @@ struct BubbleStandardLayout: View {
 
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
+    /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
+    /// `Spacer(minLength: 50)` d'alignement de la row pour que la vue épouse la
+    /// bulle. Défaut `false` — la cellule live garde ses spacers d'alignement.
+    var standalone: Bool = false
 
     // MARK: - Playback tracking
     //
@@ -122,6 +143,13 @@ struct BubbleStandardLayout: View {
     // bulle 10×/sec via le periodic time observer. Ici on s'abonne juste à
     // `$activeURL` qui ne ticke pas (change uniquement sur load/stop).
     @State private var inlineVideoActiveURL: String = ""
+
+    /// Lieu affiché en plein écran quand il vient de `message.location` (voie
+    /// serveur actuelle). Les anciennes pièces jointes `.location` du cache
+    /// local passent, elles, par `fullscreenLocationAttachment` (binding du
+    /// wrapper) — deux états distincts car les véhicules diffèrent
+    /// (`SharedPlace` vs `MessageAttachment`).
+    @State private var fullscreenPlace: BubbleFullscreenPlace?
 
     /// Whether an inline AVPlayer is currently mounted on this bubble.
     /// Read by the extension in `ThemedMessageBubble+Media.swift` to hide
@@ -230,6 +258,16 @@ struct BubbleStandardLayout: View {
         if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
             return nil
         }
+        // Link-preview bubbles host a self-loading OG card whose height changes
+        // when metadata lands (skeleton → populated card with a 2-line title +
+        // description + thumbnail) WITHOUT any `BubbleContent` change —
+        // `firstLinkURL` is identical before and after the fetch, so the
+        // content-keyed cache would return the stale skeleton-era height and the
+        // populated card would overflow the bubble frame (the misalignment seen
+        // on device). Measure live, like expandable bubbles above.
+        if content.text?.firstLinkURL != nil {
+            return nil
+        }
         return BubbleHeightCacheContext(messageId: content.messageId, content: content)
     }
 
@@ -276,6 +314,9 @@ struct BubbleStandardLayout: View {
     /// branch mirrors a child of the stack, so non-empty bubbles render
     /// exactly as before.
     private var hasBubbleBodyContent: Bool {
+        // Lieu porté par `message.location` (voie serveur actuelle) — la bulle
+        // a un corps à rendre même sans texte ni pièce jointe.
+        if content.location != nil { return true }
         if !nonMediaAttachments.isEmpty { return true }
         if !(content.text?.raw.isEmpty ?? true) { return true }
         if content.text?.firstLinkURL != nil { return true }
@@ -332,12 +373,58 @@ struct BubbleStandardLayout: View {
 
     private var reactionSummaries: [ReactionSummary] { content.reactions }
 
+    /// VoiceOver phrasing for the quoted-reply context of this bubble, injected
+    /// between the sender name and the body so the reading order is
+    /// expediteur -> [reponse a...] -> contenu. Returns nil when the bubble is
+    /// not a reply. The combined bubble element flattens the visual quote card's
+    /// own sub-views, so this is the only way the reply reaches VoiceOver.
+    private var replyAccessibilityLabel: String? {
+        guard let reply = content.reply?.reference else { return nil }
+        let author: String = reply.isMe
+            ? String(localized: "a11y.bubble.replyTo.you", bundle: .main)
+            : (reply.authorName.isEmpty
+                ? String(localized: "a11y.bubble.replyTo.unknown", bundle: .main)
+                : reply.authorName)
+        let excerpt = reply.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if excerpt.isEmpty {
+            return String(format: String(localized: "a11y.bubble.replyTo", bundle: .main), author)
+        }
+        return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
+    }
+
+    /// Mentions d'accessibilité des contenus non média : lieu + fichiers.
+    /// Pure et testable. Le lieu se déclenche sur `message.location` (voie
+    /// serveur actuelle, `hasSharedPlace`) OU sur une ancienne pièce jointe
+    /// `.location` du cache local — jamais les deux à la fois, le builder
+    /// exclut la pièce jointe quand `message.location` est présent
+    /// (cf. BubbleContentBuilder), donc la mention n'apparaît qu'une fois.
+    static func nonMediaAccessibilityParts(
+        hasSharedPlace: Bool,
+        nonMedia: [MessageAttachment]
+    ) -> [String] {
+        var parts: [String] = []
+        if hasSharedPlace {
+            parts.append(String(localized: "a11y.message.location", bundle: .main))
+        }
+        for att in nonMedia {
+            if att.type == .location {
+                parts.append(String(localized: "a11y.message.location", bundle: .main))
+            } else {
+                parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
+            }
+        }
+        return parts
+    }
+
     private var messageAccessibilityLabel: String {
         var parts: [String] = []
         if !content.isMe, let senderName = content.senderName {
             parts.append(senderName)
         } else if !content.isMe {
-            parts.append("Inconnu")
+            parts.append(String(localized: "a11y.message.unknown_sender", bundle: .main))
+        }
+        if let replyLabel = replyAccessibilityLabel {
+            parts.append(replyLabel)
         }
         if let raw = content.text?.raw, !raw.isEmpty {
             parts.append(raw)
@@ -345,29 +432,37 @@ struct BubbleStandardLayout: View {
         if !visualAttachments.isEmpty {
             let imageCount = visualAttachments.filter { $0.type == .image }.count
             let videoCount = visualAttachments.filter { $0.type == .video }.count
-            if imageCount > 0 { parts.append(imageCount == 1 ? "une image" : "\(imageCount) images") }
-            if videoCount > 0 { parts.append(videoCount == 1 ? "une video" : "\(videoCount) videos") }
-        }
-        if !audioAttachments.isEmpty {
-            parts.append(audioAttachments.count == 1 ? "un audio" : "\(audioAttachments.count) audios")
-        }
-        if !nonMediaAttachments.isEmpty {
-            for att in nonMediaAttachments {
-                if att.type == .location { parts.append("position partagee") }
-                else { parts.append("fichier \(att.originalName)") }
+            if imageCount > 0 {
+                parts.append(String(format: String(localized: "a11y.message.images", bundle: .main), imageCount))
+            }
+            if videoCount > 0 {
+                parts.append(String(format: String(localized: "a11y.message.videos", bundle: .main), videoCount))
             }
         }
+        if !audioAttachments.isEmpty {
+            parts.append(String(format: String(localized: "a11y.message.audios", bundle: .main), audioAttachments.count))
+        }
+        parts.append(contentsOf: Self.nonMediaAccessibilityParts(
+            hasSharedPlace: content.location != nil,
+            nonMedia: nonMediaAttachments
+        ))
         parts.append(content.meta.timeString)
         if content.isMe {
             parts.append(deliveryStatusAccessibilityLabel)
         }
-        if content.editedAt != nil { parts.append("modifie") }
-        if content.isPinned { parts.append("epingle") }
-        if message.expiresAt != nil { parts.append("ephemere") }
+        if content.editedAt != nil {
+            parts.append(String(localized: "a11y.message.edited", bundle: .main))
+        }
+        if content.isPinned {
+            parts.append(String(localized: "a11y.message.pinned", bundle: .main))
+        }
+        if message.expiresAt != nil {
+            parts.append(String(localized: "a11y.message.ephemeral", bundle: .main))
+        }
         let summaries = content.reactions
         if !summaries.isEmpty {
             let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
-            parts.append("reactions: \(reactionText)")
+            parts.append(String(format: String(localized: "a11y.message.reactions", bundle: .main), reactionText))
         }
         return parts.joined(separator: ", ")
     }
@@ -377,7 +472,7 @@ struct BubbleStandardLayout: View {
     var body: some View {
         let isMe = content.isMe
         HStack(alignment: .bottom, spacing: 0) {
-            if isMe { Spacer(minLength: 50) }
+            if isMe && !standalone { Spacer(minLength: 50) }
 
             VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
                 // Pin indicator
@@ -421,7 +516,7 @@ struct BubbleStandardLayout: View {
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
                             .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Hidden content", bundle: .main))
-                            .accessibilityHint("Toucher pour reveler le contenu")
+                            .accessibilityHint(String(localized: "bubble.content.hidden.hint", defaultValue: "Toucher pour révéler le contenu", bundle: .main))
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
@@ -462,9 +557,14 @@ struct BubbleStandardLayout: View {
             // (UserIdentityBar's greedy Spacer is collapsed via
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
-            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
+            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
+            // Standalone (aperçu) : hug jusqu'au cap. `.fixedSize(horizontal:)`
+            // fait remonter la largeur idéale du contenu (clampée au cap par le
+            // `.frame(maxWidth:)` ci-dessus) → une bulle courte n'occupe plus
+            // toute la largeur du cap, un texte long wrappe toujours au cap.
+            .fixedSize(horizontal: standalone, vertical: false)
 
-            if !isMe { Spacer(minLength: 50) }
+            if !isMe && !standalone { Spacer(minLength: 50) }
         }
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
@@ -505,6 +605,10 @@ struct BubbleStandardLayout: View {
                 // 5.2 — cible plein écran = largeur écran × scale. La variante la
                 // plus petite `>=` cette cible évite de charger l'original 4000px
                 // quand une 1920 suffit ; sans variante → original.
+                // L'ÉCRAN et non la fenêtre, délibérément : c'est un budget de
+                // décodage, pas une métrique de layout. Sur-décoder est invisible,
+                // sous-décoder ne l'est pas — et la fenêtre peut grandir jusqu'à
+                // l'écran (Stage Manager) après le choix de la variante.
                 let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
                 let chosen = original.isEmpty ? "" : ImageVariantSelector.bestImageURL(
                     variants: attachment.imageVariants ?? [],
@@ -513,38 +617,48 @@ struct BubbleStandardLayout: View {
                     targetWidthPx: targetPx
                 )
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                ImageFullscreen(
-                    imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
-                    accentColor: contactColor,
-                    caption: caption,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                )
+                // Composant UNIFIÉ « Enregistrer » : le flow vit DANS le cover
+                // pour que la sheet de destinations se présente par-dessus.
+                SavableMediaFullscreen(attachment: attachment) { requestSave in
+                    ImageFullscreen(
+                        imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
+                        accentColor: contactColor,
+                        caption: caption,
+                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                        onSaveRequested: requestSave
+                    )
+                }
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                     let resolvedShareURL = MeeshyConfig.resolveMediaURL(attachment.fileUrl)
-                    VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-                        MeeshyVideoPlayer(
-                            attachment: attachment,
-                            style: .fullscreen,
-                            controls: .fullscreenDefault,
-                            accentColor: contactColor,
-                            frame: .flat,
-                            availability: availability,
-                            performance: .fullscreen,
-                            author: makeFullscreenVideoAuthor(),
-                            caption: caption,
-                            fileName: attachment.originalName,
-                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
-                            onDownload: onDownload,
-                            onShare: resolvedShareURL.map { url in
-                                {
-                                    shareURL = url
-                                    showShareSheet = true
-                                }
-                            },
-                            onClose: { fullscreenAttachment = nil }
-                        )
+                    // Composant UNIFIÉ « Enregistrer » : flow DANS le cover
+                    // (miroir du case .image ci-dessus).
+                    SavableMediaFullscreen(attachment: attachment) { requestSave in
+                        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                            MeeshyVideoPlayer(
+                                attachment: attachment,
+                                style: .fullscreen,
+                                controls: .fullscreenDefault,
+                                accentColor: contactColor,
+                                frame: .flat,
+                                availability: availability,
+                                performance: .fullscreen,
+                                author: makeFullscreenVideoAuthor(),
+                                caption: caption,
+                                fileName: attachment.originalName,
+                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                                onDownload: onDownload,
+                                onShare: resolvedShareURL.map { url in
+                                    {
+                                        shareURL = url
+                                        showShareSheet = true
+                                    }
+                                },
+                                onClose: { fullscreenAttachment = nil },
+                                onSaveRequested: requestSave
+                            )
+                        }
                     }
                 } else {
                     Color.black.onAppear { fullscreenAttachment = nil }
@@ -564,6 +678,19 @@ struct BubbleStandardLayout: View {
                 )
             }
         }
+        .fullScreenCover(item: $fullscreenPlace) { item in
+            // Plein écran du lieu `message.location` — mêmes primitives que la
+            // branche par pièce jointe ci-dessus, mais avec le nom et
+            // l'adresse portés par `SharedPlace`.
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: contactColor,
+                senderName: content.senderName
+            )
+        }
     }
 
     // MARK: - Content stack (text + media + reply, with blur mask)
@@ -578,8 +705,14 @@ struct BubbleStandardLayout: View {
                     carouselView
                         .background(Color.black)
                         .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        // Le pager du carrousel possède le glissement
+                        // horizontal : le BubbleSwipeContainer parent
+                        // désengage reply/forward tant que le carrousel est
+                        // ouvert (retour grille → branche démontée →
+                        // préférence retombe à false).
+                        .preference(key: BubbleInlinePagingPreferenceKey.self, value: true)
                 } else if content.visualHostsReply, let reply = content.reply {
                     // Visual-only reply : conteneur unifié citation + grille,
                     // bordure commune RR16 — aucune chat bubble parasite.
@@ -588,7 +721,7 @@ struct BubbleStandardLayout: View {
                     visualMediaGrid
                         .background(Color.black)
                         .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .overlay(alignment: .bottomTrailing) {
                             // Footer caché pendant la lecture d'une vidéo
                             // inline : on libère le coin droit pour les
@@ -686,7 +819,12 @@ struct BubbleStandardLayout: View {
                     },
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
-                    onPlayAudio: onPlayAudio
+                    onPlayAudio: onPlayAudio,
+                    conversationName: conversationName,
+                    audioQueueTailProvider: audioQueueTailProvider,
+                    parentIsMe: content.isMe,
+                    voiceConsentMissing: voiceConsentMissing,
+                    onTapConsentNotice: onTapConsentNotice
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
@@ -766,7 +904,7 @@ struct BubbleStandardLayout: View {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                    .font(.system(size: emojiFontSize))
+                        .font(MeeshyFont.relative(emojiFontSize))
                     .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .topLeading) {
                         if content.editedAt != nil {
@@ -815,8 +953,32 @@ struct BubbleStandardLayout: View {
                 }
         }
 
+        // Edited badge — inline, directly BELOW the quoted reply (when present)
+        // and above the body. Was a `.topLeading` overlay offset by a hardcoded
+        // `reply ? 52` value that mis-fired whenever the quote was taller than
+        // 52pt (sender name + 2 preview lines), overlapping the quote. Inline
+        // placement tracks the real reply height with no magic numbers.
+        if content.editedAt != nil {
+            editedIndicator
+        }
+
         if hasBubbleBodyContent {
             VStack(alignment: .leading, spacing: 8) {
+                // Lieu porté par `message.location` (voie serveur actuelle).
+                // Rendu UNE seule fois : le builder exclut la pièce jointe
+                // `.location` de `content.attachments` quand le message porte
+                // les deux (cf. BubbleContentBuilder), donc cette branche et
+                // la branche par pièce jointe ci-dessous sont exclusives.
+                if let place = content.location {
+                    LocationMessageView(
+                        place: place,
+                        accentColor: contactColor,
+                        onTapFullscreen: {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
+                    )
+                }
+
                 ForEach(nonMediaAttachments) { attachment in
                     attachmentView(attachment)
                 }
@@ -833,7 +995,7 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(.system(size: emojiFontSize))
+                            .font(MeeshyFont.relative(emojiFontSize))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView
@@ -843,7 +1005,10 @@ struct BubbleStandardLayout: View {
                 // Inline OpenGraph preview for the first URL in the
                 // effective (possibly translated) content. Self-loading.
                 // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
-                if let url = content.text?.firstLinkURL {
+                if let video = content.text?.embeddedVideo {
+                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor), trackedURL: content.text?.embedTrackedURL)
+                        .padding(.top, 4)
+                } else if let url = content.text?.firstLinkURL {
                     LinkPreviewCard(
                         urlString: url,
                         accentColor: contactColor,
@@ -861,7 +1026,6 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var textBubbleContent: some View {
-        let hasEdited = content.editedAt != nil
         // Body + footer are stacked by `BubbleBodyFooterLayout`, not a plain
         // VStack. The footer carries a trailing Spacer — language flags on the
         // leading edge, timestamp + delivery check on the trailing edge. In a
@@ -887,14 +1051,6 @@ struct BubbleStandardLayout: View {
             // est toujours adapté ici — le widget média qui héberge sa propre
             // citation gère son footer en interne (bottomSlot ou overlay).
             standardFooter
-        }
-        .padding(.top, hasEdited ? 12 : 0)
-        .overlay(alignment: .topLeading) {
-            if hasEdited {
-                editedIndicator
-                    .padding(.leading, 12)
-                    .padding(.top, 6 + (content.reply != nil ? 52 : 0))
-            }
         }
         // FAILED outgoing send — reserve a trailing strip and glue the retry
         // band INTO it as an integrated edge tab (clipped to the bubble's rounded
@@ -954,7 +1110,8 @@ struct BubbleStandardLayout: View {
             flags: showFlags
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
-            showsTranslate: showTranslation
+            showsTranslate: showTranslation,
+            sendStartedAt: message.createdAt
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
@@ -1027,8 +1184,14 @@ struct BubbleStandardLayout: View {
         content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
     }
 
+    /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
+    /// contrastait qu'à 2.98:1 sur le fond clair de l'app.
     private var mentionTint: Color {
-        MeeshyColors.indigo400 // distinct des liens URL
+        MeeshyColors.mentionColor(isDark: theme.mode.isDark)
+    }
+
+    private var hashtagTint: Color {
+        MeeshyColors.hashtagColor(isDark: theme.mode.isDark)
     }
 
     @ViewBuilder
@@ -1039,7 +1202,9 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
-            linkTint: linkTint
+            hashtagTint: hashtagTint,
+            linkTint: linkTint,
+            trackedLinks: content.text?.trackedLinks ?? [:]
         )
     }
 
@@ -1055,7 +1220,9 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
-                linkTint: linkTint
+                hashtagTint: hashtagTint,
+                linkTint: linkTint,
+                trackedLinks: content.text?.trackedLinks ?? [:]
             )
         }
     }
@@ -1183,7 +1350,11 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
-                embedsCaptionInWidget: embedsCaption
+                conversationName: conversationName,
+                audioQueueTailProvider: audioQueueTailProvider,
+                embedsCaptionInWidget: embedsCaption,
+                voiceConsentMissing: voiceConsentMissing,
+                onTapConsentNotice: onTapConsentNotice
             )
             .equatable()
 
@@ -1357,7 +1528,16 @@ struct BubbleBodyFooterLayout: Layout {
 
     private func measuredSize(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
         guard let body = subviews.first else { return .zero }
-        let bodyProbe = body.sizeThatFits(proposal)
+        // Probe the body's INTRINSIC height (`height: nil`), never the proposed
+        // height. A link-preview body hosts a `LinkPreviewCard` whose
+        // `.frame(minHeight: 64)` has no maximum, so when handed the incoming
+        // proposal's height it grows to FILL it — and since this measured size
+        // becomes the parent's next proposal, the height runs away in a feedback
+        // loop (observed: a 213→383 inflation, leaving ~170pt of empty bubble
+        // that the next message overlapped into). `placeSubviews` already probes
+        // with `height: nil`; measuring the same way here keeps the reported
+        // height equal to the placed height (no cell-height drift).
+        let bodyProbe = body.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
         guard subviews.count > 1 else { return bodyProbe }
 
         let footer = subviews[1]

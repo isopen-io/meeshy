@@ -23,10 +23,11 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import {
   SocketCommentReactionAddSchema,
   SocketCommentReactionRemoveSchema,
+  SocketCommentReactionRequestSyncSchema,
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { canUserViewPost } from '../../services/posts/postVisibility.js';
+import { loadCommentPostAcl, canUserInteractWithPost } from '../../services/posts/postVisibility.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -113,6 +114,17 @@ export class CommentReactionHandler {
         return;
       }
 
+      // Le fil hérite de l'audience de son post, et réagir est une INTERACTION.
+      // Le post est résolu DEPUIS le commentaire : le `postId` du payload est
+      // fourni par le client, il ne sert qu'à adresser la room de diffusion.
+      // Refus indistinct d'un commentaire inexistant — pas d'oracle.
+      const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
+      if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-add denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Comment not found' });
+        return;
+      }
+
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
         userId,
@@ -136,20 +148,38 @@ export class CommentReactionHandler {
         validated.postId
       );
 
+      // Contrat ACK == broadcast : on renvoie l'`updateEvent` (commentId, postId,
+      // userId, emoji, action, aggregation, timestamp) — le MÊME objet que le
+      // broadcast `comment:reaction-added`. Le web ignore `data`, l'iOS le décode en
+      // `SocketCommentReactionUpdateEvent`. La `reaction` brute cassait le décodage iOS.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: reaction,
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
+      if (reaction.unchanged) {
+        // Idempotent no-op: the user already had exactly this emoji on this comment
+        // (re-fire — optimistic double-fire, a socket retry after a lost ACK, or a
+        // second device echoing the same tap). Nothing changed in the DB, so the
+        // success ACK above already gives the client its desired end-state. Skip the
+        // broadcast and the author notification — re-emitting them spams every
+        // post-room socket and re-notifies the author for a reaction that never
+        // changed state. Mirrors ReactionHandler.handleReactionAdd's `unchanged`
+        // guard and this handler's own already-absent guard on remove.
+        return;
+      }
+
       this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
-      await this._createCommentReactionNotification(
+      // Fire-and-forget: notification errors must not reach the outer catch after
+      // success was already confirmed to the client.
+      this._createCommentReactionNotification(
         validated.commentId,
         validated.postId,
         validated.emoji,
         userId
-      );
+      ).catch(err => this.logger.error('comment reaction notification failed', err, { commentId: validated.commentId }));
     } catch (error: unknown) {
       this.logger.error('Failed to add comment reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -207,6 +237,14 @@ export class CommentReactionHandler {
         return;
       }
 
+      // Retirer reste une interaction avec le fil — même garde que la pose.
+      const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
+      if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-remove denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Comment not found' });
+        return;
+      }
+
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
         userId,
@@ -214,11 +252,12 @@ export class CommentReactionHandler {
       });
 
       if (!removed) {
-        const errorResponse: SocketIOResponse<unknown> = {
-          success: false,
-          error: 'Reaction not found',
-        };
-        if (callback) callback(errorResponse);
+        // Idempotent: the reaction is already absent — the caller's desired
+        // end-state is achieved. Reply success (no broadcast, nothing changed)
+        // instead of an error, which the client would treat as a failed un-react
+        // and roll the optimistic removal back, re-showing a reaction that is
+        // gone. Mirrors ReactionHandler.handleReactionRemove (message reactions).
+        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
         return;
       }
 
@@ -230,9 +269,11 @@ export class CommentReactionHandler {
         validated.postId
       );
 
+      // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
+      // identique au broadcast `comment:reaction-removed`, au lieu d'un simple {message}.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: { message: 'Reaction removed successfully' },
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
@@ -256,6 +297,17 @@ export class CommentReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
+      // Validate at the socket boundary like every sibling method — otherwise a
+      // malformed payload reaches `CommentReactionService.validateCommentId`, whose
+      // error-message template dereferences `commentId.substring(...)` and throws
+      // an opaque `TypeError` instead of the intended clean validation error.
+      const schemaValidation = validateSocketEvent(SocketCommentReactionRequestSyncSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         const errorResponse: SocketIOResponse<unknown> = {
@@ -269,8 +321,14 @@ export class CommentReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
+      if (!syncAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       const reactionSync = await this.commentReactionService.getCommentReactions({
-        commentId: data.commentId,
+        commentId: validated.commentId,
         currentUserId: userId,
       });
 
@@ -321,7 +379,6 @@ export class CommentReactionHandler {
     const postAuthorName = post?.author?.displayName?.trim()
       || post?.author?.username?.trim()
       || '';
-    const isStory = post?.type === 'STORY';
 
     this.notificationService
       .createCommentReactionNotification({
@@ -332,21 +389,12 @@ export class CommentReactionHandler {
         reactionEmoji: emoji,
         commentPreview: comment.content?.slice(0, 80) ?? '',
         postAuthorName,
-        isStory,
+        // Forward the real post type (mirror PostReactionHandler) so a reaction on a
+        // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.
+        postType: post?.type,
       })
       .catch((error) => {
         this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });
       });
-  }
-
-  private async _canUserViewPost(
-    post: {
-      authorId: string;
-      visibility: import('@meeshy/shared/prisma/client').PostVisibility;
-      visibilityUserIds: string[];
-    },
-    userId: string
-  ): Promise<boolean> {
-    return canUserViewPost(this.prisma, post, userId);
   }
 }

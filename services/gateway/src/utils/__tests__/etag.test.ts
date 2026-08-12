@@ -32,6 +32,13 @@ describe('ifNoneMatchMatches', () => {
     ['*', true],
     ['"nope"', false],
     [['"x"', '"abc"'], true],
+    // RFC 7232 §3.2 — If-None-Match uses the WEAK comparison function: a client
+    // (or proxy) that presents the strong tag weakened to `W/"abc"` still matches.
+    ['W/"abc"', true],
+    ['W/"x", W/"abc"', true],
+    ['"x", W/"abc"', true],
+    [['W/"x"', 'W/"abc"'], true],
+    ['W/"nope"', false],
   ])('header %p → %p', (header, expected) => {
     expect(ifNoneMatchMatches(header as string | string[] | undefined, etag)).toBe(expected);
   });

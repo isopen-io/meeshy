@@ -44,7 +44,7 @@ interface HeaderToolbarProps {
   onToggleArchive: () => void;
   onShareConversation: () => void;
   onOpenSearch?: () => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string) => string;
 }
 
 export const HeaderToolbar = memo(function HeaderToolbar({
@@ -97,25 +97,25 @@ export const HeaderToolbar = memo(function HeaderToolbar({
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="inline-flex items-center justify-center rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    aria-label={t('conversationHeader.startCall') || 'Appeler'}
+                    aria-label={t('conversationHeader.startCall', 'Call')}
                   >
                     <Phone className="h-5 w-5" aria-hidden="true" />
                   </motion.button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{t('conversationHeader.startCall') || 'Appeler'}</p>
+                <p>{t('conversationHeader.startCall', 'Call')}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => onStartCall('audio')}>
               <Phone className="h-4 w-4 mr-2" aria-hidden="true" />
-              {t('conversationHeader.startAudioCall') || 'Appel audio'}
+              {t('conversationHeader.startAudioCall', 'Start audio call')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onStartCall('video')}>
               <Video className="h-4 w-4 mr-2" aria-hidden="true" />
-              {t('conversationHeader.startVideoCall') || 'Appel vidéo'}
+              {t('conversationHeader.startVideoCall', 'Start video call')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -165,13 +165,13 @@ export const HeaderToolbar = memo(function HeaderToolbar({
                 whileTap={{ scale: 0.95 }}
                 onClick={onOpenSearch}
                 className="inline-flex items-center justify-center rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-label={t('conversationHeader.searchMessages') || 'Rechercher'}
+                aria-label={t('conversationHeader.searchMessages', 'Search in conversation')}
               >
                 <Search className="h-5 w-5" aria-hidden="true" />
               </motion.button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{t('conversationHeader.searchMessages') || 'Rechercher dans la conversation'}</p>
+              <p>{t('conversationHeader.searchMessages', 'Search in conversation')}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

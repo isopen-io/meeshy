@@ -400,6 +400,32 @@ describe('Web Crypto Adapter Module', () => {
 
       expect(decrypted).toEqual(plaintext);
     });
+
+    it('should throw error for invalid key type in decrypt', async () => {
+      const key = await adapter.generateEncryptionKey();
+      const iv = adapter.generateRandomBytes(12);
+      const plaintext = new Uint8Array([1, 2, 3]);
+      const encrypted = await adapter.encrypt(plaintext, key, iv);
+
+      const invalidKey = { type: 'invalid' };
+
+      await expect(adapter.decrypt(encrypted, invalidKey as any)).rejects.toThrow(
+        'Invalid key type'
+      );
+    });
+
+    it('should wrap decryption errors with descriptive message', async () => {
+      const key = await adapter.generateEncryptionKey();
+      const iv = adapter.generateRandomBytes(12);
+      const plaintext = new Uint8Array([1, 2, 3]);
+      const encrypted = await adapter.encrypt(plaintext, key, iv);
+
+      mockDecrypt.mockRejectedValueOnce(new Error('tampered data'));
+
+      await expect(adapter.decrypt(encrypted, key)).rejects.toThrow(
+        'Decryption failed: tampered data'
+      );
+    });
   });
 
   describe('exportKey and importKey', () => {

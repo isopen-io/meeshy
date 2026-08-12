@@ -12,15 +12,49 @@ struct LinkPreviewCard: View {
     let accentColor: String
     let isDark: Bool
 
-    @ObservedObject private var store = LinkPreviewStore.shared
+    // NOT an `@ObservedObject`: observing the store's global `@Published cache`
+    // made EVERY link card in the conversation re-evaluate its body whenever
+    // ANY URL's metadata landed. The card now drives its own LOCAL state from
+    // an awaitable per-URL resolve, so it re-renders only when ITS url resolves.
+    private let store = LinkPreviewStore.shared
+    @State private var metadata: LinkMetadata?
+    @State private var didResolve = false
     @State private var showSafari = false
-
-    private var metadata: LinkMetadata? {
-        store.metadata(for: urlString)
-    }
 
     private var accent: Color { Color(hex: accentColor) }
     private var fallbackHost: String { URL(string: urlString)?.host ?? urlString }
+
+    // VoiceOver identity, mirroring the three visual states of `content`. The
+    // populated card reads its metadata as a sentence; the terminal and loading
+    // shells fall back to the host so the element is never anonymous.
+    private var accessibilityLabelText: String {
+        if let meta = metadata, meta.hasAnyVisibleField {
+            let joined = [
+                meta.siteName?.nilIfBlank ?? meta.host,
+                meta.title?.nilIfBlank,
+                meta.description?.nilIfBlank
+            ]
+            .compactMap { $0 }
+            .joined(separator: ". ")
+            return String(localized: "linkpreview.a11y.label",
+                          defaultValue: "Aperçu du lien : \(joined)",
+                          bundle: .main)
+        }
+        if didResolve {
+            return String(localized: "linkpreview.a11y.label-failed",
+                          defaultValue: "Lien vers \(fallbackHost)",
+                          bundle: .main)
+        }
+        return String(localized: "linkpreview.a11y.label-loading",
+                      defaultValue: "Aperçu du lien en cours de chargement, \(fallbackHost)",
+                      bundle: .main)
+    }
+
+    private var accessibilityHintText: String {
+        String(localized: "linkpreview.a11y.hint",
+               defaultValue: "Ouvre le lien dans le navigateur",
+               bundle: .main)
+    }
 
     var body: some View {
         Button {
@@ -30,7 +64,23 @@ struct LinkPreviewCard: View {
             content
         }
         .buttonStyle(.plain)
-        .onAppear { store.requestMetadata(for: urlString) }
+        // VoiceOver swept the card as disconnected fragments (uppercase site
+        // name, title, description, thumbnail) with no coherent identity, no
+        // "opens in browser" affordance, and no link trait. Collapse the
+        // fragments into one element that reads the preview as a sentence and
+        // announces itself as a link.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint(accessibilityHintText)
+        .accessibilityAddTraits(.isLink)
+        // Resolve OG metadata into LOCAL state, keyed by url so it runs once per
+        // URL (and re-runs only if this recycled cell rebinds to a different
+        // message). The store returns cached/known-failed data instantly; a real
+        // network fetch happens at most once per URL across the conversation.
+        .task(id: urlString) {
+            metadata = await store.resolvedMetadata(for: urlString)
+            didResolve = true
+        }
         .sheet(isPresented: $showSafari) {
             if let url = URL(string: urlString) {
                 SafariView(url: url)
@@ -43,6 +93,11 @@ struct LinkPreviewCard: View {
     private var content: some View {
         if let meta = metadata, meta.hasAnyVisibleField {
             populatedCard(meta)
+        } else if didResolve {
+            // Resolved with no usable metadata (404, non-HTML, empty OG): a
+            // STATIC terminal card — never an endless spinner. The old skeleton
+            // span forever for permanently-failing URLs.
+            failedCard
         } else {
             skeletonCard
         }
@@ -57,7 +112,7 @@ struct LinkPreviewCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let siteName = meta.siteName?.nilIfBlank ?? meta.host {
                     Text(siteName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(accent)
                         .textCase(.uppercase)
                         .tracking(0.3)
@@ -65,13 +120,13 @@ struct LinkPreviewCard: View {
                 }
                 if let title = meta.title?.nilIfBlank {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .lineLimit(2)
                 }
                 if let description = meta.description?.nilIfBlank {
                     Text(description)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.7))
                         .lineLimit(2)
                 }
@@ -99,11 +154,11 @@ struct LinkPreviewCard: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 6) {
                 Text(fallbackHost)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
@@ -113,6 +168,40 @@ struct LinkPreviewCard: View {
                 .scaleEffect(0.6)
                 .padding(.trailing, 10)
         }
+        // Match `populatedCard`'s floor so the skeleton → populated transition
+        // doesn't change the card's height and shift the bubble on load.
+        .frame(minHeight: 64)
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// Terminal state when the URL has no usable OG metadata: same shell as the
+    /// skeleton (host + url, stable 64-pt floor) but a static link glyph instead
+    /// of a spinner — the card stops "loading forever".
+    private var failedCard: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(accent)
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(fallbackHost)
+                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+                Text(urlString)
+                    .font(MeeshyFont.relative(11))
+                    .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
+                    .lineLimit(1)
+            }
+            .padding(.vertical, 8)
+            Spacer(minLength: 0)
+            Image(systemName: "link")
+                .font(MeeshyFont.relative(14, weight: .semibold))
+                .foregroundStyle(accent.opacity(0.6))
+                .padding(.trailing, 12)
+        }
+        .frame(minHeight: 64)
         .background(cardBackground)
         .overlay(cardBorder)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -133,7 +222,7 @@ struct LinkPreviewCard: View {
                 .fill(accent.opacity(0.1))
                 .overlay(
                     Image(systemName: "link")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundStyle(accent.opacity(0.6))
                 )
         }

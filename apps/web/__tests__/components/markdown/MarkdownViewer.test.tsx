@@ -58,6 +58,24 @@ jest.mock('@/components/ui/button', () => ({
   ),
 }));
 
+// Mock useI18n hook with markdown namespace translations
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'markdown.loadError': 'Impossible de charger le fichier',
+        'markdown.viewFormatted': 'Vue formatée',
+        'markdown.viewRaw': 'Vue brute',
+        'markdown.fullscreen': 'Ouvrir en plein écran',
+        'markdown.download': 'Télécharger',
+        'markdown.delete': 'Supprimer ce fichier Markdown',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
 // Mock fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;

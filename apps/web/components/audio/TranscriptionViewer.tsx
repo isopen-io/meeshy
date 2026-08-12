@@ -481,45 +481,45 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
                     {hasVoiceProfile && voiceDetails ? (
                       <div className="space-y-2 text-xs">
                         <div className="font-semibold border-b pb-1">
-                          Profil vocal{isUser ? ' - Vous' : ''}
+                          {isUser ? t('transcription.voiceProfile.titleYou') : t('transcription.voiceProfile.title')}
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                          <div className="text-gray-500">Pitch moyen:</div>
+                          <div className="text-muted-foreground">{t('transcription.voiceProfile.pitch')}</div>
                           <div className="font-mono">{voiceDetails.pitch}</div>
 
-                          <div className="text-gray-500">Plage:</div>
+                          <div className="text-muted-foreground">{t('transcription.voiceProfile.range')}</div>
                           <div className="font-mono text-[10px]">{voiceDetails.pitchRange}</div>
 
-                          <div className="text-gray-500">Genre:</div>
+                          <div className="text-muted-foreground">{t('transcription.voiceProfile.gender')}</div>
                           <div className="capitalize">{voiceDetails.gender}</div>
 
-                          <div className="text-gray-500">Âge:</div>
+                          <div className="text-muted-foreground">{t('transcription.voiceProfile.age')}</div>
                           <div className="capitalize">{voiceDetails.ageRange}</div>
 
-                          <div className="text-gray-500">Type vocal:</div>
+                          <div className="text-muted-foreground">{t('transcription.voiceProfile.voiceType')}</div>
                           <div className="capitalize text-[10px]">{voiceDetails.voiceType}</div>
 
                           {voiceDetails.quality && (
                             <>
-                              <div className="text-gray-500">Qualité (HNR):</div>
+                              <div className="text-muted-foreground">{t('transcription.voiceProfile.quality')}</div>
                               <div className="font-mono">{voiceDetails.quality}</div>
                             </>
                           )}
                         </div>
-                        <div className="text-[10px] text-gray-400 pt-1 border-t">
-                          Temps de parole: {Math.round(speaker.speakingTimeMs / 1000)}s
-                          {speaker.isPrimary && ' • Locuteur principal'}
+                        <div className="text-[10px] text-muted-foreground pt-1 border-t">
+                          {t('transcription.voiceProfile.speakingTime', { seconds: Math.round(speaker.speakingTimeMs / 1000) })}
+                          {speaker.isPrimary && ` • ${t('transcription.voiceProfile.primarySpeaker')}`}
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-2 text-xs">
-                        <div className="font-semibold">Locuteur inconnu</div>
-                        <div className="text-gray-400 italic">
-                          Créez une identité vocale pour vous identifier et voir les détails
+                        <div className="font-semibold">{t('transcription.voiceProfile.unknownSpeaker')}</div>
+                        <div className="text-muted-foreground italic">
+                          {t('transcription.voiceProfile.createIdentity')}
                         </div>
-                        <div className="text-[10px] text-gray-400 pt-1 border-t">
-                          Temps de parole: {Math.round(speaker.speakingTimeMs / 1000)}s
-                          {speaker.isPrimary && ' • Locuteur principal'}
+                        <div className="text-[10px] text-muted-foreground pt-1 border-t">
+                          {t('transcription.voiceProfile.speakingTime', { seconds: Math.round(speaker.speakingTimeMs / 1000) })}
+                          {speaker.isPrimary && ` • ${t('transcription.voiceProfile.primarySpeaker')}`}
                         </div>
                       </div>
                     )}

@@ -438,16 +438,19 @@ describe('LanguageSelectionMessageView', () => {
     });
 
     it('devrait afficher "All languages translated" si toutes les langues sont traduites', () => {
+      // Use jest.requireActual to get the real SUPPORTED_LANGUAGES (bypassing the mock)
+      // since the component also uses the real module and we need translations for all languages
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { SUPPORTED_LANGUAGES: realLanguages } = jest.requireActual('@meeshy/shared/utils/languages');
+      const originalLanguage = 'en';
+      const translations = realLanguages
+        .filter((lang: { code: string }) => lang.code !== originalLanguage)
+        .map((lang: { code: string }) => createMockTranslation({ language: lang.code }));
+
       renderLanguageView({
         message: createMockMessage({
-          originalLanguage: 'en',
-          translations: [
-            createMockTranslation({ language: 'fr' }),
-            createMockTranslation({ language: 'es' }),
-            createMockTranslation({ language: 'de' }),
-            createMockTranslation({ language: 'it' }),
-            createMockTranslation({ language: 'pt' }),
-          ],
+          originalLanguage,
+          translations,
         }),
       });
 

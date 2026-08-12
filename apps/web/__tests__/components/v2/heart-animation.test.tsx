@@ -10,6 +10,34 @@ import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        'post.like': 'Like post',
+        'post.unlike': 'Unlike post',
+        'post.pinned': 'Pinned',
+        'post.menu': 'Post menu',
+        'post.edit': 'Edit',
+        'post.pin': 'Pin',
+        'post.unpin': 'Unpin',
+        'post.delete': 'Delete',
+        'post.repost': 'Repost',
+        'post.bookmark': 'Bookmark',
+        'post.removeBookmark': 'Remove bookmark',
+        'post.translate': 'Translate',
+        'post.translatePost': 'Translate post',
+      };
+      return map[key] ?? key;
+    },
+    tArray: () => [],
+    locale: 'en',
+    currentLanguage: 'en',
+    setLocale: () => {},
+    isLoading: false,
+  }),
+}));
+
 jest.mock('@/components/v2/Avatar', () => ({
   Avatar: ({ name }: { name: string }) => <div data-testid="avatar">{name}</div>,
 }));

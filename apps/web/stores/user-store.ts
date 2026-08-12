@@ -99,11 +99,14 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
           regionalLanguage: 'fr',
           autoTranslateEnabled: true,
           isOnline: updates.isOnline ?? false,
-          lastActiveAt: updates.lastActiveAt || new Date(),
+          // A missing lastActiveAt must stay absent — never fabricate now(),
+          // which would make getUserStatus decay to 'online' for an offline
+          // contact whose "last seen" is hidden by privacy prefs.
+          lastActiveAt: updates.lastActiveAt,
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date(),
-        } as User;
+        } as unknown as User;
 
     const newMap = new Map(state.usersMap);
     newMap.set(userId, updatedUser);
@@ -120,7 +123,12 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   },
 
   triggerStatusTick: () => {
-    set({ _lastStatusUpdate: Date.now() });
+    // _lastStatusUpdate sert de signal de re-render pour useUserStatusTick.
+    // Date.now() seul peut renvoyer la meme valeur que le mergeParticipants qui
+    // precede (meme milliseconde) : le selecteur Zustand ne voit alors aucun
+    // changement et le decay temporel n'est jamais recalcule. On garantit une
+    // valeur strictement croissante pour toujours declencher le re-render.
+    set(state => ({ _lastStatusUpdate: Math.max(Date.now(), state._lastStatusUpdate + 1) }));
   },
 
   getUserById: (userId: string) => {

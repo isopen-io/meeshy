@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 // MARK: - Status Bubble Controller
 
@@ -38,11 +39,20 @@ final class StatusBubbleController: ObservableObject {
         // et ré-émet `notification:counts`. Fire-and-forget.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
         let statusId = entry.id
-        Task { try? await PostService.shared.viewPost(postId: statusId) }
+        Task {
+            do {
+                try await PostService.shared.viewPost(postId: statusId)
+            } catch {
+                // Compteur de vue perdu — sans impact sur l'affichage.
+                Logger.statusBubble.error("Status view not registered: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        EngagementTracker.shared.begin(postId: statusId, contentType: .status, surface: .statusBubble)
     }
 
     func dismiss() {
         currentEntry = nil
+        Task { await EngagementTracker.shared.end(surface: .statusBubble) }
     }
 
     /// Déclenché quand l'utilisateur touche le CONTENU du mood affiché (pas la
@@ -52,6 +62,8 @@ final class StatusBubbleController: ObservableObject {
     func requestReply() {
         guard let entry = currentEntry else { return }
         currentEntry = nil
+        EngagementTracker.shared.recordAction(.commented, surface: .statusBubble)
+        Task { await EngagementTracker.shared.end(surface: .statusBubble) }
         // On ne répond pas à son propre mood.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
 
@@ -65,20 +77,64 @@ final class StatusBubbleController: ObservableObject {
     var isPresented: Binding<Bool> {
         Binding(
             get: { self.currentEntry != nil },
-            set: { if !$0 { self.currentEntry = nil } }
+            set: { newValue in
+                if !newValue {
+                    self.currentEntry = nil
+                    Task { await EngagementTracker.shared.end(surface: .statusBubble) }
+                }
+            }
         )
     }
 }
 
 // MARK: - View Modifier
 
-private struct StatusBubbleOverlayModifier: ViewModifier {
-    @EnvironmentObject private var controller: StatusBubbleController
+struct StatusBubbleOverlayModifier: ViewModifier {
+    // `StatusBubbleController` is a `.shared` singleton, so reference it
+    // directly instead of via `@EnvironmentObject`. The environment-object
+    // form is fatal ("No ObservableObject of type … found") whenever
+    // `.withStatusBubble()` is evaluated outside the injected ancestor chain —
+    // notably inside a sheet's `PresentationHostingController`, which does NOT
+    // inherit the presenter's `.environmentObject(...)`. Several sheets apply
+    // `.withStatusBubble()` (ConversationInfoSheet, ForwardPickerSheet,
+    // FeedCommentsSheet, …) without re-injecting, which crashed on present.
+    @StateObject private var controller = StatusBubbleController.shared
+
+    /// Présentation dans laquelle un hôte ancêtre rend déjà la bulle, `nil`
+    /// si aucun. Cf. `shouldRenderOverlay`.
+    @Environment(\.statusBubbleHostPresentation) private var hostPresentation
+    @Environment(\.isPresented) private var isPresented
+
+    /// Un SEUL overlay doit être rendu par présentation.
+    ///
+    /// Ce mécanisme ne déduplique qu'entre ANCÊTRE et DESCENDANT (l'environment
+    /// ne se propage qu'aux enfants) — il est AVEUGLE aux hôtes FRÈRES. D'où la
+    /// règle de placement (gardée par `StatusBubbleHostPlacementTests`) : un
+    /// hôte non modal UNIQUE par fenêtre (`RootView`, `iPadRootView`) ; seules
+    /// les présentations modales (sheet / fullScreenCover) posent le leur.
+    /// Poser le modificateur sur des vues sœurs (une carte de feed, une colonne
+    /// iPad, un écran poussé) rendait une bulle PAR hôte, chacune convertissant
+    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes,
+    /// bug 2026-07-30).
+    ///
+    /// La frontière est la PRÉSENTATION, pas la hiérarchie de vues : une
+    /// `.sheet` a son propre `PresentationHostingController` et l'overlay du
+    /// présentateur y est invisible — elle doit donc rendre le sien. Les
+    /// `EnvironmentValues` traversent les feuilles (contrairement aux
+    /// `EnvironmentObject`), d'où la comparaison avec `isPresented` plutôt
+    /// qu'un simple drapeau booléen, qui aurait privé les feuilles de bulle.
+    nonisolated static func shouldRenderOverlay(hostPresentation: Bool?, isPresented: Bool) -> Bool {
+        hostPresentation != isPresented
+    }
 
     func body(content: Content) -> some View {
-        ZStack {
+        let rendersOverlay = Self.shouldRenderOverlay(
+            hostPresentation: hostPresentation, isPresented: isPresented
+        )
+        return ZStack {
             content
-            if let entry = controller.currentEntry {
+                .environment(\.statusBubbleHostPresentation, rendersOverlay ? isPresented : hostPresentation)
+            if rendersOverlay, let entry = controller.currentEntry {
                 StatusBubbleOverlay(
                     status: entry,
                     anchorPoint: controller.anchor,
@@ -96,9 +152,9 @@ private struct StatusBubbleOverlayModifier: ViewModifier {
             // overlay ZStack — et NON via `.confirmationDialog` système — parce que
             // `.withStatusBubble()` est appliqué sur ~15 écrans potentiellement
             // co-présents : une présentation modale UIKit partagée déclencherait des
-            // conflits « already presenting ». Comme la bulle, seule l'instance au
-            // sommet est visible ; les copies couvertes restent invisibles.
-            if let entry = controller.replyConfirmationEntry {
+            // conflits « already presenting ». Comme la bulle, il n'y en a qu'un
+            // seul par présentation — cf. `shouldRenderOverlay`.
+            if rendersOverlay, let entry = controller.replyConfirmationEntry {
                 MoodReplyConfirmationOverlay(
                     entry: entry,
                     onReply: {
@@ -129,7 +185,7 @@ private struct MoodReplyConfirmationOverlay: View {
 
     private var moodSummary: String {
         let date = RelativeTimeFormatter.shortString(for: entry.createdAt)
-        let content = (entry.content?.isEmpty == false) ? " \(entry.content!)" : ""
+        let content = entry.content.flatMap { $0.isEmpty ? nil : " \($0)" } ?? ""
         return "\(entry.moodEmoji)\(content) \u{00B7} \(date)"
     }
 
@@ -142,12 +198,12 @@ private struct MoodReplyConfirmationOverlay: View {
 
             VStack(spacing: 14) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(moodSummary)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -155,7 +211,7 @@ private struct MoodReplyConfirmationOverlay: View {
                 HStack(spacing: 10) {
                     Button(action: onCancel) {
                         Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
@@ -167,7 +223,7 @@ private struct MoodReplyConfirmationOverlay: View {
 
                     Button(action: onReply) {
                         Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MeeshyFont.relative(15, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
@@ -200,8 +256,32 @@ private struct MoodReplyConfirmationOverlay: View {
     }
 }
 
+// MARK: - Portée de l'hôte de bulle
+
+/// Présentation dans laquelle un hôte `.withStatusBubble()` rend déjà la bulle.
+/// `nil` = aucun hôte au-dessus dans cette présentation.
+private struct StatusBubbleHostPresentationKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+
+extension EnvironmentValues {
+    var statusBubbleHostPresentation: Bool? {
+        get { self[StatusBubbleHostPresentationKey.self] }
+        set { self[StatusBubbleHostPresentationKey.self] = newValue }
+    }
+}
+
 extension View {
+    /// Idempotent : appliqué plusieurs fois dans une même présentation, seul
+    /// l'hôte le plus EXTERNE rend l'overlay. Poser ce modificateur sur une vue
+    /// déjà couverte est donc sans effet plutôt que source d'un doublon.
     func withStatusBubble() -> some View {
         modifier(StatusBubbleOverlayModifier())
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let statusBubble = Logger(subsystem: "me.meeshy.app", category: "status-bubble")
 }

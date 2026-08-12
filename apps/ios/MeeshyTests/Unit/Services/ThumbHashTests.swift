@@ -1,7 +1,29 @@
 import XCTest
+import UIKit
 @testable import MeeshySDK
 
+@MainActor
 final class ThumbHashTests: XCTestCase {
+
+    // MARK: - Fixtures
+
+    /// Produces a GUARANTEED-valid ThumbHash by round-tripping a real image
+    /// through the encoder. The previous hand-rolled 5-byte fixtures were NOT
+    /// valid ThumbHashes — the format needs ~21-25 bytes for the L/P/Q AC
+    /// terms, so `thumbHashToRGBA` correctly returned (0,0,[]) and the
+    /// non-empty asserts tripped. Skips (not fails) if the encoder is
+    /// unavailable in the host environment, mirroring the SDK story tests.
+    private func makeValidThumbHash() throws -> (base64: String, bytes: [UInt8]) {
+        let src = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32)).image { ctx in
+            UIColor.systemTeal.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+        }
+        guard let base64 = src.toThumbHash(), !base64.isEmpty,
+              let data = Data(base64Encoded: base64) else {
+            throw XCTSkip("ThumbHash encoder unavailable in this environment")
+        }
+        return (base64, Array(data))
+    }
 
     // MARK: - thumbHashToRGBA
 
@@ -19,9 +41,8 @@ final class ThumbHashTests: XCTestCase {
         XCTAssertTrue(rgba.isEmpty)
     }
 
-    func test_thumbHashToRGBA_validHash_returnsNonEmptyImage() {
-        // Minimal valid 5-byte hash
-        let hash: [UInt8] = [0x63, 0x66, 0xF1, 0x43, 0x38]
+    func test_thumbHashToRGBA_validHash_returnsNonEmptyImage() throws {
+        let (_, hash) = try makeValidThumbHash()
         let (w, h, rgba) = thumbHashToRGBA(hash: hash)
         XCTAssertGreaterThan(w, 0)
         XCTAssertGreaterThan(h, 0)
@@ -99,10 +120,8 @@ final class ThumbHashTests: XCTestCase {
     }
 
     @MainActor
-    func test_fromThumbHash_validBase64_returnsImage() {
-        // Base64 encode a minimal valid 5-byte hash
-        let hash: [UInt8] = [0x63, 0x66, 0xF1, 0x43, 0x38]
-        let base64 = Data(hash).base64EncodedString()
+    func test_fromThumbHash_validBase64_returnsImage() throws {
+        let (base64, _) = try makeValidThumbHash()
         let image = UIImage.fromThumbHash(base64)
         XCTAssertNotNil(image, "Should decode a valid thumbhash to a UIImage")
         if let image {

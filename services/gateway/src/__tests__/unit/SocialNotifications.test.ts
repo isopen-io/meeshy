@@ -74,6 +74,11 @@ function createMockPrisma() {
       createMany: jest.fn(),
     },
     user: { findUnique: jest.fn() },
+    // Audience du post declaree PUBLIC : les notifications a destinataire unique du
+    // fil (reponse, like, reaction sur commentaire) verifient desormais que le
+    // destinataire peut encore voir le post. Ces fichiers portent sur le wording,
+    // la langue et le payload push — pas sur le droit de voir.
+    post: { findFirst: jest.fn().mockResolvedValue({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
     userPreferences: { findUnique: jest.fn() },
     conversation: { findUnique: jest.fn() },
     participant: { count: jest.fn() },
@@ -301,7 +306,10 @@ describe('Social Notification Methods', () => {
         emoji: '👍',
       });
 
-      expect(mockIO.to).toHaveBeenCalledWith(AUTHOR_ID);
+      // User-scoped notification events route to ROOMS.user(id) (`user:${id}`) —
+      // registered sockets never join the raw-id room. See emitWithSeq.
+      expect(mockIO.to).toHaveBeenCalledWith(`user:${AUTHOR_ID}`);
+      expect(mockIO.to).not.toHaveBeenCalledWith(AUTHOR_ID);
       expect(mockIO.emit).toHaveBeenCalled();
     });
   });
@@ -455,7 +463,8 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.type).toBe('post_repost');
       expect(createArg.data.priority).toBe('normal');
-      expect(createArg.data.content).toContain('repost');
+      // Body is the FR repost phrase « a partagé <noun> » (no English "repost").
+      expect(createArg.data.content).toContain('partagé');
     });
 
     it('should include repostId and originalPostId in metadata', async () => {
@@ -641,9 +650,63 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.priority).toBe('low');
     });
 
-    it('should return null when commentLikeEnabled preference is false (default)', async () => {
-      // Default preferences have commentLikeEnabled: false
+    // Le discriminant d'entité décide de la surface ouverte au tap. Sans lui,
+    // un like sur un commentaire de réel retombait sur une heuristique de cache
+    // et pouvait ouvrir la mauvaise surface.
+    it('should persist the carrying entity postType in metadata', async () => {
       setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' });
+
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+        postType: 'REEL',
+      });
+
+      const createArg = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.metadata.postType).toBe('REEL');
+    });
+
+    it('should default metadata postType to POST when the caller omits it', async () => {
+      setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' });
+
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+      });
+
+      const createArg = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.metadata.postType).toBe('POST');
+    });
+
+    it('should create comment_like notification by default (enabled by default)', async () => {
+      // Spec produit 2026-06-14 : tout activé par défaut sauf DnD. Une
+      // préférence absente résout vers `commentLikeEnabled ?? true`.
+      setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' });
+
+      const result = await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+      });
+
+      expect(result).not.toBeNull();
+      expect(mockPrisma.notification.create).toHaveBeenCalled();
+    });
+
+    it('should return null when commentLikeEnabled is explicitly disabled', async () => {
+      setupSuccessMocks(
+        mockPrisma,
+        { type: 'comment_like', priority: 'low' },
+        { commentLikeEnabled: false },
+      );
 
       const result = await service.createCommentLikeNotification({
         actorId: ACTOR_ID,

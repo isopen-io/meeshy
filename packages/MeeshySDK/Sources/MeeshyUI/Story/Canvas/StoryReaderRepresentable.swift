@@ -60,6 +60,13 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// loop mid-cycle.
     let onPlaybackTime: ((Double) -> Void)?
 
+    /// `true`/`false` quand la lecture du média primaire de la slide
+    /// progresse / stalle (buffer). Le viewer câble ça sur
+    /// `StoryReaderTimerController.setPlaybackStalled(!progressing)` pour la
+    /// timeline unifiée (progress bar + auto-advance gelés en phase avec la
+    /// lecture). No-op pour les slides sans vidéo primaire.
+    let onPlaybackProgressing: ((Bool) -> Void)?
+
     /// Locally-loaded assets handed in by the composer "Preview" path for a
     /// story whose media has not been uploaded yet. Keyed by media id.
     /// `preloadedImages` are in-memory bitmaps (e.g. from `PhotosPicker`);
@@ -86,7 +93,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
-                onPlaybackTime: ((Double) -> Void)? = nil) {
+                onPlaybackTime: ((Double) -> Void)? = nil,
+                onPlaybackProgressing: ((Bool) -> Void)? = nil) {
         self.storyItem = story
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
@@ -102,6 +110,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
         self.onPlaybackTime = onPlaybackTime
+        self.onPlaybackProgressing = onPlaybackProgressing
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -138,9 +147,20 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             if let local = videoURLs[postId] ?? audioURLs[postId] ?? imageURLs[postId] {
                 return local
             }
+            // Normalize through the SSRF-guarded resolver (relative → absolute,
+            // file:// verbatim) — same path the rest of the app uses. Without it
+            // a relative `StoryItem.media.url` (getAttachmentPath / forward /
+            // repost) fed a scheme-less string to the cache, which silently
+            // rejects it → foreground/background of another user's story blank.
             return mediaList.first { $0.id == postId }
-                     .flatMap { $0.url.flatMap(URL.init(string:)) }
+                     .flatMap { $0.url.flatMap(MeeshyConfig.resolveMediaURL) }
         }
+
+        // Résolveur audio par `audio.id` : les clips composer non publiés ont un
+        // `postMediaId` vide, donc le `resolver` (par postMediaId) ne les trouve
+        // pas — le son restait muet même en preview plein écran. `preloadedAudioURLs`
+        // est keyé par `audio.id`, correspondance directe avec le mixer.
+        let localAudioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
 
         // The background-image branch of `StoryBackgroundLayer.configure`
         // only consults the resolver when `imageCache` is non-nil. Supply a
@@ -156,12 +176,25 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         view.onContentProgress = { value in progress?(value) }
         let playback = onPlaybackTime
         view.onPlaybackTime = { t in playback?(t) }
+        let progressing = onPlaybackProgressing
+        view.onPlaybackProgressing = { p in progressing?(p) }
+        // Le canvas naît TOUJOURS en pause, et c'est `updateUIView` — appelé par
+        // SwiftUI dans la foulée — qui lui rend la lecture.
+        //
+        // Se fier au `isPaused` de l'instant de création ne suffit pas : l'hôte
+        // pose souvent son gel APRÈS coup (l'interstitiel d'identité est armé
+        // dans `onAppear`/`onChange`, donc après l'évaluation du body qui a créé
+        // ce canvas). L'audio démarrait alors dans `setReaderContext` et on
+        // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
+        // en pause supprime la course au lieu de tenter de la gagner.
+        view.setPaused(true)
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
             onCompletion: completion,
             postMediaURLResolver: resolver,
-            imageCache: imageCache
+            imageCache: imageCache,
+            localAudioURLResolver: localAudioResolver
         ))
         return view
     }
@@ -184,10 +217,18 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     }
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
+        // Le changement de langue ne touche NI l'id NI le `content` du slide
+        // (la légende du post n'a pas forcément de traduction) : sans ce test,
+        // choisir une langue dans le strip du viewer laissait le canvas afficher
+        // les textes dans l'ancienne langue (bug 2026-07-25).
+        let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
         let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
         let identityChanged = newSlide.id != view.slide.id
-        if identityChanged || newSlide.content != view.slide.content {
+        if identityChanged || languagesChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
+        }
+        if languagesChanged {
+            view.setPreferredLanguages(preferredLanguages)
         }
         if identityChanged && !isOutgoing {
             // Reset défensif de la timeline canvas quand l'id slide change :
@@ -216,9 +257,13 @@ extension StoryReaderRepresentable {
 
     /// Construct from a `RepostContent` (feed embed, repost preview).
     /// Synthesizes a `StoryItem` from the repost's media + effects.
+    /// `isPaused` is driven by the host (e.g. PostDetailView) for the SAME
+    /// viewport-visibility + call-aware pausing as the native story canvas — a
+    /// muted feed embed leaves it `false`; an unmuted detail embed must forward it.
     public init(repost: RepostContent,
                 preferredContentLanguages: [String]? = nil,
                 mute: Bool = false,
+                isPaused: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil) {
         let synthetic = StoryItem(
             id: repost.id,
@@ -232,6 +277,7 @@ extension StoryReaderRepresentable {
         self.init(story: synthetic,
                   preferredLanguages: preferredContentLanguages ?? [],
                   mute: mute,
+                  isPaused: isPaused,
                   onCompletion: onCompletion,
                   onContentReady: nil,
                   onContentProgress: nil)

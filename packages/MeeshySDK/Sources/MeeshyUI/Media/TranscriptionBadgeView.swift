@@ -12,7 +12,7 @@ public struct TranscriptionBadgeView: View {
 
     public init(transcriptionText: String, language: String? = nil,
                 confidence: Double? = nil, isOnDevice: Bool = false,
-                accentColor: String = "08D9D6") {
+                accentColor: String = MeeshyColors.brandPrimaryHex) {
         self.transcriptionText = transcriptionText
         self.language = language; self.confidence = confidence
         self.isOnDevice = isOnDevice; self.accentColor = accentColor
@@ -32,7 +32,7 @@ public struct TranscriptionBadgeView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .accessibilityLabel("Transcription: \(transcriptionText)")
+        .accessibilityLabel(String(localized: "media.transcription.a11y", defaultValue: "Transcription : \(transcriptionText)", bundle: .module))
         .accessibilityHint(isExpanded ? String(localized: "media.transcription.collapseHint", defaultValue: "Tap to collapse", bundle: .module) : String(localized: "media.transcription.expandHint", defaultValue: "Tap to expand", bundle: .module))
     }
 

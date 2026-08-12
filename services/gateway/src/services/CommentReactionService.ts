@@ -18,8 +18,18 @@ export interface CommentReactionData {
   readonly updatedAt: Date;
 }
 
+/**
+ * Résultat d'`addReaction` : la réaction PLUS un marqueur d'idempotence. `unchanged`
+ * est `true` quand la ligne existait déjà (re-fire idempotent) — aucun changement DB.
+ * Le handler s'en sert pour NE PAS re-diffuser `comment:reaction-added` ni re-notifier
+ * l'auteur sur un no-op. Miroir de `ReactionService.addReaction`, forme aplatie
+ * (`MAX_REACTIONS_PER_USER = 1`). Marqueur transitoire — jamais persisté ni diffusé.
+ */
+export type AddCommentReactionResult = CommentReactionData & { readonly unchanged: boolean };
+
 export interface CommentReactionSync {
   readonly commentId: string;
+  readonly postId: string;
   readonly reactions: readonly CommentReactionAggregationWithUsers[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];
@@ -72,7 +82,7 @@ export class CommentReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddCommentReactionOptions): Promise<CommentReactionData | null> {
+  async addReaction(options: AddCommentReactionOptions): Promise<AddCommentReactionResult | null> {
     const { commentId, userId, emoji } = options;
 
     this.validateCommentId(commentId);
@@ -123,7 +133,7 @@ export class CommentReactionService {
     });
 
     if (existingReaction) {
-      return this.mapReactionToData(existingReaction);
+      return { ...this.mapReactionToData(existingReaction), unchanged: true };
     }
 
     try {
@@ -135,16 +145,16 @@ export class CommentReactionService {
         }
       });
 
-      await this.updateCommentReactionSummary(commentId, sanitized, 'add');
+      await this.updateCommentReactionSummary(commentId);
 
-      return this.mapReactionToData(reaction);
+      return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         // Concurrent insert race: treat as idempotent success, summary already correct.
         const existing = await this.prisma.commentReaction.findFirst({
           where: { commentId, userId, emoji: sanitized }
         });
-        if (existing) return this.mapReactionToData(existing);
+        if (existing) return { ...this.mapReactionToData(existing), unchanged: true };
       }
       throw err;
     }
@@ -169,7 +179,7 @@ export class CommentReactionService {
     });
 
     if (result.count > 0) {
-      await this.updateCommentReactionSummary(commentId, sanitized, 'remove', result.count);
+      await this.updateCommentReactionSummary(commentId);
     }
 
     return result.count > 0;
@@ -179,6 +189,11 @@ export class CommentReactionService {
     const { commentId, currentUserId } = options;
 
     this.validateCommentId(commentId);
+
+    const comment = await this.prisma.postComment.findUnique({
+      where: { id: commentId },
+      select: { postId: true }
+    });
 
     const reactions = await this.prisma.commentReaction.findMany({
       where: { commentId },
@@ -251,6 +266,7 @@ export class CommentReactionService {
 
     return {
       commentId,
+      postId: comment?.postId ?? '',
       reactions: enrichedReactions,
       totalCount: reactions.length,
       userReactions: Array.from(new Set(userReactions))
@@ -361,35 +377,40 @@ export class CommentReactionService {
     };
   }
 
-  private async updateCommentReactionSummary(
-    commentId: string,
-    emoji: string,
-    action: 'add' | 'remove',
-    count: number = 1
-  ): Promise<void> {
+  private async updateCommentReactionSummary(commentId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const comment = await tx.postComment.findUnique({
         where: { id: commentId },
-        select: { reactionSummary: true, reactionCount: true }
+        select: { id: true }
       });
 
       if (!comment) return;
 
-      const currentSummary = (comment.reactionSummary as Record<string, number>) || {};
-      const currentCount = comment.reactionCount || 0;
+      // Ventilation par emoji ET total recalculés depuis la table `CommentReaction`
+      // (source de vérité), au lieu d'appliquer un delta add/remove sur une carte
+      // dénormalisée. Le pré-check des réactions dans addReaction/removeReaction se
+      // fait hors transaction, donc deux mutations concurrentes peuvent laisser un
+      // emoji fantôme dans reactionSummary (ligne présente, jamais reflétée dans la
+      // carte) ; recomputer depuis groupBy est auto-réparant, quel que soit l'état
+      // après la course. `reactionCount` ET `likeCount` synchronisés sur le total
+      // (parité REST/socket du like de commentaire : `PostCommentService.likeComment`
+      // = increment). Miroir de ReactionService.updateMessageReactionSummary /
+      // PostReactionService.updatePostReactionSummary.
+      const grouped = await tx.commentReaction.groupBy({
+        by: ['emoji'],
+        where: { commentId },
+        _count: { emoji: true }
+      });
 
-      if (action === 'add') {
-        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-      } else if (currentSummary[emoji]) {
-        currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
-      }
-
-      const newCount = action === 'add' ? currentCount + count : Math.max(0, currentCount - count);
+      const reactionSummary = grouped.reduce<Record<string, number>>((summary, group) => {
+        summary[group.emoji] = group._count.emoji;
+        return summary;
+      }, {});
+      const total = grouped.reduce((sum, group) => sum + group._count.emoji, 0);
 
       await tx.postComment.update({
         where: { id: commentId },
-        data: { reactionSummary: currentSummary, reactionCount: newCount }
+        data: { reactionSummary, reactionCount: total, likeCount: total }
       });
     });
   }

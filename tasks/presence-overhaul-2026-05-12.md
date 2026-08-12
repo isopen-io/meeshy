@@ -15,23 +15,25 @@ La chaîne socket fonctionne théoriquement, mais 4 failles structurelles :
 
 ## Plan d'exécution
 
-### Phase G — Gateway (priorité 1, débloque les clients)
-- [ ] **G1** `MaintenanceService.startMaintenanceTasks()` : ne pas reset les users actuellement dans `connectedUsers` Map. Exposer la Map ou injecter un predicate.
-- [ ] **G2** Émettre event `presence:snapshot` à la fin de `handleManualAuthentication` + `_authenticateJWTUser` + `_authenticateAnonymousUser` : liste les userIds présents dans `connectedUsers` Map parmi les participants des conversations du nouvel arrivant.
-- [ ] **G3** Endpoint REST `GET /users/presence?ids=...` qui retourne `[{userId, isOnline (runtime depuis Map), lastActiveAt (db)}]` — pour resync à la demande.
-- [ ] **G4** Patch `GET /conversations` (core.ts) : override `participant.isOnline` et `participant.user.isOnline` avec `connectedUsers.has(userId)` runtime avant return.
-- [ ] **G5** Déclarer `PRESENCE_SNAPSHOT` dans `packages/shared/types/socketio-events.ts`.
+### Phase G — Gateway (priorité 1, débloque les clients) — DONE (vérifié 2026-07-03)
+- [x] **G1** `MaintenanceService.startMaintenanceTasks()` : predicate `isCurrentlyConnected` injecté, ne reset plus les users couramment dans `connectedUsers` Map.
+- [x] **G2** Event `presence:snapshot` émis à la fin de l'authentification (cache TTL 60s, `MeeshySocketIOManager.ts`).
+- [x] **G3** `GET /users/presence?ids=...` (`services/gateway/src/routes/users/presence.ts`).
+- [x] **G4** `GET /conversations` (core.ts:478-521) : override runtime de `isOnline` via `presenceChecker.isOnline(...)`.
+- [x] **G5** `PRESENCE_SNAPSHOT` déclaré dans `packages/shared/types/socketio-events.ts`.
 
-### Phase W — Web (consommation des nouveautés)
-- [ ] **W1** Déplacer `useUserStatusRealtime()` dans un provider global pour qu'il soit monté sur toutes les pages authentifiées.
-- [ ] **W2** Dans `useUserStatusRealtime`, écouter aussi `PRESENCE_SNAPSHOT` → bulk update du store.
-- [ ] **W3** Sur reconnect socket + sur retour focus tab, déclencher fetch `/users/presence?ids=...` pour resync.
+### Phase W — Web (consommation des nouveautés) — DONE (vérifié 2026-07-03)
+- [x] **W1** `PresenceProvider` global monté dans `app/layout.tsx`, wrappe `useUserStatusRealtime()`.
+- [x] **W2** `useUserStatusRealtime` écoute `PRESENCE_SNAPSHOT` → `mergeParticipants` bulk update.
+- [x] **W3** Resync REST `/users/presence?ids=...` au retour de focus tab + reconnect, debounce 1s.
 
-### Phase I — iOS (symétrique)
-- [ ] **I1** Ajouter `PresenceSnapshotEvent` dans `MessageSocketManager` + publisher Combine.
-- [ ] **I2** Consommer le snapshot dans le cache de présence iOS.
-- [ ] **I3** Vérifier que la souscription `user:status` est globale (pas conditionnelle à un écran).
-- [ ] **I4** Sur reconnect + foreground app, déclencher refresh REST `/users/presence`.
+### Phase I — iOS (symétrique) — implémenté (fichiers présents : `MessageSocketManager.swift`, `PresenceManager.swift`,
+`BackgroundTransitionCoordinator.swift` référencent le snapshot/presence) — non re-vérifié en détail faute de
+toolchain Swift dans cet environnement ; à confirmer sur macOS si un doute survient.
+- [x] **I1** `PresenceSnapshotEvent` dans `MessageSocketManager`.
+- [x] **I2** Cache de présence iOS consomme le snapshot.
+- [x] **I3** Souscription `user:status` globale.
+- [x] **I4** Refresh REST `/users/presence` sur reconnect/foreground (`PresenceManager`/`BackgroundTransitionCoordinator`).
 
 ## Sequencing
 1. Phase G en un commit gateway (atomique, déployable indépendamment)

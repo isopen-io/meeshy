@@ -5,6 +5,45 @@ import { CommentComposer } from '@/components/v2/CommentComposer';
 import { CommentList } from '@/components/v2/CommentList';
 import type { PostComment } from '@meeshy/shared/types/post';
 
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        'commentComposer.replyingTo': 'Replying to',
+        'commentComposer.cancelReply': 'Cancel reply',
+        'commentComposer.replyPlaceholder': 'Write a reply...',
+        'commentComposer.commentPlaceholder': 'Write a comment...',
+        'commentComposer.replyInput': 'Reply input',
+        'commentComposer.commentInput': 'Comment input',
+        'commentComposer.send': 'Send comment',
+      };
+      return map[key] ?? key;
+    },
+    tArray: () => [],
+    locale: 'en',
+    currentLanguage: 'en',
+    setLocale: () => {},
+    isLoading: false,
+  }),
+}));
+
+jest.mock('@/hooks/composer/useMentions', () => ({
+  useMentions: () => ({
+    showMentionAutocomplete: false,
+    mentionQuery: '',
+    mentionPosition: { top: 0, left: 0 },
+    handleTextChange: () => {},
+    handleMentionSelect: () => {},
+    closeMentionAutocomplete: () => {},
+    getMentionedUserIds: () => [],
+    clearMentionedUserIds: () => {},
+  }),
+}));
+
+jest.mock('@/components/common/MentionAutocomplete', () => ({
+  MentionAutocomplete: () => null,
+}));
+
 // Mock Avatar and TranslationToggle to avoid complex deps
 jest.mock('@/components/v2/Avatar', () => ({
   Avatar: ({ name }: { name: string }) => <div data-testid="avatar">{name}</div>,
@@ -18,6 +57,19 @@ jest.mock('@/components/v2/TranslationToggle', () => ({
 
 jest.mock('@/components/v2/Skeleton', () => ({
   Skeleton: ({ className }: { className?: string }) => <div data-testid="skeleton" className={className} />,
+}));
+
+// CommentList monte un CommentReplies (query React Query des réponses) par
+// commentaire ayant des réponses — stub neutre : pas de réseau, thread vide.
+jest.mock('@/hooks/queries/use-comments-query', () => ({
+  useCommentRepliesQuery: () => ({
+    data: undefined,
+    isLoading: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: jest.fn(),
+  }),
+  useCommentRepliesList: () => [],
 }));
 
 const mockComment: PostComment = {
@@ -105,6 +157,23 @@ describe('CommentItem', () => {
   it('hides delete button for non-author', () => {
     render(<CommentItem comment={mockComment} isAuthor={false} />);
     expect(screen.queryByLabelText('Delete comment')).not.toBeInTheDocument();
+  });
+
+  it('exposes a stable comment-<id> anchor for notification navigation', () => {
+    const { container } = render(<CommentItem comment={mockComment} />);
+    expect(container.querySelector('#comment-comment-1')).toBeInTheDocument();
+  });
+
+  it('applies a highlight ring when isHighlighted', () => {
+    render(<CommentItem comment={mockComment} isHighlighted />);
+    const item = screen.getByTestId('comment-item-comment-1');
+    expect(item.className).toContain('ring-1');
+  });
+
+  it('does not highlight by default', () => {
+    render(<CommentItem comment={mockComment} />);
+    const item = screen.getByTestId('comment-item-comment-1');
+    expect(item.className).not.toContain('ring-1');
   });
 });
 
@@ -207,5 +276,139 @@ describe('CommentList', () => {
   it('hides composer when onSubmitComment is not provided', () => {
     render(<CommentList postId="post-1" comments={[]} />);
     expect(screen.queryByTestId('comment-composer')).not.toBeInTheDocument();
+  });
+
+  it('scrolls to and highlights the targetCommentId when present in the list', () => {
+    const scrollSpy = jest.fn();
+    // jsdom doesn't implement scrollIntoView — stub it on the prototype.
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = scrollSpy;
+
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment, mockComment2]}
+        targetCommentId="comment-2"
+      />,
+    );
+
+    expect(scrollSpy).toHaveBeenCalled();
+    const target = screen.getByTestId('comment-item-comment-2');
+    expect(target.className).toContain('ring-1');
+    // The non-targeted comment is not highlighted.
+    expect(screen.getByTestId('comment-item-comment-1').className).not.toContain('ring-1');
+
+    (Element.prototype as any).scrollIntoView = original;
+  });
+
+  it('hunts next top-level pages when the target is missing, bounded to 15 pages', () => {
+    const scrollSpy = jest.fn();
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = scrollSpy;
+    const onLoadMore = jest.fn();
+
+    const pageOf = (count: number): PostComment[] => [
+      mockComment,
+      ...Array.from({ length: count }, (_, i) => ({ ...mockComment2, id: `filler-${i}` })),
+    ];
+
+    const { rerender } = render(
+      <CommentList
+        postId="post-1"
+        comments={pageOf(0)}
+        targetCommentId="missing-comment"
+        hasMore
+        onLoadMore={onLoadMore}
+      />,
+    );
+
+    // Cible absente + pages restantes → la chasse suit le curseur.
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    // Chaque « page » arrivée sans la cible relance la chasse — jusqu'à la
+    // borne de 15 pages, après quoi elle s'arrête définitivement.
+    for (let page = 1; page <= 20; page += 1) {
+      rerender(
+        <CommentList
+          postId="post-1"
+          comments={pageOf(page)}
+          targetCommentId="missing-comment"
+          hasMore
+          onLoadMore={onLoadMore}
+        />,
+      );
+    }
+
+    expect(onLoadMore).toHaveBeenCalledTimes(15);
+    expect(scrollSpy).not.toHaveBeenCalled();
+    (Element.prototype as any).scrollIntoView = original;
+  });
+
+  it('does not hunt when there are no further pages', () => {
+    const scrollSpy = jest.fn();
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = scrollSpy;
+    const onLoadMore = jest.fn();
+
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        targetCommentId="missing-comment"
+        hasMore={false}
+        onLoadMore={onLoadMore}
+      />,
+    );
+
+    expect(onLoadMore).not.toHaveBeenCalled();
+    expect(scrollSpy).not.toHaveBeenCalled();
+    (Element.prototype as any).scrollIntoView = original;
+  });
+
+  it('calls onUnlike when a comment already carries the current user heart reaction', () => {
+    const onUnlikeComment = jest.fn();
+    const onLikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[{ ...mockComment, currentUserReactions: ['❤️'] }]}
+        onLikeComment={onLikeComment}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlike comment' }));
+    expect(onUnlikeComment).toHaveBeenCalledWith('comment-1');
+    expect(onLikeComment).not.toHaveBeenCalled();
+  });
+
+  it('calls onLike when a comment has no reaction from the current user', () => {
+    const onUnlikeComment = jest.fn();
+    const onLikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        onLikeComment={onLikeComment}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Like comment' }));
+    expect(onLikeComment).toHaveBeenCalledWith('comment-1');
+    expect(onUnlikeComment).not.toHaveBeenCalled();
+  });
+
+  it('honours an explicit likedCommentIds override even without reaction data', () => {
+    const onUnlikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        likedCommentIds={new Set(['comment-1'])}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlike comment' }));
+    expect(onUnlikeComment).toHaveBeenCalledWith('comment-1');
   });
 });

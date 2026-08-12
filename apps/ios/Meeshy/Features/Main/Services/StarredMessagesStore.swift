@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 /// Snapshot of a starred message so we can surface it in the dedicated
 /// "Starred Messages" list even after the source bubble is edited, deleted
@@ -13,7 +14,7 @@ struct StarredMessageSnapshot: Codable, Identifiable, Equatable, Sendable {
     let conversationAccentColor: String?
     let senderUserId: String?
     let senderName: String?
-    let contentPreview: String
+    var contentPreview: String
     let attachmentKind: String?  // "image" / "video" / "audio" / "file" / "location"
     let starredAt: Date
     let sentAt: Date
@@ -76,6 +77,18 @@ final class StarredMessagesStore: ObservableObject {
         persist()
     }
 
+    /// Keep the starred snapshot's preview in sync after the source message is
+    /// edited. The snapshot is a frozen copy (so the Starred list renders
+    /// without the conversation being cached), so an edit elsewhere would
+    /// otherwise leave the row showing stale content. No-op when the message
+    /// isn't starred.
+    func updatePreview(messageId: String, contentPreview: String) {
+        guard let idx = snapshots.firstIndex(where: { $0.id == messageId }),
+              snapshots[idx].contentPreview != contentPreview else { return }
+        snapshots[idx].contentPreview = contentPreview
+        persist()
+    }
+
     func snapshot(for messageId: String) -> StarredMessageSnapshot? {
         snapshots.first { $0.id == messageId }
     }
@@ -95,12 +108,18 @@ final class StarredMessagesStore: ObservableObject {
     // MARK: - Persistence
 
     private func persist() {
-        guard let data = try? encoder.encode(snapshots) else { return }
+        guard let data = encoder.encodeOrLog(snapshots, field: "starred messages", logger: Logger.starred) else { return }
         defaults.set(data, forKey: storageKey)
     }
 
     private static func load(from defaults: UserDefaults, decoder: JSONDecoder) -> [StarredMessageSnapshot] {
         guard let data = defaults.data(forKey: "meeshy_starred_messages") else { return [] }
-        return (try? decoder.decode([StarredMessageSnapshot].self, from: data)) ?? []
+        return decoder.decodeOrLog([StarredMessageSnapshot].self, from: data, field: "starred messages", logger: Logger.starred) ?? []
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let starred = Logger(subsystem: "me.meeshy.app", category: "starred-store")
 }

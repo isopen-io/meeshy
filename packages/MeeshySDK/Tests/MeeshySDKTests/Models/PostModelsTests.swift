@@ -20,7 +20,7 @@ final class PostModelsTests: XCTestCase {
 
     // MARK: - APIAuthor
 
-    func testAPIAuthorDecodableAllFields() throws {
+    func test_apiAuthor_decodeAllFields_populatesAllProperties() throws {
         let json = """
         {
             "id": "author1",
@@ -36,7 +36,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(author.avatar, "https://example.com/alice.jpg")
     }
 
-    func testAPIAuthorNameComputedProperty() throws {
+    func test_apiAuthor_name_prefersDisplayNameThenUsernameThenAnonymous() throws {
         let withDisplay = """
         {"id": "a1", "username": "bob", "displayName": "Bobby"}
         """.data(using: .utf8)!
@@ -58,7 +58,7 @@ final class PostModelsTests: XCTestCase {
 
     // MARK: - APIPostMedia
 
-    func testAPIPostMediaDecodable() throws {
+    func test_apiPostMedia_decode_populatesAllProperties() throws {
         let json = """
         {
             "id": "media1",
@@ -84,7 +84,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(media.caption, "Beautiful sunset")
     }
 
-    func testAPIPostMediaTypeComputed() throws {
+    func test_apiPostMedia_mediaType_derivesFromMimeType() throws {
         let imageJson = """
         {"id": "m1", "mimeType": "image/png"}
         """.data(using: .utf8)!
@@ -118,7 +118,7 @@ final class PostModelsTests: XCTestCase {
 
     // MARK: - APIPost
 
-    func testAPIPostDecodable() throws {
+    func test_apiPost_decode_populatesAllProperties() throws {
         let json = """
         {
             "id": "post1",
@@ -149,7 +149,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(post.isPinned, false)
     }
 
-    func testAPIPostToFeedPost() throws {
+    func test_apiPost_toFeedPost_mapsFieldsAndMedia() throws {
         let json = """
         {
             "id": "post2",
@@ -176,9 +176,48 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(feedPost.media.count, 1)
     }
 
+    func test_APIPost_decodes_impressionCount_andMapsToFeedPost() throws {
+        let json = """
+        {
+            "id": "post3",
+            "type": "POST",
+            "content": "Counters",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a3", "username": "carol"},
+            "viewCount": 4,
+            "postOpenCount": 34,
+            "impressionCount": 51
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        XCTAssertEqual(apiPost.impressionCount, 51)
+
+        let feedPost = apiPost.toFeedPost()
+        // Total (displayed) views and impressions are the raw, non-deduped
+        // counters; unique views stay in viewCount (saved, not displayed).
+        XCTAssertEqual(feedPost.impressionCount, 51)
+        XCTAssertEqual(feedPost.postOpenCount, 34)
+        XCTAssertEqual(feedPost.viewCount, 4)
+    }
+
+    func test_APIPost_missingImpressionCount_defaultsToZero() throws {
+        let json = """
+        {
+            "id": "post4",
+            "type": "POST",
+            "content": "No counters",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a4", "username": "dave"}
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        XCTAssertNil(apiPost.impressionCount)
+        XCTAssertEqual(apiPost.toFeedPost().impressionCount, 0)
+    }
+
     // MARK: - APIPostComment
 
-    func testAPIPostCommentDecodable() throws {
+    func test_apiPostComment_decode_populatesAllProperties() throws {
         let json = """
         {
             "id": "comment1",
@@ -202,7 +241,7 @@ final class PostModelsTests: XCTestCase {
 
     // MARK: - FeedPost
 
-    func testFeedPostInitDefaults() {
+    func test_feedPost_initWithDefaults_setsExpectedDefaults() {
         let post = FeedPost(author: "TestUser", content: "Hello")
         XCTAssertEqual(post.author, "TestUser")
         XCTAssertEqual(post.content, "Hello")
@@ -215,7 +254,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertFalse(post.hasMedia)
     }
 
-    func testFeedPostHasMediaComputed() {
+    func test_feedPost_hasMedia_reflectsMediaArray() {
         let withMedia = FeedPost(author: "A", content: "B", media: [.image()])
         XCTAssertTrue(withMedia.hasMedia)
 
@@ -223,7 +262,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertFalse(withoutMedia.hasMedia)
     }
 
-    func testFeedPostMediaUrl() {
+    func test_feedPost_mediaUrl_returnsFirstMediaUrl() {
         let post = FeedPost(author: "A", content: "B", media: [.image(url: "https://example.com/img.jpg")])
         XCTAssertEqual(post.mediaUrl, "https://example.com/img.jpg")
     }
@@ -397,7 +436,7 @@ final class PostModelsTests: XCTestCase {
 
     // MARK: - APIPost.currentUserReactions
 
-    func testAPIPostDecodes_currentUserReactions_emptyByDefault() throws {
+    func test_apiPost_decode_currentUserReactionsAbsent_isNil() throws {
         let json = """
         {
             "id": "post20",
@@ -412,7 +451,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertNil(post.currentUserReactions)
     }
 
-    func testAPIPostDecodes_currentUserReactions_populated() throws {
+    func test_apiPost_decode_currentUserReactionsPresent_populatesArray() throws {
         let json = """
         {
             "id": "post21",
@@ -430,7 +469,7 @@ final class PostModelsTests: XCTestCase {
 
     // MARK: - APIPostComment.currentUserReactions
 
-    func testAPIPostCommentDecodes_currentUserReactions_emptyByDefault() throws {
+    func test_apiPostComment_decode_currentUserReactionsAbsent_isNil() throws {
         let json = """
         {
             "id": "comment10",
@@ -444,7 +483,7 @@ final class PostModelsTests: XCTestCase {
         XCTAssertNil(comment.currentUserReactions)
     }
 
-    func testAPIPostCommentDecodes_currentUserReactions_populated() throws {
+    func test_apiPostComment_decode_currentUserReactionsPresent_populatesArray() throws {
         let json = """
         {
             "id": "comment11",

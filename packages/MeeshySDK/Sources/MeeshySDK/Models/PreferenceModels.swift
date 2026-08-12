@@ -259,17 +259,17 @@ public struct AudioPreferences: Codable, Equatable, Sendable {
 
     public static let defaults = AudioPreferences(
         transcriptionEnabled: true, transcriptionSource: .auto, autoTranscribeIncoming: false,
-        audioTranslationEnabled: false, translatedAudioFormat: .mp3,
-        ttsEnabled: false, ttsVoice: nil, ttsSpeed: 1.0, ttsPitch: 1.0,
+        audioTranslationEnabled: true, translatedAudioFormat: .mp3,
+        ttsEnabled: true, ttsVoice: nil, ttsSpeed: 1.0, ttsPitch: 1.0,
         audioQuality: .high, noiseSuppression: true, echoCancellation: true,
         voiceProfileEnabled: false, voiceCloneQuality: .balanced, extras: [:]
     )
 
     public init(
         transcriptionEnabled: Bool = true, transcriptionSource: TranscriptionSource = .auto,
-        autoTranscribeIncoming: Bool = false, audioTranslationEnabled: Bool = false,
+        autoTranscribeIncoming: Bool = false, audioTranslationEnabled: Bool = true,
         translatedAudioFormat: TranslatedAudioFormat = .mp3,
-        ttsEnabled: Bool = false, ttsVoice: String? = nil, ttsSpeed: Double = 1.0, ttsPitch: Double = 1.0,
+        ttsEnabled: Bool = true, ttsVoice: String? = nil, ttsSpeed: Double = 1.0, ttsPitch: Double = 1.0,
         audioQuality: AudioQuality = .high, noiseSuppression: Bool = true, echoCancellation: Bool = true,
         voiceProfileEnabled: Bool = false, voiceCloneQuality: VoiceCloneQuality = .balanced,
         extras: [String: CodableValue] = [:]
@@ -399,6 +399,10 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     public var vibrationEnabled: Bool
     public var newMessageEnabled: Bool
     public var missedCallEnabled: Bool
+    /// Sonnerie des appels entrants (pushes VoIP/ring). Catégorie dédiée côté
+    /// gateway (GW6) : ni `pushEnabled:false` ni le DND ne coupent les appels —
+    /// seul ce toggle le fait.
+    public var callsEnabled: Bool
     public var voicemailEnabled: Bool
     public var systemEnabled: Bool
     public var conversationEnabled: Bool
@@ -415,10 +419,16 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     public var storyReactionEnabled: Bool
     public var commentReplyEnabled: Bool
     public var commentLikeEnabled: Bool
+    public var friendContentEnabled: Bool
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
     public var dndDays: [DndDay]
+    /// Offset UTC du device en minutes, estampillé à chaque écriture par
+    /// `UserPreferencesManager.updateNotification` : le gateway évalue la
+    /// fenêtre DND dans l'heure LOCALE de l'utilisateur (`isWithinDnd`,
+    /// packages/shared). 0 = comportement UTC historique.
+    public var dndUtcOffsetMinutes: Int
     public var showPreview: Bool
     public var showSenderName: Bool
     public var groupNotifications: Bool
@@ -427,31 +437,34 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
 
     public static let defaults = UserNotificationPreferences(
         pushEnabled: true, emailEnabled: true, soundEnabled: true, vibrationEnabled: true,
-        newMessageEnabled: true, missedCallEnabled: true, voicemailEnabled: true, systemEnabled: true,
+        newMessageEnabled: true, missedCallEnabled: true, callsEnabled: true, voicemailEnabled: true, systemEnabled: true,
         conversationEnabled: true, replyEnabled: true, mentionEnabled: true, reactionEnabled: true,
-        contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: false,
+        contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: true,
         postLikeEnabled: true, postCommentEnabled: true, postRepostEnabled: true, storyReactionEnabled: true,
-        commentReplyEnabled: true, commentLikeEnabled: false,
-        dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [],
+        commentReplyEnabled: true, commentLikeEnabled: true, friendContentEnabled: true,
+        dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [], dndUtcOffsetMinutes: 0,
         showPreview: true, showSenderName: true, groupNotifications: true, notificationBadgeEnabled: true,
         extras: [:]
     )
 
     public init(
         pushEnabled: Bool = true, emailEnabled: Bool = true, soundEnabled: Bool = true, vibrationEnabled: Bool = true,
-        newMessageEnabled: Bool = true, missedCallEnabled: Bool = true, voicemailEnabled: Bool = true,
+        newMessageEnabled: Bool = true, missedCallEnabled: Bool = true, callsEnabled: Bool = true, voicemailEnabled: Bool = true,
         systemEnabled: Bool = true, conversationEnabled: Bool = true, replyEnabled: Bool = true,
         mentionEnabled: Bool = true, reactionEnabled: Bool = true, contactRequestEnabled: Bool = true,
-        groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = false,
+        groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = true,
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
-        storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = false,
+        storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
+        friendContentEnabled: Bool = true,
         dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
+        dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]
     ) {
         self.pushEnabled = pushEnabled; self.emailEnabled = emailEnabled
         self.soundEnabled = soundEnabled; self.vibrationEnabled = vibrationEnabled
         self.newMessageEnabled = newMessageEnabled; self.missedCallEnabled = missedCallEnabled
+        self.callsEnabled = callsEnabled
         self.voicemailEnabled = voicemailEnabled; self.systemEnabled = systemEnabled
         self.conversationEnabled = conversationEnabled; self.replyEnabled = replyEnabled
         self.mentionEnabled = mentionEnabled; self.reactionEnabled = reactionEnabled
@@ -460,7 +473,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.postLikeEnabled = postLikeEnabled; self.postCommentEnabled = postCommentEnabled
         self.postRepostEnabled = postRepostEnabled; self.storyReactionEnabled = storyReactionEnabled
         self.commentReplyEnabled = commentReplyEnabled; self.commentLikeEnabled = commentLikeEnabled
+        self.friendContentEnabled = friendContentEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
+        self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
         self.groupNotifications = groupNotifications; self.notificationBadgeEnabled = notificationBadgeEnabled
         self.extras = extras
@@ -468,12 +483,12 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case pushEnabled, emailEnabled, soundEnabled, vibrationEnabled
-        case newMessageEnabled, missedCallEnabled, voicemailEnabled, systemEnabled
+        case newMessageEnabled, missedCallEnabled, callsEnabled, voicemailEnabled, systemEnabled
         case conversationEnabled, replyEnabled, mentionEnabled, reactionEnabled
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
-        case commentReplyEnabled, commentLikeEnabled
-        case dndEnabled, dndStartTime, dndEndTime, dndDays
+        case commentReplyEnabled, commentLikeEnabled, friendContentEnabled
+        case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
     }
@@ -486,6 +501,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         vibrationEnabled = try c.decodeIfPresent(Bool.self, forKey: .vibrationEnabled) ?? Self.defaults.vibrationEnabled
         newMessageEnabled = try c.decodeIfPresent(Bool.self, forKey: .newMessageEnabled) ?? Self.defaults.newMessageEnabled
         missedCallEnabled = try c.decodeIfPresent(Bool.self, forKey: .missedCallEnabled) ?? Self.defaults.missedCallEnabled
+        callsEnabled = try c.decodeIfPresent(Bool.self, forKey: .callsEnabled) ?? Self.defaults.callsEnabled
         voicemailEnabled = try c.decodeIfPresent(Bool.self, forKey: .voicemailEnabled) ?? Self.defaults.voicemailEnabled
         systemEnabled = try c.decodeIfPresent(Bool.self, forKey: .systemEnabled) ?? Self.defaults.systemEnabled
         conversationEnabled = try c.decodeIfPresent(Bool.self, forKey: .conversationEnabled) ?? Self.defaults.conversationEnabled
@@ -502,10 +518,12 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         storyReactionEnabled = try c.decodeIfPresent(Bool.self, forKey: .storyReactionEnabled) ?? Self.defaults.storyReactionEnabled
         commentReplyEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentReplyEnabled) ?? Self.defaults.commentReplyEnabled
         commentLikeEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentLikeEnabled) ?? Self.defaults.commentLikeEnabled
+        friendContentEnabled = try c.decodeIfPresent(Bool.self, forKey: .friendContentEnabled) ?? Self.defaults.friendContentEnabled
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime
         dndDays = try c.decodeIfPresent([DndDay].self, forKey: .dndDays) ?? Self.defaults.dndDays
+        dndUtcOffsetMinutes = try c.decodeIfPresent(Int.self, forKey: .dndUtcOffsetMinutes) ?? Self.defaults.dndUtcOffsetMinutes
         showPreview = try c.decodeIfPresent(Bool.self, forKey: .showPreview) ?? Self.defaults.showPreview
         showSenderName = try c.decodeIfPresent(Bool.self, forKey: .showSenderName) ?? Self.defaults.showSenderName
         groupNotifications = try c.decodeIfPresent(Bool.self, forKey: .groupNotifications) ?? Self.defaults.groupNotifications
@@ -696,6 +714,19 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
     public var tutorialsCompleted: [String]
     public var betaFeaturesEnabled: Bool
     public var telemetryEnabled: Bool
+
+    /// Consentements données/voix — miroir des champs User, lus par le
+    /// gateway (`ConsentValidationService`) avec priorité
+    /// `UserPreferences.application` > `User`. Portés en `String?` ISO-8601
+    /// (et non `Date?`) : le PATCH `/me/preferences/application` est validé
+    /// par `z.iso.datetime({ offset: true })` côté gateway et l'encoder JSON
+    /// partagé du manager n'a pas de stratégie de date ISO.
+    public var dataProcessingConsentAt: String?
+    public var voiceDataConsentAt: String?
+    public var voiceProfileConsentAt: String?
+    public var voiceCloningConsentAt: String?
+    public var voiceCloningEnabledAt: String?
+
     public var extras: [String: CodableValue]
 
     public static let defaults = ApplicationPreferences(
@@ -714,6 +745,9 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         animationsEnabled: Bool = true, reducedMotion: Bool = false,
         highContrastMode: Bool = false, screenReaderOptimized: Bool = false, keyboardShortcutsEnabled: Bool = true,
         tutorialsCompleted: [String] = [], betaFeaturesEnabled: Bool = false, telemetryEnabled: Bool = true,
+        dataProcessingConsentAt: String? = nil, voiceDataConsentAt: String? = nil,
+        voiceProfileConsentAt: String? = nil, voiceCloningConsentAt: String? = nil,
+        voiceCloningEnabledAt: String? = nil,
         extras: [String: CodableValue] = [:]
     ) {
         self.theme = theme; self.accentColor = accentColor; self.interfaceLanguage = interfaceLanguage
@@ -723,6 +757,9 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         self.highContrastMode = highContrastMode; self.screenReaderOptimized = screenReaderOptimized
         self.keyboardShortcutsEnabled = keyboardShortcutsEnabled; self.tutorialsCompleted = tutorialsCompleted
         self.betaFeaturesEnabled = betaFeaturesEnabled; self.telemetryEnabled = telemetryEnabled
+        self.dataProcessingConsentAt = dataProcessingConsentAt; self.voiceDataConsentAt = voiceDataConsentAt
+        self.voiceProfileConsentAt = voiceProfileConsentAt; self.voiceCloningConsentAt = voiceCloningConsentAt
+        self.voiceCloningEnabledAt = voiceCloningEnabledAt
         self.extras = extras
     }
 
@@ -730,7 +767,10 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         case theme, accentColor, interfaceLanguage, fontSize, fontFamily, lineHeight
         case compactMode, sidebarPosition, showAvatars, animationsEnabled, reducedMotion
         case highContrastMode, screenReaderOptimized, keyboardShortcutsEnabled
-        case tutorialsCompleted, betaFeaturesEnabled, telemetryEnabled, extras
+        case tutorialsCompleted, betaFeaturesEnabled, telemetryEnabled
+        case dataProcessingConsentAt, voiceDataConsentAt, voiceProfileConsentAt
+        case voiceCloningConsentAt, voiceCloningEnabledAt
+        case extras
     }
 
     public init(from decoder: Decoder) throws {
@@ -752,6 +792,11 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         tutorialsCompleted = try c.decodeIfPresent([String].self, forKey: .tutorialsCompleted) ?? Self.defaults.tutorialsCompleted
         betaFeaturesEnabled = try c.decodeIfPresent(Bool.self, forKey: .betaFeaturesEnabled) ?? Self.defaults.betaFeaturesEnabled
         telemetryEnabled = try c.decodeIfPresent(Bool.self, forKey: .telemetryEnabled) ?? Self.defaults.telemetryEnabled
+        dataProcessingConsentAt = try c.decodeIfPresent(String.self, forKey: .dataProcessingConsentAt)
+        voiceDataConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceDataConsentAt)
+        voiceProfileConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceProfileConsentAt)
+        voiceCloningConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceCloningConsentAt)
+        voiceCloningEnabledAt = try c.decodeIfPresent(String.self, forKey: .voiceCloningEnabledAt)
         extras = try c.decodeIfPresent([String: CodableValue].self, forKey: .extras) ?? [:]
     }
 }

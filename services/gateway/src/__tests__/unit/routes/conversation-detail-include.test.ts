@@ -1,5 +1,6 @@
 import {
   conversationDetailInclude,
+  conversationUserPreferencesSelect,
   CONVERSATION_DETAIL_PARTICIPANTS_CAP
 } from '../../../routes/conversations/core';
 
@@ -72,5 +73,29 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     expect(conversationDetailInclude._count).toEqual({
       select: { participants: { where: { isActive: true } } }
     });
+  });
+});
+
+/**
+ * Titre DM stable — le select des userPreferences (liste ET détail) doit
+ * inclure `customName` : c'est lui qui pilote le nom affiché d'un DM côté
+ * client. Son absence créait un flip-flop de titre (liste froide = nom du
+ * participant, premier pin/mute = surnom via la réponse du PATCH préférences —
+ * vu « sandra raveloson » → « Sany » 2026-07-04). `reaction` était sélectionné
+ * mais strippé du wire (conversationMinimalSchema) — les deux contrats sont
+ * verrouillés ensemble, ce test côté DB, api-schemas.test.ts côté wire.
+ */
+describe('conversationUserPreferencesSelect (titre DM stable)', () => {
+  it('hydrate exactement les préférences que le wire déclare — customName et reaction compris', () => {
+    expect(Object.keys(conversationUserPreferencesSelect).sort()).toEqual([
+      'categoryId',
+      'customName',
+      'deletedForUserAt',
+      'isArchived',
+      'isMuted',
+      'isPinned',
+      'reaction',
+      'tags'
+    ]);
   });
 });

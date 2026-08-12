@@ -36,6 +36,7 @@ jest.mock('sonner', () => ({
 
 // Reference au mock pour les assertions
 const mockToast = jest.requireMock('sonner').toast;
+const mockCopyToClipboard = jest.requireMock('@/lib/clipboard').copyToClipboard as jest.Mock;
 
 // Mock de useI18n
 jest.mock('@/hooks/useI18n', () => ({
@@ -233,6 +234,11 @@ jest.mock('@/lib/utils', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
 }));
 
+// Mock de la source unique presse-papiers (utilisée par use-message-interactions)
+jest.mock('@/lib/clipboard', () => ({
+  copyToClipboard: jest.fn(() => Promise.resolve({ success: true, message: '' })),
+}));
+
 // Mock Z_CLASSES
 jest.mock('@/lib/z-index', () => ({
   Z_CLASSES: {
@@ -247,7 +253,13 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     emit: jest.fn(),
     on: jest.fn(),
     off: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
+}));
+
+// Mock MessageReadStatusDetails to avoid React Query dependency
+jest.mock('@/components/common/bubble-message/MessageReadStatusDetails', () => ({
+  MessageReadStatusDetails: () => null,
 }));
 
 // Mock CLIENT_EVENTS
@@ -631,7 +643,7 @@ describe('BubbleMessageNormalView', () => {
       fireEvent.click(screen.getByTestId('action-copy'));
 
       await waitFor(() => {
-        expect(navigator.clipboard.writeText).toHaveBeenCalled();
+        expect(mockCopyToClipboard).toHaveBeenCalled();
         expect(mockToast.success).toHaveBeenCalled();
       });
     });
@@ -892,22 +904,22 @@ describe('BubbleMessageNormalView', () => {
       expect(copyBtn).toBeInTheDocument();
       fireEvent.click(copyBtn);
 
-      // La copie est appelee (le mock clipboard est dans le composant reel)
+      // La copie est appelee via la source unique
       await waitFor(() => {
-        expect(navigator.clipboard.writeText).toHaveBeenCalled();
+        expect(mockCopyToClipboard).toHaveBeenCalled();
       });
     });
 
     it('devrait gerer les erreurs de copie gracieusement', async () => {
-      (navigator.clipboard.writeText as jest.Mock).mockRejectedValueOnce(new Error('Copy failed'));
+      mockCopyToClipboard.mockResolvedValueOnce({ success: false, message: 'Copy failed' });
 
       renderNormalView();
 
       fireEvent.click(screen.getByTestId('action-copy'));
 
-      // Le composant gere l'erreur sans crash
+      // Le composant gere l'echec sans crash
       await waitFor(() => {
-        expect(navigator.clipboard.writeText).toHaveBeenCalled();
+        expect(mockCopyToClipboard).toHaveBeenCalled();
       });
     });
   });
@@ -915,7 +927,7 @@ describe('BubbleMessageNormalView', () => {
   describe('iOS Parity — Visual styling', () => {
     it('devrait appliquer le gradient indigo brand sur les messages propres', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 
@@ -926,7 +938,7 @@ describe('BubbleMessageNormalView', () => {
 
     it('devrait garder le gradient indigo en dark mode (pas gray)', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 
@@ -937,7 +949,7 @@ describe('BubbleMessageNormalView', () => {
 
     it('devrait appliquer le border-radius iOS (rounded-2xl)', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 
@@ -947,7 +959,7 @@ describe('BubbleMessageNormalView', () => {
 
     it('devrait appliquer une shadow sur les messages propres', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 

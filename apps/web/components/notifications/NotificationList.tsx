@@ -20,6 +20,8 @@ type NotificationListProps = {
   onClick: (notification: Notification) => void;
   formatTimeAgo: (date: Date | string | null) => string;
   t: TranslateFunction;
+  /** Locale de l'appareil — propagée pour la date locale du contexte social. */
+  locale?: string;
   searchQuery?: string;
   compact?: boolean;
   grouped?: boolean;
@@ -35,6 +37,7 @@ export const NotificationList = memo(function NotificationList({
   onClick,
   formatTimeAgo,
   t,
+  locale,
   searchQuery = '',
   compact = false,
   grouped = true,
@@ -81,7 +84,7 @@ export const NotificationList = memo(function NotificationList({
 
   if (!grouped) {
     return (
-      <div className="space-y-3">
+      <div className="divide-y divide-border/60">
         <AnimatePresence mode="popLayout">
           {notifications.map((notification, index) => (
             <NotificationItem
@@ -92,6 +95,7 @@ export const NotificationList = memo(function NotificationList({
               onClick={onClick}
               formatTimeAgo={formatTimeAgo}
               t={t}
+              locale={locale}
               compact={compact}
               index={index}
             />
@@ -108,13 +112,13 @@ export const NotificationList = memo(function NotificationList({
   let globalIndex = 0;
 
   return (
-    <div className="space-y-6">
+    <div>
       {groups.map((group) => (
         <div key={group.label}>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3 px-1">
+          <h3 className="sticky top-16 z-20 bg-background/85 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
             {group.label}
           </h3>
-          <div className="space-y-3">
+          <div className="divide-y divide-border/60">
             <AnimatePresence mode="popLayout">
               {group.notifications.map((notification) => {
                 const idx = globalIndex++;
@@ -127,6 +131,7 @@ export const NotificationList = memo(function NotificationList({
                     onClick={onClick}
                     formatTimeAgo={formatTimeAgo}
                     t={t}
+                    locale={locale}
                     compact={compact}
                     index={idx}
                   />

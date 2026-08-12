@@ -34,7 +34,8 @@ describe('Notification Preferences', () => {
       expect(NOTIFICATION_PREFERENCE_DEFAULTS.groupNotifications).toBe(true);
       expect(NOTIFICATION_PREFERENCE_DEFAULTS.groupInviteEnabled).toBe(true);
       expect(NOTIFICATION_PREFERENCE_DEFAULTS.memberJoinedEnabled).toBe(true);
-      expect(NOTIFICATION_PREFERENCE_DEFAULTS.memberLeftEnabled).toBe(false);
+      // Tout activé par défaut sauf DnD (spec produit 2026-06-14).
+      expect(NOTIFICATION_PREFERENCE_DEFAULTS.memberLeftEnabled).toBe(true);
     });
 
     it('should have correct privacy notification defaults', () => {

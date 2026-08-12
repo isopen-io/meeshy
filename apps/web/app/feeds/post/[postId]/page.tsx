@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import {
@@ -10,9 +12,9 @@ import {
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
   useDeletePostMutation,
-  useSharePostMutation,
   useUpdatePostMutation,
   useRepostMutation,
+  useTranslatePostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import {
   useCreateCommentMutation,
@@ -21,27 +23,33 @@ import {
   useUnlikeCommentMutation,
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useCommentTarget } from '@/hooks/use-comment-target';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
-import { PageHeader, useToast } from '@/components/v2';
+import { useToast } from '@/components/v2';
 import { Skeleton } from '@/components/v2/Skeleton';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
-import { postsService } from '@/services/posts.service';
+import { postsService, recordAnonymousView } from '@/services/posts.service';
+import { reportService } from '@/services/report.service';
+import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
+import { isHeartLikedByMe } from '@/lib/reactions';
+import { shareLink } from '@/lib/share-utils';
 
 /**
  * Post detail page (v1 canonical path).
  *
  * Mounted at `/feeds/post/[postId]` — the URL minted by the gateway
  * for share intents and parsed by the iOS universal-link handler.
- * The v2 mirror at `/v2/feeds/post/[postId]` is kept for backwards
- * compatibility with already-distributed tracking links but new links
- * are minted against this path.
+ * This is the canonical (and only) post detail renderer.
  */
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const postId = params.postId as string;
   const toastCtx = useToast();
   const showToast = useCallback(
@@ -50,13 +58,25 @@ export default function PostDetailPage() {
   );
 
   const currentUser = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userLanguage = usePreferredLanguage();
+
+  // Notification → comment navigation: the link builder appends a
+  // `#comment-<id>` anchor (plus `?parent=<id>` when the target is a reply, or
+  // a legacy `?comment=<id>` query). Read REACTIVELY (hashchange / popstate /
+  // client navigations) so landing on this already-mounted page with a new
+  // target re-runs the scroll + highlight in PostDetail → CommentList.
+  const { targetCommentId, targetParentCommentId } = useCommentTarget();
 
   const postQuery = usePostQuery(postId);
   const commentsQuery = useCommentsInfiniteQuery({ postId, enabled: !!postId });
   const comments = useCommentsList(commentsQuery);
 
-  usePostSocketCacheSync();
+  usePostSocketCacheSync({ currentUserId: currentUser?.id });
+  // Join the post room so comment / reaction events broadcast to
+  // `ROOMS.post(postId)` reach this viewer even when they are not a friend of
+  // the author (PUBLIC post). Without it, real-time comments never surface.
+  usePostRoom(postId);
 
   // Mutations
   const likeMutation = useLikePostMutation();
@@ -64,9 +84,9 @@ export default function PostDetailPage() {
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const deleteMutation = useDeletePostMutation();
-  const shareMutation = useSharePostMutation();
   const updateMutation = useUpdatePostMutation();
   const repostMutation = useRepostMutation();
+  const translateMutation = useTranslatePostMutation();
   const createCommentMutation = useCreateCommentMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const likeCommentMutation = useLikeCommentMutation();
@@ -78,32 +98,45 @@ export default function PostDetailPage() {
   // Fire-and-forget view increment on first mount.
   // Failures are intentionally silent: an unreachable counter must not
   // block the user from reading the post.
+  // - Authentifié → parcours inscrit (viewPost → viewCount).
+  // - Anonyme (sans compte) → ping postOpenCount dédupliqué par session header
+  //   (spec 2026-06-17). On évite ainsi le 401 inutile de viewPost en anonyme.
   useEffect(() => {
-    if (postId) {
+    if (!postId) return;
+    if (isAuthenticated) {
       postsService.viewPost(postId).catch(() => {});
+      // Consommer les notifications du post (nouveau post, commentaires,
+      // réactions — portée serveur `context.postId`). `viewPost` ne marque
+      // qu'à la PREMIÈRE vue : une notification arrivée après resterait non
+      // lue à vie sans cet appel dédié.
+      markScopeNotificationsRead(queryClient, { kind: 'post', postId });
+    } else {
+      recordAnonymousView(postId, getOrCreateWebSessionKey());
     }
-  }, [postId]);
+  }, [postId, isAuthenticated, queryClient]);
 
   if (postQuery.isLoading) {
     return (
-      <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-        <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
-        <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
-          <Skeleton className="h-48 rounded-2xl" />
-          <Skeleton className="h-32 rounded-2xl" />
+      <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
+        <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
+          <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-32 rounded-2xl" />
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (postQuery.isError || !postQuery.data) {
     return (
-      <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-        <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
-        <div className="max-w-2xl mx-auto px-6 py-16 text-center">
-          <p className="text-[var(--gp-text-muted)]">Post not found or an error occurred.</p>
+      <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
+        <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
+          <div className="max-w-2xl mx-auto px-6 py-16 text-center">
+            <p className="text-[var(--gp-text-muted)]">Post not found or an error occurred.</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -111,12 +144,20 @@ export default function PostDetailPage() {
   const isAuthor = post.authorId === currentUser?.id;
 
   const handleShare = async () => {
+    const localUrl = `${window.location.origin}/feeds/post/${post.id}`;
+    const title = post.author?.displayName ?? post.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${post.id}`);
-      shareMutation.mutate({ postId: post.id });
-      showToast('Link copied!', 'success');
+      const { shortUrl } = await postsService.sharePost(post.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, post.content ?? '');
+      if (shared) {
+        showToast('Shared!', 'success');
+      } else if (!hasNativeShare) {
+        showToast('Link copied!', 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
     } catch {
-      /* clipboard denied / unavailable — silent */
+      showToast("Couldn't share the post.", 'error');
     }
   };
 
@@ -157,6 +198,14 @@ export default function PostDetailPage() {
     );
   };
 
+  const handleReportPost = () => {
+    if (!window.confirm('Report this post?')) return;
+    reportService
+      .reportPost(post.id, 'inappropriate', '')
+      .then(() => showToast('Post reported', 'success'))
+      .catch(() => showToast("Couldn't report the post.", 'error'));
+  };
+
   const handleQuote = (content: string) => {
     repostMutation.mutate(
       { postId: post.id, data: { content, isQuote: true } },
@@ -171,53 +220,88 @@ export default function PostDetailPage() {
   };
 
   return (
-    <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-      <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
-      <main className="px-6 py-8">
-        <PostDetail
-          post={post}
-          comments={comments}
-          currentUserId={currentUser?.id}
-          currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
-          userLanguage={userLanguage}
-          commentsLoading={commentsQuery.isLoading}
-          commentsHasMore={commentsQuery.hasNextPage ?? false}
-          commentsLoadingMore={commentsQuery.isFetchingNextPage}
-          onLike={() => likeMutation.mutate({ postId: post.id })}
-          onUnlike={() => unlikeMutation.mutate({ postId: post.id })}
-          onBookmark={() => bookmarkMutation.mutate(post.id)}
-          onUnbookmark={() => unbookmarkMutation.mutate(post.id)}
-          onShare={handleShare}
-          onEdit={isAuthor ? handleEdit : undefined}
-          onDelete={isAuthor ? handleDeletePost : undefined}
-          onSubmitComment={(content, parentId) =>
-            createCommentMutation.mutate({ postId: post.id, content, parentId })
-          }
-          onLoadMoreComments={() => commentsQuery.fetchNextPage()}
-          onLikeComment={(commentId) => likeCommentMutation.mutate({ postId: post.id, commentId })}
-          onUnlikeComment={(commentId) => unlikeCommentMutation.mutate({ postId: post.id, commentId })}
-          onDeleteComment={(commentId) => deleteCommentMutation.mutate({ postId: post.id, commentId })}
+    <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
+      <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
+        <main className="px-6 py-8">
+          <PostDetail
+            post={post}
+            comments={comments}
+            currentUserId={currentUser?.id}
+            currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+            userLanguage={userLanguage}
+            isLiked={isHeartLikedByMe(post)}
+            isBookmarked={!!post.bookmarkedAt}
+            userReaction={post.currentUserReactions?.[0]}
+            commentsLoading={commentsQuery.isLoading}
+            commentsHasMore={commentsQuery.hasNextPage ?? false}
+            commentsLoadingMore={commentsQuery.isFetchingNextPage}
+            onLike={() => {
+              const isLiked = isHeartLikedByMe(post);
+              if (isLiked) {
+                unlikeMutation.mutate({ postId: post.id });
+              } else {
+                likeMutation.mutate({ postId: post.id });
+              }
+            }}
+            onUnlike={() => unlikeMutation.mutate({ postId: post.id })}
+            onReact={(emoji) => {
+              const reactions = post.currentUserReactions ?? [];
+              if (reactions.includes(emoji)) {
+                unlikeMutation.mutate({ postId: post.id, emoji });
+              } else {
+                likeMutation.mutate({ postId: post.id, emoji });
+              }
+            }}
+            onBookmark={() => {
+              if (post.bookmarkedAt) {
+                unbookmarkMutation.mutate(post.id);
+              } else {
+                bookmarkMutation.mutate(post.id);
+              }
+            }}
+            onUnbookmark={() => unbookmarkMutation.mutate(post.id)}
+            onShare={handleShare}
+            onRepost={() => setRepostModalOpen(true)}
+            onEdit={isAuthor ? handleEdit : undefined}
+            onDelete={isAuthor ? handleDeletePost : undefined}
+            onReport={isAuthor ? undefined : handleReportPost}
+            onTranslate={() => translateMutation.mutate({ postId: post.id, targetLanguage: userLanguage })}
+            onDownloadMedia={(mediaId) => postsService.recordMediaDownloads(post.id, [mediaId], 'detail')}
+            onDownloadRepostMedia={(mediaId) => {
+              if (post.repostOf?.id) postsService.recordMediaDownloads(post.repostOf.id, [mediaId], 'detail');
+            }}
+            onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
+            onSubmitComment={(content, parentId) =>
+              createCommentMutation.mutate({ postId: post.id, content, parentId })
+            }
+            onLoadMoreComments={() => commentsQuery.fetchNextPage()}
+            onLikeComment={(commentId) => likeCommentMutation.mutate({ postId: post.id, commentId })}
+            onUnlikeComment={(commentId) => unlikeCommentMutation.mutate({ postId: post.id, commentId })}
+            onDeleteComment={(commentId) => deleteCommentMutation.mutate({ postId: post.id, commentId })}
+            targetCommentId={targetCommentId}
+            targetParentCommentId={targetParentCommentId}
+          />
+        </main>
+
+        <PostEditor
+          open={editorOpen}
+          initialContent={post.content ?? ''}
+          initialVisibility={post.visibility}
+          onSave={handleSaveEdit}
+          onClose={() => setEditorOpen(false)}
+          saving={updateMutation.isPending}
         />
-      </main>
 
-      <PostEditor
-        open={editorOpen}
-        initialContent={post.content ?? ''}
-        initialVisibility={post.visibility}
-        onSave={handleSaveEdit}
-        onClose={() => setEditorOpen(false)}
-        saving={updateMutation.isPending}
-      />
-
-      <RepostModal
-        open={repostModalOpen}
-        originalAuthor={post.author?.displayName ?? post.author?.username}
-        originalContent={post.content ?? undefined}
-        onRepost={handleRepost}
-        onQuote={handleQuote}
-        onClose={() => setRepostModalOpen(false)}
-        saving={repostMutation.isPending}
-      />
-    </div>
+        <RepostModal
+          open={repostModalOpen}
+          originalAuthor={post.author?.displayName ?? post.author?.username}
+          originalContent={post.content ?? undefined}
+          onRepost={handleRepost}
+          onQuote={handleQuote}
+          onClose={() => setRepostModalOpen(false)}
+          saving={repostMutation.isPending}
+        />
+      </div>
+    </DashboardLayout>
   );
 }

@@ -5,7 +5,7 @@ import { ConversationHeader } from '../../../components/conversations/Conversati
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import { AttachmentService } from '@/services/attachmentService';
-import { useCallStore } from '@/stores/call-store';
+import { useCallBanner } from '@/components/conversations/header/use-call-banner';
 import { useUserStore } from '@/stores/user-store';
 import type { Conversation, SocketIOUser as User, Participant } from '@meeshy/shared/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
@@ -32,15 +32,29 @@ let mockStorePrefs: any = {
 };
 
 jest.mock('@/stores/conversation-preferences-store', () => ({
-  useConversationPreferencesStore: () => ({
-    preferencesMap: new Map([['conv-1', mockStorePrefs], ['conv-2', mockStorePrefs]]),
-    categories: [],
-    isLoading: false,
-    isInitialized: true,
+  useConversationPreferencesStore: jest.fn((selector: any) => {
+    const state = {
+      preferencesMap: new Map([['conv-1', mockStorePrefs], ['conv-2', mockStorePrefs]]),
+      categories: [],
+      isLoading: false,
+      isInitialized: true,
+      initialize: jest.fn(),
+      togglePin: jest.fn(),
+      toggleMute: jest.fn(),
+      toggleArchive: jest.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+  useConversationPreference: (_id: string) => mockStorePrefs,
+  useConversationCategories: () => [],
+  useConversationPreferencesActions: () => ({
     initialize: jest.fn(),
+    getPreferences: jest.fn(),
     togglePin: jest.fn(),
     toggleMute: jest.fn(),
     toggleArchive: jest.fn(),
+    setReaction: jest.fn(),
+    refreshPreferences: jest.fn(),
   }),
 }));
 
@@ -56,9 +70,11 @@ jest.mock('@/services/attachmentService', () => ({
   },
 }));
 
-// Mock stores
-jest.mock('@/stores/call-store', () => ({
-  useCallStore: jest.fn(),
+// Call banner — its own data sourcing (REST + call-store) is exhaustively
+// covered by use-call-banner.test.tsx; ConversationHeader only needs to
+// prove it renders/wires OngoingCallBanner off whatever the hook reports.
+jest.mock('@/components/conversations/header/use-call-banner', () => ({
+  useCallBanner: jest.fn(),
 }));
 
 jest.mock('@/stores/user-store', () => ({
@@ -66,6 +82,8 @@ jest.mock('@/stores/user-store', () => ({
     getUserById: jest.fn(() => null),
     _lastStatusUpdate: 0,
   })),
+  useUserById: jest.fn(() => null),
+  useUserStatusTick: jest.fn(),
 }));
 
 // Mock sonner toast
@@ -128,8 +146,8 @@ jest.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="dropdown-content">{children}</div>
   ),
-  DropdownMenuItem: ({ children, onClick, disabled }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean }) => (
-    <button data-testid="dropdown-item" onClick={onClick} disabled={disabled}>{children}</button>
+  DropdownMenuItem: ({ children, onClick, onSelect, disabled }: { children: React.ReactNode; onClick?: () => void; onSelect?: () => void; disabled?: boolean }) => (
+    <button data-testid="dropdown-item" onClick={onClick || onSelect} disabled={disabled}>{children}</button>
   ),
   DropdownMenuSeparator: () => <hr data-testid="dropdown-separator" />,
 }));
@@ -269,6 +287,7 @@ const mockParticipants: Participant[] = [
 const mockT = (key: string) => {
   const translations: Record<string, string> = {
     'conversationHeader.backToList': 'Back to list',
+    'conversationHeader.startCall': 'Start video call',
     'conversationHeader.startVideoCall': 'Start video call',
     'conversationHeader.menuActions': 'Actions menu',
     'conversationDetails.title': 'Details',
@@ -312,9 +331,12 @@ describe('ConversationHeader', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    (useCallStore as unknown as jest.Mock).mockReturnValue({
+    (useCallBanner as unknown as jest.Mock).mockReturnValue({
       currentCall: null,
-      isInCall: false,
+      callDuration: 0,
+      showCallBanner: false,
+      handleJoinCall: jest.fn(),
+      handleDismissCallBanner: jest.fn(),
     });
 
     (useUserStore as unknown as jest.Mock).mockReturnValue({
@@ -427,7 +449,7 @@ describe('ConversationHeader', () => {
       });
     });
 
-    it('should not show video call button for regular users', async () => {
+    it('should show video call button for regular users in direct conversations', async () => {
       const onStartCall = jest.fn();
       render(
         <ConversationHeader
@@ -437,8 +459,9 @@ describe('ConversationHeader', () => {
         />
       );
 
+      // Video calls are available to ALL authenticated users (canUseVideoCalls returns Boolean(currentUser))
       await waitFor(() => {
-        expect(screen.queryByLabelText('Start video call')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Start video call')).toBeInTheDocument();
       });
     });
   });
@@ -491,9 +514,17 @@ describe('ConversationHeader', () => {
         />
       );
 
+      // The call button is a dropdown trigger — clicking a dropdown item calls onStartCall
       await waitFor(() => {
-        const videoButton = screen.getByLabelText('Start video call');
-        fireEvent.click(videoButton);
+        const dropdownItems = screen.getAllByTestId('dropdown-item');
+        // Click the first dropdown item (audio call)
+        const callItem = dropdownItems.find(item => item.textContent?.includes('audio') || item.textContent?.includes('vidéo') || item.textContent?.includes('Appel'));
+        if (callItem) {
+          fireEvent.click(callItem);
+        } else {
+          // Fallback: click the first dropdown item
+          fireEvent.click(dropdownItems[0]);
+        }
       });
 
       expect(onStartCall).toHaveBeenCalled();
@@ -616,8 +647,8 @@ describe('ConversationHeader', () => {
   });
 
   describe('Call Banner', () => {
-    it('should show call banner when there is an active call', async () => {
-      (useCallStore as unknown as jest.Mock).mockReturnValue({
+    it('should show call banner when useCallBanner reports an active call', async () => {
+      (useCallBanner as unknown as jest.Mock).mockReturnValue({
         currentCall: {
           id: 'call-1',
           conversationId: 'conv-1',
@@ -625,7 +656,10 @@ describe('ConversationHeader', () => {
           participants: [],
           startedAt: new Date().toISOString(),
         },
-        isInCall: true,
+        callDuration: 0,
+        showCallBanner: true,
+        handleJoinCall: jest.fn(),
+        handleDismissCallBanner: jest.fn(),
       });
 
       render(<ConversationHeader {...defaultProps} />);
@@ -635,16 +669,13 @@ describe('ConversationHeader', () => {
       });
     });
 
-    it('should not show call banner for different conversation', async () => {
-      (useCallStore as unknown as jest.Mock).mockReturnValue({
-        currentCall: {
-          id: 'call-1',
-          conversationId: 'other-conv',
-          status: 'active',
-          participants: [],
-          startedAt: new Date().toISOString(),
-        },
-        isInCall: true,
+    it('should not show call banner when useCallBanner reports none', async () => {
+      (useCallBanner as unknown as jest.Mock).mockReturnValue({
+        currentCall: null,
+        callDuration: 0,
+        showCallBanner: false,
+        handleJoinCall: jest.fn(),
+        handleDismissCallBanner: jest.fn(),
       });
 
       render(<ConversationHeader {...defaultProps} />);

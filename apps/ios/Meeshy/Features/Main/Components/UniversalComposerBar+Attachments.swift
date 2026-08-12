@@ -77,81 +77,274 @@ extension UniversalComposerBar {
         .foregroundColor(style == .dark ? .white : theme.textPrimary)
     }
 
-    // MARK: - Attachment Ladder
+    // MARK: - Attachment Carousel Panel
+    //
+    // Replaces the legacy vertical ladder that dropped out of the (+) button.
+    // When the user taps (+), the keyboard resigns and this horizontal carousel
+    // of attachment types slides up *in the keyboard's place* (sized to the last
+    // known keyboard height by the parent). Tapping the now-keyboard-icon swaps
+    // it back for the system keyboard. See `attachButton` and the panel host in
+    // `UniversalComposerBar.swift`.
 
-    var attachmentLadder: some View {
-        VStack(spacing: 8) {
-            // Emoji picker
-            attachLadderButton(icon: "face.smiling.fill", color: "FF9F43", delay: 0.0) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    onRequestTextEmoji?()
+    var attachmentCarouselPanel: some View {
+        let tiles = carouselTiles
+
+        return VStack(spacing: 0) {
+            mediaPanelGrabHandle
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
+                        carouselTile(tile, index: index)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+            }
+
+            // Inline recent photos/videos — selectable straight into the
+            // attachment tray, with a leading "+" to open the full library. The
+            // strip fills the remaining panel height (iPad shows a roomy
+            // scrollable grid); only hosts WITHOUT it need the trailing spacer.
+            if let onRecentMediaSelected {
+                Divider().opacity(0.4).padding(.horizontal, 14)
+                RecentMediaStrip(
+                    accentColor: accentColor,
+                    onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
+                    onSelect: onRecentMediaSelected,
+                    onEdit: onRecentMediaEdit,
+                    onSelectionChanged: { recentStripSelectionIds = $0 }
+                )
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            (style == .dark ? Color.black.opacity(0.18) : theme.inputBackground.opacity(0.6))
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "composer.a11y.attachCarousel", defaultValue: "Types de pi\u{00E8}ces jointes", bundle: .main))
+    }
+
+    // MARK: - Grab Handle
+
+    /// Poignée du panneau. Décorative tant qu'il n'y a pas d'aperçu photothèque
+    /// en dessous ; dès que le strip est monté, elle devient le raccourci vers
+    /// la photothèque COMPLÈTE — celle du système, avec ses onglets Photos /
+    /// Albums en haut, exactement le picker que le composer de story ouvre.
+    ///
+    /// Le geste est directionnel et reprend la grammaire de la feuille système :
+    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 19 vignettes à
+    /// toute la photothèque), tirer vers le BAS referme le panneau. Sans la branche
+    /// « bas », la poignée avalerait le drag et casserait le swipe-to-dismiss
+    /// que le geste global de `expandedComposer` assure partout ailleurs.
+    ///
+    /// La sélection multiple en cours est reportée au picker : partir vers la
+    /// photothèque ne doit jamais faire perdre ses choix à l'utilisateur — même
+    /// invariant que la tuile « + » du strip.
+    @ViewBuilder
+    var mediaPanelGrabHandle: some View {
+        // Branche explicite plutôt que `highPriorityGesture(optionnel)` : la
+        // surcharge qui accepte un geste `nil` n'existe qu'à partir d'iOS 18 et
+        // l'app plancher à 16.
+        if onRecentMediaSelected != nil {
+            grabHandleCapsule(emphasis: 0.55)
+                // Bande tactile confortable : 4 pt de haut ne s'attrapent pas.
+                .contentShape(Rectangle().inset(by: -12))
+                // `highPriority` : sans ça, le `DragGesture` global de
+                // `expandedComposer` gagne l'arbitrage et le geste vers le haut
+                // n'arrive jamais jusqu'ici.
+                .highPriorityGesture(mediaPanelHandleDrag)
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "composer.a11y.panelHandle", defaultValue: "Poign\u{00E9}e du panneau", bundle: .main))
+                .accessibilityHint(String(localized: "composer.a11y.panelHandleHint", defaultValue: "Glisser vers le haut pour ouvrir toute la phototh\u{00E8}que", bundle: .main))
+                // VoiceOver ne peut pas produire le drag : il lui faut l'action
+                // nommée, sinon le raccourci n'existe que pour la souris/doigt.
+                .accessibilityAction(named: Text(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))) {
+                    openFullPhotoLibrary(preselecting: recentStripSelectionIds)
+                }
+        } else {
+            grabHandleCapsule(emphasis: 0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func grabHandleCapsule(emphasis: Double) -> some View {
+        Capsule()
+            .fill(mutedColor.opacity(emphasis))
+            .frame(width: 36, height: 4)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+    }
+
+    /// La décision vit dans `ComposerPanelHandleLaw` (pure, testée) ; ce geste
+    /// ne fait que lui passer position et vélocité projetée, puis exécuter.
+    private var mediaPanelHandleDrag: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onEnded { value in
+                switch ComposerPanelHandleLaw.outcome(
+                    translation: value.translation.height,
+                    predicted: value.predictedEndTranslation.height
+                ) {
+                case .openFullLibrary:
+                    HapticFeedback.medium()
+                    openFullPhotoLibrary(preselecting: recentStripSelectionIds)
+                case .closePanel:
+                    closeAttachMenu()
+                case .ignore:
+                    break
                 }
             }
-            .accessibilityLabel(String(localized: "composer.a11y.emojiPicker", defaultValue: "Ouvrir le s\u{00E9}lecteur d'emojis", bundle: .main))
-            // File picker
-            attachLadderButton(icon: "doc.fill", color: "45B7D1", delay: 0.04) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onFilePicker?() }
+    }
+
+    /// Point unique d'ouverture de la photothèque système, partagé par la tuile
+    /// « + » du strip, la poignée et l'action VoiceOver.
+    ///
+    /// Le panneau s'étire vers le haut pendant le délai qui précède la
+    /// présentation, au lieu de se refermer vers le bas : la feuille système
+    /// prolonge alors le geste au lieu de le contredire (cf.
+    /// `ComposerLibraryHandoff`). Il est ensuite retiré SOUS la feuille qui
+    /// monte — au retour du picker le composer est propre, exactement comme
+    /// avec l'ancien chemin `fire(_:)`.
+    ///
+    /// Reduce Motion garde le chemin direct : l'étirement est une animation
+    /// décorative, pas une information.
+    func openFullPhotoLibrary(preselecting ids: [String]) {
+        let present: () -> Void = {
+            if let onPhotoLibraryPreselecting {
+                onPhotoLibraryPreselecting(ids)
+            } else {
+                onPhotoLibrary?()
             }
-            .accessibilityLabel(String(localized: "composer.a11y.filePicker", defaultValue: "Joindre un fichier", bundle: .main))
-            // Location
-            attachLadderButton(icon: "location.fill", color: "2ECC71", delay: 0.08) {
-                closeAttachMenu()
-                HapticFeedback.light()
-                onLocationRequest?()
-            }
-            .accessibilityLabel(String(localized: "composer.a11y.shareLocation", defaultValue: "Partager ma position", bundle: .main))
-            // Camera
-            attachLadderButton(icon: "camera.fill", color: "F8B500", delay: 0.12) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onCamera?() }
-            }
-            .accessibilityLabel(String(localized: "composer.a11y.camera", defaultValue: "Prendre une photo", bundle: .main))
-            // Photo library
-            attachLadderButton(icon: "photo.fill", color: "9B59B6", delay: 0.16) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onPhotoLibrary?() }
-            }
-            .accessibilityLabel(String(localized: "composer.a11y.photoLibrary", defaultValue: "Choisir dans la phototh\u{00E8}que", bundle: .main))
-            // Voice recording
-            attachLadderButton(icon: "mic.fill", color: "E74C3C", delay: 0.20) {
+        }
+        guard !reduceMotion else {
+            fire(present)
+            return
+        }
+        // Deux déclencheurs (poignée puis tuile « + ») ne doivent pas empiler
+        // deux présentations sur un seul étirement.
+        guard !isExpandingToLibrary else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            isExpandingToLibrary = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + ComposerLibraryHandoff.expandDelay) {
+            present()
+            closeAttachMenu()
+            isExpandingToLibrary = false
+        }
+    }
+
+    /// The attachment types offered by the carousel. Each tile is included only
+    /// when the host actually wired its callback (or, for voice, when the mode
+    /// allows it) — so a context like comments that only wires photo/file/voice
+    /// never shows a dead camera or emoji tile.
+    private var carouselTiles: [CarouselTile] {
+        var tiles: [CarouselTile] = []
+        // The dedicated "Photos" tile is only listed when there is NO recent-media
+        // strip below (the strip already exposes photo/video picking + a tile to
+        // open the full library). Hosts without the strip keep this tile so photo
+        // access never disappears.
+        if onPhotoLibrary != nil && onRecentMediaSelected == nil {
+            tiles.append(CarouselTile(
+                id: "photo", icon: "photo.fill", color: "9B59B6",
+                label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main)
+            ) { fire { onPhotoLibrary?() } })
+        }
+        if onCamera != nil {
+            tiles.append(CarouselTile(
+                id: "camera", icon: "camera.fill", color: "F8B500",
+                label: String(localized: "composer.attach.camera", defaultValue: "Cam\u{00E9}ra", bundle: .main)
+            ) { fire { onCamera?() } })
+        }
+        if onFilePicker != nil {
+            tiles.append(CarouselTile(
+                id: "file", icon: "doc.fill", color: "45B7D1",
+                label: String(localized: "composer.attach.file", defaultValue: "Fichier", bundle: .main)
+            ) { fire { onFilePicker?() } })
+        }
+        if showLocation && onLocationRequest != nil {
+            tiles.append(CarouselTile(
+                id: "location", icon: "location.fill", color: "2ECC71",
+                label: String(localized: "composer.attach.location", defaultValue: "Position", bundle: .main)
+            ) { fire { onLocationRequest?() } })
+        }
+        if resolvedShowVoice {
+            tiles.append(CarouselTile(
+                id: "voice", icon: "mic.fill", color: "E74C3C",
+                label: String(localized: "composer.attach.voice", defaultValue: "Vocal", bundle: .main)
+            ) {
+                // Voice records inline (the recording bar takes over the row),
+                // so the carousel must step aside immediately.
                 closeAttachMenu()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { startRecording() }
-            }
-            .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))
+            })
         }
-        .padding(.bottom, 52)
+        if showEmoji && onRequestTextEmoji != nil {
+            tiles.append(CarouselTile(
+                id: "emoji", icon: "face.smiling.fill", color: "FF9F43",
+                label: String(localized: "composer.attach.emoji", defaultValue: "Emoji", bundle: .main)
+            ) { fire { onRequestTextEmoji?() } })
+        }
+        return tiles
     }
 
-    func attachLadderButton(icon: String, color: String, delay: Double, action: @escaping () -> Void) -> some View {
-        Button(action: {
+    /// Closes the carousel then runs `action` on the next runloop tick so the
+    /// dismissal animation and any presented picker sheet don't fight.
+    private func fire(_ action: @escaping () -> Void) {
+        closeAttachMenu()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { action() }
+    }
+
+    struct CarouselTile: Identifiable {
+        let id: String
+        let icon: String
+        let color: String
+        let label: String
+        let action: () -> Void
+    }
+
+    func carouselTile(_ tile: CarouselTile, index: Int) -> some View {
+        Button {
             onAnyInteraction?()
             HapticFeedback.light()
-            action()
-        }) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: color), Color(hex: color).opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            tile.action()
+        } label: {
+            VStack(spacing: 7) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: tile.color), Color(hex: tile.color).opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 42, height: 42)
-                    .shadow(color: Color(hex: color).opacity(0.45), radius: 8, y: 3)
+                        .frame(width: 58, height: 58)
+                        .shadow(color: Color(hex: tile.color).opacity(0.4), radius: 8, y: 3)
 
-                Image(systemName: icon)
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(.white)
+                    Image(systemName: tile.icon)
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                }
+                Text(tile.label)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(style == .dark ? .white.opacity(0.85) : theme.textSecondary)
+                    .lineLimit(1)
             }
         }
-        .menuAnimation(showMenu: showAttachOptions, delay: delay)
+        .menuAnimation(showMenu: showAttachOptions, delay: Double(index) * 0.04)
+        .accessibilityLabel(tile.label)
     }
 
-    // MARK: - Attach Button
+    // MARK: - Attach / Keyboard Toggle Button
 
+    /// The left-side composer control. It toggles between the text keyboard and
+    /// the attachment carousel:
+    /// - When the carousel is hidden it shows a `plus` — tapping resigns the
+    ///   keyboard and slides the carousel up in its place.
+    /// - When the carousel is shown it shows a `keyboard` glyph — tapping hides
+    ///   the carousel and brings the system keyboard back.
     var attachButton: some View {
         let accent = Color(hex: accentColor)
         let iconColor = style == .dark ? Color.white.opacity(0.7) : accent
@@ -160,20 +353,15 @@ extension UniversalComposerBar {
 
         return Button(action: {
             onAnyInteraction?()
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            HapticFeedback.light()
             if showAttachOptions {
-                closeAttachMenu()
+                showAttachmentCarousel(false)
+                isFocused = true
             } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    attachRotation += 90
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAttachOptions = true
-                }
+                showAttachmentCarousel(true)
             }
         }) {
-            Image(systemName: showAttachOptions ? "xmark" : "plus")
+            Image(systemName: showAttachOptions ? "keyboard" : "plus")
                 .font((showAttachOptions ? Font.callout : Font.title3).weight(.semibold))
                 .foregroundColor(iconColor)
                 .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
@@ -189,8 +377,25 @@ extension UniversalComposerBar {
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)
         }
         .accessibilityLabel(showAttachOptions
-            ? String(localized: "composer.a11y.closeAttachMenu", defaultValue: "Fermer le menu des pi\u{00E8}ces jointes", bundle: .main)
+            ? String(localized: "composer.a11y.showKeyboard", defaultValue: "Afficher le clavier", bundle: .main)
             : String(localized: "composer.a11y.openAttachMenu", defaultValue: "Ouvrir le menu des pi\u{00E8}ces jointes", bundle: .main))
+    }
+
+    // MARK: - Carousel <-> Keyboard switching
+
+    /// Shows or hides the attachment carousel. Showing it resigns the keyboard
+    /// first so the carousel can occupy the freed keyboard space.
+    func showAttachmentCarousel(_ show: Bool) {
+        if show {
+            attachRotation += 90
+            isFocused = false
+            // Let the host dismiss any other bottom surface (e.g. an emoji
+            // panel) so the carousel never stacks on top of it.
+            onShowAttachments?()
+        }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showAttachOptions = show
+        }
     }
 
     // MARK: - Close Attach Menu
@@ -204,6 +409,30 @@ extension UniversalComposerBar {
     // MARK: - Clipboard Content Handling
 
     func handleClipboardCheck(_ newText: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
+        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
+        // le double de la croissance réelle et dont le seuil ne doit pas
+        // bouger) : seule une INSERTION assez grande pour contenir
+        // « file:// » déclenche la détection — un utilisateur qui tape ces
+        // caractères un par un n'a jamais une insertion de cette taille.
+        let insertedCount = newText.count - text.count
+        if insertedCount >= "file://".count, newText.contains("file://") {
+            let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
+            if !urls.isEmpty {
+                // Le champ garde le texte débarrassé des URLs ; les fichiers
+                // partent par `onIngest`, comme un dépôt.
+                DispatchQueue.main.async {
+                    text = cleaned
+                }
+                ingestPastedFileURLs(urls)
+                HapticFeedback.medium()
+                // Pas de tuile presse-papier pour un collage de fichiers :
+                // la spec exige « une pièce jointe — pas du texte, pas une
+                // tuile presse-papier ».
+                return
+            }
+        }
+
         // Detect if a paste of 2000+ chars just happened
         let delta = newText.count - (text.count - (newText.count - text.count))
         if newText.count > 2000 && delta > 500 {
@@ -282,8 +511,6 @@ extension UniversalComposerBar {
     }
 
     func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
+        Int64(bytes).formatted(.byteCount(style: .file))
     }
 }

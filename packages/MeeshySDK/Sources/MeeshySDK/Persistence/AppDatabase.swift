@@ -102,7 +102,11 @@ public final class AppDatabase: @unchecked Sendable {
     private static func openPool(at databaseURL: URL) throws -> DatabasePool {
         var configuration = Configuration()
         configuration.prepareDatabase { db in
-            db.trace { _ in }
+            // WAL mode is GRDB default, but set it explicitly for clarity.
+            // busy_timeout prevents immediate SQLITE_BUSY errors under concurrent
+            // socket-event writes and UI reads (5s gives the writer time to finish).
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+            try db.execute(sql: "PRAGMA busy_timeout = 5000")
         }
         return try DatabasePool(path: databaseURL.path, configuration: configuration)
     }
@@ -111,15 +115,37 @@ public final class AppDatabase: @unchecked Sendable {
     private static func removeDatabaseFiles(at databaseURL: URL) {
         let fileManager = FileManager.default
         for suffix in ["", "-wal", "-shm"] {
-            try? fileManager.removeItem(at: URL(fileURLWithPath: databaseURL.path + suffix))
+            let url = URL(fileURLWithPath: databaseURL.path + suffix)
+            do {
+                try fileManager.removeItem(at: url)
+            } catch CocoaError.fileNoSuchFile {
+                // `-wal`/`-shm` n'existent pas toujours — cas nominal.
+            } catch {
+                // La base corrompue survit : la réouverture échouera à nouveau.
+                Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+                    .fault("Corrupt database file '\(suffix, privacy: .public)' could not be removed, recovery will fail again: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
-    private static func inMemoryWriter() -> (any DatabaseWriter, Bool) {
+    /// `migrate` is injectable so tests can force the failure branch without
+    /// depending on a real GRDB migration actually breaking.
+    static func inMemoryWriter(
+        migrate: (any DatabaseWriter) throws -> Void = AppDatabase.runMigrations
+    ) -> (any DatabaseWriter, Bool) {
         // swiftlint:disable:next force_try
         let queue = try! DatabaseQueue()
         // The ephemeral DB still needs the schema so reads/writes don't throw.
-        try? runMigrations(on: queue)
+        // A migration failure here must not crash the host app — that's the
+        // whole point of the in-memory fallback — but swallowing it silently
+        // left zero diagnostic when the L2 cache degraded to a schemaless
+        // store for the rest of the session.
+        do {
+            try migrate(queue)
+        } catch {
+            let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+            logger.error("In-memory fallback DB migration failed, cache will be degraded for this session: \(error.localizedDescription, privacy: .public)")
+        }
         return (queue, true)
     }
 

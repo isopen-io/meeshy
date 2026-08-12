@@ -212,11 +212,6 @@ jest.mock('@/components/ui/dialog', () => ({
   ),
 }));
 
-// Mock @radix-ui/react-visually-hidden
-jest.mock('@radix-ui/react-visually-hidden', () => ({
-  Root: ({ children }: any) => <span style={{ display: 'none' }}>{children}</span>,
-}));
-
 describe('AccountRecoveryModal', () => {
   const defaultProps = {
     isOpen: true,

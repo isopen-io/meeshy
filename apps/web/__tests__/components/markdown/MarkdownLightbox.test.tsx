@@ -61,6 +61,48 @@ jest.mock('@/components/ui/button', () => ({
   ),
 }));
 
+// Mock useI18n hook with viewers namespace translations
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'markdown.loadError': 'Impossible de charger le fichier',
+        'markdown.document': 'Document Markdown',
+        'markdown.formattedView': 'Vue formatée',
+        'markdown.rawView': 'Vue brute',
+        'markdown.download': 'Télécharger le fichier Markdown',
+        'markdown.delete': 'Supprimer ce fichier Markdown',
+        'markdown.fullscreen': 'Ouvrir en plein écran',
+        'markdown.close': 'Fermer',
+        'markdown.escToClose': 'Appuyez sur Échap pour fermer',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
+// Mock use-i18n hook as well (aliased import)
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'markdown.loadError': 'Impossible de charger le fichier',
+        'markdown.document': 'Document Markdown',
+        'markdown.formattedView': 'Vue formatée',
+        'markdown.rawView': 'Vue brute',
+        'markdown.download': 'Télécharger le fichier Markdown',
+        'markdown.delete': 'Supprimer ce fichier Markdown',
+        'markdown.fullscreen': 'Ouvrir en plein écran',
+        'markdown.close': 'Fermer',
+        'markdown.escToClose': 'Appuyez sur Échap pour fermer',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
 // Mock fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -148,7 +190,7 @@ describe('MarkdownLightbox', () => {
         );
       });
 
-      expect(screen.getByText('Markdown Document')).toBeInTheDocument();
+      expect(screen.getByText('Document Markdown')).toBeInTheDocument();
     });
   });
 

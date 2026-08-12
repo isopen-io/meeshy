@@ -71,29 +71,12 @@ const mockTranslations = {
 };
 
 // Mock dynamic imports for translation files
-jest.mock(
-  '@/locales/en/common.json',
-  () => mockTranslations.en.common,
-  { virtual: true }
-);
-
-jest.mock(
-  '@/locales/en/auth.json',
-  () => mockTranslations.en.auth,
-  { virtual: true }
-);
-
-jest.mock(
-  '@/locales/fr/common.json',
-  () => mockTranslations.fr.common,
-  { virtual: true }
-);
-
-jest.mock(
-  '@/locales/es/common.json',
-  () => mockTranslations.es.common,
-  { virtual: true }
-);
+// Note: files exist on disk; omit { virtual: true } so jest.mock resolves the path
+// through moduleNameMapper (same as the dynamic import) and the mock is correctly matched.
+jest.mock('@/locales/en/common.json', () => mockTranslations.en.common);
+jest.mock('@/locales/en/auth.json', () => mockTranslations.en.auth);
+jest.mock('@/locales/fr/common.json', () => mockTranslations.fr.common);
+jest.mock('@/locales/es/common.json', () => mockTranslations.es.common);
 
 describe('useI18n', () => {
   beforeEach(() => {

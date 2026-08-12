@@ -573,7 +573,7 @@ describe('NotificationService - Structure Groupée V2', () => {
 
       const response = await NotificationService.getPreferences();
 
-      expect(apiService.get).toHaveBeenCalledWith('/notifications/preferences');
+      expect(apiService.get).toHaveBeenCalledWith('/me/preferences/notification');
       expect(response.data).toEqual(mockPreferences);
     });
   });
@@ -592,7 +592,7 @@ describe('NotificationService - Structure Groupée V2', () => {
 
       const response = await NotificationService.updatePreferences(updatedPreferences);
 
-      expect(apiService.patch).toHaveBeenCalledWith('/notifications/preferences', updatedPreferences);
+      expect(apiService.patch).toHaveBeenCalledWith('/me/preferences/notification', updatedPreferences);
       expect(response.data).toEqual(updatedPreferences);
     });
   });

@@ -29,6 +29,9 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     @State private var showEditor = false
     @State private var showPreview = false
     @State private var wavePhase: CGFloat = 0
+    /// Refus micro : le tap sur « Enregistrer » retournait en silence, laissant
+    /// l'écran inerte sans la moindre explication. Rendu sous les contrôles.
+    @State private var permissionMessage: String?
 
     public init(
         recorder: Recorder,
@@ -60,6 +63,16 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
                 Spacer()
 
+                if let permissionMessage {
+                    Text(permissionMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
+                }
+
                 bottomControls
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
@@ -88,7 +101,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 )
             }
         }
-        .onChange(of: recorder.isRecording) { isRecording in
+        .adaptiveOnChange(of: recorder.isRecording) { _, isRecording in
             if !isRecording {
                 if recordedURL == nil, let url = recorder.recordedFileURL, recorder.duration >= settings.minimumDuration {
                     recordedURL = url
@@ -164,12 +177,6 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 durationDisplay
             } else {
                 idlePrompt
-            }
-
-            if let maxDur = settings.maxDuration {
-                Text("\(Int(maxDur))s max")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
             }
         }
     }
@@ -322,18 +329,22 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     // MARK: - Actions
 
     private func handleStartRecording() {
-        // See `StoryVoiceRecorder.startRecording` for the same fix rationale:
-        // `requestRecordPermission`'s callback runs on the TCC server queue
-        // and `DispatchQueue.main.async` does not prove `@MainActor` to
-        // Swift 6, so calling `@MainActor` APIs from there crashes with
-        // `swift_task_isCurrentExecutorImpl`.
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            Task { @MainActor in
-                guard granted else { return }
-                recorder.configure(with: settings)
-                recorder.startRecording()
-                HapticFeedback.medium()
+        // Un closure de callback TCC hériterait de `@MainActor` (defaultIsolation
+        // MeeshyUI) et trapperait à l'entrée sur la queue TCC ;
+        // `DevicePermissions.requestMicrophone()` confine la demande à un helper
+        // `nonisolated`. Cf. `DevicePermissions.swift`.
+        Task { @MainActor in
+            let state = await DevicePermissions.requestMicrophone()
+            guard state.isUsable else {
+                permissionMessage = state.needsSettingsRedirect
+                    ? String(localized: "audio.recorder.micDeniedSettings", defaultValue: "Micro refus\u{00E9} \u{2014} autorisez-le dans R\u{00E9}glages", bundle: .module)
+                    : String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+                return
             }
+            permissionMessage = nil
+            recorder.configure(with: settings)
+            recorder.startRecording()
+            HapticFeedback.medium()
         }
     }
 

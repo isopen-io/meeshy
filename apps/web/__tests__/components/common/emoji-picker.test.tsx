@@ -35,6 +35,8 @@ jest.mock('@/hooks/use-i18n', () => ({
         'picker.search': 'Search emojis...',
         'picker.clearSearch': 'Clear search',
         'picker.noResults': `No results for "${params?.query || ''}"`,
+        'common.close': 'Fermer',
+        'close': 'Fermer',
       };
       return translations[key] || key;
     },

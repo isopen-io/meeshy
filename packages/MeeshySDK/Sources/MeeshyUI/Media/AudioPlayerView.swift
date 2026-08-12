@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Combine
 import os
+import UIKit
 import MeeshySDK
 
 // MARK: - Audio Playback Manager
@@ -14,6 +15,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var duration: TimeInterval = 0
     @Published public var speed: PlaybackSpeed = .x1_0
     @Published public var isLoading = false
+    /// Mirrors `SharedAVPlayerManager.shouldLoop` (the video engine): when
+    /// `true`, natural end-of-playback seeks back to 0 and replays instead of
+    /// tearing the engine down — used by the reels pager so an audio reel
+    /// loops exactly like a video reel instead of going silent forever after
+    /// one pass. Reset to `false` by `resetState()` on every new
+    /// `play`/`playLocal` call, same as the video engine's `cleanup()` — the
+    /// caller must opt back in per attachment, it never carries across tracks.
+    @Published public var shouldLoop = false
+
+    /// Profil de session transmis au MediaSessionCoordinator. Défaut
+    /// `.transient` (fail-safe : un moteur oublié duck comme avant, sans
+    /// jamais voler la carte Now Playing). Seul le moteur possédé par le
+    /// ConversationAudioCoordinator (app) opte pour `.content`.
+    public var sessionProfile: AudioSessionProfile = .transient
 
     public var onPlaybackFinished: (() -> Void)?
 
@@ -32,7 +47,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// the moment the coordinator swaps the loaded attachment. Without this,
     /// mutations stayed invisible to SwiftUI's dependency tracking and a
     /// rapid double-tap on the play button could resolve to a stale id.
-    @Published public var attachmentId: String?
+    @Published public var attachmentId: String? {
+        didSet {
+            // Track switch (the shared engine is reassigned to a new audio
+            // while the previous one is still loaded mid-playback): snapshot the
+            // outgoing track's position so "resume where you stopped" survives
+            // tapping another audio or skipping forward — not just pause/stop.
+            guard oldValue != attachmentId, let outgoing = oldValue, player != nil else { return }
+            saveResumePosition(currentTime, forAttachment: outgoing, totalDuration: duration)
+        }
+    }
 
     private var player: AVAudioPlayer?
     private var timer: Timer? {
@@ -43,6 +67,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
+
+    /// Capture fidèle de l'interaction : une entrée par écoute réellement
+    /// continue, avec son motif de fin. Un échantillonnage périodique perdrait
+    /// un vocal d'une seconde ou une écoute abandonnée en 500 ms ; le lecteur,
+    /// lui, connaît les frontières exactes.
+    private var stretchTracker = PlaybackStretchTracker()
+
+    /// Version linguistique que le lecteur a sous les yeux — piste traduite ou
+    /// transcription affichée. Fournie par la vue, qui seule la connaît : le
+    /// moteur ne lit aucun singleton (pureté SDK). `nil` ⇒ rien n'est déclaré,
+    /// ce qui vaut mieux qu'inventer une langue.
+    public var consumedLanguageProvider: (() -> String?)?
+
+    private var positionMs: Int { Int((player?.currentTime ?? currentTime) * 1000) }
 
     /// Unification Étape C (slice 4) — session routée via `MediaSessionCoordinator`
     /// (source unique, refcomptée, call-aware via l'Étape B) au lieu d'un
@@ -65,12 +103,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var loadTask: Task<Void, Never>?
         nonisolated(unsafe) var sessionRequested = false
+        /// Block-based `willResignActive` observer token. Removed in `deinit`
+        /// (thread-safe) so the lifecycle hook never outlives the engine.
+        nonisolated(unsafe) var lifecycleObserver: NSObjectProtocol?
     }
     private let cleanupHandle = CleanupHandle()
 
     public override init() {
         super.init()
         PlaybackCoordinator.shared.register(self)
+        observeAppLifecycle()
     }
 
     /// Designated init that lets callers opt out of `PlaybackCoordinator`
@@ -85,6 +127,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         if registerWithCoordinator {
             PlaybackCoordinator.shared.register(self)
         }
+        observeAppLifecycle()
+    }
+
+    /// Persists the current playback position when the app resigns active
+    /// (incoming call, app switcher, lock, imminent termination). This is the
+    /// belt that covers an app kill mid-playback — pause/stop already persist
+    /// on their own paths. No-op for engines without a loaded `attachmentId`
+    /// (preview/owned dummies).
+    private func observeAppLifecycle() {
+        cleanupHandle.lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.persistPosition() }
+        }
     }
 
     // MARK: - Audio session (routed through the single MediaSessionCoordinator)
@@ -95,7 +153,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func acquireSession() async {
         guard !sessionRequested else { return }
         sessionRequested = true
-        try? await MediaSessionCoordinator.shared.request(role: .playback)
+        try? await MediaSessionCoordinator.shared.request(
+            role: .playback, playbackOptions: sessionProfile.categoryOptions
+        )
     }
 
     /// Libère la session via le coordinator (refcompté : désactive au count 0).
@@ -181,10 +241,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             player?.rate = Float(speed.rawValue)
             player?.prepareToPlay()
             duration = player?.duration ?? 0
+            applyResumePositionIfAvailable()
             player?.play()
             isPlaying = true
             isLoading = false
             listenStartTime = Date()
+            stretchTracker.begin(positionMs)
             startProgressTimer()
         } catch {
             Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
@@ -205,12 +267,23 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         // different track does not inherit the prior track's start time and
         // post `reportListenProgress` against the wrong attachment. The new
         // track's `listenStartTime` is set in `playData(_:)` on actual start.
+        // L'écoute en cours s'arrête sans être ni terminée ni mise en pause :
+        // clos et envoyé AVANT d'effacer la fenêtre d'analyse, sans quoi elle
+        // serait perdue — ou pire, recollée à la piste suivante.
+        if stretchTracker.hasOpenStretch {
+            stretchTracker.dismissed(positionMs)
+        }
+        reportListenProgress(complete: false)
         listenStartTime = nil
         loadTask?.cancel()
         loadTask = nil
+        // Never carries across tracks — mirrors SharedAVPlayerManager.cleanup()
+        // resetting shouldLoop=false; the caller re-opts-in per attachment.
+        shouldLoop = false
     }
 
     public func stop() {
+        persistPosition()
         resetState()
         currentUrl = nil
         releaseSession()
@@ -222,7 +295,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             player.pause()
             isPlaying = false
             timer?.invalidate()
+            stretchTracker.pause(positionMs)
             reportListenProgress(complete: false)
+            persistPosition()
         } else {
             // BUG A (round 4) — gate ONLY the resume branch. Pausing is always
             // allowed; resuming during a call must not steal the VoIP session.
@@ -232,13 +307,48 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             player.play()
             isPlaying = true
             listenStartTime = listenStartTime ?? Date()
+            stretchTracker.begin(positionMs)
             startProgressTimer()
         }
+    }
+
+    /// Pause explicite pour interruption système / changement de route.
+    /// Contrairement à `togglePlayPause()`, sans effet si le player a déjà
+    /// été mis en pause par le système (le toggle RELANCERAIT dans ce cas).
+    public func pause() {
+        guard player != nil, isPlaying else { return }
+        player?.pause()
+        isPlaying = false
+        timer?.invalidate()
+        stretchTracker.pause(positionMs)
+        reportListenProgress(complete: false)
+        persistPosition()
+    }
+
+    /// Reprise après interruption système : la session a pu être désactivée
+    /// par l'OS — la réactiver de façon synchrone (call-aware, sans toucher
+    /// le refcount) avant de relancer le player conservé.
+    public func resumeFromInterruption() {
+        guard let player, !isPlaying else { return }
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
+        MediaSessionCoordinator.shared.activatePlaybackSync(
+            options: sessionProfile.categoryOptions
+        )
+        PlaybackCoordinator.shared.willStartPlaying(audio: self)
+        player.rate = Float(speed.rawValue)
+        player.play()
+        isPlaying = true
+        listenStartTime = listenStartTime ?? Date()
+        stretchTracker.begin(positionMs)
+        startProgressTimer()
     }
 
     public func seek(to fraction: Double) {
         guard let player = player else { return }
         let target = fraction * player.duration
+        // Relevé AVANT le déplacement : c'est jusque-là que l'écoute a porté.
+        // Le traqueur ignore de lui-même un déplacement à l'arrêt.
+        stretchTracker.seek(from: positionMs, to: Int(target * 1000))
         player.currentTime = target
         currentTime = target
         progress = fraction
@@ -253,6 +363,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func skip(seconds: Double) {
         guard let player = player else { return }
         let target = max(0, min(player.duration, player.currentTime + seconds))
+        stretchTracker.seek(from: positionMs, to: Int(target * 1000))
         player.currentTime = target
         currentTime = target
         progress = player.duration > 0 ? target / player.duration : 0
@@ -271,7 +382,33 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // MARK: - Playback Finished (called by delegate)
     private func handlePlaybackFinished() {
         let finishedUrl = currentUrl
+        // Le média est allé au bout tout seul : la frontière n'est ni une pause
+        // ni un abandon, et l'écart se lit dans la trace.
+        stretchTracker.completed(Int(duration * 1000))
         reportListenProgress(complete: true)
+        // Natural end → forget the saved RESUME position so a later re-listen
+        // starts from 0, but remember the media as fully CONSUMED so the bubble
+        // keeps tinting the waveform at rest.
+        if let attId = attachmentId {
+            MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
+            AudioPlaybackPositionStore.shared.clear(for: attId)
+        }
+        // Reels pager parity — mirrors SharedAVPlayerManager's video loop:
+        // seek back to 0 and replay, keeping the player + session alive,
+        // instead of tearing everything down. Without this an audio reel
+        // stopped for good after one pass while its video-reel sibling looped
+        // forever (incohérence pager réels).
+        if shouldLoop, let player {
+            player.currentTime = 0
+            currentTime = 0
+            progress = 0
+            listenStartTime = Date()
+            stretchTracker.begin(0)
+            player.play()
+            isPlaying = true
+            startProgressTimer()
+            return
+        }
         timer?.invalidate()
         timer = nil
         player = nil
@@ -291,21 +428,88 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         guard let attId = attachmentId else { return }
         guard let start = listenStartTime else { return }
         let listenedSeconds = Date().timeIntervalSince(start)
-        guard complete || listenedSeconds >= 3 else { return }
+        // Vidée AVANT la garde, et jamais après : un retour anticipé laisserait
+        // la trace dans le traqueur, qui l'attribuerait ensuite à la piste
+        // SUIVANTE. Le seuil de 3 s protège le réseau, pas la mesure — une trace
+        // non vide vaut d'être envoyée, même pour une écoute de 500 ms.
+        let stretches = stretchTracker.drain()
+        guard complete || listenedSeconds >= 3 || !stretches.isEmpty else { return }
         let positionMs = Int(currentTime * 1000)
         let totalDurationMs = Int(duration * 1000)
+        let language = consumedLanguageProvider?()
 
-        Task {
-            let body = AttachmentStatusBody(
-                action: "listened",
-                playPositionMs: positionMs,
-                durationMs: totalDurationMs,
-                complete: complete
-            )
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status",
-                body: body
-            )
+        let body = AttachmentStatusBody(
+            action: "listened",
+            playPositionMs: positionMs,
+            durationMs: totalDurationMs,
+            complete: complete,
+            stretches: stretches,
+            language: language
+        )
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
+    }
+
+    // MARK: - Playback position persistence
+    //
+    // Resume-where-you-stopped: a saved position is honored only when it sits
+    // comfortably inside the track. We never resume within `resumeEdgeGuard`
+    // of either edge — a position glued to 0 adds nothing, and one glued to
+    // the end would replay the last instant then immediately finish.
+
+    /// Tracks shorter than this are never resumed (a 1s voice note is replayed
+    /// whole). Also gates `persistPosition` so we don't store noise.
+    nonisolated private static let minResumableDuration: TimeInterval = 2.0
+    /// Dead-zone at both ends of the track, in seconds.
+    nonisolated private static let resumeEdgeGuard: TimeInterval = 1.0
+
+    /// Whether `saved` is a position playback will actually honor on the next
+    /// play. Single source of truth for the dead-zone rule: the seek path
+    /// (`applyResumePositionIfAvailable`), the store path (`saveResumePosition`)
+    /// and the bubble's elapsed timecode all ask this, so the UI can never
+    /// advertise a resume point the engine would silently ignore.
+    nonisolated public static func isResumable(
+        _ saved: TimeInterval, totalDuration: TimeInterval
+    ) -> Bool {
+        totalDuration >= minResumableDuration
+            && saved > resumeEdgeGuard
+            && saved < totalDuration - resumeEdgeGuard
+    }
+
+    /// Seeks to the saved resume position (if any) BEFORE playback starts.
+    /// Called from `playData(_:)` once `duration` is known and the player is
+    /// prepared but not yet playing.
+    private func applyResumePositionIfAvailable() {
+        guard let attId = attachmentId,
+              let player,
+              let saved = AudioPlaybackPositionStore.shared.position(for: attId),
+              Self.isResumable(saved, totalDuration: duration) else { return }
+        player.currentTime = saved
+        currentTime = saved
+        progress = duration > 0 ? saved / duration : 0
+    }
+
+    /// Persists the current elapsed time for the active attachment, or clears
+    /// it when playback sits at either edge (nothing meaningful to resume).
+    /// Safe no-op when no attachment is loaded.
+    private func persistPosition() {
+        guard let attId = attachmentId else { return }
+        // Record the at-rest consumption fraction (monotonic) so a partially
+        // listened voice note keeps its waveform tint after scroll / relaunch.
+        if duration > 0 {
+            MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
+        }
+        saveResumePosition(currentTime, forAttachment: attId, totalDuration: duration)
+    }
+
+    /// Saves `elapsed` as the resume point for `id`, or clears any stored
+    /// position when `elapsed` sits at either edge of the track (nothing
+    /// meaningful to resume). Short tracks are never stored.
+    private func saveResumePosition(_ elapsed: TimeInterval, forAttachment id: String, totalDuration: TimeInterval) {
+        guard totalDuration >= Self.minResumableDuration else { return }
+        if Self.isResumable(elapsed, totalDuration: totalDuration) {
+            AudioPlaybackPositionStore.shared.save(elapsed, for: id)
+        } else {
+            AudioPlaybackPositionStore.shared.clear(for: id)
         }
     }
 
@@ -336,6 +540,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard let self = self, let player = self.player else { return }
                 guard player.isPlaying else { return }
                 let newTime = player.currentTime
+                // Le traqueur ne crée rien ici : il retient seulement la dernière
+                // position connue, pour pouvoir clore proprement une écoute dont
+                // la position finale serait illisible (fermeture brutale).
+                self.stretchTracker.observe(Int(newTime * 1000))
                 let newProgress = player.duration > 0 ? newTime / player.duration : 0
                 if abs(newTime - self.currentTime) >= Self.currentTimeWriteThresholdSeconds {
                     self.currentTime = newTime
@@ -354,6 +562,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     deinit {
         cleanupHandle.timer?.invalidate()
         cleanupHandle.loadTask?.cancel()
+        if let observer = cleanupHandle.lifecycleObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         // Dealloc avec session encore tenue (chemin sans `stop()` — vue
         // détruite sans onDisappear) : sans cette libération le refcount du
         // MediaSessionCoordinator ne retombait jamais à 0 → session audio
@@ -426,38 +637,52 @@ extension AudioPlayerView {
         return "\(left) / \(right)"
     }
 
-    /// ByteCountFormatter binaire avec arrondi entier. Reproduit le même
-    /// format que `AttachmentDownloader.fmt` côté app pour cohérence
-    /// visuelle entre les badges DownloadBadgeView et les labels audio.
+    /// Delegates to the single SDK-wide `formatMediaFileSize` helper so the
+    /// audio play-button label, the download badges (image/video) and the
+    /// upload progress bar always render the exact same string for the same
+    /// byte count. Previously this used its own binary (1024-based)
+    /// `ByteCountFormatter` while the app's `AttachmentDownloader.fmt` used a
+    /// decimal (1000-based) one — despite a comment claiming they matched.
     nonisolated public static func formatBytes(_ bytes: Int64) -> String {
-        byteFormatter.string(fromByteCount: bytes)
+        formatMediaFileSize(bytes)
     }
+}
 
-    /// Formatter configure une seule fois et reutilise. `formatBytes` est appele
-    /// au rendu de chaque bulle audio (label de taille) ET a chaque tick de
-    /// progression de telechargement ("410 KB / 850 KB") — creer un
-    /// ByteCountFormatter a chaque appel etait une allocation repetee dans un
-    /// chemin chaud. La config est constante et le formatter n'est que lu
-    /// (string(fromByteCount:) ne le mute pas), donc sur en lecture concurrente
-    /// au meme titre que DateFormatter/NumberFormatter (thread-safe iOS 7+).
-    nonisolated(unsafe) private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .binary
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.includesUnit = true
-        formatter.includesCount = true
-        formatter.zeroPadsFractionDigits = false
-        return formatter
-    }()
+/// The progress an audio bubble renders, resolved once and shared by the
+/// waveform tint, the percentage chip and the elapsed timecode.
+/// `isLive` distinguishes a playing engine (full accent) from a persisted
+/// at-rest position (attenuated accent).
+nonisolated public struct AudioProgressDisplay: Sendable, Equatable {
+    public let fraction: Double
+    public let elapsed: TimeInterval
+    public let isLive: Bool
+
+    public init(fraction: Double, elapsed: TimeInterval, isLive: Bool) {
+        self.fraction = fraction
+        self.elapsed = elapsed
+        self.isLive = isLive
+    }
 }
 
 public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
 
-    public var accentColor: String = "08D9D6"
+    public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var transcription: MessageTranscription? = nil
     public var translatedAudios: [MessageTranslatedAudio] = []
+    /// Prisme Linguistique: the language code the transcription STRIP should
+    /// default to, resolved by the caller (app) the same way
+    /// `preferredTranslation` resolves text — `nil` (default, unchanged for
+    /// every existing call site) means "show the original". The SDK stays
+    /// agnostic of the resolution rule itself (systemLanguage > regional >
+    /// custom > deviceLocale); it only renders whichever code it is handed.
+    /// Prisme audio-follow (2026-08-09) — this now ALSO seeds playback: a
+    /// non-nil/non-"orig" value marks `hasExplicitAudioLanguage = true` in
+    /// `init`, so the matching translated audio track (if one exists) plays
+    /// automatically, exactly like the transcription strip. See
+    /// `hasExplicitAudioLanguage`'s doc for the full contract.
+    public var initialTranscriptionLanguage: String? = nil
 
     public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
@@ -516,9 +741,34 @@ public struct AudioPlayerView: View {
     @MainActor
     private static let sharedNoopExternal = AudioPlaybackManager(registerWithCoordinator: false)
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered once per audio bubble — observing the ThemeManager
+    // singleton via @ObservedObject here would invalidate EVERY audio bubble
+    // on screen on every theme publish (Zero Unnecessary Re-render,
+    // CLAUDE.md). `colorScheme` is the blessed leaf-view alternative for a
+    // simple dark/light read; ThemeManager.mode itself is kept in sync with
+    // it (see `ThemeManager.syncWithSystem`).
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isTranscriptionExpanded = false
-    @State private var selectedAudioLanguage: String = "orig"
+    /// Seeded from `initialTranscriptionLanguage` in `init` (Prisme default),
+    /// then owned by user interaction (language pill taps, `externalLanguage`)
+    /// exactly like before. Internal (not `private`) so `@testable import`
+    /// can observe the seeding decision from MeeshyUITests without exposing
+    /// it publicly — same pattern as `usesExternalPlayer` above.
+    @State internal var selectedAudioLanguage: String
+    /// Prisme audio-follow (2026-08-09) — `selectedAudioLanguage` doubles as
+    /// the Prisme-seeded transcription-STRIP default AND the playback
+    /// language: this flag says whether `selectedAudioLanguage` should steer
+    /// which audio track plays. Seeded in `init` to `true` when Prisme
+    /// already resolved a real translation (`initialTranscriptionLanguage !=
+    /// nil`/`!= "orig"`) — reversing the prior "B9 fix" policy that kept
+    /// transcription-strip language and playback language independent by
+    /// design. Also flips to `true` inside `switchToLanguage` on an explicit
+    /// language-pill tap or `externalLanguage` binding change (idempotent —
+    /// already `true` in that case). Consulted by `resolvePlaybackUrl` so
+    /// `currentAudioUrl` only ever falls back to the original when NEITHER
+    /// Prisme nor the user resolved a translated language. Internal for the
+    /// same testability reason as `selectedAudioLanguage`.
+    @State internal var hasExplicitAudioLanguage: Bool
     @State private var isRetranscribing = false
     /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
     /// and the moment the server-pushed transcription lands in `transcription`.
@@ -526,8 +776,17 @@ public struct AudioPlayerView: View {
     @State private var isTranscribing = false
     /// Toggled in `onAppear` of the skeleton view to drive the pulse.
     @State private var transcriptionPulsePhase = false
+    /// `true` pendant le drag de scrub sur la waveform. Publié via
+    /// `MediaScrubbingPreferenceKey` pour que l'hôte (conteneur de swipe de
+    /// bulle côté app) désengage ses gestes horizontaux le temps du scrub.
+    /// `@GestureState` (pas `@State`) : SwiftUI le remet à `false`
+    /// automatiquement si le drag est interrompu (appel entrant, arbitrage
+    /// perdu face au parent) même quand `.onEnded` ne se déclenche jamais —
+    /// un `@State` manuel resterait bloqué à `true` et désengagerait le swipe
+    /// reply/forward de la bulle indéfiniment.
+    @GestureState private var isUserScrubbing = false
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
@@ -536,6 +795,30 @@ public struct AudioPlayerView: View {
             transcription: transcription,
             translatedAudios: translatedAudios
         )
+    }
+
+    /// Transmet au moteur la version linguistique que l'utilisateur a sous les
+    /// yeux, pour qu'elle accompagne le rapport d'écoute.
+    ///
+    /// `"orig"` n'est pas un code de langue mais un sentinelle d'affichage : il
+    /// se traduit par la langue de rédaction de l'audio, celle qui a réellement
+    /// été entendue. Le moteur ne lit rien lui-même — pureté SDK.
+    private func publishConsumedLanguage() {
+        let displayed = selectedAudioLanguage == "orig"
+            ? transcription?.language
+            : selectedAudioLanguage
+        player.consumedLanguageProvider = { displayed }
+    }
+
+    /// Pure resolution of the transcription strip's STARTING language: the
+    /// caller-resolved Prisme preference (`initialTranscriptionLanguage`)
+    /// wins when provided, else `"orig"` — the unchanged default for every
+    /// existing call site. Extracted as a `nonisolated static` helper (same
+    /// pattern as `shouldDelegateToParent` / `shouldStopOwnedEngineOnDisappear`
+    /// elsewhere in this file) so the seeding decision is unit-testable
+    /// without a SwiftUI render lifecycle.
+    nonisolated public static func resolveInitialTranscriptionLanguage(_ initialTranscriptionLanguage: String?) -> String {
+        initialTranscriptionLanguage ?? "orig"
     }
 
     /// Pure resolution of the transcription strip segments. Falls back to a
@@ -587,8 +870,9 @@ public struct AudioPlayerView: View {
 
     public init<TopContent: View, BottomContent: View>(
         attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-        accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+        accentColor: String = MeeshyColors.brandPrimaryHex, transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
+        initialTranscriptionLanguage: String? = nil,
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,
         onRetranscribe: (() -> Void)? = nil,
@@ -604,6 +888,13 @@ public struct AudioPlayerView: View {
     ) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
+        self.initialTranscriptionLanguage = initialTranscriptionLanguage
+        self._selectedAudioLanguage = State(
+            initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)
+        )
+        self._hasExplicitAudioLanguage = State(
+            initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage) != "orig"
+        )
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
@@ -664,6 +955,7 @@ public struct AudioPlayerView: View {
             if !usesExternalPlayer {
                 player.attachmentId = attachment.id
             }
+            publishConsumedLanguage()
             // BUG A fix — the legacy static autoplay registry is the
             // auto-advance mechanism ONLY for the owned-engine path. When an
             // external coordinator engine drives this view, the coordinator
@@ -713,11 +1005,17 @@ public struct AudioPlayerView: View {
             player.stop()
             player.unregisterFromCoordinator()
         }
-        .onChange(of: player.isPlaying) { playing in
+        // La langue affichée change → le moteur doit rapporter la NOUVELLE :
+        // le fournisseur capture une valeur, pas une référence, donc il faut le
+        // reposer à chaque bascule.
+        .adaptiveOnChange(of: selectedAudioLanguage) { _, _ in
+            publishConsumedLanguage()
+        }
+        .adaptiveOnChange(of: player.isPlaying) { _, playing in
             onPlayingChange?(playing)
             if playing { loadWaveformSamples() }
         }
-        .onChange(of: externalLanguage?.wrappedValue) { newLang in
+        .adaptiveOnChange(of: externalLanguage?.wrappedValue) { _, newLang in
             let code = newLang ?? "orig"
             guard code != selectedAudioLanguage else { return }
             switchToLanguage(code)
@@ -749,6 +1047,10 @@ public struct AudioPlayerView: View {
         // which goes through handlePlayTap() — gated by availability.
         player.stop()
 
+        // Explicit user intent (pill tap / externalLanguage binding) always
+        // marks the language explicit — idempotent if Prisme had already
+        // seeded it true in `init`.
+        hasExplicitAudioLanguage = true
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
         }
@@ -980,6 +1282,40 @@ public struct AudioPlayerView: View {
         return result
     }
 
+    /// Index du segment de transcription en cours de lecture (karaoké), résolu
+    /// depuis l'état live du moteur. Délègue au helper pur testable ci-dessous.
+    private func activeTranscriptionIndex(in segments: [TranscriptionDisplaySegment]) -> Int? {
+        Self.activeSegmentIndex(
+            segments: segments,
+            currentTime: player.currentTime,
+            progress: player.progress,
+            isPlaying: player.isPlaying
+        )
+    }
+
+    /// Index du segment actif à un instant donné — fonction PURE (testable).
+    ///
+    /// Utilise les timestamps réels dès qu'au moins un segment en porte un valide
+    /// (`endTime > startTime`). Quand la transcription n'a AUCUNE découpe temporelle
+    /// — segments à `startTime == endTime == 0`, fréquent sur les audios transcrits
+    /// sans alignement mot-à-mot — le prédicat `currentTime < endTime` resterait
+    /// toujours faux et plus AUCUN segment ne s'allumerait (tout gris, désynchronisé).
+    /// On retombe alors sur une progression proportionnelle pilotée par `progress`
+    /// pour que le surlignage avance quand même avec la lecture. `nil` à l'arrêt.
+    nonisolated public static func activeSegmentIndex(
+        segments: [TranscriptionDisplaySegment],
+        currentTime: TimeInterval,
+        progress: Double,
+        isPlaying: Bool
+    ) -> Int? {
+        guard isPlaying, !segments.isEmpty else { return nil }
+        if segments.contains(where: { $0.endTime > $0.startTime }) {
+            return segments.firstIndex { currentTime >= $0.startTime && currentTime < $0.endTime }
+        }
+        let idx = Int(progress * Double(segments.count))
+        return min(max(idx, 0), segments.count - 1)
+    }
+
     @ViewBuilder
     private func inlineFlowTranscription(segments: [TranscriptionDisplaySegment]) -> some View {
         // Cas fallback synthesized : `resolveDisplaySegments` renvoie un
@@ -993,10 +1329,14 @@ public struct AudioPlayerView: View {
         // idle (avant), actif (pendant lecture), past (après) — pour qu'un
         // audio sans segments soit aussi lisible pendant la lecture.
         if segments.count == 1, let single = segments.first {
-            let isActive = player.isPlaying
-                && player.currentTime >= single.startTime
-                && player.currentTime < single.endTime
-            let isPast = !isActive && player.currentTime >= single.endTime
+            // Activité résolue par le helper partagé : timing réel si disponible,
+            // sinon proportionnel (un segment unique non-timé reste actif toute la
+            // lecture au lieu de ne jamais s'allumer faute de `endTime`).
+            let isActive = activeTranscriptionIndex(in: segments) == 0
+            let hasRealTiming = single.endTime > single.startTime
+            let isPast = !isActive && (hasRealTiming
+                ? player.currentTime >= single.endTime
+                : (!player.isPlaying && player.progress >= 0.999))
             Button {
                 player.seekToTime(single.startTime)
                 HapticFeedback.light()
@@ -1018,14 +1358,12 @@ public struct AudioPlayerView: View {
             .animation(.easeInOut(duration: 0.15), value: isActive)
             .animation(.easeInOut(duration: 0.15), value: isPast)
         } else {
-            // BUG D fix — gate active-segment detection on `isPlaying`. On an
-            // idle carousel page `player.currentTime == 0` and segment 0 has
-            // `startTime == 0`, so the unguarded predicate false-highlighted
-            // segment 0 on every idle page. The single-segment branch above is
-            // already gated the same way.
-            let activeIdx = player.isPlaying
-                ? segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
-                : nil
+            // Activité résolue par le helper partagé : timing réel quand au moins un
+            // segment en porte, sinon fallback proportionnel sur `player.progress`
+            // (transcription sans découpe temporelle → karaoké quand même synchronisé).
+            // Gate sur `isPlaying` conservé (BUG D : sur une page carousel idle,
+            // `currentTime == 0` + segment 0 à `startTime == 0` faussait l'allumage).
+            let activeIdx = activeTranscriptionIndex(in: segments)
             FlowLayout(spacing: 0) {
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     let isActive = index == activeIdx
@@ -1060,11 +1398,36 @@ public struct AudioPlayerView: View {
     }
 
     private var currentAudioUrl: String {
-        if selectedAudioLanguage != "orig",
-           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }) {
-            return translated.url
-        }
-        return attachment.fileUrl
+        AudioPlayerView.resolvePlaybackUrl(
+            selectedLanguage: selectedAudioLanguage,
+            hasExplicitLanguage: hasExplicitAudioLanguage,
+            translatedAudios: translatedAudios,
+            originalUrl: attachment.fileUrl
+        )
+    }
+
+    /// Pure resolution of the actual URL `handlePlayTap` hands the playback
+    /// engine. Prisme audio-follow (2026-08-09) — `selectedLanguage` is
+    /// steered to playback whenever `hasExplicitLanguage` is `true`, whether
+    /// that came from the automatic Prisme seed in `init` or from an
+    /// explicit `switchToLanguage` call. When `false` (no Prisme translation
+    /// resolved and no user action yet), this always resolves to
+    /// `originalUrl`. Extracted as a `nonisolated static` helper — same
+    /// pattern as `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
+    /// elsewhere in this file — so it is unit-testable without a SwiftUI
+    /// render lifecycle.
+    nonisolated internal static func resolvePlaybackUrl(
+        selectedLanguage: String,
+        hasExplicitLanguage: Bool,
+        translatedAudios: [MessageTranslatedAudio],
+        originalUrl: String
+    ) -> String {
+        guard hasExplicitLanguage, selectedLanguage != "orig",
+              let translated = translatedAudios.first(where: {
+                  $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
+              })
+        else { return originalUrl }
+        return translated.url
     }
 
     // MARK: - Play Button
@@ -1083,6 +1446,7 @@ public struct AudioPlayerView: View {
             playButtonLabel
         }
         .disabled(isDownloading)
+        .accessibilityLabel(String(localized: "media.audio.play", defaultValue: "Lire l'audio", bundle: .module))
     }
 
     private var isDownloading: Bool {
@@ -1241,39 +1605,151 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Waveform Progress
+
+    /// Number of waveform bars. Higher density reads as a finer, more faithful
+    /// envelope (thin capsules) rather than a row of chunky squares. Single
+    /// source of truth: the render loop AND `loadWaveformSamples` must request
+    /// the same count so cache keys and indices line up.
+    private var waveformBarCount: Int { context.isCompact ? 48 : 72 }
+
+    /// Persisted "at-rest" consumption fraction (0...1) for this attachment —
+    /// drives the waveform tint BEFORE playback starts so a half- or
+    /// fully-listened voice note reads at a glance. Pure store read; the player
+    /// engine owns the live `progress`.
+    private var restingProgress: Double {
+        MediaConsumptionStore.shared.fraction(for: attachment.id) ?? 0
+    }
+
+    /// The stored resume point for this attachment, but ONLY when playback
+    /// would honor it — see `AudioPlaybackManager.isResumable`. Filtering here
+    /// keeps the timecode from advertising a position the engine ignores.
+    private var eligibleResumePosition: TimeInterval? {
+        guard let saved = AudioPlaybackPositionStore.shared.position(for: attachment.id),
+              AudioPlaybackManager.isResumable(saved, totalDuration: estimatedDuration)
+        else { return nil }
+        return saved
+    }
+
+    private var displayedProgress: AudioProgressDisplay {
+        Self.progressDisplay(
+            liveProgress: player.progress,
+            liveCurrentTime: player.currentTime,
+            restingProgress: restingProgress,
+            resumePosition: eligibleResumePosition,
+            totalDuration: estimatedDuration)
+    }
+
+    /// What the widget SHOWS for "how far along am I" — one resolution behind
+    /// the waveform tint, the percentage chip AND the elapsed timecode, so the
+    /// three can never contradict each other.
+    ///
+    /// While the engine plays, its own head wins: the timecode must track the
+    /// audio coming out of the speaker even if the user scrubbed backwards past
+    /// the monotonic consumption mark.
+    ///
+    /// At rest — a fresh launch, a bubble whose engine was never attached — the
+    /// two persisted facts answer two different questions and are kept apart:
+    /// `fraction` (waveform + chip) reports how much of the note has EVER been
+    /// consumed, while `elapsed` reports where the play button will START. They
+    /// coincide on a simple pause; they diverge when an already-finished note
+    /// is re-listened and paused mid-way (100 % consumed, resumes at 0:22).
+    nonisolated public static func progressDisplay(
+        liveProgress: Double,
+        liveCurrentTime: TimeInterval,
+        restingProgress: Double,
+        resumePosition: TimeInterval?,
+        totalDuration: TimeInterval
+    ) -> AudioProgressDisplay {
+        guard liveProgress <= 0 else {
+            return AudioProgressDisplay(
+                fraction: liveProgress, elapsed: liveCurrentTime, isLive: true)
+        }
+        let fraction = max(0, min(1, restingProgress))
+        guard totalDuration > 0 else {
+            return AudioProgressDisplay(fraction: fraction, elapsed: 0, isLive: false)
+        }
+        // Consumption is monotonic and sticky-complete; the resume point is the
+        // only value that predicts where the play button will start.
+        let elapsed = resumePosition.map { max(0, min(totalDuration, $0)) }
+            ?? fraction * totalDuration
+        return AudioProgressDisplay(fraction: fraction, elapsed: elapsed, isLive: false)
+    }
+
+    /// Maps a touch / drag x-position within the waveform strip to a normalized
+    /// seek fraction (0...1), clamped at both edges. Single source of truth for
+    /// BOTH the tap-to-seek and the swipe-to-scrub gestures on `waveformProgress`
+    /// so the two paths can never compute the position differently. Guards a
+    /// zero / negative width (pre-layout `GeometryReader` tick) so it never
+    /// divides by zero. Pure; unit-tested.
+    nonisolated public static func scrubFraction(locationX: CGFloat, width: CGFloat) -> Double {
+        guard width > 0 else { return 0 }
+        return Double(max(0, min(width, locationX)) / width)
+    }
+
     private var waveformProgress: some View {
         GeometryReader { geo in
-            let barCount = context.isCompact ? 25 : 35
-            let spacing: CGFloat = 2
-            let totalSpacing = spacing * CGFloat(barCount - 1)
-            let barWidth = max(2, (geo.size.width - totalSpacing) / CGFloat(barCount))
+            let barCount = waveformBarCount
+            // Thin bars with a tight gap. The bar width is derived from the
+            // available width so the strip always fills edge-to-edge; the gap
+            // is a fraction of the slot so dense layouts don't collapse.
+            let slot = geo.size.width / CGFloat(barCount)
+            let barWidth = max(1.5, slot * 0.62)
 
-            HStack(spacing: spacing) {
+            // Live playback (incl. a resumed position) drives the bars with the
+            // full accent. At rest we fall back to the persisted consumption
+            // fraction with an attenuated accent — discreet, per the Prisme.
+            let shownProgress = displayedProgress.fraction
+            let playedColor = displayedProgress.isLive ? accent : accent.opacity(0.4)
+
+            HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
-                    let fraction = Double(i) / Double(barCount)
-                    let isPlayed = fraction <= player.progress
+                    let fraction = (Double(i) + 0.5) / Double(barCount)
+                    let isPlayed = fraction <= shownProgress
                     let h = waveformHeight(index: i, total: barCount)
 
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(isPlayed ? accent : (isDark ? Color.white.opacity(0.18) : Color.black.opacity(0.1)))
+                    Capsule(style: .continuous)
+                        .fill(isPlayed ? playedColor : (isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12)))
                         .frame(width: barWidth, height: h)
+                        .frame(width: slot, height: 24, alignment: .center)
                 }
             }
-            .frame(height: 22, alignment: .center)
+            .frame(height: 24, alignment: .center)
         }
-        .frame(height: 22)
+        .frame(height: 24)
         .overlay(
             GeometryReader { geo in
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        let fraction = max(0, min(1, location.x / geo.size.width))
-                        player.seek(to: fraction)
-                        HapticFeedback.light()
-                    }
+                    // Swipe-to-scrub. `DragGesture(minimumDistance: 0)` claims the
+                    // touch the instant it lands on the strip, so dragging here
+                    // scrubs the playback position INSTEAD of scrolling the
+                    // enclosing conversation list / post detail or triggering the
+                    // bubble's own tap/long-press. `.highPriorityGesture` makes the
+                    // waveform win over those outer components — the user expects
+                    // the waveform to own the swipe. A plain tap is the
+                    // zero-distance case: it seeks to the tapped point on `.onEnded`.
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .updating($isUserScrubbing) { _, state, _ in
+                                state = true
+                            }
+                            .onChanged { value in
+                                player.seek(to: Self.scrubFraction(
+                                    locationX: value.location.x, width: geo.size.width))
+                            }
+                            .onEnded { value in
+                                player.seek(to: Self.scrubFraction(
+                                    locationX: value.location.x, width: geo.size.width))
+                                HapticFeedback.light()
+                            }
+                    )
             }
             .allowsHitTesting(availability == .ready)
         )
+        // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
+        // le conteneur de swipe de la bulle désengage reply/forward tant que le
+        // doigt manipule la waveform.
+        .preference(key: MediaScrubbingPreferenceKey.self, value: isUserScrubbing)
     }
 
     // MARK: - Time Row
@@ -1282,7 +1758,7 @@ public struct AudioPlayerView: View {
     /// `rightChipsColumn` (capsules empilées à droite du widget).
     private var timeRow: some View {
         HStack(spacing: 0) {
-            Text(formatMediaDuration(player.currentTime))
+            Text(formatMediaDuration(displayedProgress.elapsed))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
@@ -1331,7 +1807,7 @@ public struct AudioPlayerView: View {
     }
 
     private var percentageChip: some View {
-        let pct = Int(player.progress * 100)
+        let pct = Int(displayedProgress.fraction * 100)
         let isStarted = pct > 0
         let chipBg: Color = isStarted
             ? accent.opacity(0.85)
@@ -1384,7 +1860,7 @@ public struct AudioPlayerView: View {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                     }
                 }
             }
@@ -1439,20 +1915,33 @@ public struct AudioPlayerView: View {
             )
     }
 
+    /// Bar height in points. Maps the normalized amplitude (0–1) to the strip
+    /// height with a mild perceptual curve (`pow 0.65`) so quiet passages stay
+    /// visible instead of collapsing to the floor next to a few loud peaks —
+    /// the envelope reads truer to the ear. Falls back to a smooth procedural
+    /// shape until the real samples finish decoding.
     private func waveformHeight(index: Int, total: Int) -> CGFloat {
+        let minHeight: CGFloat = 2
+        let maxHeight: CGFloat = 22
         let samples = waveformAnalyzer.samples
-        if !samples.isEmpty && index < samples.count {
-            let sample = CGFloat(samples[index])
-            return max(3, sample * 18)
+        if !samples.isEmpty {
+            // Map the bar index onto the sample array so the render density and
+            // the sample count can differ without dropping or duplicating data.
+            let sampleIndex = min(samples.count - 1, index * samples.count / max(1, total))
+            let normalized = Double(max(0, min(1, samples[sampleIndex])))
+            let curved = pow(normalized, 0.65)
+            return max(minHeight, CGFloat(curved) * maxHeight)
         }
         let seed = Double(index * 7 + 3)
-        let base = 4.0 + sin(seed) * 5 + cos(seed * 0.5) * 3.5
-        return CGFloat(max(3, min(18, base)))
+        let base = 5.0 + sin(seed) * 6 + cos(seed * 0.5) * 4.0
+        return CGFloat(max(minHeight, min(maxHeight, base)))
     }
 
     private func loadWaveformSamples() {
         guard waveformAnalyzer.samples.isEmpty else { return }
-        let barCount = context.isCompact ? 25 : 35
+        // Decode at a higher resolution than we render so the perceived detail
+        // stays crisp; `waveformHeight` down-maps bar index → sample index.
+        let barCount = max(96, waveformBarCount)
         let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
         Task {
             if let data = try? await CacheCoordinator.shared.audio.data(for: resolved) {

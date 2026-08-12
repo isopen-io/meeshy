@@ -26,7 +26,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             'focus:outline-none focus:ring-2 focus:ring-offset-0',
             icon && 'pl-10',
             error
-              ? 'border-[#C1292E] focus:border-[#C1292E] focus:ring-[#C1292E]/20'
+              ? 'border-[var(--gp-error)] focus:border-[var(--gp-error)] focus:ring-[var(--gp-error)]/20'
               : 'border-[var(--gp-border)] focus:border-[var(--gp-deep-teal)] focus:ring-[var(--gp-deep-teal)]/20',
             'disabled:bg-[var(--gp-hover)] disabled:cursor-not-allowed',
             className

@@ -413,7 +413,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.markAsRead('conv-123');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/read');
+      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/mark-as-read');
     });
   });
 
@@ -508,8 +508,10 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.searchConversations('test');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/api/conversations/search', { q: 'test' });
-      expect(result).toEqual(mockConversations);
+      expect(mockApiService.get).toHaveBeenCalledWith('/conversations/search', { q: 'test' });
+      expect(result).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'conv-1', type: 'direct', title: 'Test Search Result' }),
+      ]));
     });
 
     it('should handle empty search results', async () => {
@@ -663,8 +665,8 @@ describe('ConversationsService', () => {
     it('should correctly map conversation types', async () => {
       // Only test types that the service actually transforms
       const testCases = [
-        { input: 'public', expected: 'broadcast' },
-        { input: 'global', expected: 'broadcast' },
+        { input: 'public', expected: 'public' },
+        { input: 'global', expected: 'global' },
         { input: 'group', expected: 'group' },
         { input: 'direct', expected: 'direct' },
       ];

@@ -152,6 +152,10 @@
       "searchPlaceholder": "Digite para pesquisar um usuário...",
       "noResults": "Nenhum usuário encontrado para \"{query}\"",
       "helpText": "↑↓ navegar • Enter selecionar • Esc fechar"
-    }
+    },
+    "bubble": {
+      "forwarded": "Encaminhado"
+    },
+    "newMessagesWhileAway": "novas mensagens"
   }
 }

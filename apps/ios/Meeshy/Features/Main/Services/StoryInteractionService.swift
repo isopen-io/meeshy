@@ -37,8 +37,11 @@ final class StoryInteractionService {
     /// picker (sidebar + canvas). Fire-and-forget: the actual translated
     /// payload arrives via the social socket, not via the response of
     /// this POST.
-    func requestTranslation(storyId: String, targetLanguage: String) async {
-        let body: [String: String] = ["targetLanguage": targetLanguage]
+    /// `force` rejoue une langue DÉJÀ traduite — ce que demande le bouton
+    /// « Retraduire » de la feuille des langues. Sans lui, la gateway sortait
+    /// aussitôt sur ses gardes de cache et le bouton ne faisait rien.
+    func requestTranslation(storyId: String, targetLanguage: String, force: Bool = false) async {
+        let body = StoryTranslationRequestBody(targetLanguage: targetLanguage, force: force ? true : nil)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
                 endpoint: "/posts/\(storyId)/translate",
@@ -49,22 +52,37 @@ final class StoryInteractionService {
         }
     }
 
+    /// Corps de `POST /posts/:id/translate`. `force` est omis quand il est faux :
+    /// la route le lit comme optionnel, inutile de l'envoyer pour rien.
+    private struct StoryTranslationRequestBody: Encodable {
+        let targetLanguage: String
+        let force: Bool?
+    }
+
     /// Posts a comment (or a reply if `parentId` is set). Optimistic UI
     /// already inserted the comment locally before this call — see
-    /// `StoryViewerView+Content.sendComment` — so a failure here is
-    /// recoverable on next refresh.
+    /// `StoryViewerView+Content.sendComment`. Throws on failure so the
+    /// caller can roll that optimistic insert back instead of leaving a
+    /// phantom `temp_` comment that silently never made it to the server
+    /// (most visible offline, where the whole call fails).
     func postComment(
         storyId: String,
         content: String,
         originalLanguage: String,
         effectFlags: Int? = nil,
-        parentId: String? = nil
-    ) async {
+        parentId: String? = nil,
+        attachmentIds: [String]? = nil,
+        mobileTranscription: MobileTranscriptionPayload? = nil,
+        location: SharedPlace? = nil
+    ) async throws {
         let body = StoryCommentBody(
             content: content,
             originalLanguage: originalLanguage,
             effectFlags: effectFlags,
-            parentId: parentId
+            parentId: parentId,
+            attachmentIds: (attachmentIds?.isEmpty == false) ? attachmentIds : nil,
+            mobileTranscription: mobileTranscription,
+            location: location
         )
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
@@ -73,6 +91,7 @@ final class StoryInteractionService {
             )
         } catch {
             Self.logger.error("Failed to post comment on story \(storyId, privacy: .public): \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -108,9 +127,16 @@ final class StoryInteractionService {
         }
     }
 
-    /// Toggles the user's reaction (emoji) on a story. Fire-and-forget:
-    /// the optimistic UI in the viewer already flipped the like badge.
-    func react(storyId: String, emoji: String) async {
+    /// Toggles the user's reaction (emoji) on a story. Unlike the other
+    /// fire-and-forget methods above, this one THROWS on failure — the
+    /// optimistic UI in the viewer already flipped the like badge and
+    /// bumped the counter (`StoryViewerView.triggerStoryReaction`), and
+    /// the caller (`sendReaction` in `StoryViewerView+Content.swift`)
+    /// needs to know when to roll that back. The concrete reproducible
+    /// case is the gateway's 409 `REACTION_LIMIT_REACHED` conflict (the
+    /// user changes emoji faster than the optimistic guard catches it),
+    /// but any failure must roll back — not just that one code.
+    func react(storyId: String, emoji: String) async throws {
         let body = ReactionRequest(emoji: emoji)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
@@ -119,6 +145,7 @@ final class StoryInteractionService {
             )
         } catch {
             Self.logger.error("Failed to react on story \(storyId, privacy: .public) with emoji: \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -132,9 +159,16 @@ final class StoryInteractionService {
         let originalLanguage: String
         let effectFlags: Int?
         let parentId: String?
+        /// IDs de PostMedia pré-uploadés (uploadContext=comment) — un seul média
+        /// par commentaire (le gateway borne à 1). Omis quand vide.
+        let attachmentIds: [String]?
+        let mobileTranscription: MobileTranscriptionPayload?
+        /// Lieu partagé — une story est un post de type STORY, donc la même
+        /// clé `location` que pour un commentaire de post s'applique ici.
+        let location: SharedPlace?
 
         enum CodingKeys: String, CodingKey {
-            case content, originalLanguage, effectFlags, parentId
+            case content, originalLanguage, effectFlags, parentId, attachmentIds, mobileTranscription, location
         }
 
         func encode(to encoder: Encoder) throws {
@@ -143,6 +177,9 @@ final class StoryInteractionService {
             try container.encode(originalLanguage, forKey: .originalLanguage)
             try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
             try container.encodeIfPresent(parentId, forKey: .parentId)
+            try container.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+            try container.encodeIfPresent(location, forKey: .location)
+            try container.encodeIfPresent(mobileTranscription, forKey: .mobileTranscription)
         }
     }
 

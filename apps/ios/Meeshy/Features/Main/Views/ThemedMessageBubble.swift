@@ -41,6 +41,12 @@ struct ThemedMessageBubble: View {
 
     let message: Message
     let contactColor: String
+    /// Active conversation members EXCLUDING me (the sender) — the denominator
+    /// for the WhatsApp-style all-or-nothing delivery indicator. Defaults to `1`
+    /// so preview / overlay / onboarding call sites render as a 1:1 (the stored
+    /// status is trusted verbatim). The live conversation list passes the real
+    /// recipient count so a group's ✓✓ / read only lights up once ALL received.
+    var recipientCount: Int = 1
     var isDirect: Bool = false
     var isDark: Bool = ThemeManager.shared.mode.isDark
     var transcription: MessageTranscription? = nil
@@ -48,7 +54,7 @@ struct ThemedMessageBubble: View {
     var textTranslations: [MessageTranslation] = []
     var preferredTranslation: MessageTranslation? = nil
     var showAvatar: Bool = true
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
     var onViewStory: (() -> Void)? = nil
@@ -75,11 +81,20 @@ struct ThemedMessageBubble: View {
     /// Nil-default keeps preview / overlay call sites unchanged.
     var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
+    /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
+    /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
+    /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
+    /// lecture déjà active porte la même carte Now Playing / avance auto que
+    /// `ConversationViewModel.playAudio(attachmentId:)`. `nil`-default garde
+    /// les surfaces sans conversation (previews) inchangées.
+    var conversationName: String? = nil
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
     var onScrollToMessage: ((String) -> Void)? = nil
     /// Tap on a call-summary notice → re-initiate (call back) the same media
     /// type with the conversation peer. Routed by the conversation layer to
     /// `CallManager.startCall`.
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
+    var onLongPressCallDetail: (() -> Void)? = nil
     var activeAudioLanguage: String? = nil
     var isLastInGroup: Bool = true
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
@@ -121,6 +136,14 @@ struct ThemedMessageBubble: View {
     /// former `@EnvironmentObject Router` dependency, which made EVERY visible
     /// bubble re-render on EVERY Router publish (navigation, deep links).
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
+    /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
+    /// `Spacer` d'alignement de la row pour que la vue épouse la LARGEUR de la
+    /// bulle. Le platter système de l'aperçu coïncide alors avec la bulle elle-
+    /// même — plus de grand « card » pleine largeur (feedback device 2026-07-14).
+    /// Défaut `false` : la cellule live garde son alignement isMe / reçu.
+    var standalone: Bool = false
 
     @State private var localActiveDisplayLangCode: String? = nil
     @State private var localSecondaryLangCode: String? = nil
@@ -175,7 +198,8 @@ struct ThemedMessageBubble: View {
             activeDisplayLangCode: resolvedActiveDisplayLangCode,
             currentUserId: currentUserId,
             isEditSaving: isEditSaving,
-            hasEditHistory: hasEditHistory
+            hasEditHistory: hasEditHistory,
+            recipientCount: recipientCount
         )
 
         // Kind dispatch (mirrors legacy `body`):
@@ -188,7 +212,7 @@ struct ThemedMessageBubble: View {
         switch content.kind {
         case .system:
             if let callNotice = content.callNotice {
-                BubbleCallNoticeView(notice: callNotice, isDark: isDark, onCallBack: onCallBack)
+                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPressCallDetail)
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
             }
@@ -255,6 +279,8 @@ struct ThemedMessageBubble: View {
             onShowTranslationDetail: onShowTranslationDetail,
             onPlayAudio: onPlayAudio,
             onScrollToMessage: onScrollToMessage,
+            conversationName: conversationName,
+            audioQueueTailProvider: audioQueueTailProvider,
             activeDisplayLangCode: Binding(
                 get: { resolvedActiveDisplayLangCode },
                 set: { newValue in
@@ -284,7 +310,10 @@ struct ThemedMessageBubble: View {
             carouselIndex: $carouselIndex,
             revealedAttachmentIds: $revealedAttachmentIds,
             blurController: blurController,
-            ephemeralController: ephemeralController
+            ephemeralController: ephemeralController,
+            voiceConsentMissing: voiceConsentMissing,
+            onTapConsentNotice: onTapConsentNotice,
+            standalone: standalone
         )
         .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
         .onAppear { hasPlayedAppearance = true }
@@ -330,15 +359,65 @@ struct ThemedMessageBubble: View {
 //   - group-context flags recomputed by parent on neighbor changes
 //   - user-level prefs (language, audio language) flipped from settings
 //   - effects flags (one-shot or persistent) and reaction identity
+//   - mention display names resolved asynchronously from cache
+//   - per-attachment audio enrichment (transcription/translation) for
+//     multi-track messages, scoped to this message's own attachments
 // Fields whose changes are guaranteed to bump `updatedAt` (content, isEdited,
 // pinnedAt, expiresAt, etc.) are intentionally NOT compared here — relying on
 // `updatedAt` keeps the comparison tight while still covering them.
 extension ThemedMessageBubble: @MainActor Equatable {
+    /// Full-fidelity key for one owned audio attachment's enrichment state —
+    /// compares the actual `MessageTranscription`/`MessageTranslatedAudio`
+    /// values (both already `Equatable`), not a lossy string projection, so
+    /// an in-place update that changes segments/url/quality/cloned without
+    /// touching text or count still invalidates the gate.
+    private struct AudioEnrichmentKey: Equatable {
+        let id: String
+        let transcription: MessageTranscription?
+        let translatedAudios: [MessageTranslatedAudio]
+    }
+
+    /// Signature of the `allAudioItems` entries owned by THIS message's audio
+    /// attachments.
+    ///
+    /// `allAudioItems` is conversation-wide (every audio attachment across
+    /// every loaded message), so comparing the raw arrays would invalidate
+    /// every audio bubble whenever ANY track anywhere gets enriched. Filtering
+    /// to the ids that belong to `message.attachments` keeps the comparison
+    /// scoped to what this bubble actually renders (see
+    /// `BubbleStandardLayout`'s multi-track carousel, which keys per-page
+    /// transcription/translatedAudios off exactly this same id set — the
+    /// per-message `transcription`/`translatedAudios` slots compared above
+    /// only ever hold the LAST track's data).
+    ///
+    /// Most messages own zero audio attachments (text/system/deleted bubbles)
+    /// — this is the hot no-op comparison path (last operand of the `&&`
+    /// chain below), so bail out before touching the conversation-wide
+    /// `allAudioItems` array at all when there's nothing of ours to find in it.
+    private static func audioEnrichmentSignature(_ bubble: ThemedMessageBubble) -> [AudioEnrichmentKey] {
+        let ownedIds = Set(bubble.message.attachments.filter { $0.type == .audio }.map(\.id))
+        guard !ownedIds.isEmpty else { return [] }
+        return bubble.allAudioItems
+            .filter { ownedIds.contains($0.id) }
+            .sorted { $0.id < $1.id }
+            .map { AudioEnrichmentKey(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }
+    }
+
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
         // Message identity & server-bumped lifecycle
         lhs.message.id == rhs.message.id &&
         lhs.message.updatedAt == rhs.message.updatedAt &&
         lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        // Per-recipient counts + denominator drive the all-or-nothing delivery
+        // indicator (DeliveryStatusResolver). A group's ✓✓ / read can change
+        // without `deliveryStatus` or `updatedAt` moving (the raw status was
+        // already promoted at cold-start while counts catch up), so they MUST be
+        // part of the equality gate or the checkmark would never refresh.
+        lhs.message.deliveredCount == rhs.message.deliveredCount &&
+        lhs.message.readCount == rhs.message.readCount &&
+        lhs.message.deliveredToAllAt == rhs.message.deliveredToAllAt &&
+        lhs.message.readByAllAt == rhs.message.readByAllAt &&
+        lhs.recipientCount == rhs.recipientCount &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
@@ -376,7 +455,15 @@ extension ThemedMessageBubble: @MainActor Equatable {
         // Flag-strip selection — VM-owned inputs (lifted out of @State so the
         // Equatable gate SEES them: a flag tap changes these and must re-render)
         lhs.activeDisplayLangCode == rhs.activeDisplayLangCode &&
-        lhs.secondaryLangCode == rhs.secondaryLangCode
+        lhs.secondaryLangCode == rhs.secondaryLangCode &&
+        lhs.voiceConsentMissing == rhs.voiceConsentMissing &&
+        lhs.standalone == rhs.standalone &&
+        // Mentions — `mentionDisplayNames` populates lazily as the mentioned
+        // user's profile lands in cache; a raw `@username` token must resolve
+        // to the display name WITHOUT any `message.updatedAt` bump.
+        lhs.mentionDisplayNames == rhs.mentionDisplayNames &&
+        // Multi-track audio enrichment (see `audioEnrichmentSignature` above).
+        Self.audioEnrichmentSignature(lhs) == Self.audioEnrichmentSignature(rhs)
     }
 }
 

@@ -9,7 +9,7 @@ public struct LiveLocationBadge: View {
 
     @State private var isPulsing = false
 
-    public init(username: String, remainingTime: TimeInterval, accentColor: String = "08D9D6", onStop: (() -> Void)? = nil) {
+    public init(username: String, remainingTime: TimeInterval, accentColor: String = MeeshyColors.brandPrimaryHex, onStop: (() -> Void)? = nil) {
         self.username = username; self.remainingTime = remainingTime
         self.accentColor = accentColor; self.onStop = onStop
     }
@@ -17,7 +17,7 @@ public struct LiveLocationBadge: View {
     public var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Color(hex: "2ECC71"))
+                .fill(MeeshyColors.success)
                 .frame(width: 8, height: 8)
                 .scaleEffect(isPulsing ? 1.3 : 1.0)
                 .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
@@ -27,7 +27,7 @@ public struct LiveLocationBadge: View {
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(username) partage sa position")
+                Text(String(localized: "location.live.sharing", defaultValue: "\(username) partage sa position", bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
@@ -94,7 +94,7 @@ public struct LiveLocationDurationPicker: View {
     @Binding var selectedDuration: LiveLocationDuration
     let accentColor: String
 
-    public init(selectedDuration: Binding<LiveLocationDuration>, accentColor: String = "08D9D6") {
+    public init(selectedDuration: Binding<LiveLocationDuration>, accentColor: String = MeeshyColors.brandPrimaryHex) {
         self._selectedDuration = selectedDuration
         self.accentColor = accentColor
     }

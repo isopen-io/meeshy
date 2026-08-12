@@ -11,6 +11,7 @@ struct OnboardingFlowView: View {
     var onComplete: (() -> Void)?
 
     @State private var keyboardHeight: CGFloat = 0
+    @State private var didUploadProfileAssets = false
 
     var body: some View {
         ZStack {
@@ -87,11 +88,37 @@ struct OnboardingFlowView: View {
         }
         .adaptiveOnChange(of: authManager.isAuthenticated) { _, authenticated in
             if authenticated {
+                uploadProfileCompletionAssets()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     onComplete?()
                     dismiss()
                 }
             }
+        }
+    }
+
+    // MARK: - Profile Completion Assets
+
+    /// Le wizard collecte photo/bannière/bio AVANT la création du compte, mais
+    /// `POST /auth/register` ne les transporte pas — l'envoi ne peut se faire
+    /// qu'une fois authentifié. Le JPEG est encodé ici (hors réseau) puis
+    /// l'upload continue en tâche détachée : il survit au dismiss de la vue.
+    private func uploadProfileCompletionAssets() {
+        guard !didUploadProfileAssets else { return }
+        didUploadProfileAssets = true
+
+        let profileImageData = viewModel.profileImage?.jpegData(compressionQuality: 0.9)
+        let bannerImageData = viewModel.bannerImage?.jpegData(compressionQuality: 0.9)
+        let bio = viewModel.bio
+        guard profileImageData != nil || bannerImageData != nil
+                || !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        Task.detached(priority: .utility) {
+            _ = await ProfileCompletionUploader.shared.uploadPostRegistrationAssets(
+                profileImageData: profileImageData,
+                bannerImageData: bannerImageData,
+                bio: bio
+            )
         }
     }
 
@@ -104,13 +131,13 @@ struct OnboardingFlowView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         viewModel.previousStep()
                     }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "chevron.backward")
+                            .font(MeeshyFont.relative(15, weight: .semibold))
                         Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                     }
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 14)
@@ -121,25 +148,30 @@ struct OnboardingFlowView: View {
             } else {
                 Button(action: {
                     dismiss()
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     Image(systemName: "xmark")
+                        // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 38×38 →
+                        // taille figée (l'icône ne doit pas déborder du cercle en XXL).
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 38, height: 38)
                         .background(Circle().fill(Color(.systemGray6).opacity(0.9)))
                 }
+                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 .bounceOnTap(scale: 0.88)
             }
 
             Spacer()
 
             Image(systemName: viewModel.currentStep.iconName)
-                .font(.system(size: 20, weight: .medium))
+                .font(MeeshyFont.relative(20, weight: .medium))
                 .foregroundColor(viewModel.currentStep.accentColor)
+                // Décoratif : le compteur adjacent + l'en-tête portent le sens de l'étape.
+                .accessibilityHidden(true)
 
             Text("\(viewModel.currentStep.rawValue + 1)/\(viewModel.totalSteps)")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -154,11 +186,12 @@ struct OnboardingFlowView: View {
     private var stepHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(viewModel.currentStep.funHeader)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(26, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
+                .accessibilityAddTraits(.isHeader)
 
             Text(viewModel.currentStep.funSubtitle)
-                .font(.system(size: 14, weight: .regular))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(.secondary)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -186,7 +219,7 @@ struct OnboardingFlowView: View {
             if viewModel.currentStep == .profile {
                 Button(action: { viewModel.nextStep() }) {
                     Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette etape", bundle: .main))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
                 .bounceOnTap(scale: 0.94)
@@ -209,14 +242,14 @@ struct OnboardingFlowView: View {
         case .profile:
             return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:
-            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant!", bundle: .main)
+            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant !", bundle: .main)
         }
     }
 
     private var buttonIcon: String? {
         switch viewModel.currentStep {
         case .recap: return "sparkles"
-        default: return "arrow.right"
+        default: return "arrow.forward"
         }
     }
 

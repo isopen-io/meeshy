@@ -15,6 +15,11 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertEqual(AvatarContext.storyViewer.size, 44)
     }
 
+    func test_size_storyTrayCompact_returns44() {
+        // Mini-trail épinglée dans le header collapsé : moitié de storyTray (88).
+        XCTAssertEqual(AvatarContext.storyTrayCompact.size, 44)
+    }
+
     func test_size_feedComposer_returns36() {
         XCTAssertEqual(AvatarContext.feedComposer.size, 36)
     }
@@ -174,6 +179,28 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertFalse(AvatarContext.storyViewer.showsOnlineDot)
     }
 
+    // MARK: - storyViewerRow (who-viewed list: mood + presence, no ring)
+
+    func test_storyViewerRow_size_returns44() {
+        XCTAssertEqual(AvatarContext.storyViewerRow.size, 44)
+    }
+
+    func test_storyViewerRow_hidesStoryRing() {
+        XCTAssertFalse(AvatarContext.storyViewerRow.showsStoryRing)
+    }
+
+    func test_storyViewerRow_showsMoodBadge() {
+        XCTAssertTrue(AvatarContext.storyViewerRow.showsMoodBadge)
+    }
+
+    func test_storyViewerRow_showsOnlineDot() {
+        XCTAssertTrue(AvatarContext.storyViewerRow.showsOnlineDot)
+    }
+
+    func test_storyViewerRow_isTappable() {
+        XCTAssertTrue(AvatarContext.storyViewerRow.isTappable)
+    }
+
     // MARK: - isTappable
 
     func test_isTappable_falseForPostReaction() {
@@ -236,6 +263,15 @@ final class AvatarContextTests: XCTestCase {
 
     func test_ringWidth_storyTray_is07() {
         XCTAssertEqual(AvatarContext.storyTray.ringWidth, 0.7)
+    }
+
+    func test_storyTrayCompact_keepsStoryStyling() {
+        // La variante compacte garde l'anneau story + le mood badge, juste plus
+        // fin et à taille 44 (badge proportionnel, pas le 32 fixe du grand trail).
+        XCTAssertTrue(AvatarContext.storyTrayCompact.showsStoryRing)
+        XCTAssertTrue(AvatarContext.storyTrayCompact.showsMoodBadge)
+        XCTAssertEqual(AvatarContext.storyTrayCompact.ringWidth, 1.5)
+        XCTAssertEqual(AvatarContext.storyTrayCompact.badgeSize, 44 * 0.42, accuracy: 0.01)
     }
 
     func test_ringWidth_nonStoryTray_useSizeThreshold() {

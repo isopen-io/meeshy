@@ -159,6 +159,9 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[10001] bg-black/95 dark:bg-black/98 backdrop-blur-sm"
         onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('common.imageViewer', 'Image viewer')}
       >
         {/* Barre d'outils supérieure */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/50 to-transparent">
@@ -206,7 +209,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
           {imageError ? (
             <div className="flex flex-col items-center gap-4 text-white">
               <div className="text-red-400 text-6xl">⚠️</div>
-              <p className="text-lg">Impossible de charger l&apos;image</p>
+              <p className="text-lg">{t('common.imageLoadError', 'Unable to load image')}</p>
               <p className="text-sm text-gray-400">{currentImage.originalName}</p>
               <Button
                 variant="outline"
@@ -217,7 +220,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 className="mt-4"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Télécharger quand même
+                {t('common.downloadAnyway', 'Download anyway')}
               </Button>
             </div>
           ) : (
@@ -334,7 +337,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
         {/* Instructions clavier (desktop uniquement) */}
         <div className="hidden md:block absolute bottom-20 left-1/2 -translate-x-1/2 text-white/60 text-xs text-center">
           <p>
-            Utilisez les flèches ← → pour naviguer • +/- pour zoomer • R pour pivoter • Échap pour fermer
+            {t('common.lightboxKeyboardHelp', 'Use the ← → arrows to navigate • +/- to zoom • R to rotate • Esc to close')}
           </p>
         </div>
       </motion.div>

@@ -212,8 +212,10 @@ def _setup_module_mocks():
 # Apply mocks before anything else
 _setup_module_mocks()
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add translator root (for `from src.*` imports) and src/ (for `from services.*` imports)
+_TRANSLATOR_ROOT = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, os.path.abspath(_TRANSLATOR_ROOT))
+sys.path.insert(0, os.path.join(_TRANSLATOR_ROOT, 'src'))
 
 
 # ═══════════════════════════════════════════════════════════════

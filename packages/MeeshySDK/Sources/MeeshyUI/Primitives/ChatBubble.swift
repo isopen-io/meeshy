@@ -7,7 +7,7 @@ public struct ChatBubble: View {
     public let isMe: Bool
     public var index: Int = 0
     public var animateEntrance: Bool = true
-    public var contactColor: String = "FF2E63"
+    public var contactColor: String = MeeshyColors.brandPrimaryHex
 
     @State private var isVisible = false
     @State private var isPressed = false
@@ -20,12 +20,16 @@ public struct ChatBubble: View {
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { colorScheme == .dark }
 
-    public init(text: String, isMe: Bool, index: Int = 0, animateEntrance: Bool = true, contactColor: String = "FF2E63") {
+    public init(text: String, isMe: Bool, index: Int = 0, animateEntrance: Bool = true, contactColor: String = MeeshyColors.brandPrimaryHex) {
         self.text = text; self.isMe = isMe; self.index = index; self.animateEntrance = animateEntrance; self.contactColor = contactColor
     }
 
     public var body: some View {
         bubbleContent
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(isMe
+                ? String(format: String(localized: "accessibility.message_from_me", defaultValue: "Mon message : %@", bundle: .main), text)
+                : String(format: String(localized: "accessibility.message_from_other", defaultValue: "Message : %@", bundle: .main), text))
             .opacity(animateEntrance ? (isVisible ? 1 : 0) : 1)
             .offset(x: animateEntrance ? (isVisible ? 0 : (isMe ? 40 : -40)) : 0)
             .scaleEffect(animateEntrance ? (isVisible ? 1 : 0.85) : 1, anchor: isMe ? .bottomTrailing : .bottomLeading)
@@ -41,6 +45,7 @@ public struct ChatBubble: View {
         HStack {
             if isMe { Spacer() }
             Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .padding()
                 .background(bubbleBackground)
                 .foregroundColor(isMe ? .white : theme.textPrimary)

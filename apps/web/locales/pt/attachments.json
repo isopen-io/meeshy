@@ -53,7 +53,11 @@
     "deleteVideoNamed": "Excluir vídeo {name}",
     "deleteFileNamed": "Excluir arquivo {name}",
     "openImageNamed": "Abrir imagem {name}",
-    "openFileNamed": "Abrir arquivo {name}"
+    "openFileNamed": "Abrir arquivo {name}",
+    "imagePreviewNamed": "Pré-visualização da imagem {name}",
+    "openVideoFullscreenNamed": "Abrir o vídeo {name} em tela cheia",
+    "openPdfNamed": "Abrir PDF: {name}",
+    "openTextFileNamed": "Abrir arquivo de texto: {name}"
   },
   "contextMenu": {
     "close": "Fechar",
@@ -70,5 +74,13 @@
     "confirmDeleteIrreversible": "Esta ação é irreversível. O arquivo será excluído permanentemente.",
     "cancel": "Cancelar",
     "deleting": "Excluindo..."
+  },
+  "deleteDialog": {
+    "title": "Confirmar exclusão",
+    "description": "Tem certeza de que deseja excluir este arquivo? Esta ação é irreversível.",
+    "serverNote": "O arquivo será excluído permanentemente do servidor.",
+    "cancel": "Cancelar",
+    "deleting": "Excluindo...",
+    "delete": "Excluir"
   }
 }

@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import type { Message, User, TypingEvent, UserStatusEvent, TranslationEvent } from '@/types';
+import type { TranslationFailedEventData } from '@meeshy/shared/types/socketio-events';
 
 export interface UseSocketIOMessagingOptions {
   conversationId?: string | null;
@@ -20,8 +21,9 @@ export interface UseSocketIOMessagingOptions {
   onMessageEdited?: (message: Message) => void;
   onMessageDeleted?: (messageId: string) => void;
   onUserTyping?: (userId: string, username: string, isTyping: boolean, conversationId: string) => void;
-  onUserStatus?: (userId: string, username: string, isOnline: boolean) => void;
+  onUserStatus?: (userId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => void;
   onTranslation?: (messageId: string, translations: any[]) => void;
+  onTranslationFailed?: (data: TranslationFailedEventData) => void;
   onConversationStats?: (data: any) => void;
   onConversationOnlineStats?: (data: any) => void;
 }
@@ -39,6 +41,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     onUserTyping,
     onUserStatus,
     onTranslation,
+    onTranslationFailed,
     onConversationStats,
     onConversationOnlineStats
   } = options;
@@ -59,10 +62,17 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     const hasAuthToken = typeof window !== 'undefined' && !!authManager.getAuthToken();
     const hasSessionToken = typeof window !== 'undefined' && !!authManager.getAnonymousSession()?.token;
 
-    if (hasAuthToken || hasSessionToken) {
-      // Forcer la connexion initiale dès le montage du composant
-      meeshySocketIOService.reconnect();
-    }
+    if (!hasAuthToken && !hasSessionToken) return;
+
+    // `reconnect()` n'est PAS un « connecte si ce n'est pas déjà fait » : c'est
+    // `disconnect()` suivi d'une reconnexion différée par backoff (1 à 2,5 s au
+    // premier essai). Cinq composants montent ce hook — ouvrir un profil
+    // coupait donc une connexion saine pendant ce délai. Même garde que
+    // l'étape 1C juste en dessous, qui fait le même geste correctement.
+    const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
+    if (diagnostics?.isConnected || diagnostics?.isConnecting) return;
+
+    meeshySocketIOService.reconnect();
   }, []); // Exécuter une seule fois au montage
 
   // ÉTAPE 1B: Définir l'utilisateur courant dans le service quand disponible
@@ -76,6 +86,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
   // Le retry réseau est désormais géré par ConnectionService (online event).
   useEffect(() => {
     const tryReconnectIfTokensAvailable = () => {
+      /* istanbul ignore next -- SSR false-arm unreachable: window is always defined in browser/jsdom */
       if (typeof window === 'undefined') return;
       const hasAuthToken = !!authManager.getAuthToken();
       const hasSessionToken = !!authManager.getAnonymousSession()?.token;
@@ -127,6 +138,11 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
       });
       unsubscribers.push(unsub);
     }
+
+    if (onTranslationFailed) {
+      const unsub = meeshySocketIOService.onTranslationFailed(onTranslationFailed);
+      unsubscribers.push(unsub);
+    }
     
     if (onUserTyping) {
       const unsub = meeshySocketIOService.onTyping((event: TypingEvent) => {
@@ -138,7 +154,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onUserStatus) {
       const unsub = meeshySocketIOService.onUserStatus((event: UserStatusEvent) => {
-        onUserStatus(event.userId, event.username, event.isOnline);
+        onUserStatus(event.userId, event.username, event.isOnline, event.lastActiveAt);
       });
       unsubscribers.push(unsub);
     }
@@ -156,7 +172,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
+  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onTranslationFailed, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
 
   // ÉTAPE 4: Surveiller l'état de connexion (event-driven, plus de polling)
   useEffect(() => {

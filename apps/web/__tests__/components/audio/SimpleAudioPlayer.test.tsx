@@ -20,6 +20,7 @@ jest.mock('@/services/api.service', () => ({
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     onAudioTranslation: jest.fn().mockReturnValue(() => {}),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
@@ -31,6 +32,16 @@ jest.mock('@/utils/media-manager', () => ({
       stop: jest.fn(),
     }),
   },
+}));
+
+const mockUseAuth = jest.fn(() => ({ user: null as any }));
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
+const mockGetUserLanguagePreferences = jest.fn(() => [] as string[]);
+jest.mock('@/utils/user-language-preferences', () => ({
+  getUserLanguagePreferences: (...args: any[]) => mockGetUserLanguagePreferences(...args),
 }));
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
@@ -66,6 +77,8 @@ const createMockAttachment = (overrides: any = {}): UploadedAttachmentResponse =
 describe('SimpleAudioPlayer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseAuth.mockReturnValue({ user: null });
+    mockGetUserLanguagePreferences.mockReturnValue([]);
   });
 
   describe('Initial Rendering', () => {
@@ -118,6 +131,32 @@ describe('SimpleAudioPlayer', () => {
 
       const rootElement = container.firstChild;
       expect(rootElement).toHaveClass('custom-class');
+    });
+  });
+
+  describe('User language resolution', () => {
+    it('derives userLanguages from getUserLanguagePreferences, not a local recomputation', async () => {
+      const fakeUser = { id: 'u1', systemLanguage: 'fr', regionalLanguage: 'en' };
+      mockUseAuth.mockReturnValue({ user: fakeUser });
+      mockGetUserLanguagePreferences.mockReturnValue(['fr', 'en', 'de']);
+      const attachment = createMockAttachment();
+
+      await act(async () => {
+        render(<SimpleAudioPlayer attachment={attachment} />);
+      });
+
+      expect(mockGetUserLanguagePreferences).toHaveBeenCalledWith(fakeUser);
+    });
+
+    it('does not call getUserLanguagePreferences when there is no authenticated user', async () => {
+      mockUseAuth.mockReturnValue({ user: null });
+      const attachment = createMockAttachment();
+
+      await act(async () => {
+        render(<SimpleAudioPlayer attachment={attachment} />);
+      });
+
+      expect(mockGetUserLanguagePreferences).not.toHaveBeenCalled();
     });
   });
 

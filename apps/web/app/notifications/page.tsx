@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,10 +12,11 @@ import type { Notification } from '@/types/notification';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { NotificationFilters, matchesFilter, NotificationList, NotificationSkeleton, PushPermissionBanner } from '@/components/notifications';
 import type { FilterType } from '@/components/notifications';
+import { formatNotificationTimeAgo } from '@/utils/notification-helpers';
 import { Bell, Search, X, Check } from 'lucide-react';
 
 function NotificationsPageContent() {
-  const { t } = useI18n('notifications');
+  const { t, locale } = useI18n('notifications');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
@@ -64,45 +64,21 @@ function NotificationsPageContent() {
     });
   }, [notifications, activeFilter, searchQuery]);
 
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = useCallback((notification: Notification) => {
+    // Marquage lu ; la navigation est portée par le lien interne de la rangée.
     markAsRead(notification.id);
+  }, [markAsRead]);
 
-    if (notification.context?.conversationId) {
-      const url = notification.context?.messageId
-        ? `/conversations/${notification.context.conversationId}?messageId=${notification.context.messageId}#message-${notification.context.messageId}`
-        : `/conversations/${notification.context.conversationId}`;
-      router.push(url);
-    }
-  };
-
-  const formatTimeAgo = (timestamp: Date | string | null): string => {
-    if (!timestamp) return '';
-
-    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-    if (isNaN(date.getTime())) return '';
-
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-    if (diffMinutes < 0) return t('timeAgo.now');
-    if (diffMinutes < 1) return t('timeAgo.now');
-    if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', diffMinutes.toString());
-
-    const diffHours = Math.floor(diffMinutes / 60);
-    if (diffHours < 24) return t('timeAgo.hour').replace('{count}', diffHours.toString());
-
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 7) return t('timeAgo.day').replace('{count}', diffDays.toString());
-
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  };
+  const formatTimeAgo = useCallback(
+    (timestamp: Date | string | null) => formatNotificationTimeAgo(timestamp, t),
+    [t]
+  );
 
   if (isLoading && notifications.length === 0) {
     return (
       <DashboardLayout title={t('pageTitle')} hideSearch={true}>
         <div className="py-6">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-2xl mx-auto">
             <NotificationSkeleton count={5} />
           </div>
         </div>
@@ -113,44 +89,41 @@ function NotificationsPageContent() {
   return (
     <DashboardLayout title={t('pageTitle')} hideSearch={true}>
       <div className="py-6">
-        <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 mb-6"
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                <Bell className="h-6 w-6 text-white" />
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-6">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                <Bell className="h-5 w-5 text-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-2xl font-bold text-foreground">
                   {t('pageTitle')}
                 </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {unreadCount > 0
-                    ? t('unreadCount.active', { count: String(unreadCount), total: String(notifications.length) })
-                    : t('unreadCount.empty')
+                <p className="text-sm text-muted-foreground">
+                  {notifications.length === 0
+                    ? t('unreadCount.empty')
+                    : unreadCount > 0
+                      ? t('unreadCount.active', { count: String(unreadCount), total: String(notifications.length) })
+                      : t('unreadCount.allRead', { total: String(notifications.length), plural: notifications.length > 1 ? 's' : '' })
                   }
                 </p>
               </div>
             </div>
 
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('search')}
-                className="pl-10 pr-10 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border-white/30 dark:border-gray-700/40 focus:bg-white/70 dark:focus:bg-gray-800/70 focus:ring-2 focus:ring-blue-500/20"
+                className="border-border bg-muted/50 pl-10 pr-10 focus-visible:ring-2 focus-visible:ring-blue-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label={t('actions.clearSearch')}
                 >
                   <X className="h-4 w-4" />
@@ -160,13 +133,8 @@ function NotificationsPageContent() {
 
             {unreadCount > 0 && (
               <div className="mb-4">
-                <Button
-                  onClick={markAllAsRead}
-                  size="sm"
-                  variant="outline"
-                  className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border-white/30 dark:border-gray-700/40 hover:bg-white/70 dark:hover:bg-gray-800/70"
-                >
-                  <Check className="h-4 w-4 mr-2" />
+                <Button onClick={markAllAsRead} size="sm" variant="outline">
+                  <Check className="mr-2 h-4 w-4" />
                   <span>{t('markAllRead')}</span>
                 </Button>
               </div>
@@ -178,7 +146,7 @@ function NotificationsPageContent() {
               notifications={notifications}
               t={t}
             />
-          </motion.div>
+          </div>
 
           <PushPermissionBanner />
 
@@ -192,6 +160,7 @@ function NotificationsPageContent() {
             onClick={handleNotificationClick}
             formatTimeAgo={formatTimeAgo}
             t={t}
+            locale={locale}
             searchQuery={searchQuery}
             grouped={!searchQuery && activeFilter === 'all'}
           />

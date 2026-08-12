@@ -37,6 +37,15 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
+    /// Y (écran) du haut des contrôleurs de l'outil texte — le texte en cours
+    /// d'édition reste au-dessus (cf. `StoryCanvasUIView.inlineEditFloorGlobalY`).
+    /// `.greatestFiniteMagnitude` = pas de plafond (texte centré, comportement
+    /// historique).
+    public var inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude
+    /// Y (écran) du BAS du bouton « Terminé ». Avec `inlineEditFloorGlobalY`,
+    /// borne la zone dans laquelle le texte édité se centre
+    /// (cf. `StoryCanvasUIView.inlineEditCeilingGlobalY`).
+    public var inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude
     /// Notifié quand la couche manipulable change (`.canvas` / `.background` /
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
@@ -52,6 +61,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// via `onItemModified` → `@Binding`, ce callback est complémentaire et
     /// fournit la valeur structurée sans avoir à re-parser le slide.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
+    /// Miroir de `viewModel.isCanvasZoomed` du composer. Route le double-tap
+    /// fond vers le reset viewport quand le canvas est zoomé (C4).
+    public var isViewportZoomed: Bool = false
+    /// Demande de reset du zoom viewport (double-tap fond en état zoomé).
+    public var onViewportZoomResetRequested: (() -> Void)?
     /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
     /// canvas supprime son drawingLayer persisté pour éviter le double rendu
     /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
@@ -67,12 +81,23 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
     public var loadedImagesVersion: UInt64 = 0
+    /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
+    /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
+    /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
+    /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
+    /// pour un clip non publié, le resolver par `postMediaId` échouait.
+    public var loadedAudioURLs: [String: URL] = [:]
     /// Corner radius applied to the embedded `StoryCanvasUIView`'s backing layer
     /// so the rounded « card » actually clips the CALayer story content. A
     /// SwiftUI `.clipShape` on this representable cannot round the embedded
     /// UIKit CALayer tree, so the radius is plumbed down to the UIView. The
     /// composer passes a scale-compensated value (see `canvasComposerLayer`).
     public var canvasCornerRadius: CGFloat = 0
+    /// Preview vivante : le bridge (owné par le composer VM) reçoit une
+    /// référence faible vers le `StoryCanvasUIView` créé, pour que les
+    /// callbacks playhead du timeline VM poussent directement dans la vue
+    /// (aucun body SwiftUI re-évalué à 60 Hz).
+    public var timelineBridge: StoryCanvasTimelineBridge?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -81,14 +106,20 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
+                inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
+                inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
+                isViewportZoomed: Bool = false,
+                onViewportZoomResetRequested: (() -> Void)? = nil,
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
                 loadedImagesVersion: UInt64 = 0,
-                canvasCornerRadius: CGFloat = 0) {
+                loadedAudioURLs: [String: URL] = [:],
+                canvasCornerRadius: CGFloat = 0,
+                timelineBridge: StoryCanvasTimelineBridge? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -96,24 +127,45 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
+        self.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         self.onManipulationLayerChanged = onManipulationLayerChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
+        self.isViewportZoomed = isViewportZoomed
+        self.onViewportZoomResetRequested = onViewportZoomResetRequested
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
+        self.loadedAudioURLs = loadedAudioURLs
         self.canvasCornerRadius = canvasCornerRadius
+        self.timelineBridge = timelineBridge
     }
 
     public final class Coordinator {
         var lastLoadedImagesVersion: UInt64?
+        var lastLoadedAudioURLs: [String: URL]?
+    }
+
+    /// Construit le `StoryReaderContext` d'édition : pont image (bitmaps édités
+    /// keyés `media.id`) + resolver audio local (URLs keyées `audio.id`).
+    private func makeComposerContext() -> StoryReaderContext {
+        let audioURLs = loadedAudioURLs
+        let audioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
+        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
+        return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
+        // Live preview : sur le canvas d'édition les vidéos (fond + foreground)
+        // jouent et bouclent — la dernière vidéo posée tourne en boucle jusqu'à
+        // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
+        // jamais ce drapeau et reste silencieux.
+        view.playsVideoInEditMode = true
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
@@ -122,19 +174,27 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
+        view.inlineEditFloorGlobalY = inlineEditFloorGlobalY
+        view.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         view.onManipulationLayerChanged = onManipulationLayerChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
+        view.isViewportZoomed = isViewportZoomed
+        view.onViewportZoomResetRequested = onViewportZoomResetRequested
         view.isDrawingOverlayActive = isDrawingOverlayActive
         view.canvasCornerRadius = canvasCornerRadius
         // Wire le pont ImageCacheReader dès la première frame pour que le
         // `StoryRenderer.render(...)` initial (déclenché par le slide.didSet
         // du init StoryCanvasUIView) puisse déjà résoudre les bitmaps
         // foreground via `loadedImages[media.id]`.
-        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
-        view.setReaderContext(StoryReaderContext(imageCache: reader))
+        view.setReaderContext(makeComposerContext())
+        // Après le context (le resolver audio doit être en place) : opt-in audio
+        // d'édition → le mixer joue les clips/voix comme les vidéos.
+        view.playsAudioInEditMode = true
         context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
+        context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+        timelineBridge?.canvas = view
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
         // une frame pour que le chip indicator reflète bien la couche
@@ -156,6 +216,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
+        uiView.isViewportZoomed = isViewportZoomed
+        uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
 
@@ -171,11 +233,17 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // composer ; le reader passe par `setReaderContext` direct qui ne
         // bump plus (sinon ça gèle la progress bar et le canvas reader, cf.
         // régression 2026-05-27).
-        if context.coordinator.lastLoadedImagesVersion != loadedImagesVersion {
+        // Reconstruit le context quand les bitmaps édités OU les URLs audio
+        // locales changent. L'audio doit être à jour AVANT le slice de sync du
+        // `slide` plus bas : le `slide.didSet` déclenche `applyEditPlayback` →
+        // `reconfigureAudioForPlayback`, qui lit alors le resolver à jour.
+        let imageChanged = context.coordinator.lastLoadedImagesVersion != loadedImagesVersion
+        let audioChanged = context.coordinator.lastLoadedAudioURLs != loadedAudioURLs
+        if imageChanged || audioChanged {
             context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
-            let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
-            uiView.setReaderContext(StoryReaderContext(imageCache: reader))
-            uiView.invalidateImageCache()
+            context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+            uiView.setReaderContext(makeComposerContext())
+            if imageChanged { uiView.invalidateImageCache() }
         }
 
         // Re-emit la couche courante après chaque body eval (deferred via
@@ -204,6 +272,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         }
         uiView.onInlineTextChanged = onInlineTextChanged
         uiView.onInlineTextEditEnded = onInlineTextEditEnded
+        // Posé AVANT `beginInlineTextEdit` : l'ouverture ancre le bloc d'après
+        // ce plafond, sinon le premier placement partirait du centre et
+        // sauterait à la première frappe.
+        uiView.inlineEditFloorGlobalY = inlineEditFloorGlobalY
+        uiView.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
                 uiView.beginInlineTextEdit(textId: id)

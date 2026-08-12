@@ -61,6 +61,11 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     public var readCount: Int
     public var deliveredToAllAt: Date?
     public var readByAllAt: Date?
+    /// Server's authoritative active-recipient denominator (participants
+    /// excluding the sender), persisted so the all-or-nothing indicator survives
+    /// a cache reload with the real count instead of the client `memberCount`.
+    /// `0` = the server did not provide it; the display then falls back.
+    public var recipientCount: Int
 
     // Timestamps
     public var createdAt: Date
@@ -78,6 +83,12 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 
     // Structured call-summary metadata (JSON blob) for system call messages.
     public var callSummaryJson: Data?
+
+    /// Lieu partagé (JSON `SharedPlace`), hissé depuis `APIMessage.location`.
+    /// Stocké en texte (pas en `Data`) car décodé/réencodé côté serveur comme
+    /// un objet JSON top-level, jamais binaire — cohérent avec les autres
+    /// colonnes de position (`PostRecord`/`CommentRecord`, Task 16).
+    public var locationJson: String?
 
     // Pre-computed layout (CTFramesetter)
     public var cachedBubbleWidth: Double?
@@ -125,7 +136,9 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         layoutVersion: Int, layoutMaxWidth: Double?,
         cachedTimeString: String? = nil,
         changeVersion: Int64,
-        callSummaryJson: Data? = nil
+        callSummaryJson: Data? = nil,
+        recipientCount: Int = 0,
+        locationJson: String? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -185,6 +198,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.cachedTimeString = cachedTimeString
         self.changeVersion = changeVersion
         self.callSummaryJson = callSummaryJson
+        self.recipientCount = recipientCount
+        self.locationJson = locationJson
     }
 
     // MARK: - Timestamp pre-compute helper
@@ -214,7 +229,11 @@ public final class TimeStringCache: @unchecked Sendable {
     }
 }
 
-// (O1) Equatable via changeVersion — O(1) per record, no blob comparison
+// (O1) Equatable via changeVersion — O(1) per record, no blob comparison.
+// INVARIANT (grdb-04) : toute écriture qui doit être visible par un
+// consommateur de diff/refresh (MessageStore.refreshFromDB) DOIT bumper
+// changeVersion — un changement d'état qui ne le fait pas est invisible à
+// cette égalité et son refresh est silencieusement avalé.
 extension MessageRecord: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.localId == rhs.localId && lhs.changeVersion == rhs.changeVersion

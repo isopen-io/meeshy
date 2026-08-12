@@ -10,13 +10,14 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useQueryClient, useInfiniteQuery, focusManager } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import { messagesService } from '@/services/conversations/messages.service';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { Message, User } from '@meeshy/shared/types';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
@@ -54,6 +55,16 @@ export interface ConversationMessagesRQReturn {
   removeOptimisticMessage: (tempId: string) => void;
 }
 
+const CATCH_UP_PAGE_LIMIT = 50;
+const CATCH_UP_MAX_PAGES = 5;
+// The server reads `after` as a STRICT `createdAt >` filter. Two messages can
+// land in the same millisecond, so anchoring exactly on the newest cached
+// timestamp would make a twin unreachable by every future catch-up. Reaching
+// back one millisecond turns the window inclusive; the id-based dedup already
+// discards the boundary message when it comes back.
+const WATERMARK_INCLUSIVE_MARGIN_MS = 1;
+const FOCUS_CATCH_UP_DEBOUNCE_MS = 1_000;
+
 // Instance du service anonyme (créée à la demande)
 let anonymousChatServiceInstance: AnonymousChatService | null = null;
 
@@ -68,7 +79,7 @@ function getAnonymousChatService(linkId: string): AnonymousChatService {
 /**
  * Fonction pour récupérer les messages via les services existants
  */
-async function fetchMessagesFromService(
+export async function fetchMessagesFromService(
   conversationId: string,
   pageParam: number | string,
   limit: number,
@@ -100,6 +111,49 @@ async function fetchMessagesFromService(
       nextCursor: result.cursorPagination?.nextCursor,
     };
   }
+}
+
+type MessagesPage = { messages: Message[]; hasMore: boolean; total: number; nextCursor?: string | null };
+type InfiniteMessagesData = { pages: MessagesPage[]; pageParams: unknown[] };
+
+function clientMessageIdOf(message: Message): string | null {
+  const asRecord = message as Message & { clientMessageId?: string; _tempId?: string };
+  return asRecord.clientMessageId ?? asRecord._tempId ?? null;
+}
+
+/**
+ * Re-reading the newest page REPLACES it in the infinite cache. Two classes of
+ * locally-known messages are not (yet) in that server page and must survive:
+ * messages delivered by Socket.IO that the REST read cannot see yet (replica
+ * lag / read-after-write), and optimistic messages still in flight. Anything
+ * older than the server page is authoritative server state and is dropped as
+ * usual, so deletions still propagate.
+ */
+export function mergePendingLocalMessages(
+  serverMessages: Message[],
+  cached: InfiniteMessagesData | undefined
+): Message[] {
+  if (!cached) return serverMessages;
+
+  const serverIds = new Set(serverMessages.map((m) => m.id));
+  const serverClientIds = new Set(
+    serverMessages.map(clientMessageIdOf).filter((id): id is string => !!id)
+  );
+  const newestServerMs = serverMessages.reduce((max, m) => {
+    const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+
+  const preserved = cached.pages.flatMap((page) => page.messages).filter((m) => {
+    if (serverIds.has(m.id)) return false;
+    const clientId = clientMessageIdOf(m);
+    if (clientId && serverClientIds.has(clientId)) return false;
+    if (isOptimisticMessage(m)) return true;
+    const createdMs = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    return createdMs > newestServerMs;
+  });
+
+  return preserved.length > 0 ? [...preserved, ...serverMessages] : serverMessages;
 }
 
 export function useConversationMessagesRQ(
@@ -141,20 +195,44 @@ export function useConversationMessagesRQ(
     refetch,
   } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam = 1, signal }) =>
-      fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal),
+    queryFn: async ({ pageParam = 1, signal }) => {
+      const page = await fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal);
+      // Only the newest page (initial page param) can be contradicted by
+      // locally-known messages; older pages are pure history.
+      if (pageParam !== 1) return page;
+      const cached = queryClient.getQueryData<InfiniteMessagesData>(queryKey);
+      return { ...page, messages: mergePendingLocalMessages(page.messages, cached) };
+    },
     initialPageParam: 1 as number | string,
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.hasMore) return undefined;
-      // Préférer le cursor renvoyé par le serveur
+      // Chemin anonyme (lien partagé) : AnonymousChatService.loadMessages(limit, offset)
+      // pagine par offset numérique et ne renvoie jamais de cursor. On avance donc par
+      // index de page. Renvoyer un ID de message (string) ici le ferait retomber sur la
+      // page 1 (offset 0) dans fetchMessagesFromService (`typeof pageParam === 'number' ? … : 1`),
+      // re-chargeant la première page en boucle — doublons + historique ancien inaccessible.
+      if (linkId) return allPages.length + 1;
+      // Chemin authentifié : préférer le cursor renvoyé par le serveur…
       if (lastPage.nextCursor) return lastPage.nextCursor;
-      // Dériver le cursor depuis le dernier message de la page (le plus ancien, tri DESC)
-      // Le gateway accepte un message ID comme paramètre "before"
+      // …sinon dériver un cursor "before" depuis le dernier message (le plus ancien, tri DESC).
+      // Le gateway accepte un message ID comme paramètre "before".
       const lastMessage = lastPage.messages[lastPage.messages.length - 1];
       if (lastMessage?.id) return lastMessage.id;
       return undefined;
     },
     enabled: enabled && !!conversationId,
+    // Ouvrir une conversation relit TOUJOURS la dernière page côté serveur.
+    // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
+    // (Socket.IO est la source temps réel) ; sans cette dérogation, une page
+    // servie par le cache pouvait rester affichée indéfiniment et un message
+    // manquant ne réapparaissait jamais, même après plusieurs F5.
+    // Le refetch n'est plus destructeur : `queryFn` refusionne les messages
+    // locaux que la lecture REST ne voit pas encore (socket + optimistes).
+    refetchOnMount: 'always',
+    // Focus / reconnexion restent servis par le catch-up incrémental
+    // (`syncNewerMessages`), moins coûteux qu'un refetch complet des pages.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     select: (data) => ({
       pages: data.pages,
       pageParams: data.pageParams,
@@ -501,6 +579,155 @@ export function useConversationMessagesRQ(
       };
     });
   }, [queryClient, conversationId, queryKey]);
+
+  // Non-destructive catch-up: fetch only messages newer than the newest cached
+  // entry (`after` watermark) and prepend the genuinely-new ones. A full refetch()
+  // REPLACES the cached pages and can drop socket-added messages (see the
+  // refetchOnWindowFocus: false comment above) — this path never does that,
+  // except as a last-resort fallback when the gap exceeds CATCH_UP_MAX_PAGES pages.
+  const syncInFlightRef = useRef(false);
+
+  const syncNewerMessages = useCallback(async () => {
+    if (!conversationId || linkId || syncInFlightRef.current) return;
+
+    const cached = queryClient.getQueryData<typeof data>(queryKey);
+    if (!cached) return;
+
+    const newestCreatedAtMs = (messages: Message[]): number =>
+      messages.reduce((max, m) => {
+        const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+        return t > max ? t : max;
+      }, 0);
+
+    // The watermark is a SERVER clock reading. An optimistic message is stamped
+    // with the local clock at compose time, so including it would ask for
+    // messages newer than "now on this device" and silently skip everything
+    // peers sent during the gap — and composing while disconnected is exactly
+    // what puts an optimistic message in the cache when the catch-up runs.
+    const serverConfirmed = (messages: Message[]): Message[] =>
+      messages.filter(m => !isOptimisticMessage(m));
+
+    let watermarkMs = newestCreatedAtMs(serverConfirmed(cached.pages.flatMap(p => p.messages)));
+
+    if (watermarkMs === 0) {
+      // Nothing server-confirmed to read forward from (a conversation whose only
+      // content was composed offline). The full read is the sole catch-up left,
+      // and `mergePendingLocalMessages` keeps the pending sends alive through it.
+      syncInFlightRef.current = true;
+      try {
+        await refetch();
+      } catch {
+        // Silent — socket events will carry new messages going forward
+      } finally {
+        syncInFlightRef.current = false;
+      }
+      return;
+    }
+
+    syncInFlightRef.current = true;
+    try {
+      for (let iteration = 0; iteration < CATCH_UP_MAX_PAGES; iteration++) {
+        const after = new Date(watermarkMs - WATERMARK_INCLUSIVE_MARGIN_MS).toISOString();
+        const result = await conversationsService.getMessages(
+          conversationId, 1, CATCH_UP_PAGE_LIMIT, null, undefined, after
+        );
+        const missed = result.messages ?? [];
+        if (missed.length === 0) return;
+
+        const current = queryClient.getQueryData<typeof data>(queryKey);
+        if (!current) return;
+
+        const cachedIds = new Set(current.pages.flatMap(p => p.messages.map(m => m.id)));
+        const genuinelyNew = missed.filter(m => !cachedIds.has(m.id));
+
+        // A dropped send ACK is precisely what a disconnection loses. The server
+        // copy carries the `clientMessageId` we generated, so it must REPLACE the
+        // still-pending optimistic entry instead of sitting next to it — otherwise
+        // the sender sees their own message twice until the next cold load.
+        const confirmedClientIds = new Set(
+          missed.map(clientMessageIdOf).filter((id): id is string => !!id)
+        );
+        const reconcilesPending = current.pages.some(page =>
+          page.messages.some(m => isOptimisticMessage(m) && confirmedClientIds.has(m._tempId))
+        );
+
+        if (genuinelyNew.length > 0 || reconcilesPending) {
+          queryClient.setQueryData(queryKey, (old: typeof data) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page, i) => {
+                const kept = reconcilesPending
+                  ? page.messages.filter(
+                      m => !(isOptimisticMessage(m) && confirmedClientIds.has(m._tempId))
+                    )
+                  : page.messages;
+                const untouched = kept.length === page.messages.length;
+                if (i !== 0) return untouched ? page : { ...page, messages: kept };
+                if (untouched && genuinelyNew.length === 0) return page;
+                return { ...page, messages: [...genuinelyNew, ...kept] };
+              }),
+            };
+          });
+        }
+
+        const hasMore = result.hasMore === true || missed.length === CATCH_UP_PAGE_LIMIT;
+        if (!hasMore) return;
+
+        const newestFetchedMs = newestCreatedAtMs(missed);
+        if (newestFetchedMs <= watermarkMs) break;
+        watermarkMs = newestFetchedMs;
+      }
+      await refetch();
+    } catch {
+      // Silent — socket events will carry new messages going forward
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [conversationId, linkId, queryClient, queryKey, refetch]);
+
+  // Trigger 1 — socket reconnect: catch up on messages missed during the
+  // disconnection gap. Fires on the false → true edge only, not on initial mount.
+  const { isSocketConnected } = useConnectionStatus();
+  const prevSocketConnectedRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const prev = prevSocketConnectedRef.current;
+    prevSocketConnectedRef.current = isSocketConnected;
+
+    const isReconnect = prev === false && isSocketConnected === true;
+    if (!isReconnect) return;
+
+    void syncNewerMessages();
+  }, [isSocketConnected, syncNewerMessages]);
+
+  // NOTE — il n'y a volontairement PAS de catch-up au montage : ouvrir une
+  // conversation relit désormais la dernière page côté serveur
+  // (`refetchOnMount: 'always'` ci-dessus), ce qui couvre strictement plus que
+  // le watermark « en avant » du catch-up — lequel, par construction, ne peut
+  // pas combler un trou antérieur au message le plus récent déjà en cache.
+  // Les deux lectures au montage se seraient de surcroît concurrencées.
+
+  // Trigger 2 — window focus: safety net replacing the destructive
+  // refetchOnWindowFocus (disabled above). Debounced so rapid tab switches
+  // coalesce into one catch-up.
+  useEffect(() => {
+    if (!enabled || !conversationId || linkId) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = focusManager.subscribe((focused) => {
+      if (!focused) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void syncNewerMessages();
+      }, FOCUS_CATCH_UP_DEBOUNCE_MS);
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [enabled, conversationId, linkId, syncNewerMessages]);
 
   return {
     messages,

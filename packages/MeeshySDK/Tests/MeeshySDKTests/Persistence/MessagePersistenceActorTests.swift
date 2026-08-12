@@ -42,6 +42,114 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].changeVersion, 1)
     }
 
+    /// Regression — "message reçu en double" (transient duplicate bubble).
+    ///
+    /// A server echo that races ahead of the REST ACK and misses the cid match
+    /// inserts a SECOND "mirror" row keyed on the server id. When the ACK later
+    /// backfills the optimistic row's serverId via `applyEvent(.serverAck)`,
+    /// BOTH rows then carry the same serverId — the user sees a duplicate bubble
+    /// until a later publish collapses it (which is why it "disappears after a
+    /// few minutes / interaction"). The reconcile must purge the mirror so the
+    /// optimistic row (which holds the cid tracking + local relations) is the
+    /// only survivor for that serverId.
+    func test_applyEvent_serverAck_purgesRacingMirrorRow() async throws {
+        // Optimistic row authored locally (PK = cid, serverId nil until ack).
+        let optimistic = MessageRecordFactory.make(localId: "cid_dup", conversationId: "conv_dup")
+        try await actor.insertOptimistic(optimistic)
+        // Racing echo that missed the cid match → mirror row keyed on the server id.
+        var mirror = MessageRecordFactory.make(localId: "srv_dup", conversationId: "conv_dup", state: .sent)
+        mirror.serverId = "srv_dup"
+        try await actor.insertOptimistic(mirror)
+
+        // The REST ACK finally lands and backfills the optimistic row's serverId.
+        _ = try await actor.applyEvent(localId: "cid_dup",
+            event: .serverAck(serverId: "srv_dup", at: Date()))
+
+        let rows = try actor.messages(for: "conv_dup", limit: 10)
+        let withServerId = rows.filter { $0.serverId == "srv_dup" }
+        XCTAssertEqual(withServerId.count, 1, "exactly one row must carry the server id (mirror purged)")
+        XCTAssertEqual(withServerId.first?.localId, "cid_dup", "the optimistic/cid row survives, not the mirror")
+    }
+
+    /// Companion to the serverAck case for the OTHER reconcile path:
+    /// `upsertFromAPIMessages`. A no-cid echo inserts a mirror row; a later
+    /// cid-bearing echo reconciles the optimistic row by `clientMessageId` and
+    /// must purge the mirror so a single row survives per serverId — carrying
+    /// the server content on the optimistic (cid) row.
+    func test_upsertFromAPIMessages_cidReconcile_purgesRacingMirrorRow() async throws {
+        let optimistic = MessageRecordFactory.make(localId: "cid_up", conversationId: "conv_up")
+        try await actor.insertOptimistic(optimistic)
+        var mirror = MessageRecordFactory.make(localId: "srv_up", conversationId: "conv_up", state: .sent)
+        mirror.serverId = "srv_up"
+        try await actor.insertOptimistic(mirror)
+
+        // The cid-bearing echo reconciles the optimistic row by clientMessageId.
+        let echo = makeAPIMessage(id: "srv_up", conversationId: "conv_up", content: "Hello", clientMessageId: "cid_up")
+        try await actor.upsertFromAPIMessages([echo])
+
+        let rows = try actor.messages(for: "conv_up", limit: 10)
+        let withServerId = rows.filter { $0.serverId == "srv_up" }
+        XCTAssertEqual(withServerId.count, 1, "exactly one row must carry the server id (mirror purged)")
+        XCTAssertEqual(withServerId.first?.localId, "cid_up", "the optimistic/cid row survives, not the mirror")
+        XCTAssertEqual(withServerId.first?.content, "Hello", "the surviving row holds the reconciled server content")
+    }
+
+    /// Regression — "status-management-inconsistency" (2026-06).
+    ///
+    /// The Notification Service Extension pre-persists an offline-push message
+    /// with a PLACEHOLDER `createdAt` = the push-receipt time (when the device
+    /// came back online), because the push payload doesn't carry the real send
+    /// time. The canonical REST fetch then reconciles the row and MUST correct
+    /// `createdAt` to the authoritative server value — otherwise the bubble +
+    /// detail sheet display the data-reactivation time as the "sent" time,
+    /// contradicting the message's notification ("4h ago") and read receipts.
+    func test_upsertFromAPIMessages_correctsPlaceholderCreatedAtFromCanonicalPayload() async throws {
+        let trueSendTime = Date(timeIntervalSince1970: 1_700_000_000)         // real send
+        let pushReceiptTime = trueSendTime.addingTimeInterval(4 * 3600)        // +4h (data re-enabled)
+
+        // Simulate the NSE pre-persist: server-keyed row stamped with the
+        // push-receipt placeholder, including the derived time-string cache the
+        // bubble renders.
+        var nsePlaceholder = MessageRecordFactory.make(
+            localId: "srv_offline",
+            conversationId: "conv_offline",
+            senderId: "sender_1",
+            content: "Le Sprint 10 a ete defini",
+            state: .delivered,
+            createdAt: pushReceiptTime
+        )
+        nsePlaceholder.serverId = "srv_offline"
+        nsePlaceholder.cachedTimeString = MessageRecord.computeTimeString(for: pushReceiptTime)
+        try await actor.insertOptimistic(nsePlaceholder)
+
+        // The canonical payload (REST/socket, DB-authoritative) carries the real
+        // send time.
+        let canonical = makeAPIMessage(
+            id: "srv_offline",
+            conversationId: "conv_offline",
+            senderId: "sender_1",
+            content: "Le Sprint 10 a ete defini",
+            createdAt: trueSendTime
+        )
+        try await actor.upsertFromAPIMessages([canonical])
+
+        let row = try XCTUnwrap(
+            try actor.messages(for: "conv_offline", limit: 10)
+                .first { $0.serverId == "srv_offline" }
+        )
+        XCTAssertEqual(
+            row.createdAt.timeIntervalSince1970,
+            trueSendTime.timeIntervalSince1970,
+            accuracy: 1.0,
+            "createdAt must be corrected to the authoritative server send time, not the push-receipt placeholder"
+        )
+        XCTAssertEqual(
+            row.cachedTimeString,
+            MessageRecord.computeTimeString(for: trueSendTime),
+            "the cached time-string the bubble renders must be recomputed from the corrected createdAt"
+        )
+    }
+
     func test_applyEvent_invalidTransition_returnsNil() async throws {
         let record = MessageRecordFactory.make(localId: "temp_003", state: .read)
         try await actor.insertOptimistic(record)
@@ -149,6 +257,81 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].translatedContent, "Hello")
     }
 
+    /// grdb-06 — deux schémas d'id de traduction coexistent (fallback socket
+    /// horodaté vs id serveur stable) : la même (message, langue) peut arriver
+    /// sous deux PK différentes. Le save par PK violait l'index UNIQUE
+    /// idx_trans_msg_lang au lieu de remplacer la row existante.
+    func test_saveTranslation_sameMessageAndLanguageDifferentIds_replacesWithoutThrow() async throws {
+        let fallback = TranslationRecord(
+            id: "m1_en_1700000000", messageLocalId: "m1", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(fallback)
+
+        let canonical = TranslationRecord(
+            id: "m1-en", messageLocalId: "m1", messageServerId: "m1",
+            targetLanguage: "en", translatedContent: "Hello v2",
+            translationModel: "nllb-200", confidenceScore: 0.95,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(canonical)
+
+        let fetched = try actor.translations(for: "m1")
+        XCTAssertEqual(fetched.count, 1, "une seule row par (message, langue)")
+        XCTAssertEqual(fetched[0].translatedContent, "Hello v2")
+        XCTAssertEqual(fetched[0].id, "m1-en", "l'id est remplacé par celui du dernier écrivain")
+    }
+
+    /// La collision ne doit plus faire lever le db.write entier : avant le fix,
+    /// le throw sur la ligne translations faisait rollback TOUT le batch — un
+    /// message sans rapport avec la collision était droppé collatéralement.
+    func test_upsertFromAPIMessages_translationIdCollision_persistsWholeBatch() async throws {
+        let seeded = TranslationRecord(
+            id: "m1_en_1700000000", messageLocalId: "m1", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(seeded)
+
+        let msgA = makeAPIMessage(
+            id: "m1", conversationId: "conv_tr",
+            translations: [[
+                "id": "m1-en", "messageId": "m1", "targetLanguage": "en",
+                "translatedContent": "Hello EN", "translationModel": "nllb-200"
+            ]]
+        )
+        let msgB = makeAPIMessage(id: "m2", conversationId: "conv_tr", content: "Second")
+        try await actor.upsertFromAPIMessages([msgA, msgB])
+
+        let rows = try actor.messages(for: "conv_tr", limit: 10)
+        XCTAssertNotNil(rows.first { $0.localId == "m2" },
+                        "un message sans rapport avec la collision ne doit pas être droppé")
+        let fetched = try actor.translations(for: "m1")
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].translatedContent, "Hello EN")
+    }
+
+    /// Verrou de non-régression : des ids stables re-livrés restent idempotents
+    /// après le passage à l'upsert ON CONFLICT.
+    func test_upsertFromAPIMessages_stableTranslationIds_idempotent() async throws {
+        let msg = makeAPIMessage(
+            id: "m3", conversationId: "conv_tr2",
+            translations: [[
+                "id": "m3-en", "messageId": "m3", "targetLanguage": "en",
+                "translatedContent": "Stable", "translationModel": "nllb-200"
+            ]]
+        )
+        try await actor.upsertFromAPIMessages([msg])
+        try await actor.upsertFromAPIMessages([msg])
+
+        let fetched = try actor.translations(for: "m3")
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].translatedContent, "Stable")
+    }
+
     // MARK: - Edit / Delete
 
     func test_markEdited_updatesContentAndFlag() async throws {
@@ -160,6 +343,40 @@ final class MessagePersistenceActorTests: XCTestCase {
         let fetched = try actor.messages(for: "conv_default", limit: 10)
         XCTAssertEqual(fetched[0].content, "Edited")
         XCTAssertTrue(fetched[0].isEdited)
+    }
+
+    func test_markEdited_ignoresOutOfOrderStaleEdit() async throws {
+        let record = MessageRecordFactory.make(localId: "edit_stale", content: "Original")
+        try await actor.insertOptimistic(record)
+
+        let newer = Date()
+        let older = newer.addingTimeInterval(-60)
+
+        // Newer edit applies first, then a stale/delayed duplicate delivery
+        // of an older edit arrives — it must not clobber the newer content.
+        try await actor.markEdited(localId: "edit_stale", newContent: "Newer edit", editedAt: newer)
+        try await actor.markEdited(localId: "edit_stale", newContent: "Stale edit", editedAt: older)
+
+        let fetched = try actor.messages(for: "conv_default", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Newer edit")
+    }
+
+    /// Regression: `editMessage`'s failure-rollback path calls `markEdited`
+    /// TWICE with the exact same in-memory `editedAt` (optimistic write, then
+    /// rollback to the original content on network failure). GRDB round-trips
+    /// `Date` through a millisecond-precision column, so the second call's
+    /// stored-vs-incoming comparison must tolerate that round-trip noise —
+    /// a strict `<` misfired here and silently dropped the rollback.
+    func test_markEdited_sameEditedAtReappliedTwice_stillApplies() async throws {
+        let record = MessageRecordFactory.make(localId: "edit_rollback", content: "Original")
+        try await actor.insertOptimistic(record)
+
+        let editedAt = Date()
+        try await actor.markEdited(localId: "edit_rollback", newContent: "Edited", editedAt: editedAt)
+        try await actor.markEdited(localId: "edit_rollback", newContent: "Original", editedAt: editedAt)
+
+        let fetched = try actor.messages(for: "conv_default", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Original")
     }
 
     func test_markDeleted_clearsContentAndSetsTimestamp() async throws {
@@ -483,15 +700,19 @@ final class MessagePersistenceActorTests: XCTestCase {
         await fulfillment(of: [exp], timeout: 1.0)
     }
 
-    func test_updateLayout_postsRefreshWithConversationId() async throws {
+    func test_updateLayout_doesNotPostRefresh() async throws {
+        // grdb-04 — le refresh d'updateLayout était un no-op prouvé
+        // (MessageRecord == ne compare que localId+changeVersion, non bumpé
+        // ici) qui coûtait fetch+compare à CHAQUE écriture de layout.
         let record = MessageRecordFactory.make(localId: "layout_notif", conversationId: "conv_layout")
         try await actor.insertOptimistic(record)
         await drainMainQueueNotifications()
 
         let (exp, observer) = observeRefresh(
             conversationId: "conv_layout",
-            description: "messageStoreShouldRefresh fires for updateLayout"
+            description: "messageStoreShouldRefresh must NOT fire for updateLayout"
         )
+        exp.isInverted = true
         defer { NotificationCenter.default.removeObserver(observer) }
 
         try await actor.updateLayout(
@@ -618,8 +839,10 @@ final class MessagePersistenceActorTests: XCTestCase {
         clientMessageId: String? = nil,
         isEncrypted: Bool = false,
         attachments: [[String: Any]] = [],
+        translations: [[String: Any]] = [],
         reactionSummary: [String: Int]? = nil,
         currentUserReactions: [String]? = nil,
+        metadata: [String: Any]? = nil,
         createdAt: Date = Date()
     ) -> APIMessage {
         var json: [String: Any] = [
@@ -633,12 +856,150 @@ final class MessagePersistenceActorTests: XCTestCase {
         if let clientMessageId { json["clientMessageId"] = clientMessageId }
         if isEncrypted { json["isEncrypted"] = true }
         if !attachments.isEmpty { json["attachments"] = attachments }
+        if !translations.isEmpty { json["translations"] = translations }
         if let reactionSummary { json["reactionSummary"] = reactionSummary }
         if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
+        if let metadata { json["metadata"] = metadata }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try! decoder.decode(APIMessage.self, from: data)
+    }
+
+    // MARK: - Call notice (live → terminal, message d'appel vivant)
+
+    private func callSummaryJSON(kind: String, callId: String = "call_1", outcome: String = "completed", duration: Int = 0) -> Data {
+        let dict: [String: Any] = [
+            "kind": kind,
+            "callId": callId,
+            "initiatorId": "user_init",
+            "callType": "audio",
+            "outcome": outcome,
+            "durationSeconds": duration,
+            "bytesEstimated": false,
+        ]
+        return try! JSONSerialization.data(withJSONObject: dict)
+    }
+
+    private func callMetadataDict(kind: String, callId: String = "call_1", outcome: String = "completed", duration: Int = 0) -> [String: Any] {
+        [
+            "kind": kind,
+            "callId": callId,
+            "initiatorId": "user_init",
+            "callType": "audio",
+            "outcome": outcome,
+            "durationSeconds": duration,
+            "bytesEstimated": false,
+        ]
+    }
+
+    /// La transition serveur live → terminal (message:edited porteur d'une
+    /// métadonnée d'appel) met à jour content + callSummaryJson + updatedAt +
+    /// changeVersion SANS toucher isEdited/editedAt — une transition d'état
+    /// n'est pas une édition utilisateur, la bulle ne doit jamais porter
+    /// « modifié ».
+    func test_applyCallNoticeUpdate_updatesContentAndSummary_withoutEditFlags() async throws {
+        var record = MessageRecordFactory.make(localId: "srv_call_1", conversationId: "conv_call")
+        record.serverId = "srv_call_1"
+        record.callSummaryJson = callSummaryJSON(kind: "call-live")
+        try await actor.insertOptimistic(record)
+
+        let terminal = callSummaryJSON(kind: "call", outcome: "completed", duration: 272)
+        try await actor.applyCallNoticeUpdate(
+            localId: "srv_call_1",
+            content: "Appel audio · 04:32",
+            callSummaryJson: terminal,
+            serverUpdatedAt: Date()
+        )
+
+        let fetched = try actor.messages(for: "conv_call", limit: 10)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].content, "Appel audio · 04:32")
+        XCTAssertEqual(fetched[0].callSummaryJson, terminal)
+        XCTAssertFalse(fetched[0].isEdited, "state transition must not brand the bubble as edited")
+        XCTAssertNil(fetched[0].editedAt)
+        XCTAssertGreaterThan(fetched[0].changeVersion, record.changeVersion)
+    }
+
+    /// Le message d'appel arrive par socket avec l'id SERVEUR ; la résolution
+    /// doit matcher `serverId` comme `markEdited` (localId OR serverId).
+    func test_applyCallNoticeUpdate_resolvesByServerId() async throws {
+        var record = MessageRecordFactory.make(localId: "cid_call_2", conversationId: "conv_call2")
+        record.serverId = "srv_call_2"
+        record.callSummaryJson = callSummaryJSON(kind: "call-live")
+        try await actor.insertOptimistic(record)
+
+        try await actor.applyCallNoticeUpdate(
+            localId: "srv_call_2",
+            content: "Appel audio manqué",
+            callSummaryJson: callSummaryJSON(kind: "call", outcome: "missed"),
+            serverUpdatedAt: Date()
+        )
+
+        let fetched = try actor.messages(for: "conv_call2", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Appel audio manqué")
+    }
+
+    /// Garde anti-régression : un snapshot REST sérialisé PENDANT l'appel
+    /// (metadata live) appliqué APRÈS l'édition terminale ne doit régresser ni
+    /// la métadonnée ni le content — sinon la bulle relit « en cours » à jamais.
+    func test_upsertFromAPIMessages_staleLiveSnapshot_neverRegressesTerminalSummary() async throws {
+        var record = MessageRecordFactory.make(
+            localId: "srv_call_3",
+            conversationId: "conv_call3",
+            content: "Appel audio · 04:32",
+            state: .sent
+        )
+        record.serverId = "srv_call_3"
+        record.callSummaryJson = callSummaryJSON(kind: "call", outcome: "completed", duration: 272)
+        try await actor.insertOptimistic(record)
+
+        let staleSnapshot = makeAPIMessage(
+            id: "srv_call_3",
+            conversationId: "conv_call3",
+            content: "Appel audio en cours",
+            metadata: callMetadataDict(kind: "call-live")
+        )
+        try await actor.upsertFromAPIMessages([staleSnapshot])
+
+        let fetched = try actor.messages(for: "conv_call3", limit: 10)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].content, "Appel audio · 04:32", "stale live content must not clobber the terminal label")
+        let stored = try XCTUnwrap(fetched[0].callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive, "terminal summary must never regress to live")
+        XCTAssertEqual(decoded.durationSeconds, 272)
+    }
+
+    /// Le sens NORMAL passe toujours : un refresh REST portant le TERMINAL
+    /// remplace la métadonnée live stockée (conversation fermée pendant
+    /// l'appel, hydratation REST après coup).
+    func test_upsertFromAPIMessages_liveToTerminal_alwaysApplies() async throws {
+        var record = MessageRecordFactory.make(
+            localId: "srv_call_4",
+            conversationId: "conv_call4",
+            content: "Appel audio en cours",
+            state: .sent
+        )
+        record.serverId = "srv_call_4"
+        record.callSummaryJson = callSummaryJSON(kind: "call-live")
+        try await actor.insertOptimistic(record)
+
+        let terminalRefresh = makeAPIMessage(
+            id: "srv_call_4",
+            conversationId: "conv_call4",
+            content: "Appel audio · 04:32",
+            metadata: callMetadataDict(kind: "call", outcome: "completed", duration: 272)
+        )
+        try await actor.upsertFromAPIMessages([terminalRefresh])
+
+        let fetched = try actor.messages(for: "conv_call4", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Appel audio · 04:32")
+        let stored = try XCTUnwrap(fetched[0].callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive)
+        XCTAssertEqual(decoded.outcome, .completed)
+        XCTAssertEqual(decoded.durationSeconds, 272)
     }
 
     /// RC2.2 — a media message ingested via `upsertFromAPIMessages` must keep
@@ -1424,6 +1785,32 @@ final class MessagePersistenceActorTests: XCTestCase {
             "a 👍 cap of 1 must not suppress a distinct 🎉 reaction")
     }
 
+    // MARK: - Failed-from-outbox reconciliation (grdb-04 changeVersion bump)
+
+    func test_reconcileFailedFromOutbox_flipsState_bumpsChangeVersion() async throws {
+        let record = MessageRecordFactory.make(
+            localId: "stuck_bump_1", conversationId: "conv_stuck_bump", state: .sending, changeVersion: 3
+        )
+        try await actor.insertOptimistic(record)
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                kind: .sendMessage,
+                conversationId: "conv_stuck_bump",
+                messageLocalId: "stuck_bump_1",
+                clientMessageId: "stuck_bump_1",
+                payload: Data(),
+                status: .exhausted
+            ).insert(db)
+        }
+
+        await actor.reconcileFailedFromOutbox(conversationId: "conv_stuck_bump")
+
+        let fetched = try actor.messages(for: "conv_stuck_bump", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+        XCTAssertEqual(fetched[0].changeVersion, 4,
+            "un flip d'état sans bump changeVersion est invisible au diff O(1) du MessageStore")
+    }
+
     // MARK: - Orphaned sending reconciliation
 
     /// An optimistic row stuck in `.sending` with no serverId, no live outbox
@@ -1480,6 +1867,22 @@ final class MessagePersistenceActorTests: XCTestCase {
             "a live outbox record still owns the retry loop — don't fail its message")
     }
 
+    func test_reconcileOrphanedSendingRows_orphan_bumpsChangeVersion() async throws {
+        let old = Date().addingTimeInterval(-300)
+        let record = MessageRecordFactory.make(
+            localId: "orphan_bump_1", conversationId: "conv_orphan_bump", state: .sending,
+            createdAt: old, changeVersion: 5
+        )
+        try await actor.insertOptimistic(record)
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_orphan_bump", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_orphan_bump", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+        XCTAssertEqual(fetched[0].changeVersion, 6,
+            "le flip orphelin doit être visible du diff O(1)")
+    }
+
     func test_reconcileOrphanedSendingRows_rowWithExhaustedOutbox_flipsToFailed() async throws {
         let old = Date().addingTimeInterval(-300)
         let record = MessageRecordFactory.make(
@@ -1502,5 +1905,25 @@ final class MessagePersistenceActorTests: XCTestCase {
         let fetched = try actor.messages(for: "conv_exhausted", limit: 10)
         XCTAssertEqual(fetched[0].state, .failed,
             "an exhausted outbox no longer retries — the row is orphaned")
+    }
+}
+
+/// startup-03 — compteur des lignes outbox éligibles à l'envoi.
+extension MessagePersistenceActorTests {
+
+    func test_pendingOutboxCount_countsPendingAndInflightOnly() async throws {
+        try await dbQueue.write { db in
+            let now = Date()
+            for (id, status) in [("o-p", "pending"), ("o-i", "inflight"), ("o-e", "exhausted"), ("o-f", "failed")] {
+                try db.execute(
+                    sql: "INSERT INTO outbox (id, kind, conversationId, payload, status, createdAt, updatedAt, nextAttemptAt) VALUES (?, 'sendMessage', 'c1', ?, ?, ?, ?, ?)",
+                    arguments: [id, Data(), status, now, now, now]
+                )
+            }
+        }
+
+        let count = try await actor.pendingOutboxCount()
+
+        XCTAssertEqual(count, 2, "seuls .pending et .inflight comptent comme travail encore éligible à l'envoi")
     }
 }

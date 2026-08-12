@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { isValidObjectId } from '@/utils/object-id';
 import type {
   ReactionAggregation,
   ReactionSync,
@@ -54,6 +55,7 @@ async function fetchReactions(messageId: string): Promise<ReactionState> {
       return;
     }
 
+    /* istanbul ignore next -- 5s timeout is an infrastructure-level safety net, not unit-testable without fake timers */
     const timeout = setTimeout(() => {
       reject(new Error('Timeout fetching reactions'));
     }, 5000);
@@ -131,6 +133,28 @@ export function useReactionsQuery({
   const queryClient = useQueryClient();
   const MAX_REACTIONS_PER_USER = 3;
 
+  // Restaure EXACTEMENT l'état d'avant la mise à jour optimiste, y compris
+  // l'absence d'état. `setQueryData(key, undefined)` ne suffit pas : React Query
+  // interprète `undefined` comme « ne rien changer » et laisserait en place ce
+  // que `onMutate` a fabriqué sur un cache vide. Le retrait de l'entrée est la
+  // seule façon de revenir à « pas de donnée », et laisse les observateurs
+  // montés re-demander la vérité au serveur.
+  const restoreReactionSnapshot = useCallback((previousData: ReactionState | undefined) => {
+    if (previousData === undefined) {
+      queryClient.removeQueries({ queryKey: reactionKeys.message(messageId), exact: true });
+      return;
+    }
+    queryClient.setQueryData(reactionKeys.message(messageId), previousData);
+  }, [queryClient, messageId]);
+
+  // An optimistic (not-yet-persisted) message carries a client id (`cid_<uuid>`,
+  // see optimistic-message.ts) until the server ACK/broadcast replaces it with a
+  // Mongo ObjectId. The gateway rejects any non-ObjectId messageId ("Prisma
+  // ObjectID error"), so the query/mutations below must stay disabled until
+  // messageId is a real, persisted ObjectId — reachable in practice via the
+  // always-interactive quick-reaction button on a still-"sending" bubble.
+  const isPersisted = isValidObjectId(messageId);
+
   // Convertir reactionSummary + currentUserReactions en données initiales pour React Query
   // Permet un affichage instantané sans attendre Socket.IO
   const initialData = useMemo((): ReactionState | undefined => {
@@ -170,7 +194,7 @@ export function useReactionsQuery({
   } = useQuery({
     queryKey: reactionKeys.message(messageId),
     queryFn: () => fetchReactions(messageId),
-    enabled: enabled && !!messageId,
+    enabled: enabled && !!messageId && isPersisted,
     staleTime: Infinity, // Socket.IO gère les mises à jour
     retry: 1,
     initialData, // Utiliser reactionSummary pour affichage instantané
@@ -245,10 +269,11 @@ export function useReactionsQuery({
       return { previousData };
     },
     onError: (err, _emoji, context) => {
-      // Rollback on error
-      if (context?.previousData) {
-        queryClient.setQueryData(reactionKeys.message(messageId), context.previousData);
-      }
+      // Rollback INCONDITIONNEL. Gardé sur `context.previousData`, il refusait
+      // de défaire le cas où `onMutate` a FABRIQUÉ l'état à partir d'un cache
+      // vide : `previousData` vaut alors `undefined`, et la réaction fantôme
+      // survivait au refus du serveur.
+      restoreReactionSnapshot(context?.previousData);
 
       const errorMessage = err instanceof Error ? err.message : 'Failed to add reaction';
       if (errorMessage.includes('Maximum') && errorMessage.includes('different reactions')) {
@@ -313,16 +338,17 @@ export function useReactionsQuery({
       return { previousData };
     },
     onError: (_err, _emoji, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(reactionKeys.message(messageId), context.previousData);
-      }
+      // Rollback inconditionnel, même raison qu'à l'ajout : sur cache vide,
+      // `onMutate` matérialise un état que le garde `if (previousData)`
+      // laissait ensuite en place.
+      restoreReactionSnapshot(context?.previousData);
       toast.error('Failed to remove reaction');
     },
   });
 
   // Actions
   const addReaction = useCallback(async (emoji: string): Promise<boolean> => {
-    if (!enabled || !messageId) return false;
+    if (!enabled || !messageId || !isPersisted) return false;
 
     // Vérifier si déjà réagi
     if (userReactions.includes(emoji)) return true;
@@ -339,10 +365,10 @@ export function useReactionsQuery({
     } catch {
       return false;
     }
-  }, [enabled, messageId, userReactions, addMutation, t]);
+  }, [enabled, messageId, isPersisted, userReactions, addMutation, t]);
 
   const removeReaction = useCallback(async (emoji: string): Promise<boolean> => {
-    if (!enabled || !messageId) return false;
+    if (!enabled || !messageId || !isPersisted) return false;
 
     try {
       await removeMutation.mutateAsync(emoji);
@@ -350,7 +376,7 @@ export function useReactionsQuery({
     } catch {
       return false;
     }
-  }, [enabled, messageId, removeMutation]);
+  }, [enabled, messageId, isPersisted, removeMutation]);
 
   const toggleReaction = useCallback(async (emoji: string): Promise<boolean> => {
     if (userReactions.includes(emoji)) {
@@ -394,9 +420,15 @@ export function useReactionsQuery({
           newReactions = [...old.reactions, event.aggregation];
         }
 
-        // Mettre à jour userReactions si c'est nous
+        // Mettre à jour userReactions si c'est nous. On compare le User.id du
+        // réacteur (`event.userId`), PAS `event.participantId` : ce dernier est un
+        // Participant.id scopé conversation, jamais égal à un User.id (ObjectIds de
+        // collections distinctes). Comparer participantId à currentUserId (un
+        // User.id) échouait toujours — sur un 2e appareil du même utilisateur la
+        // réaction n'était pas surlignée et un tap la ré-ajoutait au lieu de la
+        // retirer. Aligné sur le chemin réaction de post (use-post-socket-cache-sync).
         let newUserReactions = old.userReactions;
-        if (event.participantId && event.participantId === currentUserId) {
+        if (event.userId && event.userId === currentUserId) {
           if (!old.userReactions.includes(event.emoji)) {
             newUserReactions = [...old.userReactions, event.emoji];
           }
@@ -405,8 +437,13 @@ export function useReactionsQuery({
         return { reactions: newReactions, userReactions: newUserReactions };
       });
 
-      // Invalidate conversations lists (réaction ajoutée = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // Aucune invalidation de la liste de conversations, et c'est délibéré :
+      // une réaction ne change rien de ce qu'une ligne de liste porte (aperçu,
+      // non-lus, horodatage). Il y avait ici une `invalidateQueries` sur la
+      // forme PLATE, désormais supprimée du dépôt — elle ne matchait donc
+      // aucun cache. Ne pas la « réparer » vers `conversations.infinite()` :
+      // ça relirait toutes les pages chargées à chaque réaction. Le seul cache
+      // concerné est celui du message, juste en dessous.
 
       // W4: Update reactionSummary on the message object in messages.infinite cache
       updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
@@ -427,17 +464,19 @@ export function useReactionsQuery({
           );
         }
 
-        // Mettre à jour userReactions si c'est nous
+        // Mettre à jour userReactions si c'est nous (User.id du réacteur, pas
+        // participantId — cf. handleReactionAdded). Un écho de retrait émis par un
+        // autre appareil du même utilisateur doit retirer l'emoji de userReactions.
         let newUserReactions = old.userReactions;
-        if (event.participantId && event.participantId === currentUserId) {
+        if (event.userId && event.userId === currentUserId) {
           newUserReactions = old.userReactions.filter(e => e !== event.emoji);
         }
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });
 
-      // Invalidate conversations lists (réaction supprimée = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // Pas d'invalidation de la liste de conversations — même raison qu'à
+      // l'ajout (cf. `handleReactionAdded`).
 
       // W4: Update reactionSummary on the message object in messages.infinite cache
       updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);

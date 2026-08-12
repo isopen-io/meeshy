@@ -1,8 +1,55 @@
+import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
+
+/**
+ * Mapping `{ url, token }` rangé dans `metadata.trackingLinks` de tout contenu
+ * (message, post, story, commentaire). Le client rend le lien (texte + façade
+ * vidéo) vers `/l/<token>` sans réécrire l'URL brute (l'aperçu vidéo et l'URL
+ * lisible sont préservés). Source UNIQUE produite par `collectContentTrackingLinks`.
+ */
+export type ContentTrackingLink = { url: string; token: string };
+
+/**
+ * Source UNIQUE de l'URL du frontend pour bâtir les liens `/l/<token>`.
+ * Fallback `meeshy.me` (domaine prod) — jamais localhost, qui casserait un lien
+ * partagé si `FRONTEND_URL` manquait. Utilisée par `buildTrackingUrl` ET la route share.
+ */
+export function resolveFrontendBaseUrl(): string {
+  return (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+}
+
+const SHORT_TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+/**
+ * Génère un token court via CSPRNG (`crypto.randomInt`) — JAMAIS `Math.random()`
+ * (un PRNG prédictible laisserait deviner les tokens d'autres partageurs). Source
+ * UNIQUE partagée par TrackingLinkService et PostService (collision → re-tirage
+ * géré par l'appelant). 6 chars suffisent face au brute-force grâce au rate-limit.
+ */
+export function generateShortToken(length = 6): string {
+  let token = '';
+  for (let i = 0; i < length; i += 1) token += SHORT_TOKEN_CHARS.charAt(randomInt(0, SHORT_TOKEN_CHARS.length));
+  return token;
+}
+
+/**
+ * Cible typée résolue depuis un token `/l/<token>` — sert la page de
+ * redirection intelligente (web) et le DeepLinkRouter (iOS). `kind` distingue
+ * un lien de tracking (partage de post/reel/story) d'une invitation conversation.
+ */
+export type ResolvedLinkTarget = {
+  kind: 'tracking' | 'conversation';
+  targetType: string;
+  targetId: string | null;
+  originalUrl: string | null;
+  sharerId: string | null;
+  isActive: boolean;
+  expiresAt: Date | null;
+};
 
 /**
  * Service pour gérer les liens de tracking
@@ -18,12 +65,7 @@ export class TrackingLinkService {
    * Génère un token unique de 6 caractères
    */
   private generateToken(): string {
-    const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let token = '';
-    for (let i = 0; i < 6; i++) {
-      token += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return token;
+    return generateShortToken(6);
   }
 
   /**
@@ -31,8 +73,7 @@ export class TrackingLinkService {
    * Utilise FRONTEND_URL de l'environnement ou fallback sur localhost
    */
   public buildTrackingUrl(token: string): string {
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-    return `${frontendUrl}/l/${token}`;
+    return `${resolveFrontendBaseUrl()}/l/${token}`;
   }
 
   /**
@@ -63,7 +104,7 @@ export class TrackingLinkService {
     do {
       token = this.generateToken();
       attempts++;
-      
+
       if (attempts >= maxAttempts) {
         throw new Error('Unable to generate unique token after maximum attempts');
       }
@@ -135,6 +176,51 @@ export class TrackingLinkService {
   }
 
   /**
+   * Résout un token `/l/<token>` vers sa cible typée. Tente d'abord un
+   * TrackingLink (partage de post/reel/story), puis tombe en fallback sur un
+   * ConversationShareLink (invitation). Un lien expiré ou désactivé est résolu
+   * mais marqué `isActive: false` (la page/app décide). Renvoie `null` si aucun
+   * lien ne correspond (→ 404 côté route).
+   */
+  async resolveTarget(token: string): Promise<ResolvedLinkTarget | null> {
+    const link = await this.prisma.trackingLink.findUnique({ where: { token } });
+    if (link) {
+      return {
+        kind: 'tracking',
+        targetType: link.targetType,
+        targetId: link.targetId ?? null,
+        originalUrl: link.originalUrl ?? null,
+        sharerId: link.createdBy ?? null,
+        isActive: this.isLinkActive(link.isActive, link.expiresAt ?? null),
+        expiresAt: link.expiresAt ?? null,
+      };
+    }
+
+    const invitation = await this.prisma.conversationShareLink.findFirst({
+      where: { OR: [{ linkId: token }, { identifier: token }] }
+    });
+    if (invitation) {
+      return {
+        kind: 'conversation',
+        targetType: 'CONVERSATION',
+        targetId: invitation.conversationId,
+        originalUrl: null,
+        sharerId: invitation.createdBy ?? null,
+        isActive: this.isLinkActive(invitation.isActive, invitation.expiresAt ?? null),
+        expiresAt: invitation.expiresAt ?? null,
+      };
+    }
+
+    return null;
+  }
+
+  private isLinkActive(isActive: boolean, expiresAt: Date | null): boolean {
+    if (!isActive) return false;
+    if (expiresAt && expiresAt.getTime() <= Date.now()) return false;
+    return true;
+  }
+
+  /**
    * Vérifie si un lien de tracking existe pour une URL donnée
    */
   async findExistingTrackingLink(originalUrl: string, conversationId?: string): Promise<TrackingLink | null> {
@@ -195,7 +281,7 @@ export class TrackingLinkService {
   }): Promise<{ trackingLink: TrackingLink; click: TrackingLinkClick }> {
     // Vérifier que le lien existe et est actif
     const trackingLink = await this.getTrackingLinkByToken(params.token);
-    
+
     if (!trackingLink) {
       throw new Error('Tracking link not found');
     }
@@ -330,7 +416,7 @@ export class TrackingLinkService {
     confirmedClicks: number;
   }> {
     const trackingLink = await this.getTrackingLinkByToken(token);
-    
+
     if (!trackingLink) {
       throw new Error('Tracking link not found');
     }
@@ -392,8 +478,8 @@ export class TrackingLinkService {
         clicksByLanguage[click.language] = (clicksByLanguage[click.language] || 0) + 1;
       }
 
-      // Par heure (0-23)
-      const hour = click.clickedAt.getHours().toString().padStart(2, '0');
+      // Par heure (0-23, UTC — cohérent avec clicksByDate qui utilise toISOString)
+      const hour = click.clickedAt.getUTCHours().toString().padStart(2, '0');
       clicksByHour[hour] = (clicksByHour[hour] || 0) + 1;
 
       // Par source sociale
@@ -425,7 +511,22 @@ export class TrackingLinkService {
       if (click.deviceFingerprint) uniqueFingerprints.add(click.deviceFingerprint);
     });
 
-    const uniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
+    // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
+    // divergeait du compteur lu par /posts/:id/share & /tracking-links/stats.
+    //
+    // MAIS le compteur stocké est all-time : il ne connaît pas la fenêtre
+    // [startDate, endDate]. Dès qu'un filtre de date est appliqué, `clicks`
+    // (et donc totalClicks + les histogrammes) ne couvre que la fenêtre, alors
+    // que le compteur stocké resterait sur le total historique — cassant
+    // l'invariant `uniqueClicks ≤ totalClicks`. Sur une fenêtre, on recalcule
+    // donc depuis le set filtré ; sinon on garde le compteur stocké (cohérence
+    // cross-endpoint).
+    const recomputedUniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    const isDateFiltered = Boolean(params?.startDate || params?.endDate);
+    const uniqueClicks = isDateFiltered
+      ? recomputedUniqueClicks
+      : ((trackingLink as TrackingLink).uniqueClicks ?? recomputedUniqueClicks);
 
     const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
 
@@ -497,7 +598,7 @@ export class TrackingLinkService {
    */
   async deleteTrackingLink(token: string): Promise<void> {
     const trackingLink = await this.getTrackingLinkByToken(token);
-    
+
     if (!trackingLink) {
       throw new Error('Tracking link not found');
     }
@@ -643,11 +744,16 @@ export class TrackingLinkService {
         }
 
         const meeshyShortLink = `m+${token}`;
-        processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+        // Function replacer, not a string: String.prototype.replace interprets
+        // $$, $&, $` and $' in a replacement STRING (regardless of a string vs
+        // regex search), so any $-sequence in the restored URL would be mangled.
+        // A () => value replacer reinstates the text verbatim with identical
+        // first-occurrence semantics (mirror of processLinksInContent).
+        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
       } catch (linkError) {
         logger.error('Error processing [[url]]', { error: linkError });
         // On error, replace with URL without brackets
-        processedContent = processedContent.replace(fullMatch, url);
+        processedContent = processedContent.replace(fullMatch, () => url);
       }
     }
 
@@ -685,33 +791,48 @@ export class TrackingLinkService {
         }
 
         const meeshyShortLink = `m+${token}`;
-        processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
       } catch (linkError) {
         logger.error('Error processing <url>', { error: linkError });
         // On error, replace with URL without angle brackets
-        processedContent = processedContent.replace(fullMatch, url);
+        processedContent = processedContent.replace(fullMatch, () => url);
       }
     }
 
-    // STEP 4: Restore protected markdown links
+    // STEP 4: Restore protected markdown links.
+    // Function replacer: `original` is user text that may contain $&, $$, $` or
+    // $' — a replacement STRING would substitute those and corrupt the link
+    // (e.g. "$&" would leak the __PROTECTED_MD_n__ sentinel back into content).
     for (const { placeholder, original } of protectedItems) {
-      processedContent = processedContent.replace(placeholder, original);
+      processedContent = processedContent.replace(placeholder, () => original);
     }
 
     return { processedContent, trackingLinks };
   }
 
+  /**
+   * Détecte les URLs http(s) BRUTES d'un contenu et crée/réutilise un TrackingLink pour
+   * chacune. Généralisable à tout contenu (messages, posts, stories, commentaires).
+   *
+   * `rewriteToShortLink` (défaut `true`, comportement historique) : remplace l'URL par
+   * `m+<token>` dans le contenu. Le passer à `false` MINT les liens mais LAISSE le contenu
+   * INTACT — utilisé pour le tracking « URL brute » où l'on veut préserver l'aperçu vidéo
+   * (le resolver embed côté client a besoin de l'URL d'origine) et l'URL lisible. Le mapping
+   * `originalUrl → token` retourné est alors stocké dans `metadata.trackingLinks` et le client
+   * pointe le lien (texte + façade) vers `/l/<token>`.
+   */
   async processMessageLinks(params: {
     content: string;
     conversationId?: string;
     messageId?: string;
     createdBy?: string;
+    rewriteToShortLink?: boolean;
   }): Promise<{ processedContent: string; trackingLinks: TrackingLink[] }> {
-    const { content, conversationId, messageId, createdBy } = params;
+    const { content, conversationId, messageId, createdBy, rewriteToShortLink = true } = params;
 
     // Regex pour détecter les liens HTTP(S)
     const urlRegex = /(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*))/gi;
-    
+
     // Regex pour détecter les liens de tracking existants (à ignorer)
     // Support n'importe quel domaine avec /l/<token> (flexible pour dev, staging, production)
     const trackingLinkRegex = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9_-]{2,50})/gi;
@@ -722,7 +843,7 @@ export class TrackingLinkService {
 
     // Trouver tous les liens dans le message
     const matches = content.match(urlRegex);
-    
+
     if (!matches || matches.length === 0) {
       return { processedContent: content, trackingLinks: [] };
     }
@@ -733,7 +854,7 @@ export class TrackingLinkService {
       // Ignorer les liens de tracking existants (n'importe quel domaine/l/<token> ou m+<token>)
       trackingLinkRegex.lastIndex = 0;
       mshyShortRegex.lastIndex = 0;
-      
+
       if (trackingLinkRegex.test(url) || mshyShortRegex.test(url)) {
         continue;
       }
@@ -755,9 +876,14 @@ export class TrackingLinkService {
 
         trackingLinks.push(trackingLink);
 
-        // Remplacer le lien par m+<token> (format court)
-        const replacement = `m+${trackingLink.token}`;
-        processedContent = processedContent.replace(url, replacement);
+        // Remplacer le lien par m+<token> (format court) — sauf en mode mapping-only
+        // (préservation de l'aperçu vidéo + URL lisible : le client redirige vers /l/<token>
+        // via metadata.trackingLinks, sans réécriture du contenu).
+        if (rewriteToShortLink) {
+          const replacement = `m+${trackingLink.token}`;
+          // Function replacer — same $-substitution guard as processExplicitLinksInContent.
+          processedContent = processedContent.replace(url, () => replacement);
+        }
 
       } catch (error) {
         logger.error('Error processing link', { url, error });
@@ -767,6 +893,53 @@ export class TrackingLinkService {
 
 
     return { processedContent, trackingLinks };
+  }
+
+  /**
+   * Source UNIQUE qui mint le mapping `{ url, token }` des URLs BRUTES d'un contenu
+   * — destiné à `metadata.trackingLinks` de TOUT type de contenu (message, post,
+   * story, commentaire). Enveloppe `processMessageLinks` en mode mapping-only
+   * (`rewriteToShortLink: false`) : le contenu n'est JAMAIS réécrit (l'aperçu
+   * vidéo et l'URL lisible sont préservés), seul le mapping est retourné. Le client
+   * rend le lien (texte + façade) vers `/l/<token>` (capture du clic + redirection).
+   *
+   * - Ne garde que les liens dont `originalUrl` est non-null.
+   * - Déduplique par URL (`processMessageLinks` peut pousser deux fois le même lien
+   *   quand une URL apparaît plusieurs fois et que le 2ᵉ passage le retrouve en base).
+   * - JAMAIS bloquant : une erreur de tracking ne doit pas empêcher la création du
+   *   contenu — en cas d'échec on retourne `[]`.
+   */
+  async collectContentTrackingLinks(params: {
+    content: string;
+    conversationId?: string;
+    createdBy?: string;
+    messageId?: string;
+    postId?: string;
+  }): Promise<ContentTrackingLink[]> {
+    const { content, conversationId, createdBy, messageId } = params;
+    if (!content) return [];
+    try {
+      const { trackingLinks } = await this.processMessageLinks({
+        content,
+        conversationId,
+        messageId,
+        createdBy,
+        rewriteToShortLink: false,
+      });
+      const seen = new Set<string>();
+      const result: ContentTrackingLink[] = [];
+      for (const link of trackingLinks) {
+        if (!link.originalUrl) continue;
+        const url = link.originalUrl;
+        if (seen.has(url)) continue;
+        seen.add(url);
+        result.push({ url, token: link.token });
+      }
+      return result;
+    } catch (error) {
+      logger.error('collectContentTrackingLinks failed', { error });
+      return [];
+    }
   }
 
   /**
@@ -842,4 +1015,3 @@ export class TrackingLinkService {
     return !(await this.tokenExists(token));
   }
 }
-

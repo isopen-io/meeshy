@@ -83,7 +83,19 @@
       "memberJoined": "Nuevo miembro en \"{title}\"",
       "missedCall": "Llamada {type} perdida",
       "system": "Notificación del sistema",
-      "default": "Nueva notificación"
+      "default": "Nueva notificación",
+      "postLike": "A @{sender} le gustó tu publicación",
+      "postComment": "@{sender} comentó tu publicación",
+      "postRepost": "@{sender} compartió tu publicación",
+      "commentReply": "@{sender} respondió a tu comentario",
+      "commentLike": "A @{sender} le gustó tu comentario",
+      "commentReaction": "@{sender} reaccionó a tu comentario",
+      "storyReaction": "@{sender} reaccionó a tu historia",
+      "statusReaction": "@{sender} reaccionó a tu estado",
+      "friendNewPost": "@{sender} publicó algo",
+      "friendNewStory": "@{sender} añadió una historia",
+      "friendNewMood": "@{sender} compartió un estado de ánimo",
+      "loginNewDevice": "Nuevo inicio de sesión detectado"
     },
     "content": {
       "memberJoinedMessage": "{sender} se unió al grupo",
@@ -100,7 +112,8 @@
       "now": "ahora mismo",
       "minute": "hace {count} min",
       "hour": "hace {count}h",
-      "day": "hace {count}d"
+      "day": "hace {count}d",
+      "yesterdayAt": "ayer {time}"
     },
     "actions": {
       "accept": "Aceptar",
@@ -313,6 +326,9 @@
       "reconnecting": "Reconectando...",
       "disconnected": "Desconectado"
     },
-    "dismiss": "Descartar"
+    "dismiss": "Descartar",
+    "context": {
+      "expired": "expirada"
+    }
   }
 }

@@ -5,7 +5,7 @@ final class TranscriptionModelsTests: XCTestCase {
 
     // MARK: - MessageTranscriptionSegment
 
-    func testSegmentInitWithAllFields() {
+    func test_messageTranscriptionSegment_initWithAllFields_setsAllProperties() {
         let segment = MessageTranscriptionSegment(
             text: "Hello world",
             startTime: 0.5,
@@ -20,7 +20,7 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertFalse(segment.id.uuidString.isEmpty)
     }
 
-    func testSegmentInitWithDefaults() {
+    func test_messageTranscriptionSegment_initWithDefaults_optionalsAreNil() {
         let segment = MessageTranscriptionSegment(text: "Bonjour")
 
         XCTAssertEqual(segment.text, "Bonjour")
@@ -29,7 +29,7 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertNil(segment.speakerId)
     }
 
-    func testSegmentHasUniqueIds() {
+    func test_messageTranscriptionSegment_init_generatesUniqueIds() {
         let segment1 = MessageTranscriptionSegment(text: "A")
         let segment2 = MessageTranscriptionSegment(text: "B")
 
@@ -38,7 +38,7 @@ final class TranscriptionModelsTests: XCTestCase {
 
     // MARK: - MessageTranscription
 
-    func testTranscriptionInitWithAllFields() {
+    func test_messageTranscription_initWithAllFields_setsAllProperties() {
         let segments = [
             MessageTranscriptionSegment(text: "Hello", startTime: 0.0, endTime: 1.0),
             MessageTranscriptionSegment(text: "World", startTime: 1.0, endTime: 2.0),
@@ -63,7 +63,7 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertEqual(transcription.speakerCount, 1)
     }
 
-    func testTranscriptionInitWithNilOptionals() {
+    func test_messageTranscription_initWithoutOptionals_defaultsAreNilOrEmpty() {
         let transcription = MessageTranscription(
             attachmentId: "att2",
             text: "Salut",
@@ -81,7 +81,7 @@ final class TranscriptionModelsTests: XCTestCase {
 
     // MARK: - MessageTranslatedAudio
 
-    func testTranslatedAudioInitWithRequiredFields() {
+    func test_messageTranslatedAudio_initWithRequiredFields_setsAllProperties() {
         let audio = MessageTranslatedAudio(
             id: "audio1",
             attachmentId: "att1",
@@ -108,7 +108,7 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertTrue(audio.segments.isEmpty)
     }
 
-    func testTranslatedAudioWithSegments() {
+    func test_messageTranslatedAudio_initWithSegments_segmentsAreStored() {
         let segments = [
             MessageTranscriptionSegment(text: "Bonjour", startTime: 0.0, endTime: 0.8),
         ]

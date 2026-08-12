@@ -9,10 +9,19 @@ struct ComposerToolPanelHost: View {
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+    /// Sélecteur de la bibliothèque de sons — troisième porte d'entrée audio,
+    /// à côté du fichier local et de l'enregistrement.
+    @Binding var showSoundLibrary: Bool
     let onBack: () -> Void
     var onSwitchTool: ((StoryToolMode) -> Void)? = nil
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
+    /// C8 — ouvre le picker de stickers (sheet au niveau View : le sticker
+    /// ajouté rejoint l'état canvas-authored du composer, pas le VM).
+    var onOpenStickerPicker: (() -> Void)? = nil
+    /// T20 — ouvre le sélecteur de lieu (présenté par `StoryComposerView`, qui
+    /// tient la fabrique injectée par l'app via `\.storyLocationPicker`).
+    var onOpenLocationPicker: (() -> Void)? = nil
     /// Suppression d'un texte depuis la liste : remontée jusqu'à
     /// `ComposerControlsLayer` afin de fermer le format panel si le texte
     /// supprimé était celui en cours d'édition — sans ce relai la branche
@@ -27,6 +36,7 @@ struct ComposerToolPanelHost: View {
     var panelHeightOverride: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.storyLocationPicker) private var locationPicker
 
     /// État local pour piloter le `PhotosPicker` programmatiquement quand on
     /// entre dans l'outil media sur une slide vide. Pendant — comme le
@@ -51,9 +61,23 @@ struct ComposerToolPanelHost: View {
                 .padding(.top, 8)
 
             // Tool-specific body — Phase 2 placeholder. Wired in Phase 4.
+            // `alignment: .top` : un contenu plus haut que la fenêtre du panel
+            // déborde vers le BAS (hors sheet) — centré, il remontait SOUS la
+            // rangée de chips et la bande d'opérations de la timeline se
+            // superposait aux outils (capture user 2026-07-20).
+            //
+            // `.clipped()` ferme la fuite restante : la fenêtre est dérivée de
+            // la hauteur du BAND (que le grabber peut réduire jusqu'à
+            // `bandMinHeight`), donc un panneau à contenu incompressible —
+            // typiquement la timeline — peignait par-dessus les FABs et
+            // jusqu'en dehors de l'écran. Il est désormais borné à sa fenêtre,
+            // et le band s'ouvre à la hauteur propre de l'outil (cf.
+            // `defaultPanelHeight(for:)`, semée par `StoryComposerView`) pour
+            // que ce clip ne morde jamais dans l'état par défaut.
             placeholderPanel
-                .frame(height: panelHeight - 50)
-                .padding(.horizontal, 16)
+                .frame(height: max(0, panelHeight - 50), alignment: .top)
+                .padding(.horizontal, Self.horizontalPadding(for: tool))
+                .clipped()
                 .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)
@@ -84,9 +108,9 @@ struct ComposerToolPanelHost: View {
     private var backButton: some View {
         Button(action: { onBack() }) {
             HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.system(size: 14, weight: .semibold))
-                Text(toolTitle).font(.system(size: 14, weight: .semibold))
+                Text(toolTitle).font(MeeshyFont.relative(14, weight: .semibold))
             }
         }
         .foregroundColor(primaryText)
@@ -108,10 +132,10 @@ struct ComposerToolPanelHost: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: Self.icon(for: other))
+                Image(systemName: other.symbolName)
                     .font(.system(size: 11, weight: .semibold))
                 Text(Self.title(for: other))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(secondaryText)
             .padding(.horizontal, 10)
@@ -136,34 +160,22 @@ struct ComposerToolPanelHost: View {
         ))
     }
 
-    /// Tous les éditeurs SAUF celui couramment ouvert. Ordre stable depuis
-    /// `StoryToolMode.allCases` (media, drawing, text, texture, filters,
-    /// timeline) — i.e. l'ordre des FABs du composer.
+    /// Tous les éditeurs sélectionnables SAUF celui couramment ouvert. Ordre
+    /// stable depuis `StoryToolMode.selectableCases` — le filtre global `.filters`
+    /// en est exclu (filtrage désormais par média via l'éditeur unitaire).
     private var otherTools: [StoryToolMode] {
-        StoryToolMode.allCases.filter { $0 != tool }
-    }
-
-    private static func icon(for tool: StoryToolMode) -> String {
-        switch tool {
-        case .media:    return "play.rectangle.fill"
-        case .audio:    return "music.note"
-        case .drawing:  return "pencil.tip"
-        case .text:     return "textformat"
-        case .texture:  return "paintpalette.fill"
-        case .filters:  return "camera.filters"
-        case .timeline: return "clock"
-        }
+        StoryToolMode.selectableCases.filter { $0 != tool }
     }
 
     private static func title(for tool: StoryToolMode) -> String {
         switch tool {
-        case .media:    return "Médias"
-        case .audio:    return "Son"
-        case .drawing:  return "Dessin"
-        case .text:     return "Texte"
-        case .texture:  return "Fond"
-        case .filters:  return "Effets"
-        case .timeline: return "Timeline"
+        case .media:    return String(localized: "story.tool.media", defaultValue: "Médias", bundle: .module)
+        case .audio:    return String(localized: "story.tool.audio", defaultValue: "Son", bundle: .module)
+        case .drawing:  return String(localized: "story.tool.drawing", defaultValue: "Dessin", bundle: .module)
+        case .text:     return String(localized: "story.tool.text", defaultValue: "Texte", bundle: .module)
+        case .texture:  return String(localized: "story.tool.texture", defaultValue: "Fond", bundle: .module)
+        case .filters:  return String(localized: "story.tool.filters", defaultValue: "Effets", bundle: .module)
+        case .timeline: return String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)
         }
     }
 
@@ -175,15 +187,32 @@ struct ComposerToolPanelHost: View {
         // tirée par le grabber) prime sur la hauteur intrinsèque par défaut — sinon
         // tirer la poignée ne rétrécissait PAS le menu hors dessin (le contenu gardait
         // sa hauteur fixe). Le contenu scrolle s'il est plus grand que l'espace.
-        if let override = panelHeightOverride { return override }
+        panelHeightOverride ?? Self.defaultPanelHeight(for: tool)
+    }
+
+    /// Hauteur par défaut d'un panneau d'outil avant tout redimensionnement au
+    /// grabber. Pure et testable indépendamment du montage SwiftUI.
+    /// Marge horizontale du CONTENU du panel. La timeline occupe TOUTE la
+    /// largeur de la sheet (retour user 2026-07-20 : son transport et ses
+    /// lanes étaient posés avec une marge gauche/droite héritée du conteneur
+    /// commun des outils) — son scroller horizontal gère ses propres insets.
+    /// Les autres outils gardent l'inset lisible de 16 pt.
+    nonisolated static func horizontalPadding(for tool: StoryToolMode) -> CGFloat {
+        tool == .timeline ? 0 : 16
+    }
+
+    static func defaultPanelHeight(for tool: StoryToolMode) -> CGFloat {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
         case .drawing:  return 280   // liste des traits
         case .text:     return 280
-        case .texture:  return 160
+        case .texture:  return 236  // couleurs + rangée « Ouverture » (C1)
         case .filters:  return 180
-        case .timeline: return 0  // presented as sheet, not in band
+        case .timeline: return 392  // opérations + transport + scrubber + 3 pistes
+                                    // compactes + footer (2026-07-20 : +72 pour la
+                                    // bande d'opérations — à 320 elle débordait
+                                    // sous les chips d'outils)
         }
     }
 
@@ -211,8 +240,32 @@ struct ComposerToolPanelHost: View {
             StoryFilterGridView(viewModel: viewModel,
                                 previewImage: viewModel.currentSlideBackgroundImage)
         case .timeline:
-            EmptyView()
+            timelinePanel
         }
+    }
+
+    // MARK: - Timeline Panel
+
+    /// Contenu de la timeline embarqué inline dans le band, comme tous les
+    /// autres outils (2026-07-14 — auparavant présenté en `.sheet()` modal).
+    /// Le chargement du slide courant + la resynchronisation du scrub à
+    /// l'ouverture, et l'arrêt de la lecture + le commit à la fermeture,
+    /// suivent maintenant le cycle de vie du panneau (onAppear/onDisappear)
+    /// plutôt que celui de l'ancienne sheet système.
+    private var timelinePanel: some View {
+        TimelineSheetContent(composer: viewModel)
+            .onAppear {
+                viewModel.loadCurrentSlideIntoTimeline()
+                viewModel.canvasTimelineBridge.scrub(
+                    seconds: Double(viewModel.timelineViewModel.currentTime))
+            }
+            .onDisappear {
+                if viewModel.timelineViewModel.isPlaying {
+                    viewModel.timelineViewModel.togglePlayback()
+                }
+                viewModel.canvasTimelineBridge.end()
+                viewModel.commitTimelineToCurrentSlide()
+            }
     }
 
     // MARK: - Audio Panel
@@ -226,6 +279,9 @@ struct ComposerToolPanelHost: View {
                     }
                     Button { showVoiceRecorderSheet = true } label: {
                         MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
+                    }
+                    Button { showSoundLibrary = true } label: {
+                        MediaPillLabel(icon: "music.note.list", text: String(localized: "story.composer.soundLibrary", defaultValue: "Bibliothèque", bundle: .module), destructive: false)
                     }
                 }
                 Spacer()
@@ -241,7 +297,8 @@ struct ComposerToolPanelHost: View {
                                 isBackground: viewModel.isBackground(id: audio.id),
                                 onToggleBackground: { viewModel.toggleBackground(id: audio.id) },
                                 onVolumeChanged: { viewModel.setAudioVolume(audioId: audio.id, volume: $0) },
-                                onDelete: { viewModel.deleteElement(id: audio.id) }
+                                onDelete: { viewModel.deleteElement(id: audio.id) },
+                                onToggleMute: { viewModel.toggleAudioMute(id: audio.id) }
                             )
                         }
                     }
@@ -299,7 +356,9 @@ struct ComposerToolPanelHost: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: media.kind == .image ? "photo.fill" : "video.fill")
                                             .font(.system(size: 14))
-                                        Text(media.kind == .image ? "Image" : "Vidéo")
+                                        Text(media.kind == .image
+                                             ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+                                             : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
                                             .font(.system(size: 13, weight: .semibold))
                                     }
                                     .foregroundColor(primaryText)
@@ -377,10 +436,14 @@ struct ComposerToolPanelHost: View {
 
             // Type + role
             VStack(alignment: .leading, spacing: 1) {
-                Text(isImage ? "Image" : "Vidéo")
+                Text(isImage
+                     ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+                     : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(primaryText)
-                Text(isBg ? "Fond" : "Premier plan")
+                Text(isBg
+                     ? String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
+                     : String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module))
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(isBg ? MeeshyColors.indigo400 : secondaryText)
             }
@@ -389,33 +452,51 @@ struct ComposerToolPanelHost: View {
 
             // Action buttons — compact icon row
             HStack(spacing: 6) {
+                // Mute un-bouton (vidéos uniquement — une image n'a rien à
+                // couper). Persisté via `volume` (0 = muet) : l'aperçu, le
+                // reader et l'export honorent tous ce réglage.
+                if media.kind == .video {
+                    let muted = media.isMuted
+                    mediaActionBtn(
+                        icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                        color: muted ? .red.opacity(0.85) : actionTint,
+                        tip: muted
+                            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+                            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module)
+                    ) {
+                        viewModel.toggleMediaMute(id: media.id)
+                    }
+                }
+
                 // Toggle front/back
                 mediaActionBtn(
                     icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",
                     color: isBg ? MeeshyColors.indigo400 : actionTint,
-                    tip: isBg ? "Premier plan" : "Fond"
+                    tip: isBg
+                        ? String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module)
+                        : String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
                 ) {
                     viewModel.toggleBackground(id: media.id)
                 }
 
                 // Edit
-                mediaActionBtn(icon: "pencil", color: actionTint, tip: "Éditer") {
+                mediaActionBtn(icon: "pencil", color: actionTint, tip: String(localized: "common.edit", defaultValue: "Éditer", bundle: .module)) {
                     onEditMedia?(media.id)
                 }
 
                 // Timeline
-                mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: "Timeline") {
+                mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)) {
                     viewModel.selectedElementId = media.id
                     onShowInTimeline?()
                 }
 
                 // Duplicate
-                mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: "Dupliquer") {
+                mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: String(localized: "common.duplicate", defaultValue: "Dupliquer", bundle: .module)) {
                     viewModel.duplicateElement(id: media.id)
                 }
 
                 // Delete
-                mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: "Supprimer") {
+                mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) {
                     viewModel.deleteElement(id: media.id)
                     HapticFeedback.medium()
                 }
@@ -490,6 +571,54 @@ struct ComposerToolPanelHost: View {
                                 .fill(MeeshyColors.brandPrimary.opacity(0.12))
                         )
                     }
+                }
+                // C8 — les stickers redeviennent atteignables : le picker
+                // complet existait (StickerPickerView) mais n'avait AUCUN
+                // call site depuis le retrait du tool dédié. Foyer choisi :
+                // le panneau Texte (les stickers sont des overlays de la
+                // même famille), même style que « Ajouter du texte ».
+                Button {
+                    onOpenStickerPicker?()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(MeeshyColors.brandPrimary.opacity(0.12))
+                    )
+                }
+                // T20 — la pastille de lieu partage ce foyer : c'est un overlay
+                // de la même famille que texte et sticker. Rendu SEULEMENT si
+                // l'app a injecté un picker (`\.storyLocationPicker`) : un chip
+                // qui ouvre le vide est pire que pas de chip.
+                if locationPicker != nil {
+                    Button {
+                        onOpenLocationPicker?()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(String(localized: "story.location.add", defaultValue: "Lieu", bundle: .module))
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
+                        )
+                    }
+                    .accessibilityLabel(String(localized: "story.location.add.a11y",
+                                               defaultValue: "Ajouter un lieu à la story",
+                                               bundle: .module))
                 }
                 Spacer()
             }
@@ -630,31 +759,82 @@ struct ComposerToolPanelHost: View {
     }
 
     private var texturePanel: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                    let isSelected = viewModel.backgroundColor == "#\(hex)"
-                    Button {
-                        viewModel.backgroundColor = "#\(hex)"
-                        viewModel.hasBackgroundImage = false
-                        HapticFeedback.light()
-                    } label: {
-                        Circle().fill(Color(hex: hex))
-                            .frame(width: 44, height: 44)
-                            .overlay(
-                                Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                    .padding(2)
-                            )
-                            .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
+                        let isSelected = viewModel.backgroundColor == "#\(hex)"
+                        Button {
+                            viewModel.backgroundColor = "#\(hex)"
+                            viewModel.hasBackgroundImage = false
+                            HapticFeedback.light()
+                        } label: {
+                            Circle().fill(Color(hex: hex))
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
+                                        .padding(2)
+                                )
+                                .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
+                        }
+                        .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
+                        .accessibilityValue("#\(hex)")
+                        .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
-                    .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
-                    .accessibilityValue("#\(hex)")
-                    .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    // C11 — la palette de dégradés (définie depuis l'origine
+                    // mais jamais offerte) rejoint la rangée : même format de
+                    // pastille, valeur sérialisée « gradient:HEX1:HEX2 »
+                    // (StoryBackgroundValue, rendue par les 3 renderers).
+                    ForEach(Array(StoryBackgroundPalette.gradients.enumerated()), id: \.offset) { _, pair in
+                        let serialized = StoryBackgroundValue.gradient(pair.0, pair.1).serialized
+                        let isSelected = viewModel.backgroundColor == serialized
+                        Button {
+                            viewModel.backgroundColor = serialized
+                            viewModel.hasBackgroundImage = false
+                            HapticFeedback.light()
+                        } label: {
+                            Circle()
+                                .fill(LinearGradient(
+                                    colors: [Color(hex: pair.0), Color(hex: pair.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
+                                        .padding(2)
+                                )
+                                .shadow(color: Color(hex: pair.0).opacity(isSelected ? 0.5 : 0), radius: 6)
+                        }
+                        .accessibilityLabel(String(localized: "story.background.gradient",
+                                                   defaultValue: "Fond dégradé", bundle: .module))
+                        .accessibilityValue("\(pair.0) → \(pair.1)")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
                 }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 14)
             }
+
+            // C1 — l'animation d'ouverture du slide devient accessible par
+            // GESTE (FAB Fond → band → chips ; swipe-down pour fermer), plus
+            // seulement via le menu ⋯ → sheet Transitions. Même source de
+            // vérité (viewModel.openingEffect) et même persistance
+            // (granularCanvasSync) que la sheet — cf. OpeningEffectChips.
+            Text(String(
+                localized: "story.composer.openingTitle",
+                defaultValue: "Ouverture du slide",
+                bundle: .module
+            ))
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(mutedText)
             .padding(.horizontal, 2)
-            .padding(.vertical, 14)
+            .padding(.bottom, 8)
+
+            OpeningEffectChips(selection: viewModel.openingEffect) { effect in
+                viewModel.openingEffect = effect
+            }
         }
     }
 }

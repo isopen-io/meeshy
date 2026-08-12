@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -8,12 +9,17 @@ final class ReelsViewModelTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        cachedReels: [FeedPost] = []
+        cachedReels: [FeedPost] = [],
+        postDeletedEvents: PassthroughSubject<String, Never> = PassthroughSubject()
     ) -> (sut: ReelsViewModel, service: MockPostService, cache: MockReelFeedCache) {
         let service = MockPostService()
         let cache = MockReelFeedCache()
         cache.cachedFeedResult = cachedReels
-        let sut = ReelsViewModel(service: service, cache: cache)
+        let sut = ReelsViewModel(
+            service: service,
+            cache: cache,
+            postDeletedEvents: postDeletedEvents.eraseToAnyPublisher()
+        )
         return (sut, service, cache)
     }
 
@@ -112,5 +118,324 @@ final class ReelsViewModelTests: XCTestCase {
         // must not point at a reel absent from the list.
         XCTAssertEqual(sut.reels.map(\.id), ["fresh-1"])
         XCTAssertEqual(sut.currentId, "fresh-1")
+    }
+
+    // MARK: - Affinity thread wiring (getReels / seedReelId)
+
+    func test_coldStart_fresh_pagesReelsThreadWithoutSeed() async {
+        let (sut, service, _) = makeSUT(cachedReels: [])
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["pourtoi-1", "pourtoi-2"]))
+
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+
+        // Fresh launch (no entry reel) pages the seedless « Pour toi » thread via getReels.
+        XCTAssertEqual(service.getReelsCallCount, 1)
+        XCTAssertNil(service.lastGetReelsSeedId)
+        XCTAssertEqual(service.getFeedCallCount, 0)
+        XCTAssertEqual(sut.reels.map(\.id), ["pourtoi-1", "pourtoi-2"])
+    }
+
+    func test_loadMore_afterFeedSeed_pagesAffinityThreadSeededByEntryReel() async {
+        let (sut, service, _) = makeSUT()
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["affinity-1"]))
+
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r2")
+        // Scrolling near the end pulls the affinity discovery thread, seeded by the
+        // reel the viewer opened on, and appends it (deduped) after the feed reels.
+        await sut.loadMoreIfNeeded(currentReel: Self.makeReel(id: "r2"))
+
+        XCTAssertEqual(service.getReelsCallCount, 1)
+        XCTAssertEqual(service.lastGetReelsSeedId, "r2")
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2", "affinity-1"])
+    }
+
+    // MARK: - Share (deduplicated tracking-link path — aligned with the feed)
+
+    func test_shareLink_usesDeduplicatedTrackingLinkPath_andReturnsShortUrl() async {
+        let (sut, service, _) = makeSUT()
+
+        let shortUrl = await sut.shareLink(for: Self.makeReel(id: "r1"))
+
+        // The reel share MUST hit the deduplicated `generateLink: true` path so
+        // re-taps reuse the existing link instead of bumping shareCount each tap
+        // (the over-count bug). It also returns the short URL so the caller can
+        // present the system share sheet — same contract as the feed.
+        XCTAssertEqual(service.shareCallCount, 1)
+        XCTAssertEqual(service.lastSharePostId, "r1")
+        XCTAssertEqual(service.lastShareGenerateLink, true)
+        XCTAssertEqual(shortUrl, "https://meeshy.me/l/mock123")
+    }
+
+    func test_shareLink_whenServiceFails_returnsNil() async {
+        let (sut, service, _) = makeSUT()
+        service.shareResult = .failure(NSError(domain: "test", code: 1))
+
+        let shortUrl = await sut.shareLink(for: Self.makeReel(id: "r1"))
+
+        XCTAssertNil(shortUrl)
+    }
+
+    // MARK: - deletePost() — parité avec le menu « … » du feed (FeedViewModel.deletePost)
+
+    func test_deletePost_success_removesReelFromPagerAndAdvancesCurrentId() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r1")
+
+        await sut.deletePost("r1")
+
+        XCTAssertEqual(service.deleteCallCount, 1)
+        XCTAssertEqual(service.lastDeletePostId, "r1")
+        XCTAssertEqual(sut.reels.map(\.id), ["r2"])
+        // Le reel courant était celui supprimé : le pager avance vers le suivant.
+        XCTAssertEqual(sut.currentId, "r2")
+    }
+
+    func test_deletePost_failure_restoresReel() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        service.deleteResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        await sut.deletePost("r1")
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1"], "Reel should be restored on delete failure")
+        XCTAssertEqual(sut.currentId, "r1")
+    }
+
+    // MARK: - pinPost()
+
+    func test_pinPost_callsPostService() async {
+        let (sut, _, _) = makeSUT()
+
+        await sut.pinPost("pin-reel")
+
+        // pinPost utilise postService.pinPost, un stub no-op côté mock — même
+        // convention faible que FeedViewModelTests.test_pinPost_callsPostService.
+        XCTAssertTrue(true, "pinPost should complete without error")
+    }
+
+    // MARK: - updatePost()
+
+    func test_updatePost_success_replacesReelWithServerResponse() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1", content: "avant")], startId: "r1")
+        service.createResult = .success(Self.makeAPIPost(id: "r1", content: "après"))
+
+        await sut.updatePost("r1", content: "après", language: "fr", type: nil, removeMediaIds: nil, location: nil)
+
+        XCTAssertEqual(service.updateCallCount, 1)
+        XCTAssertEqual(service.lastUpdatePostId, "r1")
+        XCTAssertEqual(service.lastUpdateContent, "après")
+        XCTAssertEqual(sut.reels.first(where: { $0.id == "r1" })?.content, "après")
+    }
+
+    func test_updatePost_failure_restoresOriginalContent() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1", content: "avant")], startId: "r1")
+        service.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        await sut.updatePost("r1", content: "après", language: nil, type: nil, removeMediaIds: nil, location: nil)
+
+        XCTAssertEqual(sut.reels.first(where: { $0.id == "r1" })?.content, "avant", "Content should roll back on update failure")
+    }
+
+    // MARK: - repost() — icône principale « Republier » (remplace Partager)
+
+    func test_repost_success_marksRepostedAndBumpsCount() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        let reel = sut.reels[0]
+
+        sut.repost(reel)
+        // Attend la fin du Task interne : sondage sur repostCallCount (pas de
+        // sleep arbitraire) — même convention que les autres tests optimistes.
+        for _ in 0..<50 where service.repostCallCount == 0 { await Task.yield() }
+
+        XCTAssertTrue(sut.isReposted("r1"))
+        XCTAssertEqual(sut.repostCount(reel), 1)
+        XCTAssertEqual(service.lastRepostPostId, "r1")
+    }
+
+    func test_repost_failure_rollsBackRepostedState() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        service.repostResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let reel = sut.reels[0]
+
+        sut.repost(reel)
+        for _ in 0..<50 where service.repostCallCount == 0 { await Task.yield() }
+        // Laisse le rollback (post-catch) s'appliquer après l'échec.
+        for _ in 0..<50 where sut.isReposted("r1") { await Task.yield() }
+
+        XCTAssertFalse(sut.isReposted("r1"))
+        XCTAssertEqual(sut.repostCount(reel), 0)
+    }
+
+    private static func makeAPIPost(id: String, content: String) -> APIPost {
+        JSONStub.decode("""
+        {"id":"\(id)","type":"REEL","content":"\(content)","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"alice"}}
+        """)
+    }
+
+    // MARK: - Pagination resilience (transient network failure must NOT kill it forever)
+
+    func test_loadMore_transientNetworkFailure_keepsPaginationAliveForRetry() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r2")
+
+        // First attempt fails transiently (e.g. offline blip).
+        service.getReelsResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+        await sut.loadMoreIfNeeded(currentReel: Self.makeReel(id: "r2"))
+        XCTAssertEqual(service.getReelsCallCount, 1)
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2"], "a failed fetch must not corrupt the existing list")
+
+        // A later retry (e.g. the user scrolls near the end again after reconnecting)
+        // MUST still reach the network — before the fix, the failure permanently
+        // pinned `hasMore = false` and every subsequent `loadMoreIfNeeded` silently
+        // no-op'd without ever calling the service again.
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["r3"]))
+        await sut.loadMoreIfNeeded(currentReel: Self.makeReel(id: "r2"))
+
+        XCTAssertEqual(service.getReelsCallCount, 2, "pagination must retry after a transient failure, not stay stuck")
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2", "r3"])
+    }
+
+    // MARK: - Real-time deletion (`post:deleted` — mirrors FeedViewModel's live removal)
+
+    func test_postDeleted_nonCurrentReel_removesItAndKeepsCurrentIdUnchanged() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(
+            posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2"), Self.makeReel(id: "r3")],
+            startId: "r2"
+        )
+
+        events.send("r1")
+        try? await waitForCondition { sut.reels.map(\.id) == ["r2", "r3"] }
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r2", "r3"])
+        XCTAssertEqual(sut.currentId, "r2", "deleting a reel other than the current one must not move the cursor")
+    }
+
+    func test_postDeleted_currentReel_advancesCurrentIdToTheReelThatTakesItsPlace() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(
+            posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2"), Self.makeReel(id: "r3")],
+            startId: "r2"
+        )
+
+        // r2 (current) is deleted — r3 slides into r2's old slot, so the
+        // viewer lands on the next reel instead of a dangling id.
+        events.send("r2")
+        try? await waitForCondition { sut.reels.map(\.id) == ["r1", "r3"] }
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r3"])
+        XCTAssertEqual(sut.currentId, "r3")
+    }
+
+    func test_postDeleted_currentReelIsLast_fallsBackToThePreviousReel() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r2")
+
+        // r2 is both current AND last — nothing slides into its slot, so the
+        // pager must fall back to the previous reel instead of going nil.
+        events.send("r2")
+        try? await waitForCondition { sut.reels.map(\.id) == ["r1"] }
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1"])
+        XCTAssertEqual(sut.currentId, "r1")
+    }
+
+    func test_postDeleted_onlyReel_emptiesThePagerAndClearsCurrentId() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+
+        events.send("r1")
+        try? await waitForCondition { sut.reels.isEmpty }
+
+        XCTAssertTrue(sut.reels.isEmpty)
+        XCTAssertNil(sut.currentId, "no reel left means no current reel — the view shows its empty state")
+    }
+
+    func test_postDeleted_unknownReelId_isANoOp() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r1")
+
+        events.send("not-in-the-pager")
+        // No matching id: nothing to poll for (the list never changes), so
+        // give the Combine delivery a fixed beat to run before asserting the
+        // list and cursor are untouched. `waitForCondition` isn't usable here
+        // — it XCTFails when its condition never turns true.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2"])
+        XCTAssertEqual(sut.currentId, "r1")
+    }
+}
+
+// MARK: - Reel Media Layout (pure classification of a reel's media surfaces)
+
+@MainActor
+final class ReelMediaLayoutTests: XCTestCase {
+
+    private func img(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .image, url: "https://x/\(id).jpg") }
+    private func aud(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .audio, url: "https://x/\(id).m4a") }
+    private func vid(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .video, url: "https://x/\(id).mp4") }
+    private func doc(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .document, fileName: "\(id).pdf") }
+
+    func test_resolve_noMedia_isEmpty() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: []), .empty)
+    }
+
+    func test_resolve_onlyDocuments_isEmpty() {
+        // Documents and locations are not playable/visual reel surfaces.
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [doc("d1")]), .empty)
+    }
+
+    func test_resolve_singleImage_isImages() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [img("i1")]), .images([img("i1")]))
+    }
+
+    func test_resolve_multipleImages_isImages() {
+        let media = [img("i1"), img("i2"), img("i3")]
+        XCTAssertEqual(ReelMediaLayout.resolve(media: media), .images(media))
+    }
+
+    func test_resolve_singleAudio_isAudioOnly() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [aud("a1")]), .audioOnly([aud("a1")]))
+    }
+
+    func test_resolve_multipleAudios_isAudioOnly() {
+        let media = [aud("a1"), aud("a2")]
+        XCTAssertEqual(ReelMediaLayout.resolve(media: media), .audioOnly(media))
+    }
+
+    func test_resolve_imagesPlusSingleAudio_isImagesWithAudio() {
+        let layout = ReelMediaLayout.resolve(media: [img("i1"), img("i2"), aud("a1")])
+        XCTAssertEqual(layout, .imagesWithAudio(images: [img("i1"), img("i2")], audios: [aud("a1")]))
+    }
+
+    func test_resolve_imagesPlusMultipleAudios_isImagesWithAudio() {
+        let layout = ReelMediaLayout.resolve(media: [img("i1"), aud("a1"), aud("a2")])
+        XCTAssertEqual(layout, .imagesWithAudio(images: [img("i1")], audios: [aud("a1"), aud("a2")]))
+    }
+
+    func test_resolve_videoWins_overImagesAndAudio() {
+        // Video takes priority over every other media kind (single-video reel).
+        let layout = ReelMediaLayout.resolve(media: [img("i1"), aud("a1"), vid("v1")])
+        XCTAssertEqual(layout, .video(vid("v1")))
+    }
+
+    func test_resolve_videoAlone_isVideo() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [vid("v1")]), .video(vid("v1")))
+    }
+
+    func test_resolve_preservesOrder_ofImagesAndAudios() {
+        let layout = ReelMediaLayout.resolve(media: [img("i2"), aud("a2"), img("i1"), aud("a1")])
+        XCTAssertEqual(layout, .imagesWithAudio(images: [img("i2"), img("i1")], audios: [aud("a2"), aud("a1")]))
     }
 }

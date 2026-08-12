@@ -4,6 +4,38 @@ const mongoId = z
   .string()
   .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
 
+/**
+ * Code de langue tel qu'il arrive du fil, AVANT normalisation serveur.
+ *
+ * Plus permissif que `languageCodeSchema` de `@meeshy/shared` sur un point : le
+ * séparateur `_`. iOS envoie `Locale.current.identifier`, qui rend `fr_FR` et
+ * non `fr-FR` ; refuser la forme à underscore ferait échouer tout le rapport
+ * pour un séparateur, alors que `normalizeLanguageCode` traite déjà les deux.
+ *
+ * La validation reste FORMELLE : le sens (langue réellement supportée) est
+ * tranché par `normalizeLanguageCode` côté service, seule autorité du repo.
+ */
+const wireLanguageCode = z
+  .string()
+  .trim()
+  .min(2)
+  .max(16)
+  .regex(/^[a-zA-Z]{2,3}([-_][a-zA-Z0-9]+)*$/, 'Invalid language code');
+
+/**
+ * Une écoute réellement CONTINUE, avec ce qui y a mis fin.
+ *
+ * Objet non `.strict()` à dessein : un client d'une version ultérieure peut
+ * enrichir son rapport (vitesse de lecture, par exemple). Zod écarte alors le
+ * champ inconnu au lieu de rejeter l'écoute entière — même tolérance que
+ * `parsePlaybackTrace` côté relecture.
+ */
+const playbackStretch = z.object({
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative(),
+  endedBy: z.enum(['pause', 'seek', 'muted', 'completed', 'dismissed', 'superseded'])
+});
+
 // ============================================
 // PARAMS SCHEMAS
 // ============================================
@@ -26,14 +58,14 @@ export const MessageStatusDetailsQuerySchema = z.object({
     .regex(/^\d+$/, 'Offset must be a non-negative integer')
     .transform(Number)
     .refine(val => val >= 0, 'Offset must be >= 0')
-    .default('0'),
+    .prefault('0'),
 
   limit: z
     .string()
     .regex(/^\d+$/, 'Limit must be a positive integer')
     .transform(Number)
     .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
-    .default('20'),
+    .prefault('20'),
 
   filter: z
     .enum(['all', 'delivered', 'read', 'unread'])
@@ -46,14 +78,14 @@ export const AttachmentStatusDetailsQuerySchema = z.object({
     .regex(/^\d+$/, 'Offset must be a non-negative integer')
     .transform(Number)
     .refine(val => val >= 0, 'Offset must be >= 0')
-    .default('0'),
+    .prefault('0'),
 
   limit: z
     .string()
     .regex(/^\d+$/, 'Limit must be a positive integer')
     .transform(Number)
     .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
-    .default('20'),
+    .prefault('20'),
 
   filter: z
     .enum(['all', 'viewed', 'downloaded', 'listened', 'watched'])
@@ -78,10 +110,75 @@ export const UpdateMessageBodySchema = z.object({
 export const MessageStatusBodySchema = z.object({
   status: z.enum(['read', 'delivered']),
 
-  timestamp: z
-    .string()
+  timestamp: z.iso
     .datetime()
-    .optional()
+    .optional(),
+
+  /**
+   * Version linguistique sous laquelle CE message a été lu. Sert la bascule
+   * ponctuelle : le lecteur ouvre la traduction d'une bulle sans changer la
+   * langue de toute la conversation.
+   */
+  language: wireLanguageCode.optional()
+}).strict();
+
+/**
+ * Suivi de lecture exact — le client rapporte les messages RÉELLEMENT affichés.
+ *
+ * Partagé par les DEUX points d'entrée de marquage : `/mark-read`
+ * (`routes/conversations/messages.ts`, utilisé par iOS) et `/mark-as-read`
+ * (`routes/message-read-status.ts`, utilisé par la webapp). N'en doter qu'un
+ * laisserait l'autre client sur le chemin par fenêtre, qui sur-déclare.
+ *
+ * Le corps reste OPTIONNEL : les binaires déjà distribués n'en envoient pas, et
+ * les priver du repli perdrait toute lecture jusqu'à leur mise à jour.
+ *
+ * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+ */
+export const MarkReadBodySchema = z.object({
+  messageIds: z
+    .array(mongoId)
+    .max(200)
+    .optional(),
+
+  /**
+   * Version linguistique affichée au lecteur pendant que ces messages défilaient
+   * sous ses yeux. Une seule valeur pour tout le lot : c'est la résolution de la
+   * conversation, celle qui vaut par défaut pour chaque bulle.
+   */
+  language: wireLanguageCode.optional(),
+
+  /**
+   * EXCEPTIONS à la langue du lot, par message.
+   *
+   * La langue rendue n'est pas toujours celle que le lecteur préfère : quand
+   * aucune traduction n'existe encore, c'est l'ORIGINAL qui s'affiche. Déclarer
+   * tout le lot dans la langue préférée mentirait précisément là où l'auteur a
+   * besoin de savoir — « m'a-t-on lu dans ma langue ou traduit ? ».
+   *
+   * Le client n'envoie que ce qui diffère : sur une conversation lue d'un bloc,
+   * cette table est vide ou presque.
+   */
+  messageLanguages: z
+    .record(mongoId, wireLanguageCode)
+    .refine((table) => Object.keys(table).length <= 200, {
+      message: 'Too many per-message languages'
+    })
+    .optional(),
+
+  /**
+   * Le lecteur a ATTEINT ce message, le plus récent de la conversation : il n'a
+   * plus de retard. Fait avancer le curseur de non-lus jusque-là — donc vide le
+   * badge — sans élargir d'un seul message l'ensemble déclaré LU.
+   *
+   * Les deux notions sont délibérément séparées. « Quels messages ai-je
+   * affichés » nourrit les accusés de lecture, que l'expéditeur voit : il doit
+   * rester exact. « Ai-je rattrapé mon retard » nourrit le badge, que seul le
+   * lecteur voit : descendre au dernier message d'une conversation à deux cents
+   * non-lus ne rend pas les cent quatre-vingt-dix intermédiaires lus, mais rend
+   * bien la conversation rattrapée. Les confondre gonflerait les coches bleues.
+   */
+  caughtUpToMessageId: mongoId.optional()
 }).strict();
 
 export const AttachmentStatusBodySchema = z.object({
@@ -105,7 +202,25 @@ export const AttachmentStatusBodySchema = z.object({
 
   wasZoomed: z
     .boolean()
-    .optional()
+    .optional(),
+
+  /**
+   * Trace de l'interaction depuis le dernier rapport : une entrée par écoute
+   * réellement continue, dans l'ordre où elles ont eu lieu.
+   *
+   * Le plafond vaut celui de la trace persistée — au-delà, le serveur écarterait
+   * de toute façon le surplus.
+   */
+  stretches: z
+    .array(playbackStretch)
+    .max(50)
+    .optional(),
+
+  /**
+   * Version linguistique consommée : piste traduite écoutée, transcription
+   * affichée. Sans objet pour une image ou un téléchargement.
+   */
+  language: wireLanguageCode.optional()
 }).strict();
 
 // ============================================

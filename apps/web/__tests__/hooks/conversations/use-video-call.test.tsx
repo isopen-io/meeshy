@@ -1,8 +1,11 @@
 /**
  * Tests for useVideoCall hook
  *
+ * The hook only exposes `startCall` (see hook JSDoc — Vague 57 removed
+ * answerCall/rejectCall/endCall/toggleAudio/toggleVideo/isCallSupported/error,
+ * none of which had a production caller).
+ *
  * Tests cover:
- * - isCallSupported for direct vs group conversations
  * - startCall functionality
  * - Media permissions handling
  * - Socket.IO integration
@@ -26,6 +29,34 @@ jest.mock('sonner', () => ({
   },
 }));
 
+// Identity translation — assertions below check the KEY (proves the hook
+// routes every toast through i18n instead of a hardcoded English literal),
+// same convention as use-call-retry-toast.test.tsx. Params are appended so
+// the interpolated `micAccessFailed` case can still assert on the original
+// error message without needing the real substitution logic. `t` is defined
+// OUTSIDE the returned object (module-scoped, one stable reference reused by
+// every `useI18n()` call) — mirroring the real hook's `useMemo`-backed `t` —
+// so `startCall`'s `useCallback([conversation, user, t])` doesn't churn
+// identity every render just because the mock handed back a fresh closure.
+jest.mock('@/hooks/useI18n', () => {
+  const t = (key: string, paramsOrFallback?: Record<string, unknown> | string) =>
+    paramsOrFallback && typeof paramsOrFallback === 'object'
+      ? `${key}|${JSON.stringify(paramsOrFallback)}`
+      : key;
+  return { useI18n: () => ({ t }) };
+});
+
+// Mock auth — startCall's ack handler reads the current user id to build the
+// initiator's CallSession (P0 fix, 2026-07-06). The user object/return value
+// must be a STABLE reference across renders (matching the real hook's
+// selector-based memoization) — recreating it per call would make
+// `startCall`'s useCallback identity churn every render.
+const mockAuthUser = { id: 'user-caller-1' };
+const mockAuthReturn = { user: mockAuthUser, isChecking: false };
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => mockAuthReturn,
+}));
+
 // Mock socket service
 const mockGetSocket = jest.fn();
 const mockEmit = jest.fn();
@@ -33,6 +64,7 @@ const mockEmit = jest.fn();
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockGetSocket(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
@@ -63,8 +95,18 @@ describe('useVideoCall', () => {
     ]),
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+
+    // useCallStore is a module-level singleton, not reset between tests by
+    // Jest itself — Vague 91's currentCall guard (startCall's ack-success
+    // handler now READS currentCall, where nothing in this hook ever did
+    // before) made every test in this file implicitly depend on it starting
+    // null, whatever an earlier test left behind. Reset explicitly, mirroring
+    // the same-purpose reset the "startCall sets currentCall" describe below
+    // already did locally.
+    const { useCallStore: storeModule } = await import('@/stores/call-store');
+    storeModule.setState({ currentCall: null, isInCall: false });
 
     // Setup navigator.mediaDevices mock
     Object.defineProperty(navigator, 'mediaDevices', {
@@ -83,51 +125,23 @@ describe('useVideoCall', () => {
       emit: mockEmit,
     });
 
+    // Default: resolve the call:initiate ack synchronously with success.
+    // Vague 89 made startCall() genuinely await this ack (with a timeout
+    // fallback) instead of firing emit and returning without waiting for
+    // the callback — tests that only care about getUserMedia/emit args
+    // (not the ack outcome) need SOME callback invocation or they'd hang
+    // for the full CALL_INITIATE_ACK_TIMEOUT_MS. Tests that care about a
+    // specific ack shape override this per-test as before.
+    mockEmit.mockImplementation((_event: string, _data: unknown, cb?: Function) => {
+      cb?.({ success: true, data: { callId: 'call-default-ack', mode: 'p2p', iceServers: [] } });
+    });
+
     // Clean up window storage
     delete (window as any).__preauthorizedMediaStream;
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
-  });
-
-  describe('isCallSupported', () => {
-    it('should return true for direct conversations', () => {
-      const { result } = renderHook(() =>
-        useVideoCall({ conversation: mockDirectConversation })
-      );
-
-      expect(result.current.isCallSupported).toBe(true);
-    });
-
-    it('should return false for group conversations', () => {
-      const { result } = renderHook(() =>
-        useVideoCall({ conversation: mockGroupConversation })
-      );
-
-      expect(result.current.isCallSupported).toBe(false);
-    });
-
-    it('should return false when conversation is null', () => {
-      const { result } = renderHook(() =>
-        useVideoCall({ conversation: null })
-      );
-
-      expect(result.current.isCallSupported).toBe(false);
-    });
-
-    it('should update when conversation type changes', () => {
-      const { result, rerender } = renderHook(
-        ({ conversation }) => useVideoCall({ conversation }),
-        { initialProps: { conversation: mockDirectConversation } }
-      );
-
-      expect(result.current.isCallSupported).toBe(true);
-
-      rerender({ conversation: mockGroupConversation });
-
-      expect(result.current.isCallSupported).toBe(false);
-    });
   });
 
   describe('startCall', () => {
@@ -140,7 +154,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Please select a conversation first');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.selectConversation');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -153,9 +167,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith(
-        'Video calls are only available for direct conversations'
-      );
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.directOnly');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -219,6 +231,10 @@ describe('useVideoCall', () => {
     });
 
     it('should show success toast after initiating call', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-111', mode: 'p2p', iceServers: [] } });
+      });
+
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockDirectConversation })
       );
@@ -227,7 +243,63 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastSuccess).toHaveBeenCalledWith('Starting call...');
+      expect(mockToastSuccess).toHaveBeenCalledWith('calls.toasts.startingCall');
+    });
+
+    it('should not show success toast when the ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+
+    it('should stop the pre-authorized stream and show an error toast when the ack is unsuccessful', async () => {
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false, error: { code: 'CALLEE_BUSY', message: 'User is busy' } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+      expect(mockToastError).toHaveBeenCalledWith('User is busy');
+    });
+
+    it('should show a generic error toast when the ack fails without an error message', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.startFailed');
     });
 
     it('should handle disconnected socket', async () => {
@@ -244,7 +316,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Connection error. Please try again.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.connectionError');
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
@@ -259,7 +331,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Connection error. Please try again.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.connectionError');
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
@@ -303,7 +375,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Camera/microphone permission denied.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micPermissionDenied');
     });
 
     it('should handle NotFoundError (no device)', async () => {
@@ -319,7 +391,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('No camera or microphone found.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micNotFound');
     });
 
     it('should handle generic Error with message', async () => {
@@ -336,7 +408,7 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith(
-        'Failed to access camera/microphone: Device busy'
+        'calls.toasts.micAccessFailed|{"message":"Device busy"}'
       );
     });
 
@@ -351,7 +423,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Failed to access camera/microphone');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micAccessFailedGeneric');
     });
 
     it('should cleanup stream on media error', async () => {
@@ -423,12 +495,19 @@ describe('useVideoCall', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle rapid multiple startCall invocations', async () => {
+    it('should ignore rapid re-invocations while a call is already starting', async () => {
+      // Regression test — before the startCallInFlightRef guard, three rapid
+      // invocations (double-click, or a re-render firing the handler twice)
+      // acquired THREE separate camera/mic streams and the last getUserMedia
+      // to resolve overwrote window.__preauthorizedMediaStream, silently
+      // orphaning the earlier streams (nothing ever called stop() on them —
+      // the camera/mic indicator stayed lit for the rest of the session).
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockDirectConversation })
       );
 
-      // Start multiple calls rapidly
+      // Start multiple calls rapidly, before the first getUserMedia call
+      // (an unresolved promise here) settles.
       await act(async () => {
         const p1 = result.current.startCall();
         const p2 = result.current.startCall();
@@ -436,8 +515,52 @@ describe('useVideoCall', () => {
         await Promise.all([p1, p2, p3]);
       });
 
-      // Each should have been processed (though in practice would be deduplicated)
-      expect(mockGetUserMedia).toHaveBeenCalledTimes(3);
+      // Only the first invocation should reach getUserMedia/call:initiate —
+      // the other two are dropped by the in-flight guard.
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+      expect(mockEmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('should allow a new startCall once the previous one has resolved via its ack', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-222', mode: 'p2p', iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledTimes(2);
+    });
+
+    it('should allow a new startCall after the previous one failed on getUserMedia', async () => {
+      mockGetUserMedia.mockRejectedValueOnce(new Error('boom'));
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      mockGetUserMedia.mockResolvedValueOnce(mockMediaStream);
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledTimes(1);
     });
 
     it('should handle conversation change during call initiation', async () => {
@@ -466,6 +589,329 @@ describe('useVideoCall', () => {
         },
         expect.any(Function)
       );
+    });
+  });
+
+  describe('startCall ICE servers', () => {
+    it('should call setIceServers when ack has iceServers with content', async () => {
+      const iceServers = [
+        { urls: 'stun:stun.example.com' },
+        { urls: 'turn:turn.example.com', username: 'u', credential: 'p' },
+      ];
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().iceServers).toEqual(iceServers);
+    });
+
+    it('should not call setIceServers when ack has empty iceServers', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      // ensure null before call
+      storeModule.setState({ iceServers: null });
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      // Still null — not overwritten with empty array
+      expect(storeModule.getState().iceServers).toBeNull();
+    });
+
+    it('should not call setIceServers when ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      storeModule.setState({ iceServers: null });
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      expect(storeModule.getState().iceServers).toBeNull();
+    });
+  });
+
+  describe('call:initiate ack timeout (Vague 89)', () => {
+    // Sibling of Vague 88's CallManager.tsx `acceptOrJoinCall` fix — same
+    // Socket.IO-4.8-does-not-auto-reject-a-dropped-ack root cause, this time
+    // on the CALL_INITIATE outbound-call path. Without a timeout, a dropped
+    // ack leaves `startCallInFlightRef` stuck `true` forever (every future
+    // Call button click silently swallowed by the guard at the top of
+    // `startCall`) and the pre-authorized camera/mic stream never released.
+    const CALL_INITIATE_ACK_TIMEOUT_MS = 10_000;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('does not hang forever when the call:initiate ack is dropped — surfaces the failure toast', async () => {
+      // emit intentionally never invokes its ack callback — simulates a
+      // dropped ack packet (transport blip right after emit).
+      mockEmit.mockImplementation(() => {});
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 1);
+      });
+
+      await startPromise;
+
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.startFailed');
+    });
+
+    it('stops the pre-authorized stream tracks when the call:initiate ack times out (no orphaned hot mic/camera)', async () => {
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+      mockEmit.mockImplementation(() => {});
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 1);
+      });
+
+      await startPromise;
+
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+    });
+
+    it('releases the in-flight guard after the timeout so a retry actually re-attempts', async () => {
+      mockEmit.mockImplementation(() => {}); // first attempt: drop the ack
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 1);
+      });
+
+      await startPromise;
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+
+      // Retry now succeeds — proves startCallInFlightRef was released, not
+      // left stuck true by the timed-out attempt.
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-retry', mode: 'p2p', iceServers: [] } });
+      });
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retroactively fail an already-successful call:initiate once the timeout window later elapses', async () => {
+      let capturedAck: ((response: unknown) => void) | undefined;
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        capturedAck = cb as (response: unknown) => void;
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      let startPromise: Promise<void> | undefined;
+      await act(async () => {
+        startPromise = result.current.startCall();
+      });
+
+      await act(async () => {
+        capturedAck?.({ success: true, data: { callId: 'call-ok', mode: 'p2p', iceServers: [] } });
+      });
+
+      await startPromise;
+
+      expect(mockToastSuccess).toHaveBeenCalledWith('calls.toasts.startingCall');
+
+      await act(async () => {
+        jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 5000);
+      });
+
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('startCall sets currentCall for the initiator (P0 fix, 2026-07-06)', () => {
+    beforeEach(async () => {
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      storeModule.setState({ currentCall: null, isInCall: false });
+    });
+
+    it('sets currentCall + isInCall from the ack — gateway never re-emits call:initiated to the initiator', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-999', mode: 'p2p', iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      const { currentCall, isInCall } = storeModule.getState();
+      expect(isInCall).toBe(true);
+      expect(currentCall).toMatchObject({
+        id: 'call-999',
+        conversationId: mockDirectConversation.id,
+        mode: 'p2p',
+        status: 'initiated',
+        initiatorId: 'user-caller-1',
+        participants: [],
+      });
+    });
+
+    it('does not set currentCall when the ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().currentCall).toBeNull();
+      expect(storeModule.getState().isInCall).toBe(false);
+    });
+
+    it('does not set currentCall when the ack carries no callId', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().currentCall).toBeNull();
+    });
+
+    it('abandons the newly-initiated call instead of clobbering an already-active different call', async () => {
+      // CALL_INITIATE_ACK_TIMEOUT_MS is 10s — long enough that the user can
+      // accept an unrelated incoming call (CallManager.acceptOrJoinCall sets
+      // currentCall/isInCall on its own, with no coordination with this
+      // hook) before this ack lands. Committing here would silently tear
+      // the call the user is already in out from under its mounted
+      // VideoCallInterface.
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      const activeCall = {
+        id: 'call-already-active',
+        conversationId: 'conv-other',
+        mode: 'p2p',
+        status: 'active',
+        initiatorId: 'peer-1',
+        startedAt: new Date(),
+        participants: [],
+      };
+      storeModule.setState({ currentCall: activeCall as any, isInCall: true });
+
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+
+      mockEmit.mockImplementation((event: string, _data: unknown, cb?: Function) => {
+        if (event === CLIENT_EVENTS.CALL_INITIATE) {
+          cb?.({ success: true, data: { callId: 'call-newcomer', mode: 'p2p', iceServers: [] } });
+        }
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      // The already-active call must survive untouched.
+      expect(storeModule.getState().currentCall).toBe(activeCall);
+      expect(storeModule.getState().isInCall).toBe(true);
+
+      // The newcomer is ended on the wire — the callee must not be left
+      // ringing forever for a call the caller will never use.
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_END,
+        { callId: 'call-newcomer', reason: 'rejected' }
+      );
+
+      // The pre-authorized stream acquired for the abandoned call is
+      // released, not left hot.
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+
+      expect(mockToastSuccess).not.toHaveBeenCalled();
     });
   });
 });

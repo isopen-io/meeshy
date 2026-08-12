@@ -28,9 +28,11 @@ jest.mock('fs', () => ({
   }
 }));
 
-// Mock crypto module
+// Mock crypto module (mockRandomUUID resettable per-test so concurrent calls can
+// simulate distinct request IDs, as real crypto.randomUUID() would produce)
+const mockRandomUUID = jest.fn(() => 'test-uuid-1234');
 jest.mock('crypto', () => ({
-  randomUUID: () => 'test-uuid-1234'
+  randomUUID: () => mockRandomUUID()
 }));
 
 // Mock logger-enhanced to prevent fs.write errors in tests
@@ -790,8 +792,8 @@ describe('VoiceProfileService', () => {
       expect(mockPrisma.userVoiceModel.update).toHaveBeenCalledWith({
         where: { userId: 'user-123' },
         data: expect.objectContaining({
-          audioCount: 3,
-          totalDurationMs: 45000
+          audioCount: { increment: 1 },
+          totalDurationMs: { increment: 15000 }
         })
       });
     });
@@ -848,9 +850,55 @@ describe('VoiceProfileService', () => {
       expect(mockPrisma.userVoiceModel.update).toHaveBeenCalledWith({
         where: { userId: 'user-123' },
         data: expect.objectContaining({
-          version: 4
+          version: { increment: 1 }
         })
       });
+    });
+
+    it('should use atomic increments so two concurrent calibrations reading the same stale audioCount do not lose an update', async () => {
+      // Both calls read the SAME stale snapshot (audioCount: 1) because the second
+      // findUnique happens before the first call's slow ZMQ round-trip resolves.
+      const mockVoiceModel = createMockVoiceModel({ audioCount: 1, totalDurationMs: 15000, version: 1 });
+      mockPrisma.userVoiceModel.findUnique.mockResolvedValue(mockVoiceModel);
+      mockPrisma.userVoiceModel.update.mockResolvedValue(mockVoiceModel);
+
+      // Distinct request IDs per call, as real crypto.randomUUID() would produce.
+      mockRandomUUID.mockImplementationOnce(() => 'req-a').mockImplementationOnce(() => 'req-b');
+
+      let callCount = 0;
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async (req: { request_id: string }) => {
+        callCount += 1;
+        const isFirstCall = callCount === 1;
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult({
+            request_id: req.request_id,
+            audio_duration_ms: isFirstCall ? 5000 : 8000
+          }));
+        }, isFirstCall ? 20 : 5);
+      });
+
+      await Promise.all([
+        service.calibrateProfile('user-123', {
+          audioData: 'base64-audio-a',
+          audioFormat: 'wav',
+          replaceExisting: false
+        }),
+        service.calibrateProfile('user-123', {
+          audioData: 'base64-audio-b',
+          audioFormat: 'wav',
+          replaceExisting: false
+        })
+      ]);
+
+      expect(mockPrisma.userVoiceModel.update).toHaveBeenCalledTimes(2);
+      for (const call of mockPrisma.userVoiceModel.update.mock.calls) {
+        const data = (call[0] as { data: Record<string, unknown> }).data;
+        // Must be Prisma atomic operators, never a JS-computed absolute value derived
+        // from the stale `voiceModel` snapshot read before the ZMQ await.
+        expect(data.audioCount).toEqual({ increment: 1 });
+        expect(data.version).toEqual({ increment: 1 });
+        expect(data.totalDurationMs).toEqual(expect.objectContaining({ increment: expect.any(Number) }));
+      }
     });
 
     it('should handle calibration failure from ZMQ', async () => {
@@ -1421,6 +1469,443 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(false);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: ZMQ event handlers for verify + compare (lines 148, 151)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('ZMQ voiceProfileVerifyResult and voiceProfileCompareResult event handlers', () => {
+    it('should resolve pending request via voiceProfileVerifyResult event', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileVerifyResult', {
+            ...createMockZmqAnalyzeResult(),
+            type: 'voice_profile_verify_result'
+          });
+        }, 10);
+      });
+
+      // registerProfile waits for any event whose request_id matches — the
+      // voiceProfileVerifyResult listener (line 148) routes it to handleZmqResponse
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav'
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should resolve pending request via voiceProfileCompareResult event', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileCompareResult', {
+            ...createMockZmqAnalyzeResult(),
+            type: 'voice_profile_compare_result'
+          });
+        }, 10);
+      });
+
+      // voiceProfileCompareResult listener (line 151) routes to handleZmqResponse
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav'
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should silently ignore event for unknown requestId', () => {
+      // handleZmqResponse when no matching pending request: no-op, no crash
+      expect(() => {
+        mockZmqClient.emit('voiceProfileVerifyResult', {
+          type: 'voice_profile_verify_result',
+          request_id: 'non-existent-id',
+          success: true,
+          timestamp: Date.now()
+        });
+      }).not.toThrow();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: canUserAccessAttachment return false when no conversationId (line 264)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('attachment access — no conversation context', () => {
+    it('should deny access when attachment message has no conversationId', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+
+      // message exists but conversationId is null → line 264 `return false`
+      const mockAttachment = {
+        id: 'att-123',
+        mimeType: 'audio/wav',
+        filePath: 'audio/test.wav',
+        uploadedBy: 'other-user',
+        message: { conversationId: null, senderId: 'other-user' }
+      };
+      mockPrisma.messageAttachment.findUnique.mockResolvedValue(mockAttachment);
+
+      const result = await service.registerProfile('user-123', {
+        attachmentId: 'att-123'
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Access denied');
+      // participant.findFirst must NOT be called since conversationId is falsy
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should deny access when attachment has no message at all', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+
+      const mockAttachment = {
+        id: 'att-123',
+        mimeType: 'audio/wav',
+        filePath: 'audio/test.wav',
+        uploadedBy: 'other-user',
+        message: null
+      };
+      mockPrisma.messageAttachment.findUnique.mockResolvedValue(mockAttachment);
+
+      const result = await service.registerProfile('user-123', {
+        attachmentId: 'att-123'
+      });
+
+      expect(result.success).toBe(false);
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: voiceCloningSettings in registerProfile (lines 555-583)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('registerProfile with voiceCloningSettings', () => {
+    const setupRegisterProfileMocks = () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult());
+        }, 10);
+      });
+    };
+
+    it('should log voice cloning settings with all valid fields', async () => {
+      setupRegisterProfileMocks();
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {
+          voiceCloningExaggeration: 0.8,
+          voiceCloningCfgWeight: 0.7,
+          voiceCloningTemperature: 1.2,
+          voiceCloningTopP: 0.9,
+          voiceCloningQualityPreset: 'high_quality'
+        }
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should clamp exaggeration to [0,1] bounds', async () => {
+      setupRegisterProfileMocks();
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {
+          voiceCloningExaggeration: 2.5,  // > 1, clamped to 1
+          voiceCloningCfgWeight: -0.5,   // < 0, clamped to 0
+        }
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should skip invalid quality preset', async () => {
+      setupRegisterProfileMocks();
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {
+          voiceCloningQualityPreset: 'ultra_extreme' as any // not in validPresets
+        }
+      });
+
+      // Invalid preset is skipped silently; registration still succeeds
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle empty voiceCloningSettings object', async () => {
+      setupRegisterProfileMocks();
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {}
+      });
+
+      // Nothing to save, but registration still succeeds
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: browserTranscription path (lines 591-603) + server transcription (607-615)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('registerProfile transcription handling', () => {
+    it('should include browser transcription in profileDetails (lines 593-603)', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', {
+            ...createMockZmqAnalyzeResult(),
+            transcription: undefined  // server has no transcription
+          });
+        }, 10);
+      });
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        browserTranscription: {
+          source: 'browser' as const,
+          text: 'Hello world from browser',
+          language: 'en',
+          confidence: 0.95,
+          durationMs: 5000,
+          segments: [{ text: 'Hello', startMs: 0, endMs: 500, confidence: 0.99 }],
+          browserDetails: { api: 'thirdParty' as const, userAgent: 'Chrome/120' }
+        }
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.transcription?.source).toBe('browser');
+      expect(result.data?.transcription?.text).toBe('Hello world from browser');
+      expect(result.data?.transcription?.durationMs).toBe(5000);
+    });
+
+    it('should include server transcription when no browser transcription (lines 607-622)', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', {
+            ...createMockZmqAnalyzeResult(),
+            transcription: {
+              text: 'Hello world from server',
+              language: 'en',
+              confidence: 0.92,
+              duration_ms: 5000,
+              source: 'whisper',
+              model: 'whisper-large-v3',
+              processing_time_ms: 1200,
+              segments: [
+                { text: 'Hello', start_ms: 0, end_ms: 500, confidence: 0.98 },
+                { text: 'world', start_ms: 500, end_ms: 1000, confidence: 0.95 }
+              ]
+            }
+          });
+        }, 10);
+      });
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        includeTranscription: true
+        // no browserTranscription → server path
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.transcription?.source).toBe('whisper');
+      expect(result.data?.transcription?.text).toBe('Hello world from server');
+      expect(result.data?.transcription?.model).toBe('whisper-large-v3');
+      expect(result.data?.transcription?.segments).toHaveLength(2);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: voice previews in registerProfile (lines 626-636)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('registerProfile with voice previews', () => {
+    it('should include voice previews when ZMQ response contains them', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+
+      const mockPreviews = [
+        {
+          language: 'en',
+          original_text: 'Bonjour',
+          translated_text: 'Hello',
+          audio_base64: 'base64audiodata',
+          audio_format: 'wav',
+          duration_ms: 1200,
+          generated_at: new Date().toISOString()
+        },
+        {
+          language: 'es',
+          original_text: 'Bonjour',
+          translated_text: 'Hola',
+          audio_base64: 'base64audiodata2',
+          audio_format: 'wav',
+          duration_ms: 1100,
+          generated_at: new Date().toISOString()
+        }
+      ];
+
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', {
+            ...createMockZmqAnalyzeResult(),
+            voice_previews: mockPreviews
+          });
+        }, 10);
+      });
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        generateVoicePreviews: true,
+        previewLanguages: ['en', 'es']
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.voicePreviews).toHaveLength(2);
+      expect(result.data?.voicePreviews?.[0].language).toBe('en');
+      expect(result.data?.voicePreviews?.[0].translatedText).toBe('Hello');
+      expect(result.data?.voicePreviews?.[1].language).toBe('es');
+    });
+
+    it('should not include voicePreviews when ZMQ response has empty array', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', {
+            ...createMockZmqAnalyzeResult(),
+            voice_previews: []  // empty array → block is skipped
+          });
+        }, 10);
+      });
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.voicePreviews).toBeUndefined();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: calibrateProfile error catch (lines 756-763)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('calibrateProfile error handling', () => {
+    it('should return error result when DB throws during calibration (lines 757-758)', async () => {
+      mockPrisma.userVoiceModel.findUnique.mockRejectedValue(new Error('DB connection lost'));
+
+      const result = await service.calibrateProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav'
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('DB connection lost');
+      expect(result.errorCode).toBe('CALIBRATION_FAILED');
+    });
+
+    it('should return generic error when non-Error is thrown', async () => {
+      mockPrisma.userVoiceModel.findUnique.mockRejectedValue('string error');
+
+      const result = await service.calibrateProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav'
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Calibration failed');
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-FILL: calculateAge — birthday not yet passed this year (line 910)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('calculateAge — birthday in future within current year', () => {
+    it('should decrement age when birthday has not yet occurred this year (line 910)', async () => {
+      // Set today to January 1. User born December 31 of 18 years ago.
+      // Their birthday this year is Dec 31 → not yet passed → age = 18-1 = 17 → uses minor expiration (60 days).
+      const realDateConstructor = Date;
+
+      // Build mock voice model BEFORE replacing Date so Date.now() still works.
+      const mockVoiceModel = createMockVoiceModel();
+
+      const TODAY_ISO = '2026-01-15';
+      // Capture the fixed timestamp before the spy so assertions survive Date mutation.
+      const todayMs = new realDateConstructor(TODAY_ISO).getTime();
+
+      // The calculateAge/calculateExpirationDate functions call `new Date()` for today.
+      // Return a FRESH instance on every call so the service can mutate its own copy
+      // without affecting our baseline timestamp.
+      jest.spyOn(global, 'Date').mockImplementation((...args: any[]) => {
+        if (args.length === 0) return new realDateConstructor(TODAY_ISO) as any;
+        return new realDateConstructor(...args as [any]);
+      });
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        ...createMockUser(),
+        // Born December 15, 2008 — would be 18 as of Dec 15, 2026, but today is Jan 15, 2026
+        // So age = 2026 - 2008 = 18, but Dec 15 > Jan 15 in month order → age-- → 17
+        birthDate: new realDateConstructor('2008-12-15')
+      });
+      mockPrisma.userVoiceModel.create.mockResolvedValue(mockVoiceModel);
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult());
+        }, 10);
+      });
+
+      const result = await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav'
+      });
+
+      expect(result.success).toBe(true);
+
+      // Minor expiration = 60 days; standard = 90. Verify expiration is ~60 days from now.
+      const expiresAt = mockPrisma.userVoiceModel.create.mock.calls[0][0].data.nextRecalibrationAt as Date;
+      const diffDays = Math.round((expiresAt.getTime() - todayMs) / (1000 * 60 * 60 * 24));
+      expect(diffDays).toBe(60);
+
+      jest.restoreAllMocks();
     });
   });
 });

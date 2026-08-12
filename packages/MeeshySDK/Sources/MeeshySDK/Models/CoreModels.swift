@@ -123,11 +123,23 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// the list row can resolve the preview in the viewer's preferred
     /// language without a per-row GRDB lookup.
     ///
-    /// Currently populated by the in-memory message cache attach path
-    /// (see `ConversationListViewModel.attachLastMessageTranslations`).
-    /// When the gateway starts shipping these in `/conversations` it will
-    /// be wired through the API → domain converter; until then the field
-    /// stays `nil` and the list falls back to the raw `lastMessagePreview`.
+    /// Deux sources, désormais :
+    /// - REST — `GET /conversations` expédie `lastMessageTranslations`, déjà
+    ///   restreint par le gateway aux langues du prisme du lecteur et tronqué au
+    ///   plafond d'aperçu ; `APIConversation.toDomain()` le câble ici. C'est le
+    ///   chemin du démarrage à froid, celui où la ligne n'avait AUCUNE
+    ///   traduction disponible et retombait toujours sur le texte de
+    ///   l'expéditeur.
+    /// - Socket — `ConversationSyncEngine.previewTranslations(from:viewerLanguages:)`
+    ///   dérive la même carte du `message:new` reçu, via `LastMessageFacet`, en
+    ///   appliquant les MÊMES quatre exclusions que le gateway (hors prisme,
+    ///   langue d'origine, traduction chiffrée, texte inexploitable) et le même
+    ///   plafond d'aperçu. Sans cette parité, le texte de la ligne dépendrait du
+    ///   transport qui l'a apportée.
+    ///
+    /// `nil` reste un état normal (aucune traduction vers une langue du prisme,
+    /// ou message déjà dans cette langue) : la liste affiche alors
+    /// `lastMessagePreview` brut, ce qui EST la règle #3 du Prisme.
     ///
     /// `[String: String]` (not `[APITextTranslation]`) is intentional:
     /// `APITextTranslation` is `Decodable`-only, but `MeeshyConversation`
@@ -145,6 +157,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var lastMessageIsBlurred: Bool = false
     public var lastMessageIsViewOnce: Bool = false
     public var lastMessageExpiresAt: Date? = nil
+    /// Position du dernier message (hissée par le gateway). Un message
+    /// position-seule a un `lastMessagePreview` vide : la ligne d'aperçu
+    /// compose alors son libellé depuis ce champ (nom du lieu ou « Position »).
+    public var lastMessageLocation: SharedPlace? = nil
     public var recentMessages: [RecentMessagePreview] = []
     /// Display-layer tags (separate concept from `userState.tags`, which
     /// is the wire-format `String[]` from `UserConversationPreferences`).
@@ -159,6 +175,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var participantUserId: String? = nil
     public var participantUsername: String? = nil
     public var participantAvatarURL: String? = nil
+    public var participantBanner: String? = nil
     public var lastSeenAt: Date? = nil
 
     public var closedAt: Date? = nil
@@ -197,15 +214,18 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     /// B1 — applies the Prisme Linguistique to `lastMessagePreview`.
     ///
-    /// Resolution mirrors `resolveUserLanguage` in
-    /// `packages/shared/utils/conversation-helpers.ts`:
+    /// Twin of `resolveLastMessagePreview` in
+    /// `packages/shared/utils/conversation-helpers.ts` — both platforms render
+    /// the same row from the same REST payload, so any divergence here would
+    /// show one account two different texts depending on the client.
     ///
-    /// 1. Walk the viewer's preferred languages in order.
-    /// 2. Return the first matching translation found in
+    /// 1. Walk the viewer's preferred languages IN ORDER.
+    /// 2. The original language competes at its own RANK: reaching it returns
+    ///    the raw preview (the message already IS in that language).
+    /// 3. Otherwise, return the first matching translation found in
     ///    `lastMessageTranslations`.
-    /// 3. If no preferred language matches, return the original
-    ///    `lastMessagePreview` (which is the message in its source
-    ///    language).
+    /// 4. If no preferred language is served, return the original
+    ///    `lastMessagePreview` (the message in its source language).
     ///
     /// **Critical Prisme rule**: never fall back to `translations.first`.
     /// The absence of a preferred-language translation means the content
@@ -220,13 +240,26 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             return lastMessagePreview
         }
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        // If the message is already in one of the preferred languages, the
-        // raw preview is canonical — no translation needed.
-        if let original = lastMessageOriginalLanguage?.lowercased(),
-           preferred.contains(original) {
-            return lastMessagePreview
-        }
+        let original = lastMessageOriginalLanguage?.lowercased()
+        // The prism is ORDERED, and the original language competes at its own
+        // RANK — never as a global short-circuit. Walking the reader's
+        // languages in order, the first one that is served wins, whether by a
+        // translation or because the message is already written in it.
+        //
+        // This used to read "if the original language appears anywhere in the
+        // preferred list, the raw preview is canonical", which silently demoted
+        // the reader's PRIMARY language whenever the original language sat
+        // lower in their prism. `CLAUDE.md` states the opposite outright: "a
+        // French-speaking user with an English iPhone ALWAYS sees their
+        // messages in French (priority 1); the English locale only kicks in
+        // when no French translation is available". With prism ["fr", "en"], an
+        // English message and a French translation available, the old rule
+        // returned the English original. Device locale enters at rank 4 — it
+        // never supersedes an in-app preference.
         for lang in preferred {
+            if let original, lang == original {
+                return lastMessagePreview
+            }
             if let translated = translations[lang] {
                 return translated
             }
@@ -248,10 +281,35 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageIsViewOnce)
         h.combine(lastMessageExpiresAt)
         // B1 — make the row re-render when a fresh translation arrives.
+        //
+        // La VALEUR est repliée, pas seulement la clé : c'est elle que la ligne
+        // affiche (`resolvedLastMessagePreview`). Le gateway ne ré-émet
+        // `conversation:updated` qu'aux lecteurs dont la carte porte la langue
+        // qui vient d'atterrir (`PreviewUpdateScope.onlyIfPreviewCarriesLanguage`),
+        // et une RETRADUCTION garde le même `lastMessageId`, le même
+        // `lastMessagePreview` (l'original ne bouge pas), le même
+        // `lastMessageAt` et le même jeu de clés. Hasher les seules clés gelait
+        // donc la ligne sur la traduction d'avant, définitivement : le portillon
+        // `.equatable()` renvoyait `true` et SwiftUI n'appelait pas `body`.
+        //
+        // Tri par clé : `Dictionary` n'a pas d'ordre d'itération stable, et un
+        // hash non déterministe ouvrirait le portillon au hasard. Chaque clé et
+        // chaque valeur sont combinées SÉPARÉMENT — une concaténation confondrait
+        // `["a": "bc"]` et `["ab": "c"]`.
         if let translations = lastMessageTranslations {
-            h.combine(translations.keys.sorted().joined(separator: ","))
+            for key in translations.keys.sorted() {
+                h.combine(key)
+                h.combine(translations[key])
+            }
         }
         h.combine(lastMessageOriginalLanguage)
+        // Position hissée : un message position-seule a un `lastMessagePreview`
+        // vide par construction et la ligne compose son libellé depuis ce champ
+        // (`ThemedConversationRow`, branche `.standard`, + label VoiceOver). La
+        // présence est repliée en plus du nom : une position sans nom affiche
+        // quand même « Position », que `name` seul (nil des deux côtés) raterait.
+        h.combine(lastMessageLocation != nil)
+        h.combine(lastMessageLocation?.name)
         h.combine(name)
         h.combine(userState.isMuted)
         h.combine(userState.isPinned)
@@ -261,6 +319,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(avatar)
         h.combine(participantUsername)
         h.combine(participantAvatarURL)
+        h.combine(participantBanner)
         h.combine(tags)
         h.combine(userState.reaction)
         // New userState fields surfaced to the row (locked, draft, pending sync).
@@ -299,10 +358,11 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 lastMessageIsBlurred: Bool = false,
                 lastMessageIsViewOnce: Bool = false,
                 lastMessageExpiresAt: Date? = nil,
+                lastMessageLocation: SharedPlace? = nil,
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, defaultWriteRole: String? = nil, slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, mentionsOnly: Bool = false, isArchivedByUser: Bool = false, customName: String? = nil,
-                participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
+                participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, participantBanner: String? = nil, lastSeenAt: Date? = nil,
                 closedAt: Date? = nil, closedBy: String? = nil,
                 currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
@@ -316,7 +376,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.isAnnouncementChannel = isAnnouncementChannel
         self.defaultWriteRole = defaultWriteRole; self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
-        self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
+        self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.participantBanner = participantBanner; self.lastSeenAt = lastSeenAt
         self.closedAt = closedAt; self.closedBy = closedBy
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
         self.lastMessagePreview = lastMessagePreview
@@ -327,6 +387,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageIsBlurred = lastMessageIsBlurred
         self.lastMessageIsViewOnce = lastMessageIsViewOnce
         self.lastMessageExpiresAt = lastMessageExpiresAt
+        self.lastMessageLocation = lastMessageLocation
         self.recentMessages = recentMessages
         self.tags = tags
         self.language = language; self.theme = theme
@@ -370,9 +431,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessagePreview, lastMessageTranslations, lastMessageOriginalLanguage
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
+        case lastMessageLocation
         case recentMessages, tags
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
-        case participantUserId, participantUsername, participantAvatarURL, lastSeenAt
+        case participantUserId, participantUsername, participantAvatarURL, participantBanner, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
         case language, theme, colorPalette
 
@@ -409,7 +471,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
         self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
 
-        self.lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        self.lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)?.meeshyPreviewTruncated
         self.lastMessageTranslations = try c.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
         self.lastMessageOriginalLanguage = try c.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
         self.lastMessageAttachments = try c.decodeIfPresent([MeeshyMessageAttachment].self, forKey: .lastMessageAttachments) ?? []
@@ -419,6 +481,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageIsBlurred = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsBlurred) ?? false
         self.lastMessageIsViewOnce = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsViewOnce) ?? false
         self.lastMessageExpiresAt = try c.decodeIfPresent(Date.self, forKey: .lastMessageExpiresAt)
+        self.lastMessageLocation = try c.decodeIfPresent(SharedPlace.self, forKey: .lastMessageLocation)
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
 
@@ -430,6 +493,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
         self.participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
         self.participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
+        self.participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
         self.lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
         self.closedAt = try c.decodeIfPresent(Date.self, forKey: .closedAt)
         self.closedBy = try c.decodeIfPresent(String.self, forKey: .closedBy)
@@ -504,6 +568,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(lastMessageIsBlurred, forKey: .lastMessageIsBlurred)
         try c.encode(lastMessageIsViewOnce, forKey: .lastMessageIsViewOnce)
         try c.encodeIfPresent(lastMessageExpiresAt, forKey: .lastMessageExpiresAt)
+        try c.encodeIfPresent(lastMessageLocation, forKey: .lastMessageLocation)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
 
@@ -515,6 +580,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
         try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
         try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
+        try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
         try c.encodeIfPresent(lastSeenAt, forKey: .lastSeenAt)
         try c.encodeIfPresent(closedAt, forKey: .closedAt)
         try c.encodeIfPresent(closedBy, forKey: .closedBy)
@@ -649,6 +715,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var readByAllAt: Date?
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
+    /// Authoritative denominator for the all-or-nothing delivery indicator: the
+    /// server's count of ACTIVE recipients (conversation participants excluding
+    /// this message's sender), projected per message by the gateway. `0` means
+    /// the server did not provide it (older payload, socket `message:new`, or an
+    /// optimistic local row) — the display then falls back to `memberCount − 1`.
+    /// Using the server value removes the client's dependency on a possibly
+    /// stale local membership count.
+    public var recipientCount: Int = 0
 
     // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
     public var cachedTimeString: String?
@@ -657,6 +731,18 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// (`messageSource == .system`). Drives the rich, actionable call bubble.
     /// `nil` for ordinary messages.
     public var callSummary: CallSummaryMetadata?
+
+    /// Lieu partagé, restitué depuis la colonne `locationJson` du cache GRDB
+    /// (`APIMessage.location` hissé côté serveur). `nil` pour un message sans
+    /// position.
+    public var location: SharedPlace?
+
+    /// `[rawURL: token]` outbound-link tracking map carried from the gateway
+    /// (`APIMessage.trackedLinkMap`). Empty when the message has no tracked
+    /// links. Consumed by the bubble renderer (tappable `/l/<token>` rewrite)
+    /// and the embedded-video façade destination. Backward-compatible: cached
+    /// rows predating the field decode to `[:]`.
+    public var trackedLinkMap: [String: String] = [:]
 
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
@@ -713,9 +799,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
-                deliveredCount: Int = 0, readCount: Int = 0,
+                deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
                 cachedTimeString: String? = nil,
-                callSummary: CallSummaryMetadata? = nil) {
+                callSummary: CallSummaryMetadata? = nil,
+                location: SharedPlace? = nil,
+                trackedLinkMap: [String: String] = [:]) {
         self.id = id; self.clientMessageId = clientMessageId
         self.conversationId = conversationId; self.senderId = senderId
         self.content = content
@@ -733,9 +821,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
+        self.recipientCount = recipientCount
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
-        self.effects = effects
+        self.location = location
+        self.trackedLinkMap = trackedLinkMap
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -748,9 +838,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case replyTo, forwardedFrom
         case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
         case deliveryStatus, isMe
-        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
         case callSummary
+        case location
+        case trackedLinkMap
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -797,10 +889,16 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount) ?? 0
         cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
         // Tolerant: a malformed / future-shape call-summary blob must not fail
         // the whole cached-message decode (mirrors the APIMessage path).
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
+        // Same tolerance as callSummary: a malformed location blob must not
+        // fail the whole cached-message decode.
+        location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // Backward-compatible: rows cached before this field decode to `[:]`.
+        trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -852,8 +950,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(readByAllAt, forKey: .readByAllAt)
         try c.encode(deliveredCount, forKey: .deliveredCount)
         try c.encode(readCount, forKey: .readCount)
+        try c.encode(recipientCount, forKey: .recipientCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
+        try c.encodeIfPresent(location, forKey: .location)
+        if !trackedLinkMap.isEmpty {
+            try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
+        }
     }
 
     public var text: String { content }
@@ -926,6 +1029,30 @@ public struct MeeshyImageVariant: Codable, Sendable, Hashable {
     }
 }
 
+/// The current user's OWN playback progress for a media attachment, surfaced
+/// per-request by the gateway (mirror of `currentUserReactions`). Lets a client
+/// seed the in-bubble waveform tint (audio) / progress bar (video) on load,
+/// synced across devices. `nil` = the current user never consumed this media.
+/// @see CurrentUserAttachmentConsumption in packages/shared/types/attachment.ts
+public struct MeeshyMediaConsumption: Codable, Sendable, Equatable {
+    public var lastPlayPositionMs: Int?
+    public var listenedComplete: Bool
+    public var lastWatchPositionMs: Int?
+    public var watchedComplete: Bool
+
+    public init(
+        lastPlayPositionMs: Int? = nil,
+        listenedComplete: Bool = false,
+        lastWatchPositionMs: Int? = nil,
+        watchedComplete: Bool = false
+    ) {
+        self.lastPlayPositionMs = lastPlayPositionMs
+        self.listenedComplete = listenedComplete
+        self.lastWatchPositionMs = lastWatchPositionMs
+        self.watchedComplete = watchedComplete
+    }
+}
+
 public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let id: String
     public var messageId: String?
@@ -978,6 +1105,27 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     // these fields instantly without waiting for a REST round-trip.
     public var transcription: EmbeddedTranscription?
     public var audioTranslations: [String: EmbeddedAudioTranslation]?
+
+    // ===== CONSUMPTION AGGREGATES (all-or-nothing) =====
+    // Server-computed denormalized state surfaced in the message-info sheet:
+    // who has viewed / downloaded / listened / watched this attachment. The
+    // `…ByAllAt` markers are stamped by the gateway only once EVERY active
+    // recipient has completed that action (WhatsApp-style). Optional so old
+    // cached `attachmentsJson` blobs (written before these shipped) decode to
+    // nil. Vit dans attachmentsJson (Codable synthétisé), pas de colonne GRDB.
+    public var deliveredToAllAt: Date?
+    public var viewedByAllAt: Date?
+    public var downloadedByAllAt: Date?
+    public var listenedByAllAt: Date?
+    public var watchedByAllAt: Date?
+    public var viewedCount: Int?
+    public var downloadedCount: Int?
+    public var consumedCount: Int?
+
+    // ===== CURRENT-USER CONSUMPTION (per-request, cross-device sync) =====
+    /// The current user's own playback progress (position + completion).
+    /// Optional so old cached `attachmentsJson` blobs decode to nil.
+    public var currentUserConsumption: MeeshyMediaConsumption?
 
     /// Lightweight Codable transcription embedded in attachmentsJson.
     public struct EmbeddedTranscription: Codable, Sendable {
@@ -1038,7 +1186,12 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 audioTranslations: [String: EmbeddedAudioTranslation]? = nil,
                 imageVariants: [MeeshyImageVariant]? = nil,
                 reactionSummary: [String: Int]? = nil,
-                currentUserReactions: [String]? = nil) {
+                currentUserReactions: [String]? = nil,
+                deliveredToAllAt: Date? = nil, viewedByAllAt: Date? = nil,
+                downloadedByAllAt: Date? = nil, listenedByAllAt: Date? = nil,
+                watchedByAllAt: Date? = nil, viewedCount: Int? = nil,
+                downloadedCount: Int? = nil, consumedCount: Int? = nil,
+                currentUserConsumption: MeeshyMediaConsumption? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1055,6 +1208,15 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.imageVariants = imageVariants
         self.reactionSummary = reactionSummary
         self.currentUserReactions = currentUserReactions
+        self.deliveredToAllAt = deliveredToAllAt
+        self.viewedByAllAt = viewedByAllAt
+        self.downloadedByAllAt = downloadedByAllAt
+        self.listenedByAllAt = listenedByAllAt
+        self.watchedByAllAt = watchedByAllAt
+        self.viewedCount = viewedCount
+        self.downloadedCount = downloadedCount
+        self.consumedCount = consumedCount
+        self.currentUserConsumption = currentUserConsumption
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {

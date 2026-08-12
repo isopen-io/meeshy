@@ -21,6 +21,33 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
         XCTAssertEqual(avLayer?.player?.isMuted, true)
     }
 
+    /// Régression 2026-05-20 (`f917d30b94`) corrigée 2026-06-20 : sur cache-miss,
+    /// le fond vidéo distant DOIT être streamé immédiatement — `AVPlayer` attaché
+    /// SYNCHRONEMENT à l'URL distante (progressive/range loading, 1ère frame en
+    /// ~centaines de ms) — et NON bloqué sur un download intégral avant attache.
+    /// Le download bloquant rendait les grosses stories injouables sur réseau
+    /// device : la slide s'auto-avançait (failsafe 2s) avant la fin du download,
+    /// la vidéo n'apparaissait jamais (« marche en simulateur, pas sur device »).
+    /// Avant le fix, `avPlayer` était nil juste après `configure` (attache
+    /// différée dans un `Task { await download }`) → ce test échouait.
+    func test_configure_video_cacheMiss_streamsRemoteURLSynchronously() {
+        let layer = StoryBackgroundLayer()
+        let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
+        // `.invalid` TLD : ne résout jamais → le cache-populate détaché échoue
+        // instantanément sans trafic réseau réel ; l'attache du player est
+        // synchrone et n'a pas besoin que l'URL soit jouable.
+        let remote = URL(string: "https://media.example.invalid/api/v1/attachments/file/clip-\(UUID().uuidString).mov")!
+        let resolver: (String) -> URL? = { _ in remote }
+        layer.configure(kind: .video(postMediaId: "vid-remote", looping: false, mute: true, thumbHash: nil),
+                        transform: .identity, geometry: geom,
+                        resolver: resolver, imageCache: nil)
+        XCTAssertNotNil(layer.avPlayer,
+                        "cache-miss : le player doit être attaché IMMÉDIATEMENT (streaming), pas après un download")
+        let assetURL = (layer.avPlayer?.currentItem?.asset as? AVURLAsset)?.url
+        XCTAssertEqual(assetURL, remote,
+                       "le player doit streamer l'URL DISTANTE, pas attendre un fichier local pré-téléchargé")
+    }
+
     func test_handleAppLifecycle_pausesAndResumes() throws {
         let layer = StoryBackgroundLayer()
         let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))

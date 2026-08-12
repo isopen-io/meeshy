@@ -15,6 +15,9 @@ public struct CommunitySettingsView: View {
     public var onDeleted: (() -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
 
+    // User-content palette: swatches the user picks to colour their own
+    // community. Intentionally a vibrant spread (not the Indigo brand chrome) —
+    // these are content choices, not UI chrome. Do not migrate to MeeshyColors.
     private let presetColors = [
         "FF2E63", "A855F7", "08D9D6", "FF6B6B",
         "4ECDC4", "45B7D1", "F59E0B", "10B981",
@@ -208,7 +211,7 @@ public struct CommunitySettingsView: View {
 
             // Color picker
             VStack(alignment: .leading, spacing: 10) {
-                Text("Couleur")
+                Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textSecondary)
 
@@ -227,7 +230,7 @@ public struct CommunitySettingsView: View {
                 TextField("🏘️", text: $viewModel.localEmoji)
                     .font(.system(size: 22))
                     .foregroundColor(theme.textPrimary)
-                    .onChange(of: viewModel.localEmoji) { newValue in
+                    .adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in
                         let trimmed = String(newValue.unicodeScalars.prefix(2))
                         if trimmed != newValue { viewModel.localEmoji = trimmed }
                     }
@@ -237,15 +240,15 @@ public struct CommunitySettingsView: View {
 
     @ViewBuilder
     private var communityBannerView: some View {
-        if !viewModel.bannerUrl.isEmpty, let url = URL(string: viewModel.bannerUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    communityBannerPlaceholder
-                }
+        if !viewModel.bannerUrl.isEmpty {
+            // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
+            // la bannière n'est téléchargée qu'une fois par installation.
+            // showsStatusOverlays: false — echec silencieux vers le gradient
+            // deja fourni ; pas de bouton retry sur une banniere decorative.
+            CachedAsyncImage(url: viewModel.bannerUrl, showsStatusOverlays: false) {
+                communityBannerPlaceholder
             }
+            .scaledToFill()
         } else {
             communityBannerPlaceholder
         }
@@ -356,7 +359,7 @@ public struct CommunitySettingsView: View {
                     viewModel.showLeaveConfirm = true
                 } label: {
                     HStack {
-                        Image(systemName: "arrow.right.square.fill")
+                        Image(systemName: "arrow.forward.square.fill")
                         Text(String(localized: "community.settings.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -452,7 +455,7 @@ final class CommunitySettingsViewModel: ObservableObject {
         self.originalAvatarUrl = avatarStr
         self.originalBannerUrl = bannerStr
 
-        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? "4ECDC4"
+        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? MeeshyColors.brandPrimaryHex
         let savedEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? ""
         self.localColor = savedColor
         self.localEmoji = savedEmoji

@@ -14,6 +14,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { WebRTCService } from '@/services/webrtc-service';
 
 // Mock Socket.IO service
 const mockGetSocket = jest.fn();
@@ -24,6 +25,7 @@ const mockOff = jest.fn();
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockGetSocket(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
@@ -43,6 +45,7 @@ const mockSetIceServers = jest.fn();
 const mockSetNegotiationRole = jest.fn();
 const mockEnableVideoSend = jest.fn();
 const mockDisableVideoSend = jest.fn();
+const mockSwitchVideoSendTrack = jest.fn();
 const mockApplyVideoEncoding = jest.fn();
 const mockSetJitterBufferTargets = jest.fn();
 
@@ -62,6 +65,7 @@ jest.mock('@/services/webrtc-service', () => ({
     setNegotiationRole: mockSetNegotiationRole,
     enableVideoSend: mockEnableVideoSend,
     disableVideoSend: mockDisableVideoSend,
+    switchVideoSendTrack: mockSwitchVideoSendTrack,
     applyVideoEncoding: mockApplyVideoEncoding,
     setJitterBufferTargets: mockSetJitterBufferTargets,
     close: mockClose,
@@ -76,10 +80,11 @@ const mockAddPeerConnection = jest.fn();
 const mockRemovePeerConnection = jest.fn();
 const mockSetError = jest.fn();
 const mockSetConnecting = jest.fn();
+const mockSetIceServersStore = jest.fn();
 let mockIceServers: RTCIceServer[] | null = null;
 
-jest.mock('@/stores/call-store', () => ({
-  useCallStore: () => ({
+jest.mock('@/stores/call-store', () => {
+  const buildState = () => ({
     localStream: null,
     iceServers: mockIceServers,
     setLocalStream: mockSetLocalStream,
@@ -88,8 +93,11 @@ jest.mock('@/stores/call-store', () => ({
     removePeerConnection: mockRemovePeerConnection,
     setError: mockSetError,
     setConnecting: mockSetConnecting,
-  }),
-}));
+    setIceServers: mockSetIceServersStore,
+  });
+  const useCallStore = Object.assign(buildState, { getState: buildState });
+  return { useCallStore };
+});
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
@@ -146,6 +154,8 @@ describe('useWebRTCP2P', () => {
     mockCreatePeerConnection.mockReturnValue(mockPeerConnection);
     mockCreateOffer.mockResolvedValue({ type: 'offer', sdp: 'offer-sdp' });
     mockCreateAnswer.mockResolvedValue({ type: 'answer', sdp: 'answer-sdp' });
+    mockHandleRenegotiationOffer.mockResolvedValue(undefined);
+    mockSetRemoteAnswer.mockResolvedValue(undefined);
 
     // Suppress console warnings
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -297,6 +307,25 @@ describe('useWebRTCP2P', () => {
       expect(onError).toHaveBeenCalled();
     });
 
+    // P1 leak fix: the peer connection was already created + registered
+    // (createPeerConnection/addPeerConnection above) by the time
+    // service.createOffer() throws — without cleanup it stays open and
+    // registered forever.
+    it('closes and deregisters the orphaned peer connection when offer creation fails', async () => {
+      mockCreateOffer.mockRejectedValue(new Error('Offer failed'));
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+
     it('should throw error if userId not available', async () => {
       const { result } = renderHook(() =>
         useWebRTCP2P({ callId: mockCallId, userId: undefined })
@@ -399,6 +428,76 @@ describe('useWebRTCP2P', () => {
         expect.objectContaining({ candidate: 'candidate:early' })
       );
     });
+
+    // P1 leak fix: handleOffer's peer connection is already created +
+    // registered (createPeerConnection/addPeerConnection) by the time
+    // service.createAnswer() throws.
+    it('closes and deregisters the orphaned peer connection when answering an incoming offer fails', async () => {
+      mockCreateAnswer.mockRejectedValue(new Error('Answer failed'));
+
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+  });
+
+  describe('Participant cleanup on rejoin (removeParticipant)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('closes the service, clears buffered ICE candidates/remote-description state, and deregisters the peer connection', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      // Establish a real connection + buffer a candidate before the answer,
+      // so there is queued/established state to actually verify gets cleared.
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: {
+            type: 'ice-candidate', from: mockTargetUserId, to: mockUserId,
+            candidate: 'candidate:queued', sdpMLineIndex: 0, sdpMid: '0',
+          },
+        });
+      });
+      expect(mockAddIceCandidate).not.toHaveBeenCalled(); // confirms it's queued, not yet applied
+
+      act(() => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+
+      // A rejoin's answer must NOT drain the old queue against the fresh
+      // service — the candidate above must have been dropped, not carried
+      // over to whatever connection gets created next for this participant.
+      mockAddIceCandidate.mockClear();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp' },
+        });
+      });
+      expect(mockAddIceCandidate).not.toHaveBeenCalled();
+    });
   });
 
   describe('Renegotiation routing (A/V switch / ICE restart)', () => {
@@ -472,6 +571,51 @@ describe('useWebRTCP2P', () => {
     });
   });
 
+  describe('Duplicate initial offer (reconnect-replay race)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('drops a second initial offer from the same peer that arrives while the first is still awaiting local media', async () => {
+      // The gateway relays an offer live AND buffers it for replay on the
+      // sender's next call:join (socket-churn reconnect recovery) — the same
+      // tab can receive the same initial offer twice. Simulate that by
+      // holding getLocalStream pending so handleOffer hasn't yet reached
+      // createPeerConnection when the duplicate arrives.
+      let resolveStream: (stream: MediaStream) => void = () => {};
+      mockGetLocalStream.mockReturnValue(
+        new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve;
+        })
+      );
+
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      act(() => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp-dup' },
+        });
+      });
+
+      await act(async () => {
+        resolveStream(mockMediaStream);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Only one RTCPeerConnection must ever be created for this peer — a
+      // second call would silently orphan the first (never-closed) one.
+      expect(mockCreatePeerConnection).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Mid-call A/V switch (FaceTime-style)', () => {
     it('enableVideo acquires a camera track and enables sending on the peer', async () => {
       const camTrack = { kind: 'video', id: 'cam', clone: jest.fn() };
@@ -507,6 +651,218 @@ describe('useWebRTCP2P', () => {
       });
 
       expect(mockDisableVideoSend).toHaveBeenCalled();
+    });
+
+    // Vague 86: no peer connection has been created yet (call still ringing —
+    // the caller's own createOffer hasn't run, or the callee hasn't received
+    // an offer signal). Silently resolving here means handleToggleVideo
+    // (VideoCallInterface) treats it as a success and flips controls.videoEnabled
+    // to true — the UI reports video as active while no camera track was ever
+    // acquired or attached to anything.
+    it('enableVideo rejects without touching the camera when no peer connection exists yet', async () => {
+      const getUserMedia = jest.fn();
+      (global.navigator as any).mediaDevices = { getUserMedia };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await expect(result.current.enableVideo()).rejects.toThrow();
+      expect(getUserMedia).not.toHaveBeenCalled();
+    });
+
+    // Vague 97: enableVideo() used to snapshot the connected peers BEFORE
+    // awaiting getUserMedia (the camera permission prompt), then distribute
+    // the acquired track over that stale snapshot. A peer joining the group
+    // call DURING that window (an ordinary sequence — camera permission can
+    // take human-scale time) was silently excluded forever: its video
+    // transceiver stays recvonly, with no later event ever re-triggering
+    // enableVideoSend for it.
+    it('also enables sending on a peer that joins the group call while getUserMedia is still pending', async () => {
+      const camTrack = { kind: 'video', id: 'cam', clone: jest.fn(() => ({ kind: 'video', id: 'clone' })) };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      let resolveGetUserMedia: (value: unknown) => void = () => {};
+      const pendingGetUserMedia = new Promise((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockReturnValue(pendingGetUserMedia),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      let enableVideoPromise!: Promise<void>;
+      act(() => {
+        enableVideoPromise = result.current.enableVideo();
+      });
+
+      // A second peer joins the group call while the camera prompt is still
+      // pending — an ordinary group-call sequence, no adversarial timing.
+      await act(async () => {
+        await result.current.createOffer(`${mockTargetUserId}-2`);
+      });
+
+      await act(async () => {
+        resolveGetUserMedia(camStream);
+        await enableVideoPromise;
+      });
+
+      expect(mockEnableVideoSend).toHaveBeenCalledTimes(2);
+      expect(mockEnableVideoSend).toHaveBeenCalledWith(camTrack);
+      expect(mockEnableVideoSend).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'clone' })
+      );
+    });
+
+    // Same window, opposite edge: every peer leaves before getUserMedia
+    // resolves. Resolving silently would leave a live, unattached camera
+    // capture running — release it and fail loudly instead (mirrors the
+    // zero-peer guard above, and the leak-avoidance pattern of every other
+    // track-acquiring path in this file).
+    it('releases the acquired camera and rejects when every peer leaves before getUserMedia resolves', async () => {
+      const stoppedTracks: string[] = [];
+      const camTrack = { kind: 'video', id: 'cam', stop: () => stoppedTracks.push('cam') };
+      const camStream = { getVideoTracks: () => [camTrack], getTracks: () => [camTrack] };
+      let resolveGetUserMedia: (value: unknown) => void = () => {};
+      const pendingGetUserMedia = new Promise((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockReturnValue(pendingGetUserMedia),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      let enableVideoPromise!: Promise<void>;
+      act(() => {
+        enableVideoPromise = result.current.enableVideo();
+      });
+
+      await act(async () => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+
+      resolveGetUserMedia(camStream);
+      await expect(enableVideoPromise).rejects.toThrow();
+      expect(stoppedTracks).toEqual(['cam']);
+      expect(mockEnableVideoSend).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('switchCamera (Vague 95 — front/back camera flip)', () => {
+    it('acquires a new track and swaps it on the single peer (no clone needed)', async () => {
+      const camTrack = { kind: 'video', id: 'cam-back', clone: jest.fn() };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      const getUserMedia = jest.fn().mockResolvedValue(camStream);
+      (global.navigator as any).mediaDevices = { getUserMedia };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      await act(async () => {
+        await result.current.switchCamera('environment');
+      });
+
+      expect(getUserMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ video: expect.objectContaining({ facingMode: 'environment' }) })
+      );
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(camTrack);
+      expect(camTrack.clone).not.toHaveBeenCalled(); // single peer → no clone
+    });
+
+    it('gives the first peer the literal track and every other peer a clone (group call)', async () => {
+      const camTrack = { kind: 'video', id: 'cam-front', clone: jest.fn(() => ({ kind: 'video', id: 'clone' })) };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockResolvedValue(camStream),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+        await result.current.createOffer(`${mockTargetUserId}-2`);
+      });
+      mockSwitchVideoSendTrack.mockClear();
+
+      await act(async () => {
+        await result.current.switchCamera('user');
+      });
+
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledTimes(2);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(camTrack);
+      expect(camTrack.clone).toHaveBeenCalledTimes(1);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'clone' })
+      );
+    });
+
+    it('rejects without touching the camera when no peer connection exists yet', async () => {
+      const getUserMedia = jest.fn();
+      (global.navigator as any).mediaDevices = { getUserMedia };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await expect(result.current.switchCamera('environment')).rejects.toThrow();
+      expect(getUserMedia).not.toHaveBeenCalled();
+    });
+
+    // Vague 97: same stale-snapshot-before-await defect as enableVideo — a
+    // peer joining while the camera prompt for the flip is still pending was
+    // silently excluded from switchVideoSendTrack.
+    it('also swaps the track on a peer that joins the group call while getUserMedia is still pending', async () => {
+      const camTrack = { kind: 'video', id: 'cam-back', clone: jest.fn(() => ({ kind: 'video', id: 'clone' })) };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      let resolveGetUserMedia: (value: unknown) => void = () => {};
+      const pendingGetUserMedia = new Promise((resolve) => {
+        resolveGetUserMedia = resolve;
+      });
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockReturnValue(pendingGetUserMedia),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      let switchCameraPromise!: Promise<void>;
+      act(() => {
+        switchCameraPromise = result.current.switchCamera('environment');
+      });
+
+      await act(async () => {
+        await result.current.createOffer(`${mockTargetUserId}-2`);
+      });
+
+      await act(async () => {
+        resolveGetUserMedia(camStream);
+        await switchCameraPromise;
+      });
+
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledTimes(2);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(camTrack);
+      expect(mockSwitchVideoSendTrack).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'clone' })
+      );
     });
   });
 
@@ -574,6 +930,356 @@ describe('useWebRTCP2P', () => {
 
       // Should not throw
       expect(mockOn).not.toHaveBeenCalled();
+    });
+  });
+
+  // Gap fix (2026-07-07): web never had a call site for
+  // call:request-ice-servers/call:ice-servers-refreshed — a call outliving
+  // the TURN credential TTL had no way to get fresh ones.
+  describe('TURN credential refresh', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('listens for call:ice-servers-refreshed and arms a periodic refresh timer on mount', () => {
+      jest.useFakeTimers();
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+
+      expect(mockOn).toHaveBeenCalledWith(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, expect.any(Function));
+
+      // Default fallback TTL is 3600s, refreshed at 80% = 2880s.
+      act(() => {
+        jest.advanceTimersByTime(2880 * 1000);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('requests fresh TURN credentials immediately when ICE connection state becomes disconnected', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onIceConnectionStateChange('disconnected');
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    // --- call:reconnecting / call:reconnected — le serveur suit le restart ---
+    // (parité iOS/Android : sans ces emits, un restart ICE web laissait le
+    // statut serveur `active` et l'analytics aveugle à la reconnexion)
+
+    const driveIce = async (states: string[]) => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        for (const state of states) lastCallOptions.onIceConnectionStateChange(state);
+      });
+      return result;
+    };
+
+    it('émet call:reconnecting une seule fois par stall mid-call', async () => {
+      await driveIce(['connected', 'disconnected', 'disconnected', 'failed']);
+
+      const reconnecting = mockEmit.mock.calls.filter(
+        ([event]) => event === CLIENT_EVENTS.CALL_RECONNECTING
+      );
+      expect(reconnecting).toHaveLength(1);
+      expect(reconnecting[0][1]).toEqual({
+        callId: mockCallId,
+        participantId: mockUserId,
+        attempt: 1,
+      });
+    });
+
+    it('émet call:reconnected quand le média revient après un stall', async () => {
+      await driveIce(['connected', 'disconnected', 'connected']);
+
+      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_RECONNECTED, {
+        callId: mockCallId,
+        participantId: mockUserId,
+      });
+    });
+
+    it('un flottement ICE pré-connexion n’est jamais un stall', async () => {
+      await driveIce(['checking', 'disconnected']);
+
+      const reconnectEvents = mockEmit.mock.calls.filter(
+        ([event]) =>
+          event === CLIENT_EVENTS.CALL_RECONNECTING || event === CLIENT_EVENTS.CALL_RECONNECTED
+      );
+      expect(reconnectEvents).toHaveLength(0);
+    });
+
+    // Vague 98: `isReconnecting` is the real stall signal exposed to callers
+    // (e.g. call:analytics' reconnectionCount) — the connectionState value
+    // it replaces never actually carries the string 'reconnecting'.
+    it('expose isReconnecting=true pendant un stall mid-call, false une fois reconnecté', async () => {
+      const result = await driveIce(['connected', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(true);
+
+      act(() => {
+        const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+        lastCallOptions.onIceConnectionStateChange('connected');
+      });
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
+    it('isReconnecting reste false pour un flottement ICE pré-connexion', async () => {
+      const result = await driveIce(['checking', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
+    it('chaque cycle de stall porte une tentative incrémentée', async () => {
+      await driveIce(['connected', 'disconnected', 'connected', 'failed']);
+
+      const attempts = mockEmit.mock.calls
+        .filter(([event]) => event === CLIENT_EVENTS.CALL_RECONNECTING)
+        .map(([, payload]) => (payload as { attempt: number }).attempt);
+      expect(attempts).toEqual([1, 2]);
+    });
+
+    it('applies a refreshed ICE server list to the store and every existing peer connection, then reschedules using the real TTL', async () => {
+      jest.useFakeTimers();
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const refreshedHandler = mockOn.mock.calls.find(
+        (c) => c[0] === SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED
+      )![1];
+
+      const freshServers = [{ urls: 'turn:fresh.example.com', username: 'u', credential: 'c' }];
+      act(() => {
+        refreshedHandler({ callId: mockCallId, iceServers: freshServers, ttl: 600 });
+      });
+
+      expect(mockSetIceServersStore).toHaveBeenCalledWith(freshServers);
+      expect(mockSetIceServers).toHaveBeenCalledWith(freshServers);
+
+      // Rescheduled at 80% of the REAL ttl (600s), not the 3600s default.
+      mockEmit.mockClear();
+      act(() => {
+        jest.advanceTimersByTime(480 * 1000);
+      });
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('ignores a refresh event for a different callId', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const refreshedHandler = mockOn.mock.calls.find(
+        (c) => c[0] === SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED
+      )![1];
+
+      act(() => {
+        refreshedHandler({ callId: 'some-other-call', iceServers: [{ urls: 'turn:x' }], ttl: 600 });
+      });
+
+      expect(mockSetIceServersStore).not.toHaveBeenCalled();
+    });
+
+    it('clears the refresh timer on unmount', () => {
+      jest.useFakeTimers();
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      const { unmount } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      unmount();
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+  });
+
+  // Bug fix (2026-07-27): iOS's CallManager enforces a per-peer negotiationId
+  // high-water mark (packages/shared/types/video-call.ts,
+  // WebRTCSignalBase.negotiationId) and silently drops any SDP/ICE signal
+  // whose negotiationId is older than what it last sent. Web never stamped
+  // this field, so an iOS caller's offer (negotiationId: 1) got an answer
+  // back with no negotiationId — read by iOS as epoch 0, strictly less than
+  // its own high-water mark of 1 — and iOS discarded the (valid) answer,
+  // leaving the iOS caller stuck ringing until its own no-answer timeout.
+  describe('Negotiation epoch (negotiationId)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('stamps negotiationId=1 on the initial outgoing offer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'offer', negotiationId: 1 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('echoes the offer negotiationId back on the answer, so the caller does not drop it as stale', async () => {
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp', negotiationId: 1 },
+        });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'answer', negotiationId: 1 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('defaults to epoch 0 on the answer when the incoming offer carries no negotiationId (older client)', async () => {
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'answer', negotiationId: 0 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('stamps the current epoch on outgoing ICE candidates', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onIceCandidate({ toJSON: () => ({ candidate: 'candidate:1', sdpMLineIndex: 0, sdpMid: '0' }) });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'ice-candidate', negotiationId: 1 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('bumps the epoch when web initiates a renegotiation offer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onLocalDescription({ type: 'offer', sdp: 'reoffer-sdp' });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'offer', negotiationId: 2 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('echoes the tracked epoch on a renegotiation answer produced after receiving a re-offer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp', negotiationId: 1 },
+        });
+      });
+
+      // Peer re-offers with a bumped epoch (their ICE restart).
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'reoffer-sdp', negotiationId: 5 },
+        });
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onLocalDescription({ type: 'answer', sdp: 'reanswer-sdp' });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'answer', negotiationId: 5 }),
+        }),
+        expect.any(Function)
+      );
     });
   });
 

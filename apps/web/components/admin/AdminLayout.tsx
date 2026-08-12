@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@/stores';
+import { useUser, useAppActions } from '@/stores';
 import { useAuth } from '@/hooks/use-auth';
 import { AuthGuard } from '@/components/auth';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
   const { t } = useI18n('admin');
   const interfaceLanguage = useCurrentInterfaceLanguage();
   const user = useUser();
+  const { setTheme } = useAppActions();
   const { logout } = useAuth();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);

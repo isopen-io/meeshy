@@ -105,7 +105,7 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
                 if (country) onCountryChange(country);
               }}
               disabled={disabled}
-              aria-label={t('register.countryCodeLabel') || 'Country code'}
+              aria-label={t('register.countryCodeLabel', 'Country code')}
               className={cn(
                 "w-[90px] px-2 py-2 rounded-md text-sm border-2 bg-white/70 dark:bg-gray-800/70 sm:bg-white/50 sm:dark:bg-gray-800/50 sm:backdrop-blur-sm",
                 "text-gray-900 dark:text-gray-100",

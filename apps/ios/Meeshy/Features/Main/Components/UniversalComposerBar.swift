@@ -45,6 +45,12 @@ struct UniversalComposerBar: View {
     /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
     var onClipboardContent: ((ClipboardContent) -> Void)? = nil
 
+    /// Émis quand l'utilisateur dépose ou colle du contenu dans la bande du
+    /// composer. Chaque `.file` pointe un fichier DÉJÀ copié dans notre
+    /// conteneur : l'hôte en devient propriétaire (il le déplace ou le
+    /// supprime). Un `.text` est destiné au champ de saisie de l'hôte.
+    var onIngest: (([ComposerIngest]) -> Void)? = nil
+
     // MARK: - Configuration
 
     var placeholder: String = "Message..."
@@ -62,6 +68,16 @@ struct UniversalComposerBar: View {
     /// composer, which must allow text / voice / effects / blur / ephemeral /
     /// view-once but NOT file/photo attachments.
     var forceHideAttachment: Bool = false
+
+    /// Opt-in override that enables the attachment carousel even when `mode`
+    /// would otherwise hide it (e.g. comments). The host MUST wire the attachment
+    /// callbacks (`onPhotoLibrary`, `onFilePicker`, …) for the carousel to offer
+    /// anything. `forceHideAttachment` still wins if both are set.
+    var forceShowAttachment: Bool = false
+
+    /// Opt-in override that enables voice recording even when `mode` would hide
+    /// it (e.g. comments).
+    var forceShowVoice: Bool = false
 
     // MARK: - Language
 
@@ -114,14 +130,49 @@ struct UniversalComposerBar: View {
 
     var externalHasContent: Bool = false
 
+    // MARK: - External send state (disables button while a send is in flight)
+
+    /// When true, the send button is non-interactive. Réservé aux hosts dont le
+    /// flux d'envoi est LOCAL et COURT (ex. ThreadView et son `isSending`
+    /// éphémère). ⚠️ Ne JAMAIS passer `ConversationViewModel.isSending` : il
+    /// couvre tout le cycle REST+fallback (~22s en réseau dégradé) et gèlerait
+    /// le composer pendant qu'un message est sur l'horloge ⏳ — les envois de
+    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), le dedup double-tap
+    /// vit dans le ViewModel (`duplicateSendDebounce`).
+    var externalIsSending: Bool = false
+
     // MARK: - Attachment ladder callbacks
 
     var onPhotoLibrary: (() -> Void)? = nil
     var onCamera: (() -> Void)? = nil
     var onFilePicker: (() -> Void)? = nil
 
+    /// Fired when the attachment carousel becomes visible. The keyboard, the
+    /// attachment carousel and any host-owned emoji panel are mutually
+    /// exclusive input surfaces — a host that shows an emoji panel below the
+    /// bar should dismiss it here so the carousel and the emoji panel never
+    /// stack on top of each other.
+    var onShowAttachments: (() -> Void)? = nil
+
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
+
+    /// Called when the user taps a thumbnail in the inline recent-media strip
+    /// (shown beneath the attachment carousel). When non-nil, the strip is
+    /// rendered; the host ingests the resolved photo/video like a camera capture.
+    var onRecentMediaSelected: ((RecentMediaPick) -> Void)? = nil
+
+    /// Called when the user picks "Éditer" on a recent-media thumbnail (long
+    /// press). The host opens its media editor with the resolved photo/video
+    /// and stages the edited result. When nil the action is hidden.
+    var onRecentMediaEdit: ((RecentMediaPick) -> Void)? = nil
+
+    /// Called when the user opens the full photo library from the recent-media
+    /// strip, carrying the asset identifiers already multi-selected there so
+    /// the host can preselect them in its PhotosPicker (via
+    /// `PhotosPickerItem(itemIdentifier:)` + `photoLibrary: .shared()`).
+    /// Falls back to `onPhotoLibrary` when nil.
+    var onPhotoLibraryPreselecting: (([String]) -> Void)? = nil
 
     /// Bind this to inject an emoji into the text field from outside (e.g. from parent's emoji picker)
     var injectedEmoji: Binding<String> = .constant("")
@@ -201,6 +252,14 @@ struct UniversalComposerBar: View {
     @State var sendBounce = false
     @State var focusBounce = false
     @State var showAttachOptions = false
+    /// Dernière sélection multiple reportée par `RecentMediaStrip`, pour que le
+    /// raccourci photothèque de la poignée préselectionne les mêmes assets.
+    /// Non-`private` : muté depuis `UniversalComposerBar+Attachments.swift`.
+    @State var recentStripSelectionIds: [String] = []
+    /// `true` pendant l'étirement qui précède la présentation de la photothèque
+    /// complète — cf. `ComposerLibraryHandoff`. Non-`private` : muté depuis
+    /// `UniversalComposerBar+Attachments.swift`.
+    @State var isExpandingToLibrary = false
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
     // Voice recording
@@ -232,6 +291,29 @@ struct UniversalComposerBar: View {
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
+    /// Tracks the system keyboard so the attachment carousel can be sized to the
+    /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).
+    @StateObject private var keyboardObserver = KeyboardObserver()
+
+    /// Height for the attachment carousel — matches the last known keyboard
+    /// height so swapping keyboard <-> carousel keeps the input row still, but
+    /// never shorter than the panel's own content (taller when the two-row
+    /// recent-media grid is shown, so it can't clip).
+    var attachmentPanelHeight: CGFloat {
+        let keyboard = max(keyboardObserver.lastKnownHeight, 260)
+        // iPad / macOS gets a taller floor so the roomy recent-media grid has
+        // breathing room; iPhone (incl. landscape, also .regular width) keeps the
+        // compact two-row floor since its screen is short.
+        let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
+        let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
+        let resting = max(keyboard, contentFloor)
+        guard isExpandingToLibrary else { return resting }
+        return ComposerLibraryHandoff.expandedHeight(
+            resting: resting,
+            windowHeight: DeviceLayout.windowSize.height
+        )
+    }
+
     // MARK: - Recording constants
 
     /// Minimum duration below which the send button is disabled to prevent
@@ -242,8 +324,11 @@ struct UniversalComposerBar: View {
 
     var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
     var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
-    var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
-    var resolvedShowAttachment: Bool { forceHideAttachment ? false : (mode?.showAttachment ?? showAttachment) }
+    var resolvedShowVoice: Bool { forceShowVoice || (mode?.showVoice ?? showVoice) }
+    var resolvedShowAttachment: Bool {
+        if forceHideAttachment { return false }
+        return forceShowAttachment || (mode?.showAttachment ?? showAttachment)
+    }
     private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
     private var resolvedHideEphemeral: Bool {
         if let mode { return !mode.showEphemeral }
@@ -311,8 +396,15 @@ struct UniversalComposerBar: View {
                             }
                             .onEnded { value in
                                 if value.translation.height > 80 {
-                                    // Swipe down: collapse keyboard / minimize
+                                    // Swipe down: dismiss whichever input surface
+                                    // is up — the keyboard or the attachment
+                                    // carousel — and optionally minimize.
                                     isFocused = false
+                                    if showAttachOptions {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            showAttachOptions = false
+                                        }
+                                    }
                                     if startMinimized {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                             isMinimized = true
@@ -334,6 +426,10 @@ struct UniversalComposerBar: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isMinimized)
+        // Cible de dépôt sur le conteneur externe : couvre toute la bande
+        // (champ, barre d'outils, bandeaux édition/réponse, tiroir
+        // d'attachements). Voir UniversalComposerBar+Drop.swift.
+        .modifier(ComposerDropTargetModifier(accentColor: accentColor, onIngest: onIngest))
         .onAppear {
             isMinimized = startMinimized
         }
@@ -485,19 +581,24 @@ struct UniversalComposerBar: View {
                         )
                 } else {
                     HStack(alignment: .bottom, spacing: 12) {
-                        // Left: (+) attach button with ladder overlay above it
+                        // Left: (+) attach / keyboard toggle button
                         if resolvedShowAttachment {
                             attachButton
-                                .overlay(alignment: .bottom) {
-                                    if showAttachOptions {
-                                        attachmentLadder
-                                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                                    }
-                                }
                         }
 
-                        // Center: text field
+                        // Center: text field. While the carousel is up, an
+                        // overlay intercepts taps to bring the keyboard back
+                        // (the field isn't focused then). When the keyboard is
+                        // already up there is no overlay, so the TextField keeps
+                        // its native tap-to-place-cursor behaviour.
                         textInputField
+                            .overlay {
+                                if showAttachOptions {
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { focusTextField() }
+                                }
+                            }
 
                         // Right: send (when content) or hidden (idle)
                         actionButton
@@ -507,11 +608,22 @@ struct UniversalComposerBar: View {
                     .padding(.vertical, 10)
                     .transition(.opacity)
                 }
+
+                // Attachment carousel — slides up in the keyboard's place when
+                // the (+) toggle is active. Sized to the last known keyboard
+                // height so swapping keyboard <-> carousel keeps the input row
+                // perfectly still.
+                if showAttachOptions && !effectiveIsRecording {
+                    attachmentCarouselPanel
+                        .frame(height: attachmentPanelHeight)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .background(composerBackground)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showAttachOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
         .animation(
             reduceMotion
@@ -687,17 +799,18 @@ struct UniversalComposerBar: View {
                 permanentEffectsToggleButton
             }
 
-            // Sentiment indicator
-            Button {
-                onAnyInteraction?()
-                HapticFeedback.light()
-            } label: {
-                Text(textAnalyzer.sentiment.emoji)
-                    .font(.callout)
-                    .frame(width: 30, height: 30)
-                    .contentShape(Circle())
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
+            // Sentiment indicator — LECTURE SEULE.
+            // C'était un `Button` dont l'action se limitait à un retour
+            // haptique : il se présentait comme actionnable (et comme tel à
+            // VoiceOver) sans mener nulle part. Rendu passif, il reste lisible
+            // par les technologies d'assistance via label + valeur.
+            Text(textAnalyzer.sentiment.emoji)
+                .font(.callout)
+                .frame(width: 30, height: 30)
+                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
+                .accessibilityValue(textAnalyzer.sentiment.emoji)
 
             // Language selector
             languageSelectorPill
@@ -764,6 +877,9 @@ struct UniversalComposerBar: View {
                     : Color(hex: accentColor)
             )
         }
+        .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
+        .accessibilityValue(currentLangOption.name)
+        .accessibilityHint(String(localized: "a11y.composer.language.hint", defaultValue: "Choisir la langue d'envoi du message", bundle: .main))
     }
 
     // ========================================================================
@@ -794,7 +910,7 @@ struct UniversalComposerBar: View {
     /// moment `hasContent || effectiveIsRecording` flips.
     @ViewBuilder
     var actionButton: some View {
-        let isReady = effectiveIsRecording || hasContent
+        let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
         sendButton
             .opacity(isReady ? 1.0 : 0.4)
             .allowsHitTesting(isReady)
@@ -948,16 +1064,29 @@ struct UniversalComposerBar: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             isMinimized = false
         }
-        // Show keyboard + open attach menu after a short delay
+        // Show keyboard after a short delay. The attachment carousel and the
+        // keyboard are now mutually exclusive surfaces, so expanding goes
+        // straight to the keyboard — the user opens the carousel via (+).
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isFocused = true
-            if resolvedShowAttachment {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAttachOptions = true
-                }
-            }
         }
         onExpand?()
+    }
+
+    // MARK: - Focus the text field (bring the keyboard back)
+
+    /// Brings the system keyboard back, dismissing the attachment carousel if it
+    /// was open. Wired to a tap on the text field so the user can always summon
+    /// the keyboard by tapping where they type — even mid-carousel.
+    func focusTextField() {
+        if showAttachOptions {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showAttachOptions = false
+            }
+        }
+        if !isFocused {
+            isFocused = true
+        }
     }
 
     // ========================================================================
@@ -1027,7 +1156,7 @@ struct UniversalComposerBar: View {
         }
         .accessibilityLabel(isActive
                             ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")", bundle: .main)
-                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode ephemere", bundle: .main))
+                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 

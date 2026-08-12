@@ -30,6 +30,7 @@ jest.mock('@/services/user-preferences.service', () => ({
 jest.mock('@/services/conversations.service', () => ({
   conversationsService: {
     updateConversation: jest.fn(),
+    getEncryptionStatus: jest.fn(() => Promise.resolve({ encryptionMode: 'none', isActive: false })),
   },
 }));
 
@@ -91,6 +92,12 @@ jest.mock('@/hooks/useI18n', () => ({
         'conversationDetails.hybridDescription': 'Server-side encryption with shared keys',
         'conversationDetails.serverDescription': 'Messages are encrypted on the server',
         'conversationDetails.noEncryptionDescription': 'Messages are not encrypted',
+        'conversationDetails.activity': 'Activity',
+        'conversationDetails.viewAllParticipants': 'View all participants',
+        'conversationDetails.mediaAndAppearance': 'Media & Appearance',
+        'conversationDetails.changeBanner': 'Change banner',
+        'conversationDetails.uploadBanner': 'Add a banner',
+        'conversationDetails.directConversationWarning': 'A direct conversation should normally have only 2 participants.',
         'conversationDetails.currentStatus': 'Current Status',
         'conversationDetails.groupConversation': 'Group',
         'conversationDetails.directConversation': 'Direct',
@@ -135,13 +142,27 @@ jest.mock('framer-motion', () => ({
 
 // Mock conversation preferences store
 jest.mock('@/stores/conversation-preferences-store', () => ({
-  useConversationPreferencesStore: () => ({
-    preferencesMap: new Map(),
-    categories: [],
-    isLoading: false,
-    isInitialized: true,
+  useConversationPreferencesStore: jest.fn((selector: any) => {
+    const state = {
+      preferencesMap: new Map(),
+      categories: [],
+      isLoading: false,
+      isInitialized: true,
+      initialize: jest.fn(),
+      getPreferences: jest.fn(() => undefined),
+      togglePin: jest.fn(),
+      toggleMute: jest.fn(),
+      toggleArchive: jest.fn(),
+      setReaction: jest.fn(),
+      refreshPreferences: jest.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+  useConversationPreference: (_id: string) => undefined,
+  useConversationCategories: () => [],
+  useConversationPreferencesActions: () => ({
     initialize: jest.fn(),
-    getPreferences: jest.fn(() => undefined),
+    getPreferences: jest.fn(),
     togglePin: jest.fn(),
     toggleMute: jest.fn(),
     toggleArchive: jest.fn(),

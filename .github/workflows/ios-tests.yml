@@ -15,20 +15,92 @@ name: iOS Tests
 # So we COMPILE with Xcode 26.1.1 (Swift 6.2, required by the package) but RUN the
 # tests on an iOS 18.x simulator: crash-free AND consistent with the baselines.
 # Product code also received `nonisolated deinit` hardening for the affected
-# classes. workflow_dispatch kept for on-demand runs from the Actions tab.
+# classes.
+#
+# TRIGGER SCOPE (2026-07-27, measured on runs #3728-#3741): the job itself takes
+# 29-45 min, but a PR-triggered run took 56 min to 1h34 wall-clock. The extra
+# 24-49 min is pure QUEUE time — the account's macOS concurrency ceiling was
+# saturated by 5-6 simultaneous PR runs (plus sdk-tests.yml, also macos-15), so
+# every new PR run just waited for a runner. Fanning this suite out over every
+# open PR therefore made it slower for everyone, including dev/main.
+# So: the FULL suite runs automatically on `dev` ONLY. main and ad-hoc checks
+# run on demand from the Actions tab ("Run workflow" → pick any branch). No
+# branch protection requires this check, so neither trigger can deadlock a merge.
+#
+# PR GATE RESTORED, COMPILE-ONLY (2026-08-12, measured over the 30 days to
+# 2026-08-12 — 148 PRs touching apps/ios/**, 340 pushes after collapsing commits
+# <5 min apart, each run capped by the cancel-in-progress group below):
+#
+#   >= 1 iOS run in flight   8.9% of wall clock   (64.2 h / 720)
+#   >= 2 in flight           1.9%                 (13.4 h)
+#   >= 5 in flight           0.2%                 ( 1.6 h)
+#
+# The July decision hinged on 5-6 SIMULTANEOUS runs being the norm. They are not:
+# the window is idle 91% of the time, and the 5-6 figure is reached for 1.6 h a
+# month, only inside batch-merge bursts (whose commit timestamps overstate real
+# push times, so that tail is an upper bound). What saturated the ceiling was the
+# 29-45 min FULL suite, not the trigger.
+#
+# So the PR run does the half that is cheap and catches what actually breaks —
+# the compile, app AND test targets — and skips the two network/CPU posts that
+# cost the most and gate the least at PR time: the 7-min iOS 18.2 runtime
+# download and the 8-min test execution.
+#
+# MEASURED on the first run of this gate (#31564979638, job 94014846909, the PR
+# that introduced it — cold SPM cache, cold DerivedData), against the 35-min dev
+# baseline decomposed above:
+#     0s     provision the iOS 18.2 runtime     ← skipped   (was 7m01)
+#     2m02   resolve SPM (cache miss)                       (was 8m07)
+#     6m33   build-for-testing                              (was 8m58)
+#     32s    save DerivedData
+#     0s     test-without-building              ← skipped   (was 8m20)
+#   =10m02 total. The pre-wiring estimate was "~18 min cold, ~10 min warm"; the
+# cold run came in at what was predicted for a WARM one. Note the compile is
+# FASTER than the dev baseline's, not slower — which is the observable proof
+# that the ARCHS=arm64 pin below is taking effect. Losing that pin would show up
+# here as a compile roughly double this, not as a failure.
+#
+# The next run on the same branch (job 94017664432), warm on BOTH caches, is the
+# steady state to budget against:
+#     18s    restore SPM cache                  ← hit
+#     14s    restore DerivedData                ← hit, seeded by the cold run
+#     23s    resolve SPM (warm)                             (was 2m02 cold)
+#     3m19   build-for-testing (incremental)                (was 6m33 cold)
+#     17s    save DerivedData
+#   =4m54 total. So a cold gate costs ~10 min and the steady state ~5 — budget
+# ~5, not ~10. Cold recurs when the SPM key (`project.yml`) changes or the
+# DerivedData lineage restarts, not per PR.
+#
+# That second run also settles half of an open question: DerivedData saved by a
+# compile-only run IS reused by the next compile-only run (6m33 → 3m19). What is
+# still unverified is the CROSS-mode case — whether a `generic/platform` build's
+# products are reused by an `id=<sim>` build on dev, and the reverse. Both modes
+# share one cache lineage deliberately (two multi-GB lineages would thrash the
+# repo's cache limit and evict the SPM cache); if the cross-mode reuse turns out
+# to be nil, the cost is a cold compile on dev, never a wrong result.
+#
+# One job, one set of steps: `COMPILE_ONLY`
+# gates steps 10 and 12 (already separate since forever), so there is no second
+# copy of the toolchain to drift. Guarded by
+# `packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`, which runs on every
+# PR — the 2026-07-27 removal went unnoticed for weeks precisely because nothing
+# watched it.
 on:
   push:
     branches:
       - dev
-      - main
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
       - '.github/workflows/ios-tests.yml'
   pull_request:
     branches:
-      - dev
       - main
+      - dev
+    # `ready_for_review` is NOT in the default type set. Without it a PR opened
+    # as a draft (skipped by the job-level `if` below) and later marked ready
+    # would never emit another event, and the gate would be silently skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
@@ -43,18 +115,111 @@ concurrency:
 
 jobs:
   ios-tests:
+    # The check name says which half ran, so a green tick on a PR is never
+    # mistaken for "the suite passed".
+    name: ${{ github.event_name == 'pull_request' && 'iOS compile (PR gate)' || 'iOS tests (full suite)' }}
+    # A draft PR is work in progress; its compile is the author's business, not
+    # the shared macOS pool's. `ready_for_review` above brings the gate back.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: macos-15
-    # Hard cap: the suite normally finishes in <15 min (incl. the one-time 18.2
-    # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
-    timeout-minutes: 25
+    env:
+      # 'true' on a PR run: compile the app AND the test targets, run nothing.
+      COMPILE_ONLY: ${{ github.event_name == 'pull_request' }}
+    # STOPGAP cap, sized to the measured worst case — NOT a healthy target.
+    # This suite on the standard 3 vCPU / 7 GB runner is dominated by
+    # high-variance steps no cache removes: iOS 18.2 runtime download 8-14 min
+    # (network), SPM resolve 3-6.6 min (network), compile 8-9 min (DerivedData
+    # incremental reuse is unreliable across ephemeral runners — one 4.5-min
+    # build was a fluke), + 14-16 min serial tests. Observed range ≈ 38-44 min;
+    # 30/35/40 caps all timed out. 50 covers the tail with margin so CI stops
+    # flapping. The RIGHT fix is macos-15-xlarge (faster compile/tests + enough
+    # RAM for real parallel testing, impossible on this runner). Hard cap kept
+    # so a real deadlock fails.
+    #
+    # WHAT xlarge WOULD ACTUALLY BUY (measured step-by-step on run #31488415343,
+    # a green 35-min run on dev, 2026-08-11 — the "reliably under ~30 min" above
+    # was an estimate, this is the meter):
+    #   38s   checkout + Xcode select + cache restore + XcodeGen
+    #   7m01  provision the iOS 18.2 runtime      ← NETWORK-bound
+    #   8m07  resolve SPM (cache miss)            ← NETWORK-bound
+    #   36s   save SPM cache
+    #   8m58  build-for-testing                   ← CPU-bound
+    #   40s   save DerivedData
+    #   8m20  test-without-building               ← CPU-bound
+    #   26s   failure summary + job teardown
+    # 15 of the 35 minutes are network, and no runner size shortens them. xlarge
+    # attacks the 17 CPU-bound minutes (plausibly → 6-8), so the honest estimate
+    # is ~24 min, not "under 30 by a wide margin", at 2-4x the per-minute rate.
+    #
+    # And it does NOT re-open the pull_request trigger. That was dropped for
+    # QUEUE saturation (see TRIGGER SCOPE above), not for job duration: a
+    # shorter job does not create a runner. What a PR-time gate actually needs
+    # is far cheaper — the compile alone. Steps 10 and 12 are already separate;
+    # a build-only job can drop the simulator provisioning entirely by targeting
+    # `generic/platform=iOS Simulator`, which removes BOTH the 7-min runtime
+    # download and the 8-min test run: ~18 min cold, ~10 min on a warm SPM
+    # cache, on this same standard runner. Measure how many PRs touch
+    # apps/ios/** concurrently before wiring it — that number, not the duration,
+    # is what closed the door in July. That measurement now exists — see
+    # "PR GATE RESTORED" in the header — and it is what wired the gate below.
+    #
+    # 30 stays the PR cap; 50 stays the cap for the full suite. The first
+    # measured gate run took 10m02 end to end (see the header), so 30 is ~3x the
+    # observed cost — deliberately loose, because the two variable posts it
+    # keeps (SPM resolve, compile) are network- and contention-sensitive. A
+    # compile that overruns 30 min is hung, not slow.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 50 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
+      # SPM checkouts + binary-target zips (Firebase/gRPC from dl.google.com,
+      # ~6 min cold and flaky). RESTORE-ONLY here; the matching save runs right
+      # after resolve — see the "Save SPM cache" step for why the split matters.
+      # Kept in its own tree (`$RUNNER_TEMP/spm`, via -clonedSourcePackagesDirPath)
+      # so it caches independently of the compiled build products below.
+      - name: Restore SPM cache
+        id: spm-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/spm
+          key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
+
+      # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
+      # after the compile step (see "Save DerivedData build cache"), because the
+      # post-job save is skipped on a timeout-cancellation exactly like the SPM
+      # one. Rolling key → incremental reuse from the most recent prior run; the
+      # toolchain + manifest prefix starts a fresh lineage on a dependency or
+      # Xcode bump.
+      - name: Restore DerivedData build cache
+        id: dd-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/DerivedData
+          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-
+            ios-dd-macos15-xc26_1_1-
+
+      # XcodeGen owns project generation (see commit dropping hand-edited
+      # pbxproj entries). The committed Meeshy.xcodeproj/project.pbxproj is a
+      # generated artifact and can lag behind newly-added sources; regenerate
+      # it from project.yml so every file on disk is compiled (otherwise a new
+      # file like a Bubble subview fails with "cannot find … in scope").
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd apps/ios
+          xcodegen generate
+
+      # Skipped in compile-only mode: `generic/platform=iOS Simulator` compiles
+      # against the simulator SDK without any runtime installed, which is the
+      # single largest saving of the PR gate (~7 min, network-bound).
       - name: Provision iOS 18.2 simulator
         id: sim
+        if: env.COMPILE_ONLY != 'true'
         run: |
           set -e
           # iOS 18.5/18.6 (the runner's pre-installed 18.x) AND iOS 26.x all hit a
@@ -69,22 +234,157 @@ jobs:
           fi
           SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS182-CI" "iPhone 16 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
           echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+          # Boot the simulator and pre-grant the photos-add TCC permission so
+          # CameraCaptureSaveRuntimeTests (the "film + validate" SIGTRAP guard,
+          # see apps/ios/MeeshyTests/Unit/Components/CameraCaptureSaveRuntimeTests.swift)
+          # actually exercises PhotoLibraryManager.saveVideo/saveImage instead of
+          # always hitting its skipIfUnauthorized() XCTSkip. A freshly `simctl
+          # create`d device has no grants, so without this the guard silently
+          # never runs in CI.
+          xcrun simctl boot "$SIM_ID"
+          xcrun simctl privacy "$SIM_ID" grant photos-add me.meeshy.app
 
-      - name: Run iOS tests
+      # Pre-resolve the SPM graph with retries. Firebase/grpc ship binary-target
+      # zips fetched from dl.google.com, which intermittently fail mid-download
+      # on the runner ("The network connection was lost." → exit 74) and took the
+      # whole job down before a single test compiled. Resolving up front — into
+      # the same fixed trees the cache restores and the test step reuses — lets
+      # us retry the transient network failure, and a warm cache makes it
+      # near-instant; a real resolution error still fails after the attempts.
+      - name: Resolve SPM packages (retry on transient network)
+        run: |
+          for attempt in 1 2 3 4; do
+            if xcodebuild -resolvePackageDependencies \
+                 -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+                 -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+                 -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"; then
+              echo "SPM resolve OK (attempt $attempt)"
+              exit 0
+            fi
+            echo "::warning::SPM resolve attempt $attempt failed (transient network?), retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "::error::SPM resolve failed after 4 attempts"
+          exit 1
+
+      # Seed the SPM cache the INSTANT it resolves — before the compile that may
+      # blow the timeout. actions/cache's post-job save is skipped when the job
+      # is cancelled, and a timeout IS a cancellation: the first cold run proved
+      # a combined cache never seeds because the compile is killed before
+      # post-job runs. This explicit save sits right after a resolve that
+      # finishes well within budget, so run N banks the ~6-min SPM download even
+      # if it later times out compiling — run N+1 then starts warm and is far
+      # likelier to finish the build, which in turn seeds the DerivedData cache.
+      - name: Save SPM cache
+        if: always() && steps.spm-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/spm
+          key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
+
+      # Compile separately from running so DerivedData can be banked the moment
+      # the (expensive) build finishes — see "Save DerivedData build cache".
+      - name: Build for testing
+        run: |
+          # CI-only compile trims (safe — no IDE, no archiving here):
+          #   COMPILER_INDEX_STORE_ENABLE=NO  → skip the index-while-building
+          #     store; it only feeds Xcode's IDE features, useless on CI.
+          #   DEBUG_INFORMATION_FORMAT=dwarf  → emit DWARF in the binaries but
+          #     skip the separate .dSYM bundle generation/linking; a test run
+          #     symbolicates fine without it.
+          #   ONLY_ACTIVE_ARCH=YES            → arm64 only (the single sim
+          #     destination), never build the unused arch.
+          #
+          # Destination depends on the mode. `generic/platform=iOS Simulator`
+          # needs no installed runtime — that is what lets the PR gate skip the
+          # provisioning step — but it also has NO active architecture, so
+          # ONLY_ACTIVE_ARCH has nothing to reduce to and xcodebuild would
+          # compile arm64 AND x86_64: double the most expensive step in the job.
+          # macos-15 runners are Apple Silicon, so pin arm64 explicitly instead.
+          if [ "$COMPILE_ONLY" = "true" ]; then
+            DESTINATION='generic/platform=iOS Simulator'
+            ARCH_SETTINGS=(ARCHS=arm64)
+          else
+            DESTINATION='platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}'
+            ARCH_SETTINGS=(ONLY_ACTIVE_ARCH=YES)
+          fi
+          xcodebuild build-for-testing \
+            -project apps/ios/Meeshy.xcodeproj \
+            -scheme Meeshy \
+            -destination "$DESTINATION" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            "${ARCH_SETTINGS[@]}" \
+            -quiet
+
+      # Seed DerivedData the instant the compile succeeds — BEFORE the test run,
+      # which can itself be slow. Same rationale as "Save SPM cache": the
+      # post-job save is skipped on a timeout-cancellation, so an explicit save
+      # here banks the compiled build products even if the run phase later
+      # overruns. `success()` guards against caching a broken build. Progressive:
+      # once seeded, the next run restores compiled modules and the compile is
+      # incremental (minutes, not the ~15+ min cold compile that was overrunning
+      # the budget). Skipped when the restore already hit the exact key.
+      - name: Save DerivedData build cache
+        if: success() && steps.dd-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/DerivedData
+          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+
+      # The other half the PR gate skips (~8 min). It is also the half that needs
+      # the simulator provisioned above, so the two are gated together or not at
+      # all — a `test-without-building` against a destination that was never
+      # created fails on the destination, not on the code.
+      - name: Run iOS tests (without building)
+        if: env.COMPILE_ONLY != 'true'
         run: |
           rm -rf TestResults.xcresult
-          xcodebuild test \
+          # The 3 XCTMetric benchmark suites (MessageListPerformanceTests,
+          # BubbleSimpleMessagePerfTests, SearchPerformanceTests) are
+          # intentionally gated OUT of the regular run — see their file
+          # headers and scripts/ios-perf-benchmark.sh, which is the only
+          # invocation meant to exercise them (via -only-testing). Gating
+          # is invocational, not env-var based (RUN_PERF_BENCHMARKS never
+          # reaches the in-simulator test process under `xcodebuild test`),
+          # so -skip-testing is the only thing that actually excludes them.
+          # meeshy.sh mirrors the same exclusion locally (NON_PHASE_SUITES).
+          # Run SERIALLY (single destination, no -parallel-testing-enabled).
+          # Parallel testing was tried and reverted: on the 3 vCPU / 7 GB
+          # standard runner it saved only ~2 min (2 clones saturate CPU+RAM). The
+          # real time win came from the CI compile settings on the build step
+          # above. Real parallelism would need a bigger runner (more cores+RAM).
+          #
+          # CameraCaptureSaveRuntimeTests is skipped: it drives real
+          # `PHPhotoLibrary.performChanges` writes, whose completion handler
+          # never fires on the headless CI simulator (photolibraryd hangs) — both
+          # tests hit the 3-min per-test allowance in SERIAL, so it is not a
+          # parallel/TCC-clone artefact. The photos-add grant added in e5f88a3de
+          # (AFTER the last green run) "enabled" these guards to run for the
+          # first time, and they have never once passed on a CI sim. They stay
+          # valuable as LOCAL/on-device guards for the film+validate SIGTRAP
+          # (see the file header) but a CI simulator cannot execute photo-library
+          # writes reliably — same reason the XCTMetric perf suites are gated out.
+          xcodebuild test-without-building \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
             -only-testing:MeeshyTests \
+            -skip-testing:MeeshyTests/MessageListPerformanceTests \
+            -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
+            -skip-testing:MeeshyTests/SearchPerformanceTests \
+            -skip-testing:MeeshyTests/CameraCaptureSaveRuntimeTests \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 180 \
             -quiet
 
       - name: Surface test failures
-        if: always()
+        if: always() && env.COMPILE_ONLY != 'true'
         run: |
           BUNDLE=TestResults.xcresult
           [ -d "$BUNDLE" ] || { echo "No result bundle produced."; exit 0; }

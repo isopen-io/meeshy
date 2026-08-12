@@ -1,5 +1,31 @@
 import Foundation
 
+// MARK: - Outbound Link Tracking
+
+/// A single raw-URL → tracking-token mapping attached to a message or post by
+/// the gateway. The client never rewrites the message content; instead it
+/// resolves `https://meeshy.me/l/<token>` as the tappable destination for the
+/// raw URL (capture + 302 redirect to the original page), keeping the displayed
+/// text and any video preview intact. Optional everywhere → older payloads
+/// without this field decode unchanged (rollout-safe).
+public struct TrackedLink: Codable, Sendable, Equatable {
+    public let url: String
+    public let token: String
+
+    public init(url: String, token: String) {
+        self.url = url
+        self.token = token
+    }
+}
+
+extension Sequence where Element == TrackedLink {
+    /// Collapses a list of `{ url, token }` mappings into a `[url: token]`
+    /// lookup. Last token wins on a duplicate URL (gateway sends one per URL).
+    public var trackedLinkMap: [String: String] {
+        reduce(into: [:]) { $0[$1.url] = $1.token }
+    }
+}
+
 // MARK: - API Message Models
 
 public struct APIMessageSenderUser: Decodable, Sendable {
@@ -88,6 +114,9 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let reactionSummary: [String: Int]?
     /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
     public let currentUserReactions: [String]?
+    /// Phase 2 — progression de consommation PERSONNELLE du current-user
+    /// (position + complétion), pour seeder le tint waveform / progress-bar.
+    public let currentUserConsumption: MeeshyMediaConsumption?
 
     // ── Audio / video ──
     public let duration: Int?
@@ -158,7 +187,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, messageId
         case fileName, originalName, mimeType, fileSize, fileUrl
-        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions
+        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions, currentUserConsumption
         case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
         case pageCount, lineCount
         case latitude, longitude
@@ -198,6 +227,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
         self.reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
         self.currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        self.currentUserConsumption = try c.decodeIfPresent(MeeshyMediaConsumption.self, forKey: .currentUserConsumption)
         self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
         self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
         self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)
@@ -275,6 +305,14 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let translationModel: String
     public let confidenceScore: Double?
     public let sourceLanguage: String?
+    /// `true` quand `translatedContent` est un CRYPTOGRAMME et non du texte.
+    /// Le gateway pose le drapeau depuis `Message.translations[lang].isEncrypted`
+    /// (`transformTranslationsToArray`) ; il était sur le fil depuis toujours,
+    /// simplement jamais décodé — donc jamais respecté par les surfaces qui
+    /// rendent cette traduction sans clé de déchiffrement (l'aperçu de la ligne
+    /// de liste, cf. `ConversationSyncEngine.previewTranslations`).
+    /// `nil` sur un payload qui l'omet : on ne suppose alors PAS le chiffrement.
+    public let isEncrypted: Bool?
 }
 
 /// Métadonnées enrichies de la story citée — renvoyées par le gateway dans
@@ -298,9 +336,13 @@ public struct APIPostReplyTarget: Decodable, Sendable {
     /// Présent quand le post cité est un mood/statut — déclenche le rendu
     /// dédié (emoji + contenu + date) côté bulle.
     public let moodEmoji: String?
+    /// Nom d'affichage de l'auteur du post cité, figé par le gateway.
+    /// `nil` sur un snapshot antérieur au 2026-08-10 — le rendu retombe alors
+    /// sur le libellé générique de la citation.
+    public let authorName: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji
+        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji, authorName
     }
 
     nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
@@ -320,6 +362,7 @@ public struct APIPostReplyTarget: Decodable, Sendable {
         thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
         previewText = try c.decode(String.self, forKey: .previewText)
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
+        authorName = try c.decodeIfPresent(String.self, forKey: .authorName)
         // `createdAt` est décodé depuis une String puis parsé ici — agnostique
         // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
         // une stratégie `.custom`, les tests `.iso8601`). Tolère les
@@ -347,6 +390,7 @@ public struct APIMessage: Sendable {
     public let messageType: String?
     public let messageSource: String?
     public let isEdited: Bool?
+    public let editedAt: Date?
     public let deletedAt: Date?
     public var isDeleted: Bool { deletedAt != nil }
     public let replyToId: String?
@@ -360,6 +404,12 @@ public struct APIMessage: Sendable {
     public let isViewOnce: Bool?
     public let isBlurred: Bool?
     public let expiresAt: Date?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que `postReplyTo`. Le SDK ne décode pas `metadata` brut.
+    /// `var`/`= nil` (au lieu de `let`) : même patron que `trackingLinks`
+    /// ci-dessous, pour rester source-compatible avec le memberwise init déjà
+    /// utilisé par les tests existants sans devoir y ajouter ce paramètre.
+    public var location: SharedPlace? = nil
     public let isEncrypted: Bool?
     public let encryptionMode: String?
     public let createdAt: Date
@@ -376,28 +426,54 @@ public struct APIMessage: Sendable {
     public let readByAllAt: Date?
     public let deliveredCount: Int?
     public let readCount: Int?
+    /// Server's authoritative count of ACTIVE recipients for this message
+    /// (active conversation participants excluding the sender). Projected by the
+    /// gateway so the all-or-nothing delivery indicator uses the real
+    /// denominator instead of a possibly-stale client `memberCount`. `nil` when
+    /// the payload predates the field (e.g. socket `message:new`).
+    public let recipientCount: Int?
     public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
     public let mentionedUsers: [MentionedUser]?
     /// Structured per-type payload. For call-summary system messages this decodes
     /// into a `CallSummaryMetadata`; absent / non-call metadata yields `nil`.
     public let callSummary: CallSummaryMetadata?
+    /// Outbound-link tracking mappings minted by the gateway. Parsed from the
+    /// top-level `trackingLinks` (socket `message:new`) OR from
+    /// `metadata.trackingLinks` (REST). `nil` when the payload predates the
+    /// feature — the renderer then falls back to the raw URLs. Defaulted so the
+    /// memberwise initializer stays source-compatible with existing call sites.
+    public var trackingLinks: [TrackedLink]? = nil
+
+    /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when no
+    /// tracking data is present. Consumed by `MessageTextRenderer` (tappable
+    /// link rewrite) and `VideoEmbedContainer` (façade destination).
+    public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
 }
 
 extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
-        case messageType, messageSource, isEdited, deletedAt
+        case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
-        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
-        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case effectFlags, translations, mentionedUsers
         case metadata
+        case trackingLinks
         // MongoDB fallback
         case _id
+    }
+
+    /// Minimal shape of the `metadata` JSON blob needed to extract
+    /// `trackingLinks` on REST payloads (socket payloads put it top-level).
+    /// Decoded with `try?` so a non-conforming metadata object never fails the
+    /// whole message decode.
+    private struct MessageMetadataEnvelope: Decodable {
+        let trackingLinks: [TrackedLink]?
     }
 
     public init(from decoder: Decoder) throws {
@@ -416,6 +492,7 @@ extension APIMessage: Decodable {
         messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
         messageSource = try c.decodeIfPresent(String.self, forKey: .messageSource)
         isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
+        editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
@@ -430,6 +507,7 @@ extension APIMessage: Decodable {
         isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -446,12 +524,22 @@ extension APIMessage: Decodable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount)
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount)
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
         mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
         // Tolerant: a present-but-non-call metadata object must not fail the
         // whole message decode, so swallow shape mismatches into nil.
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
+        // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
+        // `message:new`); otherwise read it from the `metadata` envelope (REST).
+        // Both decodes are tolerant so a malformed shape leaves the field nil
+        // (renderer falls back to raw URLs) without failing the message.
+        if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
+            trackingLinks = topLevel
+        } else {
+            trackingLinks = (try? c.decodeIfPresent(MessageMetadataEnvelope.self, forKey: .metadata))??.trackingLinks
+        }
     }
 }
 
@@ -494,8 +582,13 @@ public struct SendMessageRequest: Encodable, Sendable {
     public var effectFlags: UInt32?
     public var isEncrypted: Bool?
     public var encryptionMode: String?
+    /// Lieu partagé attaché au message — clé JSON `location`, celle que le
+    /// schéma REST valide déjà (`routes/conversations/messages.ts`, champ
+    /// `location` passé à `parseSharedPlace`). L'encodage synthétisé omet les
+    /// optionnels nil : un `location` nil n'apparaît PAS dans le corps envoyé.
+    public var location: SharedPlace?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -504,6 +597,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
         self.isBlurred = isBlurred; self.effectFlags = effectFlags
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
+        self.location = location
     }
 }
 
@@ -536,7 +630,11 @@ extension APIMessage {
         return f
     }()
 
-    public func toMessage(currentUserId: String, currentUsername: String? = nil) -> MeeshyMessage {
+    public func toMessage(
+        currentUserId: String,
+        currentUsername: String? = nil,
+        currentUserDisplayName: String? = nil
+    ) -> MeeshyMessage {
         let msgType: MeeshyMessage.MessageType = {
             switch messageType?.lowercased() {
             case "image": return .image
@@ -564,14 +662,62 @@ extension APIMessage {
         let thumbnailColor = senderColor ?? DynamicColorGenerator.colorForName("?")
 
         let uiAttachments: [MeeshyMessageAttachment] = (attachments ?? []).map { apiAtt in
-            MeeshyMessageAttachment(
+            let embeddedTranscription: MeeshyMessageAttachment.EmbeddedTranscription? = apiAtt.transcription.map { t in
+                MeeshyMessageAttachment.EmbeddedTranscription(
+                    text: t.resolvedText,
+                    language: t.language ?? "und",
+                    confidence: t.confidence,
+                    durationMs: t.durationMs,
+                    speakerCount: t.speakerCount,
+                    segments: t.segments?.map { s in
+                        MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
+                            text: s.text,
+                            startTime: s.startTime,
+                            endTime: s.endTime,
+                            speakerId: s.speakerId
+                        )
+                    }
+                )
+            }
+            let embeddedAudioTranslations: [String: MeeshyMessageAttachment.EmbeddedAudioTranslation]? = apiAtt.translations.flatMap { dict in
+                let mapped = dict.compactMapValues { t -> MeeshyMessageAttachment.EmbeddedAudioTranslation? in
+                    guard let url = t.url else { return nil }
+                    return MeeshyMessageAttachment.EmbeddedAudioTranslation(
+                        url: url,
+                        transcription: t.transcription,
+                        durationMs: t.durationMs,
+                        format: t.format,
+                        cloned: t.cloned,
+                        quality: t.quality,
+                        voiceModelId: t.voiceModelId,
+                        ttsModel: t.ttsModel,
+                        segments: t.segments?.map { s in
+                            MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
+                                text: s.text,
+                                startTime: s.startTime,
+                                endTime: s.endTime,
+                                speakerId: s.speakerId
+                            )
+                        }
+                    )
+                }
+                return mapped.isEmpty ? nil : mapped
+            }
+            return MeeshyMessageAttachment(
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,
-                imageVariants: apiAtt.imageVariants
+                transcription: embeddedTranscription,
+                audioTranslations: embeddedAudioTranslations,
+                imageVariants: apiAtt.imageVariants,
+                deliveredToAllAt: apiAtt.deliveredToAllAt, viewedByAllAt: apiAtt.viewedByAllAt,
+                downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
+                watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,
+                downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount,
+                currentUserConsumption: apiAtt.currentUserConsumption
             )
         }
 
@@ -607,7 +753,11 @@ extension APIMessage {
                 // Réponse à un mood : rendu dédié (emoji + contenu + date).
                 if let emoji = target.moodEmoji {
                     return ReplyReference(
-                        messageId: target.id, authorName: "",
+                        messageId: target.id,
+                        // Le nom vient du snapshot serveur. Vide sur un snapshot
+                        // legacy : `quotedTitle` retombe alors sur « Humeur »,
+                        // filet et non cas nominal.
+                        authorName: target.authorName ?? "",
                         previewText: target.previewText,
                         isStoryReply: true,
                         storyPublishedAt: target.createdAt,
@@ -653,6 +803,16 @@ extension APIMessage {
             )
         }()
         let resolvedUsername = sender?.username ?? sender?.user?.username
+        let isMe = (sender?.resolvedUserId ?? senderId) == currentUserId
+            || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased())
+
+        // Un écho socket allégé peut omettre l'enveloppe expéditeur. Pour MON
+        // propre message, l'identité de la session est déjà la vérité en local :
+        // s'en servir évite que l'aperçu de la liste perde le nom de l'auteur
+        // entre l'insertion optimiste et le prochain resync REST. Repli
+        // strictement borné à `isMe` — jamais deviner le nom d'un autre.
+        let effectiveSenderName = senderDisplayName ?? (isMe ? currentUserDisplayName : nil)
+        let effectiveSenderUsername = resolvedUsername ?? (isMe ? currentUsername : nil)
 
         var effects: MessageEffects = .none
         if let flags = effectFlags, flags > 0 {
@@ -688,14 +848,15 @@ extension APIMessage {
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             attachments: uiAttachments, reactions: uiReactions, replyTo: uiReplyTo,
             forwardedFrom: uiForwardRef,
-            senderName: senderDisplayName, senderUsername: resolvedUsername, senderColor: senderColor,
+            senderName: effectiveSenderName, senderUsername: effectiveSenderUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
             deliveryStatus: computedDeliveryStatus,
-            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
-                || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
+            isMe: isMe,
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
-            callSummary: callSummary
+            recipientCount: recipientCount ?? 0,
+            callSummary: callSummary,
+            trackedLinkMap: trackedLinkMap
         )
     }
 }

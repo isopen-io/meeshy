@@ -47,6 +47,16 @@ describe('attachment-validators — Zod schemas at the JSON boundary', () => {
       }
     });
 
+    it('accepts supported ISO 639-3 three-letter codes (bas/ksf/nnh/dua/ewo)', () => {
+      // These are first-class supported Cameroonian languages (languages.ts),
+      // treated as canonical and never truncated (language-normalize.ts). A
+      // `[a-zA-Z]{2}` anchor would reject a legitimate Basaa transcription or
+      // `{ bas: {...} }` translation map at the trust boundary.
+      for (const code of ['bas', 'ksf', 'nnh', 'dua', 'ewo']) {
+        expect(languageCodeSchema.safeParse(code).success).toBe(true);
+      }
+    });
+
     it('rejects non-letter codes and empty strings', () => {
       for (const code of ['', '1', '123', '!!', 'a']) {
         expect(languageCodeSchema.safeParse(code).success).toBe(false);
@@ -244,6 +254,26 @@ describe('attachment-validators — Zod schemas at the JSON boundary', () => {
         attachmentTranslationsMapSchema.safeParse({ en, fr: { ...fr, quality: 2 } }).success,
       ).toBe(false);
     });
+
+    // Contract lock (iter. 183): the outer language key is AUTHORITATIVE and is
+    // NOT cross-checked against the content. AttachmentTranslation carries no
+    // top-level language field, so a key/content mismatch is structurally
+    // undetectable at this boundary — keying correctly is the caller's
+    // responsibility. This pins the honest contract (docstring above the schema)
+    // so the previously contradictory "cross-field validation is enforced" claim
+    // cannot silently return.
+    it('accepts a map whose key does not match the content language (no cross-field check)', () => {
+      const englishContentUnderFrenchKey: AttachmentTranslationInput = {
+        type: 'audio',
+        transcription: 'Hello, this is English text stored under the "fr" key',
+        createdAt: '2026-05-20T12:00:00Z',
+      };
+      const result = parseAttachmentTranslationsMap({ fr: englishContentUnderFrenchKey });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value['fr']?.transcription).toContain('English text');
+      }
+    });
   });
 
   describe('parse helpers — boundary contract', () => {
@@ -267,11 +297,44 @@ describe('attachment-validators — Zod schemas at the JSON boundary', () => {
       }
     });
 
+    it('parseAttachmentTranslation returns ok:true on valid input', () => {
+      const r = parseAttachmentTranslation({
+        type: 'audio',
+        transcription: 'Bonjour le monde',
+        createdAt: '2024-01-01T00:00:00Z',
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.value.transcription).toBe('Bonjour le monde');
+        expect(r.value.type).toBe('audio');
+      }
+    });
+
     it('parseAttachmentTranslation returns a structured error on invalid input', () => {
       const r = parseAttachmentTranslation({ type: 'audio' /* missing transcription, createdAt */ });
       expect(r.ok).toBe(false);
       if (!r.ok) {
         expect(r.code).toBe('INVALID_TRANSLATION');
+      }
+    });
+
+    it('parseAttachmentTranslationsMap returns ok:true on valid map', () => {
+      const r = parseAttachmentTranslationsMap({
+        fr: {
+          type: 'audio',
+          transcription: 'Bonjour',
+          createdAt: '2024-06-01T00:00:00Z',
+        },
+        en: {
+          type: 'audio',
+          transcription: 'Hello',
+          createdAt: '2024-06-01T00:00:00Z',
+        },
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.value['fr']?.transcription).toBe('Bonjour');
+        expect(r.value['en']?.transcription).toBe('Hello');
       }
     });
 

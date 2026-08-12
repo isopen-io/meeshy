@@ -19,6 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
+import type { LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -71,8 +72,22 @@ export class SocketIOOrchestrator {
   // Message conversion helper
   private messageConverter: ((msg: SocketIOMessage) => Message) | null = null;
 
+  // Socket instance for which listeners were last wired up. `initializeConnection()`
+  // is called repeatedly on reconnect-adjacent paths (ensureConnection() before every
+  // send, setCurrentUser() retries); the underlying socket is reused across those calls
+  // (ConnectionService.initializeConnection returns the existing socket if one exists),
+  // so re-running setupEventListeners() on it would stack duplicate Socket.IO listeners.
+  private listenersAttachedSocket: TypedSocket | null = null;
+
   // Current user ID for E2EE initialization
   private currentUserId: string | null = null;
+
+  // Handle of setCurrentUser()'s auth-retry interval (armed while waiting for
+  // a token to appear). Tracked so a later setCurrentUser() call or cleanup()
+  // can cancel it — without this, two rapid setCurrentUser() calls each armed
+  // their own interval (double initializeConnection() once a token landed),
+  // and cleanup()/logout had no way to stop a still-pending one from firing.
+  private authRetryInterval: ReturnType<typeof setInterval> | null = null;
 
   // Message queue for messages sent before socket is ready
   private pendingMessages: PendingMessage[] = [];
@@ -119,21 +134,26 @@ export class SocketIOOrchestrator {
       return;
     }
 
-    // Setup connection listeners
-    this.connectionService.setupConnectionListeners(
-      () => this.onAuthenticated(),
-      (reason) => this.onDisconnected(reason),
-      (error) => this.onError(error)
-    );
+    if (socket !== this.listenersAttachedSocket) {
+      // Setup connection listeners
+      this.connectionService.setupConnectionListeners(
+        () => this.onAuthenticated(),
+        (reason) => this.onDisconnected(reason),
+        (error) => this.onError(error),
+        () => this.onSessionRevoked()
+      );
 
-    // Setup service listeners
-    if (this.messageConverter) {
-      this.messagingService.setupEventListeners(socket, this.messageConverter);
+      // Setup service listeners
+      if (this.messageConverter) {
+        this.messagingService.setupEventListeners(socket, this.messageConverter);
+      }
+      this.typingService.setupEventListeners(socket);
+      this.presenceService.setupEventListeners(socket);
+      this.translationService.setupEventListeners(socket);
+      this.preferencesSyncService.setupEventListeners(socket);
+
+      this.listenersAttachedSocket = socket;
     }
-    this.typingService.setupEventListeners(socket);
-    this.presenceService.setupEventListeners(socket);
-    this.translationService.setupEventListeners(socket);
-    this.preferencesSyncService.setupEventListeners(socket);
 
     // Connect the socket
     this.connectionService.connect();
@@ -162,6 +182,18 @@ export class SocketIOOrchestrator {
     this.processPendingMessages();
   }
 
+  // Annule et oublie le timeout individuel d'un message en attente. Appelé sur
+  // chaque chemin qui retire un message de la file (traité, expulsé, cleanup) —
+  // sans quoi le timer resterait armé et l'entrée de la Map fuiterait sur onglet
+  // longue durée.
+  private clearPendingTimeout(clientMessageId: string): void {
+    const timeout = this.pendingMessageTimeouts.get(clientMessageId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.pendingMessageTimeouts.delete(clientMessageId);
+    }
+  }
+
   /**
    * Process pending messages queue after socket is connected
    */
@@ -185,11 +217,7 @@ export class SocketIOOrchestrator {
       if (!pending) continue;
 
       // Annuler le timeout individuel puisqu'on traite maintenant le message
-      const pendingTimeout = this.pendingMessageTimeouts.get(pending.clientMessageId);
-      if (pendingTimeout) {
-        clearTimeout(pendingTimeout);
-        this.pendingMessageTimeouts.delete(pending.clientMessageId);
-      }
+      this.clearPendingTimeout(pending.clientMessageId);
 
       // Check if message has expired
       if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
@@ -232,6 +260,9 @@ export class SocketIOOrchestrator {
    */
   private onDisconnected(reason: string): void {
     logger.debug('[SocketIOOrchestrator]', 'Disconnected', { reason });
+    // Clear stale typing indicators immediately — server-side state is gone.
+    // Without this, indicators linger until the 15-second safety timeout fires.
+    this.typingService.clearAllTypingState();
   }
 
   /**
@@ -239,6 +270,18 @@ export class SocketIOOrchestrator {
    */
   private onError(error: Error): void {
     logger.error('[SocketIOOrchestrator]', 'Error', { error });
+  }
+
+  /**
+   * Handle session revoked event — server explicitly invalidated this session.
+   * Dispatches a DOM event so the React layer can trigger logout without a
+   * circular import between the socket service and the auth store.
+   */
+  private onSessionRevoked(): void {
+    logger.warn('[SocketIOOrchestrator]', 'Session revoked by server — dispatching meeshy:session-revoked');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('meeshy:session-revoked'));
+    }
   }
 
   /**
@@ -261,25 +304,39 @@ export class SocketIOOrchestrator {
     const hasSessionToken = typeof window !== 'undefined' && !!require('../auth-manager.service').authManager.getAnonymousSession()?.token;
 
     if (!hasAuthToken && !hasSessionToken) {
-      // Retry with short delay
+      // Retry with short delay. Cancel any retry already in flight first —
+      // at most one may ever be pending, so a stray call can never stack a
+      // second interval alongside it (see authRetryInterval doc comment).
+      this.stopAuthRetry();
+
       let attempts = 0;
       const maxAttempts = 3;
-      const retryInterval = setInterval(() => {
+      this.authRetryInterval = setInterval(() => {
         attempts++;
         const retryAuthToken = require('../auth-manager.service').authManager.getAuthToken();
         const retryAnonymousToken = require('../auth-manager.service').authManager.getAnonymousSession()?.token;
 
         if ((retryAuthToken || retryAnonymousToken)) {
-          clearInterval(retryInterval);
+          this.stopAuthRetry();
           this.initializeConnection();
         } else if (attempts >= maxAttempts) {
-          clearInterval(retryInterval);
+          this.stopAuthRetry();
         }
       }, 200);
       return;
     }
 
     this.initializeConnection();
+  }
+
+  /**
+   * Cancel setCurrentUser()'s pending auth-retry interval, if any.
+   */
+  private stopAuthRetry(): void {
+    if (this.authRetryInterval) {
+      clearInterval(this.authRetryInterval);
+      this.authRetryInterval = null;
+    }
   }
 
   /**
@@ -373,6 +430,7 @@ export class SocketIOOrchestrator {
         logger.warn('[SocketIOOrchestrator]', 'Message queue full, oldest message will be discarded');
         const oldest = this.pendingMessages.shift();
         if (oldest) {
+          this.clearPendingTimeout(oldest.clientMessageId);
           oldest.resolve({ success: false });
         }
       }
@@ -400,6 +458,7 @@ export class SocketIOOrchestrator {
           if (idx !== -1) {
             this.pendingMessages.splice(idx, 1);
             this.pendingMessageTimeouts.delete(resolvedClientMessageId);
+            logger.warn('[SocketIOOrchestrator]', 'Message queue timeout, message discarded');
             resolve({ success: false });
           }
         }, this.MESSAGE_QUEUE_TIMEOUT);
@@ -407,16 +466,6 @@ export class SocketIOOrchestrator {
 
         this.pendingMessages.push(pending);
         logger.debug('[SocketIOOrchestrator]', `Message queued (${this.pendingMessages.length} in queue)`);
-
-        // Set a timeout to reject if not sent within MESSAGE_QUEUE_TIMEOUT
-        setTimeout(() => {
-          const index = this.pendingMessages.indexOf(pending);
-          if (index !== -1) {
-            this.pendingMessages.splice(index, 1);
-            logger.warn('[SocketIOOrchestrator]', 'Message queue timeout, message discarded');
-            resolve({ success: false });
-          }
-        }, this.MESSAGE_QUEUE_TIMEOUT);
       });
     }
 
@@ -466,6 +515,10 @@ export class SocketIOOrchestrator {
   }
 
   leaveConversation(conversationOrId: any): void {
+    const conversationId = typeof conversationOrId === 'string'
+      ? conversationOrId
+      : (conversationOrId?.id ?? conversationOrId?.identifier ?? '');
+    this.typingService.clearConversationTypingState(conversationId);
     this.connectionService.leaveConversation(conversationOrId);
   }
 
@@ -542,6 +595,26 @@ export class SocketIOOrchestrator {
     return this.messagingService.onAttachmentStatusUpdated(listener);
   }
 
+  onMessageAttachmentUpdated(listener: (data: any) => void): UnsubscribeFn {
+    return this.messagingService.onMessageAttachmentUpdated(listener);
+  }
+
+  onPendingMessagesDelivered(listener: (data: { count: number; conversationIds: string[] }) => void): UnsubscribeFn {
+    return this.messagingService.onPendingMessagesDelivered(listener);
+  }
+
+  onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): UnsubscribeFn {
+    return this.messagingService.onLinkMessageNew(listener);
+  }
+
+  onMessagePinned(listener: (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void): UnsubscribeFn {
+    return this.messagingService.onMessagePinned(listener);
+  }
+
+  onMessageUnpinned(listener: (data: { messageId: string; conversationId: string }) => void): UnsubscribeFn {
+    return this.messagingService.onMessageUnpinned(listener);
+  }
+
   onTranslation(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onTranslation(listener);
   }
@@ -560,6 +633,18 @@ export class SocketIOOrchestrator {
 
   onAudioTranslationsCompleted(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onAudioTranslationsCompleted(listener);
+  }
+
+  onTranslationFailed(listener: Parameters<TranslationService['onTranslationFailed']>[0]): UnsubscribeFn {
+    return this.translationService.onTranslationFailed(listener);
+  }
+
+  onAudioTranslationFailed(listener: Parameters<TranslationService['onAudioTranslationFailed']>[0]): UnsubscribeFn {
+    return this.translationService.onAudioTranslationFailed(listener);
+  }
+
+  onTranscriptionFailed(listener: Parameters<TranslationService['onTranscriptionFailed']>[0]): UnsubscribeFn {
+    return this.translationService.onTranscriptionFailed(listener);
   }
 
   onTyping(listener: (event: any) => void): UnsubscribeFn {
@@ -616,17 +701,83 @@ export class SocketIOOrchestrator {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 
+  onCategoryChanged(listener: () => void): UnsubscribeFn {
+    return this.preferencesSyncService.onCategoryChanged(listener);
+  }
+
   onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): UnsubscribeFn {
     return this.presenceService.onParticipantRoleUpdated(listener);
+  }
+
+  onConversationNew(listener: import('./types').ConversationNewListener): UnsubscribeFn {
+    return this.presenceService.onConversationNew(listener);
+  }
+
+  onFriendRequestCancelled(listener: import('./types').FriendRequestCancelledListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestCancelled(listener);
+  }
+
+  onFriendRequestNew(listener: import('./types').FriendRequestNewListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestNew(listener);
+  }
+
+  onFriendRequestAccepted(listener: import('./types').FriendRequestAcceptedListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestAccepted(listener);
+  }
+
+  onFriendRequestRejected(listener: import('./types').FriendRequestRejectedListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestRejected(listener);
+  }
+
+  onUserUpdated(listener: import('./types').UserUpdatedListener): UnsubscribeFn {
+    return this.presenceService.onUserUpdated(listener);
+  }
+
+  onConversationDeleted(listener: import('./types').ConversationDeletedListener): UnsubscribeFn {
+    return this.presenceService.onConversationDeleted(listener);
+  }
+
+  onConversationUpdated(listener: import('./types').ConversationUpdatedListener): UnsubscribeFn {
+    return this.presenceService.onConversationUpdated(listener);
+  }
+
+  onConversationParticipantJoined(listener: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantJoined(listener);
+  }
+
+  onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantLeft(listener);
+  }
+
+  onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantBanned(listener);
+  }
+
+  onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantUnbanned(listener);
+  }
+
+  onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationClosed(listener);
+  }
+
+  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationJoinError(listener);
   }
 
   // ============ CLEANUP ============
 
   cleanup(): void {
-    // Reject all pending messages
+    // Cancel a still-pending auth retry — without this a logout mid-retry
+    // could see initializeConnection() fire after cleanup, once a token
+    // happened to appear within the remaining retry window.
+    this.stopAuthRetry();
+
+    // Reject all pending messages and clear their armed timers
     while (this.pendingMessages.length > 0) {
       const pending = this.pendingMessages.shift();
       if (pending) {
+        this.clearPendingTimeout(pending.clientMessageId);
         pending.resolve({ success: false });
       }
     }
@@ -637,6 +788,7 @@ export class SocketIOOrchestrator {
     this.presenceService.cleanup();
     this.translationService.cleanup();
     this.preferencesSyncService.cleanup();
+    this.listenersAttachedSocket = null;
   }
 
   /**

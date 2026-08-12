@@ -253,8 +253,9 @@ describe('Header', () => {
 
       await user.click(menuButton);
 
-      // Mobile menu should be visible
-      expect(screen.getByRole('navigation')).toBeInTheDocument();
+      // Mobile menu should be visible (multiple navigation elements may exist: the div#mobile-nav and inner nav)
+      const navElements = screen.getAllByRole('navigation');
+      expect(navElements.length).toBeGreaterThan(0);
     });
   });
 

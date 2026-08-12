@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import type { AudioEffectType } from '@meeshy/shared/types/video-call';
 import { AudioEffectIcon } from './AudioEffectIcon';
 import { getEffectName, getEffectColor } from '@/utils/audio-effects-config';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AudioEffectsTimelineProps {
   appliedEffects: AudioEffectType[];
@@ -22,6 +23,7 @@ export const AudioEffectsTimeline = memo<AudioEffectsTimelineProps>(({
   totalDuration,
   onSeekToTime,
 }) => {
+  const { t } = useI18n('audioEffects');
   return (
     <div className="space-y-2">
       {appliedEffects.map((effect) => {
@@ -32,14 +34,14 @@ export const AudioEffectsTimeline = memo<AudioEffectsTimelineProps>(({
             <div className="flex items-center gap-2 text-xs">
               <AudioEffectIcon effect={effect} className="w-3.5 h-3.5" />
               <span className="font-medium text-gray-700 dark:text-gray-300">{getEffectName(effect)}</span>
-              <span className="text-gray-400">({segments.length} segment{segments.length > 1 ? 's' : ''})</span>
+              <span className="text-gray-400">({segments.length} {segments.length > 1 ? t('timeline.segments') : t('timeline.segment')})</span>
             </div>
 
             {/* Barre de timeline */}
             <div className="relative h-6 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
               {segments.length === 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">
-                  Aucun segment
+                  {t('timeline.noSegment')}
                 </div>
               ) : (
                 segments.map((segment, idx) => {
@@ -47,19 +49,29 @@ export const AudioEffectsTimeline = memo<AudioEffectsTimelineProps>(({
                   const endTimeSeconds = segment.endTime / 1000;
                   const startPercent = (startTimeSeconds / totalDuration) * 100;
                   const widthPercent = ((endTimeSeconds - startTimeSeconds) / totalDuration) * 100;
+                  const segmentLabel = `${startTimeSeconds.toFixed(2)}s - ${endTimeSeconds.toFixed(2)}s - ${t('timeline.clickToSeek')}`;
 
                   return (
                     <div
                       key={idx}
-                      className="absolute h-full rounded cursor-pointer hover:opacity-100 transition-opacity"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={segmentLabel}
+                      className="absolute h-full rounded cursor-pointer hover:opacity-100 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       style={{
                         left: `${startPercent}%`,
                         width: `${widthPercent}%`,
                         backgroundColor: getEffectColor(effect),
                         opacity: 0.8,
                       }}
-                      title={`${startTimeSeconds.toFixed(2)}s - ${endTimeSeconds.toFixed(2)}s - Cliquez pour aller à ce moment`}
+                      title={segmentLabel}
                       onClick={() => onSeekToTime(startTimeSeconds)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSeekToTime(startTimeSeconds);
+                        }
+                      }}
                     />
                   );
                 })

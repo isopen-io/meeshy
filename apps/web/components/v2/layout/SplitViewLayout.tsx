@@ -36,15 +36,15 @@ function SplitViewContent({ children }: { children: ReactNode }) {
 
   // Check if we're on a page that should use the split view
   const splitViewRoutes = [
-    '/v2/chats',
-    '/v2/communities',
-    '/v2/contacts',
-    '/v2/notifications',
-    '/v2/settings',
-    '/v2/me',
-    '/v2/links',
-    '/v2/u/',
-    '/v2/feeds',
+    '/conversations',
+    '/communities',
+    '/contacts',
+    '/notifications',
+    '/settings',
+    '/me',
+    '/links',
+    '/u/',
+    '/feeds',
   ];
 
   const useSplitViewLayout = splitViewRoutes.some(

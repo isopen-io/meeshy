@@ -15,6 +15,7 @@ import type {
 
 const ALGORITHM = 'AES-GCM';
 const KEY_LENGTH = 256; // bits
+const TAG_LENGTH = 128; // bits (AES-GCM authentication tag)
 
 /**
  * Web Crypto Key Wrapper

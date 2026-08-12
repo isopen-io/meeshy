@@ -12,11 +12,15 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.UpdateConversationResponse
+import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.outbox.ConversationPrefsPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
@@ -60,6 +64,17 @@ class ConversationRepository @Inject constructor(
             row?.let { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
         }
 
+    /**
+     * Local-only cached conversations — a plain Room read with **no** network
+     * revalidation. Powers the home-screen widget (`:app` `UnreadCountWidget`),
+     * which must render from whatever is already cached (possibly offline, no
+     * connectivity guarantee at widget-refresh time) rather than block on a
+     * fetch. An empty/never-synced cache resolves to an empty list, never a
+     * fabricated placeholder.
+     */
+    fun cachedConversations(): Flow<List<ApiConversation>> =
+        cacheSource.observe().map { it ?: emptyList() }
+
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
@@ -77,6 +92,17 @@ class ConversationRepository @Inject constructor(
 
     suspend fun markRead(id: String): NetworkResult<Unit> =
         apiCall { conversationApi.markRead(id) }
+
+    /**
+     * Persist an admin conversation-settings patch (write-role / announcement /
+     * slow-mode / auto-translate). Online-only — the settings screen consumes the
+     * [NetworkResult] directly; transport/HTTP errors fold into a [NetworkResult.Failure].
+     */
+    suspend fun updateSettings(
+        id: String,
+        request: UpdateConversationSettingsRequest,
+    ): NetworkResult<UpdateConversationResponse> =
+        apiCall { conversationApi.updateSettings(id, request) }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
@@ -105,6 +131,116 @@ class ConversationRepository @Inject constructor(
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
                 payload = "{}",
+            ),
+        )
+        return true
+    }
+
+    /**
+     * Optimistic mark-as-unread (context-menu counterpart to [markReadOptimistic],
+     * parity iOS `ConversationStore.markConversationUnreadLocally` + `.markAsUnread`
+     * dispatch): the server stays authoritative on the exact count, so locally this
+     * only hints `unreadCount = 1` (the badge appears at once) — never a no-op-to-
+     * no-op write. No-op (returns false) when the conversation is unknown or already
+     * unread (nothing to flip; the context menu only ever offers this action on an
+     * already-read row). Shares the `READ_RECEIPT` outbox lane with [markReadOptimistic]
+     * (both drain in the same FIFO), and its [OutboxKind.MARK_UNREAD] kind coalesces
+     * against a pending [OutboxKind.READ_RECEIPT] as opposite terminal states
+     * ([OutboxCoalescer] `terminalToggle`) rather than iOS's simpler always-replace
+     * shared coalescing key — a quick read→unread undo cancels both mutations locally
+     * instead of round-tripping a redundant "mark unread" the server would just
+     * no-op anyway (same idempotent-terminal-state shape already used for
+     * block/unblock and pin/unpin).
+     */
+    suspend fun markUnreadOptimistic(id: String): Boolean {
+        val updated = database.withTransaction {
+            val row = conversationDao.find(id) ?: return@withTransaction false
+            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+            if (conversation.unreadCount > 0) return@withTransaction false
+            conversationDao.upsertAll(
+                listOf(
+                    row.copy(
+                        payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 1)),
+                    ),
+                ),
+            )
+            true
+        }
+        if (!updated) return false
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.MARK_UNREAD,
+                lane = OutboxLanes.READ_RECEIPT,
+                targetId = id,
+                payload = "{}",
+            ),
+        )
+        return true
+    }
+
+    /** Optimistic pin/unpin toggle (swipe action + context menu). */
+    suspend fun setPinnedOptimistic(id: String, pinned: Boolean): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(isPinned = pinned) }
+
+    /** Optimistic mute/unmute toggle. */
+    suspend fun setMutedOptimistic(id: String, muted: Boolean): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(isMuted = muted) }
+
+    /** Optimistic archive/unarchive toggle. */
+    suspend fun setArchivedOptimistic(id: String, archived: Boolean): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(isArchived = archived) }
+
+    /**
+     * Optimistic drag-to-category (re)assignment (parity iOS
+     * `ConversationOptionsViewModel.setCategory`): the cached `categoryId` mutates
+     * instantly — the section splitter re-buckets the row into [categoryId]'s
+     * section — and the full-snapshot mutation joins the shared prefs lane. A no-op
+     * (returns false) when the conversation is already in [categoryId].
+     */
+    suspend fun setCategoryOptimistic(id: String, categoryId: String): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(categoryId = categoryId) }
+
+    /**
+     * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
+     * cached preferences mutate instantly (the filter re-derives the visible
+     * list) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation joins the
+     * shared prefs lane, where the coalescer keeps only the latest snapshot per
+     * conversation. No-op (returns false) when the conversation is unknown or
+     * [transform] leaves the preferences unchanged.
+     */
+    private suspend fun updatePreferencesOptimistic(
+        id: String,
+        transform: (ApiConversationPreferences) -> ApiConversationPreferences,
+    ): Boolean {
+        val snapshot = database.withTransaction {
+            val row = conversationDao.find(id) ?: return@withTransaction null
+            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+            val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
+            val next = transform(current)
+            if (next == current) return@withTransaction null
+            conversationDao.upsertAll(
+                listOf(
+                    row.copy(
+                        payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
+                    ),
+                ),
+            )
+            next
+        } ?: return false
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.UPDATE_CONVERSATION_PREFS,
+                lane = OutboxLanes.CONVERSATION_PREFS,
+                targetId = id,
+                payload = MeeshyApi.json.encodeToString(
+                    ConversationPrefsPayload(
+                        isPinned = snapshot.isPinned,
+                        isMuted = snapshot.isMuted,
+                        isArchived = snapshot.isArchived,
+                        mentionsOnly = snapshot.mentionsOnly,
+                        categoryId = snapshot.categoryId,
+                    ),
+                ),
             ),
         )
         return true

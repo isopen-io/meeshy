@@ -12,17 +12,29 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
+import { blockCacheKey, BLOCK_CACHE_TTL_SECONDS } from '../../utils/block-cache';
 import { MessagingService } from '../../services/MessagingService';
 import {
   buildPostReplyTo,
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
+import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
+import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
+import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
+import {
+  PREVIEW_PRISM_PARTICIPANT_SELECT,
+  resolveLastMessagePreviewPrism,
+  type PreviewPrismParticipant,
+} from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -36,6 +48,9 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
+import { messageTypeFromMimeTypes } from '../utils/attachment-message-type.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
   MessageResponse
@@ -46,15 +61,38 @@ import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
-import { resolveMentionedUsers } from '../../services/MentionService';
+import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
+import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
+import {
+  reconcileEditedLinks,
+  mergeTrackingLinksIntoMetadata,
+  type LinkReconciler,
+} from '../../services/messaging/messageLinks';
+import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import {
+  admitEditedContent,
+  isEditedContentRefused,
+  EMPTY_EDIT_REFUSAL_MESSAGE,
+} from '../../services/messaging/messageEditContent';
+import { emitMentionCreated } from '../emitMentionCreated';
+import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
-import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
+import {
+  SocketMessageSendSchema,
+  SocketMessageSendWithAttachmentsSchema,
+  SocketMessageEditSchema,
+  SocketMessageDeleteSchema,
+} from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -73,6 +111,22 @@ export interface MessageHandlerDependencies {
   attachmentService: AttachmentService;
   readStatusService: MessageReadStatusService;
   privacyPreferencesService: PrivacyPreferencesService;
+  deliveryQueue?: RedisDeliveryQueue | null;
+  /**
+   * Optionnel : sans lui, une édition socket laisse les lignes `Mention`
+   * telles quelles plutôt que d'en déduire que le message ne nomme plus
+   * personne (cf. `reconcileEditedMentions`, qui distingue « établi vide » de
+   * « rien établi »).
+   */
+  mentionService?: MentionResolver | null;
+  /**
+   * Optionnel pour le seul bénéfice des tests : sans injection, le handler en
+   * construit un sur son propre `prisma`. Le laisser à la charge du site de
+   * construction rejouerait le défaut qu'on corrige — un écrivain qui oublie
+   * de câbler, et l'édition socket réécrit du texte brut sans que rien ne le
+   * dise.
+   */
+  trackingLinkService?: LinkReconciler | null;
 }
 
 export class MessageHandler {
@@ -89,7 +143,31 @@ export class MessageHandler {
   private attachmentService: AttachmentService;
   private readStatusService: MessageReadStatusService;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private deliveryQueue: RedisDeliveryQueue | null;
+  private mentionService: MentionResolver | null;
+  private trackingLinkService: LinkReconciler;
   private rateLimiter = getSocketRateLimiter();
+
+  /**
+   * Short-lived in-process cache for (userId, conversationId) → participantId lookups.
+   * Avoids a DB findFirst query on every message send for active users.
+   * TTL: 5 minutes, size-bounded (BoundedTtlCache) so a long-running gateway
+   * process doesn't accumulate one entry per (user, conversation) pair forever.
+   * Also invalidated on conversation leave / kick events via
+   * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
+   *
+   * Uses `BoundedTtlCache` (size cap + lazy/bulk TTL eviction) rather than a raw
+   * `Map`: a lazily-checked TTL only reclaims a key when the SAME key is read
+   * again, so a one-shot (user, conversation) sender that never sends again would
+   * leak its entry forever on a long-lived gateway. The size cap hard-bounds the
+   * heap regardless of read patterns, matching `StatusHandler.identityCache`.
+   */
+  private static readonly PARTICIPANT_CACHE_MAX_SIZE = 50_000;
+  private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
+  private participantIdCache = new BoundedTtlCache<string, string>({
+    maxSize: MessageHandler.PARTICIPANT_CACHE_MAX_SIZE,
+    ttlMs: this.PARTICIPANT_CACHE_TTL_MS,
+  });
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -105,6 +183,18 @@ export class MessageHandler {
     this.attachmentService = deps.attachmentService;
     this.readStatusService = deps.readStatusService;
     this.privacyPreferencesService = deps.privacyPreferencesService;
+    this.deliveryQueue = deps.deliveryQueue ?? null;
+    this.mentionService = deps.mentionService ?? null;
+    this.trackingLinkService = deps.trackingLinkService ?? new TrackingLinkService(deps.prisma);
+  }
+
+  /**
+   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
+   * (same instance shared with the REST broadcast path), since the queue is
+   * built once `server.ts` has the Redis-backed CacheStore ready.
+   */
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
   }
 
   /**
@@ -121,6 +211,7 @@ export class MessageHandler {
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
       encryptedPayload?: unknown;
+      location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -151,6 +242,23 @@ export class MessageHandler {
         if (callback) callback(errorResponse);
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
+      // Per-conversation burst guard: prevents flooding a single conversation
+      // even within the global 20 msg/min budget.
+      const convRateLimitKey = `${userId || participantId}:${validated.conversationId}`;
+      const convRateLimitAllowed = await this.rateLimiter.checkLimit(convRateLimitKey, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+      if (!convRateLimitAllowed) {
+        const convInfo = this.rateLimiter.getRateLimitInfo(convRateLimitKey, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many messages in this conversation. Please wait ${Math.ceil(convInfo.resetIn / 1000)} seconds.`
         });
         return;
       }
@@ -209,8 +317,8 @@ export class MessageHandler {
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
+        forwardedFromId: validated.forwardedFromId,
+        forwardedFromConversationId: validated.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
@@ -222,6 +330,9 @@ export class MessageHandler {
         isViewOnce: validated.isViewOnce,
         maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
+        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
+        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        location: validated.location,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -238,9 +349,12 @@ export class MessageHandler {
       // Répondre au client
       this._sendResponse(callback, response);
 
-      // Broadcaster le message si succès
+      // Broadcaster le message si succès — SAUF sur un dedup idempotent
+      // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
+      // broadcasté au premier envoi ; re-broadcaster `message:new` duplique la
+      // bulle. Flag posé in-process par MessageProcessor.saveMessage.
       // response.data is already enriched (sender.user, attachments, replyTo) from saveMessage include
-      if (response.success && response.data) {
+      if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await performanceLogger.withTiming(
           'ws.broadcastNewMessage',
@@ -252,25 +366,23 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
-              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
-          senderUsername: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
+          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
+          senderUsername: message.sender?.user?.username,
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
           mentionedUserIds: await this._resolveMentionUserIds(
-            ((message as never)['validatedMentions'] as string[]) ?? []
+            (message.validatedMentions as string[] | undefined) ?? []
           ),
           createdAt: message.createdAt,
         });
 
-        conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', [], null
-        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
+        // Le comptage du message n'est plus fait ici : il vit avec les trois
+        // autres obligations post-commit, dans `runMessagePostSaveEffects`, que
+        // `MessagingService.handleMessage` vient d'exécuter pour CE message.
+        // Le garder ici le compterait deux fois — et le laisser ici seulement
+        // était exactement ce qui laissait tous les autres tuyaux d'envoi
+        // (REST, liens de partage) ne jamais compter.
       }
 
       handlerLogger.info('perf:ws.message.send', {
@@ -301,6 +413,7 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
+      location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -334,6 +447,22 @@ export class MessageHandler {
         return;
       }
 
+      // Per-conversation burst guard (mirrors handleMessageSend logic)
+      const convRateLimitKeyWA = `${userId || participantId}:${validated.conversationId}`;
+      const convRateLimitAllowedWA = await this.rateLimiter.checkLimit(convRateLimitKeyWA, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+      if (!convRateLimitAllowedWA) {
+        const convInfoWA = this.rateLimiter.getRateLimitInfo(convRateLimitKeyWA, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many messages in this conversation. Please wait ${Math.ceil(convInfoWA.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
       if (validated.content && validated.content.trim()) {
         const validation = validateMessageLength(validated.content);
         if (!validation.isValid) {
@@ -354,6 +483,12 @@ export class MessageHandler {
           return;
         }
       }
+
+      // Mettre à jour l'activité — parité avec handleMessageSend. L'envoi de
+      // pièces jointes (notamment les notes vocales, dont ce path WS est le
+      // SEUL transport) est une activité utilisateur qui doit rafraîchir
+      // lastActiveAt, sinon la présence d'un utilisateur voice-first se périme.
+      this.statusService.updateLastSeen(userId || participantId, isAnonymous);
 
       const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
@@ -396,20 +531,40 @@ export class MessageHandler {
         // contournerait également le dedup serveur.
         clientMessageId: validated.clientMessageId,
         originalLanguage: validated.originalLanguage,
-        messageType: 'text',
+        // Le schéma socket n'expose pas `messageType` (le client ne peut pas le
+        // fournir) — on le DÉRIVE des MIME des pièces jointes déjà résolues
+        // ci-dessus. Sans ça, une photo/vidéo/audio (dont les médias view-once /
+        // floutés / éphémères qui transitent principalement par CE path) était
+        // persistée et diffusée en `'text'`, faisant afficher un ballon 💬 au
+        // lieu de l'icône média dans `protectedPreview`/`contentTypeIcon`.
+        messageType: messageTypeFromMimeTypes(attachments.map((a) => a?.mimeType)) ?? 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
+        forwardedFromId: validated.forwardedFromId,
+        forwardedFromConversationId: validated.forwardedFromConversationId,
+        // Effets de message — parité avec `handleMessageSend` (path texte) et
+        // POST /messages. Le bitfield final `effectFlags` est recomposé par
+        // `MessageProcessor.saveMessage` depuis `isBlurred` / `expiresAt` /
+        // `isViewOnce`, donc on transmet les champs bruts. Sans cette
+        // propagation, une photo view-once / floutée / éphémère envoyée sur ce
+        // path (le PRINCIPAL pour les pièces jointes) serait persistée comme un
+        // média normal, rouvrable indéfiniment.
+        isBlurred: validated.isBlurred,
+        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
+        effectFlags: validated.effectFlags,
+        isViewOnce: validated.isViewOnce,
+        maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
+        // Lieu partagé — même contrat que handleMessageSend ci-dessus.
+        location: validated.location,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
           clientTimestamp: Date.now()
         }
-      } as any; // Cast needed as MessageRequest uses readonly attachments objects
+      };
 
       const response: MessageResponse = await this.messagingService.handleMessage(
         messageRequest,
@@ -424,7 +579,7 @@ export class MessageHandler {
       // retry. Mirror the order used by `handleMessageSend` above.
       this._sendResponse(callback, response);
 
-      if (response.success && response.data) {
+      if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await performanceLogger.withTiming(
           'ws.broadcastNewMessage',
@@ -436,33 +591,20 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
-              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
-          senderUsername: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
+          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
+          senderUsername: message.sender?.user?.username,
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
           mentionedUserIds: await this._resolveMentionUserIds(
-            ((message as never)['validatedMentions'] as string[]) ?? []
+            (message.validatedMentions as string[] | undefined) ?? []
           ),
           createdAt: message.createdAt,
         });
 
-        const msgAttachments = (message as unknown as Record<string, unknown>).attachments as Array<Record<string, unknown>> | undefined;
-        const attachmentTypes = (msgAttachments ?? []).map((a: Record<string, unknown>) => {
-          const mime = (a.mimeType as string) ?? '';
-          if (mime.startsWith('image/')) return 'image';
-          if (mime.startsWith('audio/')) return 'audio';
-          if (mime.startsWith('video/')) return 'video';
-          return 'file';
-        });
-        conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null
-        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
+        // Idem : le comptage — pièces jointes comprises — vit dans
+        // `runMessagePostSaveEffects`, qui lit les MIME du message committé au
+        // lieu de retraduire ici une table déjà écrite ailleurs.
       }
 
       handlerLogger.info('perf:ws.message.send-with-attachments', {
@@ -481,6 +623,470 @@ export class MessageHandler {
   }
 
   /**
+   * Handles real-time message editing via WebSocket.
+   * Mirrors the REST PUT /messages/:messageId logic but operates over socket
+   * so the edit is propagated without an HTTP round-trip.
+   *
+   * Permissions: `admitMessageEdit` — l'auteur pendant 24h, ET tout membre
+   * actif porteur d'un rôle GLOBAL privilégié (MODERATOR/ADMIN/BIGBOSS), sans
+   * fenêtre. Cette ligne annonçait encore « seul l'auteur peut éditer », ce que
+   * le code avait cessé de faire : c'est en la lisant qu'on a laissé la file de
+   * rejeu hors ligne exclure l'auteur en croyant exclure l'acteur.
+   * Anonymous users cannot edit (no stable identity → no ownership proof).
+   */
+  async handleMessageEdit(
+    socket: Socket,
+    data: { messageId: string; content: string },
+    callback?: (response: SocketIOResponse) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketMessageEditSchema, data);
+      if (schemaValidation.success === false) {
+        this._sendGenericError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userContext = this._getUserContext(socket);
+      if (!userContext || !userContext.userId || userContext.isAnonymous) {
+        this._sendGenericError(callback, 'Authentication required to edit messages', socket);
+        return;
+      }
+
+      const { userId } = userContext;
+
+      const editRateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_EDIT);
+      if (!editRateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_EDIT);
+        this._sendGenericError(callback, `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`, socket);
+        return;
+      }
+
+      // La lecture n'ENCODE plus la règle d'admission : elle filtrait
+      // `sender: { userId }`, donc la ligne d'un message qu'on n'a pas écrit
+      // n'atteignait jamais la décision — et aucun modérateur ne pouvait être
+      // admis ici, alors que l'UI web lui propose le geste et que la route
+      // conversation-scopée l'admet. Une politique cachée dans un `where` est
+      // une politique qu'on ne peut ni lire ni unifier.
+      const message = await this.prisma.message.findFirst({
+        where: {
+          id: validated.messageId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          content: true,
+          originalLanguage: true,
+          createdAt: true,
+          // Lu pour la réconciliation des mentions : une mention ajoutée en
+          // éditant un message éphémère ne doit pas survivre à ce message.
+          expiresAt: true,
+          // Lu pour la réconciliation des liens : `metadata` est un blob
+          // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
+          // `location`.
+          metadata: true,
+          sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
+          attachments: { select: attachmentMediaSelect },
+        },
+      });
+
+      if (!message) {
+        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
+        return;
+      }
+
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`services/messaging/messageEditAdmission`). Cette garde vivait ici
+      // dépliée, et les trois entrées REST en portaient chacune une variante
+      // différente. Le privilège de contournement est un rôle GLOBAL
+      // (`User.role`), JAMAIS le `Participant.role` minuscule qu'expose
+      // `message.sender.role` — confondre les deux avait déjà produit un bypass
+      // mort. L'unité garde ses lectures paresseuses : l'auteur dans sa fenêtre
+      // n'en déclenche aucune.
+      const admission = await admitMessageEdit({
+        prisma: this.prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          createdAt: message.createdAt,
+        },
+        onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
+      });
+
+      if (isEditRefused(admission)) {
+        this._sendGenericError(
+          callback,
+          admission.reason === 'edit-window-expired'
+            ? 'You can no longer edit this message (24-hour limit exceeded)'
+            : 'Message not found or you are not authorized to edit it',
+          socket
+        );
+        return;
+      }
+
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`), énoncé
+      // une seule fois pour les quatre transports d'édition.
+      const contentAdmission = admitEditedContent({
+        content: validated.content,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(contentAdmission)) {
+        this._sendGenericError(callback, EMPTY_EDIT_REFUSAL_MESSAGE, socket);
+        return;
+      }
+
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture, exactement comme à l'envoi. Ce chemin — le transport
+      // d'édition PRIMAIRE, celui qu'emploie le web — écrivait le texte BRUT :
+      // les crochets restaient en dur dans le message, pour toujours, alors que
+      // le même texte envoyé produit un lien traçable. Le contenu traité est
+      // ensuite le SEUL en circulation : base, mentions, retraduction, payload.
+      // La seconde moitié — le mapping des URLs BRUTES (`metadata.trackingLinks`)
+      // — n'était recomposée par aucun transport d'édition : une URL brute
+      // ajoutée par édition restait intraçable pour toujours.
+      const editedLinks = await reconcileEditedLinks({
+        linkService: this.trackingLinkService,
+        message: { id: validated.messageId, conversationId: message.conversationId },
+        content: contentAdmission.content,
+        editorUserId: userId,
+        onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
+      });
+      const editedContent = editedLinks.processedContent;
+
+      // Écrit seulement si la réconciliation a ÉTABLI quelque chose — y compris
+      // l'ensemble vide, qui dit « ce texte ne porte plus d'URL ». Sur panne, la
+      // base garde le mapping qu'elle avait.
+      const nextMetadata = editedLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
+        : {};
+
+      // Optimistic-concurrency guard: only write while the message is still
+      // non-deleted. A `message:delete` landing between the read above and
+      // this write would otherwise resurrect the row with edited content
+      // (unconditional `update` by id succeeds regardless of `deletedAt`),
+      // and the gateway would broadcast MESSAGE_EDITED for a message clients
+      // already removed. Mirrors the guarded `updateMany` used by
+      // handleMessageDelete's lastMessageAt recompute.
+      const editedAt = new Date();
+      const editResult = await this.prisma.message.updateMany({
+        where: { id: validated.messageId, deletedAt: null },
+        data: {
+          content: editedContent,
+          isEdited: true,
+          editedAt,
+          translations: null,
+          ...nextMetadata,
+        },
+      });
+
+      if (editResult.count === 0) {
+        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
+        return;
+      }
+
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
+      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
+      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
+      // pour les quatre transports.
+      await applyMessageEditEffects(this.prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: editedContent,
+      });
+
+      // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
+      // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
+      // ni notification — alors qu'il est le transport d'édition PRIMAIRE.
+      // Éditer « salut @alice » en « salut @bob » laissait Alice mentionnée et
+      // ne nommait jamais Bob. Même unité que la route REST, aux mêmes
+      // conditions : la réconciliation ne détruit rien qu'elle n'ait pu lire,
+      // et seuls les ENTRANTS sont notifiés.
+      const editedMentions = await reconcileEditedMentions({
+        prisma: this.prisma,
+        mentionService: this.mentionService,
+        notificationService: this.notificationService,
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          expiresAt: message.expiresAt,
+        },
+        content: editedContent,
+        editorUserId: userId,
+        onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
+      });
+
+      const updatedMessage = {
+        id: message.id,
+        conversationId: message.conversationId,
+        content: editedContent,
+        isEdited: true,
+        editedAt,
+        originalLanguage: message.originalLanguage,
+        sender: message.sender,
+      };
+
+      // Trigger async retranslation — fire-and-forget, non-blocking
+      const retranslationPayload = {
+        id: validated.messageId,
+        content: editedContent,
+        originalLanguage: message.originalLanguage,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+      };
+      this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
+        .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
+
+      // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL : quelqu'un
+      // que l'édition vient de nommer n'est pas forcément dans
+      // ROOMS.conversation(id), et `message:edited` ne fan que là. Parité avec
+      // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
+      // `User.id` sont déjà résolus — inutile de repasser par les usernames.
+      emitMentionCreated({
+        io: this.io,
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId: message.id,
+        conversationId: message.conversationId,
+        editorUserId: userId,
+        content: editedContent,
+        timestamp: editedAt,
+        onError: (err) => handlerLogger.warn('mention:created fanout (edit) failed', { messageId: validated.messageId, error: err }),
+      });
+
+      // Attachments are unaffected by a content edit — carry over the ones
+      // fetched pre-edit so clients that overwrite their cached message with
+      // this payload (`{ ...cached, ...editedPayload }`) do not lose the
+      // photo/video/audio that was attached to the message being edited.
+      // `validatedMentions` n'est recopié que si la réconciliation a ÉTABLI
+      // quelque chose — y compris l'ensemble vide, qui dit « ce texte ne nomme
+      // plus personne ». Le poser inconditionnellement rejouerait dans le
+      // payload l'effacement que l'unité vient d'empêcher en base : les clients
+      // écrasent leur message caché avec `{ ...cached, ...editedPayload }`, et
+      // un `[]` venu d'une panne transitoire effacerait un surlignage vivant.
+      const editedPayload = {
+        ...updatedMessage,
+        conversationId: message.conversationId,
+        translations: [],
+        ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
+        attachments: this._serializeAttachmentsField(message as unknown as Message),
+      };
+
+      const room = ROOMS.conversation(message.conversationId);
+      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+
+      // Fan a conversation:updated preview refresh to participants sitting on
+      // the conversation list (in user:<id> but not conversation:<id>) so an
+      // edit of the latest message updates their row — MESSAGE_EDITED alone
+      // only reaches the conversation room. Mirrors broadcastNewMessage.
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, message.conversationId, userId,
+        (err) => handlerLogger.warn('conversation preview fanout (edit) failed', { error: err })
+      );
+
+      // Skip the EDITOR, not the author. Depuis que `admitMessageEdit` admet un
+      // modérateur sur le message d'autrui, les deux ne sont plus la même
+      // personne : `message.senderId` est le `Participant.id` de l'AUTEUR. Le
+      // passer ici sautait l'auteur hors ligne, qui n'apprenait alors JAMAIS
+      // que son message avait été modéré — rien ne rejoue l'événement et aucun
+      // client ne refetch spontanément, donc sa copie gardait le texte
+      // d'avant-modération pendant que toute la conversation lisait le texte
+      // corrigé. Le seul destinataire que le geste concerne vraiment était le
+      // seul exclu. `userId` est l'éditeur, et c'est un `User.id` réel :
+      // l'anonyme est refusé en tête de ce handler. Jumeau du même correctif
+      // dans `handleMessageDelete`.
+      this._enqueueOfflineEventForParticipants({
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'edited',
+        messageId: validated.messageId,
+        payload: editedPayload,
+      }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+
+      callback?.({ success: true, data: { messageId: validated.messageId } });
+      handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
+    } catch (error: unknown) {
+      handlerLogger.error('message:edit failed', { error });
+      this._sendGenericError(callback, 'Failed to edit message', socket);
+    }
+  }
+
+  /**
+   * Handles real-time message deletion (soft delete) via WebSocket.
+   * Mirrors the REST DELETE /messages/:messageId logic.
+   *
+   * Permissions: `admitMessageDelete` — l'auteur sans limite de temps, sinon un
+   * rôle privilégié de CONVERSATION (`admin`/`moderator`) ou GLOBAL
+   * (`MODERATOR`/`ADMIN`/`BIGBOSS`). La règle vit dans l'unité partagée, pas
+   * ici : les trois transports de suppression y répondent désormais la même
+   * chose. Les utilisateurs anonymes ne peuvent pas supprimer.
+   */
+  async handleMessageDelete(
+    socket: Socket,
+    data: { messageId: string },
+    callback?: (response: SocketIOResponse) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketMessageDeleteSchema, data);
+      if (schemaValidation.success === false) {
+        this._sendGenericError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userContext = this._getUserContext(socket);
+      if (!userContext || !userContext.userId || userContext.isAnonymous) {
+        this._sendGenericError(callback, 'Authentication required to delete messages', socket);
+        return;
+      }
+
+      const { userId } = userContext;
+
+      const deleteRateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_DELETE);
+      if (!deleteRateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_DELETE);
+        this._sendGenericError(callback, `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`, socket);
+        return;
+      }
+
+      const message = await this.prisma.message.findFirst({
+        where: { id: validated.messageId, deletedAt: null },
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          sender: { select: { id: true, userId: true } },
+          // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
+          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
+          // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
+          // relit `lastMessageAt` lui-même, au plus près de son écriture
+          // conditionnelle. Restent le contenu et les métadonnées, qui portent
+          // les deux représentations des `/l/<token>` du message. Et, depuis que
+          // le décompte des compteurs vit dans la même unité, `messageType` et
+          // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
+          // lisibles une fois les attachements supprimés, quelques lignes plus
+          // bas.
+          content: true,
+          metadata: true,
+          messageType: true,
+          attachments: { select: { id: true, mimeType: true } },
+        },
+      });
+
+      if (!message) {
+        this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
+
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle,
+      // jumeau d'`admitMessageEdit`. Cette copie-ci était la plus juste des
+      // trois, et c'est précisément pour ça qu'elle n'était pas suffisante :
+      // rien ne la reliait aux deux autres, qui avaient dérivé chacune de son
+      // côté. Sa forme est conservée à l'identique — auteur, rôle de
+      // conversation, puis rôle global en lecture paresseuse.
+      const admission = await admitMessageDelete({
+        prisma: this.prisma,
+        deleterUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+        },
+        onError: (err) => handlerLogger.warn('delete admission read failed', { messageId: validated.messageId, error: err }),
+      });
+
+      if (!admission.admitted) {
+        this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
+        return;
+      }
+
+      // Delete attachments (best-effort, non-blocking on individual failures)
+      if (message.attachments && message.attachments.length > 0) {
+        await Promise.allSettled(
+          message.attachments.map((att) => this.attachmentService.deleteAttachment(att.id))
+        );
+      }
+
+      // Soft delete: atomically clear translations and set deletedAt in one write
+      await this.prisma.message.update({
+        where: { id: validated.messageId },
+        data: { translations: null, deletedAt: new Date() },
+      });
+
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. La liste vit
+      // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
+      await applyMessageRemovalEffects(this.prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        messageType: message.messageType,
+        attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        metadata: message.metadata,
+      });
+
+      const room = ROOMS.conversation(message.conversationId);
+      const deletedPayload = {
+        messageId: validated.messageId,
+        conversationId: message.conversationId,
+      };
+      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+
+      // Fan a conversation:updated preview refresh to list-screen participants
+      // (in user:<id> but not conversation:<id>): deleting the latest message
+      // changes their row's preview, which MESSAGE_DELETED (conversation room
+      // only) never tells them. The latest non-deleted message is recomputed
+      // inside the helper, consistent with the lastMessageAt recompute above.
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, message.conversationId, userId,
+        (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })
+      );
+
+      // Skip the DELETER, not the author. A moderator/admin may delete another
+      // user's message (`message.senderId` is the author's participant id, not
+      // the actor's) — passing the author here skipped the offline author, who
+      // then never learns their moderated message was removed.
+      //
+      // Les DEUX monnaies d'identité de l'acteur sont passées, et elles se
+      // relaient. Le `Participant.id` a deux provenances, et une seule est
+      // juste dans chaque cas :
+      //   - l'acteur EST l'auteur → c'est `message.senderId`, par définition ;
+      //   - l'acteur est un tiers → c'est la ligne que `admitMessageDelete`
+      //     vient de lire pour l'admettre, JAMAIS `message.senderId`, qui
+      //     désigne alors la personne à servir et non celle à exclure.
+      // Il reste `undefined` pour un admin GLOBAL non-participant, lequel a
+      // toujours un `User.id`. L'exclusion ne dépend donc jamais du fait que
+      // l'acteur soit connecté. Les deux espaces d'id ne se croisant pas, en
+      // passer deux ne sur-exclut personne : ils désignent la même personne.
+      const deleterParticipantId = message.sender?.userId === userId
+        ? message.senderId
+        : admission.actorParticipantId;
+      this._enqueueOfflineEventForParticipants({
+        conversationId: message.conversationId,
+        actorParticipantId: deleterParticipantId,
+        actorUserId: userId,
+        eventType: 'deleted',
+        messageId: validated.messageId,
+        payload: deletedPayload,
+      }).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
+
+      callback?.({ success: true, data: { messageId: validated.messageId } });
+      handlerLogger.debug('message:delete processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
+    } catch (error: unknown) {
+      handlerLogger.error('message:delete failed', { error });
+      this._sendGenericError(callback, 'Failed to delete message', socket);
+    }
+  }
+
+  /**
    * Broadcaster un nouveau message vers tous les participants
    */
   async broadcastNewMessage(message: Message, conversationId: string, senderSocket?: Socket): Promise<void> {
@@ -490,33 +1096,43 @@ export class MessageHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      // Récupérer traductions et déclencher le calcul des stats en parallèle.
-      // Les stats ne sont plus embarquées dans le payload message:new — elles
-      // sont diffusées via l'event dédié `conversation:stats`. L'appel
-      // updateOnNewMessage reste pour son side-effect (cache stats).
-      const [translations] = await Promise.allSettled([
-        this._getMessageTranslations(message),
-        conversationStatsService.updateOnNewMessage(
-          this.prisma,
-          conversationId,
-          message.originalLanguage || 'fr',
-          () => Array.from(this.connectedUsers.values()).map((u) => u.id)
-        )
-      ]);
+      // Fire stats update as true fire-and-forget: it is a non-critical
+      // DB side-effect (cache warm-up for `conversation:stats`) and must
+      // not block the emit. Previously awaited via Promise.allSettled which
+      // added the full stats write latency (~10–50ms) to every broadcast.
+      conversationStatsService.updateOnNewMessage(
+        this.prisma,
+        conversationId,
+        message.originalLanguage || 'fr',
+        () => Array.from(this.connectedUsers.values()).map((u) => u.id)
+      ).catch(error => handlerLogger.warn('stats update error', { error }));
+
+      // Translations are part of the payload — await them separately so
+      // the stats write no longer gates the emit (fast path when
+      // message.translations is already on the object; DB fallback otherwise).
+      const messageTranslations = await this._getMessageTranslations(message).catch(() => []);
 
       const messagePayload: unknown = this._buildMessagePayload(
         message,
         normalizedId,
-        translations.status === 'fulfilled' ? translations.value : []
+        messageTranslations
       );
 
-      // Enrichir avec les détails du forward si applicable
+      // Enrichir avec les détails du forward si applicable. Best-effort : un
+      // échec de ce lookup (DB transient) ne doit JAMAIS avorter le broadcast —
+      // sinon un message déjà persisté ET ACKé « envoyé » ne serait délivré à
+      // personne (ni emit live, ni offline queue), sans retry. Parité avec
+      // `_getMessageTranslations().catch(() => [])` ci-dessus.
       if (message.forwardedFromId) {
         const [originalMsg, originalConv] = await Promise.all([
           this.prisma.message.findUnique({
             where: { id: message.forwardedFromId },
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
+              // Lot 2 : message transféré (objet imbriqué) — sans `metadata`,
+              // un message géolocalisé transféré n'affiche jamais sa
+              // position sur le chemin socket (parité avec le chemin REST).
+              metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
               attachments: { select: attachmentForwardPreviewSelect, take: 1 }
             }
@@ -527,8 +1143,8 @@ export class MessageHandler {
                 select: { id: true, title: true, identifier: true, type: true, avatar: true }
               })
             : Promise.resolve(null)
-        ]);
-        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = originalMsg;
+        ]).catch(() => [null, null] as const);
+        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = hoistLocationOnto(originalMsg as unknown as Record<string, unknown>);
         if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
       }
 
@@ -538,14 +1154,15 @@ export class MessageHandler {
       // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
       // legacy via lookup du post.
       if (message.storyReplyToId) {
-        const fromSnapshot = postReplyToFromMetadata((message as never)['metadata']);
+        const fromSnapshot = postReplyToFromMetadata(message.metadata);
         if (fromSnapshot) {
           (messagePayload as Record<string, unknown>).postReplyTo = fromSnapshot;
         } else {
+          // Best-effort : le fallback live ne doit pas gater la délivrance.
           const post = await this.prisma.post.findUnique({
             where: { id: message.storyReplyToId },
             select: POST_REPLY_SNAPSHOT_SELECT,
-          });
+          }).catch(() => null);
           if (post) {
             (messagePayload as Record<string, unknown>).postReplyTo = buildPostReplyTo(post);
           }
@@ -553,10 +1170,34 @@ export class MessageHandler {
       }
 
       if (message.content) {
-        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]);
+        // Best-effort : une résolution de mention en échec ne doit pas avorter
+        // le broadcast (cf. `_resolveMentionUserIds` plus bas, même contrat).
+        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]).catch(() => []);
         if (mentionedUsers.length > 0) {
           (messagePayload as Record<string, unknown>).mentionedUsers = mentionedUsers;
         }
+      }
+
+      // Tracking des URLs brutes : hisser `metadata.trackingLinks` ([{url, token}])
+      // en top-level (miroir de `postReplyTo`) — `_buildMessagePayload` n'embarque
+      // pas `metadata`. Le destinataire rend le lien (texte + façade vidéo) vers
+      // `/l/<token>` (capture + redirection) en gardant l'URL/aperçu.
+      const rawMetadata = message.metadata;
+      if (rawMetadata && typeof rawMetadata === 'object') {
+        const tl = (rawMetadata as Record<string, unknown>).trackingLinks;
+        if (Array.isArray(tl) && tl.length > 0) {
+          (messagePayload as Record<string, unknown>).trackingLinks = tl;
+        }
+      }
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location` —
+      // même miroir que `postReplyTo`/`trackingLinks` ci-dessus.
+      // `_buildMessagePayload` n'embarque pas `metadata`, donc sans ce hoist
+      // le destinataire ne voit la position qu'après rechargement (relecture
+      // REST, qui hisse aussi `location` — cf. routes/conversations/messages.ts).
+      const place = sharedPlaceFromMetadata(message.metadata);
+      if (place) {
+        (messagePayload as Record<string, unknown>).location = place;
       }
 
       const room = ROOMS.conversation(normalizedId);
@@ -570,8 +1211,7 @@ export class MessageHandler {
       //     can promote the optimistic row to `.sent` even after a crash
       //     that lost the ACK.
       const senderPayload = messagePayload as Record<string, unknown>;
-      const broadcastPayload: Record<string, unknown> = { ...senderPayload };
-      delete broadcastPayload.clientMessageId;
+      const broadcastPayload: Record<string, unknown> = stripClientMessageId(senderPayload);
 
       // Resolve the sender's USER id (not the participant id) so we can
       // address every device session via `ROOMS.user(userId)`. The sender
@@ -579,8 +1219,7 @@ export class MessageHandler {
       // the underlying user (null for anonymous). For anonymous sends we
       // fall back to the previous senderSocket-only path since there is
       // no user-level room to broadcast into.
-      const senderParticipant = (message as unknown as { sender?: { userId?: string | null } }).sender;
-      const senderUserId = senderParticipant?.userId ?? null;
+      const senderUserId = message.sender?.userId ?? null;
 
       // Bandwidth sprint Phase B1 — per-recipient language filtering of the
       // `message:new` broadcast. The payload carries every translation; each
@@ -631,6 +1270,53 @@ export class MessageHandler {
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
+      // Emit `mention:created` to each mentioned user's PERSONAL room so an
+      // @mention reaches a recipient who is online but not currently inside
+      // ROOMS.conversation(id) — `message:new` only fans to the conversation
+      // room. Parity with the REST/ZMQ broadcast path
+      // (`MeeshySocketIOManager._broadcastNewMessage`); without it, @mentions
+      // sent over the PRIMARY WebSocket `message:send` transport were silently
+      // dropped for anyone not viewing the conversation. `validatedMentions` is
+      // persisted as String[] of usernames, so resolve to User.ids first. The
+      // self-mention guard compares against `senderUserId` (the sender's
+      // User.id; null for anonymous senders, which can't self-mention a
+      // registered user). `_resolveMentionUserIds` swallows lookup failures so a
+      // mention miss never blocks the message broadcast.
+      const mentionUsernames = (message.validatedMentions as string[] | undefined) ?? [];
+      if (mentionUsernames.length > 0) {
+        const mentionedUserIds = await this._resolveMentionUserIds(mentionUsernames);
+        for (const targetUserId of mentionedUserIds) {
+          if (targetUserId && targetUserId !== senderUserId) {
+            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+              messageId: message.id,
+              conversationId: normalizedId,
+              senderId: senderUserId ?? message.senderId,
+              mentionedUserId: targetUserId,
+              content: message.content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      // Single participant query shared between CONVERSATION_UPDATED and
+      // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
+      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
+      // satisfies both callers — `user` (préférences de langue) est le Prisme
+      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
+      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
+      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
+      // qui charge le même superset pour la même raison.
+      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> = [];
+      try {
+        sharedParticipants = await this.prisma.participant.findMany({
+          where: { conversationId: normalizedId, isActive: true },
+          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
+        });
+      } catch (err) {
+        handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
+      }
+
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
       // list can re-sort and surface this conversation at the top in
@@ -639,33 +1325,79 @@ export class MessageHandler {
       // conversation list open elsewhere never receives a signal —
       // the row stays at its old position until a manual refresh,
       // and brand-new DMs never appear in the list at all.
-      try {
-        const participants = await this.prisma.participant.findMany({
-          where: { conversationId: normalizedId, isActive: true },
-          select: { userId: true }
-        });
+      if (sharedParticipants.length > 0) {
         const updatePayload = {
           conversationId: normalizedId,
+          // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the sender's
+          // User.id (participant senderId fallback for anonymous). Parity with the
+          // REST/ZMQ send path in MeeshySocketIOManager, whose typed `io` forced
+          // this field; here `io` is the loose Socket.IO Server, so the compiler
+          // never caught the omission.
+          updatedBy: { id: senderUserId ?? message.senderId },
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
           lastMessagePreview: message.content,
+          // Un message position-seule a un `content` vide : hisser
+          // `metadata.location` (même règle que la liste REST et
+          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
+          // client compose son libellé — aucun texte de repli côté serveur.
+          ...((): Record<string, unknown> => {
+            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+            return place ? { location: place } : {};
+          })(),
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
-        for (const p of participants) {
-          if (!p.userId) continue;
-          this.io.to(ROOMS.user(p.userId)).emit(
-            SERVER_EVENTS.CONVERSATION_UPDATED,
-            updatePayload
-          );
+        // `userId ?? id` — un participant sans compte a une room personnelle
+        // nommée d'après son `Participant.id`, et c'est la SEULE par laquelle il
+        // apprend qu'une conversation remonte en tête de liste. Sans elle, un
+        // invité de lien partagé ne voit jamais sa liste se retrier, et une
+        // conversation toute neuve n'y apparaît pas du tout.
+        //
+        // Un payload PAR destinataire : la carte d'aperçu est filtrée au prisme
+        // du lecteur (resolveLastMessagePreviewPrism), donc deux participants de
+        // langues différentes n'ont pas la même carte de traductions. Parité
+        // avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`)
+        // et `emitConversationPreviewUpdate` (édition/suppression) — sans ce
+        // Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
+        // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
+        // rechargement manuel.
+        const targets = participantUserRoomTargets(sharedParticipants);
+        for (const { room, participant } of targets) {
+          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+            ...updatePayload,
+            ...resolveLastMessagePreviewPrism(participant, message)
+          });
         }
-        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length });
-      } catch (err) {
-        handlerLogger.warn('conversation:updated emit failed', { error: err });
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });
       }
 
-      // Mettre à jour unread counts
-      await this._updateUnreadCounts(message, normalizedId);
+      // Offline delivery queue — parity with the REST send path
+      // (`MeeshySocketIOManager.broadcastMessage` / `_broadcastNewMessage`).
+      // Without this, a message sent via the primary WS `message:send` path
+      // to a currently-offline recipient is never replayed on their next
+      // reconnect (`_drainPendingMessages`) and never triggers the
+      // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
+      // `broadcastPayload` (same one peers receive live) so a replayed
+      // message never leaks the sender's local optimistic id to another user.
+      // Sender exclusion goes through BOTH identities, reproducing `_isSender`:
+      // this path's `senderId` is a Participant.id on the REST/ZMQ transport and
+      // a User.id on the WS transport, and the two id spaces never collide.
+      await enqueueForOfflineParticipants(
+        { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+        {
+          conversationId: normalizedId,
+          actorParticipantId: message.senderId,
+          actorUserId: message.senderId,
+          eventType: 'new',
+          messageId: message.id,
+          payload: broadcastPayload,
+          participants: sharedParticipants,
+        }
+      );
+
+      // Mettre à jour unread counts (re-uses the participant list already fetched above)
+      await this._updateUnreadCounts(message, normalizedId, sharedParticipants);
 
       // Auto-mark delivered for online recipients so the sender's checkmark
       // upgrades from "sent" (✓) to "delivered" (✓✓ gray) immediately, even
@@ -673,7 +1405,7 @@ export class MessageHandler {
       // Without this, MESSAGE_NEW only reaches sockets in the conversation
       // room, so an online recipient outside the conversation never triggers
       // mark-as-received and the sender stays stuck at a single checkmark.
-      this._autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
+      this.autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
         handlerLogger.warn('auto-deliver background failure', { error: err });
       });
     } catch (error) {
@@ -693,12 +1425,32 @@ export class MessageHandler {
     payload: Record<string, unknown>,
     opts: { excludeUserId?: string; excludeSocketId?: string }
   ): void {
-    const socketIds = this.io.sockets.adapter.rooms.get(room);
-    if (!socketIds || socketIds.size === 0) return;
+    // `adapter.rooms` and the `connectedUsers`/`socketToUser` maps only ever see
+    // THIS node's sockets. On a multi-node deployment (the documented 100k+
+    // msg/s horizontal-scale topology runs the Socket.IO Redis adapter) a
+    // recipient connected to another gateway node is never enumerated here — so
+    // the per-language loop below, which can only resolve locally-connected
+    // sockets, would silently never deliver `message:new` to them. Broadcast the
+    // FULL, untrimmed payload to the room across the cluster FIRST (the Redis
+    // adapter propagates `io.to(room)`), excepting every LOCAL room socket —
+    // each of which the loop below serves with a language-trimmed copy — plus
+    // the sender. Remote sockets thus receive exactly one (unfiltered)
+    // `message:new`; local sockets receive exactly one trimmed copy. On a single
+    // node every room socket is local, so the except-set covers the whole room
+    // and this cross-node broadcast reaches nobody — behavior is unchanged. The
+    // bandwidth trim still applies to every socket whose language IS resolvable
+    // locally (the common co-located case).
+    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
+    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
+    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
+    if (opts.excludeSocketId) exceptForRemote.push(opts.excludeSocketId);
+    this.io.to(room).except(exceptForRemote).emit(SERVER_EVENTS.MESSAGE_NEW, payload);
+
+    if (!localSocketIds || localSocketIds.size === 0) return;
 
     const originalLanguage = String((payload as { originalLanguage?: unknown }).originalLanguage || 'fr');
     const groups = groupSocketsByLanguage({
-      socketIds,
+      socketIds: localSocketIds,
       originalLanguage,
       excludeUserId: opts.excludeUserId,
       excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,
@@ -725,10 +1477,84 @@ export class MessageHandler {
       }
       // Chain `.to(socketId)` so a single emit fans out to exactly this group's
       // sockets (mirrors the manager's per-language emit).
-      let emitter: any = this.io;
-      for (const sid of group.socketIds) emitter = emitter.to(sid);
+      const [firstSid, ...restSids] = group.socketIds;
+      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
+  }
+
+  /**
+   * Offline delivery queue for message:edit / message:delete — mirrors the
+   * enqueue block in `broadcastNewMessage` for the WS `message:send` path.
+   * Without this, an edit or delete made while a recipient is offline is
+   * lost for them: `RedisDeliveryQueue` only ever replayed `message:new`
+   * entries on reconnect, so the recipient's cached message stays on the
+   * pre-edit content (or a "deleted" message stays visible) until an
+   * unrelated full refetch of that conversation happens to occur.
+   *
+   * L'exclusion porte sur l'ACTEUR — celui qui édite ou supprime — et sur
+   * personne d'autre. Le paramètre s'appelait `senderParticipantId`, et ce nom
+   * décrivait l'auteur du message : les deux coïncident tant qu'on ne peut
+   * toucher que ses propres messages, et divergent dès qu'un modérateur
+   * intervient. `handleMessageEdit` passait effectivement `message.senderId`,
+   * si bien que l'auteur hors ligne — le seul destinataire que la modération
+   * concerne vraiment — était le seul que le rejeu sautait. Un paramètre-objet
+   * nommé d'après le RÔLE (`actor…`) plutôt que d'après une valeur qu'on avait
+   * sous la main est ce qui rend le prochain appel lisible au premier coup
+   * d'œil.
+   */
+  private async _enqueueOfflineEventForParticipants(params: {
+    conversationId: string;
+    /** `Participant.id` de l'acteur, quand le transport le connaît. */
+    actorParticipantId?: string | null;
+    /** `User.id` de l'acteur. Les deux espaces d'id ne se croisent jamais. */
+    actorUserId?: string | null;
+    eventType: 'edited' | 'deleted';
+    messageId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    await enqueueForOfflineParticipants(
+      { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+      params
+    );
+  }
+
+  /**
+   * Sender-exclusion predicate robust to which identity `senderId` carries.
+   * The WS `message:send` path forwards `MessagingService`'s response object
+   * whose `senderId` is normalised to the sender's `User.id` (clients compare
+   * against their own userId), whereas the REST/ZMQ path keeps `senderId` as
+   * the raw `Participant.id`. Participant ids and user ids never collide, so
+   * matching EITHER excludes the sender on both transports without ever
+   * dropping a legitimate recipient. Anonymous senders (no `userId`) keep the
+   * `Participant.id` representation and are matched by `p.id`.
+   */
+  private _isSender(
+    p: { id: string; userId: string | null },
+    senderId: string | null | undefined
+  ): boolean {
+    return !!senderId && (p.id === senderId || p.userId === senderId);
+  }
+
+  /**
+   * Clé sous laquelle `connectedUsers` indexe ce participant.
+   *
+   * `AuthHandler._registerUser` reçoit `user.id` pour un inscrit et
+   * `participant.id` pour un anonyme — la seule identité qu'un anonyme
+   * possède, n'ayant pas de ligne `User`. Une sonde de présence écrite
+   * `!!p.userId && connectedUsers.has(p.userId)` ne peut donc JAMAIS être
+   * vraie pour un anonyme : elle l'exclut par construction, pas par
+   * circonstance.
+   *
+   * Ce n'est pas neutre pour l'expéditeur : `getLatestMessageSummary` compte
+   * TOUT participant actif par `Participant.id` dans `totalMembers`. Un
+   * anonyme présent au dénominateur et inatteignable au numérateur rend
+   * « remis à tous » impossible pour la conversation entière — soit
+   * exactement la forme de toute conversation ouverte par lien de partage.
+   */
+  private _presenceKey(p: { id: string; userId: string | null }): string {
+    return p.userId ?? p.id;
   }
 
   /**
@@ -738,9 +1564,23 @@ export class MessageHandler {
    * vers la conversation room et chaque user room afin que l'expéditeur
    * voie passer son indicateur à "delivered" sans devoir attendre une
    * action manuelle du destinataire.
+   *
+   * Public: source unique partagée par les TROIS transports d'envoi — le chemin
+   * WS `message:send` (ci-dessus, `broadcastNewMessage`), le chemin REST/ZMQ
+   * (`MeeshySocketIOManager._broadcastNewMessage`, qui délègue ici) et les deux
+   * routes de lien de partage (via `broadcastLinkMessage`, qui passent par le
+   * relais public du manager). Toutes partagent le même `io`/`connectedUsers`
+   * et les mêmes services, donc le comportement est identique quel que soit le
+   * transport (parité receipt).
+   *
+   * Le paramètre est structural et minimal — les deux seuls champs lus — et non
+   * un `Message` Prisma : les routes de lien ne construisent pas d'entité
+   * complète, et demander ce dont on n'a pas besoin est précisément ce qui
+   * rendait cette unité inatteignable depuis une route. Même raison et même
+   * forme que `PostSaveMessage` (`services/messaging/messagePostSaveEffects.ts`).
    */
-  private async _autoDeliverToOnlineRecipients(
-    message: Message,
+  async autoDeliverToOnlineRecipients(
+    message: { id: string; senderId: string | null },
     conversationId: string
   ): Promise<void> {
     const senderId = message.senderId;
@@ -752,18 +1592,24 @@ export class MessageHandler {
     });
 
     const onlineRecipients = participants.filter(
-      (p): p is { id: string; userId: string } =>
-        p.id !== senderId && !!p.userId && this.connectedUsers.has(p.userId)
+      (p) => !this._isSender(p, senderId) && this.connectedUsers.has(this._presenceKey(p))
     );
     handlerLogger.debug('auto-deliver', { conversationId, messageId: message.id, participants: participants.length, onlineRecipients: onlineRecipients.length });
     if (onlineRecipients.length === 0) return;
 
+    // Les préférences se lisent sous la MÊME clé que la présence : un anonyme
+    // n'a pas d'id utilisateur à interroger, et `getPreferencesForUsers` le
+    // sert par les défauts dès que `isAnonymous` est vrai. Le déclarer inscrit
+    // enverrait un `Participant.id` à `fetchManyFromDatabase` comme s'il
+    // s'agissait d'un `User.id` — une requête payée pour rien, dont le résultat
+    // vide serait mis en cache sous un id qui n'est pas un utilisateur.
     const preferences = await this.privacyPreferencesService.getPreferencesForUsers(
-      onlineRecipients.map((r) => ({ id: r.userId, isAnonymous: false }))
+      onlineRecipients.map((r) => ({ id: this._presenceKey(r), isAnonymous: !r.userId }))
     );
-    const allowedRecipients = onlineRecipients.filter(
-      (r) => preferences.get(r.userId)?.showReadReceipts
-    );
+    const allowedRecipients = onlineRecipients.filter((r) => {
+      const key = this._presenceKey(r);
+      return preferences.get(key)?.showReadReceipts;
+    });
 
     const results = await Promise.allSettled(
       allowedRecipients.map((r) =>
@@ -797,18 +1643,20 @@ export class MessageHandler {
       summary
     };
 
-    const convRoom = ROOMS.conversation(conversationId);
-    let emitter: ReturnType<SocketIOServer['to']> = this.io.to(convRoom);
-    const seen = new Set<string>([convRoom]);
-    for (const p of participants) {
-      if (!p.userId) continue;
-      const userRoom = ROOMS.user(p.userId);
-      if (seen.has(userRoom)) continue;
-      seen.add(userRoom);
-      emitter = emitter.to(userRoom);
-    }
-    emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-    handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
+    // Même clé de présence que le filtre ci-dessus, par la même unité que les
+    // deux routes d'accusé de lecture : la boucle que ceci remplace sautait tout
+    // participant sans ligne `User`, donc l'anonyme qui vient d'acquitter
+    // n'apprenait pas lui-même que la remise avait eu lieu — et un anonyme parti
+    // sur la liste des conversations, sorti de `conversation:<id>`, ne recevait
+    // plus rien du tout.
+    const rooms = emitToConversationParticipants({
+      io: this.io,
+      conversationId,
+      participants,
+      events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+      payload
+    });
+    handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms, deliveredCount: summary.deliveredCount });
   }
 
   /**
@@ -852,6 +1700,12 @@ export class MessageHandler {
 
     if (!userId) return null;
 
+    const cacheKey = `${userId}:${conversationId}`;
+    const cached = this.participantIdCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     const result = await resolveParticipant({
       prisma: this.prisma,
       userIdOrToken: userId,
@@ -859,7 +1713,27 @@ export class MessageHandler {
       connectedUsers: this.connectedUsers,
     });
 
+    if (result?.participantId) {
+      this.participantIdCache.set(cacheKey, result.participantId);
+    }
+
     return result?.participantId ?? null;
+  }
+
+  /**
+   * Invalidate participantId cache entries for a given user (e.g. on leave/kick).
+   * Pass conversationId to remove just one entry, omit to clear all for the user.
+   */
+  invalidateParticipantCache(userId: string, conversationId?: string): void {
+    if (conversationId) {
+      this.participantIdCache.delete(`${userId}:${conversationId}`);
+    } else {
+      for (const key of this.participantIdCache.keys()) {
+        if (key.startsWith(`${userId}:`)) {
+          this.participantIdCache.delete(key);
+        }
+      }
+    }
   }
 
   /**
@@ -868,24 +1742,61 @@ export class MessageHandler {
    * (messages tout juste créés → null, messages re-broadcastés après traduction → objet).
    */
   private async _getMessageTranslations(message: Message): Promise<unknown[]> {
-    const inMemory = (message as unknown as Record<string, unknown>).translations;
-    if (inMemory !== undefined) {
-      return this._parseTranslations(inMemory);
+    if (message.translations !== undefined) {
+      return this._parseTranslations(message.id, message.translations);
     }
     const msg = await this.prisma.message.findUnique({
       where: { id: message.id },
       select: { translations: true }
     });
-    return this._parseTranslations(msg?.translations);
+    return this._parseTranslations(message.id, msg?.translations);
   }
 
-  private _parseTranslations(translations: unknown): unknown[] {
+  /**
+   * Sérialise les traductions d'un message pour le fil `message:new`.
+   *
+   * Deux formes entrent ici, et une seule sort :
+   * - une **carte Mongo** (`{ "en": { text, translationModel, ... } }`), telle
+   *   que la colonne `Message.translations` la stocke — c'est ce que rend le
+   *   `findUnique` ci-dessus, et ce que porte un message re-broadcasté après
+   *   traduction ;
+   * - un **tableau déjà au format API**, ce que le type partagé
+   *   `Message.translations` promet (`readonly MessageTranslation[]`) — laissé
+   *   intact, le re-transformer produirait `targetLanguage: "0"` (les clés
+   *   d'un tableau sont ses index).
+   *
+   * La carte passe par `transformTranslationsToArray`, le MÊME sérialiseur que
+   * le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`). Ce
+   * handler en portait une seconde copie qui répandait l'entrée Mongo telle
+   * quelle (`{ targetLanguage, ...data }`) : il en sortait `text`, jamais
+   * `translatedContent`, et ni `id` ni `messageId`. Ces trois champs sont NON
+   * optionnels dans `APITextTranslation` (SDK iOS), et `APIMessage.init(from:)`
+   * décode le tableau avec `try` et non `try?` — une seule entrée mal formée
+   * fait échouer le décodage du `message:new` ENTIER : le message n'apparaît
+   * pas du tout en temps réel, il ne lui manque pas seulement ses traductions.
+   * Le même message rechargé par `GET /messages` s'affichait normalement ; la
+   * visibilité dépendait donc du transport qui l'avait apporté.
+   *
+   * Les entrées inexploitables de la carte (valeur nulle, primitive, `text`
+   * non textuel — une colonne `Json` n'a pas de schéma pour l'interdire) sont
+   * ÉCARTÉES avant transformation, jamais émises mutilées : une entrée sans
+   * `translatedContent` utilisable ferait échouer le décodage du message
+   * entier, exactement le défaut que ce sérialiseur corrige. Les écarter ici
+   * plutôt que de laisser `transformTranslationsToArray` déréférencer `null`
+   * garde aussi les traductions VALIDES de la même carte — un seul `throw`
+   * remonterait au `.catch(() => [])` de l'appelant et les perdrait toutes.
+   */
+  private _parseTranslations(messageId: string, translations: unknown): unknown[] {
     if (!translations || typeof translations !== 'object') return [];
     if (Array.isArray(translations)) return translations;
-    return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({
-      targetLanguage: lang,
-      ...(typeof data === 'object' && data !== null ? data : {})
-    }));
+
+    const usableEntries = Object.entries(translations as Record<string, unknown>)
+      .filter(([, data]) => typeof (data as { text?: unknown })?.text === 'string');
+
+    return transformTranslationsToArray(
+      messageId,
+      Object.fromEntries(usableEntries) as Record<string, MessageTranslationJSON>
+    );
   }
 
   /**
@@ -898,13 +1809,20 @@ export class MessageHandler {
     translations: unknown[]
   ): unknown {
     // Build a backward-compatible sender object from Participant
-    const senderParticipant = (message as unknown as Record<string, unknown>).sender as Record<string, unknown> | undefined;
-    const senderUser = senderParticipant?.user as Record<string, unknown> | undefined;
+    const senderParticipant = message.sender;
+    const senderUser = senderParticipant?.user;
 
     return {
       id: message.id,
       conversationId,
-      senderId: message.senderId,
+      // `message.senderId` is a Participant.id, but clients compare the wire
+      // `senderId` against their own User.id (apps/web use-socket-cache-sync.ts)
+      // to detect own messages and reconcile the optimistic bubble across
+      // devices. Resolve to the sender's User.id — mirroring the REST/ZMQ
+      // writer (MeeshySocketIOManager.broadcastMessage) — so both transports
+      // emit the same id-space. Falls back to Participant.id for anonymous
+      // senders (no userId), matching the anonymous room convention.
+      senderId: senderParticipant?.userId ?? senderUser?.id ?? message.senderId,
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',
@@ -914,16 +1832,16 @@ export class MessageHandler {
       // a été perdu (crash app après le send, multi-device). Le caller
       // `broadcastNewMessage` strip ce champ pour les autres
       // participants (`delete broadcastPayload.clientMessageId`).
-      clientMessageId: (message as never)['clientMessageId'] || undefined,
-      isBlurred: Boolean((message as never)['isBlurred']),
-      isViewOnce: Boolean((message as never)['isViewOnce']),
-      maxViewOnceCount: (message as never)['maxViewOnceCount'] ?? undefined,
-      effectFlags: (message as never)['effectFlags'] ?? 0,
-      expiresAt: (message as never)['expiresAt'] || undefined,
-      isEdited: Boolean((message as never)['isEdited']),
-      deletedAt: (message as never)['deletedAt'] || undefined,
+      clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
+      isBlurred: Boolean(message.isBlurred),
+      isViewOnce: Boolean(message.isViewOnce),
+      maxViewOnceCount: message.maxViewOnceCount ?? undefined,
+      effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
+      expiresAt: message.expiresAt || undefined,
+      isEdited: Boolean(message.isEdited),
+      deletedAt: message.deletedAt || undefined,
       createdAt: message.createdAt,
-      validatedMentions: (message as never)['validatedMentions'] || [],
+      validatedMentions: message.validatedMentions ?? [],
       translations,
       // Unified sender from Participant
       sender: senderParticipant ? {
@@ -939,7 +1857,17 @@ export class MessageHandler {
       } : undefined,
       attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
-      replyTo: (message as never)['replyTo'],
+      // Lot 2 : `MessageProcessor.saveMessage` récupère déjà `metadata` du
+      // message CITÉ (include, pas select restrictif), donc la donnée brute
+      // voyageait déjà — mais sans ce hoist elle restait invisible sous
+      // `replyTo.metadata.location` au lieu de `replyTo.location`.
+      // DUPLICATION CONNUE avec MeeshySocketIOManager._broadcastNewMessage
+      // (son bloc `replyTo`, qui reconstruit/aplatit le sender à la main) —
+      // voir le commentaire à cet endroit précis. Tout champ ajouté ici doit
+      // y être répliqué à la main, et inversement.
+      replyTo: message.replyTo
+        ? hoistLocationOnto(message.replyTo as unknown as Record<string, unknown>)
+        : message.replyTo,
       // Réponse à un post : `postReplyTo` (snapshot figé) est ajouté par
       // `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
       storyReplyToId: message.storyReplyToId || undefined,
@@ -967,60 +1895,47 @@ export class MessageHandler {
    * explicitly select them.
    */
   private _serializeAttachmentsField(message: Message): unknown[] {
-    const raw = (message as unknown as Record<string, unknown>).attachments;
+    const raw = message.attachments;
     if (!Array.isArray(raw)) return [];
     return raw.map((att) => serializeAttachmentForSocket(att as Record<string, unknown>));
   }
 
   /**
-   * Met à jour les unread counts pour tous les participants
-   * Uses Participant model instead of ConversationMember
+   * Met à jour les unread counts pour tous les participants.
+   *
+   * Délègue à `emitUnreadCountsToRecipients` — l'unité partagée par les TROIS
+   * transports d'envoi (WS ici, REST/ZMQ via `MeeshySocketIOManager`, lien de
+   * partage via `broadcastLinkMessage`). L'implémentation vivait ici, dans un
+   * `private`, donc inatteignable par les routes de lien qui contournent cette
+   * classe : leur badge ne bougeait jamais.
+   *
+   * `preloadedParticipants` est transmis tel quel — `broadcastNewMessage` a déjà
+   * chargé cette liste pour la file hors ligne, et un second aller-retour sur le
+   * chemin le plus chaud du service n'est pas acceptable.
    */
-  private async _updateUnreadCounts(message: Message, conversationId: string): Promise<void> {
-    try {
-      const senderId = message.senderId;
-      if (!senderId) return;
-
-      // Get all active participants except the sender (include joinedAt for batch count floor)
-      const participants = await this.prisma.participant.findMany({
-        where: {
-          conversationId,
-          isActive: true,
-          id: { not: senderId }
-        },
-        select: { id: true, userId: true, joinedAt: true }
-      });
-
-      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
-      const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
-        participants,
-        conversationId,
-        senderId
-      );
-
-      await Promise.all(participants.map(async (participant) => {
-        const roomTarget = participant.userId ?? participant.id;
-        const unreadCount = unreadCounts.get(participant.id) ?? 0;
-        this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-          conversationId,
-          unreadCount
-        });
-      }));
-    } catch (error) {
-      handlerLogger.warn('unread count update failed', { error });
-    }
+  private async _updateUnreadCounts(
+    message: Message,
+    conversationId: string,
+    preloadedParticipants?: { id: string; userId: string | null; joinedAt: Date }[]
+  ): Promise<void> {
+    await emitUnreadCountsToRecipients({
+      io: this.io,
+      prisma: this.prisma,
+      readStatusService: this.readStatusService,
+      conversationId,
+      senderId: message.senderId,
+      participants: preloadedParticipants,
+      onError: (error) => handlerLogger.warn('unread count update failed', { error }),
+    });
   }
 
 
   private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
     if (usernames.length === 0) return [];
     try {
-      const users = await this.prisma.user.findMany({
-        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
-        select: { id: true },
-      });
-      return users.map((u) => u.id);
-    } catch {
+      return await resolveUsernamesToIds(this.prisma, usernames);
+    } catch (error) {
+      handlerLogger.warn('mention user lookup failed (mentions skipped)', { usernames, error });
       return [];
     }
   }
@@ -1050,7 +1965,7 @@ export class MessageHandler {
       replyToId: message.replyToId ?? undefined,
       mentionedUserIds: message.mentionedUserIds ?? [],
       timestamp: message.createdAt.getTime(),
-    }).catch(() => {});
+    }).catch(err => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }));
   }
 
   private _sendError(
@@ -1060,6 +1975,21 @@ export class MessageHandler {
     code?: string
   ): void {
     const errorResponse: SocketIOResponse<{ messageId: string }> = {
+      success: false,
+      error,
+      ...(code ? { code } : {})
+    };
+    if (callback) callback(errorResponse);
+    socket.emit(SERVER_EVENTS.ERROR, { message: error, ...(code ? { code } : {}) });
+  }
+
+  private _sendGenericError(
+    callback: ((response: SocketIOResponse) => void) | undefined,
+    error: string,
+    socket: Socket,
+    code?: string
+  ): void {
+    const errorResponse: SocketIOResponse = {
       success: false,
       error,
       ...(code ? { code } : {})
@@ -1103,15 +2033,14 @@ export class MessageHandler {
     }
     const cacheStore = getCacheStore();
     for (const otherId of otherMemberIds) {
-      const [a, b] = [userId, otherId].sort();
-      const cacheKey = `blocks:${a}:${b}`;
+      const cacheKey = blockCacheKey(userId, otherId);
       const cached = await cacheStore.get(cacheKey);
       let blocked: boolean;
       if (cached !== null) {
         blocked = cached === '1';
       } else {
         blocked = await isBlockedBetween(this.prisma, userId, otherId);
-        await cacheStore.set(cacheKey, blocked ? '1' : '0', 300);
+        await cacheStore.set(cacheKey, blocked ? '1' : '0', BLOCK_CACHE_TTL_SECONDS);
       }
       if (blocked) {
         return true;
@@ -1122,6 +2051,10 @@ export class MessageHandler {
 
   /**
    * Envoie une réponse de succès
+   *
+   * Wrapped in try-catch: a throwing callback must never propagate up to the
+   * Socket.IO event handler frame, which would tear down the entire socket
+   * connection for an unrelated serialization / client-side bug.
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
@@ -1129,31 +2062,28 @@ export class MessageHandler {
   ): void {
     if (!callback) return;
 
-    if (response.success && response.data) {
-      // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
-      // ACK against their pending optimistic row by cid (the `messageId`
-      // alone is insufficient: the optimistic row has a `cid_*` local id
-      // and only learns the server `messageId` from this very ACK).
-      // `createdAt` is echoed too so the WS-first send path can stamp the
-      // optimistic row with the authoritative server time without waiting
-      // for the `message:new` broadcast.
-      const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
-      const createdAt = data.createdAt instanceof Date
-        ? data.createdAt.toISOString()
-        : data.createdAt;
-      callback({
-        success: true,
-        data: {
-          messageId: data.id,
-          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
-          ...(createdAt ? { createdAt } : {})
-        }
-      });
-    } else {
-      callback({
-        success: false,
-        error: response.error || 'Failed to send message'
-      });
+    try {
+      if (response.success && response.data) {
+        // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
+        // ACK against their pending optimistic row by cid (the `messageId`
+        // alone is insufficient: the optimistic row has a `cid_*` local id
+        // and only learns the server `messageId` from this very ACK).
+        // `createdAt` is echoed too so the WS-first send path can stamp the
+        // optimistic row with the authoritative server time without waiting
+        // for the `message:new` broadcast.
+        const data = response.data as MessageAckSource;
+        callback({
+          success: true,
+          data: buildMessageAckData(data)
+        });
+      } else {
+        callback({
+          success: false,
+          error: response.error || 'Failed to send message'
+        });
+      }
+    } catch (error) {
+      handlerLogger.error('ACK callback threw — socket connection preserved', { error });
     }
   }
 }

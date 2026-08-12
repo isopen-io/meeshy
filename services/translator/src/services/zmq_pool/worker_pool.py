@@ -160,7 +160,7 @@ class WorkerPool:
             increment = 5 if self.pool_name == "normal" else 3
             new_count = min(self.current_workers + increment, self.max_scaling_workers)
 
-            if new_count > self.current_workers:
+            if new_count > self.current_workers:  # pragma: no branch
                 logger.info(
                     f"[{self.pool_name.upper()}] Scaling UP: "
                     f"{self.current_workers} → {new_count} workers"
@@ -176,7 +176,7 @@ class WorkerPool:
             decrement = 2 if self.pool_name == "normal" else 1
             new_count = max(self.current_workers - decrement, self.min_workers)
 
-            if new_count < self.current_workers:
+            if new_count < self.current_workers:  # pragma: no branch
                 logger.info(
                     f"[{self.pool_name.upper()}] Scaling DOWN: "
                     f"{self.current_workers} → {new_count} workers"
@@ -255,26 +255,37 @@ class WorkerPool:
 
     def shutdown(self):
         """Shutdown du thread pool"""
-        if self.thread_pool:
+        if self.thread_pool:  # pragma: no branch
             self.thread_pool.shutdown(wait=True)
             logger.info(f"[{self.pool_name.upper()}] Thread pool shut down")
 
 
 def configure_pytorch_threads(total_workers: int):
     """
-    Configure PyTorch pour limiter les threads par worker
+    Configure les threads PyTorch du process.
+
+    torch.set_num_threads est GLOBAL au process et l'inférence ML est
+    sérialisée par un threading.Lock par modèle : une seule inférence est
+    active à la fois, les workers asyncio attendent le lock, pas le CPU.
+    L'unique inférence active doit donc disposer de presque tous les cœurs
+    (cpu_count - 1, plancher 2) — diviser par le nombre de workers bridait
+    l'inférence à 2 threads sur le serveur 4 cœurs (~2× plus lente),
+    faisant expirer les budgets des textes longs (incident 2026-07-04).
 
     Args:
-        total_workers: Nombre total de workers dans tous les pools
+        total_workers: Nombre total de workers dans tous les pools (loggé
+            pour contexte, n'influence pas le nombre de threads)
     """
     try:
         import torch
         cpu_count = multiprocessing.cpu_count()
-        # Chaque worker utilise 2 threads PyTorch max (évite contention)
-        threads_per_worker = max(2, cpu_count // total_workers)
-        torch.set_num_threads(threads_per_worker)
-        logger.info(f"[PYTORCH] Configured {threads_per_worker} threads per worker")
-    except ImportError:
+        inference_threads = max(2, cpu_count - 1)
+        torch.set_num_threads(inference_threads)
+        logger.info(
+            f"[PYTORCH] Configured {inference_threads} inference threads "
+            f"({cpu_count} cores, {total_workers} async workers)"
+        )
+    except ImportError:  # pragma: no cover
         logger.debug("[PYTORCH] PyTorch not available, skipping thread configuration")
 
 

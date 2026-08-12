@@ -3,27 +3,31 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// The People hub — the redesigned contact view.
+///
+/// Three primary tabs sit under a collapsing header and swipe horizontally:
+/// **Appels** (call journal), **Clavier** (dial pad), **Contacts** (the
+/// directory — an annuaire filtered by `ContactFilter`).
+///
+/// Connection management and user discovery (Demandes / Decouvrir / Bloques)
+/// no longer clutter the Contacts tab — they live in `PeopleDiscoveryView`,
+/// reachable from the floating menu ladder.
 struct ContactsHubView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @State private var scrollOffset: CGFloat = 0
-    @State private var selectedTab: ContactsTab
+    @State private var selectedTab: PeopleTab = .contacts
 
+    @StateObject private var keypadVM = KeypadViewModel()
+    @StateObject private var callsVM = CallsViewModel()
     @StateObject private var contactsListVM = ContactsListViewModel()
-    @StateObject private var requestsVM = RequestsViewModel()
-    @StateObject private var discoverVM = DiscoverViewModel()
-    @StateObject private var blockedVM = BlockedViewModel()
-
-    init(initialTab: ContactsTab = .contacts) {
-        _selectedTab = State(initialValue: initialTab)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             CollapsibleHeader(
-                title: "Contacts",
+                title: tabTitle(selectedTab),
                 scrollOffset: scrollOffset,
                 onBack: { router.pop() },
                 titleColor: theme.textPrimary,
@@ -40,6 +44,7 @@ struct ContactsHubView: View {
             // Re-expand the header when switching tabs (the freshly shown tab's
             // offset only re-fires once the user scrolls it).
             scrollOffset = 0
+            HapticFeedback.light()
         }
     }
 
@@ -47,7 +52,7 @@ struct ContactsHubView: View {
 
     private var tabBar: some View {
         HStack(spacing: 0) {
-            ForEach(ContactsTab.allCases, id: \.self) { tab in
+            ForEach(PeopleTab.allCases, id: \.self) { tab in
                 tabButton(tab)
             }
         }
@@ -57,7 +62,7 @@ struct ContactsHubView: View {
         }
     }
 
-    private func tabButton(_ tab: ContactsTab) -> some View {
+    private func tabButton(_ tab: PeopleTab) -> some View {
         let isSelected = selectedTab == tab
         let badge = badgeCount(for: tab)
 
@@ -65,14 +70,13 @@ struct ContactsHubView: View {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 selectedTab = tab
             }
-            HapticFeedback.light()
         } label: {
             VStack(spacing: 6) {
                 HStack(spacing: 4) {
                     Image(systemName: tab.icon)
                         .font(.footnote.weight(.medium))
 
-                    Text(tab.rawValue)
+                    Text(tabTitle(tab))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
 
@@ -94,14 +98,27 @@ struct ContactsHubView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.rawValue)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tabTitle(tab))\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private func badgeCount(for tab: ContactsTab) -> Int {
+    /// Localized display name for a People-hub tab. The raw enum value stays the
+    /// stable French key used for `.tag`/persistence; VoiceOver and the visible
+    /// label read this localized string instead.
+    private func tabTitle(_ tab: PeopleTab) -> String {
         switch tab {
-        case .contacts: return FriendshipCache.shared.friendCount
-        case .requests: return FriendshipCache.shared.pendingReceivedCount
-        case .discover, .blocked: return 0
+        case .calls:
+            return String(localized: "contacts.tab.calls", defaultValue: "Appels", bundle: .main)
+        case .keypad:
+            return String(localized: "contacts.tab.keypad", defaultValue: "Clavier", bundle: .main)
+        case .contacts:
+            return String(localized: "contacts.tab.contacts", defaultValue: "Contacts", bundle: .main)
+        }
+    }
+
+    private func badgeCount(for tab: PeopleTab) -> Int {
+        switch tab {
+        case .contacts, .calls, .keypad: return 0
         }
     }
 
@@ -109,20 +126,28 @@ struct ContactsHubView: View {
 
     private var tabContent: some View {
         TabView(selection: $selectedTab) {
-            ContactsListTab(viewModel: contactsListVM, isActive: selectedTab == .contacts, onScrollOffsetChange: { scrollOffset = $0 })
-                .tag(ContactsTab.contacts)
+            CallsTab(
+                viewModel: callsVM,
+                isActive: selectedTab == .calls,
+                onScrollOffsetChange: { scrollOffset = $0 }
+            )
+            .tag(PeopleTab.calls)
 
-            RequestsTab(viewModel: requestsVM, isActive: selectedTab == .requests, onScrollOffsetChange: { scrollOffset = $0 })
-                .tag(ContactsTab.requests)
+            KeypadTab(
+                viewModel: keypadVM,
+                isActive: selectedTab == .keypad,
+                onScrollOffsetChange: { scrollOffset = $0 }
+            )
+            .tag(PeopleTab.keypad)
 
-            DiscoverTab(viewModel: discoverVM, isActive: selectedTab == .discover, onScrollOffsetChange: { scrollOffset = $0 })
-                .tag(ContactsTab.discover)
-
-            BlockedTab(viewModel: blockedVM, isActive: selectedTab == .blocked, onScrollOffsetChange: { scrollOffset = $0 })
-                .tag(ContactsTab.blocked)
+            ContactsListTab(
+                viewModel: contactsListVM,
+                isActive: selectedTab == .contacts,
+                onScrollOffsetChange: { scrollOffset = $0 }
+            )
+            .tag(PeopleTab.contacts)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
     }
-
 }

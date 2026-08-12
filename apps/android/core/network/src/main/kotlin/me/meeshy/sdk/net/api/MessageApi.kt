@@ -9,6 +9,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -46,4 +47,16 @@ interface MessageApi {
         @Query("limit") limit: Int? = null,
         @Query("cursor") cursor: String? = null,
     ): ApiResponse<List<ApiMessage>>
+
+    @PUT("conversations/{cid}/messages/{mid}/pin")
+    suspend fun pin(
+        @Path("cid") conversationId: String,
+        @Path("mid") messageId: String,
+    ): ApiResponse<Unit>
+
+    @DELETE("conversations/{cid}/messages/{mid}/pin")
+    suspend fun unpin(
+        @Path("cid") conversationId: String,
+        @Path("mid") messageId: String,
+    ): ApiResponse<Unit>
 }

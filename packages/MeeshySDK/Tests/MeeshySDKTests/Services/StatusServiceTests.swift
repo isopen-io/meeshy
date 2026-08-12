@@ -22,10 +22,10 @@ final class StatusServiceTests: XCTestCase {
     private func makeAPIPost(id: String = "post1", content: String = "Hello") -> APIPost {
         let author = APIAuthor(id: "a1", username: "testuser", displayName: "Test", avatar: nil)
         return APIPost(
-            id: id, type: "STATUS", visibility: "PUBLIC", content: content,
+            id: id, type: "STATUS", visibility: "PUBLIC", visibilityUserIds: nil, content: content,
             originalLanguage: "fr", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
-            viewCount: 0, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
+            viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
             isPinned: false, isEdited: false, media: nil, comments: nil,
             repostOf: nil, originalRepostOfId: nil, isQuote: false,
             moodEmoji: "smile", audioUrl: nil,
@@ -102,6 +102,29 @@ final class StatusServiceTests: XCTestCase {
         XCTAssertEqual(result.moodEmoji, "smile")
     }
 
+    func testCreateForwardsOriginalLanguageToTheBody() async throws {
+        // Prisme Linguistique : sans langue source, le gateway ne peut pas
+        // router la traduction NLLB du texte du mood. L'app envoie « fr »
+        // par défaut (public cible France, directive 2026-07-30).
+        let post = makeAPIPost()
+        let response = APIResponse<APIPost>(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(moodEmoji: "smile", content: "Bonjour", originalLanguage: "fr")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["originalLanguage"] as? String, "fr")
+    }
+
+    func testCreateWithoutOriginalLanguageOmitsTheKey() async throws {
+        let post = makeAPIPost()
+        let response = APIResponse<APIPost>(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(moodEmoji: "smile", content: "Hello")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["originalLanguage"])
+    }
+
     func testCreateWithVisibilityAndUserIds() async throws {
         let post = makeAPIPost()
         let response = APIResponse<APIPost>(success: true, data: post, error: nil)
@@ -128,6 +151,25 @@ final class StatusServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/posts")
+    }
+
+    func testCreateForwardsAudioUrlAndRepostOfIdForRepublish() async throws {
+        // Republishing a voice mood must carry the source audio (else the voice
+        // is lost) AND link the source via repostOfId (so attribution resolves
+        // from repostOf.author and the source's TTL no longer matters).
+        let post = makeAPIPost()
+        let response = APIResponse<APIPost>(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(
+            moodEmoji: "fire",
+            content: "republished mood",
+            audioUrl: "/api/v1/attachments/file/voice.mp3",
+            repostOfId: "source-status-1"
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["audioUrl"] as? String, "/api/v1/attachments/file/voice.mp3")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["repostOfId"] as? String, "source-status-1")
     }
 
     // MARK: - delete

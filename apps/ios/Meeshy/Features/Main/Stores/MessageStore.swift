@@ -48,6 +48,30 @@ private func fetchMessageWindow(
     initialWindowSize: Int
 ) throws -> [MessageRecord] {
     switch mode {
+    case .search(let ids):
+        // Filtered-conversation search: show ONLY the matched messages
+        // (chronological), regardless of how far back they are. Matches are
+        // identified by their SERVER id (the search API works server-side);
+        // offline messages without a serverId are intentionally excluded.
+        guard !ids.isEmpty else { return [] }
+        return try reader.read { db in
+            // SQLite caps `IN (…)` at ~999 bound variables. Chunk to stay safe
+            // on very large match sets (deep search pagination), then re-sort
+            // the union chronologically. The common case (≤ a page of results)
+            // is a single query + a trivial sort.
+            let chunks = stride(from: 0, to: ids.count, by: 900).map {
+                Array(ids[$0 ..< min($0 + 900, ids.count)])
+            }
+            var collected: [MessageRecord] = []
+            for chunk in chunks {
+                let rows = try MessageRecord
+                    .filter(Column("conversationId") == convId)
+                    .filter(chunk.contains(Column("serverId")))
+                    .fetchAll(db)
+                collected.append(contentsOf: rows)
+            }
+            return collected.sorted { $0.createdAt < $1.createdAt }
+        }
     case .around(let centerDate):
         return try reader.read { db in
         let half = initialWindowSize / 2
@@ -109,6 +133,12 @@ public enum WindowMode: Equatable, Sendable {
     case latest
     /// Jumped window — show messages centered around a specific date.
     case around(date: Date)
+    /// Search filter — show ONLY the messages whose `serverId` is in `ids`,
+    /// in chronological order, independent of any time window. Drives the
+    /// in-situ filtered-conversation search UX. `ids` are server message IDs;
+    /// the caller must have persisted the matches in GRDB beforehand (e.g.
+    /// via `upsertFromAPIMessages`).
+    case search(ids: [String])
 }
 
 @MainActor
@@ -197,7 +227,7 @@ public final class MessageStore: ObservableObject {
                 // REST-refresh path. Window transitions (jump / restore /
                 // paginate) bypass this notification and call refreshFromDB()
                 // directly with a straight replace.
-                await store.refreshFromDB(mergeInMemory: true)
+                await store.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
             }
         }
         // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
@@ -225,7 +255,7 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Off-main DB read + progressive decrypt
 
-    func refreshFromDB(mergeInMemory: Bool = false) async {
+    func refreshFromDB(mergeInMemory: Bool = false, skipRunLoopYield: Bool = false) async {
         let convId = conversationId
         let mode = windowMode
         let anchor = windowAnchor
@@ -258,11 +288,15 @@ public final class MessageStore: ObservableObject {
         // and silently shows an empty bubble list. The dispatch hop forces
         // the mutation onto a fresh runloop tick AFTER the current view
         // update completes.
-        await yieldToRunLoop()
-
-        // Re-check: state could have changed during the runloop yield (e.g.,
-        // a socket message arrived and another refresh wrote first).
-        guard newRecords != messages else { return }
+        // skipRunLoopYield: notification-driven paths already run inside a
+        // `Task { @MainActor in }` that was created outside any view-update
+        // cycle — the yield is unnecessary there and adds ~16ms per event.
+        if !skipRunLoopYield {
+            await yieldToRunLoop()
+            // Re-check: state could have changed during the runloop yield (e.g.,
+            // a socket message arrived and another refresh wrote first).
+            guard newRecords != messages else { return }
+        }
 
         publish(records: newRecords, mergeInMemory: mergeInMemory)
     }
@@ -481,6 +515,9 @@ public final class MessageStore: ObservableObject {
     // MARK: - Pagination
 
     func loadOlder(before: Date) async -> Bool {
+        // Temporal pagination is disabled in search-filter mode: the window is
+        // an explicit set of matched IDs, not an extensible chronological slice.
+        if case .search = windowMode { return false }
         let convId = conversationId
         let reader = persistence.reader
 
@@ -514,6 +551,17 @@ public final class MessageStore: ObservableObject {
     /// Restores the latest window. Used when returning from a jumped state.
     public func restoreLatestWindow() async {
         windowMode = .latest
+        windowAnchor = nil
+        await refreshFromDB()
+    }
+
+    /// Enters search-filter mode: the window shows ONLY the messages whose
+    /// `serverId` is in `ids`, in chronological order. The caller must have
+    /// persisted the matching messages in GRDB beforehand (e.g. via
+    /// `upsertFromAPIMessages`) so they are fetchable. Exit via
+    /// `restoreLatestWindow()`.
+    public func enterSearchMode(ids: [String]) async {
+        windowMode = .search(ids: ids)
         windowAnchor = nil
         await refreshFromDB()
     }

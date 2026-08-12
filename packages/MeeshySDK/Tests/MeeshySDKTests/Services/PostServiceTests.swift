@@ -22,10 +22,10 @@ final class PostServiceTests: XCTestCase {
 
     private func makePost(id: String = "post123") -> APIPost {
         APIPost(
-            id: id, type: "POST", visibility: "PUBLIC", content: "Hello world",
+            id: id, type: "POST", visibility: "PUBLIC", visibilityUserIds: nil, content: "Hello world",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: APIAuthor(id: "author1", username: "alice", displayName: "Alice", avatar: nil),
-            likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100,
+            likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil,
             bookmarkCount: 3, shareCount: 0, reactionSummary: nil, isPinned: false,
             isEdited: false, media: nil, comments: nil, repostOf: nil,
             originalRepostOfId: nil, isQuote: nil,
@@ -43,7 +43,8 @@ final class PostServiceTests: XCTestCase {
             effectFlags: nil,
             createdAt: Date(),
             author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil),
-            currentUserReactions: nil
+            currentUserReactions: nil,
+            media: nil
         )
     }
 
@@ -213,6 +214,32 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.bodyJSON?["content"] as? String, "Mon commentaire")
     }
 
+    /// Le composer de repost affiche un sélecteur d'audience. Sa valeur ne
+    /// traversait AUCUNE couche — ni le handler, ni cette requête, ni la
+    /// gateway, qui recopiait la visibilité de l'original. Un repost n'étant
+    /// permis que sur un original PUBLIC, tout repost sortait PUBLIC : choisir
+    /// « Privé » publiait en grand public, sans le moindre signal.
+    func test_PostService_repost_sends_theChosenVisibility() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "story-1"), error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1", targetType: .post,
+                                     content: nil, isQuote: false, visibility: "PRIVATE")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["visibility"] as? String, "PRIVATE")
+    }
+
+    /// Sans choix explicite, la gateway garde l'héritage historique — le
+    /// champ ne doit donc PAS être envoyé.
+    func test_PostService_repost_omitsVisibility_whenNoneChosen() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "story-1"), error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["visibility"] ?? nil)
+    }
+
     // MARK: - share
 
     func testShareCallsCorrectEndpoint() async throws {
@@ -304,6 +331,21 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    func testCreateWithTypeReelWithoutMediaDegradesToPost() async throws {
+        let post = makePost(id: "reelTyped1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.createWithType(.reel, content: "Would-be reel")
+
+        // Règle produit 2026-08-02 : un REEL exige vidéo || audio || >= 2 images.
+        // `createWithType` ne transporte AUCUN média → la composition ne peut pas
+        // qualifier ; le service publie un POST au lieu d'un REEL invalide.
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["type"] as? String, "POST")
+    }
+
     // MARK: - Error case
 
     func testGetFeedThrowsOnNetworkError() async {
@@ -323,5 +365,75 @@ final class PostServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(mock.requestCount, 1)
+    }
+
+    func test_recordEngagement_postsBatch_toEngagementEndpoint() async throws {
+        let response = APIResponse(success: true, data: ["recorded": 1], error: nil)
+        mock.stub("/posts/engagement/batch", result: response)
+
+        let session = EngagementSession(
+            sessionId: "s1", userId: "u1", postId: "p1", contentType: .reel, surface: .reels,
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000), dwellMs: 4000, watchMs: 3800,
+            mediaDurationMs: 15000, completed: false, truncated: false, consent: "granted",
+            actions: [], watchSamples: []
+        )
+
+        try await service.recordEngagement([session])
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/engagement/batch")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    func test_recordEngagement_emptyArray_doesNotCallNetwork() async throws {
+        try await service.recordEngagement([])
+        XCTAssertEqual(mock.requestCount, 0)
+    }
+
+    func test_recordImpression_postsTo_singleImpressionEndpoint() async throws {
+        let response = APIResponse(success: true, data: ["recorded": true], error: nil)
+        mock.stub("/posts/\(postId)/impression", result: response)
+
+        try await service.recordImpression(postId: postId, source: "detail")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    // MARK: - update : tri-état du lieu (gestion de la position à l'édition)
+
+    func test_update_setLocation_encodesThePlaceObject() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+        let place = SharedPlace(latitude: 48.8584, longitude: 2.2945, name: "Tour Eiffel")
+
+        _ = try await service.update(postId: "p1", location: .set(place))
+
+        let encoded = mock.lastRequest?.bodyJSON?["location"] as? [String: Any]
+        XCTAssertEqual(encoded?["latitude"] as? Double ?? 0, 48.8584, accuracy: 0.0001)
+        XCTAssertEqual(encoded?["name"] as? String, "Tour Eiffel")
+    }
+
+    func test_update_removeLocation_encodesExplicitNull() async throws {
+        // Le retrait DOIT partir en `location: null` — une clé absente
+        // signifie « inchangé » pour le gateway (tri-état).
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(postId: "p1", location: .remove)
+
+        XCTAssertTrue(mock.lastRequest?.bodyJSON?["location"] is NSNull,
+                      "`.remove` doit émettre un null JSON explicite, pas omettre la clé")
+    }
+
+    func test_update_withoutLocation_omitsTheKey() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(postId: "p1", content: "nouveau texte")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["location"],
+                     "Sans modification du lieu, la clé ne doit pas partir (inchangé)")
     }
 }

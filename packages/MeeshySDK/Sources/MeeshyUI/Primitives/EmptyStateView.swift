@@ -20,7 +20,7 @@ public struct EmptyStateView: View {
         title: String,
         subtitle: String,
         actionLabel: String? = nil,
-        accentColor: String = "4ECDC4",
+        accentColor: String = MeeshyColors.brandPrimaryHex,
         compact: Bool = false,
         onAction: (() -> Void)? = nil
     ) {
@@ -34,48 +34,46 @@ public struct EmptyStateView: View {
     }
 
     public var body: some View {
-        VStack(spacing: compact ? 10 : 16) {
+        VStack(spacing: compact ? MeeshySpacing.sm : MeeshySpacing.lg) {
             Spacer()
 
             Image(systemName: icon)
-                .font(.system(size: compact ? 36 : 52, weight: .light))
+                .font(MeeshyFont.relative(compact ? 36 : 52, weight: .light))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
-                .padding(.bottom, compact ? 0 : 4)
+                .padding(.bottom, compact ? 0 : MeeshySpacing.xs)
 
             if let actionLabel, let onAction, compact {
                 actionButton(label: actionLabel, action: onAction)
             }
 
             Text(title)
-                .font(.system(size: compact ? 15 : 18, weight: .bold))
+                .font(MeeshyFont.relative(compact ? 15 : 18, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             if !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: compact ? 12 : 14))
+                    .font(MeeshyFont.relative(compact ? 12 : 14))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
             }
 
             if let actionLabel, let onAction, !compact {
                 actionButton(label: actionLabel, action: onAction)
-                    .padding(.top, 4)
+                    .padding(.top, MeeshySpacing.xs)
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
+        .offset(y: appeared ? 0 : MeeshySpacing.md)
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
                 appeared = true
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title). \(subtitle)")
     }
 
     private func actionButton(label: String, action: @escaping () -> Void) -> some View {
@@ -84,10 +82,10 @@ public struct EmptyStateView: View {
             action()
         } label: {
             Text(label)
-                .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                .font(MeeshyFont.relative(compact ? 13 : 14, weight: .semibold))
                 .foregroundColor(.white)
-                .padding(.horizontal, compact ? 16 : 24)
-                .padding(.vertical, compact ? 8 : 10)
+                .padding(.horizontal, compact ? MeeshySpacing.lg : MeeshySpacing.xxl)
+                .padding(.vertical, compact ? MeeshySpacing.sm : MeeshySpacing.md)
                 .background(
                     Capsule()
                         .fill(Color(hex: accentColor))

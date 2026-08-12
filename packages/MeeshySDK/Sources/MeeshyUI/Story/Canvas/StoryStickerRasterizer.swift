@@ -48,6 +48,7 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
     private nonisolated init(countLimit: Int = StoryStickerRasterizer.defaultCountLimit) {
         let cache = NSCache<NSString, CGImage>()
         cache.countLimit = countLimit
+        cache.totalCostLimit = 10 * 1024 * 1024
         self.cache = cache
         let cacheRef = SendableGlyphCacheRef(cache: cache)
         self.memoryWarningObserver = NotificationCenter.default.addObserver(
@@ -99,7 +100,8 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
         let image = renderer.image { _ in attributed.draw(at: .zero) }
         guard let cgImage = image.cgImage else { return nil }
 
-        cache.setObject(cgImage, forKey: key)
+        let pixelCost = cgImage.width * cgImage.height * 4
+        cache.setObject(cgImage, forKey: key, cost: pixelCost)
         return cgImage
     }
 

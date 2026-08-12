@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SecuritySanitizer } from '../../utils/sanitize';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -17,6 +18,11 @@ import {
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import {
+  resolveConversationEntry,
+  REJOIN_PARTICIPANT_STATE
+} from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
@@ -191,8 +197,8 @@ export function registerSharingRoutes(
           linkId: initialLinkId, // Temporaire
           conversationId: conversationId,
           createdBy: currentUserId,
-          name: body.name,
-          description: body.description,
+          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
           maxUses: body.maxUses ?? undefined,
           maxConcurrentUsers: body.maxConcurrentUsers ?? undefined,
           maxUniqueSessions: body.maxUniqueSessions ?? undefined,
@@ -544,9 +550,11 @@ export function registerSharingRoutes(
         return sendUnauthorized(reply, 'Authentification requise');
       }
 
-      // Vérifier que le lien existe et est valide
+      // Accepter linkId OU identifier : iOS partage l'`identifier`, le web le
+      // `linkId`. Querier seulement par linkId 404ait toute invitation partagée
+      // depuis iOS. Symétrique avec resolveTarget (qui accepte déjà les deux).
       const shareLink = await prisma.conversationShareLink.findFirst({
-        where: { linkId },
+        where: { OR: [{ linkId }, { identifier: linkId }] },
         include: {
           conversation: true
         }
@@ -564,52 +572,91 @@ export function registerSharingRoutes(
         return sendError(reply, 410, 'This link has expired');
       }
 
-      // Vérifier si l'utilisateur est déjà membre de la conversation
-      const existingMember = await prisma.participant.findFirst({
-        where: {
-          conversationId: shareLink.conversationId,
-          userId: userToken.userId
-        }
+      // Que faire de la ligne `Participant` déjà là — cf.
+      // `services/conversations/conversationEntryAdmission.ts`. La recherche qui
+      // précédait ne filtrait pas `isActive` et concluait « déjà membre » sur la
+      // ligne inactive d'un ancien membre : quitter une conversation rejointe
+      // par lien était définitif, et le client naviguait ensuite vers une
+      // conversation que `GET /conversations/:id/messages` refuse.
+      const entry = await resolveConversationEntry({
+        prisma,
+        conversationId: shareLink.conversationId,
+        userId: userToken.userId,
       });
 
-      if (existingMember) {
+      if (entry.outcome === 'banned') {
+        logger.warn('Jointure refusée — participant banni', { conversationId: shareLink.conversationId });
+        return sendForbidden(reply, 'Vous avez été banni de cette conversation');
+      }
+
+      if (entry.outcome === 'already-member') {
         logger.info('Utilisateur déjà membre', { conversationId: shareLink.conversationId });
         return sendSuccess(reply, { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId });
       }
 
       // Ajouter l'utilisateur à la conversation
-      logger.info('Ajout utilisateur à conversation', { conversationId: shareLink.conversationId });
+      logger.info('Entrée dans la conversation', { conversationId: shareLink.conversationId, outcome: entry.outcome });
       const joiningUserInfo = await prisma.user.findUnique({
         where: { id: userToken.userId },
         select: { displayName: true, username: true }
       });
-      await prisma.participant.create({
-        data: {
-          conversationId: shareLink.conversationId,
-          userId: userToken.userId,
-          type: 'user',
-          displayName: joiningUserInfo?.displayName || joiningUserInfo?.username || 'User',
-          role: 'member',
-          permissions: {
-            canSendMessages: true,
-            canSendFiles: true,
-            canSendImages: true,
-            canSendVideos: false,
-            canSendAudios: false,
-            canSendLocations: false,
-            canSendLinks: false
-          },
-          joinedAt: new Date(),
-          shareLinkId: shareLink.id
-        }
-      });
+
+      // Le rang et les droits repartent de ce que le lien donne à un nouvel
+      // arrivant : un ancien `admin` qui revient par un lien PUBLIC ne récupère
+      // pas son rang dans une ligne périmée.
+      const linkMemberFields = {
+        type: 'user',
+        displayName: joiningUserInfo?.displayName || joiningUserInfo?.username || 'User',
+        role: 'member',
+        permissions: {
+          canSendMessages: true,
+          canSendFiles: true,
+          canSendImages: true,
+          canSendVideos: false,
+          canSendAudios: false,
+          canSendLocations: false,
+          canSendLinks: false
+        },
+        shareLinkId: shareLink.id
+      };
+
+      if (entry.outcome === 'rejoin' && entry.participantId) {
+        // Réintégration sur la ligne existante : `Participant` ne porte aucune
+        // contrainte d'unicité sur `(conversationId, userId)`, donc un `create`
+        // ici laisserait une seconde ligne — identité d'expéditeur ambiguë,
+        // fan-out doublé. `joinedAt` reste celui de la première venue.
+        await prisma.participant.update({
+          where: { id: entry.participantId },
+          data: { ...linkMemberFields, ...REJOIN_PARTICIPANT_STATE }
+        });
+        invalidateParticipantLookup(entry.participantId, shareLink.conversationId);
+      } else {
+        await prisma.participant.create({
+          data: {
+            conversationId: shareLink.conversationId,
+            userId: userToken.userId,
+            ...linkMemberFields,
+            joinedAt: new Date()
+          }
+        });
+      }
 
       // Incrémenter le compteur d'utilisation du lien
       await prisma.conversationShareLink.update({
         where: { id: shareLink.id },
         data: { currentUses: { increment: 1 } }
       });
-      logger.info('Membre créé avec succès');
+      logger.info('Appartenance ouverte', { outcome: entry.outcome });
+
+      // Auto-join the joining user's currently-connected sockets to the
+      // conversation room so they receive message:new events immediately
+      // without a reconnect (mirrors POST /conversations/:id/participants).
+      const joinSocketManager = fastify.socketIOHandler?.getManager();
+      if (joinSocketManager) {
+        joinSocketManager.joinUserToConversationRoom(userToken.userId, shareLink.conversationId).catch(
+          (err: unknown) => logger.error('Failed to auto-join link joiner to conversation room', err as Error)
+        );
+      }
 
       // Envoyer des notifications
       const notificationService = fastify.notificationService;
@@ -647,15 +694,20 @@ export function registerSharingRoutes(
               select: { userId: true }
             });
 
-            // Envoyer une notification à chaque admin/créateur
-            for (const member of adminsAndCreators) {
-              await notificationService.createMemberJoinedNotification({
-                recipientUserId: member.userId,
+            // Une seule diffusion pour tous les administrateurs. La boucle
+            // `await` qui précédait tenait la réponse « vous avez rejoint »
+            // jusqu'à ce que le dernier d'entre eux soit notifié, et relisait
+            // par destinataire un contexte identique pour tous.
+            const adminUserIds = adminsAndCreators
+              .map((member) => member.userId)
+              .filter((id): id is string => !!id);
+            if (adminUserIds.length > 0) {
+              const notified = await notificationService.createMemberJoinedNotificationsBatch(adminUserIds, {
                 newMemberUserId: userToken.userId,
                 conversationId: shareLink.conversationId,
                 joinMethod: 'via_link'
               });
-              logger.debug('Notification membre rejoint envoyée');
+              logger.debug('Notifications membre rejoint envoyées', { notified, audience: adminUserIds.length });
             }
 
             logger.debug('Notification confirmation envoyée');
@@ -787,46 +839,84 @@ export function registerSharingRoutes(
         return sendNotFound(reply, 'User not found');
       }
 
-      // Vérifier que l'utilisateur n'est pas déjà membre
-      const existingMember = conversation.participants.find(m => m.userId === userId);
-      if (existingMember) {
+      // `conversation.participants` est chargé avec `where: { isActive: true }` :
+      // il ne pouvait donc PAS voir la ligne d'un banni ni celle d'un ancien
+      // membre, et le `create` qui suit leur fabriquait une ligne neuve et
+      // active — un bannissement défait sans passer par `POST …/unban`, plus une
+      // seconde ligne `Participant` pour la même paire.
+      const entry = await resolveConversationEntry({
+        prisma: fastify.prisma,
+        conversationId,
+        userId,
+      });
+
+      if (entry.outcome === 'banned') {
+        return sendForbidden(reply, 'This user is banned from the conversation — lift the ban first');
+      }
+
+      if (entry.outcome === 'already-member') {
         return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
-      // Ajouter l'utilisateur à la conversation
-      const newMember = await fastify.prisma.participant.create({
-        data: {
-          conversationId: conversationId,
-          userId: userId,
-          type: 'user',
-          displayName: userToInvite.displayName || userToInvite.username,
-          role: 'member',
-          permissions: {
-            canSendMessages: true,
-            canSendFiles: true,
-            canSendImages: true,
-            canSendVideos: false,
-            canSendAudios: false,
-            canSendLocations: false,
-            canSendLinks: false
-          },
-          joinedAt: new Date(),
-          isActive: true
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-              isOnline: true
-            }
+      const invitedMemberFields = {
+        type: 'user',
+        displayName: userToInvite.displayName || userToInvite.username,
+        role: 'member',
+        permissions: {
+          canSendMessages: true,
+          canSendFiles: true,
+          canSendImages: true,
+          canSendVideos: false,
+          canSendAudios: false,
+          canSendLocations: false,
+          canSendLinks: false
+        }
+      };
+
+      const invitedMemberInclude = {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            isOnline: true
           }
         }
-      });
+      };
+
+      const newMember = entry.outcome === 'rejoin' && entry.participantId
+        ? await fastify.prisma.participant.update({
+            where: { id: entry.participantId },
+            data: { ...invitedMemberFields, ...REJOIN_PARTICIPANT_STATE },
+            include: invitedMemberInclude
+          })
+        : await fastify.prisma.participant.create({
+            data: {
+              conversationId: conversationId,
+              userId: userId,
+              ...invitedMemberFields,
+              joinedAt: new Date(),
+              isActive: true
+            },
+            include: invitedMemberInclude
+          });
+
+      if (entry.outcome === 'rejoin' && entry.participantId) {
+        invalidateParticipantLookup(entry.participantId, conversationId);
+      }
+
+      // Auto-join the invited user's currently-connected sockets to the
+      // conversation room so they receive message:new events immediately
+      // without a reconnect (mirrors POST /conversations/:id/participants).
+      const inviteSocketManager = fastify.socketIOHandler?.getManager();
+      if (inviteSocketManager) {
+        inviteSocketManager.joinUserToConversationRoom(userId, conversationId).catch(
+          (err: unknown) => logger.error('Failed to auto-join invited user to conversation room', err as Error)
+        );
+      }
 
       // Envoyer une notification à l'utilisateur invité
       const notificationService = fastify.notificationService;

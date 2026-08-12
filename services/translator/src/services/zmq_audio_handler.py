@@ -10,6 +10,7 @@ import base64
 import json
 import logging
 import time
+import traceback
 import uuid
 from typing import Dict, Optional, List
 
@@ -18,13 +19,56 @@ logger = logging.getLogger(__name__)
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 
-# Import du pipeline audio
+# Import du pipeline audio.
+#
+# Incident prod 2026-07-03 : un ImportError au boot du process (ordre
+# d'import/circularité transitoire) était avalé par un `except: pass`
+# silencieux et figeait AUDIO_PIPELINE_AVAILABLE=False pour TOUTE la vie du
+# process — tous les messages vocaux répondaient pipeline_unavailable pendant
+# 8 h alors que le module s'importait très bien après coup (vérifié dans le
+# container). Le flag n'est plus définitif : l'échec est LOGGÉ avec son
+# traceback et l'import est retenté à chaud à la première requête via
+# `_retry_audio_pipeline_import()`.
 AUDIO_PIPELINE_AVAILABLE = False
 try:
     from .audio_message_pipeline import AudioMessagePipeline, AudioMessageMetadata, get_audio_pipeline
     AUDIO_PIPELINE_AVAILABLE = True
 except ImportError:
-    pass
+    logger.error(
+        "[TRANSLATOR] ❌ Import du pipeline audio échoué au chargement du module — "
+        "retentera à chaud à la première requête audio:\n%s",
+        traceback.format_exc()
+    )
+
+
+def _retry_audio_pipeline_import() -> bool:
+    """Retente l'import du pipeline audio si le boot l'a raté.
+
+    Idempotent et bon marché quand le pipeline est déjà disponible. Met à
+    jour les symboles module (`get_audio_pipeline`, …) et le flag — le mode
+    dégradé du boot n'est plus irréversible.
+    """
+    global AUDIO_PIPELINE_AVAILABLE, AudioMessagePipeline, AudioMessageMetadata, get_audio_pipeline
+    if AUDIO_PIPELINE_AVAILABLE:
+        return True
+    try:
+        from .audio_message_pipeline import (
+            AudioMessagePipeline as _pipeline_cls,
+            AudioMessageMetadata as _metadata_cls,
+            get_audio_pipeline as _get_pipeline,
+        )
+    except ImportError:
+        logger.error(
+            "[TRANSLATOR] ❌ Retry d'import du pipeline audio échoué:\n%s",
+            traceback.format_exc()
+        )
+        return False
+    AudioMessagePipeline = _pipeline_cls
+    AudioMessageMetadata = _metadata_cls
+    get_audio_pipeline = _get_pipeline
+    AUDIO_PIPELINE_AVAILABLE = True
+    logger.info("[TRANSLATOR] ✅ Pipeline audio importé au retry — mode dégradé du boot levé")
+    return True
 
 # Import du service audio fetcher
 AUDIO_FETCHER_AVAILABLE = False
@@ -51,8 +95,9 @@ class AudioHandler:
         self.pub_socket = pub_socket
         self.db = database_service
         
-        # Obtenir le pipeline audio si disponible
-        if AUDIO_PIPELINE_AVAILABLE:
+        # Obtenir le pipeline audio si disponible (retente l'import si le
+        # boot du module l'a raté — voir _retry_audio_pipeline_import).
+        if _retry_audio_pipeline_import():
             self.audio_pipeline = get_audio_pipeline()
         else:
             self.audio_pipeline = None
@@ -129,7 +174,7 @@ class AudioHandler:
         task_id = str(uuid.uuid4())
         start_time = time.time()
 
-        if not AUDIO_PIPELINE_AVAILABLE:
+        if not _retry_audio_pipeline_import():
             logger.error("[TRANSLATOR] ❌ Audio pipeline non disponible")
             await self._publish_audio_error(
                 task_id=task_id,
@@ -315,6 +360,11 @@ class AudioHandler:
             await self._publish_audio_result(task_id, result, processing_time)
             logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
 
+            # Le résultat porte la transcription même sans traduction : on le
+            # publie d'abord, puis on signale l'échec pour sortir le client de
+            # son état « traduction en cours ».
+            await self._report_total_translation_failure(task_id, request_data, result)
+
             logger.info(
                 f"✅ [TRANSLATOR] Audio process terminé: "
                 f"msg={result.message_id}, "
@@ -348,6 +398,33 @@ class AudioHandler:
                 error=str(e),
                 error_code="processing_failed"
             )
+
+    async def _report_total_translation_failure(self, task_id: str, request_data: dict, result) -> bool:
+        """Signale au client l'échec de TOUTES les langues demandées.
+
+        `translation_stage` absorbe l'exception de chaque langue : un crash TTS
+        ou un timeout watchdog produit donc un résultat sans traduction, sans
+        exception. Sans ce signalement, le gateway n'émet jamais
+        `audio:translation-failed` et le client reste bloqué sur « traduction en
+        cours ». Un résultat sans langue demandée reste une transcription seule
+        parfaitement légitime.
+        """
+        requested = list(getattr(result, 'requested_languages', []) or [])
+        if not requested or result.translations:
+            return False
+
+        logger.error(
+            f"❌ [TRANSLATOR] Toutes les traductions ont échoué: "
+            f"task={task_id}, langues={requested}"
+        )
+        await self._publish_audio_error(
+            task_id=task_id,
+            message_id=request_data.get('messageId', ''),
+            attachment_id=request_data.get('attachmentId', ''),
+            error=f"Toutes les traductions ont échoué ({', '.join(requested)})",
+            error_code="translation_failed"
+        )
+        return True
 
     async def _publish_audio_result(self, task_id: str, result, processing_time: int):
         """
@@ -400,17 +477,6 @@ class AudioHandler:
                     }
                     frame_index += 1
 
-                    logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
-
-                if audio_bytes:
-                    binary_frames.append(audio_bytes)
-                    audio_key = f"audio_{t.language}"
-                    binary_frames_info[audio_key] = {
-                        'index': frame_index,
-                        'size': len(audio_bytes),
-                        'mimeType': t.audio_mime_type or 'audio/mp3'
-                    }
-                    frame_index += 1
                     logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
 
                 # Metadata sans base64 (contient juste le mapping vers le frame)
@@ -681,21 +747,21 @@ class AudioHandler:
         try:
             translation = translation_data['translation']
 
-            # D2: prefer raw bytes (no base64 round-trip), fall back to base64 or file
+            # D2: prefer raw bytes (no base64 round-trip), fall back to base64/file
+            # (read_audio_bytes handles the base64→file fallback off the event
+            # loop, matching _publish_audio_result's non-blocking read).
             audio_bytes = None
             if getattr(translation, 'audio_bytes', None):
                 audio_bytes = translation.audio_bytes
-            elif translation.audio_data_base64:
+            else:
                 try:
-                    audio_bytes = base64.b64decode(translation.audio_data_base64)
+                    audio_bytes = await asyncio.to_thread(
+                        read_audio_bytes,
+                        audio_path=translation.audio_path,
+                        audio_data_base64=translation.audio_data_base64,
+                    )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur décodage audio {translation.language}: {e}")
-            elif translation.audio_path and os.path.exists(translation.audio_path):
-                try:
-                    with open(translation.audio_path, 'rb') as f:
-                        audio_bytes = f.read()
-                except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture fichier audio {translation.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {e}")
 
             # Préparer le metadata JSON (Frame 0)
             translated_audio_dict = {

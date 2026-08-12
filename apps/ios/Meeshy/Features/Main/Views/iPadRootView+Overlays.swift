@@ -23,13 +23,13 @@ extension iPadRootView {
             VStack {
                 if let toast = toastManager.currentToast {
                     FeedbackToastView(toast: toast)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(.feedbackToastReveal)
                         .padding(.top, MeeshySpacing.xxl)
                         .onTapGesture { toastManager.dismiss() }
                 }
                 Spacer()
             }
-            .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+            .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
             .zIndex(200)
 
             VStack {

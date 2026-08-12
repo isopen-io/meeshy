@@ -28,6 +28,25 @@ jest.mock('@/hooks/useI18n', () => ({
         'unknownUser': 'Unknown user',
         'translations': 'translations',
         'conversations.pasteTooLongTxtCreated': 'Text converted to file attachment',
+        'composer.recordVoice': 'Record voice message',
+        'composer.attachFile': 'Attach file',
+        'composer.messageInput': 'Write a message...',
+        'composer.sendMessage': 'Send message',
+      };
+      return translations[key] || key;
+    },
+    locale: 'en',
+  }),
+}));
+
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'composer.recordVoice': 'Record voice message',
+        'composer.attachFile': 'Attach file',
+        'composer.messageInput': 'Write a message...',
+        'composer.sendMessage': 'Send message',
       };
       return translations[key] || key;
     },

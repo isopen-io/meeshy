@@ -27,6 +27,28 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { BackendMessageData, BackendConversationData } from './types';
 
 /**
+ * Valide la carte `{ langue: aperçu traduit }` du dernier message.
+ *
+ * Le gateway rend `null` — jamais `{}` — quand aucune traduction n'est utile,
+ * et le résolveur doit pouvoir distinguer « pas de carte » de « carte vide » :
+ * une carte matérialisée en objet vide lui ferait croire qu'il y a quelque
+ * chose à résoudre. Un tableau est un `object` en JavaScript, d'où le rejet
+ * explicite — sans lui, `['Bonjour']` traverserait comme une carte dont les
+ * clés sont des indices.
+ *
+ * Au niveau module, et non plus méthode privée, parce que le patch socket
+ * (`normalizeConversationPatch`) doit produire EXACTEMENT la même forme que
+ * l'hydratation REST : deux validations distinctes pour un même champ auraient
+ * laissé le cache détenir deux formes selon le transport.
+ */
+export function extractPreviewTranslations(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
  * Service de transformation des données backend vers frontend
  */
 export class TransformersService {
@@ -360,8 +382,8 @@ export class TransformersService {
       senderId: senderUserId,
       conversationId: String(msg.conversationId),
       originalLanguage,
-      messageType: (String(msg.messageType) || 'text') as MessageType,
-      messageSource: (String(msg.messageSource) || 'user') as MessageSource,
+      messageType: String(msg.messageType || 'text') as MessageType,
+      messageSource: String(msg.messageSource || 'user') as MessageSource,
       // Structured per-type payload (call-summary facts for system messages).
       metadata: msg.metadata as Record<string, unknown> | undefined,
       isEdited: Boolean(msg.isEdited),
@@ -393,6 +415,10 @@ export class TransformersService {
     }
 
     return transformedMessage;
+  }
+
+  private extractPreviewTranslations(raw: unknown): Record<string, string> | undefined {
+    return extractPreviewTranslations(raw);
   }
 
   /**
@@ -431,8 +457,8 @@ export class TransformersService {
     const transformedConversation: Conversation = {
       id: String(conv.id),
       identifier: conv.identifier as string | undefined,
-      type: this.mapConversationType(String(conv.type) || 'direct'),
-      visibility: this.mapConversationVisibility(String(conv.type) || 'direct'),
+      type: this.mapConversationType(String(conv.type || 'direct')),
+      visibility: this.mapConversationVisibility(String(conv.type || 'direct')),
       status: 'active' as const,
       title: conv.title as string,
       description: conv.description as string,
@@ -443,7 +469,7 @@ export class TransformersService {
       isActive: Boolean(conv.isActive ?? true),
       isArchived: Boolean(conv.isArchived ?? false),
       isGroup: String(conv.type) === 'group',
-      isPrivate: this.mapConversationVisibility(String(conv.type) || 'direct') === 'private',
+      isPrivate: this.mapConversationVisibility(String(conv.type || 'direct')) === 'private',
       memberCount: (conv.memberCount as number) || (conv._count as any)?.participants || participants.length,
       lastMessageAt: conv.lastMessageAt ? new Date(String(conv.lastMessageAt)) : new Date(String(conv.updatedAt)),
       createdAt: new Date(String(conv.createdAt)),
@@ -454,6 +480,17 @@ export class TransformersService {
 
       // Last message transformé
       lastMessage: conv.lastMessage ? this.transformMessageData(conv.lastMessage) : undefined,
+
+      // Prisme Linguistique de la ligne de liste (cycle 61). Le gateway expédie
+      // ces deux champs depuis le cycle 60, déjà restreints aux langues du
+      // lecteur et tronqués ; cet objet est construit à la main, donc tout ce
+      // qui n'est pas copié explicitement ici est perdu pour TOUT le web.
+      // La résolution elle-même appartient à `resolveLastMessagePreview`
+      // (`@meeshy/shared`), jumeau de `resolvedLastMessagePreview` côté iOS.
+      lastMessageTranslations: this.extractPreviewTranslations(conv.lastMessageTranslations),
+      lastMessageOriginalLanguage: typeof conv.lastMessageOriginalLanguage === 'string'
+        ? conv.lastMessageOriginalLanguage
+        : undefined,
 
       // Unread count
       unreadCount: Number(conv.unreadCount) || 0,

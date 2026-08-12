@@ -68,7 +68,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
         : message.content)
     : (attachmentCount > 0
         ? message.attachments!.map(att => att.originalName).join(', ')
-        : t('emptyMessage') || '(Message vide)');
+        : t('emptyMessage', 'Empty message'));
 
   // Version mobile épurée (alerte simple)
   if (isMobile) {

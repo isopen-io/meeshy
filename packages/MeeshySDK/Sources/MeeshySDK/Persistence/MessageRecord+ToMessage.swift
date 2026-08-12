@@ -38,44 +38,29 @@ extension MessageRecord {
         // a l'ancien code (et l'usage reste sequentiel mono-thread).
         let decoder = JSONDecoder()
 
-        let uiAttachments: [MeeshyMessageAttachment]
-        if let data = attachmentsJson,
-           let decoded = try? decoder.decode([MeeshyMessageAttachment].self, from: data) {
-            uiAttachments = decoded
-        } else {
-            uiAttachments = []
+        let uiAttachments = attachmentsJson.flatMap {
+            decoder.decodeOrLog([MeeshyMessageAttachment].self, from: $0, field: "attachmentsJson", id: localId)
+        } ?? []
+
+        let uiReactions = reactionsJson.flatMap {
+            decoder.decodeOrLog([MeeshyReaction].self, from: $0, field: "reactionsJson", id: localId)
+        } ?? []
+
+        let uiReplyTo = replyToJson.flatMap {
+            decoder.decodeOrLog(ReplyReference.self, from: $0, field: "replyToJson", id: localId)
         }
 
-        let uiReactions: [MeeshyReaction]
-        if let data = reactionsJson,
-           let decoded = try? decoder.decode([MeeshyReaction].self, from: data) {
-            uiReactions = decoded
-        } else {
-            uiReactions = []
+        let uiForwardedFrom = forwardedFromJson.flatMap {
+            decoder.decodeOrLog(ForwardReference.self, from: $0, field: "forwardedFromJson", id: localId)
         }
 
-        let uiReplyTo: ReplyReference?
-        if let data = replyToJson,
-           let decoded = try? decoder.decode(ReplyReference.self, from: data) {
-            uiReplyTo = decoded
-        } else {
-            uiReplyTo = nil
+        let uiCallSummary = callSummaryJson.flatMap {
+            decoder.decodeOrLog(CallSummaryMetadata.self, from: $0, field: "callSummaryJson", id: localId)
         }
 
-        let uiForwardedFrom: ForwardReference?
-        if let data = forwardedFromJson,
-           let decoded = try? decoder.decode(ForwardReference.self, from: data) {
-            uiForwardedFrom = decoded
-        } else {
-            uiForwardedFrom = nil
-        }
-
-        let uiCallSummary: CallSummaryMetadata?
-        if let data = callSummaryJson,
-           let decoded = try? decoder.decode(CallSummaryMetadata.self, from: data) {
-            uiCallSummary = decoded
-        } else {
-            uiCallSummary = nil
+        let uiLocation = locationJson.flatMap { json -> SharedPlace? in
+            guard let data = json.data(using: .utf8) else { return nil }
+            return decoder.decodeOrLog(SharedPlace.self, from: data, field: "locationJson", id: localId)
         }
 
         var effects = MessageEffects.none
@@ -154,8 +139,10 @@ extension MessageRecord {
             readByAllAt: readByAllAt,
             deliveredCount: deliveredCount,
             readCount: readCount,
+            recipientCount: recipientCount,
             cachedTimeString: cachedTimeString,
-            callSummary: uiCallSummary
+            callSummary: uiCallSummary,
+            location: uiLocation
         )
     }
 }

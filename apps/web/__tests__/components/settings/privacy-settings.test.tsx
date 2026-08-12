@@ -13,6 +13,31 @@ jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({
     t: (key: string, fallback?: string) => {
       const translations: Record<string, string> = {
+        // Privacy settings section titles
+        'privacy.visibility.title': 'Visibilité et statut',
+        'privacy.visibility.description': 'Contrôlez les informations que les autres utilisateurs peuvent voir',
+        'privacy.visibility.hideProfile.label': 'Masquer le profil de la recherche',
+        'privacy.visibility.hideProfile.description': 'Empêche votre profil d\'apparaître dans les résultats de recherche',
+        'privacy.visibility.onlineStatus.label': 'Statut en ligne',
+        'privacy.visibility.onlineStatus.description': 'Permet aux autres de voir si vous êtes connecté',
+        'privacy.visibility.lastSeen.label': 'Dernière activité',
+        'privacy.visibility.lastSeen.description': 'Partage la date de votre dernière connexion',
+        'privacy.visibility.readReceipts.label': 'Accusés de réception',
+        'privacy.visibility.readReceipts.description': 'Informe les expéditeurs que vous avez lu leurs messages',
+        'privacy.communications.title': 'Communications',
+        'privacy.communications.description': 'Gérez qui peut vous contacter et comment',
+        'privacy.communications.contactRequests.label': 'Demandes de messages',
+        'privacy.communications.contactRequests.description': 'Permet aux utilisateurs de vous envoyer des demandes de contact',
+        'privacy.data.title': 'Gestion des données',
+        'privacy.data.description': 'Exportez ou supprimez vos données personnelles',
+        'privacy.data.export.label': 'Exporter mes données',
+        'privacy.data.export.description': 'Téléchargez une copie de toutes vos données',
+        'privacy.data.export.button': 'Exporter les données',
+        'privacy.legal.title': 'Informations légales',
+        'privacy.legal.description': 'Vos données sont traitées conformément à notre politique de confidentialité.',
+        'privacy.legal.privacyPolicy': 'Politique de confidentialité',
+        'privacy.legal.termsOfUse': 'Conditions d\'utilisation',
+        // Delete data
         'privacy.settingsUpdated': 'Paramètres de confidentialité mis à jour',
         'privacy.dataExported': 'Données exportées avec succès',
         'privacy.dataDeleted': 'Toutes les données ont été supprimées',
@@ -125,7 +150,8 @@ describe('PrivacySettings', () => {
       render(<PrivacySettings />);
 
       const switches = screen.getAllByRole('switch');
-      fireEvent.click(switches[0]); // showOnlineStatus
+      // switches[0] = hideProfileFromSearch, switches[1] = showOnlineStatus (true by default)
+      fireEvent.click(switches[1]); // showOnlineStatus: true → false
 
       expect(SoundFeedback.playToggleOff).toHaveBeenCalled();
     });
@@ -308,8 +334,9 @@ describe('PrivacySettings', () => {
       render(<PrivacySettings />);
 
       const switches = screen.getAllByRole('switch');
+      // switches[0] = hideProfileFromSearch (false), switches[1] = showOnlineStatus (true by default)
       // Toggle showOnlineStatus from true to false
-      fireEvent.click(switches[0]);
+      fireEvent.click(switches[1]);
 
       expect(SoundFeedback.playToggleOff).toHaveBeenCalled();
     });

@@ -526,6 +526,15 @@ public final class AudioEditorController: ObservableObject {
                                                         to destination: URL) async -> Bool {
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: destination.path) { return true }
+
+        // Files handed back by `.fileImporter` are security-scoped: without
+        // claiming access first, both `copyItem` and `Data(contentsOf:)`
+        // silently fail (the user saw "Impossible de charger cet audio." and
+        // could neither play nor trim). Harmless for our own temp recordings —
+        // `startAccessingSecurityScopedResource()` just returns `false` there.
+        let scoped = source.startAccessingSecurityScopedResource()
+        defer { if scoped { source.stopAccessingSecurityScopedResource() } }
+
         do {
             try fileManager.copyItem(at: source, to: destination)
             return true

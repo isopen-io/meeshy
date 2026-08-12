@@ -55,6 +55,14 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
+    public var leftA11yLabel: String
+    public var leftA11yHint: String? = nil
+    public var leftA11yValue: String? = nil
+    public var leftA11yActionName: String? = nil
+    public var rightA11yLabel: String
+    public var rightA11yHint: String? = nil
+    public var rightA11yValue: String? = nil
+    public var rightA11yActionName: String? = nil
 
     private let buttonSize: CGFloat = 52
     private let minEdgePadding: CGFloat = 20
@@ -65,11 +73,19 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public init(
         leftPosition: Binding<String>,
         rightPosition: Binding<String>,
+        leftA11yLabel: String,
+        rightA11yLabel: String,
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
+        leftA11yHint: String? = nil,
+        leftA11yValue: String? = nil,
+        leftA11yActionName: String? = nil,
+        rightA11yHint: String? = nil,
+        rightA11yValue: String? = nil,
+        rightA11yActionName: String? = nil,
         @ViewBuilder leftContent: () -> LeftContent,
         @ViewBuilder rightContent: () -> RightContent
     ) {
@@ -80,6 +96,14 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.onLeftLongPress = onLeftLongPress
         self.onRightLongPress = onRightLongPress
         self.isSearchBarVisible = isSearchBarVisible
+        self.leftA11yLabel = leftA11yLabel
+        self.leftA11yHint = leftA11yHint
+        self.leftA11yValue = leftA11yValue
+        self.leftA11yActionName = leftA11yActionName
+        self.rightA11yLabel = rightA11yLabel
+        self.rightA11yHint = rightA11yHint
+        self.rightA11yValue = rightA11yValue
+        self.rightA11yActionName = rightA11yActionName
         self.leftContent = leftContent()
         self.rightContent = rightContent()
     }
@@ -117,7 +141,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                     bottomSafeZone: currentBottomSafeZone,
                     snapToEdges: true,
                     onTap: onLeftTap,
-                    onLongPress: onLeftLongPress
+                    onLongPress: onLeftLongPress,
+                    a11yLabel: leftA11yLabel,
+                    a11yHint: leftA11yHint,
+                    a11yValue: leftA11yValue,
+                    a11yActionName: leftA11yActionName
                 ) {
                     leftContent
                 }
@@ -135,7 +163,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                     bottomSafeZone: currentBottomSafeZone,
                     snapToEdges: true,
                     onTap: onRightTap,
-                    onLongPress: onRightLongPress
+                    onLongPress: onRightLongPress,
+                    a11yLabel: rightA11yLabel,
+                    a11yHint: rightA11yHint,
+                    a11yValue: rightA11yValue,
+                    a11yActionName: rightA11yActionName
                 ) {
                     rightContent
                 }
@@ -158,6 +190,10 @@ public struct FreeFloatingButton<Content: View>: View {
     public let snapToEdges: Bool
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
+    public var a11yLabel: String? = nil
+    public var a11yHint: String? = nil
+    public var a11yValue: String? = nil
+    public var a11yActionName: String? = nil
     public let content: Content
 
     @State private var dragOffset: CGSize = .zero
@@ -174,6 +210,10 @@ public struct FreeFloatingButton<Content: View>: View {
         snapToEdges: Bool = true,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
+        a11yLabel: String? = nil,
+        a11yHint: String? = nil,
+        a11yValue: String? = nil,
+        a11yActionName: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self._position = position
@@ -186,6 +226,10 @@ public struct FreeFloatingButton<Content: View>: View {
         self.snapToEdges = snapToEdges
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.a11yLabel = a11yLabel
+        self.a11yHint = a11yHint
+        self.a11yValue = a11yValue
+        self.a11yActionName = a11yActionName
         self.content = content()
     }
 
@@ -251,6 +295,14 @@ public struct FreeFloatingButton<Content: View>: View {
             .simultaneousGesture(longPressGesture)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: position)
+            .floatingButtonAccessibility(
+                label: a11yLabel,
+                hint: a11yHint,
+                value: a11yValue,
+                actionName: a11yActionName,
+                onTap: onTap,
+                onLongPress: onLongPress
+            )
     }
 
     private func dragGesture(from startPos: CGPoint) -> some Gesture {
@@ -293,6 +345,44 @@ public struct FreeFloatingButton<Content: View>: View {
     }
 }
 
+// MARK: - Floating Button Accessibility
+
+private extension View {
+    /// Makes a gesture-driven floating button reachable by assistive technologies.
+    ///
+    /// The floating buttons activate via `.simultaneousGesture(TapGesture)` rather than a
+    /// `Button`, so VoiceOver cannot trigger them on its own — the explicit
+    /// `accessibilityAction(.default)` wires double-tap activation, and `.isButton`
+    /// announces the element as a button. Treatment is opt-in: callers that pass no label
+    /// keep the previous behaviour untouched.
+    @ViewBuilder
+    func floatingButtonAccessibility(
+        label: String?,
+        hint: String?,
+        value: String?,
+        actionName: String?,
+        onTap: @escaping () -> Void,
+        onLongPress: (() -> Void)?
+    ) -> some View {
+        if let label {
+            let base = self
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(label)
+                .accessibilityValue(value ?? "")
+                .accessibilityHint(hint ?? "")
+                .accessibilityAction { onTap() }
+            if let actionName, let onLongPress {
+                base.accessibilityAction(named: Text(actionName)) { onLongPress() }
+            } else {
+                base
+            }
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Legacy Container (for backward compatibility)
 public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: View {
     @Binding public var leftCorner: ButtonCorner
@@ -304,6 +394,14 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
+    public var leftA11yLabel: String
+    public var leftA11yHint: String? = nil
+    public var leftA11yValue: String? = nil
+    public var leftA11yActionName: String? = nil
+    public var rightA11yLabel: String
+    public var rightA11yHint: String? = nil
+    public var rightA11yValue: String? = nil
+    public var rightA11yActionName: String? = nil
 
     private let buttonSize: CGFloat = 52
     private let horizontalPadding: CGFloat = 44
@@ -314,11 +412,19 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public init(
         leftCorner: Binding<ButtonCorner>,
         rightCorner: Binding<ButtonCorner>,
+        leftA11yLabel: String,
+        rightA11yLabel: String,
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
+        leftA11yHint: String? = nil,
+        leftA11yValue: String? = nil,
+        leftA11yActionName: String? = nil,
+        rightA11yHint: String? = nil,
+        rightA11yValue: String? = nil,
+        rightA11yActionName: String? = nil,
         @ViewBuilder leftContent: () -> LeftContent,
         @ViewBuilder rightContent: () -> RightContent
     ) {
@@ -329,6 +435,14 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
         self.onLeftLongPress = onLeftLongPress
         self.onRightLongPress = onRightLongPress
         self.isSearchBarVisible = isSearchBarVisible
+        self.leftA11yLabel = leftA11yLabel
+        self.leftA11yHint = leftA11yHint
+        self.leftA11yValue = leftA11yValue
+        self.leftA11yActionName = leftA11yActionName
+        self.rightA11yLabel = rightA11yLabel
+        self.rightA11yHint = rightA11yHint
+        self.rightA11yValue = rightA11yValue
+        self.rightA11yActionName = rightA11yActionName
         self.leftContent = leftContent()
         self.rightContent = rightContent()
     }
@@ -352,7 +466,11 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
                     topPadding: topPadding,
                     bottomPadding: currentBottomPadding,
                     onTap: onLeftTap,
-                    onLongPress: onLeftLongPress
+                    onLongPress: onLeftLongPress,
+                    a11yLabel: leftA11yLabel,
+                    a11yHint: leftA11yHint,
+                    a11yValue: leftA11yValue,
+                    a11yActionName: leftA11yActionName
                 ) {
                     leftContent
                 }
@@ -365,7 +483,12 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
                     horizontalPadding: horizontalPadding,
                     topPadding: topPadding,
                     bottomPadding: currentBottomPadding,
-                    onTap: onRightTap
+                    onTap: onRightTap,
+                    onLongPress: onRightLongPress,
+                    a11yLabel: rightA11yLabel,
+                    a11yHint: rightA11yHint,
+                    a11yValue: rightA11yValue,
+                    a11yActionName: rightA11yActionName
                 ) {
                     rightContent
                 }
@@ -387,6 +510,10 @@ public struct LegacyFloatingButton<Content: View>: View {
     public let bottomPadding: CGFloat
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
+    public var a11yLabel: String? = nil
+    public var a11yHint: String? = nil
+    public var a11yValue: String? = nil
+    public var a11yActionName: String? = nil
     public let content: Content
 
     @State private var dragOffset: CGSize = .zero
@@ -402,6 +529,10 @@ public struct LegacyFloatingButton<Content: View>: View {
         bottomPadding: CGFloat,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
+        a11yLabel: String? = nil,
+        a11yHint: String? = nil,
+        a11yValue: String? = nil,
+        a11yActionName: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self._corner = corner
@@ -413,6 +544,10 @@ public struct LegacyFloatingButton<Content: View>: View {
         self.bottomPadding = bottomPadding
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.a11yLabel = a11yLabel
+        self.a11yHint = a11yHint
+        self.a11yValue = a11yValue
+        self.a11yActionName = a11yActionName
         self.content = content()
     }
 
@@ -458,6 +593,14 @@ public struct LegacyFloatingButton<Content: View>: View {
             .simultaneousGesture(tapGesture)
             .simultaneousGesture(longPressGesture)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+            .floatingButtonAccessibility(
+                label: a11yLabel,
+                hint: a11yHint,
+                value: a11yValue,
+                actionName: a11yActionName,
+                onTap: onTap,
+                onLongPress: onLongPress
+            )
     }
 
     private func dragGesture(from startPos: CGPoint) -> some Gesture {
@@ -517,38 +660,66 @@ public struct NotificationBadge: View {
     public let count: Int
     @State private var isPulsing = false
 
+    // MARK: - Trame (exposée pour les tests)
+
+    public static let height: CGFloat = 18
+    /// Largeur plancher égale à la hauteur : à un chiffre, la pastille reste un
+    /// CERCLE. C'est ce qui la distingue d'une étiquette.
+    public static let minimumSize: CGFloat = height
+    /// De quoi loger trois glyphes (« 99+ ») sans rogner le texte.
+    public static let horizontalPadding: CGFloat = 6
+    /// Pas de gras : sur deux chiffres blancs dans un disque rouge saturé il
+    /// n'ajoute aucune lisibilité, il empâte les glyphes et fait baver le
+    /// compteur sur le bord. Le repère visuel est la pastille, pas la graisse.
+    public static let fontWeight: Font.Weight = .semibold
+
+    /// Texte du compteur. Au-delà de 99 on annonce « 99+ » — et non `min(count,
+    /// 99)`, qui affichait « 99 » : un nombre FAUX présenté comme exact.
+    public static func displayed(_ count: Int) -> String {
+        guard count > 0 else { return "" }
+        return count >= 100 ? "99+" : "\(count)"
+    }
+
     public init(count: Int) {
         self.count = count
     }
 
     public var body: some View {
         if count > 0 {
-            ZStack {
-                Circle()
-                    .fill(Color(hex: "FF2E63").opacity(isPulsing ? 0.4 : 1.0))
-                    .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
-
-                Text("\(min(count, 99))")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 18, height: 18)
-                    .background(
-                        Circle()
-                            .fill(Color(hex: "FF2E63"))
-                            .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 3)
-                    )
-            }
-            .offset(x: 16, y: -16)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                    isPulsing = true
+            Text(Self.displayed(count))
+                .font(MeeshyFont.relative(10, weight: Self.fontWeight))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                // Ni `minimumScaleFactor`, ni cadre carré figé : la pastille
+                // s'ÉLARGIT. L'ancien 18×18 forçait « 71 » à rétrécir et aurait
+                // rendu « 99+ » illisible — on tronquait la donnée, ou sa
+                // lisibilité, pour protéger la mise en page.
+                .padding(.horizontal, Self.horizontalPadding)
+                .frame(minWidth: Self.minimumSize, minHeight: Self.height)
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.error)
+                        .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
+                )
+                // Halo pulsant en capsule et non en cercle : à trois glyphes un
+                // cercle centré déborderait des extrémités. `scaleEffect`
+                // reproduit l'ancienne respiration 18 → 28 à toute largeur.
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.error.opacity(0.4))
+                        .scaleEffect(isPulsing ? 1.55 : 1.0)
+                )
+                .offset(x: 16, y: -16)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                        isPulsing = true
+                    }
                 }
-            }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    isPulsing = false
+                .onDisappear {
+                    withTransaction(Transaction(animation: nil)) {
+                        isPulsing = false
+                    }
                 }
-            }
         }
     }
 }

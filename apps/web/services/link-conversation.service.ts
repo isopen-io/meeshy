@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { analyzeLinkIdentifier, generateFallbackIdentifiers, isValidForApiRequest } from '@/utils/link-identifier';
 
@@ -174,7 +175,7 @@ export class LinkConversationService {
 
       return data.data;
     } catch (error) {
-      console.error('[LinkConversationService] Erreur lors de la récupération:', error);
+      logger.error('[LinkConversation]', 'Erreur lors de la récupération', { error });
       
       // Essayer avec les identifiants de fallback si disponibles
       const fallbacks = generateFallbackIdentifiers(identifier);

@@ -19,8 +19,9 @@ public extension View {
     /// Regular Liquid Glass — translucent, for secondary / neutral controls.
     ///
     /// - iOS 26+: `.glassEffect(.regular[.tint][.interactive], in: shape)`.
-    /// - iOS < 26: `tint`-tinted fill when given, else `.ultraThinMaterial`, with
-    ///   a hairline stroke so the control reads as a distinct surface.
+    /// - iOS < 26: an `.ultraThinMaterial` blur (the defining trait of glass) with
+    ///   the `tint` layered on top when given, plus a hairline stroke so the
+    ///   control reads as a distinct surface.
     ///
     /// Apply LAST in the modifier chain (after sizing) for correct rendering.
     @ViewBuilder
@@ -55,10 +56,29 @@ public extension View {
         }
     }
 
+    /// Translucent sheet backdrop — the Liquid Glass treatment for sheets: the
+    /// presenting context shows through instead of an opaque slab.
+    ///
+    /// - iOS 16.4+ (incl. 26): `presentationBackground(.ultraThinMaterial)` —
+    ///   on iOS 26 the system sheet chrome already composes this as glass.
+    /// - iOS < 16.4: no-op (the API doesn't exist; the sheet keeps its default
+    ///   opaque background).
+    ///
+    /// Apply on the sheet's ROOT view, alongside `presentationDetents`.
+    @ViewBuilder
+    func adaptiveSheetGlassBackground() -> some View {
+        if #available(iOS 16.4, *) {
+            presentationBackground(.ultraThinMaterial)
+        } else {
+            self
+        }
+    }
+
     @ViewBuilder
     private func adaptiveGlassRegularFallback<S: Shape>(in shape: S, tint: Color?) -> some View {
         if let tint {
-            shape.fill(tint.opacity(0.22))
+            shape.fill(.ultraThinMaterial)
+                .overlay(shape.fill(tint.opacity(0.22)))
                 .overlay(shape.stroke(tint.opacity(0.5), lineWidth: 1))
         } else {
             shape.fill(.ultraThinMaterial)

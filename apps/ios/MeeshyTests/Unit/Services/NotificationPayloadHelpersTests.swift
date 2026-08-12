@@ -436,4 +436,130 @@ final class NotificationPayloadHelpersTests: XCTestCase {
 
         XCTAssertNil(result)
     }
+
+    // MARK: - mediaMessageTypes (N4 — typed pre-persisted bubble)
+
+    func test_mediaMessageTypes_audioMime_returnsAudio() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "audio/m4a"
+        )
+        XCTAssertEqual(result.messageType, "audio")
+        XCTAssertEqual(result.contentType, "audio")
+    }
+
+    func test_mediaMessageTypes_videoMp4Mime_returnsVideo() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "video/mp4"
+        )
+        XCTAssertEqual(result.messageType, "video")
+        XCTAssertEqual(result.contentType, "video")
+    }
+
+    func test_mediaMessageTypes_imageMime_returnsImage() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "image/jpeg"
+        )
+        XCTAssertEqual(result.messageType, "image")
+        XCTAssertEqual(result.contentType, "image")
+    }
+
+    func test_mediaMessageTypes_uppercaseMime_isCaseInsensitive() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "AUDIO/MP4"
+        )
+        XCTAssertEqual(result.messageType, "audio")
+    }
+
+    func test_mediaMessageTypes_nilMime_returnsText() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: nil
+        )
+        XCTAssertEqual(result.messageType, "text")
+        XCTAssertEqual(result.contentType, "text")
+    }
+
+    func test_mediaMessageTypes_emptyMime_returnsText() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: ""
+        )
+        XCTAssertEqual(result.messageType, "text")
+    }
+
+    func test_mediaMessageTypes_unknownMime_returnsText() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "application/pdf"
+        )
+        XCTAssertEqual(result.messageType, "text")
+        XCTAssertEqual(result.contentType, "text")
+    }
+
+    // MARK: - socialCategoryIdentifier (R3 — inline comment action)
+
+    func test_socialCategoryIdentifier_postCommentWithPostId_returnsCommentable() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "post_comment", postId: "p1"),
+            "MEESHY_SOCIAL_COMMENTABLE"
+        )
+    }
+
+    func test_socialCategoryIdentifier_friendNewPostWithPostId_returnsCommentable() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "friend_new_post", postId: "p1"),
+            "MEESHY_SOCIAL_COMMENTABLE"
+        )
+    }
+
+    func test_socialCategoryIdentifier_threadReplyTypesWithPostId_returnCommentable() {
+        for type in ["comment_reply", "story_new_comment", "story_thread_reply", "friend_story_comment"] {
+            XCTAssertEqual(
+                NotificationPayloadHelpers.socialCategoryIdentifier(type: type, postId: "p1"),
+                "MEESHY_SOCIAL_COMMENTABLE",
+                "\(type) with a postId must expose the comment action"
+            )
+        }
+    }
+
+    func test_socialCategoryIdentifier_commentableTypeWithoutPostId_returnsSocial() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "post_comment", postId: nil),
+            "MEESHY_SOCIAL"
+        )
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "post_comment", postId: ""),
+            "MEESHY_SOCIAL"
+        )
+    }
+
+    func test_socialCategoryIdentifier_nonCommentableType_returnsSocial() {
+        for type in ["post_like", "story_reaction", "comment_like", "friend_new_mood", "friend_new_story", "post_repost"] {
+            XCTAssertEqual(
+                NotificationPayloadHelpers.socialCategoryIdentifier(type: type, postId: "p1"),
+                "MEESHY_SOCIAL",
+                "\(type) has no commentable target — a Comment button would be misleading"
+            )
+        }
+    }
+
+    // MARK: - callCategoryIdentifier (G4d — no « Answer » on ended calls)
+
+    func test_callCategoryIdentifier_incomingCall_returnsIncoming() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.callCategoryIdentifier(type: "incoming_call"),
+            "MEESHY_CALL_INCOMING"
+        )
+    }
+
+    func test_callCategoryIdentifier_terminalCallTypes_returnMissed() {
+        for type in ["missed_call", "call_ended", "call_declined", "call_recording_ready"] {
+            XCTAssertEqual(
+                NotificationPayloadHelpers.callCategoryIdentifier(type: type),
+                "MEESHY_CALL_MISSED",
+                "\(type) is a terminal call state — it must NOT expose an Answer action"
+            )
+        }
+    }
+
+    func test_callCategoryIdentifier_nonCallType_returnsNil() {
+        XCTAssertNil(NotificationPayloadHelpers.callCategoryIdentifier(type: "new_message"))
+    }
 }

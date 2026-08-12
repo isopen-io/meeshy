@@ -16,8 +16,9 @@ public final class StoryMediaLoader {
     private init() {
         // React to system memory pressure — drop the thumbnail cache and tear
         // down all prerolled players. Without this, a sustained tour through
-        // many stories accumulated up to 6 prerolled `AVQueuePlayer` instances
-        // plus 100 thumbnails (~30 MB) until the next manual `clear*` call.
+        // many stories accumulated up to `maxCachedPlayers` prerolled
+        // `AVQueuePlayer` instances plus 100 thumbnails (~30 MB) until the next
+        // manual `clear*` call.
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
@@ -54,6 +55,49 @@ public final class StoryMediaLoader {
         return await Task.detached(priority: .userInitiated) {
             StoryMediaLoader.downsample(data: localData, maxDimension: dim)
         }.value
+    }
+
+    /// Downsample + encodage JPEG en UN SEUL aller hors du thread principal.
+    /// Les deux opérations sont les deux moitiés du même travail (préparer un
+    /// fichier temporaire pour un média de premier plan) : les séparer
+    /// laisserait l'encodage — le plus coûteux des deux — sur le MainActor.
+    public func downsampledJPEG(
+        image: UIImage,
+        maxDimension: CGFloat,
+        compressionQuality: CGFloat
+    ) async -> (image: UIImage, data: Data)? {
+        let source = image
+        let dim = maxDimension
+        let quality = compressionQuality
+        return await Task.detached(priority: .userInitiated) {
+            let resized = StoryMediaLoader.downsample(image: source, maxDimension: dim) ?? source
+            guard let data = resized.jpegData(compressionQuality: quality) else { return nil }
+            return (resized, data)
+        }.value
+    }
+
+    /// Cœur PUR du redimensionnement, `nonisolated` : c'est ce qui garantit que
+    /// le travail lourd ne peut PAS revenir sur le MainActor par accident.
+    /// `UIGraphicsImageRenderer` est utilisable hors thread principal.
+    ///
+    /// Pas de variante publique `downsampled(image:)` : elle n'a jamais eu
+    /// d'appelant hors tests. Le seul chemin d'un `UIImage` DÉJÀ décodé (capture
+    /// caméra, asset de la pellicule) est `downsampledJPEG`, qui redimensionne
+    /// ET encode en un seul aller détaché — les séparer laissait l'encodage, la
+    /// plus coûteuse des deux moitiés, sur le MainActor.
+    nonisolated static func downsample(image: UIImage, maxDimension: CGFloat) -> UIImage? {
+        let size = image.size
+        let longest = max(size.width, size.height)
+        guard longest > maxDimension, longest > 0 else { return image }
+        let scale = maxDimension / longest
+        let target = CGSize(width: (size.width * scale).rounded(),
+                            height: (size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
     }
 
     // MARK: - ImageIO Downsampling (nonisolated — runs on background thread)
@@ -115,9 +159,13 @@ public final class StoryMediaLoader {
     /// Must run on MainActor since AVPlayer is not thread-safe.
     /// Waits for .readyToPlay status before calling preroll (required by AVPlayer).
     public func preloadVideoPlayer(url: URL) async -> AVPlayer {
+        let thermalState = ProcessInfo.processInfo.thermalState
         let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = 2.0
-        item.preferredPeakBitRate = 1_500_000 // 1.5 Mbps — fast start, good quality
+        // SOTA buffer/bitrate, thermal-aware (WWDC19 #422). Offscreen preroll is
+        // always bitrate-capped; the cap tightens — and the decoded-ahead window
+        // shrinks — once the device heats up. Forward buffer was 2.0s (now ~1s).
+        item.preferredForwardBufferDuration = MediaThermalPolicy.forwardBufferDuration(thermalState: thermalState)
+        item.preferredPeakBitRate = MediaThermalPolicy.preferredPeakBitRate(isVisible: false, thermalState: thermalState)
         let player = AVQueuePlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = false
 
@@ -169,7 +217,9 @@ public final class StoryMediaLoader {
     private var playerCache: [String: AVPlayer] = [:]
     /// Insertion order for FIFO eviction (Dictionary has no guaranteed order).
     private var playerCacheOrder: [String] = []
-    private let maxCachedPlayers = 6
+    /// SOTA short-video pool size: previous / current / next. Was 6 — six prerolled
+    /// `AVQueuePlayer`s each holding decoded frames was a major CPU/GPU/thermal load.
+    private let maxCachedPlayers = 3
 
     /// Preroll and cache a player for later retrieval via `cachedPlayer(for:)`.
     public func preloadAndCachePlayer(url: URL) async {

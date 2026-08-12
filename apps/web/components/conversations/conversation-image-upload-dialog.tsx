@@ -132,7 +132,7 @@ export function ConversationImageUploadDialog({
       onImageUploaded(file);
     } catch (error) {
       console.error('Erreur lors du recadrage:', error);
-      toast.error(t('conversationImage.processingError') || 'Erreur lors du traitement de l\'image');
+      toast.error(t('conversationImage.processingError', 'Error processing image'));
     } finally {
       setIsProcessing(false);
     }
@@ -159,7 +159,7 @@ export function ConversationImageUploadDialog({
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
-            {t('conversationImage.title') || 'Changer l\'image de la conversation'}
+            {t('conversationImage.title', 'Change conversation image')}
           </DialogTitle>
         </DialogHeader>
 
@@ -172,11 +172,11 @@ export function ConversationImageUploadDialog({
               </div>
               <div className="text-center space-y-2">
                 <h3 className="font-semibold text-lg">
-                  {t('conversationImage.selectImage') || 'Sélectionner une image'}
+                  {t('conversationImage.selectImage', 'Select an image')}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {t('conversationImage.selectImageDescription') ||
-                    'Choisissez une image pour représenter cette conversation'}
+                  {t('conversationImage.selectImageDescription',
+                    'Choose an image to represent this conversation')}
                 </p>
               </div>
               <input
@@ -191,11 +191,11 @@ export function ConversationImageUploadDialog({
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
               >
                 <Upload className="mr-2 h-4 w-4" />
-                {t('conversationImage.chooseFile') || 'Choisir un fichier'}
+                {t('conversationImage.chooseFile', 'Choose a file')}
               </Button>
               <p className="text-xs text-muted-foreground">
-                {t('conversationImage.fileRequirements') ||
-                  'JPEG, PNG ou WebP - Max 5MB'}
+                {t('conversationImage.fileRequirements',
+                  'JPEG, PNG or WebP - Max 5MB')}
               </p>
             </div>
           ) : (
@@ -217,7 +217,7 @@ export function ConversationImageUploadDialog({
                     containerStyle: {
                       width: '100%',
                       height: '100%',
-                      backgroundColor: '#f3f4f6',
+                      backgroundColor: 'var(--gp-background)',
                     },
                   }}
                 />
@@ -228,7 +228,7 @@ export function ConversationImageUploadDialog({
                 <div className="flex items-center justify-between">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <ZoomIn className="h-4 w-4" />
-                    {t('conversationImage.zoom') || 'Zoom'}
+                    {t('conversationImage.zoom', 'Zoom')}
                   </Label>
                   <span className="text-sm text-gray-500">{Math.round(zoom * 100)}%</span>
                 </div>
@@ -247,7 +247,7 @@ export function ConversationImageUploadDialog({
                 <div className="flex items-center justify-between">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <RotateCw className="h-4 w-4" />
-                    {t('conversationImage.rotation') || 'Rotation'}
+                    {t('conversationImage.rotation', 'Rotation')}
                   </Label>
                   <span className="text-sm text-gray-500">{rotation}°</span>
                 </div>
@@ -264,8 +264,8 @@ export function ConversationImageUploadDialog({
               {/* Instructions */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                  {t('conversationImage.instructions') ||
-                    'Utilisez la souris pour déplacer l\'image, les curseurs pour zoomer et tourner.'}
+                  {t('conversationImage.instructions',
+                    'Use your mouse to move the image, sliders to zoom and rotate.')}
                 </p>
               </div>
             </>
@@ -280,14 +280,14 @@ export function ConversationImageUploadDialog({
                 onClick={handleReset}
                 disabled={isProcessing || isUploading}
               >
-                {t('conversationImage.reset') || 'Réinitialiser'}
+                {t('conversationImage.reset', 'Reset')}
               </Button>
               <Button
                 variant="outline"
                 onClick={handleSelectFile}
                 disabled={isProcessing || isUploading}
               >
-                {t('conversationImage.changeImage') || 'Changer l\'image'}
+                {t('conversationImage.changeImage', 'Change image')}
               </Button>
             </>
           )}
@@ -296,7 +296,7 @@ export function ConversationImageUploadDialog({
             onClick={onClose}
             disabled={isProcessing || isUploading}
           >
-            {t('conversationImage.cancel') || 'Annuler'}
+            {t('conversationImage.cancel', 'Cancel')}
           </Button>
           {imageSrc && (
             <Button
@@ -308,10 +308,10 @@ export function ConversationImageUploadDialog({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               {isUploading
-                ? (t('conversationImage.uploading') || 'Téléchargement...')
+                ? t('conversationImage.uploading', 'Uploading...')
                 : isProcessing
-                  ? (t('conversationImage.processing') || 'Traitement...')
-                  : (t('conversationImage.save') || 'Enregistrer')}
+                  ? t('conversationImage.processing', 'Processing...')
+                  : t('conversationImage.save', 'Save')}
             </Button>
           )}
         </DialogFooter>

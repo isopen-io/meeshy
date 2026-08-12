@@ -3,23 +3,39 @@ import Combine
 import MeeshyUI
 
 struct VideoFiltersPanel: View {
-    @ObservedObject private var callManager = CallManager.shared
+    // Received from CallEffectsOverlay, NOT instantiated here (`= CallManager.shared`
+    // would re-create the @ObservedObject subscription on every parent body
+    // re-evaluation — CallEffectsOverlay/CallView re-evaluate often mid-call.
+    // Same P1-16 hazard already fixed on CallView, FloatingCallPillView,
+    // CallBubbleView and CallParticipantVisual; this panel was missed.
+    @ObservedObject var callManager: CallManager
     @State private var filterConfig = VideoFilterConfig()
-    @State private var activePreset: VideoFilterPreset? = .natural
+
+    // Derived, not stored: a separate `@State` here could drift from
+    // `filterConfig` (e.g. stale on panel reopen, or left pointing at a
+    // preset the user has since hand-tuned away from via `VideoFilterControlView`'s
+    // sliders). Deriving it every render from the single source of truth
+    // (`filterConfig`) makes that whole class of staleness impossible.
+    private var activePreset: VideoFilterPreset? {
+        VideoFilterPreset.matching(filterConfig)
+    }
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.md) {
             header
             presetSelector
             VideoFilterControlView(config: $filterConfig)
-                .padding(.horizontal, -16)
+                .padding(.horizontal, -MeeshySpacing.lg)
             advancedToggles
             performanceIndicator
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
+        .padding(MeeshySpacing.lg)
+        // Liquid Glass natif (iOS 26+) sur la surface flottante neutre. La
+        // sous-section `VideoFilterControlView` reste en `.ultraThinMaterial`
+        // (matériau SUR verre = HIG ; jamais verre-dans-verre).
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .padding(.horizontal, MeeshySpacing.lg)
         .onAppear {
             filterConfig = callManager.videoFilters.config
         }
@@ -31,24 +47,25 @@ struct VideoFiltersPanel: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "camera.filters")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
+                .accessibilityHidden(true)
             Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
             Spacer()
             if filterConfig.isEnabled {
                 Button {
                     filterConfig = VideoFilterPreset.natural.config
                     filterConfig.isEnabled = false
-                    activePreset = .natural
                 } label: {
                     Text(String(localized: "video.filter.reset", defaultValue: "Reset", bundle: .main))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                 }
+                .meeshyTapTarget()
             }
         }
     }
@@ -57,7 +74,7 @@ struct VideoFiltersPanel: View {
 
     private var presetSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(VideoFilterPreset.allCases, id: \.self) { preset in
                     presetChip(preset)
                 }
@@ -68,7 +85,6 @@ struct VideoFiltersPanel: View {
     private func presetChip(_ preset: VideoFilterPreset) -> some View {
         let isActive = activePreset == preset
         return Button {
-            activePreset = preset
             var config = preset.config
             config.backgroundBlurEnabled = filterConfig.backgroundBlurEnabled
             config.backgroundBlurRadius = filterConfig.backgroundBlurRadius
@@ -77,10 +93,10 @@ struct VideoFiltersPanel: View {
             filterConfig = config
         } label: {
             Text(presetLabel(preset))
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(isActive ? MeeshyColors.indigo500 : .secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     Capsule()
                         .fill(isActive ? MeeshyColors.indigo500.opacity(0.15) : Color.primary.opacity(0.06))
@@ -90,7 +106,9 @@ struct VideoFiltersPanel: View {
                         .stroke(isActive ? MeeshyColors.indigo500.opacity(0.4) : Color.clear, lineWidth: 1)
                 )
         }
+        .meeshyTapTarget()
         .pressable()
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     private func presetLabel(_ preset: VideoFilterPreset) -> String {
@@ -106,32 +124,35 @@ struct VideoFiltersPanel: View {
     // MARK: - Advanced Toggles
 
     private var advancedToggles: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.sm) {
             Divider().opacity(0.3)
 
             HStack {
                 Image(systemName: "person.and.background.dotted")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
                     .frame(width: 18)
                 Text(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: $filterConfig.backgroundBlurEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
             }
 
             if filterConfig.backgroundBlurEnabled {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Text(String(localized: "video.filter.radius", defaultValue: "Rayon", bundle: .main))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.backgroundBlurRadius, in: 5...20)
                         .tint(MeeshyColors.indigo500)
+                        .accessibilityLabel(String(localized: "video.filter.radius", defaultValue: "Rayon", bundle: .main))
+                        .accessibilityValue(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                     Text(String(format: "%.0f", filterConfig.backgroundBlurRadius))
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary)
                         .frame(width: 28, alignment: .trailing)
                 }
@@ -141,27 +162,30 @@ struct VideoFiltersPanel: View {
 
             HStack {
                 Image(systemName: "face.dashed")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
                     .frame(width: 18)
                 Text(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: $filterConfig.skinSmoothingEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
             }
 
             if filterConfig.skinSmoothingEnabled {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Text(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.skinSmoothingIntensity, in: 0...1)
                         .tint(MeeshyColors.indigo500)
+                        .accessibilityLabel(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
+                        .accessibilityValue(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                     Text(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary)
                         .frame(width: 42, alignment: .trailing)
                 }
@@ -178,15 +202,15 @@ struct VideoFiltersPanel: View {
     @ViewBuilder
     private var performanceIndicator: some View {
         if callManager.videoFilters.isAutoDegraded {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                 Text(String(localized: "video.filter.performanceDegraded", defaultValue: "Performance reduite — certains filtres desactives", bundle: .main))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
             }
             .foregroundColor(MeeshyColors.warning)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
                     .fill(MeeshyColors.warning.opacity(0.12))

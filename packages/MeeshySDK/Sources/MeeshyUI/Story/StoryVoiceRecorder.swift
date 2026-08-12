@@ -9,9 +9,17 @@ import MeeshySDK
 /// Uses injected AudioRecordingProviding for actual recording logic.
 /// Hold-to-record or tap-to-toggle. Large controls at the bottom.
 public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
-    public var onRecordComplete: (URL) -> Void
+    /// Hands back the recorded file together with the language the user tagged
+    /// it with, so the downstream audio editor (transcription) opens pre-set.
+    public var onRecordComplete: (URL, String) -> Void
+    /// Portes vers les autres sources d'audio (import Fichiers, bibliothèque de
+    /// sons), rendues en chips sous le header. `nil` = pas de chip — le
+    /// recorder reste un pur enregistreur pour les call sites qui n'offrent
+    /// pas ces flux. Closures opaques : le composant ignore ce qu'elles ouvrent.
+    var onImportAudioFile: (() -> Void)?
+    var onOpenSoundLibrary: (() -> Void)?
 
-    // `@StateObject` (et non `@ObservedObject`) : le call site (StoryAudioPanel)
+    // `@StateObject` (et non `@ObservedObject`) : le call site (sheet +Media)
     // crée le recorder inline via l'init de convenance — en observed, chaque
     // ré-évaluation du panel remplaçait l'instance observée mid-recording et
     // orphelinait un AVAudioRecorder live (micro chaud, enregistrement perdu).
@@ -20,14 +28,42 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     @State private var phaseTimer: Timer?
     @State private var errorMessage: String?
     @State private var hasCompleted = false
+    @State private var selectedLanguage: String
 
-    private let maxDuration: TimeInterval = 60
+    /// `nil` = no cap (the previous hardcoded 1-minute limit is removed). A
+    /// caller may still opt into a ceiling.
 
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(recorder: @autoclosure @escaping () -> Recorder, onRecordComplete: @escaping (URL) -> Void) {
+    public init(recorder: @autoclosure @escaping () -> Recorder,
+                preferredLanguage: String = "fr",
+                onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil,
+                onRecordComplete: @escaping (URL, String) -> Void) {
         self._recorder = StateObject(wrappedValue: recorder())
+        self._selectedLanguage = State(initialValue: preferredLanguage)
+        self.onImportAudioFile = onImportAudioFile
+        self.onOpenSoundLibrary = onOpenSoundLibrary
         self.onRecordComplete = onRecordComplete
+    }
+
+    // MARK: - Theme-aware colors
+    //
+    // Le panneau repose sur `.ultraThinMaterial` : en light mode ce matériau est
+    // quasi blanc, donc le `.white` codé en dur disparaissait (texte/contrôles
+    // blanc-sur-blanc, bug #5). On dérive donc les teintes du colorScheme.
+
+    private var primaryTextColor: Color {
+        colorScheme == .dark ? .white : MeeshyColors.indigo950
+    }
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? .white.opacity(0.55) : MeeshyColors.indigo600.opacity(0.75)
+    }
+    private var controlFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : MeeshyColors.indigo500.opacity(0.12)
+    }
+    private var controlIcon: Color {
+        colorScheme == .dark ? .white.opacity(0.7) : MeeshyColors.indigo700
     }
 
     public var body: some View {
@@ -39,10 +75,18 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.voiceRecorder.title", defaultValue: "Enregistrement", bundle: .module))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                    .foregroundColor(primaryTextColor)
                 Spacer()
             }
             .padding(.bottom, 12)
+
+            if !recorder.isRecording {
+                StoryVoiceRecorderSourceChips(
+                    onImportAudioFile: onImportAudioFile,
+                    onOpenSoundLibrary: onOpenSoundLibrary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 8)
+            }
 
             VStack(spacing: 20) {
                 if let error = errorMessage {
@@ -61,10 +105,12 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                     .opacity(recorder.isRecording ? 1 : 0.3)
 
                 Text(recorder.isRecording
-                     ? String(format: "%.1fs / 60s", recorder.duration)
+                     ? recordingTimeLabel
                      : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : .white.opacity(0.5))
+                    .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : secondaryTextColor)
+
+                languageStrip
 
                 Spacer()
 
@@ -79,11 +125,11 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                         } label: {
                             ZStack {
                                 Circle()
-                                    .fill(Color.white.opacity(0.08))
+                                    .fill(controlFill)
                                     .frame(width: 50, height: 50)
                                 Image(systemName: "xmark")
                                     .font(.system(size: 18, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(controlIcon)
                             }
                         }
                     }
@@ -113,11 +159,60 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 recorder.cancelRecording()
             }
         }
-        .onChange(of: recorder.isRecording) { isRecording in
+        .adaptiveOnChange(of: recorder.isRecording) { _, isRecording in
             if !isRecording {
                 stopRecording()
             }
         }
+    }
+
+    // MARK: - Recording time label
+
+    /// Temps écoulé, sans « / plafond » : l'enregistrement n'a plus de limite
+    /// de durée (directive produit 2026-07-26).
+    private var recordingTimeLabel: String {
+        formatTime(recorder.duration)
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded(.down))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    // MARK: - Language strip
+
+    /// Lets the user tag the recorded audio's spoken language so the editor
+    /// (and downstream transcription / Prisme) start from the right idiom.
+    private var languageStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(LanguageData.allLanguagesCommonFirst, id: \.code) { language in
+                    let isActive = selectedLanguage == language.code
+                    Button {
+                        HapticFeedback.light()
+                        selectedLanguage = language.code
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(language.flag)
+                            Text(language.nativeName)
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(isActive ? .white : secondaryTextColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule().fill(isActive
+                                           ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                           : AnyShapeStyle(controlFill))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .frame(height: 34)
     }
 
     // MARK: - Waveform
@@ -139,14 +234,14 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     private var recordButton: some View {
         ZStack {
             Circle()
-                .fill(recorder.isRecording ? MeeshyColors.brandPrimary : Color.white.opacity(0.12))
+                .fill(recorder.isRecording ? AnyShapeStyle(MeeshyColors.brandPrimary) : AnyShapeStyle(controlFill))
                 .frame(width: 72, height: 72)
                 .scaleEffect(recorder.isRecording ? 1.1 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
 
             Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
                 .font(.system(size: 26, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(recorder.isRecording ? .white : controlIcon)
         }
         .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)
         .onTapGesture {
@@ -167,32 +262,27 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         guard !recorder.isRecording else { return }
         hasCompleted = false
 
-        // `requestRecordPermission` invokes its completion on the
-        // `com.avaudiosession.tccserver` queue. Hopping back via
-        // `DispatchQueue.main.async` does NOT prove `@MainActor` isolation
-        // to Swift 6's runtime; calling `@MainActor`-isolated APIs from
-        // there trips `swift_task_isCurrentExecutorImpl` and crashes with
-        // `EXC_BREAKPOINT`. `Task { @MainActor in ... }` is the
-        // Swift-6-correct hop.
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            Task { @MainActor in
-                guard granted else {
-                    errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
-                    return
-                }
-                errorMessage = nil
-                recorder.configure(with: .story)
-                recorder.startRecording()
-                HapticFeedback.medium()
-
-                phaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                    Task { @MainActor in
-                        if recorder.duration >= maxDuration {
-                            stopRecording()
-                        }
-                    }
-                }
+        // La demande passe par `DevicePermissions` (SDK core), dont le callback
+        // est confiné dans un helper `nonisolated` : le système rappelle sur la
+        // queue TCC, et sous `defaultIsolation(MainActor)` (MeeshyUI) un closure
+        // littéral y hériterait de `@MainActor` — son prologue
+        // (`swift_task_isCurrentExecutorImpl`) vérifie l'exécuteur À L'ENTRÉE et
+        // trappe (`EXC_BREAKPOINT`) AVANT même qu'un `Task { @MainActor in }`
+        // interne ne s'exécute (crash 1re demande de permission micro story,
+        // 2026-06-15). Le résultat est consommé ici sur le MainActor via `await`.
+        Task { @MainActor in
+            let state = await DevicePermissions.requestMicrophone()
+            guard state.isUsable else {
+                errorMessage = state.needsSettingsRedirect
+                    ? String(localized: "audio.recorder.micDeniedSettings", defaultValue: "Micro refus\u{00E9} \u{2014} autorisez-le dans R\u{00E9}glages", bundle: .module)
+                    : String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+                return
             }
+            errorMessage = nil
+            recorder.configure(with: .story)
+            recorder.startRecording()
+            HapticFeedback.medium()
+
         }
     }
 
@@ -211,7 +301,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         HapticFeedback.success()
 
         if let url, recorder.duration > 0.5 {
-            onRecordComplete(url)
+            onRecordComplete(url, selectedLanguage)
         }
     }
 
@@ -221,10 +311,54 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     }
 }
 
+// MARK: - Source chips (Fichiers / Bibliothèque)
+
+/// Rangée d'accès aux sources d'audio alternatives, montée par le recorder
+/// hors enregistrement. Chaque chip n'existe que si SA closure est fournie ;
+/// sans aucune closure la rangée n'a aucune surface (absence structurelle) —
+/// les call sites qui ne passent rien rendent le recorder à l'identique.
+struct StoryVoiceRecorderSourceChips: View {
+    var onImportAudioFile: (() -> Void)?
+    var onOpenSoundLibrary: (() -> Void)?
+
+    var body: some View {
+        if onImportAudioFile != nil || onOpenSoundLibrary != nil {
+            HStack(spacing: 8) {
+                if let onImportAudioFile {
+                    chip(icon: "folder.fill",
+                         text: String(localized: "story.voiceRecorder.fromFiles", defaultValue: "Fichiers", bundle: .module),
+                         action: onImportAudioFile)
+                }
+                if let onOpenSoundLibrary {
+                    chip(icon: "music.note.list",
+                         text: String(localized: "story.voiceRecorder.fromLibrary", defaultValue: "Bibliothèque", bundle: .module),
+                         action: onOpenSoundLibrary)
+                }
+            }
+        }
+    }
+
+    private func chip(icon: String, text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            MediaPillLabel(icon: icon, text: text)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Backward-compatible convenience init (uses DefaultSDKAudioRecorder)
 
 extension StoryVoiceRecorder where Recorder == DefaultSDKAudioRecorder {
-    public init(onRecordComplete: @escaping (URL) -> Void) {
-        self.init(recorder: DefaultSDKAudioRecorder(), onRecordComplete: onRecordComplete)
+    public init(preferredLanguage: String = "fr",
+                onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil,
+                onRecordComplete: @escaping (URL, String) -> Void) {
+        self.init(recorder: DefaultSDKAudioRecorder(),
+                  preferredLanguage: preferredLanguage,
+                  onImportAudioFile: onImportAudioFile,
+                  onOpenSoundLibrary: onOpenSoundLibrary,
+                  onRecordComplete: onRecordComplete)
     }
 }

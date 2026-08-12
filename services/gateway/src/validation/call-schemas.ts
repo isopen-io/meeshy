@@ -111,6 +111,17 @@ export const getActiveCallSchema = z.object({
 export const getActiveCallForUserSchema = z.object({});
 
 /**
+ * GET /api/calls/history - Paginated call journal (query params)
+ * Parsed in-handler (mirrors the feed route), so this is the query shape only.
+ */
+export const callHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+  cursor: objectIdSchema.optional(),
+  filter: z.enum(['all', 'missed']).default('all')
+});
+export type CallHistoryQueryInput = z.infer<typeof callHistoryQuerySchema>;
+
+/**
  * Socket.IO Event: call:initiate
  */
 export const socketInitiateCallSchema = z.object({
@@ -143,14 +154,33 @@ export const socketSignalSchema = z.object({
   callId: objectIdSchema,
   signal: z.object({
     type: z.enum(['offer', 'answer', 'ice-candidate', 'ice-restart'], {
-      errorMap: () => ({ message: 'Signal type must be offer, answer, ice-candidate, or ice-restart' })
+      error: () => 'Signal type must be offer, answer, ice-candidate, or ice-restart'
     }),
     from: z.string().min(1, 'from field is required'),
     to: z.string().min(1, 'to field is required'),
-    // SDP data for offer/answer
-    sdp: z.string().max(50000, 'SDP data exceeds maximum size of 50KB').optional(),
-    // ICE candidate data
-    candidate: z.string().max(1000, 'ICE candidate exceeds maximum size of 1KB').optional(),
+    // SDP data for offer/answer — size-capped and structurally validated.
+    // Every RFC 4566 WebRTC SDP must contain "v=0" (version field, always first)
+    // and at least one "m=" line (media description). A string that passes the
+    // 50KB cap but lacks these fields is either malformed or a crafted payload
+    // that could exploit the client-side SDP parser.
+    sdp: z.string()
+      .max(50000, 'SDP data exceeds maximum size of 50KB')
+      .refine(
+        (s) => s.includes('v=0') && s.includes('m='),
+        'SDP must contain a version field (v=0) and at least one media line (m=) per RFC 4566'
+      )
+      .optional(),
+    // ICE candidate data — validated against RFC 8445 candidate-attribute format.
+    // An empty string is accepted as the end-of-candidates marker (§8.2.1).
+    // Rejecting non-conforming strings prevents forwarding crafted payloads that
+    // could trigger parser bugs in the peer's WebRTC implementation.
+    candidate: z.string()
+      .max(1000, 'ICE candidate exceeds maximum size of 1KB')
+      .refine(
+        (s) => s === '' || /^candidate:\S+/i.test(s),
+        'ICE candidate must start with "candidate:" (RFC 8445) or be empty (end-of-candidates marker)'
+      )
+      .optional(),
     sdpMLineIndex: z.number().optional(),
     sdpMid: z.string().optional(),
     // §3.5 negotiation epoch — declared so Zod does not strip it from the
@@ -162,9 +192,11 @@ export const socketSignalSchema = z.object({
       if (data.type === 'offer' || data.type === 'answer' || data.type === 'ice-restart') {
         return typeof data.sdp === 'string' && data.sdp.length > 0;
       }
+      /* istanbul ignore else -- enum guarantees all 4 types are handled */
       if (data.type === 'ice-candidate') {
         return typeof data.candidate === 'string';
       }
+      /* istanbul ignore next -- enum guarantees all 4 types handled above */
       return true;
     },
     {
@@ -188,7 +220,11 @@ export const socketMediaToggleSchema = z.object({
  */
 export const socketEndCallSchema = z.object({
   callId: objectIdSchema,
-  reason: z.string().max(50).optional()
+  // Whitelist: only lowercase letters and underscores. Prevents XSS payloads
+  // from being stored in call session metadata if the client later renders the
+  // raw reason string. The service maps it to a known CallEndReason enum anyway,
+  // but the gate here stops malicious payloads from reaching the DB or logs.
+  reason: z.string().max(50).regex(/^[a-z_]+$/, 'End reason must contain only lowercase letters and underscores').optional()
 });
 
 /**
@@ -212,11 +248,13 @@ export const socketQualityReportSchema = z.object({
       video: z.number().min(0)
     }).optional(),
     jitter: z.number().min(0).optional(),
-    timestamp: z.string().datetime().or(z.date()).optional(),
+    timestamp: z.iso.datetime().or(z.date()).optional(),
     // Cumulative WebRTC byte counters (monotonic). The last report before
     // teardown carries the call totals, persisted to surface "data spent".
     bytesSent: z.number().min(0).optional(),
-    bytesReceived: z.number().min(0).optional()
+    bytesReceived: z.number().min(0).optional(),
+    // TWCC GCC bandwidth estimate (bps). 0 or absent = TWCC not yet active.
+    availableOutgoingBitrateBps: z.number().min(0).optional()
   })
 });
 
@@ -282,3 +320,82 @@ export type SocketReconnectingInput = z.infer<typeof socketReconnectingSchema>;
 export type SocketReconnectedInput = z.infer<typeof socketReconnectedSchema>;
 export type SocketForceLeaveInput = z.infer<typeof socketForceLeaveSchema>;
 export type SocketTranscriptionSegmentInput = z.infer<typeof socketTranscriptionSegmentSchema>;
+
+/**
+ * Socket.IO Event: call:request-ice-servers (fire-and-forget, Client → Server)
+ * Sent by the client near credential expiry to obtain fresh TURN credentials.
+ */
+export const socketRequestIceServersSchema = z.object({
+  callId: objectIdSchema,
+});
+export type SocketRequestIceServersInput = z.infer<typeof socketRequestIceServersSchema>;
+
+/**
+ * Socket.IO Event: call:backgrounded (fire-and-forget, Client → Server)
+ * Emitted when the app enters background while a call is active so the gateway
+ * can extend heartbeat tolerance and skip socket-delivery for ringing.
+ */
+export const socketCallBackgroundedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+});
+export type SocketCallBackgroundedInput = z.infer<typeof socketCallBackgroundedSchema>;
+
+/**
+ * Socket.IO Event: call:foregrounded (fire-and-forget, Client → Server)
+ * Emitted when the app returns to foreground so the gateway can reset heartbeat
+ * tolerance and resume normal socket delivery for incoming calls.
+ */
+export const socketCallForegroundedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+});
+export type SocketCallForegroundedInput = z.infer<typeof socketCallForegroundedSchema>;
+
+/**
+ * Socket.IO Event: call:screen-capture-detected (fire-and-forget, Client → Server)
+ * Emitted when UIScreen.isCaptured changes so the gateway can alert other
+ * participants via call:screen-capture-alert.
+ */
+export const socketCallScreenCaptureDetectedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+  isCapturing: z.boolean(),
+});
+export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;
+
+/**
+ * Socket.IO Event: call:analytics (fire-and-forget, Client → Server)
+ * Emitted once at call end with lifecycle telemetry. Gateway logs and
+ * optionally persists the payload for quality dashboards.
+ */
+export const socketCallAnalyticsSchema = z.object({
+  callId: objectIdSchema,
+  setupTimeMs: z.number().int(),
+  // answer/join → connected : la négociation WebRTC seule, SANS le temps de
+  // sonnerie humain que setupTimeMs inclut (23 s observés — métrique
+  // inutilisable pour détecter une régression de setup). Optionnel : absent
+  // des builds iOS < 2026-07-03 ; -1 = jamais connecté / ancrage manquant.
+  negotiationTimeMs: z.number().int().optional(),
+  durationSeconds: z.number().nonnegative(),
+  reconnectionCount: z.number().int().nonnegative(),
+  networkTransitions: z.number().int().nonnegative(),
+  averageRtt: z.number().nonnegative(),
+  averagePacketLoss: z.number().nonnegative(),
+  maxPacketLoss: z.number().nonnegative(),
+  codec: z.string().max(50),
+  effectsUsed: z.array(z.string().max(50)).max(50),
+  filtersUsed: z.boolean(),
+  transcriptionUsed: z.boolean(),
+  qualityDistribution: z.object({
+    excellent: z.number().min(0).max(1),
+    good: z.number().min(0).max(1),
+    fair: z.number().min(0).max(1),
+    poor: z.number().min(0).max(1),
+  }),
+  platform: z.string().max(50),
+  deviceModel: z.string().max(100),
+  isVideo: z.boolean(),
+  endReason: z.string().max(50),
+});
+export type SocketCallAnalyticsInput = z.infer<typeof socketCallAnalyticsSchema>;

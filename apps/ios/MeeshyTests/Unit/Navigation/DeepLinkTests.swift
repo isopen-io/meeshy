@@ -4,6 +4,7 @@ import MeeshySDK
 
 // MARK: - DeepLinkParser Tests
 
+@MainActor
 final class DeepLinkParserTests: XCTestCase {
 
     // MARK: - Custom Scheme (meeshy://)
@@ -228,13 +229,15 @@ final class DeepLinkParserTests: XCTestCase {
         XCTAssertEqual(id, "inv123")
     }
 
-    func test_parse_webUrl_legacyJoinL_returnsJoinLink() {
+    func test_parse_webUrl_trackedShareLink_returnsTrackedLink() {
+        // `/l/<token>` is a tracked share link resolved async by targetType
+        // (fix collision tracking↔invitation), no longer assumed to be a join.
         let url = URL(string: "https://meeshy.me/l/shortcode")!
-        guard case .joinLink(let id) = DeepLinkParser.parse(url) else {
-            XCTFail("Expected .joinLink")
+        guard case .trackedLink(let token) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .trackedLink")
             return
         }
-        XCTAssertEqual(id, "shortcode")
+        XCTAssertEqual(token, "shortcode")
     }
 
     func test_parse_webUrl_chat_returnsChatLink() {
@@ -473,14 +476,18 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(sut.pendingDeepLink, .joinLink(identifier: "inv123"))
     }
 
-    func test_handle_joinLink_shortPath_setsPendingDeepLink() {
+    func test_handle_trackedShareLink_isClaimedAndResolvedAsync() {
         let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/l/shortcode")!
 
         let handled = sut.handle(url: url)
 
+        // `/l/<token>` is claimed as a Meeshy deep link (so it never bounces to
+        // Safari) but its destination is resolved ASYNC by targetType — it is
+        // not set synchronously. Typed resolution is covered by
+        // DeepLinkRouterTrackedDestinationTests.
         XCTAssertTrue(handled)
-        XCTAssertEqual(sut.pendingDeepLink, .joinLink(identifier: "shortcode"))
+        XCTAssertNil(sut.pendingDeepLink)
     }
 
     func test_handle_conversationLink_setsPendingDeepLink() {
@@ -717,6 +724,7 @@ final class DeepLinkRouterChatLinkTests: XCTestCase {
 
 // MARK: - DeepLink Equatable Tests
 
+@MainActor
 final class DeepLinkEquatableTests: XCTestCase {
 
     func test_joinLink_equality() {
@@ -763,6 +771,7 @@ final class DeepLinkEquatableTests: XCTestCase {
 
 // MARK: - DeepLinkParser Post Detail Tests
 
+@MainActor
 final class DeepLinkParserPostDetailTests: XCTestCase {
 
     func test_parse_webUrl_feedsPost_returnsPostDetail() {
@@ -876,6 +885,7 @@ final class DeepLinkParserPostDetailTests: XCTestCase {
 
 // MARK: - DeepLinkParser Story Detail Tests
 
+@MainActor
 final class DeepLinkParserStoryDetailTests: XCTestCase {
 
     func test_parse_webUrl_story_returnsStoryDetail() {
@@ -1204,6 +1214,7 @@ final class DeepLinkRouterShortAliasTests: XCTestCase {
 
 // MARK: - DeepLink Equatable — Profile / Self cases
 
+@MainActor
 final class DeepLinkProfileEquatableTests: XCTestCase {
 
     func test_userProfile_equality() {
@@ -1333,5 +1344,104 @@ final class DeepLinkRouterPostDetailTests: XCTestCase {
 
         XCTAssertFalse(handled)
         XCTAssertNil(sut.pendingDeepLink)
+    }
+}
+
+// MARK: - DeepLinkRouter Conversation Short Alias — Lockstep with Parser
+//
+// Regression guard: `DeepLinkParser.parseCustomScheme` accepted
+// `meeshy://c/<id>` (short alias for `conversation`) via its own
+// `case "c", "conversation":`, and `DeepLinkRouter.handle` (Universal Link
+// branch, `https://meeshy.me/c/<id>`) already matched `case "c", "conversation":`
+// too — but `DeepLinkRouter.handleCustomScheme` (the `meeshy://...` branch)
+// only matched `case "conversation":`. So `DeepLinkParser.parse` resolved
+// `meeshy://c/<id>` to `.conversation(id:)` correctly (used by
+// `DeepLinkParser.open`, e.g. in-app Link taps), yet `DeepLinkRouter.handle`
+// (used by `AppDelegate.application(_:continue:)` / `.onOpenURL` cold-launch
+// dispatch) silently dropped it. These tests enumerate every alias the
+// parser considers a valid "conversation" keyword and assert the router
+// recognises each one identically on both surfaces, so a future alias added
+// to one side can't silently regress on the other.
+@MainActor
+final class DeepLinkRouterConversationAliasLockstepTests: XCTestCase {
+
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
+
+    /// Every alias `DeepLinkParser.parseCustomScheme` / `parseMeeshyWeb`
+    /// resolve to `.conversation(id:)`. Kept as a literal list (mirroring
+    /// `postSegments`/`storySegments`/`userSegments`) since `DeepLinkParser`
+    /// does not expose a `conversationSegments` accessor — extending this
+    /// list is the deliberate signal to also extend both `DeepLinkRouter`
+    /// switch statements.
+    private let conversationAliases = ["c", "conversation"]
+
+    func test_handle_customScheme_cShort_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://c/conv_short_alias")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .conversation(id: "conv_short_alias"))
+    }
+
+    func test_handle_customScheme_cShort_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://c/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
+    }
+
+    func test_handle_customScheme_everyConversationAlias_setsPendingDeepLink() {
+        for alias in conversationAliases {
+            let sut = makeSUT()
+            let url = URL(string: "meeshy://\(alias)/conv_\(alias)")!
+
+            let handled = sut.handle(url: url)
+
+            XCTAssertTrue(handled, "Expected meeshy://\(alias)/<id> to be claimed by the router")
+            XCTAssertEqual(sut.pendingDeepLink, .conversation(id: "conv_\(alias)"), "alias '\(alias)'")
+        }
+    }
+
+    func test_handle_universalLink_everyConversationAlias_setsPendingDeepLink() {
+        for alias in conversationAliases {
+            let sut = makeSUT()
+            let url = URL(string: "https://meeshy.me/\(alias)/conv_\(alias)")!
+
+            let handled = sut.handle(url: url)
+
+            XCTAssertTrue(handled, "Expected https://meeshy.me/\(alias)/<id> to be claimed by the router")
+            XCTAssertEqual(sut.pendingDeepLink, .conversation(id: "conv_\(alias)"), "alias '\(alias)'")
+        }
+    }
+
+    /// True lockstep check: for every alias, `DeepLinkParser.parse` (used by
+    /// in-app `Link` taps via `DeepLinkParser.open`) and `DeepLinkRouter.handle`
+    /// (used by cold-launch Universal Link / custom-scheme dispatch) MUST
+    /// agree on the resolved conversation id — neither silently drops the
+    /// alias nor resolves it to a different destination.
+    func test_parse_everyConversationAlias_agreesWithRouter_customScheme() {
+        for alias in conversationAliases {
+            let url = URL(string: "meeshy://\(alias)/conv_\(alias)")!
+
+            guard case .conversation(let parsedId) = DeepLinkParser.parse(url) else {
+                XCTFail("Expected DeepLinkParser to resolve alias '\(alias)' to .conversation")
+                continue
+            }
+
+            let sut = makeSUT()
+            _ = sut.handle(url: url)
+
+            guard case .conversation(let routedId) = sut.pendingDeepLink else {
+                XCTFail("Expected DeepLinkRouter to resolve alias '\(alias)' to .conversation, got \(String(describing: sut.pendingDeepLink))")
+                continue
+            }
+
+            XCTAssertEqual(parsedId, routedId, "Parser/router disagree on conversation id for alias '\(alias)'")
+        }
     }
 }

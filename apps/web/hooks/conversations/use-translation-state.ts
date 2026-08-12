@@ -12,19 +12,9 @@
 import { useState, useCallback } from 'react';
 
 interface UseTranslationStateReturn {
-  /**
-   * Ajoute un état de traduction en cours
-   */
   addTranslatingState: (messageId: string, targetLanguage: string) => void;
-
-  /**
-   * Supprime un état de traduction
-   */
   removeTranslatingState: (messageId: string, targetLanguage: string) => void;
-
-  /**
-   * Vérifie si une traduction est en cours
-   */
+  clearMessageTranslatingState: (messageId: string) => void;
   isTranslating: (messageId: string, targetLanguage: string) => boolean;
 
   /**
@@ -92,9 +82,15 @@ export function useTranslationState(): UseTranslationStateReturn {
     });
   }, []);
 
-  /**
-   * Vérifie si une traduction est en cours (O(1) lookup)
-   */
+  const clearMessageTranslatingState = useCallback((messageId: string) => {
+    setTranslatingMessages(prev => {
+      if (!prev.has(messageId)) return prev;
+      const next = new Map(prev);
+      next.delete(messageId);
+      return next;
+    });
+  }, []);
+
   const isTranslating = useCallback((messageId: string, targetLanguage: string): boolean => {
     const currentLanguages = translatingMessages.get(messageId);
     return currentLanguages ? currentLanguages.has(targetLanguage) : false;
@@ -125,6 +121,7 @@ export function useTranslationState(): UseTranslationStateReturn {
   return {
     addTranslatingState,
     removeTranslatingState,
+    clearMessageTranslatingState,
     isTranslating,
     usedLanguages,
     addUsedLanguage,

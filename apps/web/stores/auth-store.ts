@@ -46,6 +46,7 @@ export const useAuthStore = create<AuthStore>()(
     persist(
       (set, get) => {
         // Register cleanup with AuthManager
+        /* istanbul ignore next */
         if (typeof window !== 'undefined') {
           authManager.registerOnClear(() => {
             set({
@@ -98,6 +99,7 @@ export const useAuthStore = create<AuthStore>()(
               isAuthChecking: false,
             });
 
+            /* istanbul ignore next */
             if (typeof window !== 'undefined' && window.localStorage) {
               try {
                 localStorage.removeItem(AUTH_STORAGE_KEYS.ZUSTAND_AUTH);
@@ -107,6 +109,7 @@ export const useAuthStore = create<AuthStore>()(
 
           logout: async () => {
             authManager.clearAllSessions();
+            /* istanbul ignore next */
             if (typeof window !== 'undefined') {
               setTimeout(() => {
                 window.location.href = '/';

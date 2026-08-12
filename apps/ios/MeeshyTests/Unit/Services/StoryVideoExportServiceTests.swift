@@ -1,6 +1,10 @@
 import XCTest
+import AVFoundation
+import CoreMedia
+import UIKit
 @testable import Meeshy
 @testable import MeeshySDK
+@testable import MeeshyUI
 
 // MARK: - StoryVideoExportServiceTests
 //
@@ -239,6 +243,147 @@ final class StoryVideoExportServiceTests: XCTestCase {
 
         sut.cleanupExport(at: url)
     }
+
+    // MARK: - 4. Emballage de marque — interlude ET carte de fin
+
+    /// Durée du MP4 factice produit par `RealMP4StubExporter`.
+    private static let stubStoryDuration: TimeInterval = 2.0
+
+    /// Allongement net apporté par la carte de fin **logo-seule** (aucune
+    /// identité d'auteur) : 2 s de carte dont 1,5 s en crossfade par-dessus la
+    /// fin de la story (cf.
+    /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
+    private static let outroTail: TimeInterval = 0.5
+
+    /// Allongement net de la carte de fin **d'auteur**, en 2 temps depuis la
+    /// « carte de fin d'auteur » (Part D, 2026-07-26) : `StoryExportOutro`
+    /// insère `logoPhase` (1,5 s) + `identityPhase` (2 s) à `fin − overlap`, et
+    /// `overlap` vaut exactement `logoPhase` — la phase logo se superpose donc
+    /// entièrement au crossfade et seule la phase d'identité rallonge la vidéo.
+    ///
+    /// Miroir local de `StoryExportOutro.identityPhase`, `internal` à MeeshyUI
+    /// donc invisible ici — même parti pris que `outroTail` juste au-dessus.
+    private static let outroAuthorTail: TimeInterval = 2.0
+
+    /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
+    /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
+    /// identité non résolue faisait donc perdre l'interlude ET la carte de fin.
+    /// Tant que `intro == nil` voulait dire « pas de session » (cas de bord),
+    /// la conséquence restait théorique ; depuis que ce lot borne la résolution
+    /// d'identité à 4 s, `intro == nil` est devenu un résultat de course
+    /// routinier (première installation, réseau lent) — le branding devenait
+    /// non déterministe d'un export à l'autre, sans aucun signal utilisateur.
+    ///
+    /// La carte de fin ne dépend d'AUCUNE identité : elle doit survivre à
+    /// `intro == nil`.
+    func test_prepareExport_withoutIntro_stillAppendsTheBrandOutro() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+        let exporter = RealMP4StubExporter(duration: Self.stubStoryDuration)
+        let sut = StoryVideoExportService(exporter: exporter)
+
+        let produced = await sut.prepareExport(
+            slide: makeStaticSlide(),
+            languages: [],
+            watermark: nil,
+            intro: nil,
+            onProgress: nil,
+            onPhaseChange: nil
+        )
+        let url = try XCTUnwrap(produced)
+        defer { sut.cleanupExport(at: url) }
+
+        let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
+        XCTAssertEqual(duration, Self.stubStoryDuration + Self.outroTail, accuracy: 0.35,
+                       "sans interlude, la carte de fin de marque doit tout de même allonger la vidéo")
+        XCTAssertGreaterThan(duration, Self.stubStoryDuration + 0.15,
+                             "une vidéo à la durée EXACTE de la story prouve que la carte de fin est retombée sous la dépendance de l'interlude")
+
+        // La story factice est MUETTE : la seule piste audio possible dans le
+        // fichier livré est la signature sonore de fermeture de la carte de fin.
+        let audio = try await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+        XCTAssertGreaterThanOrEqual(audio.count, 1,
+                                    "la carte de fin apporte la signature sonore de fermeture — absente, elle n'a pas été appliquée")
+    }
+
+    /// Le pendant : avec une identité résolue, le MP4 porte les DEUX bouts de
+    /// l'emballage — interlude en tête, carte de fin en queue.
+    func test_prepareExport_withIntro_carriesBothInterludeAndOutro() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+        let exporter = RealMP4StubExporter(duration: Self.stubStoryDuration)
+        let sut = StoryVideoExportService(exporter: exporter)
+
+        let produced = await sut.prepareExport(
+            slide: makeStaticSlide(),
+            languages: [],
+            watermark: nil,
+            intro: StoryExportIntroContent(displayName: "Alice", username: "alice",
+                                           accentColorHex: "4ECDC4"),
+            onProgress: nil,
+            onPhaseChange: nil
+        )
+        let url = try XCTUnwrap(produced)
+        defer { sut.cleanupExport(at: url) }
+
+        let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
+        // Une identité d'auteur est fournie ci-dessus, donc la fermeture est
+        // celle en 2 temps : c'est `outroAuthorTail` qui s'applique, pas le
+        // `outroTail` de la carte logo-seule.
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroAuthorTail
+        XCTAssertEqual(duration, expected, accuracy: 0.35,
+                       "l'export doit porter l'interlude ET la carte de fin")
+    }
+}
+
+// MARK: - RealMP4StubExporter
+
+/// Exporteur factice qui écrit un VRAI MP4 lisible par AVFoundation (aplat de
+/// couleur, muet) plutôt qu'un fichier vide.
+///
+/// `MockStoryExporter` écrit `Data()` : `StoryExportIntro.prepend` /
+/// `StoryExportOutro.append` échouent alors sur un asset invalide et
+/// retomberaient silencieusement sur la dégradation gracieuse — un test de
+/// l'emballage de marque bâti dessus serait vert quoi qu'il arrive.
+final class RealMP4StubExporter: StoryExporting, @unchecked Sendable {
+
+    private let duration: TimeInterval
+    private let size: CGSize
+
+    init(duration: TimeInterval, size: CGSize = CGSize(width: 180, height: 320)) {
+        self.duration = duration
+        self.size = size
+    }
+
+    /// `branding` est volontairement ignoré : ce double produit la piste
+    /// vidéo BRUTE, et c'est `StoryVideoExportService` qui pose ensuite
+    /// l'emballage de marque. Le consommer ici masquerait le fait que
+    /// l'emballage est bien appliqué EN AVAL de l'exporteur.
+    func export(
+        slide: StorySlide,
+        to outputURL: URL,
+        languages: [String],
+        watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
+        progress: (@Sendable (Double) -> Void)?
+    ) async throws {
+        let image = UIGraphicsImageRenderer(size: size, format: {
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            return format
+        }()).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }.cgImage!
+        let clip = try await StoryExportIntro.makeClip(image: image, duration: duration, size: size)
+        try? FileManager.default.removeItem(at: outputURL)
+        try FileManager.default.moveItem(at: clip, to: outputURL)
+        progress?(1.0)
+    }
 }
 
 // MARK: - ProgressCollector
@@ -274,6 +419,10 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
     private var _exportCallCount = 0
     private var _lastOutputURL: URL?
     private var _lastLanguages: [String] = []
+    /// Plan d'emballage de marque reçu au dernier appel. Enregistré plutôt
+    /// qu'ignoré : sans lui, un test ne pourrait pas distinguer « le plan est
+    /// transmis à l'exporteur » de « le plan est perdu en route ».
+    private var _lastBranding: StoryExportBranding.Plan?
     let behavior: Behavior
 
     init(behavior: Behavior) {
@@ -295,17 +444,25 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         return _lastLanguages
     }
 
+    var lastBranding: StoryExportBranding.Plan? {
+        lock.lock(); defer { lock.unlock() }
+        return _lastBranding
+    }
+
     func export(
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
+        watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
-        lock.lock()
-        _exportCallCount += 1
-        _lastOutputURL = outputURL
-        _lastLanguages = languages
-        lock.unlock()
+        lock.withLock {
+            _exportCallCount += 1
+            _lastOutputURL = outputURL
+            _lastLanguages = languages
+            _lastBranding = branding
+        }
 
         switch behavior {
         case .success:

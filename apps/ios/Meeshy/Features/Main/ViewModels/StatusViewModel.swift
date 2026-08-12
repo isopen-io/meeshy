@@ -17,7 +17,12 @@ class StatusViewModel: ObservableObject {
     private let socialSocket: SocialSocketProviding
     private let authManager: AuthManaging
     private let offlineQueue: OfflineQueueing
+    private let postService: PostServiceProviding
     private let isOffline: () -> Bool
+
+    /// Groupement, persistance et flush (arrière-plan / relance) portés par
+    /// `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -40,6 +45,7 @@ class StatusViewModel: ObservableObject {
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        postService: PostServiceProviding = PostService.shared,
         isOffline: @escaping () -> Bool = { NetworkMonitor.shared.isOffline }
     ) {
         self.mode = mode
@@ -47,7 +53,34 @@ class StatusViewModel: ObservableObject {
         self.socialSocket = socialSocket
         self.authManager = authManager
         self.offlineQueue = offlineQueue
+        self.postService = postService
         self.isOffline = isOffline
+    }
+
+    // MARK: - Portée (impressions & vues)
+    //
+    // Un mood EST un post (`PostType.STATUS`) : il porte `impressionCount` et
+    // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
+    // de moods était le seul contenu du produit dont la portée restait à zéro.
+    //
+    // Même contrat que le feed : une impression par APPARITION du pill, groupée
+    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
+    // serveur par `PostView`, donc rejouable sans risque).
+
+    /// Le mood `statusId` est apparu à l'écran.
+    func trackImpression(_ statusId: String) {
+        impressions.record(statusId)
+    }
+
+    /// À appeler quand la barre disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
+    }
+
+    /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
+    func markStatusViewed(_ statusId: String) {
+        Task { [postService] in try? await postService.viewPost(postId: statusId, duration: nil) }
     }
 
     // MARK: - Load Statuses
@@ -149,7 +182,7 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Set Status
 
-    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil) async {
+    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil, audioUrl: String? = nil, repostOfId: String? = nil) async {
         // Offline: persist the mood durably through the SAME `.createPost` outbox
         // row as posts/reels (type STATUS) so it is not lost, and survives an app
         // kill. We do NOT insert an optimistic entry — unlike posts, the gateway
@@ -162,6 +195,7 @@ class StatusViewModel: ObservableObject {
                 content: content ?? "",
                 attachmentIds: [],
                 visibility: visibility,
+                originalLanguage: DefaultComposerLanguage.resolve(),
                 type: "STATUS",
                 moodEmoji: emoji,
                 visibilityUserIds: visibilityUserIds
@@ -176,7 +210,7 @@ class StatusViewModel: ObservableObject {
         }
 
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry
@@ -267,6 +301,23 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Socket.IO Real-Time Updates
 
+    /// Applique un delta de reaction sur un resume par emoji. Un compte qui
+    /// retombe a zero perd sa cle : le laisser a 0 afficherait une pastille
+    /// vide, et le resume ne descend jamais sous zero meme si un
+    /// `status:unreacted` arrive sans son `status:reacted` (reconnexion).
+    static func applyingReaction(
+        emoji: String, delta: Int, to summary: [String: Int]?
+    ) -> [String: Int] {
+        var updated = summary ?? [:]
+        let next = (updated[emoji] ?? 0) + delta
+        if next > 0 {
+            updated[emoji] = next
+        } else {
+            updated.removeValue(forKey: emoji)
+        }
+        return updated
+    }
+
     func subscribeToSocketEvents() {
         guard cancellables.isEmpty else { return }
 
@@ -277,6 +328,7 @@ class StatusViewModel: ObservableObject {
                 if let entry = apiPost.toStatusEntry() {
                     if !self.statuses.contains(where: { $0.id == entry.id }) {
                         self.statuses.insert(entry, at: 0)
+                        self.persistSnapshot()
                     }
                 }
             }
@@ -285,7 +337,9 @@ class StatusViewModel: ObservableObject {
         socialSocket.statusDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] statusId in
-                self?.statuses.removeAll { $0.id == statusId }
+                guard let self, self.statuses.contains(where: { $0.id == statusId }) else { return }
+                self.statuses.removeAll { $0.id == statusId }
+                self.persistSnapshot()
             }
             .store(in: &cancellables)
 
@@ -296,18 +350,72 @@ class StatusViewModel: ObservableObject {
                 if let entry = apiPost.toStatusEntry(),
                    let index = self.statuses.firstIndex(where: { $0.id == entry.id }) {
                     self.statuses[index] = entry
+                    self.persistSnapshot()
                 }
             }
             .store(in: &cancellables)
 
+        // Reception temps reel des reactions de statut (le REST /posts/:id/like
+        // emet `status:reacted` cote gateway). La propre reaction de l'utilisateur
+        // est deja posee optimistiquement par reactToStatus ; on n'applique donc
+        // que celles des AUTRES. Le payload ne porte pas de compte agrege, on
+        // incremente prudemment (meme garde d'echo que la reaction de conversation).
+        socialSocket.statusReacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.applyReactionDelta(statusId: payload.statusId, emoji: payload.emoji,
+                                         userId: payload.userId, delta: 1)
+            }
+            .store(in: &cancellables)
+
+        // Symetrique : `status:unreacted` etait publie par le SDK sans AUCUN
+        // abonne, donc un retrait de reaction ne se voyait qu'apres un
+        // rechargement REST — et jamais hors-ligne.
+        socialSocket.statusUnreacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.applyReactionDelta(statusId: payload.statusId, emoji: payload.emoji,
+                                         userId: payload.userId, delta: -1)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applyReactionDelta(statusId: String, emoji: String, userId: String, delta: Int) {
+        guard userId != authManager.currentUser?.id,
+              let index = statuses.firstIndex(where: { $0.id == statusId }) else { return }
+        statuses[index].reactionSummary = Self.applyingReaction(
+            emoji: emoji, delta: delta, to: statuses[index].reactionSummary
+        )
+        persistSnapshot()
+    }
+
+    /// Toute mutation temps reel de `statuses` doit atteindre le disque : les
+    /// quatre sinks ne muteraient que le tableau `@Published`, si bien qu'un
+    /// mood cree, supprime ou reagi pendant la session disparaissait au
+    /// prochain demarrage a froid (le cache gardait l'instantane REST).
+    private func persistSnapshot() {
+        Task { await saveCacheSnapshot() }
     }
 
     // MARK: - React to Status
 
     func reactToStatus(_ statusId: String, emoji: String) async {
+        // Optimistic : refleter la reaction dans reactionSummary avant le reseau
+        // (parite avec les reactions de post/commentaire). Snapshot pour rollback.
+        let previousSummary = statuses.first(where: { $0.id == statusId })?.reactionSummary
+        if let index = statuses.firstIndex(where: { $0.id == statusId }) {
+            var summary = statuses[index].reactionSummary ?? [:]
+            summary[emoji, default: 0] += 1
+            statuses[index].reactionSummary = summary
+        }
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
         } catch {
+            // Rollback de l'optimisme + toast. (Sur succes, le broadcast
+            // `status:reacted` reconcilie l'etat autoritaire cote serveur.)
+            if let index = statuses.firstIndex(where: { $0.id == statusId }) {
+                statuses[index].reactionSummary = previousSummary
+            }
             FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Error reacting to status", bundle: .main))
         }
     }

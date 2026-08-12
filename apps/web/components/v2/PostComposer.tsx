@@ -1,32 +1,61 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
-import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
+import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
+import { useAuthStore } from '@/stores/auth-store';
+import { AttachmentService } from '@/services/attachmentService';
+import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
+
+export interface PostPublishPayload {
+  content: string;
+  type: PostType;
+  visibility: PostVisibility;
+  visibilityUserIds?: string[];
+  mediaIds?: string[];
+  /**
+   * Client-only echo of the already-uploaded media (id/mimeType/fileUrl are
+   * known before the post exists server-side), built from `uploadedAttachments`.
+   * Consumed by `useCreatePostMutation` to seed the optimistic post's `media`
+   * so a media-only publish never flashes an empty card — never sent to the
+   * wire (the mutation strips it before calling `postsService.createPost`).
+   */
+  optimisticMedia?: readonly PostMedia[];
+}
 
 export interface PostComposerProps {
   currentUser?: { username: string; avatar?: string | null } | null;
-  onPublish: (data: {
-    content: string;
-    type: PostType;
-    visibility: PostVisibility;
-    visibilityUserIds?: string[];
-    mediaIds?: string[];
-  }) => void;
+  onPublish: (data: PostPublishPayload) => void;
   disabled?: boolean;
   className?: string;
 }
 
-const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: string }[] = [
-  { value: 'PUBLIC', label: 'Public', icon: '🌍' },
-  { value: 'FRIENDS', label: 'Friends', icon: '👥' },
-  { value: 'EXCEPT', label: 'Friends except...', icon: '🚫' },
-  { value: 'ONLY', label: 'Only...', icon: '🎯' },
-  { value: 'PRIVATE', label: 'Private', icon: '🔒' },
+const VISIBILITY_OPTIONS: { value: PostVisibility; labelKey: string; icon: string }[] = [
+  { value: 'PUBLIC', labelKey: 'postComposer.visibility.public', icon: '🌍' },
+  { value: 'FRIENDS', labelKey: 'postComposer.visibility.friends', icon: '👥' },
+  { value: 'EXCEPT', labelKey: 'postComposer.visibility.except', icon: '🚫' },
+  { value: 'ONLY', labelKey: 'postComposer.visibility.only', icon: '🎯' },
+  { value: 'PRIVATE', labelKey: 'postComposer.visibility.private', icon: '🔒' },
 ];
+
+// W6 media — cap client aligné sur la limite serveur `mediaIds` (≤ 10,
+// `CreatePostSchema`). Un seul pool combiné photos+vidéos, contrairement à
+// StoryComposer qui répartit sur 3 catégories.
+const MEDIA_LIMIT = 10;
+
+const MEDIA_ACCEPT = {
+  image: 'image/*',
+  video: 'video/*',
+} as const;
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
+}
 
 function PostComposer({
   currentUser,
@@ -37,23 +66,154 @@ function PostComposer({
   const { t } = useI18n('common');
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  // W6 — audience explicite des visibilités EXCEPT/ONLY (fix : ces options
+  // partaient sans liste → visibilité cassée). Même picker/gate que stories.
+  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
+  // W7 — Reel ⇄ Post toggle (Task 5). Default REEL, as iOS; only meaningful
+  // while `compositionQualifies` is true — see below, `handlePublish` always
+  // sends 'POST' otherwise so this state can never leak a false promotion.
+  const [postType, setPostType] = useState<PostType>('REEL');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const authToken = useAuthStore((s) => s.authToken);
+
+  const {
+    selectedFiles,
+    uploadedAttachments,
+    isUploading,
+    uploadProgress,
+    handleFilesSelected,
+    handleRemoveFile,
+    clearAttachments,
+  } = useAttachmentUpload({
+    token: authToken ?? undefined,
+    // useAttachmentUpload now counts `selectedFiles` alone as the single
+    // source of truth for the cap check (Task 7, point 2 — it used to sum
+    // selectedFiles.length + uploadedAttachments.length, double-counting
+    // once uploads settled since selectedFiles is never trimmed on
+    // success). MEDIA_LIMIT can be passed as-is.
+    maxAttachments: MEDIA_LIMIT,
+  });
+
+  const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
+  const uploadPercentage = uploadProgress[0] ?? 0;
+
+  // W7 — same source-of-truth predicate the gateway degrades REEL→POST with
+  // (`@meeshy/shared/utils/reel-composition`). An attachment whose duration
+  // is not yet known client-side is treated as non-qualifying — never a
+  // false REEL promise the gateway would silently downgrade.
+  const compositionQualifies = qualifiesAsReel(
+    uploadedAttachments.map((att) => ({ mimeType: att.mimeType, duration: att.duration })),
+  );
+  const effectivePostType: PostType = compositionQualifies ? postType : 'POST';
+
+  // Blob URLs for image previews, memoized per File identity so retyping the
+  // caption (re-render on every keystroke) never mints a new object URL —
+  // only revoked (in the effect below) once a file actually drops out of
+  // selectedFiles, on clear/publish, or on unmount.
+  const objectUrlCacheRef = useRef<Map<File, string>>(new Map());
+
+  const getPreviewUrl = (file: File): string => {
+    const cache = objectUrlCacheRef.current;
+    const existing = cache.get(file);
+    if (existing) return existing;
+    const url = URL.createObjectURL(file);
+    cache.set(file, url);
+    return url;
+  };
+
+  useEffect(() => {
+    const cache = objectUrlCacheRef.current;
+    const stillSelected = new Set(selectedFiles);
+    cache.forEach((url, file) => {
+      if (!stillSelected.has(file)) {
+        URL.revokeObjectURL(url);
+        cache.delete(file);
+      }
+    });
+  }, [selectedFiles]);
+
+  useEffect(() => {
+    const cache = objectUrlCacheRef.current;
+    return () => {
+      cache.forEach((url) => URL.revokeObjectURL(url));
+      cache.clear();
+    };
+  }, []);
+
+  const handleMediaSelect = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const available = MEDIA_LIMIT - selectedFiles.length;
+    if (available <= 0) {
+      setMediaError(`You can attach up to ${MEDIA_LIMIT} media files.`);
+      return;
+    }
+
+    const requested = Array.from(files);
+    const filesToAdd = requested.slice(0, available);
+    // Pré-validation avec le même service que le hook (taille/type), pour
+    // afficher le message spécifique DANS le composer plutôt que de laisser
+    // le hook émettre un toast générique.
+    const validation = AttachmentService.validateFiles(filesToAdd);
+    if (!validation.valid) {
+      setMediaError(validation.errors.join(' '));
+      return;
+    }
+
+    setMediaError(
+      filesToAdd.length < requested.length
+        ? `You can attach up to ${MEDIA_LIMIT} media files. Only ${filesToAdd.length} added.`
+        : null,
+    );
+    handleFilesSelected(filesToAdd);
+  }, [selectedFiles.length, handleFilesSelected]);
+
+  const handleRemoveMedia = useCallback((index: number) => {
+    handleRemoveFile(index);
+    setMediaError(null);
+  }, [handleRemoveFile]);
 
   const handlePublish = useCallback(() => {
     const trimmed = content.trim();
-    if (!trimmed || disabled) return;
+    const mediaIds = uploadedAttachments.map((att) => att.id);
+    const hasMedia = mediaIds.length > 0;
+    if ((!trimmed && !hasMedia) || disabled || isUploading) return;
+
+    if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
 
     onPublish({
       content: trimmed,
-      type: 'POST',
+      type: effectivePostType,
       visibility,
+      visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
+        ? visibilityUserIds
+        : undefined,
+      mediaIds: hasMedia ? mediaIds : undefined,
+      optimisticMedia: hasMedia
+        ? uploadedAttachments.map((att, order) => ({
+            id: att.id,
+            mimeType: att.mimeType,
+            fileUrl: att.fileUrl,
+            thumbnailUrl: att.thumbnailUrl,
+            duration: att.duration,
+            order,
+          }))
+        : undefined,
     });
 
     setContent('');
+    setVisibilityUserIds([]);
     setIsExpanded(false);
-  }, [content, disabled, onPublish, visibility]);
+    setMediaError(null);
+    setPostType('REEL');
+    clearAttachments();
+  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -65,7 +225,9 @@ function PostComposer({
     [handlePublish],
   );
 
-  const isValid = content.trim().length > 0 && content.trim().length <= 5000;
+  const trimmedContent = content.trim();
+  const hasMedia = uploadedAttachments.length > 0;
+  const isValid = (trimmedContent.length > 0 || hasMedia) && trimmedContent.length <= 5000;
   const charCount = content.length;
   const selectedVisibility = VISIBILITY_OPTIONS.find((v) => v.value === visibility) ?? VISIBILITY_OPTIONS[0];
 
@@ -101,17 +263,84 @@ function PostComposer({
                 'text-[var(--gp-text-primary)] placeholder:text-[var(--gp-text-muted)]',
                 disabled && 'opacity-50 cursor-not-allowed',
               )}
-              aria-label="Post content"
+              aria-label={t('postComposer.contentLabel')}
             />
+
+            {isExpanded && selectedFiles.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2" data-testid="post-composer-media-preview">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    className="group relative rounded-lg overflow-hidden bg-[var(--gp-hover)]"
+                  >
+                    {isImageFile(file) ? (
+                      <img
+                        src={getPreviewUrl(file)}
+                        alt={file.name}
+                        className="h-16 w-16 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center text-[var(--gp-text-secondary)]">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="23 7 16 12 23 17 23 7" />
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                        </svg>
+                      </div>
+                    )}
+                    {isUploading && (
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
+                        {uploadPercentage}%
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMedia(index)}
+                      className={cn(
+                        'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full',
+                        'bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100',
+                        'transition-opacity duration-200',
+                      )}
+                      aria-label={t('delete')}
+                    >
+                      x
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isExpanded && mediaError && (
+              <p className="mt-2 text-xs text-red-500" role="alert" data-testid="post-composer-media-error">
+                {mediaError}
+              </p>
+            )}
 
             {isExpanded && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--gp-border)]">
                 <div className="flex items-center gap-2">
                   {/* Media buttons */}
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label="Add photo">
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={mediaLimitReached}
+                    className={cn(
+                      'p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors',
+                      mediaLimitReached && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                    )}
+                    aria-label={t('postComposer.addPhoto')}
+                  >
                     📷
                   </button>
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label="Add video">
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={mediaLimitReached}
+                    className={cn(
+                      'p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors',
+                      mediaLimitReached && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                    )}
+                    aria-label={t('postComposer.addVideo')}
+                  >
                     🎥
                   </button>
 
@@ -120,10 +349,10 @@ function PostComposer({
                     <button
                       onClick={() => setShowVisibilityPicker(!showVisibilityPicker)}
                       className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
-                      aria-label="Change visibility"
+                      aria-label={t('postComposer.changeVisibility')}
                     >
                       <span>{selectedVisibility.icon}</span>
-                      <span>{selectedVisibility.label}</span>
+                      <span>{t(selectedVisibility.labelKey)}</span>
                     </button>
 
                     {showVisibilityPicker && (
@@ -133,6 +362,9 @@ function PostComposer({
                             key={opt.value}
                             onClick={() => {
                               setVisibility(opt.value);
+                              if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.value)) {
+                                setVisibilityUserIds([]);
+                              }
                               setShowVisibilityPicker(false);
                             }}
                             className={cn(
@@ -141,12 +373,55 @@ function PostComposer({
                             )}
                           >
                             <span>{opt.icon}</span>
-                            <span>{opt.label}</span>
+                            <span>{t(opt.labelKey)}</span>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
+
+                  {/* W7 — Reel ⇄ Post toggle: only shown once the uploaded
+                      composition qualifies (mirrors the gateway's
+                      qualifiesAsReel degradation threshold client-side) */}
+                  {compositionQualifies && (
+                    <div
+                      className="flex items-center gap-0.5 rounded-lg border border-[var(--gp-border)] p-0.5"
+                      role="group"
+                      aria-label={t('postComposer.reelToggle.groupLabel')}
+                      data-testid="post-composer-type-toggle"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPostType('REEL')}
+                        aria-pressed={postType === 'REEL'}
+                        aria-label={t('postComposer.reelToggle.reel')}
+                        data-testid="post-composer-type-reel"
+                        className={cn(
+                          'px-2 py-1 rounded-md text-xs transition-colors',
+                          postType === 'REEL'
+                            ? 'bg-[var(--gp-terracotta)] text-white'
+                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
+                        )}
+                      >
+                        🎬 {t('postComposer.reelToggle.reel')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPostType('POST')}
+                        aria-pressed={postType === 'POST'}
+                        aria-label={t('postComposer.reelToggle.post')}
+                        data-testid="post-composer-type-post"
+                        className={cn(
+                          'px-2 py-1 rounded-md text-xs transition-colors',
+                          postType === 'POST'
+                            ? 'bg-[var(--gp-terracotta)] text-white'
+                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
+                        )}
+                      >
+                        {t('postComposer.reelToggle.post')}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Character count */}
                   {charCount > 4500 && (
@@ -163,15 +438,50 @@ function PostComposer({
                   variant="primary"
                   size="sm"
                   onClick={handlePublish}
-                  disabled={!isValid || disabled}
+                  disabled={!isValid || disabled || isUploading || isAudienceIncomplete(visibility, visibilityUserIds.length)}
                 >
-                  Publish
+                  {isUploading ? t('uploading') : t('publish')}
                 </Button>
+              </div>
+            )}
+
+            {/* W6 — audience explicite pour EXCEPT/ONLY */}
+            {isExpanded && (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
+              <div className="mt-2">
+                <AudienceUserPicker
+                  mode={visibility as 'EXCEPT' | 'ONLY'}
+                  selectedIds={visibilityUserIds}
+                  onChange={setVisibilityUserIds}
+                />
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept={MEDIA_ACCEPT.image}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleMediaSelect(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept={MEDIA_ACCEPT.video}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleMediaSelect(e.target.files);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }

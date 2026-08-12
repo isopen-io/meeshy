@@ -323,7 +323,7 @@ describe('useSearchUsersQuery', () => {
   });
 
   it('should not fetch when query is less than 2 characters', () => {
-    mockSearchUsers.mockResolvedValue({ data: [mockUser] });
+    mockSearchUsers.mockResolvedValue([mockUser]);
 
     const { result } = renderHook(() => useSearchUsersQuery('a'), {
       wrapper: createWrapper(),
@@ -334,7 +334,7 @@ describe('useSearchUsersQuery', () => {
   });
 
   it('should not fetch when query is empty', () => {
-    mockSearchUsers.mockResolvedValue({ data: [mockUser] });
+    mockSearchUsers.mockResolvedValue([mockUser]);
 
     const { result } = renderHook(() => useSearchUsersQuery(''), {
       wrapper: createWrapper(),
@@ -345,7 +345,7 @@ describe('useSearchUsersQuery', () => {
   });
 
   it('should fetch when query is 2 or more characters', async () => {
-    mockSearchUsers.mockResolvedValue({ data: [mockUser] });
+    mockSearchUsers.mockResolvedValue([mockUser]);
 
     const { result } = renderHook(() => useSearchUsersQuery('te'), {
       wrapper: createWrapper(),
@@ -364,7 +364,7 @@ describe('useSearchUsersQuery', () => {
       mockUser,
       { ...mockUser, id: 'user-2', username: 'testuser2' },
     ];
-    mockSearchUsers.mockResolvedValue({ data: mockUsers });
+    mockSearchUsers.mockResolvedValue(mockUsers);
 
     const { result } = renderHook(() => useSearchUsersQuery('test'), {
       wrapper: createWrapper(),
@@ -378,7 +378,7 @@ describe('useSearchUsersQuery', () => {
   });
 
   it('should return empty array when no users match', async () => {
-    mockSearchUsers.mockResolvedValue({ data: [] });
+    mockSearchUsers.mockResolvedValue([]);
 
     const { result } = renderHook(() => useSearchUsersQuery('xyz'), {
       wrapper: createWrapper(),

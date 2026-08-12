@@ -8,7 +8,25 @@ public struct APIAuthor: Codable, Sendable {
     public let displayName: String?
     public let avatar: String?
 
+    /// Présence auteur — servie UNIQUEMENT par le chemin stories du gateway
+    /// (`storyAuthorSelect` : feed complet + projection tray) pour que
+    /// l'interstitiel d'identité du viewer résolve la présence AU moment du
+    /// switch de groupe. `nil` sur tous les autres payloads (posts, comments,
+    /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
+    public let isOnline: Bool?
+    public let lastActiveAt: Date?
+
     public var name: String { displayName ?? username ?? "Anonymous" }
+
+    public init(id: String, username: String?, displayName: String?, avatar: String?,
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.isOnline = isOnline
+        self.lastActiveAt = lastActiveAt
+    }
 }
 
 public struct APIPostMedia: Codable, Sendable {
@@ -66,6 +84,7 @@ public struct APIRepostOf: Codable, Sendable {
     public let translations: [String: APIPostTranslationEntry]?
     public let storyEffects: StoryEffects?
     public let audioUrl: String?
+    public let moodEmoji: String?
     public let originalRepostOfId: String?
     public let author: APIAuthor
     public let media: [APIPostMedia]?
@@ -73,6 +92,9 @@ public struct APIRepostOf: Codable, Sendable {
     public let likeCount: Int?
     public let commentCount: Int?
     public let isQuote: Bool?
+    /// Lieu du post SOURCE, hissé par le gateway comme sur le post porteur.
+    /// `nil` sur les payloads antérieurs — décodage synthétisé tolérant.
+    public let location: SharedPlace?
 }
 
 public struct APIPostComment: Decodable, Sendable {
@@ -87,6 +109,15 @@ public struct APIPostComment: Decodable, Sendable {
     public let createdAt: Date
     public let author: APIAuthor
     public let currentUserReactions: [String]?
+    /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise le modèle
+    /// `APIPostMedia` (mêmes champs Prisme : transcription/translations). Un commentaire
+    /// ne porte qu'un seul média ; le tableau reste pour parité avec les posts.
+    public let media: [APIPostMedia]?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que sur `APIMessage`/`APIPost`. Décodage synthétisé (pas de
+    /// `CodingKeys` custom sur ce type). `var`/`= nil` : source-compatible
+    /// avec le memberwise init déjà utilisé par les tests existants.
+    public var location: SharedPlace? = nil
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -96,20 +127,49 @@ public struct APIPostTranslationEntry: Codable, Sendable {
     public let createdAt: String?
 }
 
-public struct APIPost: Decodable, Sendable {
+public struct APIPost: Sendable {
     public let id: String
     public let type: String?
     public let visibility: String?
+    /// Ids ciblés (`ONLY`) ou exclus (`EXCEPT`). Renvoyé par le gateway pour
+    /// tous les posts (`include: postInclude` ne filtre aucun scalaire).
+    /// `nil` sur les payloads antérieurs au champ — le picker d'audience
+    /// s'ouvre alors vierge plutôt que de casser le décodage. Défaut
+    /// memberwise `= nil`, même patron que `postOpenCount` et les compteurs
+    /// juste en dessous : permet la construction runtime/test sans le
+    /// fournir explicitement. Décodage INCHANGÉ — `init(from:)` ci-dessous
+    /// lit toujours la clé via `decodeIfPresent` (le défaut ne sert qu'à
+    /// l'init memberwise, pas au décodage).
+    public var visibilityUserIds: [String]? = nil
     public let content: String?
     public let originalLanguage: String?
     public let createdAt: Date
     public let updatedAt: Date?
+    /// Horodatage de la dernière édition de CONTENU (texte / storyEffects /
+    /// médias) — distinct d'`updatedAt` qui bouge sur chaque écriture
+    /// (compteurs inclus). Sert à céder la garde « viewed monotone » après
+    /// une édition de story. Défaut memberwise `= nil`, même patron que
+    /// `postOpenCount` : décodage via `decodeIfPresent` ci-dessous.
+    public var contentEditedAt: Date? = nil
     public let expiresAt: Date?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que sur `APIMessage`. `var`/`= nil` : même patron que
+    /// `trackingLinks` plus bas, pour rester source-compatible avec le
+    /// memberwise init déjà utilisé par les tests existants.
+    public var location: SharedPlace? = nil
     public let author: APIAuthor
     public let likeCount: Int?
     public let commentCount: Int?
     public let repostCount: Int?
     public let viewCount: Int?
+    // Compteurs d'engagement optionnels (server-augmented). Défaut memberwise
+    // `= nil` : permet la construction runtime/test sans les fournir explicitement.
+    // Décodage INCHANGÉ — `Decodable` synthétisé lit ces clés via `decodeIfPresent`
+    // (le défaut ne sert qu'à l'init memberwise, pas au décodage).
+    public var postOpenCount: Int? = nil
+    public var qualifiedViewCount: Int? = nil
+    public var playCount: Int? = nil
+    public var impressionCount: Int? = nil
     public let bookmarkCount: Int?
     public let shareCount: Int?
     public let reactionSummary: [String: Int]?
@@ -132,6 +192,97 @@ public struct APIPost: Decodable, Sendable {
     public let currentUserReactions: [String]?
     public let mentionedUsers: [MentionedUser]?
     public let viaUsername: String?
+    /// Outbound-link tracking mappings minted by the gateway. Parsed from the
+    /// top-level `trackingLinks` (socket `post:created` / `story:created` /
+    /// `comment:added`) OR from `metadata.trackingLinks` (REST / feed). `nil`
+    /// when the payload predates the feature — renderer falls back to raw URLs.
+    public var trackingLinks: [TrackedLink]? = nil
+
+    /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
+    public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
+}
+
+extension APIPost: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt, location
+        case author, likeCount, commentCount, repostCount, viewCount
+        case postOpenCount, qualifiedViewCount, playCount, impressionCount
+        case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
+        case media, comments, repostOf, originalRepostOfId, isQuote, moodEmoji
+        case audioUrl, audioDuration, storyEffects, translations
+        case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
+        case currentUserReactions, mentionedUsers, viaUsername
+        case trackingLinks, metadata
+    }
+
+    /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
+    /// payloads (socket payloads hoist it top-level). Decoded tolerantly.
+    private struct PostMetadataEnvelope: Decodable {
+        let trackingLinks: [TrackedLink]?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        visibilityUserIds = try c.decodeIfPresent([String].self, forKey: .visibilityUserIds)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        contentEditedAt = try c.decodeIfPresent(Date.self, forKey: .contentEditedAt)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        author = try c.decode(APIAuthor.self, forKey: .author)
+        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount)
+        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount)
+        repostCount = try c.decodeIfPresent(Int.self, forKey: .repostCount)
+        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount)
+        postOpenCount = try c.decodeIfPresent(Int.self, forKey: .postOpenCount)
+        qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount)
+        playCount = try c.decodeIfPresent(Int.self, forKey: .playCount)
+        impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount)
+        bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount)
+        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount)
+        reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned)
+        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
+        media = try c.decodeIfPresent([APIPostMedia].self, forKey: .media)
+        comments = try c.decodeIfPresent([APIPostComment].self, forKey: .comments)
+        repostOf = try c.decodeIfPresent(APIRepostOf.self, forKey: .repostOf)
+        originalRepostOfId = try c.decodeIfPresent(String.self, forKey: .originalRepostOfId)
+        isQuote = try c.decodeIfPresent(Bool.self, forKey: .isQuote)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        audioDuration = try c.decodeIfPresent(Int.self, forKey: .audioDuration)
+        // Resilience: a single malformed `storyEffects` payload (a type mismatch
+        // on a present nested field of another user's story) must NOT fail the
+        // whole `APIPost` decode — the story feed is decoded as a strict array,
+        // so one throwing post would drop the ENTIRE batch ("0 stories loaded").
+        // Degrade this post to no effects (it still renders content/media) and
+        // keep the rest of the list intact.
+        do {
+            storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        } catch {
+            storyEffects = nil
+        }
+        translations = try c.decodeIfPresent([String: APIPostTranslationEntry].self, forKey: .translations)
+        isLikedByMe = try c.decodeIfPresent(Bool.self, forKey: .isLikedByMe)
+        isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe)
+        isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe)
+        isViewedByMe = try c.decodeIfPresent(Bool.self, forKey: .isViewedByMe)
+        currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
+        viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
+        // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
+        // (socket), else recover from the REST `metadata` envelope. Tolerant.
+        if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
+            trackingLinks = topLevel
+        } else {
+            trackingLinks = (try? c.decodeIfPresent(PostMetadataEnvelope.self, forKey: .metadata))??.trackingLinks
+        }
+    }
 }
 
 public struct APIPostViewer: Decodable, Sendable {
@@ -168,41 +319,75 @@ private func formatFileSize(_ bytes: Int) -> String {
     return String(format: "%.1f MB", Double(bytes) / 1048576)
 }
 
+extension APIPostMedia {
+    /// Single source of truth `APIPostMedia → FeedMedia` mapping, shared by post
+    /// media, repost media AND comment media. Carries the full Prisme Linguistique
+    /// payload (transcription + per-language TTS variants) so a comment's inline
+    /// media plays + switches language exactly like a message bubble or a reel.
+    public func toFeedMedia() -> FeedMedia {
+        let transcription: MessageTranscription? = self.transcription.map { t in
+            let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
+                MessageTranscriptionSegment(
+                    text: seg.text,
+                    startTime: seg.startTime,
+                    endTime: seg.endTime,
+                    speakerId: seg.speakerId
+                )
+            }
+            return MessageTranscription(
+                attachmentId: id,
+                text: t.resolvedText,
+                language: t.language ?? "und",
+                confidence: t.confidence,
+                durationMs: t.durationMs,
+                segments: segments,
+                speakerCount: t.speakerCount
+            )
+        }
+        let translatedAudios: [MessageTranslatedAudio] = (translations ?? [:]).compactMap { (lang, trans) in
+            guard let url = trans.url, !url.isEmpty else { return nil }
+            let segments = (trans.segments ?? []).map {
+                MessageTranscriptionSegment(
+                    text: $0.text,
+                    startTime: $0.startTime,
+                    endTime: $0.endTime,
+                    speakerId: $0.speakerId
+                )
+            }
+            return MessageTranslatedAudio(
+                id: "\(id)_\(lang)",
+                attachmentId: id,
+                targetLanguage: lang,
+                url: url,
+                transcription: trans.transcription ?? "",
+                durationMs: trans.durationMs ?? 0,
+                format: trans.format ?? "mp3",
+                cloned: trans.cloned ?? false,
+                quality: trans.quality ?? 0,
+                voiceModelId: trans.voiceModelId,
+                ttsModel: trans.ttsModel ?? "xtts",
+                segments: segments
+            )
+        }
+        return FeedMedia(
+            id: id, type: mediaType, url: fileUrl,
+            thumbnailUrl: thumbnailUrl, thumbHash: thumbHash,
+            thumbnailColor: thumbnailColorForMime(mimeType),
+            width: width, height: height,
+            duration: duration.map { $0 / 1000 },
+            fileName: originalName ?? fileName,
+            fileSize: fileSize.map { formatFileSize($0) },
+            transcription: transcription,
+            translatedAudios: translatedAudios
+        )
+    }
+}
+
 extension APIPost {
     public func toFeedPost(userLanguage: String? = nil, preferredLanguages: [String] = []) -> FeedPost {
         let langs = preferredLanguages.isEmpty ? (userLanguage.map { [$0] } ?? []) : preferredLanguages
 
-        let feedMedia: [FeedMedia] = (media ?? []).map { m in
-            let transcription: MessageTranscription? = m.transcription.map { t in
-                let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
-                    MessageTranscriptionSegment(
-                        text: seg.text,
-                        startTime: seg.startTime,
-                        endTime: seg.endTime,
-                        speakerId: seg.speakerId
-                    )
-                }
-                return MessageTranscription(
-                    attachmentId: m.id,
-                    text: t.resolvedText,
-                    language: t.language ?? "und",
-                    confidence: t.confidence,
-                    durationMs: t.durationMs,
-                    segments: segments,
-                    speakerCount: t.speakerCount
-                )
-            }
-            return FeedMedia(
-                id: m.id, type: m.mediaType, url: m.fileUrl,
-                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                thumbnailColor: thumbnailColorForMime(m.mimeType),
-                width: m.width, height: m.height,
-                duration: m.duration.map { $0 / 1000 },
-                fileName: m.originalName ?? m.fileName,
-                fileSize: m.fileSize.map { formatFileSize($0) },
-                transcription: transcription
-            )
-        }
+        let feedMedia: [FeedMedia] = (media ?? []).map { $0.toFeedMedia() }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
             let commentTranslatedContent: String? = Self.resolveTranslation(
@@ -217,41 +402,13 @@ extension APIPost {
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
+                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() },
+                        location: c.location)
         }
 
-        var repost: RepostContent?
-        if let r = repostOf {
-            let repostMedia: [FeedMedia] = (r.media ?? []).map { m in
-                FeedMedia(
-                    id: m.id, type: m.mediaType, url: m.fileUrl,
-                    thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                    thumbnailColor: thumbnailColorForMime(m.mimeType),
-                    width: m.width, height: m.height,
-                    duration: m.duration.map { $0 / 1000 },
-                    fileName: m.originalName ?? m.fileName,
-                    fileSize: m.fileSize.map { formatFileSize($0) }
-                )
-            }
-            let repostTranslations: [String: PostTranslation]? = r.translations?.mapValues { entry in
-                PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
-            }
-            repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
-                                   authorUsername: r.author.username,
-                                   authorAvatarURL: r.author.avatar,
-                                   content: r.content ?? "",
-                                   timestamp: r.createdAt, likes: r.likeCount ?? 0,
-                                   isQuote: r.isQuote ?? false,
-                                   type: r.type,
-                                   originalLanguage: r.originalLanguage,
-                                   audioUrl: r.audioUrl,
-                                   storyEffects: r.storyEffects,
-                                   media: repostMedia,
-                                   translations: repostTranslations,
-                                   originalRepostOfId: r.originalRepostOfId,
-                                   visibility: nil,
-                                   expiresAt: nil)
-        }
+        let repost: RepostContent? = repostOf?.toRepostContent()
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
@@ -287,12 +444,28 @@ extension APIPost {
         feedPost.repostCount = repostCount ?? 0
         feedPost.bookmarkCount = bookmarkCount ?? 0
         feedPost.shareCount = shareCount ?? 0
+        feedPost.viewCount = viewCount ?? 0
+        feedPost.postOpenCount = postOpenCount ?? 0
+        feedPost.impressionCount = impressionCount ?? 0
+        feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
+        feedPost.playCount = playCount ?? 0
+        // Story canvas + legacy audio (top-level story posts). The init keeps a
+        // stable signature, so we set these post-construction like the counters.
+        feedPost.storyEffects = storyEffects
+        feedPost.audioUrl = audioUrl
+        // Lieu partagé — décodé sur APIPost depuis toujours, mais jeté ici
+        // jusqu'au 2026-07-30 : aucun post du feed ne portait sa position.
+        feedPost.location = location
+        // Outbound-link tracking map (runtime-only, like the counters above).
+        feedPost.trackedLinkMap = trackedLinkMap
         return feedPost
     }
 
     /// Prisme Linguistique resolution: walk preferred languages in order.
     /// If original is already in a preferred language, return nil (no translation needed).
-    private static func resolveTranslation(
+    /// Internal (pas private) : `PostRecord.toFeedPost` réutilise la MÊME
+    /// règle — jamais de résolution de langue dupliquée (stores-05).
+    static func resolveTranslation(
         translations: [String: APIPostTranslationEntry]?,
         originalLanguage: String?,
         preferredLanguages: [String]
@@ -307,5 +480,44 @@ extension APIPost {
             }
         }
         return nil
+    }
+}
+
+extension APIRepostOf {
+    /// Conversion partagée `APIRepostOf` → `RepostContent` — utilisée par
+    /// `APIPost.toFeedPost` (réseau) ET `PostRecord.toFeedPost` (cache GRDB,
+    /// stores-05) : une seule projection, pas deux qui divergent.
+    func toRepostContent() -> RepostContent {
+        let repostMedia: [FeedMedia] = (media ?? []).map { m in
+            FeedMedia(
+                id: m.id, type: m.mediaType, url: m.fileUrl,
+                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                thumbnailColor: thumbnailColorForMime(m.mimeType),
+                width: m.width, height: m.height,
+                duration: m.duration.map { $0 / 1000 },
+                fileName: m.originalName ?? m.fileName,
+                fileSize: m.fileSize.map { formatFileSize($0) }
+            )
+        }
+        let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
+            PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
+        }
+        return RepostContent(id: id, author: author.name, authorId: author.id,
+                             authorUsername: author.username,
+                             authorAvatarURL: author.avatar,
+                             content: content ?? "",
+                             timestamp: createdAt, likes: likeCount ?? 0,
+                             isQuote: isQuote ?? false,
+                             type: type,
+                             originalLanguage: originalLanguage,
+                             audioUrl: audioUrl,
+                             moodEmoji: moodEmoji,
+                             storyEffects: storyEffects,
+                             media: repostMedia,
+                             translations: repostTranslations,
+                             originalRepostOfId: originalRepostOfId,
+                             visibility: nil,
+                             expiresAt: nil,
+                             location: location)
     }
 }

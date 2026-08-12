@@ -8,6 +8,7 @@ export type ResolvedTheme = 'light' | 'dark';
 const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
 
 const getSystemTheme = (): ResolvedTheme => {
+  /* istanbul ignore next -- SSR guard: window is always defined in jsdom */
   if (typeof window === 'undefined') return 'light';
   return window.matchMedia(DARK_SCHEME_QUERY).matches ? 'dark' : 'light';
 };

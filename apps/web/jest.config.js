@@ -31,6 +31,8 @@ const customJestConfig = {
     // Handle module aliases
     '^@/(.*)$': '<rootDir>/$1',
     '^@meeshy/shared/(.*)$': '<rootDir>/../../packages/shared/dist/$1',
+    // Strip .js from relative imports: shared source uses ESM .js extensions but jest needs .ts
+    '^(\\.{1,2}/.*)\\.js$': '$1',
     // Mock lucide-react to avoid ESM issues - catch both direct and modularized imports
     '^lucide-react$': '<rootDir>/__mocks__/lucide-react.js',
     '^lucide-react/dist/esm/icons/(.*)$': '<rootDir>/__mocks__/lucide-react.js',
@@ -55,7 +57,7 @@ const customJestConfig = {
     '^rehype-sanitize$': '<rootDir>/__mocks__/react-markdown.js',
     // Mock react-syntax-highlighter to avoid ESM issues
     '^react-syntax-highlighter$': '<rootDir>/__mocks__/react-syntax-highlighter.js',
-    '^react-syntax-highlighter/dist/esm/(.*)$': '<rootDir>/__mocks__/react-syntax-highlighter/dist/esm/$1.js',
+    '^react-syntax-highlighter/dist/esm/(.*)$': '<rootDir>/__mocks__/react-syntax-highlighter.js',
   },
   // Transform ESM packages - handle both standard and pnpm nested node_modules
   transformIgnorePatterns: [
@@ -83,9 +85,22 @@ const customJestConfig = {
     '/.next/',
     '/__tests__/integration/',
     '\\.md$',
-    '/_archived/',
     '/e2e/',
   ],
+
+  // Ratcheting floor — raised 2026-06-17 after P1 Real-time × web slice.
+  // Previous thresholds (2026-06-16): lines:37 / branches:29 / stmts:36 / funcs:33.
+  // New measured: 38.81% lines / 30.99% branches / 38.02% stmts / 35.13% funcs.
+  // Thresholds set 1% below local measure to absorb CI environment delta.
+  // Only ever raise these values, never lower them.
+  coverageThreshold: {
+    global: {
+      lines: 42,
+      branches: 34,
+      statements: 41,
+      functions: 38,
+    },
+  },
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

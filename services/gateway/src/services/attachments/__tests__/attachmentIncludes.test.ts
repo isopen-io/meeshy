@@ -17,14 +17,30 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
     // against future omissions.
     const schemaKeys = new Set(Object.keys(messageAttachmentSchema.properties));
 
+    // Fields fetched from DB for server-side aggregation only — intentionally
+    // absent from messageAttachmentSchema because they are transformed before
+    // serialization. BUG2 A': raw reactions → reactionSummary + currentUserReactions.
+    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions']);
+
     it('attachmentMediaSelect ⊆ messageAttachmentSchema.properties', () => {
-      const missing = Object.keys(attachmentMediaSelect).filter((k) => !schemaKeys.has(k));
+      const missing = Object.keys(attachmentMediaSelect)
+        .filter((k) => !INTERNAL_AGGREGATION_FIELDS.has(k))
+        .filter((k) => !schemaKeys.has(k));
       expect(missing).toEqual([]);
     });
 
     it('attachmentFullSelect ⊆ messageAttachmentSchema.properties (no stripped fields)', () => {
-      const missing = Object.keys(attachmentFullSelect).filter((k) => !schemaKeys.has(k));
+      const missing = Object.keys(attachmentFullSelect)
+        .filter((k) => !INTERNAL_AGGREGATION_FIELDS.has(k))
+        .filter((k) => !schemaKeys.has(k));
       expect(missing).toEqual([]);
+    });
+
+    it('reactions aggregation output fields declared in schema (reactionSummary + currentUserReactions)', () => {
+      // The raw reactions relation is aggregated server-side; the wire format sends
+      // reactionSummary and currentUserReactions. Guard against accidentally removing them.
+      expect(schemaKeys.has('reactionSummary')).toBe(true);
+      expect(schemaKeys.has('currentUserReactions')).toBe(true);
     });
 
     it('attachmentForwardPreviewSelect ⊆ messageAttachmentSchema.properties', () => {
@@ -101,7 +117,16 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       );
     });
 
-    it('selects exactly 27 documented fields — guards against silent omission', () => {
+    it('includes per-image reaction aggregation select (BUG2 guard)', () => {
+      // BUG2 A' — reactions added to media select to support per-image aggregation
+      // (emoji + participantId needed for reactionSummary + currentUserReactions mapping).
+      // Uses nested Prisma select (not boolean true) because reactions is a relation.
+      expect(attachmentMediaSelect).toHaveProperty('reactions', {
+        select: { emoji: true, participantId: true },
+      });
+    });
+
+    it('selects exactly 28 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -130,16 +155,20 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'createdAt',
         'transcription',
         'translations',
+        'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(27);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(28);
     });
   });
 
   describe('attachmentFullSelect — render + consumption tracking + security', () => {
     it('is a superset of attachmentMediaSelect', () => {
+      // Check each key from attachmentMediaSelect is present in attachmentFullSelect
+      // with the same value (true for scalar fields, nested select for relations).
       for (const key of Object.keys(attachmentMediaSelect)) {
-        expect(attachmentFullSelect).toHaveProperty(key, true);
+        const srcValue = (attachmentMediaSelect as Record<string, unknown>)[key];
+        expect(attachmentFullSelect).toHaveProperty(key, srcValue);
       }
     });
 

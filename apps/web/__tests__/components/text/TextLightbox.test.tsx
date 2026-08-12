@@ -75,13 +75,61 @@ jest.mock('@/components/ui/button', () => ({
   ),
 }));
 
-// Mock clipboard API
-const mockWriteText = jest.fn();
-Object.assign(navigator, {
-  clipboard: {
-    writeText: mockWriteText,
-  },
-});
+// Mock useI18n hook with common and viewers namespace translations
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: (_namespace?: string) => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        // common namespace
+        'common.close': 'Fermer',
+        'common.copy': 'Copier',
+        'common.download': 'Télécharger',
+        // viewers.text namespace
+        'text.disableWordWrap': 'Désactiver le retour à la ligne',
+        'text.enableWordWrap': 'Activer le retour à la ligne',
+        'text.copy': 'Copier le contenu',
+        'text.fullscreen': 'Ouvrir en plein écran',
+        'text.download': 'Télécharger le fichier',
+        'text.copied': 'Copié dans le presse-papiers',
+        'text.copyError': 'Impossible de copier',
+        'text.loadError': 'Impossible de charger le fichier',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
+// Mock use-i18n as well (aliased import in TextLightbox)
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: (_namespace?: string) => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        // common namespace
+        'common.close': 'Fermer',
+        'common.copy': 'Copier',
+        'common.download': 'Télécharger',
+        // viewers.text namespace
+        'text.disableWordWrap': 'Désactiver le retour à la ligne',
+        'text.enableWordWrap': 'Activer le retour à la ligne',
+        'text.copy': 'Copier le contenu',
+        'text.fullscreen': 'Ouvrir en plein écran',
+        'text.download': 'Télécharger le fichier',
+        'text.copied': 'Copié dans le presse-papiers',
+        'text.copyError': 'Impossible de copier',
+        'text.loadError': 'Impossible de charger le fichier',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
+// Mock the canonical clipboard util (source unique lib/clipboard)
+jest.mock('@/lib/clipboard', () => ({
+  copyToClipboard: jest.fn().mockResolvedValue({ success: true, message: 'ok' }),
+}));
+const { copyToClipboard: mockCopyToClipboard } = jest.requireMock('@/lib/clipboard');
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -109,7 +157,7 @@ describe('TextLightbox', () => {
       ok: true,
       text: () => Promise.resolve('Hello, this is text content.\nLine 2\nLine 3'),
     });
-    mockWriteText.mockResolvedValue(undefined);
+    mockCopyToClipboard.mockResolvedValue({ success: true, message: 'ok' });
     document.body.style.overflow = '';
   });
 
@@ -434,7 +482,7 @@ describe('TextLightbox', () => {
         fireEvent.click(copyButton);
       });
 
-      expect(mockWriteText).toHaveBeenCalledWith('content to copy');
+      expect(mockCopyToClipboard).toHaveBeenCalledWith('content to copy');
     });
 
     it('should show success toast after copying', async () => {
@@ -485,7 +533,7 @@ describe('TextLightbox', () => {
     });
 
     it('should show error toast when copy fails', async () => {
-      mockWriteText.mockRejectedValue(new Error('Copy failed'));
+      mockCopyToClipboard.mockResolvedValue({ success: false, message: 'fail' });
       const attachment = createMockAttachment();
 
       await act(async () => {

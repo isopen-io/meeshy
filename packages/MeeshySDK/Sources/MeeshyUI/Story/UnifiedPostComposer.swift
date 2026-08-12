@@ -11,6 +11,13 @@ public struct UnifiedPostComposer: View {
     @State private var content = ""
     @State private var moodEmoji: String? = nil
     @State private var visibility = "PUBLIC"
+    /// Écrite par `storyPlaceholder.onTapGesture` — plus lue par personne
+    /// depuis que S6 a retiré le `.fullScreenCover` mort qui l'affichait
+    /// (`selectedType` ne peut plus jamais valoir `.story` : `typeSelector`,
+    /// seul point capable de le faire varier, a été retiré à la même passe,
+    /// gaté par `lockedType == nil` qui ne vaut plus jamais vrai). Écriture
+    /// morte inoffensive, laissée en l'état — cascade documentée au-dessus de
+    /// `contentArea`.
     @State private var showStoryComposer = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
@@ -49,7 +56,10 @@ public struct UnifiedPostComposer: View {
 
     /// Async-throwing repost-mode publish handler. Nil when not in repost mode.
     /// When set, takes precedence over `publishHandler` in the Publish button.
-    private let repostPublishHandler: ((String, StoryItem) async throws -> Void)?
+    /// `(contenu, story source, audience choisie)`. L'audience était le
+    /// paramètre manquant : le sélecteur s'affichait mais sa valeur n'allait
+    /// nulle part — tout repost sortait avec la visibilité de l'original.
+    private let repostPublishHandler: ((String, StoryItem, String) async throws -> Void)?
 
     public var onDismiss: () -> Void
 
@@ -61,30 +71,6 @@ public struct UnifiedPostComposer: View {
     public var onStoryImported: ((RepostImportResult) -> Void)?
 
     // MARK: - Public initializers
-
-    /// Sync-callback init (legacy). Use the `async throws` init below for new
-    /// call sites that need rollback semantics on publish failure.
-    public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) -> Void,
-                onDismiss: @escaping () -> Void) {
-        self.publishHandler = { type, content, mood, effects, image in
-            onPublish(type, content, mood, effects, image)
-        }
-        self.repostPublishHandler = nil
-        self.onDismiss = onDismiss
-        self.lockedType = nil
-        self.repostSourceForTests = nil
-    }
-
-    /// Async-throwing publish init. The Publish button awaits this closure and
-    /// resets `isPublishing` to `false` if it throws, so the user can retry.
-    public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
-                onDismiss: @escaping () -> Void) {
-        self.publishHandler = onPublish
-        self.repostPublishHandler = nil
-        self.onDismiss = onDismiss
-        self.lockedType = nil
-        self.repostSourceForTests = nil
-    }
 
     /// Initializes the composer in repost-as-post mode with an embedded story preview.
     ///
@@ -107,7 +93,7 @@ public struct UnifiedPostComposer: View {
     public init(
         repostingStory story: StoryItem,
         authorHandle: String,
-        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) -> Void,
+        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem, _ visibility: String) -> Void,
         onStoryImported: ((RepostImportResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
@@ -115,8 +101,8 @@ public struct UnifiedPostComposer: View {
         self.lockedType = .post
         self._repostSourceStory = State(initialValue: story)
         self.repostSourceForTests = story
-        self.repostPublishHandler = { content, source in
-            onPublishRepost(content, source)
+        self.repostPublishHandler = { content, source, visibility in
+            onPublishRepost(content, source, visibility)
         }
         self.onStoryImported = onStoryImported
         self.onDismiss = onDismiss
@@ -131,7 +117,7 @@ public struct UnifiedPostComposer: View {
     public init(
         repostingStory story: StoryItem,
         authorHandle: String,
-        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) async throws -> Void,
+        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem, _ visibility: String) async throws -> Void,
         onStoryImported: ((RepostImportResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
@@ -153,7 +139,7 @@ public struct UnifiedPostComposer: View {
     internal func triggerPublishForTests(content: String) {
         if let story = repostSourceForTests, let repostPublishHandler {
             Task {
-                try? await repostPublishHandler(content, story)
+                try? await repostPublishHandler(content, story, visibility)
             }
         } else {
             Task {
@@ -168,7 +154,7 @@ public struct UnifiedPostComposer: View {
     internal func triggerPublishForTestsAwaiting(content: String) async -> Bool {
         do {
             if let story = repostSourceForTests, let repostPublishHandler {
-                try await repostPublishHandler(content, story)
+                try await repostPublishHandler(content, story, visibility)
             } else {
                 try await publishHandler(selectedType, content, moodEmoji, nil, selectedImage)
             }
@@ -183,12 +169,8 @@ public struct UnifiedPostComposer: View {
     internal var isPublishingForTests: Bool { isPublishing }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
-                if lockedType == nil {
-                    typeSelector
-                    Divider().overlay(Color.white.opacity(0.1))
-                }
                 contentArea
                 Spacer()
                 bottomBar
@@ -210,19 +192,16 @@ public struct UnifiedPostComposer: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showStoryComposer) {
-            StoryComposerView(
-                onPublishSlide: { slide, image, _, _, _ in
-                    Task {
-                        try? await publishHandler(.story, slide.content ?? "", nil, slide.effects, image)
-                        await MainActor.run { showStoryComposer = false }
-                    }
-                },
-                onPublishAllInBackground: { _, _, _, _, _, _, _ in },
-                onPreview: { _, _, _, _, _ in },
-                onDismiss: { showStoryComposer = false }
-            )
-        }
+        // S6 — le cover story (`.fullScreenCover(isPresented: $showStoryComposer)`)
+        // a été retiré : SUPPRIMÉ, pas juste documenté comme inerte (S3/S5
+        // l'avaient déjà réduit à un no-op — `onPublishAllInBackground` figé à
+        // `false`, `onPublishSlide` jamais atteint). Sa SEULE porte d'entrée
+        // était `typeSelector` (retiré ci-dessus, gaté par `lockedType == nil`)
+        // et `storyPlaceholder.onTapGesture` (conservé — `contentArea`/
+        // `storyPlaceholder` restent inatteignables en pratique, cf. note sur
+        // `showStoryComposer` ci-dessus). Sans ce cover, ce tap ne fait plus
+        // que poser un `@State` que plus aucune vue ne lit — écriture morte
+        // inoffensive, cohérente avec le reste de la cascade documentée.
         .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
@@ -253,49 +232,18 @@ public struct UnifiedPostComposer: View {
         }
     }
 
-    // MARK: - Type Selector
-
-    private var typeSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(PostType.allCases, id: \.self) { type in
-                typeTab(type)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-
-    private func typeTab(_ type: PostType) -> some View {
-        let isSelected = selectedType == type
-        return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedType = type
-                if type == .story {
-                    showStoryComposer = true
-                }
-            }
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Image(systemName: type.icon)
-                        .font(.system(size: 14, weight: .medium))
-                    Text(type.displayName)
-                        .font(.system(size: 14, weight: isSelected ? .bold : .medium))
-                }
-                .foregroundColor(isSelected ? Color(hex: "6366F1") : theme.textMuted)
-
-                Rectangle()
-                    .fill(isSelected ? Color(hex: "6366F1") : Color.clear)
-                    .frame(height: 2)
-                    .cornerRadius(1)
-            }
-            .frame(maxWidth: .infinity)
-        }
-    }
-
     // MARK: - Content Area
 
+    /// S6 — `selectedType` is initialized to `.post` and, since the generic
+    /// (non-repost) inits + `typeSelector` were removed, nothing can mutate
+    /// it anymore: both surviving `repostingStory:` inits pin `lockedType`
+    /// (and `selectedType`) to `.post` unconditionally. `.status`/`.story`
+    /// branches below — along with `statusComposer`, `storyPlaceholder`,
+    /// `moodEmojiPicker` — are therefore unreachable in practice, though the
+    /// compiler cannot prove it statically. Deliberately left as compiling
+    /// dead code rather than cascaded away in this pass (mandate was the
+    /// generic init + `typeSelector` + the dead story cover, not a full
+    /// `PostType` surface audit) — flagged here for a dedicated future pass.
     @ViewBuilder
     private var contentArea: some View {
         switch selectedType {
@@ -533,18 +481,19 @@ public struct UnifiedPostComposer: View {
 
     private var publishButton: some View {
         Button {
-            guard !content.isEmpty || selectedType == .story else { return }
+            guard canPublish else { return }
             guard !isPublishing else { return }
             isPublishing = true
             HapticFeedback.success()
             let typedContent = content
+            let typedVisibility = visibility
             let typedType = selectedType
             let typedMood = moodEmoji
             let typedImage = selectedImage
             Task { @MainActor in
                 do {
                     if let story = repostSourceStory, let repostPublishHandler {
-                        try await repostPublishHandler(typedContent, story)
+                        try await repostPublishHandler(typedContent, story, typedVisibility)
                     } else {
                         try await publishHandler(typedType, typedContent, typedMood, nil, typedImage)
                     }
@@ -577,7 +526,15 @@ public struct UnifiedPostComposer: View {
 
     private var canPublish: Bool {
         switch selectedType {
-        case .post, .reel: return !content.isEmpty
+        case .post: return !content.isEmpty
+        case .reel:
+            // Règle produit 2026-08-02 : un REEL exige une composition
+            // qualifiante (vidéo || audio || >= 2 images). Ce composer ne porte
+            // qu'UNE image ou UNE vidéo — seule la vidéo peut qualifier ; une
+            // image seule ou du texte seul ne publie jamais un réel. (.reel est
+            // aujourd'hui inatteignable ici — S6 : `lockedType` épingle .post —
+            // mais le prédicat ne doit pas mentir si la surface rouvre.)
+            return selectedVideoURL != nil
         case .status: return moodEmoji != nil
         case .story: return true
         }
@@ -657,6 +614,7 @@ public struct RepostImportResult: Sendable {
     public let stickers: [StorySticker]
     public let drawingData: Data?
     public let audios: [StoryAudioPlayerObject]
+    public let locations: [StoryLocationObject]
     public let warnings: [CanvasReprojector.ReprojectionWarning]
     public let targetSize: CGSize
 
@@ -680,6 +638,7 @@ extension UnifiedPostComposer {
         var stickers: [StorySticker] = []
         var drawingData: Data? = nil
         var audios: [StoryAudioPlayerObject] = []
+        var locations: [StoryLocationObject] = []
 
         for t in payload.textObjects {
             let r = projector.reproject(text: t)
@@ -705,6 +664,11 @@ extension UnifiedPostComposer {
             // audio reprojection is identity (no spatial position)
             audios.append(projector.reproject(audio: a).value)
         }
+        for l in payload.locationObjects {
+            let r = projector.reproject(location: l)
+            locations.append(r.value)
+            if let w = r.warning { warnings.append(w) }
+        }
 
         return RepostImportResult(
             texts: texts,
@@ -712,6 +676,7 @@ extension UnifiedPostComposer {
             stickers: stickers,
             drawingData: drawingData,
             audios: audios,
+            locations: locations,
             warnings: warnings,
             targetSize: targetSize
         )

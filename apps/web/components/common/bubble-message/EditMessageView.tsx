@@ -11,7 +11,7 @@ import { getLanguageInfo, SUPPORTED_LANGUAGES } from '@meeshy/shared/types';
 import type { Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
-import { detectMentionAtCursor } from '@meeshy/shared/types/mention';
+import { detectMentionAtCursor, isValidMentionQuery } from '@meeshy/shared/types/mention';
 import { getCursorPosition, adjustPositionForViewport } from '@/lib/cursor-position';
 
 const DEFAULT_LANGUAGE = 'fr';
@@ -124,8 +124,11 @@ export const EditMessageView = memo(function EditMessageView({
     }
 
     if (mentionDetection && isValidObjectId) {
-      // Valider que la query est un username valide (lettres, chiffres, underscore, max 30 caractères)
-      const isValidQuery = /^\w{0,30}$/.test(mentionDetection.query);
+      // Valider que la query est un username valide en cours de frappe. Charset SSOT
+      // MENTION_HANDLE_CHARS (lettres/chiffres/underscore/TIRET) — l'ancienne regex `\w`
+      // omettait le tiret et fermait l'autocomplete dès `@marie-cl…`, cassant les usernames
+      // à tiret en édition (le composer, lui, l'autorise déjà).
+      const isValidQuery = isValidMentionQuery(mentionDetection.query);
 
       if (isValidQuery) {
         // Calculer la position de l'autocomplete AU NIVEAU DU CURSEUR

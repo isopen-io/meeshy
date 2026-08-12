@@ -9,6 +9,8 @@ import MeeshySDK
 /// Supported treatments (applied via a priority-based rule pipeline):
 /// - **Markdown**: `**bold**`, `*italic*`, `~~strikethrough~~`, `__underline__`
 /// - **Meeshy links**: `m+TOKEN` → tappable link to `https://meeshy.me/l/TOKEN`
+/// - **Mentions**: `@username` → tappable link to the profile
+/// - **Hashtags**: `#tag` → tappable link to `https://meeshy.me/hashtag/<tag>`
 /// - **URLs**: Auto-detected via `NSDataDetector` and made tappable
 ///
 /// The pipeline is extensible: add new `NSRegularExpression` entries to `rules`.
@@ -26,22 +28,52 @@ public enum MessageTextRenderer {
     ///
     /// Links use the `.link` attribute on `AttributedString` so they open in Safari.
     /// Pass `mentionColor` to override mention (`@username`) link color.
+    /// Pass `hashtagColor` to override hashtag (`#tag`) text color.
     /// Pass `accentColor` to override m+token and URL link color.
+    /// Pass `usesRelativeFont` to map `fontSize` onto the nearest Dynamic Type
+    /// text style (`MeeshyFont.relative`) instead of a frozen `.system(size:)`.
+    /// Callers migrating a `Text(...).font(MeeshyFont.relative(...))` MUST pass
+    /// `true` so the migration doesn't silently freeze their type size.
     /// Pass `mentionDisplayNames` to resolve `@username` → display name (e.g. `["atabeth": "Ata Beth"]`).
+    /// Pass `trackedLinks` (`[rawURL: token]`) to route raw URLs through the
+    /// gateway tracking redirect: a `.urlLink` whose raw string is a key (with a
+    /// trailing-punctuation-trimmed fallback) links to `https://meeshy.me/l/<token>`
+    /// instead of the raw URL — the DISPLAYED text stays the raw URL.
     /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
         fontSize: CGFloat = 15,
         color: Color,
         mentionColor: Color? = nil,
+        hashtagColor: Color? = nil,
         accentColor: Color? = nil,
+        usesRelativeFont: Bool = false,
         mentionDisplayNames: [String: String]? = nil,
-        highlightTerm: String? = nil
+        highlightTerm: String? = nil,
+        trackedLinks: [String: String]? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames)
         let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text)
+        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, hashtagColor: hashtagColor, accentColor: accentColor, usesRelativeFont: usesRelativeFont, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text, trackedLinks: trackedLinks)
+    }
+
+    // MARK: - Tracked-link resolution
+
+    /// Resolves the tappable destination for a raw URL string. Returns the
+    /// `https://meeshy.me/l/<token>` tracking URL when the raw string (or its
+    /// trailing-punctuation-trimmed form) is a key in `trackedLinks`; otherwise
+    /// the original `url`. Pure + side-effect-free so it's unit-testable.
+    static func resolvedLinkURL(raw: String, original: URL, trackedLinks: [String: String]?) -> URL {
+        guard let trackedLinks, !trackedLinks.isEmpty else { return original }
+        if let token = trackedLinks[raw] {
+            return URL(string: "https://meeshy.me/l/\(token)") ?? original
+        }
+        let trimmed = raw.trimmingTrailingLinkPunctuation
+        if trimmed != raw, let token = trackedLinks[trimmed] {
+            return URL(string: "https://meeshy.me/l/\(token)") ?? original
+        }
+        return original
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -83,7 +115,6 @@ public enum MessageTextRenderer {
     /// Returns NSRanges suitable for AttributedString highlighting.
     public static func highlightRanges(in text: String, term: String) -> [NSRange] {
         guard !term.isEmpty else { return [] }
-        let ns = text as NSString
         let lowered = text.lowercased()
         let termLower = term.lowercased()
         var ranges: [NSRange] = []
@@ -111,12 +142,13 @@ public enum MessageTextRenderer {
         case mentionLink(display: String, url: URL, username: String)
         case meeshyTokenLink(display: String, url: URL, token: String)
         case urlLink(display: String, url: URL)
+        case hashtagLink(display: String, url: URL, tag: String)
     }
 
     // MARK: - Rule Definitions
 
     private enum RuleKind {
-        case bold, italic, strikethrough, underline, meeshyLink, mention, url
+        case bold, italic, strikethrough, underline, meeshyLink, mention, url, hashtag
         case displayNameMention(username: String)
     }
 
@@ -128,6 +160,16 @@ public enum MessageTextRenderer {
         pattern: #"(?<![a-zA-Z0-9])@([a-zA-Z0-9_]{1,30})"#
     )
 
+    // `#` + 1-50 caractères Unicode lettre/chiffre/underscore. PAS de tiret
+    // (convention hashtag). Frontière gauche : ni mot ni `/` — exclut aussi
+    // bien "C#paris" qu'un fragment d'URL "exemple.com/#section". MÊME
+    // classe de caractères que le service gateway (HashtagService.ts) —
+    // SSOT dupliquée consciemment, comme MENTION_HANDLE_CHARS l'est déjà
+    // entre mention-parser.ts et son miroir Swift.
+    private static let hashtagRegex = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})"#
+    )
+
     /// Priority-ordered rules. First match at any position wins.
     /// Bold must precede italic so `**` is consumed before `*`.
     private static let rules: [(regex: NSRegularExpression, kind: RuleKind)] = [
@@ -137,6 +179,7 @@ public enum MessageTextRenderer {
         (try! NSRegularExpression(pattern: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#), .italic),
         (meeshyLinkRegex, .meeshyLink),
         (mentionRegex, .mention),
+        (hashtagRegex, .hashtag),
     ]
 
     /// Pure-regex URL matcher that replaces `NSDataDetector` for HTTP(S) link
@@ -216,21 +259,25 @@ public enum MessageTextRenderer {
     // MARK: - Parser
 
     /// True when `text` could contain ANY inline-rule trigger: markdown
-    /// (`* ~ _`), `@mention` / display-name mention, `m+token`, or an `http` URL.
+    /// (`* ~ _`), `@mention` / display-name mention, `#hashtag`, `m+token`, or
+    /// an `http` URL.
     /// Conservative superset — every rule's pattern requires one of these — so
     /// when it returns false no rule can match and `parse` can short-circuit to
     /// plain text without running the regex pipeline.
-    private static func hasInlineSyntax(_ text: String) -> Bool {
+    static func hasInlineSyntax(_ text: String) -> Bool {
         for scalar in text.unicodeScalars {
             switch scalar {
-            case "*", "~", "_", "@": return true
+            case "*", "~", "_", "@", "#": return true
             default: continue
             }
         }
         return text.contains("http") || text.contains("m+")
     }
 
-    private static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
+    // `internal` (pas `private`) — même précédent que `resolvedLinkURL` : accès
+    // direct depuis les tests via `@testable import`, sans exposer publiquement
+    // un détail d'implémentation hors du module.
+    static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
         guard length > 0 else { return [] }
@@ -329,6 +376,13 @@ public enum MessageTextRenderer {
                     segments.append(.mentionLink(display: display, url: url, username: username))
                 }
 
+            case .hashtag:
+                let tag = ns.substring(with: match.range(at: 1))
+                let display = ns.substring(with: match.range)
+                if let url = URL(string: "https://meeshy.me/hashtag/\(tag.lowercased())") {
+                    segments.append(.hashtagLink(display: display, url: url, tag: tag.lowercased()))
+                }
+
             case .url:
                 // `match.url` is only populated by `NSDataDetector`. Our pure
                 // regex returns plain `NSTextCheckingResult` values where
@@ -350,15 +404,26 @@ public enum MessageTextRenderer {
 
     // MARK: - Text Builder (AttributedString-based, avoids deprecated Text `+`)
 
+    /// Builds one run's font, honoring the caller's Dynamic Type opt-in.
+    /// `MeeshyFont.relative` maps the point size onto the nearest relative text
+    /// style, so a caller migrating a scaling `Text` keeps its scaling.
+    private static func font(_ fontSize: CGFloat, _ weight: Font.Weight, relative: Bool) -> Font {
+        relative ? MeeshyFont.relative(fontSize, weight: weight)
+                 : .system(size: fontSize, weight: weight)
+    }
+
     private static func buildText(
         _ segments: [Segment],
         fontSize: CGFloat,
         color: Color,
         mentionColor: Color?,
+        hashtagColor: Color?,
         accentColor: Color?,
+        usesRelativeFont: Bool,
         mentionDisplayNames: [String: String]?,
         highlightRanges: [NSRange] = [],
-        fullText: String = ""
+        fullText: String = "",
+        trackedLinks: [String: String]? = nil
     ) -> Text {
         var result = AttributedString()
         var charOffset = 0
@@ -367,9 +432,10 @@ public enum MessageTextRenderer {
             switch segment {
             case .text(let str, let styles):
                 var attr = AttributedString(str)
-                var font: Font = .system(
-                    size: fontSize,
-                    weight: styles.contains(.bold) ? .bold : .regular
+                var font = Self.font(
+                    fontSize,
+                    styles.contains(.bold) ? .bold : .regular,
+                    relative: usesRelativeFont
                 )
                 if styles.contains(.italic) { font = font.italic() }
                 attr.font = font
@@ -386,7 +452,7 @@ public enum MessageTextRenderer {
                     ?? display
                 var attr = AttributedString(resolvedDisplay)
                 attr.link = url
-                attr.font = .system(size: fontSize, weight: .semibold)
+                attr.font = Self.font(fontSize, .semibold, relative: usesRelativeFont)
                 attr.underlineStyle = .single
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
@@ -394,10 +460,21 @@ public enum MessageTextRenderer {
                 charOffset += display.count
                 result.append(attr)
 
+            case .hashtagLink(let display, let url, _):
+                var attr = AttributedString(display)
+                attr.link = url
+                attr.font = Self.font(fontSize, .semibold, relative: usesRelativeFont)
+                attr.underlineStyle = .single
+                if let hashtagColor {
+                    attr.foregroundColor = hashtagColor
+                }
+                charOffset += display.count
+                result.append(attr)
+
             case .meeshyTokenLink(let display, let url, _):
                 var attr = AttributedString(display)
                 attr.link = url
-                attr.font = .system(size: fontSize, weight: .medium)
+                attr.font = Self.font(fontSize, .medium, relative: usesRelativeFont)
                 attr.underlineStyle = .single
                 if let accentColor {
                     attr.foregroundColor = accentColor
@@ -407,8 +484,10 @@ public enum MessageTextRenderer {
 
             case .urlLink(let display, let url):
                 var attr = AttributedString(display)
-                attr.link = url
-                attr.font = .system(size: fontSize, weight: .medium)
+                // DISPLAY stays the raw URL; the tappable destination becomes
+                // the gateway tracking redirect when a token is mapped.
+                attr.link = Self.resolvedLinkURL(raw: display, original: url, trackedLinks: trackedLinks)
+                attr.font = Self.font(fontSize, .medium, relative: usesRelativeFont)
                 attr.underlineStyle = .single
                 if let accentColor {
                     attr.foregroundColor = accentColor
@@ -436,9 +515,25 @@ public enum MessageTextRenderer {
             guard intersection.length > 0 else { continue }
             let localStart = intersection.location - charOffset
             let localNS = NSRange(location: localStart, length: intersection.length)
-            guard let swiftRange = Range(localNS, in: segmentText) else { continue }
+            guard Range(localNS, in: segmentText) != nil else { continue }
             let attrRange = attr.index(attr.startIndex, offsetByCharacters: localStart)..<attr.index(attr.startIndex, offsetByCharacters: localStart + intersection.length)
             attr[attrRange].backgroundColor = Color.yellow.opacity(0.4)
         }
+    }
+}
+
+private extension String {
+    /// Trailing-punctuation set used for tracked-link key matching. The URL
+    /// regex may capture a trailing `.,;:!?)]` that the gateway excluded when
+    /// it minted the token (it tracks the bare URL). Trim them so a sentence
+    /// like "see https://x.com." still maps to the `https://x.com` token.
+    private static let trailingLinkPunctuation: Set<Character> = [".", ",", ";", ":", "!", "?", ")", "]"]
+
+    var trimmingTrailingLinkPunctuation: String {
+        var result = self
+        while let last = result.last, Self.trailingLinkPunctuation.contains(last) {
+            result.removeLast()
+        }
+        return result
     }
 }

@@ -113,6 +113,5 @@ final class CoreModelsTests: XCTestCase {
         XCTAssertEqual(FeedMediaType.video.rawValue, "video")
         XCTAssertEqual(FeedMediaType.audio.rawValue, "audio")
         XCTAssertEqual(FeedMediaType.document.rawValue, "document")
-        XCTAssertEqual(FeedMediaType.location.rawValue, "location")
     }
 }

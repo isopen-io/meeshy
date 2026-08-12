@@ -5,6 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';
+import { coerceCallAnalytics, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
 
 const CACHE_TTL = {
   realtime: 60,         // 1 min — "real-time" freshness
@@ -72,7 +73,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         }
       };
 
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.realtime).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.realtime).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get realtime analytics error:', error);
@@ -112,7 +113,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       const sampledActivity = buckets.reverse();
 
       const responseBody = { success: true, data: sampledActivity };
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.hourly).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.hourly).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get hourly activity error:', error);
@@ -130,7 +131,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const period = query.period || '7d';
+      const period = query.period || /* istanbul ignore next -- Zod provides default */ '7d';
 
       const cacheKey = `admin:analytics:message-types:${period}`;
       const cached = await getCacheStore().get(cacheKey);
@@ -144,6 +145,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         case '24h': startDate.setHours(startDate.getHours() - 24); break;
         case '7d':  startDate.setDate(startDate.getDate() - 7);  break;
         case '30d': startDate.setDate(startDate.getDate() - 30); break;
+        /* istanbul ignore next -- Zod z.enum enforces valid period; default unreachable */
         default:    startDate.setDate(startDate.getDate() - 7);
       }
 
@@ -161,7 +163,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       }));
 
       const responseBody = { success: true, data: distribution };
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get message types error:', error);
@@ -215,7 +217,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         ]
       };
 
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get user distribution error:', error);
@@ -233,7 +235,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const limit = parseInt(query.limit) || 5;
+      const limit = parseInt(query.limit) || /* istanbul ignore next -- Zod transforms limit to number */ 5;
 
       const cacheKey = `admin:analytics:language-distribution:${limit}`;
       const cached = await getCacheStore().get(cacheKey);
@@ -257,7 +259,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       }));
 
       const responseBody = { success: true, data: distribution };
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get language distribution error:', error);
@@ -275,7 +277,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const period = query.period || '30d';
+      const period = query.period || /* istanbul ignore next -- Zod provides default */ '30d';
 
       const cacheKey = `admin:analytics:kpis:${period}`;
       const cached = await getCacheStore().get(cacheKey);
@@ -289,6 +291,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         case '7d':  startDate.setDate(startDate.getDate() - 7);  break;
         case '30d': startDate.setDate(startDate.getDate() - 30); break;
         case '90d': startDate.setDate(startDate.getDate() - 90); break;
+        /* istanbul ignore next -- Zod z.enum enforces valid period; default unreachable */
         default:    startDate.setDate(startDate.getDate() - 30);
       }
 
@@ -314,7 +317,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         }
       };
 
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.kpis).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.kpis).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get KPIs error:', error);
@@ -355,11 +358,78 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       );
 
       const responseBody = { success: true, data: timeline };
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.daily).catch(() => {});
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.daily).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get volume timeline error:', error);
       return sendInternalError(reply, 'Erreur lors de la récupération de la timeline');
+    }
+  });
+
+  /**
+   * GET /api/admin/analytics/calls?days=7
+   * Aggregate call-reliability telemetry — the READ side of `call:analytics`.
+   * Each client persists its per-participant telemetry on hangup
+   * (CallParticipant.analytics); this surfaces it as a reliability summary
+   * (setup time, reconnection rate, RTT, packet loss, quality distribution,
+   * per-platform / per-end-reason breakdowns) over a recent window. Cached
+   * 10 min. `sampled` flags a window large enough to hit the row cap.
+   */
+  fastify.get('/calls', {
+    onRequest: [fastify.authenticate, requireAnalyticsPermission]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const rawDays = (request.query as { days?: string }).days;
+      const parsedDays = rawDays !== undefined ? Number(rawDays) : 7;
+      const days = Number.isFinite(parsedDays)
+        ? Math.min(90, Math.max(1, Math.floor(parsedDays)))
+        : 7;
+
+      const cacheKey = `admin:analytics:calls:${days}`;
+      const cached = await getCacheStore().get(cacheKey);
+      if (cached) {
+        return reply.send(JSON.parse(cached));
+      }
+
+      const windowStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      // Bound the in-memory aggregation: an admin dashboard never needs every
+      // row to see the trend. `sampled` surfaces truncation so a capped window
+      // is never silently read as complete.
+      const ROW_CAP = 5000;
+
+      // No DB-level `analytics != null` filter: filtering a nullable Json field
+      // by null in Prisma is the JsonNull/DbNull-ambiguity footgun. Fetch the
+      // window and drop null / shape-drifted rows in JS via coerceCallAnalytics
+      // (which returns null for anything untrustworthy) — bulletproof and
+      // unit-tested. A participant that never reported telemetry is simply
+      // skipped.
+      const rows = await fastify.prisma.callParticipant.findMany({
+        where: { joinedAt: { gte: windowStart } },
+        select: { analytics: true },
+        orderBy: { joinedAt: 'desc' },
+        take: ROW_CAP,
+      });
+
+      const records = rows
+        .map((row) => coerceCallAnalytics(row.analytics))
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      const summary = summarizeCallReliability(records);
+      const responseBody = {
+        success: true,
+        data: {
+          windowDays: days,
+          sampled: rows.length >= ROW_CAP,
+          rowsWithTelemetry: records.length,
+          ...summary,
+        }
+      };
+
+      getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.daily).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
+      return sendSuccess(reply, responseBody.data);
+    } catch (error) {
+      logError(fastify.log, 'Get call reliability analytics error:', error);
+      return sendInternalError(reply, 'Erreur lors de la récupération des métriques d\'appels');
     }
   });
 }

@@ -44,8 +44,16 @@ interface UseConversationTypingReturn {
   handleTextInput: (value: string) => void;
 }
 
-// Délai avant arrêt automatique de l'indicateur de frappe
+// Délai avant arrêt automatique de l'indicateur de frappe (émetteur local)
 const TYPING_STOP_DELAY = 3000;
+
+// Filet de sécurité : un remote `typing:stop` peut se perdre (coupure réseau
+// brève qui ne déclenche pas de `disconnect`, crash de l'onglet expéditeur
+// avant que son timeout local ne s'exécute...). Sans ce filet, l'indicateur
+// "X est en train d'écrire" resterait affiché jusqu'au ping-timeout du socket
+// (~45-60s). 8s laisse une marge confortable au-dessus du cycle normal
+// start→stop (3s) tout en bornant le pire cas perçu par l'utilisateur.
+const REMOTE_TYPING_SAFETY_TIMEOUT = 8000;
 
 /**
  * Extrait le displayName d'un participant
@@ -90,8 +98,31 @@ export function useConversationTyping({
 
   // Refs pour éviter re-créations de callbacks
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Miroir SYNCHRONE de `isTyping`, écrit aux trois mêmes endroits que l'état.
+  // Le nettoyage ci-dessous est une fermeture créée au rendu où
+  // `conversationId` a changé pour la DERNIÈRE fois : il y capture un `isTyping`
+  // qui vaut toujours `false`, donc la retraction n'était jamais émise. Un ref
+  // synchronisé par `useEffect` ne suffirait pas non plus — React exécute TOUS
+  // les nettoyages avant TOUS les effets, l'ordre resterait à démontrer. Écrit
+  // à la main, il est juste par construction au moment où le nettoyage le lit.
+  const isTypingRef = useRef(false);
   const participantsRef = useRef(participants);
   const conversationIdRef = useRef(conversationId);
+  // Un timeout de sécurité par utilisateur distant en train de taper
+  const remoteTypingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  const clearRemoteTypingTimeout = useCallback((userId: string) => {
+    const existing = remoteTypingTimeoutsRef.current.get(userId);
+    if (existing) {
+      clearTimeout(existing);
+      remoteTypingTimeoutsRef.current.delete(userId);
+    }
+  }, []);
+
+  const clearAllRemoteTypingTimeouts = useCallback(() => {
+    remoteTypingTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    remoteTypingTimeoutsRef.current.clear();
+  }, []);
 
   // Sync refs
   useEffect(() => {
@@ -109,14 +140,24 @@ export function useConversationTyping({
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      // Stop typing if active
-      if (isTyping) {
+      clearAllRemoteTypingTimeouts();
+      // Retracte l'indicateur chez les pairs. Rien d'autre ne le fera :
+      // `conversation:leave` ne retracte pas côté gateway (seul `disconnecting`
+      // le fait, cf. `StatusHandler.handleSocketDisconnecting`), et le timer
+      // d'auto-stop local vient justement d'être annulé au-dessus. Le
+      // `stopTyping` capturé ici est celui du rendu où cette conversation a été
+      // sélectionnée : il vise donc bien la conversation qu'on QUITTE.
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
         stopTyping();
       }
     };
   }, [conversationId]); // Reset on conversation change
 
-  // Reset typing users when conversation changes
+  // Reset typing users when conversation changes.
+  // `isTypingRef` n'a pas besoin d'être remis à zéro ici : le nettoyage
+  // ci-dessus s'exécute AVANT cet effet et le remet lui-même à `false` dans la
+  // seule branche où il valait `true`.
   useEffect(() => {
     setTypingUsers([]);
     setIsTyping(false);
@@ -134,6 +175,21 @@ export function useConversationTyping({
 
     // Filter by conversation
     if (typingConversationId !== conversationIdRef.current) return;
+
+    if (typing) {
+      // Refresh the safety timeout on every keepalive so a still-typing user
+      // is never dropped mid-session, then reschedule the removal.
+      clearRemoteTypingTimeout(userId);
+      remoteTypingTimeoutsRef.current.set(
+        userId,
+        setTimeout(() => {
+          remoteTypingTimeoutsRef.current.delete(userId);
+          setTypingUsers(prev => prev.filter(u => u.id !== userId));
+        }, REMOTE_TYPING_SAFETY_TIMEOUT)
+      );
+    } else {
+      clearRemoteTypingTimeout(userId);
+    }
 
     setTypingUsers(prev => {
       if (typing) {
@@ -153,14 +209,23 @@ export function useConversationTyping({
         return prev.filter(u => u.id !== userId);
       }
     });
-  }, [currentUserId]);
+  }, [currentUserId, clearRemoteTypingTimeout]);
 
   // Handle local typing start
   const handleTypingStart = useCallback(() => {
+    isTypingRef.current = true;
     if (!isTyping) {
       setIsTyping(true);
-      startTyping();
     }
+
+    // Re-emit on every keystroke, not just the first one of the session:
+    // the underlying transport throttles this to ~1 emit/2s, and that
+    // steady trickle is what refreshes the remote safety timeout above.
+    // Gating this on `!isTyping` (as before) meant a single continuous
+    // typing session only ever sent one `typing:start`, so anyone typing
+    // longer than REMOTE_TYPING_SAFETY_TIMEOUT had their indicator dropped
+    // by peers while still actively typing.
+    startTyping();
 
     // Reset timeout
     if (typingTimeoutRef.current) {
@@ -169,6 +234,7 @@ export function useConversationTyping({
 
     // Auto-stop after delay
     typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
       setIsTyping(false);
       stopTyping();
     }, TYPING_STOP_DELAY);
@@ -177,6 +243,7 @@ export function useConversationTyping({
   // Handle local typing stop
   const handleTypingStop = useCallback(() => {
     if (isTyping) {
+      isTypingRef.current = false;
       setIsTyping(false);
       stopTyping();
     }

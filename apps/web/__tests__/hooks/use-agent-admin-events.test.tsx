@@ -11,6 +11,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

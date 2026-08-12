@@ -21,10 +21,23 @@ data class ApiConversation(
     val defaultWriteRole: String? = null,
     val isAnnouncementChannel: Boolean = false,
     val slowModeSeconds: Int? = null,
+    /** The conversation's encryption posture (`"e2ee"` / `"server"` / `"hybrid"`),
+     * or `null` when it is not encrypted. Drives the top-of-history E2EE notice. */
+    val encryptionMode: String? = null,
     val autoTranslateEnabled: Boolean? = null,
+    val isActive: Boolean? = null,
     val preferences: ApiConversationPreferences? = null,
+    val userPreferences: List<ApiConversationPreferences> = emptyList(),
 ) {
     val memberCount: Int get() = participants.size
+
+    /**
+     * The effective per-user preferences. The gateway sends the signed-in user's
+     * row as `userPreferences[0]`; [preferences] is only ever set locally by an
+     * optimistic mutation, so an in-flight override wins over the server value.
+     */
+    val resolvedPreferences: ApiConversationPreferences?
+        get() = preferences ?: userPreferences.firstOrNull()
 }
 
 @Serializable
@@ -59,6 +72,7 @@ data class ApiConversationPreferences(
     val customName: String? = null,
     val categoryId: String? = null,
     val mentionsOnly: Boolean = false,
+    val reaction: String? = null,
 )
 
 @Serializable
@@ -67,3 +81,10 @@ data class CreateConversationRequest(
     val title: String? = null,
     val participantIds: List<String>,
 )
+
+/**
+ * Total unread-message count across a conversation list — the single source of
+ * truth for both the in-app dashboard preview (`DashboardScreen.dashboardUnreadTotal`)
+ * and the home-screen widget's unread badge, so the two surfaces can never drift.
+ */
+fun List<ApiConversation>.totalUnreadCount(): Int = sumOf { it.unreadCount }

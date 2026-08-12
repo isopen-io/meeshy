@@ -22,12 +22,28 @@ export async function resolveParticipant(opts: {
   const { user, realUserId } = userResult;
 
   if (user.isAnonymous) {
+    // An anonymous participant is bound to exactly ONE conversation
+    // (Participant row created when joining a share link; the socket joins
+    // only that conversation room — see AuthHandler._authenticateAnonymousUser).
+    // Verify the participant is active in the REQUESTED conversation before
+    // trusting the in-memory identity, mirroring the registered path below.
+    // Without this check an anonymous socket could pass an arbitrary
+    // conversationId to any participant-gated handler (typing:start, reactions,
+    // …) and broadcast into a room it does not belong to. The DB read also
+    // re-checks `isActive`, so an anon removed/banned since connect is rejected.
     const participantId = user.participantId || user.id;
+    const anonParticipant = await prisma.participant.findFirst({
+      where: { id: participantId, conversationId, isActive: true },
+      select: { id: true, displayName: true, nickname: true },
+    });
+
+    if (!anonParticipant) return null;
+
     return {
-      participantId,
+      participantId: anonParticipant.id,
       userId: realUserId,
       isAnonymous: true,
-      displayName: user.displayName || 'Anonymous User',
+      displayName: anonParticipant.nickname || anonParticipant.displayName || user.displayName || 'Anonymous User',
     };
   }
 

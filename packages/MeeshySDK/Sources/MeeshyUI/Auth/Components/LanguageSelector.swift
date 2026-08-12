@@ -87,14 +87,14 @@ public struct LanguageSelector: View {
                                     Spacer()
                                     if lang.id == selectedId {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(Color(hex: "4ECDC4"))
+                                            .foregroundStyle(MeeshyColors.brandPrimary)
                                     }
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 10)
                                 .background(
                                     lang.id == selectedId ?
-                                        Color(hex: "4ECDC4").opacity(0.15) :
+                                        MeeshyColors.brandPrimary.opacity(0.15) :
                                         Color.clear
                                 )
                             }

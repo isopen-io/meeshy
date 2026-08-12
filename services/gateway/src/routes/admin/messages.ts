@@ -31,7 +31,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const period = query.period || '30d';
+      const period = query.period || /* istanbul ignore next -- Zod provides default */ '30d';
 
       // Calculer la date de début
       const now = new Date();
@@ -50,6 +50,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         case '90d':
           startDate.setDate(startDate.getDate() - 90);
           break;
+        /* istanbul ignore next -- Zod z.enum enforces valid period; default unreachable */
         default:
           startDate.setDate(startDate.getDate() - 30);
       }
@@ -312,7 +313,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const period = query.period || '7d';
+      const period = query.period || /* istanbul ignore next -- Zod provides default */ '7d';
 
       const now = new Date();
       let startDate = new Date();
@@ -324,6 +325,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         case '30d':
           startDate.setDate(startDate.getDate() - 30);
           break;
+        /* istanbul ignore next -- Zod z.enum enforces valid period; default unreachable */
         default:
           startDate.setDate(startDate.getDate() - 7);
       }

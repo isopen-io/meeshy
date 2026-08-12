@@ -99,6 +99,17 @@ public final class PlaybackCoordinator {
         return false
     }
 
+    /// `true` when any registered AUDIO engine is playing — the shared VIDEO
+    /// manager is deliberately excluded. This is the background-transition
+    /// discriminant: audio playback survives backgrounding under the `audio`
+    /// UIBackgroundMode, while video NEVER does (it either hands off to PiP or
+    /// pauses). `isAnyPlaying` above stays the global predicate (video included)
+    /// for the post-call resume gate in `ConversationAudioCoordinator`.
+    public var isAnyAudioPlaying: Bool {
+        for (_, weak) in audioPlayers where weak.player?.isPlaying == true { return true }
+        return false
+    }
+
     // MARK: - Stop All Playback
 
     public func stopAll() {
@@ -108,6 +119,18 @@ public final class PlaybackCoordinator {
         }
         stopAllExternal(except: nil)
         SharedAVPlayerManager.shared.stop()
+    }
+
+    /// Stops every audio / external player but leaves the shared video engine
+    /// (`SharedAVPlayerManager`) untouched. Used when paging away from a reel so
+    /// the previous clip's audio is cut without racing the incoming video reel,
+    /// which drives its own engine.
+    public func stopAllAudio() {
+        pruneDeadReferences()
+        for (_, weak) in audioPlayers {
+            weak.player?.stop()
+        }
+        stopAllExternal(except: nil)
     }
 
     // MARK: - Cleanup

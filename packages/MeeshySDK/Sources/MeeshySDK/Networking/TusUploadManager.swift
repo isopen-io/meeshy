@@ -132,6 +132,12 @@ public actor TusUploadManager {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
                         try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token, uploadContext: uploadContext, thumbHash: thumbHash)
                     }
+                    // Local-first : copie le fichier qu'on vient d'uploader dans le
+                    // cache média typé, keyé par l'URL canonique serveur. L'auteur
+                    // relit ses propres médias (story, pièce jointe) depuis le disque
+                    // — offline, jamais re-téléchargés. Idempotent (no-op si déjà
+                    // caché, ex. via MessagePersistenceActor.adoptSDKLevel).
+                    await Self.seedMediaCache(localFile: fileURL, result: result)
                     activeCount -= 1
                     continuation.resume(returning: result)
                     processQueue()
@@ -146,6 +152,30 @@ public actor TusUploadManager {
                 }
             }
         }
+    }
+
+    /// Local-first cache seed : copie le fichier source qu'on vient d'uploader
+    /// dans le `DiskCacheStore` typé (image/vidéo/audio) selon le MIME, keyé par
+    /// l'URL canonique serveur (`result.fileUrl` — exactement la clé que le
+    /// reader résout). Non-destructif (la source reste pour le caller, ex. un
+    /// asset encore référencé par la preview live). Idempotent. Un MIME non-média
+    /// (document…) est ignoré. C'est ce qui garantit que l'auteur joue ses
+    /// propres stories / pièces jointes depuis le disque, offline, sans jamais
+    /// re-télécharger un média qu'il possède déjà localement.
+    private static func seedMediaCache(localFile: URL, result: TusUploadResult) async {
+        let mime = result.mimeType
+        let store: DiskCacheStore?
+        if mime.hasPrefix("image/") {
+            store = CacheCoordinator.shared.images
+        } else if mime.hasPrefix("video/") {
+            store = CacheCoordinator.shared.video
+        } else if mime.hasPrefix("audio/") {
+            store = CacheCoordinator.shared.audio
+        } else {
+            store = nil
+        }
+        guard let store else { return }
+        await store.seed(copyingLocalFile: localFile, for: result.fileUrl)
     }
 
     private func withBackgroundTask<T: Sendable>(named name: String, operation: @Sendable () async throws -> T) async throws -> T {
@@ -233,7 +263,10 @@ public actor TusUploadManager {
         // chunk so an OS suspend / app kill in the middle still leaves the
         // checkpoint in a state the next attempt can reuse.
         let fileHandle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? fileHandle.close() }
+        defer {
+            do { try fileHandle.close() }
+            catch { Self.logger.error("Upload file handle leaked: \(error.localizedDescription, privacy: .public)") }
+        }
         fileHandle.seek(toFileOffset: UInt64(offset))
 
         while offset < fileSize {
@@ -280,16 +313,26 @@ public actor TusUploadManager {
                     struct TusResponseData: Decodable {
                         let attachment: TusUploadResult
                     }
-                    if let parsed = try? decoder.decode(TusResponse.self, from: responseData),
-                       let attachment = parsed.data?.attachment {
-                        await store.delete(checkpointKey: checkpointKey)
-                        progressMap[fileId] = FileUploadProgress(
-                            fileId: fileId, fileName: fileName, fileSize: fileSize,
-                            status: .complete, percentage: 100, bytesUploaded: fileSize,
-                            error: nil, attachmentId: attachment.id
+                    do {
+                        let parsed = try decoder.decode(TusResponse.self, from: responseData)
+                        if let attachment = parsed.data?.attachment {
+                            await store.delete(checkpointKey: checkpointKey)
+                            progressMap[fileId] = FileUploadProgress(
+                                fileId: fileId, fileName: fileName, fileSize: fileSize,
+                                status: .complete, percentage: 100, bytesUploaded: fileSize,
+                                error: nil, attachmentId: attachment.id
+                            )
+                            emitProgress()
+                            return attachment
+                        }
+                        Self.logger.error("TUS finish body decoded but carried no attachment — upload succeeded server-side, client will retry the whole file")
+                    } catch {
+                        // Le fichier EST bien monté côté serveur : sans cette
+                        // trace, l'échec de parsing se traduit par un
+                        // ré-upload complet et silencieux.
+                        Self.logger.error(
+                            "TUS finish body undecodable — upload succeeded server-side, client will retry the whole file: \(error.localizedDescription, privacy: .public)"
                         )
-                        emitProgress()
-                        return attachment
                     }
                 }
 
@@ -403,7 +446,10 @@ public actor TusUploadManager {
     /// be exercised from tests without needing an actor hop.
     static func sha256Hex(of fileURL: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? handle.close() }
+        defer {
+            do { try handle.close() }
+            catch { logger.error("Hashing file handle leaked: \(error.localizedDescription, privacy: .public)") }
+        }
 
         var hasher = SHA256()
         while try autoreleasepool(invoking: { () throws -> Bool in

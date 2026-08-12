@@ -15,11 +15,56 @@
 
 import { Prisma } from '@meeshy/shared/prisma/client';
 
+/**
+ * MongoDB "live post" matcher for the `deletedAt` soft-delete column.
+ *
+ * Prisma's bare `{ deletedAt: null }` filter does NOT match documents where the
+ * field is ABSENT on MongoDB — Prisma omits unset optional fields at insert
+ * time, so every never-deleted Post stores no `deletedAt` key at all. The naive
+ * `null` filter then silently drops EVERY live post, which emptied the feed /
+ * reels / stories endpoints in production (all posts returned `data: []` while
+ * the collection was full).
+ *
+ * Match on the field being unset instead — the same `isSet:false` pattern used
+ * for `parentId` (commentsPreviewInclude below) and `expiresAt` (PostFeedService).
+ * Soft-deleted posts always carry a real `deletedAt` date (`isSet:true`) and so
+ * remain excluded.
+ */
+import { NOT_DELETED } from './softDelete';
+
+// Ré-exporté ici : la plupart des appelants tiennent déjà `postIncludes` pour
+// leurs formes de `select`/`include` et lisent le prédicat au même endroit.
+export { NOT_DELETED };
+
 export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
   username: true,
   displayName: true,
   avatar: true,
+});
+
+/**
+ * Story-scoped author shape — `authorSelect` + presence.
+ *
+ * The story viewer presents an identity interstitial (avatar, name, presence
+ * badge) at every author switch; presence must ship WITH the feed payload so
+ * the interstitial is complete the instant the switch happens (no lazy
+ * resolution after the slide is already on screen). Presence stays scoped to
+ * the stories path: story visibility already gates the audience (friends /
+ * DM contacts / community co-members), whereas the general post feed keeps
+ * the lean `authorSelect`.
+ *
+ * Derived by spread so any future `authorSelect` field flows through.
+ */
+export const storyAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
+  ...authorSelect,
+  isOnline: true,
+  lastActiveAt: true,
+  // `banner` complète l'interstitiel : c'était le dernier élément encore
+  // résolu paresseusement (GET /users/:id par auteur, cf.
+  // StoryViewModel.resolveGroupIntro). Même raisonnement que la présence
+  // ci-dessus — l'interstitiel doit être complet à l'instant du switch.
+  banner: true,
 });
 
 /**
@@ -64,6 +109,17 @@ export const mediaInclude = Prisma.validator<Prisma.Post$mediaArgs>()({
 });
 
 /**
+ * Comment media include — the single media a comment may carry. Reuses
+ * `mediaSelect` (same PostMedia shape, same Prisme fields) so a comment's
+ * media is decoded identically to a post's media on every client.
+ * A comment never holds more than one media, but the relation stays ordered.
+ */
+export const commentMediaInclude = Prisma.validator<Prisma.PostComment$mediaArgs>()({
+  select: mediaSelect,
+  orderBy: { order: 'asc' },
+});
+
+/**
  * Top-3 comments preview shape attached to every Post response.
  *
  * The `OR isSet:false` clause is REQUIRED — MongoDB documents that were
@@ -74,7 +130,7 @@ export const mediaInclude = Prisma.validator<Prisma.Post$mediaArgs>()({
  */
 export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>()({
   where: {
-    deletedAt: null,
+    deletedAt: NOT_DELETED,
     OR: [{ parentId: null }, { parentId: { isSet: false } }],
   },
   select: {
@@ -85,7 +141,20 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     likeCount: true,
     replyCount: true,
     createdAt: true,
+    // Rappel projet : tout champ lu par un resolver doit figurer dans son
+    // `select`. Sans `metadata` ici, un commentaire portant un lieu partagé
+    // (`metadata.location`) l'affiche dans la liste complète des commentaires
+    // mais pas dans cet aperçu embarqué sur le post — la position semble
+    // disparaître selon la surface consultée par le client.
+    metadata: true,
     author: { select: authorSelect },
+    // A comment's single media (image/video/audio + Prisme transcription/TTS).
+    // Without this the feed/reels comments sheet — which reads top-level
+    // comments ONLY from this post-embedded preview, never re-fetching them —
+    // loses every comment attachment on reload, and contacts receiving the
+    // post:updated broadcast see comments stripped of their media. Reuses the
+    // canonical commentMediaInclude so the preview decodes exactly like getComments.
+    media: commentMediaInclude,
   },
   orderBy: { likeCount: 'desc' },
   take: 3,
@@ -108,12 +177,62 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     translations: true,
     storyEffects: true,
     audioUrl: true,
+    moodEmoji: true,
     originalRepostOfId: true,
     author: { select: authorSelect },
     media: mediaInclude,
     createdAt: true,
     likeCount: true,
     commentCount: true,
+    // `metadata.location` du post SOURCE — sans ce select, `hoistLocationDeep`
+    // n'a rien à hisser sur `repostOf` et un repost perd la position de
+    // l'original (même porte que `commentsPreviewInclude.metadata`).
+    metadata: true,
+    // Compteurs de portée de l'ORIGINAL (chantier reposts cohérents & watermark,
+    // tâche 1) — sans eux, un repost affiché ne peut jamais montrer combien de
+    // fois l'original a été vu, reposté, partagé ou mis en favori. `PostService`
+    // crédite désormais ces mêmes compteurs à travers la chaîne de reposts
+    // (voir `recordView` / routes d'impression), ce select les rend visibles.
+    viewCount: true,
+    repostCount: true,
+    shareCount: true,
+    bookmarkCount: true,
+    impressionCount: true,
+  },
+});
+
+/**
+ * G1(b) — lean tray projection for `GET /posts/feed/stories?projection=tray`.
+ *
+ * The story TRAY renders rings + author + latest thumbnail + viewed state:
+ * it needs ids, timestamps, the author and the media rows (thumbnailUrl /
+ * thumbHash), NOT the canvas (`storyEffects`), the content translations or
+ * the comments preview — which dominate the full-body payload (50 stories
+ * shipped whole). Opt-in per request; the full body stays the default so
+ * every existing client keeps decoding unchanged. Reposted stories keep a
+ * minimal `repostOf` (the shell's own media is empty — the thumbnail lives
+ * on the original, same resolution as `toStoryGroups` client-side).
+ */
+export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
+  id: true,
+  type: true,
+  visibility: true,
+  createdAt: true,
+  updatedAt: true,
+  contentEditedAt: true,
+  expiresAt: true,
+  originalRepostOfId: true,
+  viewCount: true,
+  author: { select: storyAuthorSelect },
+  media: mediaInclude,
+  repostOf: {
+    select: {
+      id: true,
+      type: true,
+      createdAt: true,
+      author: { select: authorSelect },
+      media: mediaInclude,
+    },
   },
 });
 
@@ -128,6 +247,17 @@ export const postInclude = Prisma.validator<Prisma.PostInclude>()({
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
+});
+
+/**
+ * Story-scoped post include — `postInclude` with the presence-carrying
+ * author shape (see `storyAuthorSelect`). Derived by spread: adding a
+ * relation to `postInclude` flows through here automatically, so the two
+ * shapes cannot drift apart.
+ */
+export const storyPostInclude = Prisma.validator<Prisma.PostInclude>()({
+  ...postInclude,
+  author: { select: storyAuthorSelect },
 });
 
 // ============================================================================

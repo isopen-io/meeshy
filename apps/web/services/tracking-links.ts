@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { copyToClipboard } from '@/lib/clipboard';
 import { authManager } from '@/services/auth-manager.service';
 import type {
   TrackingLink,
@@ -225,11 +226,6 @@ export async function deleteTrackingLink(token: string): Promise<void> {
  * Copier l'URL d'un lien tracké dans le presse-papiers
  */
 export async function copyTrackingLinkToClipboard(shortUrl: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(shortUrl);
-    return true;
-  } catch (error) {
-    console.error('Erreur lors de la copie dans le presse-papiers:', error);
-    return false;
-  }
+  const { success } = await copyToClipboard(shortUrl);
+  return success;
 }

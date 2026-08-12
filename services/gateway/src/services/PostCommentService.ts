@@ -1,9 +1,29 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect } from './posts/postIncludes';
+import type { MobileTranscription } from '../routes/posts/types';
+import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
+import { TrackingLinkService } from './TrackingLinkService';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { parseSharedPlace } from './location/sharedPlace';
+import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { enhancedLogger } from '../utils/logger-enhanced';
+import { getSharedNotificationService } from './notifications/notification-service-registry';
+import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
+import { retractCommentNotifications } from './posts/retractCommentNotifications';
+
+const log = enhancedLogger.child({ module: 'PostCommentService' });
 
 export class PostCommentService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly trackingLinkService: TrackingLinkService;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    // Source UNIQUE du mapping `metadata.trackingLinks` partagée avec
+    // messages/posts/stories. Injectable pour les tests ; défaut = même prisma.
+    trackingLinkService?: TrackingLinkService,
+  ) {
+    this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
+  }
 
   async addComment(
     postId: string,
@@ -12,20 +32,46 @@ export class PostCommentService {
     parentId?: string,
     effectFlags?: number,
     originalLanguage?: string,
+    /// PostMedia déjà uploadé (pending) à rattacher au commentaire via `commentId`.
+    /// Un commentaire ne porte QU'UN SEUL média.
+    mediaId?: string,
+    /// Transcription Whisper mobile pour un média audio — persistée sur le PostMedia
+    /// (évite la re-transcription serveur, même mécanisme que les posts).
+    mobileTranscription?: MobileTranscription,
+    /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
+    /// `parseSharedPlace` ci-dessous avant écriture.
+    location?: unknown,
   ) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
 
     // If parentId, verify parent exists
     if (parentId) {
       const parent = await this.prisma.postComment.findFirst({
-        where: { id: parentId, postId, deletedAt: null },
+        where: { id: parentId, postId, deletedAt: NOT_DELETED },
       });
       if (!parent) throw new Error('PARENT_NOT_FOUND');
     }
+
+    // Verify the pending media belongs to no post/comment yet (anti-hijack) before linking.
+    if (mediaId) {
+      const media = await this.prisma.postMedia.findUnique({
+        where: { id: mediaId },
+        select: { id: true, postId: true, commentId: true },
+      });
+      if (!media || media.postId || media.commentId) {
+        throw new Error('MEDIA_NOT_AVAILABLE');
+      }
+    }
+
+    // Lieu partagé : validation stricte côté serveur (bornes, rejet
+    // NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN CLAIR
+    // dans `metadata.location`, même décision assumée que pour message/post
+    // (cf. services/location/sharedPlace.ts).
+    const sharedPlace = parseSharedPlace(location);
 
     const comment = await this.prisma.postComment.create({
       data: {
@@ -34,7 +80,15 @@ export class PostCommentService {
         content,
         parentId: parentId ?? null,
         effectFlags: effectFlags ?? 0,
-        originalLanguage: originalLanguage ?? null,
+        // Canonicalize the client claim at the write boundary (raw platform locale
+        // `fr_FR`/`fr-FR` → `fr`); irreducible codes (`bas`) fall back verbatim.
+        // Mirrors the message + post funnel so the stored source lines up with NLLB
+        // + the Prisme resolver.
+        originalLanguage:
+          originalLanguage != null
+            ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
+            : null,
+        ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
       },
       select: {
         id: true,
@@ -46,9 +100,46 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
       },
     });
+
+    // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
+    //
+    // La pré-vérification anti-hijack plus haut couvre « le média est déjà
+    // pris ». Elle ne couvre PAS deux choses : à qui il appartient, et le fait
+    // qu'elle vérifie puis agit en deux temps — entre le `findUnique` et cet
+    // écrit, un autre commentaire peut avoir réclamé le même média.
+    //
+    // Porter la condition dans le `where` de l'écriture règle les deux : la
+    // base tranche en une opération. `updateMany` est obligatoire pour ça —
+    // `update` n'accepte qu'un critère unique, pas une clause composée.
+    if (mediaId) {
+      const linked = await this.prisma.postMedia.updateMany({
+        where: { id: mediaId, ...claimableMediaWhere(authorId) },
+        data: {
+          commentId: comment.id,
+          ...(mobileTranscription
+            ? {
+                transcription: {
+                  ...mobileTranscription,
+                  segments: mobileTranscription.segments ?? [],
+                  source: 'mobile',
+                } as Prisma.InputJsonValue,
+              }
+            : {}),
+        },
+      });
+      const shortfall = describeClaimShortfall([mediaId], linked.count);
+      if (shortfall) {
+        // Le commentaire existe déjà et reste publié : refuser le média sans
+        // trace donnerait un commentaire vide inexplicable.
+        enhancedLogger.warn(`[PostCommentService] createComment: ${shortfall}`, {
+          commentId: comment.id, authorId, mediaId,
+        });
+      }
+    }
 
     // Increment counters
     await this.prisma.post.update({
@@ -63,23 +154,65 @@ export class PostCommentService {
       });
     }
 
-    return comment;
+    // Le média lié est renvoyé top-level (`media: [PostMedia]`) — même forme que les
+    // posts, décodé identiquement par les clients (viewers inline + plein écran).
+    const media = mediaId
+      ? await this.prisma.postMedia.findMany({
+          where: { commentId: comment.id },
+          ...commentMediaInclude,
+        })
+      : [];
+
+    // Tracking des URLs brutes du commentaire : même mécanisme que les messages
+    // et les posts — mapping `url → token` rangé dans `metadata.trackingLinks`
+    // SANS réécrire le contenu (aperçu vidéo + URL lisible préservés). Le client
+    // rend le lien vers `/l/<token>`. JAMAIS bloquant : le helper avale ses
+    // erreurs (→ []) et l'écriture metadata est gardée.
+    if (content) {
+      try {
+        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
+          content,
+          createdBy: authorId,
+        });
+        if (trackingLinks.length > 0) {
+          const existingMetadata = (comment.metadata as Record<string, unknown> | null) ?? {};
+          const metadata = { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue;
+          await this.prisma.postComment.update({
+            where: { id: comment.id },
+            data: { metadata },
+          });
+          return { ...comment, metadata, media };
+        }
+      } catch {
+        // non-bloquant : un échec de tracking ne doit pas casser le commentaire
+      }
+    }
+
+    return { ...comment, media };
   }
 
   async getComments(postId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    // Top-level comments only — replies (parentId set) are loaded lazily via
+    // getReplies. The parentId filter lives in AND so the cursor's own OR can
+    // be appended without clobbering it (a bare `where.OR = …` on pagination
+    // dropped the parentId guard and leaked replies into page 2+).
     const where: any = {
       postId,
-      deletedAt: null,
-      OR: [{ parentId: null }, { parentId: { isSet: false } }],
+      deletedAt: NOT_DELETED,
+      AND: [
+        { OR: [{ parentId: null }, { parentId: { isSet: false } }] },
+      ],
     };
 
     if (cursorData) {
-      where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-      ];
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
     }
 
     const comments = await this.prisma.postComment.findMany({
@@ -95,7 +228,9 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
+        media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -130,13 +265,19 @@ export class PostCommentService {
 
     const where: any = {
       parentId: commentId,
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
     };
 
+    // Replies are ordered ASCENDING (oldest → newest, threaded reading order),
+    // so the cursor must select rows strictly AFTER the last item of the
+    // previous page (`gt`). `nextCursor` is the last item's (createdAt, id) —
+    // the largest so far under asc ordering — so `lt` would walk BACKWARD,
+    // re-yielding already-shown replies and permanently dropping the rest.
+    // (Sibling `getComments` orders DESC and correctly pairs that with `lt`.)
     if (cursorData) {
       where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        { createdAt: { gt: new Date(cursorData.createdAt) } },
+        { createdAt: new Date(cursorData.createdAt), id: { gt: cursorData.id } },
       ];
     }
 
@@ -153,7 +294,9 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
+        media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
@@ -183,23 +326,66 @@ export class PostCommentService {
     return { items: enriched, nextCursor, hasMore };
   }
 
-  async deleteComment(commentId: string, userId: string) {
+  async deleteComment(
+    commentId: string,
+    userId: string,
+    // Défaut = le service partagé du processus, le seul câblé avec `io`. Même
+    // résolution que `applyPostRemovalEffects` et `applyMessageRemovalEffects` :
+    // la route n'a rien à câbler, et un appelant hors serveur (worker, script,
+    // test) retire quand même les lignes, sans annonce. Le défaut est évalué à
+    // CHAQUE appel — le service n'est enregistré qu'au démarrage du socket,
+    // après la construction des routes.
+    announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  ) {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, deletedAt: null },
+      where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
     if (comment.authorId !== userId) throw new Error('FORBIDDEN');
 
-    await this.prisma.postComment.update({
-      where: { id: commentId },
-      data: { deletedAt: new Date() },
+    // Soft-delete the WHOLE reply subtree, not just the target comment.
+    // `addComment` increments `post.commentCount` for EVERY comment — top-level
+    // AND reply (l.102) — so `commentCount` counts the full non-deleted thread.
+    // The relation is `onDelete: NoAction` (schema l.3102) and `PostComment`
+    // allows arbitrary-depth chains (any live comment can be a `parentId`), so a
+    // decrement of 1 would (a) leave surviving replies orphaned — `getComments`
+    // filters `parentId: null` and their now-deleted parent is never rendered, so
+    // `getReplies` is never called for them — and (b) permanently over-count
+    // `commentCount` by the number of surviving descendants. Collect the subtree
+    // breadth-first and remove it atomically-in-count.
+    const descendantIds: string[] = [];
+    let frontier = [commentId];
+    while (frontier.length > 0) {
+      const children = await this.prisma.postComment.findMany({
+        where: { parentId: { in: frontier }, deletedAt: NOT_DELETED },
+        select: { id: true },
+      });
+      if (children.length === 0) break;
+      const childIds = children.map((c) => c.id);
+      descendantIds.push(...childIds);
+      frontier = childIds;
+    }
+
+    // La liste est calculée UNE fois et sert partout : soft-delete, décompte,
+    // retrait des notifications, et — rendue à l'appelant — annonce Socket.IO.
+    // Une seconde dérivation dériverait : après le soft-delete, la reconstruire
+    // demanderait de relire des lignes que `NOT_DELETED` masque désormais.
+    const deletedCommentIds = [commentId, ...descendantIds];
+
+    const deletedAt = new Date();
+    await this.prisma.postComment.updateMany({
+      where: { id: { in: deletedCommentIds } },
+      data: { deletedAt },
     });
 
     await this.prisma.post.update({
       where: { id: comment.postId },
-      data: { commentCount: { decrement: 1 } },
+      data: { commentCount: { decrement: 1 + descendantIds.length } },
     });
 
+    // Only the direct parent's `replyCount` moves: it counts direct children, and
+    // exactly one direct child (this comment) disappears. Descendant reply counts
+    // are irrelevant once their rows are soft-deleted.
     if (comment.parentId) {
       await this.prisma.postComment.update({
         where: { id: comment.parentId },
@@ -207,51 +393,88 @@ export class PostCommentService {
       });
     }
 
-    return { success: true };
+    // Les notifications que le fil retiré a produites. Le soft-delete ne
+    // déclenche aucune cascade et le lien vit dans un blob JSON : sans ceci,
+    // l'extrait du commentaire supprimé reste affiché — et non lu — dans
+    // l'inbox de toute son audience, avec un `view_post` qui n'ouvre plus rien.
+    // Sur la MÊME liste d'ids que le soft-delete, pas sur la seule cible.
+    //
+    // Best-effort DÉLIBÉRÉ, comme les quatre effets du retrait de post : quand
+    // ceci s'exécute, `deletedAt` est déjà committé. Une inbox récalcitrante ne
+    // doit pas transformer une suppression réussie en 500.
+    try {
+      await retractCommentNotifications(this.prisma, deletedCommentIds, announcer);
+    } catch (err) {
+      log.warn('comment removal: notification retraction failed', { commentId, err });
+    }
+
+    // `deletedCommentIds` remonte pour que la route ANNONCE le fil entier. Sans
+    // elle, les descendants restaient affichés chez tout client qui les avait
+    // dépliés, et aucun refetch ne les enlevait : `getComments` filtre
+    // `parentId: null`, leur parent supprimé n'est plus rendu, donc `getReplies`
+    // n'est plus jamais appelé pour eux.
+    return { success: true as const, deletedCommentIds };
   }
 
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, deletedAt: null },
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: { id: true },
     });
     if (!comment) return null;
 
-    const summary = (comment.reactionSummary as Record<string, number> | null) ?? {};
-    summary[emoji] = (summary[emoji] ?? 0) + 1;
-
-    return this.prisma.postComment.update({
-      where: { id: commentId },
-      data: {
-        likeCount: { increment: 1 },
-        reactionSummary: summary as Prisma.InputJsonValue,
-      },
-      select: {
-        id: true,
-        postId: true,
-        authorId: true,
-        content: true,
-        likeCount: true,
-        reactionSummary: true,
-      },
+    // Source de vérité = table `CommentReaction` (comme le chemin socket).
+    // Invariant « max 1 réaction par user » (identique à `CommentReactionService`
+    // et au modèle canonique `ReactionService`) : la réaction REST REMPLACE toute
+    // autre réaction de ce user sur ce commentaire. Sans cette purge, un client
+    // envoyant successivement ❤️ puis 👍 via REST accumulerait 2 réactions
+    // distinctes, contournant l'invariant que le socket applique.
+    // On purge d'abord les autres emojis, puis on upsert l'emoji demandé —
+    // idempotent (❤️/❤️ inchangé), donc le REST reste un FALLBACK sûr du socket
+    // sans double-comptage même si socket + REST se déclenchent sur le même like.
+    await this.prisma.commentReaction.deleteMany({
+      where: { commentId, userId, emoji: { not: emoji } },
     });
+    await this.prisma.commentReaction.upsert({
+      where: { comment_user_reaction_unique: { commentId, userId, emoji } },
+      create: { commentId, userId, emoji },
+      update: {},
+    });
+    return this.syncCommentLikeCounters(commentId);
   }
 
   async unlikeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, deletedAt: null },
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: { id: true },
     });
     if (!comment) return null;
 
-    const summary = (comment.reactionSummary as Record<string, number> | null) ?? {};
-    if (summary[emoji]) {
-      summary[emoji] = Math.max(0, summary[emoji] - 1);
-      if (summary[emoji] === 0) delete summary[emoji];
-    }
+    await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji } });
+    return this.syncCommentLikeCounters(commentId);
+  }
 
+  /// Recalcule les compteurs dénormalisés du commentaire DEPUIS la table (source de
+  /// vérité) : `likeCount` = `reactionCount` = nombre total de réactions, et
+  /// `reactionSummary` = comptes par emoji. Identique au chemin socket (CS1) → REST
+  /// et socket restent parfaitement cohérents, ce qui autorise le REST comme fallback.
+  private async syncCommentLikeCounters(commentId: string) {
+    const grouped = await this.prisma.commentReaction.groupBy({
+      by: ['emoji'],
+      where: { commentId },
+      _count: { emoji: true },
+    });
+    const summary: Record<string, number> = {};
+    let total = 0;
+    for (const g of grouped) {
+      summary[g.emoji] = g._count.emoji;
+      total += g._count.emoji;
+    }
     return this.prisma.postComment.update({
       where: { id: commentId },
       data: {
-        likeCount: { decrement: 1 },
+        likeCount: total,
+        reactionCount: total,
         reactionSummary: summary as Prisma.InputJsonValue,
       },
       select: {

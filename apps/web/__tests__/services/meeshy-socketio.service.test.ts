@@ -216,12 +216,11 @@ describe('MeeshySocketIOService', () => {
   });
 
   describe('Connection status', () => {
-    it('should return connection status object', () => {
+    it('should return connection status string', () => {
       const status = meeshySocketIOService.getConnectionStatus();
 
-      expect(status).toHaveProperty('isConnected');
-      expect(status).toHaveProperty('hasSocket');
-      expect(typeof status.isConnected).toBe('boolean');
+      expect(typeof status).toBe('string');
+      expect(['connected', 'connecting', 'disconnected']).toContain(status);
     });
   });
 
@@ -264,7 +263,7 @@ describe('MeeshySocketIOService', () => {
 
       expect(diagnostics).toHaveProperty('isConnected');
       expect(diagnostics).toHaveProperty('hasSocket');
-      expect(diagnostics).toHaveProperty('hasToken');
+      expect(diagnostics).toHaveProperty('status');
     });
   });
 
@@ -276,7 +275,7 @@ describe('MeeshySocketIOService', () => {
     it('should reset connection status after cleanup', () => {
       meeshySocketIOService.cleanup();
       const status = meeshySocketIOService.getConnectionStatus();
-      expect(status.isConnected).toBe(false);
+      expect(status).toBe('disconnected');
     });
   });
 });

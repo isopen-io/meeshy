@@ -58,9 +58,10 @@ jest.mock('react-easy-crop', () => {
     onCropChange,
     onZoomChange,
     onCropComplete,
+    style,
   }: any) {
     return (
-      <div data-testid="cropper">
+      <div data-testid="cropper" data-container-bg={style?.containerStyle?.backgroundColor}>
         <span data-testid="cropper-image">{image}</span>
         <span data-testid="cropper-zoom">{zoom}</span>
         <span data-testid="cropper-rotation">{rotation}</span>
@@ -314,6 +315,14 @@ describe('ConversationImageUploadDialog', () => {
         expect(screen.getByTestId('cropper')).toBeInTheDocument();
       });
     };
+
+    it('uses a dark-mode-aware design token for the crop backdrop (no frozen hex)', async () => {
+      await setupCropper();
+
+      const bg = screen.getByTestId('cropper').getAttribute('data-container-bg');
+      expect(bg).toBe('var(--gp-background)');
+      expect(bg).not.toMatch(/#[0-9A-Fa-f]{3,8}/);
+    });
 
     it('should show zoom slider when image is loaded', async () => {
       await setupCropper();

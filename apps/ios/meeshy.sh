@@ -13,6 +13,17 @@ SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
 DERIVED_DATA="Build"
 
+# Apple Developer Team — required for device code-signing under automatic
+# provisioning (CODE_SIGN_STYLE=Automatic in project.yml). Without it,
+# xcodebuild fails: "Signing for 'Meeshy' requires a development team".
+# Mirrors fastlane's source of truth (Appfile/Matchfile default + Fastfile
+# xcargs DEVELOPMENT_TEAM=D72UK7R5RE) and honours the same FASTLANE_TEAM_ID
+# override. Simulator builds don't sign, so this is only consumed by `device`.
+# Pinned to D72UK7R5RE since 2026-07-28 — the header block in
+# fastlane/Appfile lists every site carrying this value.
+# `:-` (not `-`) so an empty FASTLANE_TEAM_ID falls back instead of signing blank.
+DEVELOPMENT_TEAM="${FASTLANE_TEAM_ID:-D72UK7R5RE}"
+
 # Xcode GUI SPM package cache — avoids re-cloning on slow networks
 # Auto-detected: finds the latest Meeshy DerivedData with SourcePackages
 XCODE_PKG_CACHE=""
@@ -59,6 +70,9 @@ CLEAN=false
 EXPORT_METHOD="app-store"
 UI_TESTS=false
 COVERAGE=false
+# Phase 0 du gate `test` : suite du package MeeshySDK. Exécutée par défaut —
+# `--skip-sdk` ne la saute que pour une itération rapide sur du code app.
+SKIP_SDK_TESTS=false
 LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
@@ -233,6 +247,94 @@ restore_entitlements() {
     ok "Entitlements restored"
 }
 
+# ─── Build number ────────────────────────────────────────────────────────────
+#
+# `CFBundleVersion` vaut `$(CURRENT_PROJECT_VERSION)` dans les 4 Info.plist, et
+# cette variable vit à DEUX endroits qui doivent rester d'accord :
+#   • project.yml                      → source de vérité XcodeGen
+#   • Meeshy.xcodeproj/project.pbxproj → ce que meeshy.sh compile réellement
+#     (ce script ne lance JAMAIS `xcodegen`, cf. apps/ios/CLAUDE.md)
+#
+# Le 2026-07-25 un `xcodegen generate` a réécrit le pbxproj depuis le
+# placeholder `"1"` de project.yml, et ce reset est parti dans un commit de
+# feature (85bb7e8d6, 1255 → 1). Depuis, toute app posée par `device` portait le
+# build **1**. La chaîne de publication ne l'a jamais vu : `ios-release.yml`
+# calcule son numéro avec `andp build-number --strategy max-build` et le passe
+# en build setting, et les lanes fastlane prennent `max(dépôt, TestFlight) + 1`
+# — le dépôt n'est jamais lu comme vérité. D'où une dérive muette de ~260.
+#
+# Le remède est un MÉCANISME, pas une valeur figée : on va chercher la vérité
+# chez Apple quand c'est possible. `andp build-number --strategy max-build
+# --json` renvoie `source.latest_asc`, le dernier build réellement présent sur
+# App Store Connect — exactement ce que le dépôt doit porter pour que la
+# prochaine publication soit un +1. Sans `andp`, sans credentials ou hors ligne,
+# on n'échoue JAMAIS le build : on garde la valeur committée et on le dit.
+
+# Numéro actuellement gravé dans le projet compilé.
+current_build_number() {
+    grep -m1 -o 'CURRENT_PROJECT_VERSION = [0-9][0-9]*' "$PROJECT/project.pbxproj" 2>/dev/null \
+        | grep -o '[0-9][0-9]*$' || true
+}
+
+# Dernier build présent sur App Store Connect, ou échec (code 1) si la vérité
+# n'est pas joignable. Aucune sortie sur stderr : l'appelant décide du message.
+fetch_latest_asc_build() {
+    command -v andp >/dev/null 2>&1 || return 1
+    local out
+    out=$(andp build-number "$BUNDLE_ID" --strategy max-build --json 2>/dev/null) || return 1
+    # Enveloppe ANDP : {"ok":true,…,"source":{"floor":0,"latest_asc":1263,…}}
+    # `build_number` est le PROCHAIN (latest+1) ; c'est `latest_asc` qu'on veut.
+    printf '%s' "$out" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || return 1
+    local latest
+    latest=$(printf '%s' "$out" \
+        | grep -o '"latest_asc"[[:space:]]*:[[:space:]]*[0-9][0-9]*' \
+        | grep -o '[0-9][0-9]*$' | head -n 1)
+    [ -n "$latest" ] || return 1
+    [ "$latest" -gt 0 ] 2>/dev/null || return 1
+    printf '%s' "$latest"
+}
+
+# Écrit le numéro dans les DEUX fichiers. Omettre project.yml rendrait le
+# correctif éphémère : le prochain `xcodegen generate` réécraserait le pbxproj
+# depuis le placeholder — c'est très exactement la panne d'origine.
+write_build_number() {
+    local value="$1"
+    sed -i '' -E "s/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*).*$/\1\"$value\"/" project.yml
+    sed -i '' -E "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*;/CURRENT_PROJECT_VERSION = $value;/g" \
+        "$PROJECT/project.pbxproj"
+}
+
+# Aligne le dépôt sur App Store Connect. Best-effort : ne fait jamais échouer
+# l'appelant.
+sync_build_number() {
+    local committed latest
+    committed=$(current_build_number)
+
+    if ! latest=$(fetch_latest_asc_build); then
+        if command -v andp >/dev/null 2>&1; then
+            warn "Build number : App Store Connect injoignable (credentials .andp/secrets.yml ou réseau) — build ${BOLD}${committed:-?}${NC} conservé"
+        else
+            warn "Build number : ${BOLD}andp${NC} introuvable — build ${BOLD}${committed:-?}${NC} conservé"
+        fi
+        # Le placeholder XcodeGen mérite un cri : c'est la panne de 2026-07-25,
+        # et sans réseau on ne peut pas la réparer tout seul.
+        if [ "${committed:-1}" = "1" ]; then
+            err "Build number = ${BOLD}1${NC} — c'est le placeholder XcodeGen, pas un vrai build."
+            err "  Corrigez : ./meeshy.sh build-number   (ou éditez CURRENT_PROJECT_VERSION dans project.yml ET le pbxproj)"
+        fi
+        return 0
+    fi
+
+    if [ "$committed" = "$latest" ]; then
+        ok "Build number ${BOLD}$latest${NC} — aligné sur le dernier build App Store Connect"
+        return 0
+    fi
+
+    write_build_number "$latest"
+    ok "Build number ${BOLD}${committed:-?}${NC} → ${BOLD}$latest${NC} (dernier build App Store Connect ; la prochaine publication sera $((latest + 1)))"
+    log "project.yml et $PROJECT/project.pbxproj mis à jour — pensez à committer ce bump"
+}
+
 do_device_deploy() {
     detect_physical_device
     do_device_deploy_only
@@ -245,9 +347,12 @@ do_device_deploy_only() {
     # building for device, and the device install ships an inconsistent .app.
     wait_for_existing_build
 
-    local dev_product="$APP_NAME"
-    [ "$CONFIGURATION" = "Debug" ] && dev_product="$APP_NAME Dev"
-    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$dev_product.app"
+    # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration
+    # (project.yml deliberately leaves PRODUCT_NAME unset), so the product is
+    # "Meeshy.app" for both Debug and Release. The legacy "Meeshy Dev" name came
+    # from Configuration/Debug.xcconfig — never wired into the generated project
+    # (no configFiles: key), so it had no effect; deleted 2026-07-28.
+    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
     local ncpu
@@ -276,6 +381,7 @@ do_device_deploy_only() {
         -skipMacroValidation \
         -jobs "$ncpu" \
         ONLY_ACTIVE_ARCH=YES \
+        DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
@@ -401,21 +507,24 @@ ensure_booted() {
 
 is_app_running() {
     if [ "$PLATFORM" = "mac" ]; then
-        pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1
+        pgrep -f "/Wrapper/$APP_NAME.app/$APP_NAME" >/dev/null 2>&1
     else
         xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID" 2>/dev/null
     fi
 }
 
 app_path() {
-    # Debug config produces "Meeshy Dev.app", Release produces "Meeshy.app"
-    local product_name="$APP_NAME"
-    [ "$CONFIGURATION" = "Debug" ] && product_name="$APP_NAME Dev"
-
+    # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration, so
+    # both Debug and Release produce "Meeshy.app". The old "Meeshy Dev.app"
+    # name lived in Configuration/Debug.xcconfig, which the generated project
+    # never referenced — file deleted 2026-07-28; see do_device_deploy_only.
     if [ "$PLATFORM" = "mac" ]; then
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-maccatalyst/$product_name.app"
+        # "Designed for iPad" (the only valid macOS slice — SUPPORTS_MACCATALYST=0
+        # by design) builds an iOS bundle under Debug-iphoneos, NOT a Mac Catalyst
+        # app under Debug-maccatalyst. See build_destination() for the rationale.
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     else
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$product_name.app"
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$APP_NAME.app"
     fi
 }
 
@@ -555,8 +664,11 @@ do_build() {
 
     local mac_flags=()
     if [ "$PLATFORM" = "mac" ]; then
+        # NB: no SUPPORTS_MACCATALYST=YES here — the project is SUPPORTS_MACCATALYST=0
+        # by design (native calls are gated on isiOSAppOnMac), so the macOS build is
+        # an iOS "Designed for iPad" bundle. Forcing Catalyst would break that path
+        # and is a no-op against the Designed-for-iPad destination anyway.
         mac_flags=(
-            SUPPORTS_MACCATALYST=YES
             CODE_SIGN_IDENTITY=-
             CODE_SIGNING_REQUIRED=NO
             CODE_SIGNING_ALLOWED=NO
@@ -642,13 +754,15 @@ do_install() {
 
 do_launch() {
     if [ "$PLATFORM" = "mac" ]; then
-        # Kill existing instance
-        pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
-        sleep 0.5
-
-        log "Launching ${BOLD}$APP_NAME${NC} on macOS..."
-        open "$(app_path)"
-        ok "App launched"
+        # A "Designed for iPad" build is an iOS bundle (LSRequiresIPhoneOS=true)
+        # that macOS refuses to launch from the CLI ("incorrect executable
+        # format"). Mac Catalyst would be CLI-launchable but is off the table —
+        # the native call subsystem is gated on isiOSAppOnMac. So we build here
+        # and hand off to Xcode for the actual launch.
+        warn "macOS \"Designed for iPad\" bundles cannot be launched from the CLI."
+        log "Launch from Xcode: select ${BOLD}My Mac (Designed for iPad)${NC}, then press ${BOLD}⌘R${NC}."
+        log "Bundle: ${BOLD}$(app_path)${NC}"
+        log "Stream the running app's logs with: ${BOLD}./meeshy.sh logs --mac${NC}"
         return 0
     fi
 
@@ -700,7 +814,7 @@ start_crash_monitor() {
         while true; do
             sleep 5
             if [ "$PLATFORM" = "mac" ]; then
-                if ! pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1; then
+                if ! pgrep -f "/Wrapper/$APP_NAME.app/$APP_NAME" >/dev/null 2>&1; then
                     echo ""
                     err "App appears to have crashed or been terminated."
                     err "Check logs at: $LOGFILE"
@@ -811,14 +925,25 @@ do_release() {
         return 1
     fi
 
-    if ! command -v bundle >/dev/null 2>&1; then
-        err "Bundler missing. Install with: gem install bundler"
-        return 1
-    fi
-
-    if [ ! -f "Gemfile.lock" ]; then
+    # Prefer `bundle exec` for reproducibility (CI parity). Fall back to a
+    # globally installed fastlane when bundler can't resolve the locked gems on
+    # this machine — e.g. macOS system Ruby against a Gemfile.lock pinned for
+    # another platform (the global fastlane/cocoapods already match the lock).
+    # NB: `bundle check` is a false positive here (a binary gem present for the
+    # wrong arch satisfies it), so we probe the real `bundle exec` resolution.
+    local -a fastlane_runner
+    if command -v bundle >/dev/null 2>&1 && [ ! -f "Gemfile.lock" ]; then
         log "Bundle install (first-time setup)…"
         bundle install || return 1
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v bundle >/dev/null 2>&1 && bundle exec ruby -e 'exit 0' >/dev/null 2>&1; then
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v fastlane >/dev/null 2>&1; then
+        warn "Bundler can't resolve the locked gems here → using the global fastlane."
+        fastlane_runner=(fastlane)
+    else
+        err "No usable fastlane. Fix bundler (cd apps/ios && bundle install) or run: gem install fastlane"
+        return 1
     fi
 
     # Match needs MATCH_PASSWORD to decrypt the certificates Git repo. The password
@@ -855,10 +980,10 @@ do_release() {
     warn "This will : sync certificates · build Release IPA (~15 min) · upload to $lane_label"
     echo ""
 
-    ASC_KEY_FILEPATH="$key_file" \
-    ASC_KEY_ID="5542B6LVNL" \
-    ASC_ISSUER_ID="69a6de89-ae7a-47e3-e053-5b8c7c11a4d1" \
-        bundle exec fastlane "$lane" "${fastlane_args[@]}"
+    ASC_KEY_FILEPATH="${ASC_KEY_FILEPATH:-$key_file}" \
+    ASC_KEY_ID="${ASC_KEY_ID:-5542B6LVNL}" \
+    ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}" \
+        "${fastlane_runner[@]}" "$lane" "${fastlane_args[@]}"
     local rc=$?
 
     echo ""
@@ -874,6 +999,199 @@ do_release() {
         echo -e "  ${DIM} - Match certificate errors → ./meeshy.sh release with fresh keychain${NC}"
     fi
     return "$rc"
+}
+
+# ─── Release via ANDP (new tool) ─────────────────────────────────────────────
+# Uses ANDP (isopen-io/andp) for build number, upload/submit instead of fastlane.
+# Flow: build via fastlane build_for_andp (syncs certs, builds IPA, increments build number)
+#       then: andp release <ipa> [--group] (TestFlight) or andp release start --ship (App Store)
+# Flags: --testflight : upload to TestFlight (default)
+#        --appstore : submit to App Store
+#        --skip-tests : skip the unit-test pre-flight run.
+do_release_andp() {
+    local target="${RELEASE_TARGET:-testflight}"
+    local target_label="TestFlight"
+    [ "$target" = "appstore" ] && target_label="App Store"
+
+    local key_file="$(pwd)/fastlane/AuthKey_5542B6LVNL.p8"
+    if [ ! -f "$key_file" ]; then
+        err "ASC API Key missing: $key_file"
+        err "Drop the .p8 file there or rotate the key via App Store Connect → Users → Integrations → App Store Connect API"
+        return 1
+    fi
+
+    # Setup fastlane runner for build phase
+    local -a fastlane_runner
+    if command -v bundle >/dev/null 2>&1 && [ ! -f "Gemfile.lock" ]; then
+        log "Bundle install (first-time setup)…"
+        bundle install || return 1
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v bundle >/dev/null 2>&1 && bundle exec ruby -e 'exit 0' >/dev/null 2>&1; then
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v fastlane >/dev/null 2>&1; then
+        warn "Bundler can't resolve the locked gems here → using the global fastlane."
+        fastlane_runner=(fastlane)
+    else
+        err "No usable fastlane. Fix bundler (cd apps/ios && bundle install) or run: gem install fastlane"
+        return 1
+    fi
+
+    # MATCH_PASSWORD for fastlane match
+    if [ -z "${MATCH_PASSWORD:-}" ] && [ -f ".env" ]; then
+        set -a; source .env; set +a
+    fi
+    if [ -z "${MATCH_PASSWORD:-}" ] && ! security find-generic-password -l "fastlane-match" >/dev/null 2>&1; then
+        err "MATCH_PASSWORD is unset and the keychain has no 'fastlane-match' entry."
+        echo ""
+        echo -e "  ${DIM}fastlane match needs the password chosen at 'fastlane match init' time.${NC}"
+        echo -e "  ${DIM}Options :${NC}"
+        echo -e "  ${DIM}  1. Pass inline      :${NC} MATCH_PASSWORD=xxx ./meeshy.sh release --andp"
+        echo -e "  ${DIM}  2. Store in .env    :${NC} echo 'MATCH_PASSWORD=xxx' >> apps/ios/.env"
+        echo -e "  ${DIM}  3. Save to keychain :${NC} cd apps/ios && bundle exec fastlane match appstore --readonly"
+        return 1
+    fi
+
+    # Check ANDP is installed
+    if ! command -v andp >/dev/null 2>&1 && ! python3 -m andp --version >/dev/null 2>&1; then
+        err "ANDP not installed. Run: pip install andp"
+        return 1
+    fi
+    local andp_cmd="python3 -m andp"
+    command -v andp >/dev/null 2>&1 && andp_cmd="andp"
+
+    log "Release → $target_label via ANDP (build via fastlane build_for_andp)"
+    log "ASC API Key : $(basename "$key_file") (key_id: 5542B6LVNL)"
+    [ -n "${MATCH_PASSWORD:-}" ] && log "MATCH_PASSWORD : sourced (env or .env)"
+
+    local fastlane_args=()
+    [ "${SKIP_TESTS:-}" = "true" ] && fastlane_args+=("skip_tests:true")
+    [ -n "${RELEASE_VERSION:-}" ] && fastlane_args+=("version:${RELEASE_VERSION}")
+
+    echo ""
+    warn "This will : sync certificates · build Release IPA (~15 min) · hand off to ANDP for $target_label upload"
+    echo ""
+
+    # Phase 1: Build IPA via fastlane (no upload yet)
+    ASC_KEY_FILEPATH="${ASC_KEY_FILEPATH:-$key_file}" \
+    ASC_KEY_ID="${ASC_KEY_ID:-5542B6LVNL}" \
+    ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}" \
+        "${fastlane_runner[@]}" build_for_andp "${fastlane_args[@]}"
+    local rc=$?
+
+    if [ "$rc" -ne 0 ]; then
+        err "Build via fastlane FAILED (exit $rc)"
+        return "$rc"
+    fi
+    ok "IPA built successfully at build/Meeshy.ipa"
+
+    # Phase 2: Upload/submit via ANDP
+    local ipa_path="build/Meeshy.ipa"
+    if [ ! -f "$ipa_path" ]; then
+        err "IPA not found at $ipa_path"
+        return 1
+    fi
+
+    # Write ANDP secrets file.
+    # MUST be .andp/secrets.yml. ANDP resolve la cascade
+    # $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ (andp/paths.py::_candidates) et
+    # `misplaced_secrets()` ERREUR EXPRÈS quand un secrets.yml traîne à la
+    # racine — pour qu'un fichier au mauvais endroit ne fasse pas basculer un
+    # run en DRY-RUN silencieux.
+    # Historique 2026-07-28 : l'inverse était vrai le matin (ANDP ne lisait que
+    # ./secrets.yml) ; la mise à jour d'ANDP du soir a retourné la règle. Un
+    # ./secrets.yml résiduel fait désormais échouer le run avec
+    # `config_misplaced` — d'où le rm ci-dessous.
+    # .andp/ porte aussi les fichiers d'état de release (artefact andp-state).
+    # Les deux chemins sont gitignorés — ce fichier embarque la clé privée .p8.
+    rm -f secrets.yml
+    mkdir -p .andp
+    {
+        echo "accounts:"
+        echo "  primary:"
+        echo "    asc_api:"
+        echo "      key_id: \"${ASC_KEY_ID:-5542B6LVNL}\""
+        echo "      issuer_id: \"${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}\""
+        echo "      key_content: |"
+        sed 's/^/        /' "$key_file"
+    } > .andp/secrets.yml
+    chmod 600 .andp/secrets.yml
+
+    # Write compliance policy
+    {
+        echo "compliance:"
+        echo "  uses_non_exempt_encryption: false"
+    } > andp.yml
+
+    log "Uploading to $target_label via ANDP…"
+
+    if [ "$target" = "testflight" ]; then
+        $andp_cmd release "$ipa_path"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            ok "Release to TestFlight SUCCEEDED"
+        else
+            err "Release to TestFlight FAILED (exit $rc)"
+        fi
+    else
+        # App Store submit — waits at approval gate
+        log "Starting App Store submission (will wait at approval gate)…"
+        $andp_cmd release start "$ipa_path" --ship --json | jq .
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            ok "Build advanced to App Store approval gate — waiting for environment approval"
+        else
+            err "App Store submission FAILED (exit $rc)"
+        fi
+    fi
+
+    return "$rc"
+}
+
+# ─── Signature des frameworks embarqués (ITMS-90035) ─────────────────────────
+# À l'action `archive`, la signature automatique signe les XCFrameworks binaires
+# embarqués (FirebaseAnalytics, GoogleAppMeasurement, GoogleAdsOnDeviceConversion,
+# GoogleAppMeasurementIdentitySupport, WebRTC) avec l'identité de DÉVELOPPEMENT.
+# `-exportArchive` les re-signe ensuite en Distribution, mais ce « replacing
+# existing signature » laisse des métadonnées résiduelles que l'analyseur d'App
+# Store Connect rejette : ITMS-90035 « Invalid Signature — Code failed to satisfy
+# specified code requirement(s) ».
+#
+# Le strip DOIT donc courir entre l'archive et l'export, sur TOUS les chemins.
+# `meeshy.sh` ne l'appelait sur aucun des deux siens : `archive` et `distribute`
+# produisaient des IPA rejetés à l'upload, alors que le build lui-même passait.
+strip_embedded_signatures() {
+    local archive_path="$1"
+    local strip_script="./ci_scripts/ci_post_xcodebuild.sh"
+
+    if [ ! -x "$strip_script" ]; then
+        err "Strip script introuvable ou non exécutable: $strip_script"
+        err "Sans lui, l'IPA sera rejeté par App Store Connect (ITMS-90035)."
+        exit 1
+    fi
+
+    log "Stripping embedded framework signatures (ITMS-90035 guard)..."
+    CI_XCODEBUILD_ACTION=archive CI_ARCHIVE_PATH="$archive_path" "$strip_script"
+    ok "Embedded framework signatures stripped"
+}
+
+# Vérifie l'IPA/app EXPORTÉ : chaque framework embarqué doit porter une signature
+# de distribution valide. C'est le seul contrôle qui juge le produit livré plutôt
+# que le câblage du pipeline — un strip oublié y devient rouge localement au lieu
+# de revenir par courriel d'Apple deux jours plus tard.
+verify_embedded_signatures() {
+    local bundle_path="$1"
+    local verify_script="./ci_scripts/verify_embedded_signatures.sh"
+
+    if [ ! -x "$verify_script" ]; then
+        err "Verification script introuvable ou non exécutable: $verify_script"
+        exit 1
+    fi
+
+    log "Verifying embedded framework signatures..."
+    if ! "$verify_script" "$bundle_path"; then
+        err "Signature verification FAILED — ne pas uploader cet IPA."
+        exit 1
+    fi
 }
 
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
@@ -911,6 +1229,8 @@ do_archive() {
     fi
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # Export IPA
     log "Exporting IPA (method: $EXPORT_METHOD)..."
     local export_opts="$DERIVED_DATA/$archive_config/ExportOptions.plist"
@@ -942,6 +1262,8 @@ EOXML
         err "IPA export failed"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
@@ -1070,6 +1392,8 @@ do_distribute() {
     rm -f "$archive_log"
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # ── Export IPA ──
     log "Exporting IPA (method: $dist_method)..."
     local export_opts="$DERIVED_DATA/Distribution/ExportOptions.plist"
@@ -1113,6 +1437,8 @@ EOXML
         exit 1
     fi
 
+    verify_embedded_signatures "$ipa_file"
+
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
 
@@ -1136,28 +1462,196 @@ EOXML
 }
 
 # ─── Tests ───────────────────────────────────────────────────────────────────
+# Exécution PHASÉE (2026-07-04) : le run se termine toujours par la connexion
+# réelle au compte de test pour laisser l'app du simulateur dans un état
+# connecté (MeeshyTests est hébergé dans Meeshy.app → la session Keychain
+# écrite par la phase 3 survit au run).
+#   Phase 1 — suites isolées (infra, appels/WebRTC, médias, mocks purs)
+#   Phase 2 — connexion & manipulation de contenu : auth/session, stories,
+#             posts/feed/reels, traduction, brouillons locaux, UI/UX produit.
+#             Contient notamment AuthServiceTests (vrais logout() sur
+#             AuthManager.shared) — d'où son passage AVANT la phase 3.
+#   Phase 3 — ZZEndStateConnectedSessionTests : login réel avec les creds de
+#             test (fastlane/.env → TEST_RUNNER_DEMO_*), jamais de logout.
+# La répartition 1/2 est dérivée dynamiquement des noms de classes : toute
+# nouvelle suite matchant FINAL_PHASE_CLASS_PATTERN rejoint la phase 2.
+END_STATE_SUITE="ZZEndStateConnectedSessionTests"
+# Connexion/session : Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous
+# Contenu produit   : Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search
+# Traduction        : Language|Translat|Compose|Mention
+# Brouillons locaux : Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline
+# UI/UX/navigation  : Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile
+# État persistant hors-catégorie (wipes UserDefaults réels, cf. classification 2026-07-04) : CallQualitySummary|VoIPPush
+FINAL_PHASE_CLASS_PATTERN='Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous|Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search|Language|Translat|Compose|Mention|Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline|Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile|CallQualitySummary|VoIPPush'
+# Jamais exécutées dans les phases 1/2 : perf (opt-in),
+# et la suite d'état final (réservée à la phase 3). (BubbleExpandableTextUITests,
+# the never-compiled XCUITest suite this list used to defend against, was
+# deleted 2026-07-21 — dead code with no UI-testing target to host it; its
+# stale project.yml exclude-list entry is left for the i18n lane, which owns
+# that file, to clear on its next pass.)
+NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests"
+
+discover_test_classes() {
+    grep -rhoE "class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[[:space:]]*XCTestCase" MeeshyTests --include="*.swift" \
+        | sed -E 's/.*class[[:space:]]+([A-Za-z0-9_]+).*/\1/' \
+        | sort -u
+}
+
+# `discover_test_classes` lit les SOURCES, jamais le produit du build. Le projet
+# énumère ses fichiers explicitement (aucun PBXFileSystemSynchronizedRootGroup) :
+# un test créé sans être enregistré dans project.pbxproj entre quand même dans le
+# manifeste `-only-testing` alors qu'il n'est PAS compilé. xcodebuild ne dit rien
+# d'une classe sélectionnée qui n'existe pas, et le gate reste VERT avec des
+# tests morts (2026-08-11 : MessageMoreJumpsToViewsGuardTests, deux commits,
+# 0 symbole dans le bundle, 3 gardes promises jamais exécutées).
+#
+# Seule la présence du SYMBOLE dans MeeshyTests.xctest fait foi — on la vérifie
+# ici, après le build, et un orphelin rend le gate ROUGE. Remède côté dépôt :
+# `(cd apps/ios && xcodegen generate)`, puis committer les 4 lignes ajoutées au
+# pbxproj (référence légitime d'un fichier neuf, pas du churn).
+verify_test_classes_are_compiled() {
+    local binary="$DERIVED_DATA/Products/Debug-iphonesimulator/$APP_NAME.app/PlugIns/MeeshyTests.xctest/MeeshyTests"
+    if [ ! -f "$binary" ]; then
+        warn "Bundle de tests introuvable ($binary) — garde d'orphelins sautée"
+        return 0
+    fi
+
+    local declared_file compiled_file orphans
+    declared_file=$(mktemp) && compiled_file=$(mktemp)
+    discover_test_classes > "$declared_file"
+    if [ ! -s "$declared_file" ]; then
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    nm -a "$binary" 2>/dev/null | grep -oF -f "$declared_file" | sort -u > "$compiled_file" || true
+    if [ ! -s "$compiled_file" ]; then
+        warn "Aucun symbole de classe de test lisible dans $binary — garde d'orphelins sautée"
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    orphans=$(grep -vxF -f "$compiled_file" "$declared_file" || true)
+    rm -f "$declared_file" "$compiled_file"
+    [ -z "$orphans" ] && return 0
+
+    err "Classes de test ABSENTES du bundle compilé (non enregistrées dans $PROJECT) :"
+    printf '  • %s\n' $orphans
+    err "Leurs tests ne s'exécutent jamais. Corriger : (cd apps/ios && xcodegen generate) puis committer l'ajout de référence."
+    return 1
+}
+
+xcpretty_or_cat() {
+    if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
+}
+
 do_test() {
     local destination="platform=iOS Simulator,id=$DEVICE_ID"
+    local coverage_flag
+    coverage_flag=$([ "$COVERAGE" = true ] && echo YES || echo NO)
+    local common_flags=(
+        -project "$PROJECT"
+        -scheme "$SCHEME"
+        -destination "$destination"
+        -configuration Debug
+        -derivedDataPath "$DERIVED_DATA"
+        "${XCODE_PKG_FLAGS[@]}"
+        -enableCodeCoverage "$coverage_flag"
+    )
 
     mkdir -p "$TEST_OUTPUT_DIR"
+    rm -rf "$TEST_OUTPUT_DIR"/phase0-sdk.xcresult \
+           "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
+           "$TEST_OUTPUT_DIR"/phase2-content.xcresult \
+           "$TEST_OUTPUT_DIR"/phase3-connected.xcresult \
+           "$TEST_OUTPUT_DIR"/unit-tests.xcresult
 
-    log "Running unit tests..."
-    xcodebuild test \
-        -project "$PROJECT" \
-        -scheme "$SCHEME" \
-        -destination "$destination" \
-        -configuration Debug \
-        -derivedDataPath "$DERIVED_DATA" \
-        "${XCODE_PKG_FLAGS[@]}" \
-        -enableCodeCoverage "$([ "$COVERAGE" = true ] && echo YES || echo NO)" \
-        -resultBundlePath "$TEST_OUTPUT_DIR/unit-tests.xcresult" \
+    # Phase 0 — suite du package MeeshySDK (MeeshySDKTests + MeeshyUITests du
+    # package, scheme MeeshySDK-Package). Sans elle, le gate n'exerçait QUE le
+    # bundle de l'app : un test rouge sous packages/MeeshySDK/Tests restait
+    # invisible en local et n'apparaissait qu'au push, dans sdk-tests.yml.
+    # Hôte xctest distinct de Meeshy.app : aucun effet sur l'état de session, donc
+    # elle tourne AVANT les trois phases de l'app. `--skip-sdk` la saute pour une
+    # itération rapide sur du code purement app.
+    local p0=0
+    if [ "$SKIP_SDK_TESTS" = true ]; then
+        warn "Phase 0 (package MeeshySDK) sautée (--skip-sdk)"
+    else
+        log "Phase 0 — suite du package MeeshySDK (scheme MeeshySDK-Package)..."
+        ( cd ../../packages/MeeshySDK && xcodebuild test \
+            -scheme MeeshySDK-Package \
+            -destination "$destination" \
+            -resultBundlePath "../../apps/ios/$TEST_OUTPUT_DIR/phase0-sdk.xcresult" \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 180 \
+            2>&1 | xcpretty_or_cat ) || p0=$?
+    fi
+
+    log "Building for testing..."
+    xcodebuild build-for-testing "${common_flags[@]}" \
+        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --color; else cat; fi
+
+    # Le manifeste des phases 1/2 sort des sources : on le confronte au bundle
+    # compilé AVANT de lui faire confiance (cf. verify_test_classes_are_compiled).
+    local porphan=0
+    verify_test_classes_are_compiled || porphan=$?
+
+    # Répartition dynamique des classes entre phase 1 (skip) et phase 2 (only)
+    local phase1_skip=() phase2_only=() cls
+    while IFS= read -r cls; do
+        [ -z "$cls" ] && continue
+        [[ " $NON_PHASE_SUITES $END_STATE_SUITE " == *" $cls "* ]] && continue
+        if [[ "$cls" =~ $FINAL_PHASE_CLASS_PATTERN ]]; then
+            phase1_skip+=( "-skip-testing:MeeshyTests/$cls" )
+            phase2_only+=( "-only-testing:MeeshyTests/$cls" )
+        fi
+    done < <(discover_test_classes)
+
+    local skip_always=()
+    for cls in $NON_PHASE_SUITES; do
+        skip_always+=( "-skip-testing:MeeshyTests/$cls" )
+    done
+
+    local p1=0 p2=0 p3=0
+
+    log "Phase 1/3 — suites isolées (infra, mocks purs)..."
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase1-isolated.xcresult" \
         -only-testing:MeeshyTests \
-        -skip-testing:MeeshyTests/MessageListPerformanceTests \
-        -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
-        -skip-testing:MeeshyTests/SearchPerformanceTests \
-        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
+        "${skip_always[@]}" \
+        -skip-testing:MeeshyTests/$END_STATE_SUITE \
+        "${phase1_skip[@]}" \
+        2>&1 | xcpretty_or_cat || p1=$?
 
-    ok "Unit tests completed"
+    log "Phase 2/3 — connexion & manipulation de contenu (${#phase2_only[@]} suites : auth, story, post, traduction, drafts, UI/UX)..."
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase2-content.xcresult" \
+        "${phase2_only[@]}" \
+        2>&1 | xcpretty_or_cat || p2=$?
+
+    # Phase 3 — connexion finale : les creds passent par l'environnement du
+    # runner (préfixe TEST_RUNNER_ → visible du process hôte Meeshy.app).
+    local demo_user="${DEMO_USER:-}" demo_password="${DEMO_PASSWORD:-}"
+    if [ -z "$demo_user" ] && [ -f fastlane/.env ]; then
+        demo_user=$(grep -m1 '^DEMO_USER=' fastlane/.env | cut -d= -f2-)
+        demo_password=$(grep -m1 '^DEMO_PASSWORD=' fastlane/.env | cut -d= -f2-)
+    fi
+    if [ -z "$demo_user" ] || [ -z "$demo_password" ]; then
+        warn "DEMO_USER/DEMO_PASSWORD introuvables (fastlane/.env) — phase 3 sautée côté test (XCTSkip), l'app restera déconnectée"
+    fi
+
+    log "Phase 3/3 — connexion finale au compte de test (laisse l'app connectée)..."
+    TEST_RUNNER_DEMO_USER="$demo_user" TEST_RUNNER_DEMO_PASSWORD="$demo_password" \
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase3-connected.xcresult" \
+        -only-testing:MeeshyTests/$END_STATE_SUITE \
+        2>&1 | xcpretty_or_cat || p3=$?
+
+    [ "$porphan" -eq 0 ] && ok "Garde d'orphelins : toutes les classes de test sont dans le bundle compilé" || err "Garde d'orphelins : des classes de test ne sont PAS compilées (détail ci-dessus)"
+    [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
+    [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
+    [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
+    [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
 
     if [ "$UI_TESTS" = true ]; then
         log "Running UI tests..."
@@ -1176,10 +1670,19 @@ do_test() {
 
     if [ "$COVERAGE" = true ]; then
         log "Generating coverage report..."
-        xcrun xccov view --report "$TEST_OUTPUT_DIR/unit-tests.xcresult" > "$TEST_OUTPUT_DIR/coverage.txt"
+        : > "$TEST_OUTPUT_DIR/coverage.txt"
+        local bundle
+        for bundle in phase1-isolated phase2-content phase3-connected; do
+            if [ -d "$TEST_OUTPUT_DIR/$bundle.xcresult" ]; then
+                echo "━━━ $bundle ━━━" >> "$TEST_OUTPUT_DIR/coverage.txt"
+                xcrun xccov view --report "$TEST_OUTPUT_DIR/$bundle.xcresult" >> "$TEST_OUTPUT_DIR/coverage.txt" 2>/dev/null || true
+            fi
+        done
         ok "Coverage report: $TEST_OUTPUT_DIR/coverage.txt"
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
+
+    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -1284,38 +1787,48 @@ usage() {
     echo -e "    ${GREEN}clean${NC}        Clean build artifacts ${DIM}(add --deep for global caches)${NC}"
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
     echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
-    echo -e "    ${GREEN}release${NC}      Upload to TestFlight via fastlane ${DIM}(--appstore for App Store submission)${NC}"
+    echo -e "    ${GREEN}release${NC}      Upload to TestFlight ${DIM}(--fastlane or --andp; fastlane default)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
-    echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
+    echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(SDK package suite + 3 app phases; --skip-sdk, --ui)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
+    echo -e "    ${GREEN}build-number${NC} Align CURRENT_PROJECT_VERSION on the latest App Store Connect build ${DIM}(via andp)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Platform:${NC}"
     echo -e "    ${YELLOW}--iphone${NC}                 iPhone simulator ${DIM}(default)${NC}"
     echo -e "    ${YELLOW}--ipad${NC}                   iPad simulator"
-    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Mac Catalyst)"
+    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Designed for iPad — build only, launch via Xcode)"
     echo ""
     echo -e "  ${BOLD}Flags:${NC}"
     echo -e "    ${YELLOW}--clean, -C${NC}              Clean before building"
     echo -e "    ${YELLOW}--release, -r${NC}            Release configuration"
     echo -e "    ${YELLOW}--configuration, -c${NC} <v>  Explicit config (Debug/Release/Staging)"
     echo -e "    ${YELLOW}--method, -m${NC} <v>         Export method (app-store/ad-hoc/development)"
+    echo -e "    ${YELLOW}--fastlane${NC}               Use fastlane for release (default)"
+    echo -e "    ${YELLOW}--andp${NC}                   Use ANDP for release (new tool)"
+    echo -e "    ${YELLOW}--testflight${NC}             Upload to TestFlight (default)"
+    echo -e "    ${YELLOW}--appstore${NC}               Submit to App Store"
+    echo -e "    ${YELLOW}--skip-tests${NC}             Skip unit tests before release"
     echo -e "    ${YELLOW}--ui${NC}                     Include UI tests"
+    echo -e "    ${YELLOW}--skip-sdk${NC}               Skip phase 0 (MeeshySDK package suite)"
     echo -e "    ${YELLOW}--coverage${NC}               Generate coverage report"
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
     echo ""
     echo -e "  ${BOLD}Examples:${NC}"
     echo -e "    ${DIM}./meeshy.sh${NC}                          ${DIM}# Build + run iPhone sim + logs${NC}"
     echo -e "    ${DIM}./meeshy.sh run --ipad${NC}               ${DIM}# Build + run iPad sim + logs${NC}"
-    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build + run as macOS app${NC}"
+    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build macOS app (then launch via Xcode ⌘R)${NC}"
     echo -e "    ${DIM}./meeshy.sh run --clean${NC}              ${DIM}# Clean build + run${NC}"
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
     echo -e "    ${DIM}./meeshy.sh release-check${NC}            ${DIM}# Mirror Xcode Cloud Release build (no signing)${NC}"
-    echo -e "    ${DIM}./meeshy.sh release${NC}                  ${DIM}# Upload Release to TestFlight via fastlane${NC}"
-    echo -e "    ${DIM}./meeshy.sh release --appstore${NC}       ${DIM}# Submit to App Store via fastlane${NC}"
+    echo -e "    ${DIM}./meeshy.sh release${NC}                  ${DIM}# Upload Release to TestFlight via fastlane (default)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --fastlane${NC}       ${DIM}# TestFlight via fastlane (explicit)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --andp${NC}           ${DIM}# TestFlight via ANDP (new tool)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --appstore${NC}       ${DIM}# Submit to App Store${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --andp --appstore${NC} ${DIM}# App Store submission via ANDP${NC}"
     echo -e "    ${DIM}./meeshy.sh release --skip-tests${NC}     ${DIM}# TestFlight upload without pre-flight tests${NC}"
     echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
@@ -1330,7 +1843,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|build-number|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -1350,12 +1863,15 @@ while [[ $# -gt 0 ]]; do
         --release|-r)     CONFIGURATION="Release"; shift ;;
         --testflight)     RELEASE_TARGET="testflight"; shift ;;
         --appstore)       RELEASE_TARGET="appstore"; shift ;;
+        --fastlane)       RELEASE_TOOL="fastlane"; shift ;;
+        --andp)           RELEASE_TOOL="andp"; shift ;;
         --skip-tests)     SKIP_TESTS=true; shift ;;
         --changelog)      RELEASE_CHANGELOG="$2"; shift 2 ;;
         --version)        RELEASE_VERSION="$2"; shift 2 ;;
         -c|--configuration) CONFIGURATION="$2"; shift 2 ;;
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
+        --skip-sdk)       SKIP_SDK_TESTS=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
         --iphone)         PLATFORM="iphone"; shift ;;
@@ -1388,7 +1904,12 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        if [ -t 1 ]; then
+        if [ "$PLATFORM" = "mac" ]; then
+            # Nothing was CLI-launched (see do_launch) — don't monitor a process
+            # that isn't running. Logs become available once the app is launched
+            # from Xcode: ./meeshy.sh logs --mac
+            ok "Build ready. Launch via Xcode (⌘R on \"My Mac (Designed for iPad)\")."
+        elif [ -t 1 ]; then
             # Interactive terminal — stream logs until Ctrl+C
             start_log_stream
             start_crash_monitor
@@ -1409,7 +1930,7 @@ case "$COMMAND" in
         detect_simulator
         log "Stopping $APP_NAME..."
         if [ "$PLATFORM" = "mac" ]; then
-            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+            pkill -f "/Wrapper/$APP_NAME.app/$APP_NAME" 2>/dev/null || true
         else
             xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
         fi
@@ -1421,7 +1942,7 @@ case "$COMMAND" in
         ensure_booted
         log "Stopping $APP_NAME..."
         if [ "$PLATFORM" = "mac" ]; then
-            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+            pkill -f "/Wrapper/$APP_NAME.app/$APP_NAME" 2>/dev/null || true
         else
             xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
         fi
@@ -1430,7 +1951,9 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        if [ -t 1 ]; then
+        if [ "$PLATFORM" = "mac" ]; then
+            ok "Build ready. Launch via Xcode (⌘R on \"My Mac (Designed for iPad)\")."
+        elif [ -t 1 ]; then
             start_log_stream
             start_crash_monitor
             wait "$LOG_STREAM_PID" 2>/dev/null || true
@@ -1469,7 +1992,11 @@ case "$COMMAND" in
         ;;
 
     release)
-        do_release
+        if [ "${RELEASE_TOOL:-fastlane}" = "andp" ]; then
+            do_release_andp
+        else
+            do_release
+        fi
         ;;
 
     distribute)
@@ -1490,10 +2017,21 @@ case "$COMMAND" in
         do_screenshot "$1"
         ;;
 
+    build-number)
+        echo ""
+        echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+        echo ""
+        sync_build_number
+        echo ""
+        ;;
+
     device)
         echo ""
         echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
         echo ""
+        # Avant de compiler : l'app posée sur un appareil réel doit porter le
+        # numéro de build du dernier TestFlight, pas le placeholder XcodeGen.
+        sync_build_number
         pick_device
 
         if [ "$PICKED_DEVICE_TYPE" = "physical" ]; then

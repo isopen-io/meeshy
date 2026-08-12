@@ -218,6 +218,17 @@ describe('SharedEncryptionService', () => {
 
       expect(cryptoAdapter.generateEncryptionKey).toHaveBeenCalledTimes(2);
     });
+
+    it('should throw when conversation key exists but raw key data is missing', async () => {
+      await service.initialize('user-123');
+
+      // Seed a conversation key mapping pointing to a non-existent raw key
+      await keyStorage.storeConversationKey('conv-corrupt', 'orphan-key-id', 'server');
+
+      await expect(
+        service.encryptMessage('hello', 'conv-corrupt', 'server')
+      ).rejects.toThrow('Encryption key not found');
+    });
   });
 
   describe('decryptMessage', () => {
@@ -483,6 +494,259 @@ describe('SharedEncryptionService', () => {
       expect(status.isInitialized).toBe(true);
       expect(status.userId).toBe('user-123');
       expect(status.isAvailable).toBe(true);
+    });
+  });
+
+  describe('generateUserKeys (Signal Protocol path)', () => {
+    function makePreKeyBundle() {
+      return {
+        registrationId: 42,
+        deviceId: 1,
+        preKeyId: 1,
+        preKeyPublic: new Uint8Array([1, 2, 3]),
+        signedPreKeyId: 7,
+        signedPreKeyPublic: new Uint8Array([4, 5, 6]),
+        signedPreKeySignature: new Uint8Array([7, 8, 9]),
+        identityKey: new Uint8Array([10, 11, 12]),
+        kyberPreKeyId: null,
+        kyberPreKeyPublic: null,
+        kyberPreKeySignature: null,
+      };
+    }
+
+    it('should use Signal Protocol service to generate pre-key bundle', async () => {
+      const bundle = makePreKeyBundle();
+      const mockSignalService = {
+        generatePreKeyBundle: vi.fn().mockResolvedValue(bundle),
+        hasSession: vi.fn(),
+        encryptMessage: vi.fn(),
+        decryptMessage: vi.fn(),
+        processPreKeyBundle: vi.fn(),
+      };
+
+      const svc = new SharedEncryptionService({
+        cryptoAdapter,
+        keyStorage,
+        signalProtocolService: mockSignalService,
+      });
+      await svc.initialize('user-signal');
+
+      const result = await svc.generateUserKeys();
+
+      expect(mockSignalService.generatePreKeyBundle).toHaveBeenCalledTimes(1);
+      expect(keyStorage.storeUserKeys).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-signal',
+          registrationId: 42,
+          preKeyBundleVersion: 7,
+        })
+      );
+      expect(result).toMatchObject({ registrationId: 42, identityKey: expect.any(Uint8Array) });
+    });
+  });
+
+  describe('encryptMessage (e2ee Signal Protocol path)', () => {
+    function makeSignalMessage() {
+      return {
+        type: 2,
+        destinationRegistrationId: 99,
+        content: new Uint8Array([10, 20, 30, 40]),
+        messageVersion: 3,
+        counter: 0,
+        previousCounter: 0,
+      };
+    }
+
+    it('should encrypt with Signal Protocol when e2ee and session exists', async () => {
+      const mockSignalService = {
+        generatePreKeyBundle: vi.fn(),
+        hasSession: vi.fn().mockResolvedValue(true),
+        encryptMessage: vi.fn().mockResolvedValue(makeSignalMessage()),
+        decryptMessage: vi.fn(),
+        processPreKeyBundle: vi.fn(),
+      };
+
+      const svc = new SharedEncryptionService({
+        cryptoAdapter,
+        keyStorage,
+        signalProtocolService: mockSignalService,
+      });
+      await svc.initialize('user-a');
+
+      const payload = await svc.encryptMessage('Secret', 'conv-e2ee', 'e2ee', 'user-b');
+
+      expect(mockSignalService.hasSession).toHaveBeenCalled();
+      expect(mockSignalService.encryptMessage).toHaveBeenCalled();
+      expect(payload.metadata.mode).toBe('e2ee');
+      expect(payload.metadata.protocol).toBe('signal_v3');
+      expect(payload.metadata.keyId).toBe('user-b');
+      expect(payload.metadata.messageType).toBe(2);
+      expect(payload.metadata.registrationId).toBe(99);
+      expect(typeof payload.ciphertext).toBe('string');
+    });
+
+    it('should throw when e2ee session does not exist', async () => {
+      const mockSignalService = {
+        generatePreKeyBundle: vi.fn(),
+        hasSession: vi.fn().mockResolvedValue(false),
+        encryptMessage: vi.fn(),
+        decryptMessage: vi.fn(),
+        processPreKeyBundle: vi.fn(),
+      };
+
+      const svc = new SharedEncryptionService({
+        cryptoAdapter,
+        keyStorage,
+        signalProtocolService: mockSignalService,
+      });
+      await svc.initialize('user-a');
+
+      await expect(
+        svc.encryptMessage('Secret', 'conv-e2ee', 'e2ee', 'user-b')
+      ).rejects.toThrow('No Signal Protocol session with user-b');
+    });
+
+    it('should fall through to server-mode when e2ee has no signal service or recipientUserId', async () => {
+      await service.initialize('user-a');
+
+      const payload = await service.encryptMessage('Fallback', 'conv-fall', 'e2ee');
+
+      expect(payload.metadata.mode).toBe('e2ee');
+    });
+  });
+
+  describe('decryptMessage (e2ee Signal Protocol path)', () => {
+    it('should decrypt e2ee message using Signal Protocol', async () => {
+      const decryptedBytes = new TextEncoder().encode('hello from signal');
+      const mockSignalService = {
+        generatePreKeyBundle: vi.fn(),
+        hasSession: vi.fn(),
+        encryptMessage: vi.fn(),
+        decryptMessage: vi.fn().mockResolvedValue(decryptedBytes),
+        processPreKeyBundle: vi.fn(),
+      };
+
+      const svc = new SharedEncryptionService({
+        cryptoAdapter,
+        keyStorage,
+        signalProtocolService: mockSignalService,
+      });
+      await svc.initialize('recipient');
+
+      const payload = {
+        ciphertext: Buffer.from(new Uint8Array([1, 2, 3, 4])).toString('base64'),
+        metadata: {
+          mode: 'e2ee' as EncryptionMode,
+          protocol: 'signal_v3' as const,
+          keyId: 'sender-id',
+          iv: '',
+          authTag: '',
+          messageType: 2,
+          registrationId: 42,
+        },
+      };
+
+      const result = await svc.decryptMessage(payload, 'sender-id');
+
+      expect(mockSignalService.decryptMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ name: expect.any(Function) }),
+        expect.objectContaining({
+          type: 2,
+          destinationRegistrationId: 42,
+          messageVersion: 3,
+        })
+      );
+      expect(result).toBe('hello from signal');
+    });
+  });
+
+  describe('establishE2EESession', () => {
+    it('should throw if not initialized', async () => {
+      await expect(
+        service.establishE2EESession('conv-1', 'recipient-456')
+      ).rejects.toThrow('Encryption service not initialized');
+    });
+
+    it('should use Signal Protocol processPreKeyBundle when service and bundle provided', async () => {
+      const mockPreKeyBundle = {
+        registrationId: 10,
+        deviceId: 1,
+        preKeyId: 1,
+        preKeyPublic: new Uint8Array([1, 2]),
+        signedPreKeyId: 2,
+        signedPreKeyPublic: new Uint8Array([3, 4]),
+        signedPreKeySignature: new Uint8Array([5, 6]),
+        identityKey: new Uint8Array([7, 8]),
+        kyberPreKeyId: null,
+        kyberPreKeyPublic: null,
+        kyberPreKeySignature: null,
+      };
+      const mockSignalService = {
+        generatePreKeyBundle: vi.fn(),
+        hasSession: vi.fn(),
+        encryptMessage: vi.fn(),
+        decryptMessage: vi.fn(),
+        processPreKeyBundle: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const svc = new SharedEncryptionService({
+        cryptoAdapter,
+        keyStorage,
+        signalProtocolService: mockSignalService,
+      });
+      await svc.initialize('user-a');
+
+      const result = await svc.establishE2EESession('conv-e2ee', 'user-b', mockPreKeyBundle);
+
+      expect(mockSignalService.processPreKeyBundle).toHaveBeenCalledWith(
+        expect.objectContaining({ name: expect.any(Function) }),
+        mockPreKeyBundle
+      );
+      expect(keyStorage.storeConversationKey).toHaveBeenCalledWith('conv-e2ee', 'user-b', 'e2ee');
+      expect(result).toBe('user-b');
+    });
+
+    it('should throw when own keys not found (no Signal service fallback)', async () => {
+      await service.initialize('user-no-keys');
+
+      await expect(
+        service.establishE2EESession('conv-1', 'recipient-456')
+      ).rejects.toThrow('User has no encryption keys');
+    });
+
+    it('should throw when recipient keys not found', async () => {
+      await service.initialize('user-has-keys');
+      await service.generateUserKeys();
+
+      await expect(
+        service.establishE2EESession('conv-1', 'recipient-no-keys')
+      ).rejects.toThrow('Recipient has no encryption keys');
+    });
+
+    it('should perform ECDH key agreement when both keys present (no Signal service)', async () => {
+      await service.initialize('user-x');
+      await service.generateUserKeys();
+
+      await keyStorage.storeUserKeys({
+        userId: 'recipient-y',
+        publicKey: 'cmVjaXBpZW50LXB1YmxpYy1rZXk=',
+        privateKey: '',
+        registrationId: 5,
+        identityKey: 'cmVjaXBpZW50LWlkLWtleQ==',
+        preKeyBundleVersion: 1,
+        createdAt: Date.now(),
+      });
+
+      const result = await service.establishE2EESession('conv-ecdh', 'recipient-y');
+
+      expect(cryptoAdapter.deriveSharedSecret).toHaveBeenCalled();
+      expect(keyStorage.storeConversationKey).toHaveBeenCalledWith(
+        'conv-ecdh',
+        expect.any(String),
+        'e2ee'
+      );
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(0);
     });
   });
 });

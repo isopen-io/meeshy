@@ -7,7 +7,7 @@ import "../styles/z-index-fix.css";
 import "../styles/custom-toast.css";
 import { Toaster } from "@/components/ui/sonner";
 import { StoreInitializer } from "@/stores";
-import { ThemeProvider, QueryProvider, PresenceProvider } from "@/components/providers";
+import { ThemeProvider, QueryProvider, PresenceProvider, MotionProvider } from "@/components/providers";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
@@ -15,6 +15,7 @@ import { getAllFontVariables } from "@/lib/fonts";
 import { CriticalPreloader } from "@/components/common/CriticalPreloader";
 import { CallManager } from "@/components/video-call";
 import { TabNotificationManager } from "@/components/common/TabNotificationManager";
+import { SessionRevocationHandler } from "@/components/common/SessionRevocationHandler";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
 import { ServiceWorkerInitializer } from "@/components/providers/ServiceWorkerInitializer";
@@ -97,20 +98,23 @@ export default async function RootLayout({
         <QueryProvider>
           <StoreInitializer>
             <ThemeProvider>
-              <MessageViewProvider>
-                <ErrorBoundary>
-                  <ClientOnly>
-                    <SystemStatusBanner />
-                    <PresenceProvider>
-                      <main id="main-content">
-                        {children}
-                      </main>
-                    </PresenceProvider>
-                    <CallManager />
-                    <TabNotificationManager />
-                  </ClientOnly>
-                </ErrorBoundary>
-              </MessageViewProvider>
+              <MotionProvider>
+                <MessageViewProvider>
+                  <ErrorBoundary>
+                    <ClientOnly>
+                      <SystemStatusBanner />
+                      <PresenceProvider>
+                        <main id="main-content">
+                          {children}
+                        </main>
+                      </PresenceProvider>
+                      <CallManager />
+                      <TabNotificationManager />
+                      <SessionRevocationHandler />
+                    </ClientOnly>
+                  </ErrorBoundary>
+                </MessageViewProvider>
+              </MotionProvider>
             </ThemeProvider>
           </StoreInitializer>
         </QueryProvider>

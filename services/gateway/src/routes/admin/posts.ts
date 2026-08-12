@@ -6,7 +6,9 @@ import { type UserRole } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { authorSelect, mediaSelect } from '../../services/posts/postIncludes';
+import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
+import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
+import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -96,6 +98,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const user = authContext.registeredUser;
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
+      /* istanbul ignore next -- all admin roles passing canAccessAdmin have canViewAnalytics or canModerateContent; guard unreachable */
       if (!permissions.canViewAnalytics && !permissions.canModerateContent) {
         return sendForbidden(reply, 'Permission insuffisante pour voir les statistiques des posts');
       }
@@ -117,13 +120,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       ] = await Promise.all([
         // Total posts (non-deleted)
         fastify.prisma.post.count({
-          where: { deletedAt: null, ...dateFilter }
+          where: { deletedAt: NOT_DELETED, ...dateFilter }
         }),
 
         // Count by type
         fastify.prisma.post.groupBy({
           by: ['type'],
-          where: { deletedAt: null, ...dateFilter },
+          where: { deletedAt: NOT_DELETED, ...dateFilter },
           _count: { id: true }
         }),
 
@@ -135,7 +138,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         // Top 10 authors by post count
         fastify.prisma.post.groupBy({
           by: ['authorId'],
-          where: { deletedAt: null, ...dateFilter },
+          where: { deletedAt: NOT_DELETED, ...dateFilter },
           _count: { id: true },
           orderBy: { _count: { id: 'desc' } },
           take: 10
@@ -143,7 +146,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
         // Top 10 trending posts by engagement (likes + comments + reposts)
         fastify.prisma.post.findMany({
-          where: { deletedAt: null, ...dateFilter },
+          where: { deletedAt: NOT_DELETED, ...dateFilter },
           select: {
             id: true,
             type: true,
@@ -214,7 +217,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           offset: { type: 'string', description: 'Pagination offset', default: '0' },
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
           search: { type: 'string', description: 'Search in post content' },
-          type: { type: 'string', enum: ['POST', 'STORY', 'STATUS'], description: 'Filter by post type' },
+          type: { type: 'string', enum: ['POST', 'REEL', 'STORY', 'STATUS'], description: 'Filter by post type' },
           visibility: { type: 'string', enum: ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'], description: 'Filter by visibility' },
           authorId: { type: 'string', description: 'Filter by author user ID' },
           period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' },
@@ -412,7 +415,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             orderBy: { order: 'asc' }
           },
           comments: {
-            where: { deletedAt: null },
+            where: { deletedAt: NOT_DELETED },
             select: {
               id: true,
               content: true,
@@ -529,9 +532,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const { postId } = request.params;
       const { reason } = request.body ?? {};
 
+      // `type` / `visibility` / `visibilityUserIds` ne servent pas au retrait
+      // lui-même mais à l'annoncer : ils choisissent l'événement et refiltrent
+      // l'audience (`broadcastPostRemoval`). Prisma `select` : ce qui n'est pas
+      // demandé ici n'existe pas plus bas.
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, deletedAt: true, authorId: true }
+        select: { id: true, deletedAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
       });
 
       if (!post) {
@@ -548,6 +555,31 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           deletedAt: new Date()
         }
       });
+
+      // Deuxième dette du même raccourci : écrire `deletedAt` sans passer par
+      // `PostService.deletePost`, c'est aussi n'annoncer le retrait à personne.
+      // Rien ne rejoue ces événements et aucun client ne refetch spontanément —
+      // sans ceci, un post retiré depuis la console restait affiché dans le fil
+      // de tous ses lecteurs, auteur compris.
+      //
+      // Émis AVANT les effets durables : `deletedAt` est déjà committé, donc le
+      // retrait est vrai, et cette diffusion ne s'attend pas (elle rend `void`).
+      // Derrière deux écritures best-effort, elle partait après leurs
+      // aller-retours base — de la latence pure sur le seul effet que quelqu'un
+      // regarde en temps réel.
+      broadcastPostRemoval(
+        fastify.socialEvents,
+        post,
+        (err) => fastify.log.warn({ err }, '[DELETE /admin/posts/:postId]: broadcast deletion failed')
+      );
+
+      // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`.
+      // Tout ce qu'un retrait doit écrire en base — ligne d'audit, coupure des
+      // liens de partage, libération des usages de sons — vit désormais dans
+      // `applyPostRemovalEffects`, partagé avec le service. Les trois effets
+      // ont été rattrapés ici un par un, à des cycles d'intervalle, parce que
+      // rien ne nommait la liste : il n'y a plus qu'un endroit à tenir.
+      await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason });
 
       fastify.log.info({
         action: 'admin_post_delete',

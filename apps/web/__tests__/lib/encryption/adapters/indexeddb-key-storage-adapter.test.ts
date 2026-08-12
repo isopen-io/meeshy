@@ -468,5 +468,60 @@ describe('IndexedDB Key Storage Adapter Module', () => {
 
       await expect(badAdapter.importKeys(invalidBackup, 'password')).rejects.toThrow();
     });
+
+    it('should handle database open failure during init', async () => {
+      const failingIDB = {
+        open: jest.fn(() => {
+          const request = {
+            onsuccess: null as any,
+            onerror: null as any,
+            onupgradeneeded: null as any,
+            result: null,
+            error: new Error('IndexedDB open failed'),
+          };
+          setTimeout(() => request.onerror?.(), 0);
+          return request;
+        }),
+      };
+
+      Object.defineProperty(global, 'indexedDB', { value: failingIDB, configurable: true });
+
+      try {
+        const failingAdapter = new IndexedDBKeyStorageAdapter();
+        await expect(failingAdapter.storeKey('key', 'data')).rejects.toThrow();
+      } finally {
+        Object.defineProperty(global, 'indexedDB', { value: mockIDB, configurable: true });
+      }
+    });
+  });
+
+  describe('importKeys with conversations and userKeys', () => {
+    it('imports non-empty conversations and userKeys arrays so they are readable after import', async () => {
+      await adapter.storeConversationKey('conv-import-1', 'key-import-1', 'e2ee');
+      await adapter.storeUserKeys({
+        userId: 'import-user-1',
+        publicKey: 'pub-key',
+        privateKey: 'priv-key',
+        registrationId: 42,
+        identityKey: 'id-key',
+        preKeyBundleVersion: 1,
+        createdAt: Date.now(),
+      });
+
+      const password = 'import-test-password';
+      const exported = await adapter.exportKeys(password);
+
+      const importAdapter = new IndexedDBKeyStorageAdapter();
+      await importAdapter.importKeys(exported, password);
+
+      const conv = await importAdapter.getConversationKey('conv-import-1');
+      expect(conv).not.toBeNull();
+      expect(conv?.keyId).toBe('key-import-1');
+      expect(conv?.mode).toBe('e2ee');
+
+      const userKeys = await importAdapter.getUserKeys('import-user-1');
+      expect(userKeys).not.toBeNull();
+      expect(userKeys?.publicKey).toBe('pub-key');
+    });
   });
 });

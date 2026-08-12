@@ -12,6 +12,9 @@ public struct CommunityDetailView: View {
     public var onOpenMembers: ((String) -> Void)? = nil
     public var onInvite: ((String) -> Void)? = nil
     public var onDismiss: (() -> Void)? = nil
+    /// Création d'un post de communauté, fournie par l'hôte. `nil` ⇒ l'état vide
+    /// du feed n'affiche AUCUN bouton (plutôt qu'un bouton inerte).
+    public var onCreatePost: (() -> Void)? = nil
 
     @State private var showLeaveConfirm = false
     @State private var showAddChannel = false
@@ -26,13 +29,15 @@ public struct CommunityDetailView: View {
                 onOpenSettings: ((MeeshyCommunity) -> Void)? = nil,
                 onOpenMembers: ((String) -> Void)? = nil,
                 onInvite: ((String) -> Void)? = nil,
-                onDismiss: (() -> Void)? = nil) {
+                onDismiss: (() -> Void)? = nil,
+                onCreatePost: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(communityId: communityId))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
         self.onInvite = onInvite
         self.onDismiss = onDismiss
+        self.onCreatePost = onCreatePost
     }
 
     public var body: some View {
@@ -41,7 +46,7 @@ public struct CommunityDetailView: View {
 
             if viewModel.isLoading && viewModel.community == nil {
                 ProgressView()
-                    .tint(Color(hex: "FF2E63"))
+                    .tint(MeeshyColors.brandPrimary)
             } else if let community = viewModel.community {
                 ScrollView {
                     VStack(spacing: 0) {
@@ -151,7 +156,7 @@ public struct CommunityDetailView: View {
                     dismiss()
                 }
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
@@ -335,7 +340,7 @@ public struct CommunityDetailView: View {
             HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.brandPrimary)
                 Text(value)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -373,7 +378,7 @@ public struct CommunityDetailView: View {
                         showSettings = true
                     }
                 } else if !viewModel.isMember {
-                    actionButton(icon: "arrow.right.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
+                    actionButton(icon: "arrow.forward.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
                         Task { await viewModel.joinCommunity() }
                     }
                 }
@@ -388,10 +393,10 @@ public struct CommunityDetailView: View {
                         Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communaute", bundle: .module))
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(hex: "FF2E63"))
+                    .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color(hex: "FF2E63").opacity(0.1))
+                    .background(MeeshyColors.error.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
@@ -405,7 +410,7 @@ public struct CommunityDetailView: View {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 18))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.brandPrimary)
                 Text(title)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.textSecondary)
@@ -451,14 +456,19 @@ public struct CommunityDetailView: View {
     private var postsSection: some View {
         // Placeholder for Community Posts / Stories
         VStack(spacing: 8) {
+            // Le libellé + l'action ne sont posés QUE si l'hôte sait créer un
+            // post de communauté. `EmptyStateView` masque son bouton quand
+            // `onAction` est nil : l'état vide reste informatif au lieu
+            // d'exposer un « Créer un post » dont l'action était un `// To do`
+            // vide — un bouton qui ne menait nulle part.
             EmptyStateView(
                 icon: "photo.on.rectangle.angled",
                 title: String(localized: "community.detail.posts.empty.title", defaultValue: "No Posts Yet", bundle: .module),
                 subtitle: String(localized: "community.detail.posts.empty.subtitle", defaultValue: "Community feed will appear here", bundle: .module),
-                actionLabel: String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
-                onAction: { 
-                    // To do: Show post creator
-                }
+                actionLabel: onCreatePost == nil
+                    ? nil
+                    : String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
+                onAction: onCreatePost
             )
             .frame(height: 200)
         }
@@ -469,9 +479,9 @@ public struct CommunityDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: "number")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: "A855F7"))
+                .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 36, height: 36)
-                .background(Color(hex: "A855F7").opacity(0.1))
+                .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -609,7 +619,7 @@ struct AddChannelSheet: View {
 
                 if isLoading && conversations.isEmpty {
                     ProgressView()
-                        .tint(Color(hex: "A855F7"))
+                        .tint(MeeshyColors.brandPrimary)
                 } else if filtered.isEmpty && !isLoading {
                     emptyState
                 } else {
@@ -677,7 +687,7 @@ struct AddChannelSheet: View {
                     Spacer()
                     if isLoadingMore {
                         ProgressView()
-                            .tint(Color(hex: "A855F7"))
+                            .tint(MeeshyColors.brandPrimary)
                     }
                     Spacer()
                 }
@@ -693,9 +703,9 @@ struct AddChannelSheet: View {
         HStack(spacing: 12) {
             Image(systemName: "number")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color(hex: "A855F7"))
+                .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 32, height: 32)
-                .background(Color(hex: "A855F7").opacity(0.1))
+                .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -723,15 +733,15 @@ struct AddChannelSheet: View {
 
             if isAdding == conversation.id {
                 ProgressView()
-                    .tint(Color(hex: "A855F7"))
+                    .tint(MeeshyColors.brandPrimary)
             } else if conversation.communityId != nil {
-                Image(systemName: "arrow.right.circle.fill")
+                Image(systemName: "arrow.forward.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(Color(hex: "F59E0B"))
             } else {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.brandPrimary)
             }
         }
         .padding(.vertical, 4)

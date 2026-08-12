@@ -149,4 +149,56 @@ describe('createOptimisticMessage', () => {
     expect(result._sendPayload).toBeDefined();
     expect(result.senderId).toBeDefined();
   });
+
+  it('should produce undefined sender when no sender is provided (positional API)', () => {
+    const result = createOptimisticMessage(
+      'No sender message',
+      'user-123',
+      'conv-456',
+      'en',
+      undefined,
+      undefined, // sender = undefined
+    );
+
+    expect(result.sender).toBeUndefined();
+    expect(result.senderId).toBe('user-123');
+  });
+
+  it('should produce undefined sender when options object omits sender', () => {
+    const result = createOptimisticMessage({
+      content: 'No sender opts',
+      senderId: 'user-123',
+      conversationId: 'conv-456',
+      language: 'en',
+      // sender not provided
+    });
+
+    expect(result.sender).toBeUndefined();
+  });
+
+  it('supports forwardedFromId and forwardedFromConversationId via options object', () => {
+    const result = createOptimisticMessage({
+      content: 'Forwarded',
+      senderId: 'user-123',
+      conversationId: 'conv-456',
+      language: 'en',
+      forwardedFromId: 'orig-msg-id',
+      forwardedFromConversationId: 'orig-conv-id',
+    });
+
+    expect(result.forwardedFromId).toBe('orig-msg-id');
+    expect(result.forwardedFromConversationId).toBe('orig-conv-id');
+  });
+
+  it('supports custom messageType via options object', () => {
+    const result = createOptimisticMessage({
+      content: '',
+      senderId: 'user-123',
+      conversationId: 'conv-456',
+      language: 'en',
+      messageType: 'image',
+    });
+
+    expect(result.messageType).toBe('image');
+  });
 });

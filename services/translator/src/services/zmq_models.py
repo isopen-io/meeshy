@@ -13,7 +13,7 @@ PERFORMANCE_MODULE_AVAILABLE = False
 try:
     from utils.performance import Priority
     PERFORMANCE_MODULE_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     pass
 
 

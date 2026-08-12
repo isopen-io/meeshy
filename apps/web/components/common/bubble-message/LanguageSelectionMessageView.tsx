@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useCallback, useMemo, useEffect } from 'react';
+import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   X,
@@ -26,6 +26,7 @@ import type { Message, BubbleTranslation, TranslationModel } from '@meeshy/share
 import { useI18n } from '@/hooks/useI18n';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
 interface LanguageSelectionMessageViewProps {
   message: Message & {
@@ -75,13 +76,40 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     if (message.translations && message.translations.length > 0) {
       // Pour chaque traduction disponible, retirer la langue de l'état "en cours"
       message.translations.forEach((translation: unknown) => {
-        const lang = translation.targetLanguage || translation.language;
-        if (lang && translatingLanguages.has(lang)) {
+        const lang = (translation as Record<string, unknown>).targetLanguage || (translation as Record<string, unknown>).language;
+        if (typeof lang === 'string' && translatingLanguages.has(lang)) {
           unmarkLanguageAsTranslating(lang);
         }
       });
     }
   }, [message.translations, translatingLanguages, unmarkLanguageAsTranslating]);
+
+  // Ref stable pour unmarkLanguageAsTranslating to avoid stale closure in subscription
+  const unmarkRef = useRef(unmarkLanguageAsTranslating);
+  useEffect(() => { unmarkRef.current = unmarkLanguageAsTranslating; }, [unmarkLanguageAsTranslating]);
+
+  // Clear spinner on server-side translation/transcription failures for this message
+  useEffect(() => {
+    const messageId = message.id;
+
+    const clearAll = () => setTranslatingLanguages(new Set());
+
+    const unsubTranslation = meeshySocketIOService.onTranslationFailed((data) => {
+      if (data.messageId === messageId) clearAll();
+    });
+    const unsubAudio = meeshySocketIOService.onAudioTranslationFailed((data) => {
+      if (data.messageId === messageId) clearAll();
+    });
+    const unsubTranscription = meeshySocketIOService.onTranscriptionFailed((data) => {
+      if (data.messageId === messageId) clearAll();
+    });
+
+    return () => {
+      unsubTranslation();
+      unsubAudio();
+      unsubTranscription();
+    };
+  }, [message.id]);
   
   // Utilitaires pour l'affichage des informations
   const getModelIcon = (model: string, size = "h-3 w-3") => {

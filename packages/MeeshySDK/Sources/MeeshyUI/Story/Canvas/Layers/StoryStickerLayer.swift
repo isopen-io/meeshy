@@ -9,7 +9,7 @@ import MeeshySDK
 /// `baseSize` is interpreted in design pixels (1080-référentiel) and projected
 /// through `CanvasGeometry.render(_:)` so stickers retain identical visual
 /// proportions across iPhone and iPad canvases.
-public final class StoryStickerLayer: CALayer, @unchecked Sendable {
+public final class StoryStickerLayer: CALayer {
     public private(set) nonisolated(unsafe) var sticker: StorySticker?
 
     public override nonisolated init() { super.init() }
@@ -23,11 +23,15 @@ public final class StoryStickerLayer: CALayer, @unchecked Sendable {
     @MainActor
     public func configure(with sticker: StorySticker,
                           geometry: CanvasGeometry,
-                          mode: RenderMode) {
+                          mode: RenderMode,
+                          renderScale: CGFloat = UIScreen.main.scale) {
         self.sticker = sticker
 
-        let designSize = CGFloat(sticker.baseSize * sticker.scale)
-        let renderedSide = geometry.render(designSize)
+        // Règle partagée avec le composite et l'export — voir
+        // `CanvasGeometry.stickerFontSize`, qui les faisait diverger.
+        let renderedSide = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
+                                                          scale: sticker.scale,
+                                                          canvasWidth: geometry.renderSize.width)
 
         if let cg = StoryStickerRasterizer.shared.cgImage(for: sticker.emoji,
                                                            size: renderedSide) {
@@ -37,17 +41,17 @@ public final class StoryStickerLayer: CALayer, @unchecked Sendable {
         bounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(sticker.x))
-        let designCenterY = CGFloat(sticker.y) * CanvasGeometry.designHeight
+        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(sticker.y))
         position = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
         anchorPoint = sticker.anchor
         transform = CATransform3DMakeRotation(CGFloat(sticker.rotation) * .pi / 180, 0, 0, 1)
         zPosition = CGFloat(sticker.zIndex)
-        contentsScale = UIScreen.main.scale
+        contentsScale = renderScale
         name = sticker.id
 
         // Stickers are pre-rasterized via StoryStickerRasterizer; in .play we
         // additionally flag the layer for the GPU rasterization fast path.
         shouldRasterize = mode == .play && sticker.isStatic
-        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
+        if shouldRasterize { rasterizationScale = renderScale }
     }
 }

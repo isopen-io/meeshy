@@ -59,7 +59,7 @@ public struct NotificationToastView: View {
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    if let subtitle = event.toastSubtitle {
+                    if let subtitle = NotificationToastManager.shared.resolvedToastSubtitle(for: event) {
                         Text(subtitle)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
@@ -76,7 +76,7 @@ public struct NotificationToastView: View {
 
                 Spacer(minLength: 4)
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }

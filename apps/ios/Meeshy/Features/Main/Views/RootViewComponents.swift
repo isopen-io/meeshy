@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 // MARK: - Extracted from RootView.swift
 
@@ -9,6 +10,8 @@ import MeeshyUI
 struct ThemedActionButton: View {
     let icon: String
     let color: String
+    let label: String
+    let hint: String
     var badge: Int = 0
     var size: CGFloat = 46
     let action: () -> Void
@@ -42,28 +45,32 @@ struct ThemedActionButton: View {
                     .frame(width: size, height: size)
                     .shadow(
                         color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
-                        radius: isGlowing ? 14 : 10,
+                        radius: isGlowing ? MeeshyShadow.strong.radius : MeeshyShadow.medium.radius,
                         y: 4
                     )
 
                 Image(systemName: icon)
-                    .font(.system(size: iconSize, weight: .semibold))
+                    .font(MeeshyFont.relative(iconSize, weight: .semibold))
                     .foregroundColor(.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
-                    Text("\(min(badge, 99))")
-                        .font(.system(size: 9, weight: .bold))
+                    Text(NotificationBadge.displayed(badge))
+                        .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                         .foregroundColor(Color(hex: color))
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(Color.white))
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
                         .pulse(intensity: 0.08)
                 }
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
         .onAppear {
             // Reduce Motion: keep the static base shadow, no breathing glow.
             guard !reduceMotion else { return }
@@ -85,21 +92,28 @@ struct ThemedFeedOverlay: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = FeedViewModel()
+    /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
+    /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
+    /// Identique au chemin iPad (`FeedView.feedScrollView`).
+    @StateObject private var reelAutoplay = ReelFeedAutoplayCoordinator()
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    /// Présentation unifiée du story viewer (`.fullScreenCover(item:)` au root).
+    /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
+    /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
+    @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    /// `true` quand le viewer est ouvert depuis l'avatar d'un auteur de post
-    /// (contexte « personne précise ») ; `false` depuis le tray (flux).
-    @State private var storyViewerSingleGroup = false
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
+    /// Negative scroll offset of the feed (0 at rest, more negative scrolling
+    /// up) — drives the collapsing header and the reveal of the compact story
+    /// trail integrated in the header's accessory slot. Mirrors `FeedView`.
+    @State private var headerScrollOffset: CGFloat = 0
 
     // Post reaction state — socket-driven, mirrors FeedView pattern.
     @State private var postLikedIds: Set<String> = []
@@ -200,7 +214,9 @@ struct ThemedFeedOverlay: View {
                             postBookmarkedIds.insert(p.id)
                         }
                     }
-                } catch { }
+                } catch {
+                    Logger.network.error("bookmarks refresh failed: \(error.localizedDescription)")
+                }
             }
             return
         }
@@ -266,14 +282,14 @@ struct ThemedFeedOverlay: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
             } else {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
                 }
                 FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
-                    : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
+                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
             }
         }
     }
@@ -332,6 +348,202 @@ struct ThemedFeedOverlay: View {
         }
     }
 
+    // MARK: - Feed header (mirror de « Meeshy Chats »)
+
+    /// Header épinglé en haut du feed, même traitement visuel que le header
+    /// « Meeshy Chats » (`ConversationListHeaderOverlay`) : titre dégradé indigo +
+    /// action glass à droite. Ici l'action lance la vue des Réels (`presentFresh`).
+    private var feedHeader: some View {
+        CollapsibleHeader(
+            title: "Meeshy Feed",
+            scrollOffset: headerScrollOffset,
+            showBackButton: false,
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.indigo500,
+            backgroundColor: theme.backgroundPrimary,
+            titleView: {
+                Text("Meeshy Feed")
+                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
+                    )
+                    // Même garde-fou que « Meeshy Chats » : rétrécir plutôt que
+                    // tronquer quand le volet (iPad) est étroit.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+            },
+            trailing: {
+                Button {
+                    HapticFeedback.medium()
+                    ReelsPresenter.shared.presentFresh()
+                } label: {
+                    Image(systemName: "play.rectangle.on.rectangle.fill")
+                        .font(MeeshyFont.relative(18, weight: .semibold))
+                        .foregroundColor(MeeshyColors.indigo500)
+                        .frame(width: 40, height: 40)
+                        .adaptiveGlass(in: Circle(), interactive: true)
+                }
+                .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+                .accessibilityIdentifier("feed.header.reels")
+            },
+            // Compact story trail integrated inside the header (accessory slot,
+            // below the title/actions bar) — reveals as the full Story Tray
+            // scrolls up under the header. Mirrors `FeedView` and the chats list.
+            accessory: {
+                AnyView(
+                    // Lancement unifié via StoryViewerCoordinator (chemin unique trail).
+                    PinnedStoryTrailBand(
+                        viewModel: storyViewModel,
+                        scrollOffset: headerScrollOffset
+                    )
+                )
+            }
+        )
+    }
+
+    // MARK: - Reel card (full-frame)
+
+    /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
+    /// la carte standard (toggle cœur/repartage/signet/partage) + le même bloc
+    /// d'ouverture viewer (`ReelsPresenter.present`). Le tap média fait d'abord le
+    /// handoff (clear + pause du moteur feed) avant de présenter. Identique au
+    /// chemin iPad (`FeedView.reelFeedCardView`).
+    private func reelFeedCardView(for post: FeedPost) -> some View {
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCardContainer(
+            coordinator: reelAutoplay,
+            post: post,
+            isDark: isDark,
+            isLiked: postLikedIds.contains(post.id),
+            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
+            isBookmarked: postBookmarkedIds.contains(post.id),
+            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
+            isReposted: postRepostedIds.contains(post.id),
+            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
+            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
+            onTapMedia: {
+                // Handoff : le viewer prend la session via son propre usage de
+                // SharedAVPlayerManager ; on stoppe d'abord la lecture muette du
+                // feed pour éviter un conflit de moteur.
+                reelAutoplay.clear()
+                SharedAVPlayerManager.shared.pause()
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                }
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
+            onTapGlyph: {
+                // Le logo Réel ouvre la page détail du poste (thread complet),
+                // distinct du tap média qui présente le viewer immersif.
+                router.push(.postDetail(post.id, post))
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
+            onLike: { _ in togglePostHeart(post: post) },
+            onComment: { _ in
+                // Les commentaires d'un réel vivent dans le viewer plein écran :
+                // même handoff que le tap média.
+                reelAutoplay.clear()
+                SharedAVPlayerManager.shared.pause()
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                }
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
+            onRepost: { postId in togglePostRepost(postId: postId) },
+            onBookmark: { postId in togglePostBookmark(postId: postId) },
+            onShare: { postId in sharePostWithLink(postId: postId) },
+            onTapAuthor: { authorId in
+                NotificationCenter.default.post(
+                    name: Notification.Name("openProfileSheet"),
+                    object: ["userId": authorId, "username": post.authorUsername ?? post.author]
+                )
+            },
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
+        )
+        // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
+        // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
+        // séparation nette des bords.
+        .padding(.horizontal, MeeshySpacing.md)
+    }
+
+    // MARK: - Standard post card
+
+    private func standardFeedPostCardView(for post: FeedPost) -> FeedPostCard {
+        FeedPostCard(
+            post: post,
+            isLiked: postLikedIds.contains(post.id),
+            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
+            isHeartInFlight: postHeartInFlightIds.contains(post.id),
+            isBookmarked: postBookmarkedIds.contains(post.id),
+            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
+            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
+            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
+            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
+            isReposted: postRepostedIds.contains(post.id),
+            isRepostInFlight: postRepostInFlightIds.contains(post.id),
+            isShareInFlight: postShareInFlightIds.contains(post.id),
+            onLike: { _ in
+                togglePostHeart(post: post)
+            },
+            onRepost: { postId in
+                togglePostRepost(postId: postId)
+            },
+            onQuote: { postId in
+                quoteOriginalPost = viewModel.posts.first(where: { $0.id == postId })
+            },
+            onShare: { postId in
+                sharePostWithLink(postId: postId)
+            },
+            onBookmark: { postId in
+                togglePostBookmark(postId: postId)
+            },
+            onTapPost: { post in
+                router.push(.postDetail(post.id, post))
+            },
+            onTapRepost: { repostId in
+                router.push(.postDetail(repostId))
+            },
+            onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil,
+            onEdit: post.authorId == AuthManager.shared.currentUser?.id ? { post in
+                editingPost = post
+            } : nil,
+            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
+            moodLookup: { userId in
+                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                 tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+            onViewAuthorStory: {
+                // Contexte « personne précise » → singleGroup, via le coordinator unique.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
+            }
+        )
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -354,16 +566,32 @@ struct ThemedFeedOverlay: View {
             }
             .ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 14) {
-                    Spacer().frame(height: 70)
-
-                    // Story Tray
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    }, onAddStatus: {
+            // GeometryReader extérieur : fournit les bornes globales du viewport au
+            // coordinator d'autoplay. Les cartes réel publient leur frame (.global)
+            // via `reportReelFrame` ; `onPreferenceChange` les agrège et élit le réel
+            // centré (iOS 16-compatible). Identique à `FeedView.feedScrollView`.
+            GeometryReader { viewportProxy in
+                let viewportFrame = viewportProxy.frame(in: .global)
+                // Branded pull-to-refresh + scroll-offset tracking (drives the
+                // collapsing header and the compact story-trail reveal). The
+                // `topPadding` reserves the header height so the full Story Tray
+                // glides up under the header on scroll. Mirrors `FeedView`.
+                MeeshyRefreshableScroll(
+                    onRefresh: {
+                        await viewModel.refresh()
+                        await storyViewModel.loadStories()
+                        await statusViewModel.loadStatuses()
+                    },
+                    coordinateSpaceName: "feedScroll",
+                    onScrollOffsetChange: { offset in
+                        headerScrollOffset = offset
+                    },
+                    topPadding: CollapsibleHeaderMetrics.expandedHeight
+                ) {
+                LazyVStack(spacing: MeeshySpacing.md) {
+                    // Story Tray — lancement unifié via StoryViewerCoordinator
+                    // (même chemin que la liste de conversations), pas de cover local.
+                    StoryTrayView(viewModel: storyViewModel, onAddStatus: {
                         showStatusComposer = true
                     })
 
@@ -379,98 +607,47 @@ struct ThemedFeedOverlay: View {
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
-                                .font(.footnote)
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
 
                             Spacer()
 
                             Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 16))
+                                .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
-                        .padding(12)
+                        .padding(MeeshySpacing.md)
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                         .stroke(theme.inputBorder, lineWidth: 1)
                                 )
                         )
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .accessibilityIdentifier("feed.composer.placeholder")
 
-                    // Feed posts with infinite scroll
+                    // Feed posts with infinite scroll. Les Réels (`type == REEL`)
+                    // rendent plein-cadre via `reelFeedCardView` ; les autres via
+                    // la carte standard. Même routage que le chemin iPad
+                    // (`FeedView.feedPostCardView`).
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
-                        FeedPostCard(
-                            post: post,
-                            isLiked: postLikedIds.contains(post.id),
-                            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
-                            isHeartInFlight: postHeartInFlightIds.contains(post.id),
-                            isBookmarked: postBookmarkedIds.contains(post.id),
-                            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
-                            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
-                            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
-                            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
-                            isReposted: postRepostedIds.contains(post.id),
-                            isRepostInFlight: postRepostInFlightIds.contains(post.id),
-                            isShareInFlight: postShareInFlightIds.contains(post.id),
-                            onLike: { _ in
-                                togglePostHeart(post: post)
-                            },
-                            onRepost: { postId in
-                                togglePostRepost(postId: postId)
-                            },
-                            onQuote: { postId in
-                                quoteOriginalPost = viewModel.posts.first(where: { $0.id == postId })
-                            },
-                            onShare: { postId in
-                                sharePostWithLink(postId: postId)
-                            },
-                            onBookmark: { postId in
-                                togglePostBookmark(postId: postId)
-                            },
-                            onSendComment: { postId, content, parentId in
-                                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-                            },
-                            onLikeComment: { postId, commentId in
-                                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
-                            },
-                            onTapPost: { post in
-                                router.push(.postDetail(post.id, post))
-                            },
-                            onTapRepost: { repostId in
-                                router.push(.postDetail(repostId))
-                            },
-                            onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
-                                Task { await viewModel.deletePost(postId) }
-                            } : nil,
-                            onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
-                                Task { await viewModel.reportPost(postId) }
-                            } : nil,
-                            onEdit: post.authorId == AuthManager.shared.currentUser?.id ? { post in
-                                editingPost = post
-                            } : nil,
-                            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
-                            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
-                            moodLookup: { userId in
-                                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
-                                 tapHandler: statusViewModel.moodTapHandler(for: userId))
-                            },
-                            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
-                            onViewAuthorStory: {
-                                selectedStoryUserId = post.authorId
-                                storyViewerSingleGroup = true
-                                showStoryViewer = true
+                        Group {
+                            if post.isReel {
+                                reelFeedCardView(for: post)
+                            } else {
+                                standardFeedPostCardView(for: post)
+                                    .equatable()
                             }
-                        )
-                        .equatable()
-                            .staggeredAppear(index: index, baseDelay: 0.06)
-                            .onAppear {
-                                Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
-                                viewModel.prefetchComments(post.id)
-                            }
+                        }
+                        .staggeredAppear(index: index, baseDelay: 0.06)
+                        .onAppear {
+                            Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                            viewModel.prefetchComments(post.id)
+                        }
                     }
 
                     // Loading indicator
@@ -480,13 +657,23 @@ struct ThemedFeedOverlay: View {
                             .padding()
                     }
                 }
-                .padding(.bottom, 100)
+                .padding(.bottom, 100) // Clear floating button / tab bar area
+                }
+                .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
+                    reelAutoplay.update(
+                        frames: frames,
+                        viewportMinY: viewportFrame.minY,
+                        viewportMaxY: viewportFrame.maxY
+                    )
+                }
             }
-            .refreshable {
-                await viewModel.refresh()
-                await storyViewModel.loadStories()
-                await statusViewModel.loadStatuses()
-            }
+        }
+        .overlay(alignment: .top) {
+            // Header « Meeshy Feed » épinglé : le `MeeshyRefreshableScroll`
+            // réserve `CollapsibleHeaderMetrics.expandedHeight` en tête (topPadding)
+            // pour que le contenu glisse dessous au scroll et que la trail compacte
+            // se révèle dans le slot accessory.
+            feedHeader
         }
         .task {
             if viewModel.posts.isEmpty {
@@ -560,32 +747,28 @@ struct ThemedFeedOverlay: View {
         .sheet(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
-                onSave: { newContent in
-                    await viewModel.updatePost(post.id, content: newContent)
+                originalLanguage: post.originalLanguage,
+                originalType: post.type,
+                media: post.media.map { EditablePostMedia($0) },
+                originalLocation: post.location,
+                isRepost: post.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
                 },
                 onDismiss: { editingPost = nil }
             )
         }
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "FeedOverlay"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer : présentation unifiée via StoryViewerCoordinator au root
+        // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
+        // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                // `.large` is not decoration: the composer's labels scale with
+                // Dynamic Type while its emoji grid does not, so at accessibility
+                // sizes the content outgrows `.medium`. Offering the larger detent
+                // gives the user somewhere to go instead of a dead end.
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {
             FeedComposerSheet(

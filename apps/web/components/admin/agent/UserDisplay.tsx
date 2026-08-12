@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usersService } from '@/services/users.service';
 import type { SocketIOUser as User } from '@meeshy/shared/types';
 import { cn } from '@/lib/utils';
+import { getInitials } from '@/utils/initials';
 
 interface UserDisplayProps {
   userId?: string;
@@ -66,7 +67,7 @@ export function UserDisplay({ userId, user: initialUser, showUsername = true, cl
   if (!user) return null;
 
   const displayName = usersService.getDisplayName(user);
-  const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const initials = getInitials(displayName);
 
   return (
     <div className={cn("flex items-center gap-2 overflow-hidden", className)}>

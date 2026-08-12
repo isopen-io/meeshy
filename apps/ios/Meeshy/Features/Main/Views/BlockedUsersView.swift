@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
-import os
 
 struct BlockedUsersView: View {
     @Environment(\.dismiss) private var dismiss
@@ -10,12 +9,15 @@ struct BlockedUsersView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var blockedUsers: [BlockedUser] = []
-    @State private var isLoading = false
+    // Wired onto the conformant, cache-first + outbox `BlockedViewModel`
+    // instead of the ad-hoc `@State`-based network-only loading this screen
+    // used to own: that path ignored the `blockedUsers` store entirely and
+    // routed a failed fetch straight into `Self.logger.error(...)` with no
+    // error state, so an offline open silently rendered "Aucun utilisateur
+    // bloque" (a lie — the request never even reached the network).
+    @StateObject private var viewModel = BlockedViewModel()
     @State private var userToUnblock: BlockedUser?
-    @State private var isUnblocking = false
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "blocked-users")
     private let accentColor = MeeshyColors.errorHex
 
     var body: some View {
@@ -36,14 +38,15 @@ struct BlockedUsersView: View {
             }
             Button(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), role: .destructive) {
                 guard let user = userToUnblock else { return }
-                unblock(user)
+                Task { await viewModel.unblock(userId: user.id) }
+                userToUnblock = nil
             }
         } message: {
             if let user = userToUnblock {
                 Text(String(localized: "blocked.users.unblock.confirm", defaultValue: "Voulez-vous debloquer \(user.name) ?", bundle: .main))
             }
         }
-        .task { await loadBlockedUsers() }
+        .task { await viewModel.loadBlocked() }
     }
 
     // MARK: - Header
@@ -54,11 +57,11 @@ struct BlockedUsersView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                HStack(spacing: MeeshySpacing.xs) {
+                    Image(systemName: "chevron.backward")
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -66,24 +69,32 @@ struct BlockedUsersView: View {
             Spacer()
 
             Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloques", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
             Color.clear.frame(width: 60, height: 24)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
-        if isLoading && blockedUsers.isEmpty {
+        // Cache-first: `.loading` only fires on a genuinely empty cache
+        // (cold start) — `.loaded` covers both `.cachedFresh`/`.cachedStale`
+        // (data already applied) and a completed network round-trip, so no
+        // spinner masks cached data. `.offline`/`.error` fall through to the
+        // same empty-state branch as a true empty list — distinguishing them
+        // further isn't needed here since `RequestsTab`'s sibling screens
+        // follow the same reduced-surface convention.
+        if viewModel.loadState == .loading {
             loadingState
-        } else if blockedUsers.isEmpty {
+        } else if viewModel.blockedUsers.isEmpty {
             emptyState
         } else {
             usersList
@@ -93,22 +104,24 @@ struct BlockedUsersView: View {
     // MARK: - Loading
 
     private var loadingState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ForEach(0..<4, id: \.self) { _ in
                 skeletonRow
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
     }
 
     private var skeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 14)
@@ -119,10 +132,10 @@ struct BlockedUsersView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
         )
         .shimmer()
@@ -135,8 +148,8 @@ struct BlockedUsersView: View {
             Spacer()
             EmptyStateView(
                 icon: "person.crop.circle.badge.checkmark",
-                title: String(localized: "blocked.users.empty.title", defaultValue: "Aucun utilisateur bloque", bundle: .main),
-                subtitle: String(localized: "blocked.users.empty.subtitle", defaultValue: "Les utilisateurs que vous bloquez apparaitront ici", bundle: .main)
+                title: String(localized: "blocked.users.empty.title", defaultValue: "Aucun utilisateur bloqué", bundle: .main),
+                subtitle: String(localized: "blocked.users.empty.subtitle", defaultValue: "Les utilisateurs que vous bloquez apparaîtront ici", bundle: .main)
             )
             Spacer()
         }
@@ -146,7 +159,7 @@ struct BlockedUsersView: View {
 
     private var usersList: some View {
         List {
-            ForEach(blockedUsers) { user in
+            ForEach(viewModel.blockedUsers) { user in
                 blockedUserRow(user)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
@@ -164,31 +177,33 @@ struct BlockedUsersView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .refreshable { await loadBlockedUsers() }
+        .refreshable { await viewModel.loadBlocked() }
     }
 
     private func blockedUserRow(_ user: BlockedUser) -> some View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -197,10 +212,10 @@ struct BlockedUsersView: View {
                 userToUnblock = user
             } label: {
                 Text(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
                             .fill(Color(hex: accentColor).opacity(0.12))
@@ -208,49 +223,16 @@ struct BlockedUsersView: View {
             }
             .accessibilityLabel(String(localized: "blocked.users.unblock.a11y", defaultValue: "Debloquer \(user.name)", bundle: .main))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
     }
 
-    // MARK: - Actions
-
-    private func loadBlockedUsers() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            blockedUsers = try await BlockService.shared.listBlockedUsers()
-        } catch {
-            Self.logger.error("Failed to load blocked users: \(error.localizedDescription)")
-        }
-    }
-
-    private func unblock(_ user: BlockedUser) {
-        isUnblocking = true
-        Task { [weak blockService = BlockService.shared] in
-            do {
-                try await blockService?.unblockUser(userId: user.id)
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "blocked.users.unblock.success", defaultValue: "Utilisateur debloque", bundle: .main))
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    blockedUsers.removeAll { $0.id == user.id }
-                }
-                Self.logger.info("Unblocked user \(user.id)")
-            } catch {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "blocked.users.unblock.error", defaultValue: "Erreur lors du deblocage", bundle: .main))
-                Self.logger.error("Failed to unblock user: \(error.localizedDescription)")
-            }
-            isUnblocking = false
-            userToUnblock = nil
-        }
-    }
 }

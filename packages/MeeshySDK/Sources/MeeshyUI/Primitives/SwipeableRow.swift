@@ -114,10 +114,21 @@ public struct SwipeableRow<Content: View>: View {
             content
                 .environment(\.swipeProgress, swipeProgress)
                 .offset(x: effectiveOffset)
+                // Tap-pour-fermer piloté par GestureMask. L'ancien
+                // `.onTapGesture { if openOffset != 0 close() }` était
+                // systématiquement court-circuité par le tap du contenu
+                // (le geste de l'enfant gagne) : taper une ligne aux actions
+                // révélées OUVRAIT la conversation au lieu de refermer.
+                // Ouvert → `.gesture` : ce tap est actif et les taps du
+                // contenu sont masqués. Fermé → `.subviews` : ce tap est
+                // inerte, le contenu reprend ses interactions. Attaché AVANT
+                // `simultaneousGesture(swipeGesture)` pour que le masque ne
+                // couvre jamais le drag d'ouverture/fermeture.
+                .gesture(
+                    TapGesture().onEnded { close() },
+                    including: openOffset != 0 ? .gesture : .subviews
+                )
                 .simultaneousGesture(swipeGesture)
-                .onTapGesture {
-                    if openOffset != 0 { close() }
-                }
         }
         .clipped()
         .animation(.spring(response: 0.40, dampingFraction: 0.74), value: dragOffset)
@@ -163,9 +174,9 @@ public struct SwipeableRow<Content: View>: View {
                 action.color
                 VStack(spacing: 4) {
                     Image(systemName: action.icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MeeshyFont.relative(18, weight: .semibold))
                     Text(action.label)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .scaleEffect(0.4 + 0.6 * progress)
@@ -175,6 +186,7 @@ public struct SwipeableRow<Content: View>: View {
         .frame(width: actionWidth)
         .opacity(min(progress * 2.5, 1.0))
         .buttonStyle(.plain)
+        .accessibilityLabel(action.label)
     }
 
     // MARK: - Geste

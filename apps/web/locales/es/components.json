@@ -212,7 +212,8 @@
       "bookmark": "Guardar",
       "removeBookmark": "Quitar de guardados",
       "translate": "Traducir",
-      "translatePost": "Traducir la publicación"
+      "translatePost": "Traducir la publicación",
+      "imageAlt": "Imagen {index}"
     },
     "videoPlayer": {
       "play": "Reproducir",

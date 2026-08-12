@@ -1,0 +1,201 @@
+// packages/shared/__tests__/mention-extract.test.ts
+import {
+  extractMentions,
+  mentionsToLinks,
+  isValidMentionUsername,
+  isValidMentionQuery,
+  detectMentionAtCursor,
+} from '../types/mention';
+
+describe('extractMentions (types/mention)', () => {
+  it('extrait un username classique', () => {
+    expect(extractMentions('hello @alice and @bob')).toEqual(['alice', 'bob']);
+  });
+
+  it('extrait un username avec tiret sans le tronquer', () => {
+    // Username valide au registre : /^[a-zA-Z0-9_-]+$/ autorise le tiret.
+    expect(extractMentions('salut @marie-claire')).toEqual(['marie-claire']);
+  });
+
+  it('lowercase + dédup par défaut', () => {
+    expect(extractMentions('@Alice @alice')).toEqual(['alice']);
+  });
+
+  it('respecte maxUsernameLength', () => {
+    const long = 'a'.repeat(40);
+    expect(extractMentions(`@${long}`, { maxUsernameLength: 30 })).toEqual([long.slice(0, 30)]);
+  });
+
+  it('retourne [] pour un contenu vide', () => {
+    expect(extractMentions('')).toEqual([]);
+  });
+
+  it("ignore un @ collé après un mot (adresse e-mail) — parité SSOT parseMentions", () => {
+    // `@` précédé d'un caractère de nom = fragment d'adresse e-mail, PAS une mention.
+    // Même frontière gauche que parseMentions/hasMentions (mention-parser.ts).
+    expect(extractMentions('write to bob@alice.com')).toEqual([]);
+    expect(extractMentions('contact@marie.com')).toEqual([]);
+    expect(extractMentions('reply to jean.dupont@example.org please')).toEqual([]);
+  });
+
+  it("ignore un @ collé après une lettre accentuée/non-latine", () => {
+    expect(extractMentions('André@atabeth.com')).toEqual([]);
+    expect(extractMentions('écris à Владимир@mail.ru')).toEqual([]);
+  });
+
+  it("extrait une vraie mention mais pas le fragment d'e-mail voisin", () => {
+    expect(extractMentions('cc @alice et bob@alice.com')).toEqual(['alice']);
+  });
+});
+
+describe('mentionsToLinks', () => {
+  it('transforme un username validé en lien', () => {
+    expect(mentionsToLinks('hey @alice', '/u/{username}', ['alice']))
+      .toBe('hey [@alice](/u/alice)');
+  });
+
+  it('transforme un username à tiret validé en lien', () => {
+    expect(mentionsToLinks('hey @marie-claire', '/u/{username}', ['marie-claire']))
+      .toBe('hey [@marie-claire](/u/marie-claire)');
+  });
+
+  it('laisse un username non validé en texte brut', () => {
+    expect(mentionsToLinks('hey @marie-claire', '/u/{username}', []))
+      .toBe('hey @marie-claire');
+  });
+
+  it('linkifie une mention tapée en casse mixte contre une liste minuscule', () => {
+    // validatedMentions est stocké en minuscules par MentionService ;
+    // le texte du message conserve la casse tapée par l'utilisateur.
+    expect(mentionsToLinks('Hey @Alice!', '/u/{username}', ['alice']))
+      .toBe('Hey [@Alice](/u/alice)!');
+  });
+
+  it('linkifie une mention MAJUSCULE avec URL canonique en minuscules', () => {
+    expect(mentionsToLinks('cc @BOB', '/u/{username}', ['bob']))
+      .toBe('cc [@BOB](/u/bob)');
+  });
+
+  it('normalise aussi une liste validée en casse mixte', () => {
+    expect(mentionsToLinks('hi @alice', '/u/{username}', ['Alice']))
+      .toBe('hi [@alice](/u/alice)');
+  });
+
+  it("ne linkifie pas un @ collé dans une adresse e-mail", () => {
+    // `bob@alice.com` : le `@` fait partie de l'e-mail — ne doit PAS devenir /u/alice.
+    expect(mentionsToLinks('mail bob@alice.com', '/u/{username}', ['alice']))
+      .toBe('mail bob@alice.com');
+  });
+
+  it("linkifie une vraie mention mais laisse intact le fragment d'e-mail voisin", () => {
+    expect(mentionsToLinks('cc @alice et bob@alice.com', '/u/{username}', ['alice']))
+      .toBe('cc [@alice](/u/alice) et bob@alice.com');
+  });
+});
+
+describe('detectMentionAtCursor', () => {
+  it('détecte une mention fraîche dès la frappe de `@`', () => {
+    expect(detectMentionAtCursor('hello @', 7)).toEqual({
+      start: 6,
+      end: 7,
+      query: '',
+      hasMention: true,
+    });
+  });
+
+  it('détecte une mention partielle sous le curseur', () => {
+    expect(detectMentionAtCursor('hi @ali', 7)).toEqual({
+      start: 3,
+      end: 7,
+      query: 'ali',
+      hasMention: true,
+    });
+  });
+
+  it('détecte une mention en tout début de contenu', () => {
+    expect(detectMentionAtCursor('@bob', 4)).toEqual({
+      start: 0,
+      end: 4,
+      query: 'bob',
+      hasMention: true,
+    });
+  });
+
+  it('retourne null quand un espace sépare le `@` du curseur', () => {
+    expect(detectMentionAtCursor('hi @ bob', 8)).toBeNull();
+  });
+
+  it('retourne null pour un contenu vide ou un curseur négatif', () => {
+    expect(detectMentionAtCursor('', 0)).toBeNull();
+    expect(detectMentionAtCursor('hi @bob', -1)).toBeNull();
+  });
+
+  it("ignore un `@` collé après un mot (adresse e-mail) — parité SSOT parseMentions/extractMentions", () => {
+    // `@` précédé d'un caractère de nom = fragment d'adresse e-mail, PAS une mention.
+    // Même frontière gauche NAME_BOUNDARY_LEFT que extractMentions/hasMentions/mentionsToLinks.
+    // Sans ce garde, le composer d'ÉDITION (EditMessageView) ouvrait l'autocomplete sur un e-mail
+    // là où le composer d'ENVOI (useMentions) le supprimait déjà — divergence observable.
+    expect(detectMentionAtCursor('write to bob@alice', 18)).toBeNull();
+    expect(detectMentionAtCursor('contact@marie', 13)).toBeNull();
+  });
+
+  it("ignore un `@` collé après une lettre accentuée/non-latine", () => {
+    expect(detectMentionAtCursor('André@atabeth', 13)).toBeNull();
+    expect(detectMentionAtCursor('écris à Владимир@mail', 21)).toBeNull();
+  });
+
+  it("détecte une vraie mention même lorsqu'un fragment d'e-mail précède", () => {
+    // Le dernier `@` (cursor) est une vraie mention ; le `@` de l'e-mail est ignoré en amont.
+    const content = 'mail bob@alice.com puis @cla';
+    expect(detectMentionAtCursor(content, content.length)).toEqual({
+      start: 24,
+      end: content.length,
+      query: 'cla',
+      hasMention: true,
+    });
+  });
+});
+
+describe('isValidMentionUsername', () => {
+  it('accepte lettres/chiffres/underscore', () => {
+    expect(isValidMentionUsername('user_42')).toBe(true);
+  });
+
+  it('accepte un tiret (parité charset username)', () => {
+    expect(isValidMentionUsername('marie-claire')).toBe(true);
+  });
+
+  it('rejette un point', () => {
+    expect(isValidMentionUsername('jane.smith')).toBe(false);
+  });
+});
+
+describe('isValidMentionQuery', () => {
+  it('accepte une query vide (autocomplete dès la frappe de `@`)', () => {
+    expect(isValidMentionQuery('')).toBe(true);
+  });
+
+  it('accepte lettres/chiffres/underscore', () => {
+    expect(isValidMentionQuery('user_42')).toBe(true);
+  });
+
+  it('accepte une query partielle avec tiret (username à tiret en cours de frappe)', () => {
+    // Régression : `@marie-cl…` doit garder l'autocomplete ouvert. Le charset SSOT
+    // MENTION_HANDLE_CHARS inclut le tiret — parité avec le composer (useMentions) et
+    // avec isValidMentionUsername.
+    expect(isValidMentionQuery('marie-cl')).toBe(true);
+    expect(isValidMentionQuery('marie-claire')).toBe(true);
+  });
+
+  it('rejette un espace (mention terminée)', () => {
+    expect(isValidMentionQuery('marie claire')).toBe(false);
+  });
+
+  it('rejette un point (caractère hors charset username)', () => {
+    expect(isValidMentionQuery('jane.smith')).toBe(false);
+  });
+
+  it('rejette au-delà de 30 caractères', () => {
+    expect(isValidMentionQuery('a'.repeat(31))).toBe(false);
+  });
+});

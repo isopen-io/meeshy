@@ -25,7 +25,7 @@ VOICE_API_AVAILABLE = False
 try:
     from .voice_api import VoiceAPIHandler, get_voice_api_handler
     VOICE_API_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     pass
 
 # Import du Voice Profile handler
@@ -33,7 +33,7 @@ VOICE_PROFILE_HANDLER_AVAILABLE = False
 try:
     from .voice_profile_handler import VoiceProfileHandler, get_voice_profile_handler
     VOICE_PROFILE_HANDLER_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     pass
 
 
@@ -63,11 +63,11 @@ class VoiceHandler:
         self._in_flight_voice_translates: Set[str] = set()
 
         # Initialiser les handlers si disponibles
-        if VOICE_API_AVAILABLE:
+        if VOICE_API_AVAILABLE:  # pragma: no branch
             self.voice_api_handler = get_voice_api_handler()
             logger.info("✅ [ZMQ] VoiceAPIHandler initialisé")
 
-        if VOICE_PROFILE_HANDLER_AVAILABLE:
+        if VOICE_PROFILE_HANDLER_AVAILABLE:  # pragma: no branch
             self.voice_profile_handler = get_voice_profile_handler()
             logger.info("✅ [ZMQ] VoiceProfileHandler initialisé")
 

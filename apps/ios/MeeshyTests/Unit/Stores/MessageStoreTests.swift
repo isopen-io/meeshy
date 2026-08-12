@@ -335,6 +335,120 @@ final class MessageStoreTests: XCTestCase {
         XCTAssertEqual(result.map(\.localId), ["cid_1", "cid_2"])
     }
 
+    // MARK: - Search filter window (in-situ filtered-conversation search)
+
+    func test_enterSearchMode_showsOnlyMatchedServerIdsChronologically() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-search", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        for i in 0..<3 {
+            var r = MessageStoreObservationHelper.makeRecord(
+                localId: "msg-\(i)", conversationId: "conv-search",
+                content: "hit \(i)", createdAt: base.addingTimeInterval(TimeInterval(i * 10))
+            )
+            r.serverId = "S\(i)"
+            try await MessageStoreObservationHelper.insertRecord(r, into: persistence)
+        }
+
+        // IDs order is irrelevant — the window is chronological. Only S0 and S2
+        // match, so msg-1 must be filtered out.
+        await store.enterSearchMode(ids: ["S2", "S0"])
+
+        XCTAssertEqual(store.windowMode, .search(ids: ["S2", "S0"]))
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["msg-0", "msg-2"],
+            "search mode shows ONLY the matched serverIds, in chronological order"
+        )
+
+        // Temporal pagination is disabled while filtered.
+        let paged = await store.loadOlder(before: base.addingTimeInterval(1_000))
+        XCTAssertFalse(paged, "loadOlder must be a no-op in search mode")
+
+        // Exiting restores the full latest window.
+        await store.restoreLatestWindow()
+        XCTAssertEqual(store.windowMode, .latest)
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-0", "msg-1", "msg-2"])
+    }
+
+    func test_enterSearchMode_emptyIds_showsNothing() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-search-empty", persistence: persistence)
+
+        var r = MessageStoreObservationHelper.makeRecord(
+            localId: "m", conversationId: "conv-search-empty",
+            content: "x", createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        r.serverId = "S"
+        try await MessageStoreObservationHelper.insertRecord(r, into: persistence)
+
+        await store.enterSearchMode(ids: [])
+
+        XCTAssertTrue(store.messages.isEmpty, "empty match set surfaces no bubbles")
+    }
+
+    func test_enterSearchMode_excludesMessagesWithoutServerId() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-search-nil", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        var acked = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-acked", conversationId: "conv-search-nil",
+            content: "acked", createdAt: base
+        )
+        acked.serverId = "S1"
+        // Offline / un-acked message: serverId nil → never matchable server-side.
+        let offline = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-offline", conversationId: "conv-search-nil",
+            content: "offline", createdAt: base.addingTimeInterval(5)
+        )
+        try await MessageStoreObservationHelper.insertRecord(acked, into: persistence)
+        try await MessageStoreObservationHelper.insertRecord(offline, into: persistence)
+
+        await store.enterSearchMode(ids: ["S1"])
+
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-acked"])
+    }
+
+    /// The critical contract: while filtered, a real-time refresh (a new message
+    /// arriving) must NOT inject the non-matching message into the search view.
+    /// `publish` only merges in-memory in `.latest` mode, so search does a
+    /// strict replace from the (stable) matched-ids window.
+    func test_refreshFromDB_realtime_inSearchMode_doesNotInjectNonMatchingMessage() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-search-rt", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        var matched = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-match", conversationId: "conv-search-rt",
+            content: "match", createdAt: base
+        )
+        matched.serverId = "S1"
+        try await MessageStoreObservationHelper.insertRecord(matched, into: persistence)
+
+        await store.enterSearchMode(ids: ["S1"])
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-match"])
+
+        // A new message lands in GRDB (different serverId, not in the match set).
+        var incoming = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-new", conversationId: "conv-search-rt",
+            content: "new realtime", createdAt: base.addingTimeInterval(60)
+        )
+        incoming.serverId = "S2"
+        try await MessageStoreObservationHelper.insertRecord(incoming, into: persistence)
+
+        await store.refreshFromDB(mergeInMemory: true)
+
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["msg-match"],
+            "search mode must NOT inject a non-matching real-time message"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryDatabase() throws -> DatabaseQueue {

@@ -12,6 +12,7 @@
 
 import React from 'react';
 import type { Message } from '@/types';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 
 interface LastMessagePreviewProps {
   message: Message | null | undefined;
@@ -20,19 +21,11 @@ interface LastMessagePreviewProps {
 }
 
 /**
- * Formate la durée en millisecondes pour affichage (mm:ss.cc ou hh:mm:ss.cc)
+ * Formate la durée en millisecondes pour affichage (mm:ss.cc ou hh:mm:ss.cc).
+ * Délègue à la source unique {@link formatClock}.
  */
-function formatDuration(milliseconds: number, includeHours = true): string {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const ms = Math.floor((milliseconds % 1000) / 10); // Centièmes
-  const hours = Math.floor(totalSeconds / 3600);
-  const mins = Math.floor((totalSeconds % 3600) / 60);
-  const secs = Math.floor(totalSeconds % 60);
-
-  if (includeHours && hours > 0) {
-    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+function formatDuration(milliseconds: number): string {
+  return formatClock(milliseconds / 1000, { includeCentiseconds: true });
 }
 
 /**
@@ -132,7 +125,7 @@ export const LastMessagePreview = React.memo<LastMessagePreviewProps>(({
                 <>
                   <span className="inline-flex text-purple-500">🎵</span>
                   {attachment.duration && (
-                    <span className="text-xs ml-1">{formatDuration(attachment.duration, true)}</span>
+                    <span className="text-xs ml-1">{formatDuration(attachment.duration)}</span>
                   )}
                   {effectDisplay && (
                     <span className="text-xs ml-1">• {effectDisplay}</span>

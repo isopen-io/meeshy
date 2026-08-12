@@ -10,8 +10,8 @@ public protocol CommunityServiceProviding: Sendable {
     func update(communityId: String, name: String?, identifier: String?, description: String?, isPrivate: Bool?, avatar: String?, banner: String?) async throws -> APICommunity
     func delete(communityId: String) async throws
     func getMembers(communityId: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunityMember]>
-    func addMember(communityId: String, userId: String, role: CommunityRole) async throws -> APICommunityMember
-    func updateMemberRole(communityId: String, memberId: String, role: CommunityRole) async throws -> APICommunityMember
+    func addMember(communityId: String, userId: String, role: MemberRole) async throws -> APICommunityMember
+    func updateMemberRole(communityId: String, memberId: String, role: MemberRole) async throws -> APICommunityMember
     func removeMember(communityId: String, userId: String) async throws
     func join(communityId: String) async throws -> APICommunityMember
     func leave(communityId: String) async throws
@@ -99,7 +99,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     // MARK: - Add Member
 
-    public func addMember(communityId: String, userId: String, role: CommunityRole = .member) async throws -> APICommunityMember {
+    public func addMember(communityId: String, userId: String, role: MemberRole = .member) async throws -> APICommunityMember {
         struct AddMemberBody: Encodable {
             let userId: String
             let role: String
@@ -111,7 +111,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     // MARK: - Update Member Role
 
-    public func updateMemberRole(communityId: String, memberId: String, role: CommunityRole) async throws -> APICommunityMember {
+    public func updateMemberRole(communityId: String, memberId: String, role: MemberRole) async throws -> APICommunityMember {
         struct RoleBody: Encodable {
             let role: String
         }

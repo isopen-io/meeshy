@@ -19,6 +19,8 @@ import MeeshyUI
 ///   5. Each pending outbox item — one entry per item, label = the concrete
 ///      French operation (`Envoi d'audio`, `Envoi d'image`, …), carries
 ///      `source` so taps route to the conversation / post / story.
+///   6. Chaque conversation NON ouverte où quelqu'un écrit — `@pseudo` +
+///      points animés, tap pour l'ouvrir.
 ///
 /// The pill collapses to `EmptyView` automatically when every signal
 /// clears — there is no 3-cycle auto-hide; the rotation runs as long as
@@ -26,6 +28,10 @@ import MeeshyUI
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
+    /// Source des frappes hors conversation. Injecté à la racine
+    /// (`RootView` / `iPadRootView`), donc disponible partout où cette
+    /// bannière est montée.
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     /// Flag d'environnement injecté par `RootView` / `iPadRootView` quand
     /// `StoryViewerView` est présenté en `fullScreenCover`. Cache la pill
     /// pour qu'elle ne rende plus par-dessus le header story (le cover ne
@@ -39,6 +45,14 @@ struct ConnectionBanner: View {
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
     /// to its router to push onto the navigation stack.
     private let onItemTap: ((OutboxUIItem.Source) -> Void)?
+
+    /// Identifiant de la conversation actuellement à l'écran, quand le point de
+    /// montage en connaît une. Elle est exclue des entrées de frappe : son
+    /// propre indicateur est déjà visible, le doubler en haut serait du bruit.
+    /// Une closure, pas une valeur : la bannière est reconstruite à chaque
+    /// re-rendu du parent, et une valeur figée à la construction se périmerait
+    /// dès la navigation suivante.
+    private let activeConversationId: (() -> String?)?
 
     /// Set to `true` for ~4 seconds after the device transitions from
     /// `.offline` to any non-offline state. Drives the transient green
@@ -58,8 +72,34 @@ struct ConnectionBanner: View {
     /// Duration of the "En ligne" acknowledgement (seconds).
     private static let onlineAckDuration: Duration = .seconds(4)
 
-    init(onItemTap: ((OutboxUIItem.Source) -> Void)? = nil) {
+    /// Grace window before a dropped socket is surfaced as "Reconnexion".
+    /// A reconnection that completes within this window — the common case at
+    /// cold start and on resume-from-background — never shows the pill; only a
+    /// genuinely stalled connection (> `reconnectingGraceDuration`) does. This
+    /// is the "ne pas polluer la tuile si non nécessaire" rule.
+    private static let reconnectingGraceDuration: Duration = .seconds(3)
+
+    /// `true` once the `.disconnected` state has actually been surfaced as the
+    /// "Reconnexion" pill (grace window elapsed while still disconnected).
+    /// Gates the pill so a fast reconnect stays invisible.
+    @State private var showReconnecting: Bool = false
+
+    /// Cancellable handle for the grace-window task. Stored on `@State` so a
+    /// reconnect cancels a pending surface and successive flaps don't pile up.
+    @State private var reconnectingGraceTimer: Task<Void, Never>?
+
+    /// `true` once a *visible* down state (offline shown, or "Reconnexion"
+    /// surfaced after the grace) has been displayed since the last connected
+    /// state. Drives whether the transient "En ligne" confirmation is shown —
+    /// it must only acknowledge a problem the user actually saw.
+    @State private var downWasSurfaced: Bool = false
+
+    init(
+        onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        activeConversationId: (() -> String?)? = nil
+    ) {
         self.onItemTap = onItemTap
+        self.activeConversationId = activeConversationId
     }
 
     private var isDisconnected: Bool { statusVM.status == .disconnected }
@@ -95,7 +135,7 @@ struct ConnectionBanner: View {
                 source: nil,
                 showsActivityDots: false
             ))
-        } else if isDisconnected {
+        } else if isDisconnected && showReconnecting {
             result.append(SyncPillEntry(
                 id: "status.disconnected",
                 label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion"),
@@ -129,7 +169,37 @@ struct ConnectionBanner: View {
             ))
         }
 
+        result.append(contentsOf: Self.typingEntries(
+            typingUsers: conversationListViewModel.typingUsers,
+            excluding: activeConversationId?()
+        ))
+
         return result
+    }
+
+    /// Une entrée par conversation NON ouverte où quelqu'un écrit.
+    ///
+    /// Le `@pseudo` plutôt que le nom d'affichage : la pastille est étroite et
+    /// le handle est ce qui identifie sans ambiguïté. Triées par identifiant de
+    /// conversation — un ordre instable ferait sauter la rotation d'une entrée
+    /// à l'autre à chaque frappe.
+    static func typingEntries(
+        typingUsers: [String: String],
+        excluding activeConversationId: String?
+    ) -> [SyncPillEntry] {
+        typingUsers
+            .filter { $0.key != activeConversationId }
+            .sorted { $0.key < $1.key }
+            .map { conversationId, username in
+                SyncPillEntry(
+                    id: "typing.\(conversationId)",
+                    label: "@\(username)",
+                    iconName: nil,
+                    dotStyle: .brand,
+                    source: .conversation(id: conversationId),
+                    showsActivityDots: true
+                )
+            }
     }
 
     var body: some View {
@@ -146,36 +216,117 @@ struct ConnectionBanner: View {
                 }
                 .onAppear {
                     lastObservedStatus = statusVM.status
+                    handleInitialStatus(statusVM.status)
                 }
         }
     }
 
-    /// `true` only when the connection becomes genuinely usable again — the
-    /// SOCKET (re)connects (`.connected`/`.syncing`) after having been `.offline`
-    /// or `.disconnected`. Confirming "En ligne" on a mere `.offline → .disconnected`
-    /// (device network back but the socket still reconnecting) would falsely tell
-    /// the user they are online while no socket exists yet.
+    /// `true` only when the connection becomes genuinely usable again
+    /// (`.connected`/`.syncing`) AND a *visible* down state was actually shown
+    /// to the user beforehand (`downWasSurfaced`). Confirming "En ligne" at cold
+    /// start or after a fast resume — where the socket blips through
+    /// `.disconnected` without the "Reconnexion" pill ever appearing — would be
+    /// a parasitic flash acknowledging a problem the user never saw.
     static func shouldConfirmReturnOnline(
+        downWasSurfaced: Bool,
+        new: ConnectionStatusViewModel.Status
+    ) -> Bool {
+        let isUp = new == .connected || new == .syncing
+        return downWasSurfaced && isUp
+    }
+
+    /// `true` when a freshly-dropped socket should open a grace window before
+    /// surfacing "Reconnexion". Only a NEW drop (the previous state was not
+    /// already `.disconnected`) starts the window; staying disconnected lets the
+    /// running window finish without being pushed back.
+    static func shouldStartReconnectingGrace(
         previous: ConnectionStatusViewModel.Status?,
         new: ConnectionStatusViewModel.Status
     ) -> Bool {
-        let wasDown = previous == .offline || previous == .disconnected
-        let isUp = new == .connected || new == .syncing
-        return wasDown && isUp
+        new == .disconnected && previous != .disconnected
     }
 
-    /// Detects the transition back to a genuinely-connected state and schedules a
-    /// task that clears the "En ligne" acknowledgement after `onlineAckDuration`.
-    /// Cancels any pending task so successive flap-up / flap-down cycles don't
-    /// pile up handlers.
+    /// `true` when, at the end of the grace window, the socket is STILL down so
+    /// the "Reconnexion" pill should finally be surfaced. A reconnect that
+    /// landed during the window leaves a non-`.disconnected` status → stays
+    /// silent.
+    static func shouldSurfaceReconnecting(
+        statusAtDeadline: ConnectionStatusViewModel.Status
+    ) -> Bool {
+        statusAtDeadline == .disconnected
+    }
+
+    /// Seeds the surfacing state machine from the status observed at mount,
+    /// since `adaptiveOnChange` only fires on subsequent changes. A banner that
+    /// mounts already `.disconnected` (cold start) still gets its grace window;
+    /// one that mounts `.offline` is treated as a surfaced down state.
+    private func handleInitialStatus(_ status: ConnectionStatusViewModel.Status) {
+        switch status {
+        case .offline:
+            downWasSurfaced = true
+        case .disconnected:
+            scheduleReconnectingGrace()
+        case .connected, .syncing:
+            break
+        }
+    }
+
+    /// Drives the connection-pill state machine on every status change:
+    /// - `.offline`      → surfaced immediately (important), cancels any grace.
+    /// - `.disconnected` → opens a grace window; "Reconnexion" only shows after
+    ///   it elapses while still down (fast reconnects stay silent).
+    /// - `.connected`/`.syncing` → cancels grace, confirms "En ligne" only if a
+    ///   down state was actually surfaced, then clears that flag.
     private func handleStatusTransition(
         from oldValue: ConnectionStatusViewModel.Status?,
         to newValue: ConnectionStatusViewModel.Status
     ) {
         let previous = oldValue ?? lastObservedStatus
         lastObservedStatus = newValue
-        guard Self.shouldConfirmReturnOnline(previous: previous, new: newValue) else { return }
 
+        switch newValue {
+        case .offline:
+            cancelReconnectingGrace()
+            showReconnecting = false
+            downWasSurfaced = true
+
+        case .disconnected:
+            if Self.shouldStartReconnectingGrace(previous: previous, new: newValue) {
+                scheduleReconnectingGrace()
+            }
+
+        case .connected, .syncing:
+            cancelReconnectingGrace()
+            showReconnecting = false
+            if Self.shouldConfirmReturnOnline(downWasSurfaced: downWasSurfaced, new: newValue) {
+                confirmReturnOnline()
+            }
+            downWasSurfaced = false
+        }
+    }
+
+    /// Opens (or restarts) the grace window. When it elapses, "Reconnexion" is
+    /// surfaced only if the socket is still down (`shouldSurfaceReconnecting`).
+    private func scheduleReconnectingGrace() {
+        reconnectingGraceTimer?.cancel()
+        reconnectingGraceTimer = Task { @MainActor [graceDuration = Self.reconnectingGraceDuration] in
+            try? await Task.sleep(for: graceDuration)
+            guard !Task.isCancelled else { return }
+            guard Self.shouldSurfaceReconnecting(statusAtDeadline: statusVM.status) else { return }
+            showReconnecting = true
+            downWasSurfaced = true
+        }
+    }
+
+    private func cancelReconnectingGrace() {
+        reconnectingGraceTimer?.cancel()
+        reconnectingGraceTimer = nil
+    }
+
+    /// Shows the transient green "En ligne" pill, clearing it after
+    /// `onlineAckDuration`. Cancels any pending clear so flap-up / flap-down
+    /// cycles don't pile up handlers.
+    private func confirmReturnOnline() {
         justReturnedOnlineTimer?.cancel()
         showJustReturnedOnline = true
         justReturnedOnlineTimer = Task { @MainActor [showDuration = Self.onlineAckDuration] in

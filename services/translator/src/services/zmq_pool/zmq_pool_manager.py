@@ -18,7 +18,7 @@ from typing import List, Optional
 try:
     import psutil
     PSUTIL_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     PSUTIL_AVAILABLE = False
 
 # Import des modules internes
@@ -33,7 +33,7 @@ CACHE_AVAILABLE = False
 try:
     from ..redis_service import get_redis_service, get_translation_cache_service
     CACHE_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     pass
 
 logger = logging.getLogger(__name__)

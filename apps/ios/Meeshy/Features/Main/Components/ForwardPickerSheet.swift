@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - ForwardPickerSheet
 
@@ -21,7 +22,8 @@ struct ForwardPickerSheet: View {
     @State private var searchText = ""
     @State private var sendingToId: String? = nil
     @State private var sentToIds: Set<String> = []
-    @State private var errorMessage: String? = nil
+    @State private var failedToIds: Set<String> = []
+    @State private var loadFailed = false
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -29,7 +31,9 @@ struct ForwardPickerSheet: View {
         }
         let query = searchText.lowercased()
         return conversations.filter { conv in
-            conv.id != sourceConversationId && conv.name.lowercased().contains(query)
+            conv.id != sourceConversationId
+                && (conv.displayName.lowercased().contains(query)
+                    || conv.name.lowercased().contains(query))
         }
     }
 
@@ -46,17 +50,28 @@ struct ForwardPickerSheet: View {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                     Spacer()
+                } else if conversations.isEmpty && loadFailed {
+                    // Cold-start load failure — distinct from a genuinely empty
+                    // list so the user gets a recoverable Retry rather than a
+                    // misleading "no conversations". Reuses the conversation-list
+                    // error copy (identical operation), already localized.
+                    EmptyStateView(
+                        icon: "wifi.slash",
+                        title: String(localized: "conversations.error.title", defaultValue: "Une erreur est survenue", bundle: .main),
+                        subtitle: String(localized: "conversations.error.subtitle", defaultValue: "Impossible de charger vos conversations.", bundle: .main),
+                        actionLabel: String(localized: "conversations.error.retry", defaultValue: "Réessayer", bundle: .main),
+                        accentColor: accentColor,
+                        compact: true,
+                        onAction: { Task { await retryLoad() } }
+                    )
                 } else if filteredConversations.isEmpty {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 40))
-                            .foregroundColor(theme.textMuted)
-                        Text(String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    Spacer()
+                    EmptyStateView(
+                        icon: "bubble.left.and.bubble.right",
+                        title: String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main),
+                        subtitle: String(localized: "forward.empty.subtitle", defaultValue: "Rejoignez ou démarrez une conversation pour y transférer des messages.", bundle: .main),
+                        accentColor: accentColor,
+                        compact: true
+                    )
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -100,15 +115,16 @@ struct ForwardPickerSheet: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(message.senderName ?? "?")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .lineLimit(1)
 
                 Text(message.content.isEmpty ? String(localized: "forward.media-placeholder", defaultValue: "[Media]", bundle: .main) : message.content)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer(minLength: 0)
 
@@ -116,6 +132,7 @@ struct ForwardPickerSheet: View {
                 dismiss()
                 onDismiss()
             } label: {
+                // Chrome close glyph in a thin preview banner — kept fixed per chrome doctrine 82i.
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
@@ -150,7 +167,7 @@ struct ForwardPickerSheet: View {
     private func conversationRow(_ conv: Conversation) -> some View {
         HStack(spacing: 12) {
             MeeshyAvatar(
-                name: conv.name,
+                name: conv.displayName,
                 context: .conversationList,
                 accentColor: conv.accentColor,
                 avatarURL: conv.avatar,
@@ -159,23 +176,26 @@ struct ForwardPickerSheet: View {
             )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(conv.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
+                ConversationTitleLabel(
+                    name: conv.displayName,
+                    favoriteEmoji: conv.userState.reaction,
+                    font: MeeshyFont.relative(15, weight: .medium),
+                    color: theme.textPrimary
+                )
 
                 HStack(spacing: 4) {
                     Text(conv.type.rawValue)
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
                     if conv.memberCount > 0 {
                         Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -197,12 +217,25 @@ struct ForwardPickerSheet: View {
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
                 .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
+        } else if failedToIds.contains(conv.id) {
+            // Send failed — surface it in-sheet (a root toast renders behind the
+            // sheet) as a tappable, recoverable retry. Error is signalled by the
+            // glyph shape, not colour alone.
+            Button {
+                forwardTo(conv)
+            } label: {
+                Image(systemName: "exclamationmark.arrow.circlepath")
+                    .font(MeeshyFont.relative(24))
+                    .foregroundColor(MeeshyColors.error)
+            }
+            .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
+            .disabled(sendingToId != nil)
         } else {
             Button {
                 forwardTo(conv)
             } label: {
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.relative(24))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
@@ -213,6 +246,24 @@ struct ForwardPickerSheet: View {
     // MARK: - Actions
 
     private func loadConversations() async {
+        // Cache-first: surface the locally-cached conversations instantly (same
+        // store/key as the conversation list) so the forward picker never shows
+        // a spinner when data is already known, then revalidate in background.
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+        switch cached {
+        case .fresh(let data, _):
+            conversations = data
+            isLoading = false
+        case .stale(let data, _):
+            conversations = data
+            isLoading = false
+            await refreshConversations()
+        case .expired, .empty:
+            await refreshConversations()
+        }
+    }
+
+    private func refreshConversations() async {
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.offsetPaginatedRequest(
                 endpoint: "/conversations",
@@ -221,17 +272,54 @@ struct ForwardPickerSheet: View {
             )
             if response.success {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
-                conversations = response.data.map { $0.toConversation(currentUserId: userId) }
+                let payload = response.data
+                // Decode off the main actor so opening the picker never hitches.
+                conversations = await Task.detached(priority: .userInitiated) {
+                    payload.map { $0.toConversation(currentUserId: userId) }
+                }.value
+                loadFailed = false
+            } else {
+                loadFailed = true
             }
         } catch {
-            errorMessage = error.localizedDescription
+            loadFailed = true
         }
         isLoading = false
     }
 
+    private func retryLoad() async {
+        loadFailed = false
+        isLoading = true
+        await refreshConversations()
+    }
+
+    /// Offline: durably enqueues instead of attempting — and losing — the
+    /// direct REST POST (the same `ofq_*` outbox row
+    /// `OutboxDispatcher.dispatchSendMessage` already replays for
+    /// `ConversationViewModel`). Gated on `NetworkMonitor.shared.isOnline`
+    /// mirroring `ConversationViewModel.sendMessage`'s offline branch.
     private func forwardTo(_ targetConversation: Conversation) {
         sendingToId = targetConversation.id
+        failedToIds.remove(targetConversation.id)
         Task {
+            guard NetworkMonitor.shared.isOnline else {
+                let item = OfflineQueueItem(
+                    conversationId: targetConversation.id,
+                    content: message.content,
+                    forwardedFromId: message.id,
+                    forwardedFromConversationId: sourceConversationId
+                )
+                do {
+                    try await OfflineQueue.shared.enqueue(item)
+                    sentToIds.insert(targetConversation.id)
+                    HapticFeedback.success()
+                } catch {
+                    failedToIds.insert(targetConversation.id)
+                    HapticFeedback.error()
+                }
+                sendingToId = nil
+                return
+            }
             do {
                 let body = SendMessageRequest(
                     content: message.content.isEmpty ? nil : message.content,
@@ -248,7 +336,7 @@ struct ForwardPickerSheet: View {
                 sentToIds.insert(targetConversation.id)
                 HapticFeedback.success()
             } catch {
-                errorMessage = String(format: String(localized: "common.error.format", defaultValue: "Erreur: %@", bundle: .main), error.localizedDescription)
+                failedToIds.insert(targetConversation.id)
                 HapticFeedback.error()
             }
             sendingToId = nil

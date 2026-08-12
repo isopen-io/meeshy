@@ -22,10 +22,10 @@ final class StoryServiceTests: XCTestCase {
 
     private func makePost(id: String = "story123") -> APIPost {
         APIPost(
-            id: id, type: "STORY", visibility: "PUBLIC", content: "My story",
+            id: id, type: "STORY", visibility: "PUBLIC", visibilityUserIds: nil, content: "My story",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: APIAuthor(id: "author1", username: "bob", displayName: "Bob", avatar: nil),
-            likeCount: 5, commentCount: 0, repostCount: 0, viewCount: 10,
+            likeCount: 5, commentCount: 0, repostCount: 0, viewCount: 10, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil,
             bookmarkCount: 0, shareCount: 0, reactionSummary: nil, isPinned: false,
             isEdited: false, media: nil, comments: nil, repostOf: nil,
             originalRepostOfId: nil, isQuote: nil,
@@ -43,7 +43,8 @@ final class StoryServiceTests: XCTestCase {
             effectFlags: nil,
             createdAt: Date(),
             author: APIAuthor(id: "author2", username: "alice", displayName: "Alice", avatar: nil),
-            currentUserReactions: nil
+            currentUserReactions: nil,
+            media: nil
         )
     }
 
@@ -181,6 +182,15 @@ final class StoryServiceTests: XCTestCase {
         _ = try await service.list()
 
         XCTAssertEqual(service.cachedPost(id: "p1")?.id, "p1")
+    }
+
+    func testCacheSeedsByIdTrayWithoutNetwork() {
+        // External seed (e.g. an NSE-prefetched story drained on a cold-start tap)
+        // must resolve via cachedPost without any list()/fetchPost() round-trip.
+        XCTAssertNil(service.cachedPost(id: "seeded"))
+        service.cache(post: makePost(id: "seeded"))
+        XCTAssertEqual(service.cachedPost(id: "seeded")?.id, "seeded")
+        XCTAssertTrue(mock.requests.isEmpty, "cache(post:) must not hit the network")
     }
 
     // MARK: - fetchPost

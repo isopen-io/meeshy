@@ -150,12 +150,14 @@ struct PostTranslationSheet: View {
                         Spacer()
 
                         if let confidence = availableTranslations[lang]?.confidenceScore {
-                            Text("\(Int(confidence * 100))%")
+                            let percent = confidence.formatted(.percent.precision(.fractionLength(0)))
+                            Text(percent)
                                 .font(.caption.weight(.medium))
                                 .foregroundColor(theme.textMuted)
+                                .accessibilityLabel(String(localized: "feed.post.translation.confidence.a11y", defaultValue: "Confiance de traduction \(percent)", bundle: .main))
                         }
 
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(theme.textMuted)
                     }

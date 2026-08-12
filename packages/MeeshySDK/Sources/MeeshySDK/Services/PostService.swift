@@ -23,8 +23,25 @@ public struct PostShareResult: Decodable, Sendable {
 
 public protocol PostServiceProviding: Sendable {
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// `GET /posts/hashtag/:tag` — posts+reels portant ce hashtag, plus
+    /// récents en premier. `tag` est envoyé tel quel (le serveur normalise).
+    func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// `GET /hashtags/trending` — top hashtags par usageCount décroissant.
+    func getTrendingHashtags(limit: Int) async throws -> [APIHashtag]
+    /// Thread de découverte de réels (`GET /posts/feed/reels`). `seedReelId` = le
+    /// réel d'entrée touché dans le feed → le serveur classe par affinité à ce réel
+    /// (et l'exclut, comme il exclut les réels de l'utilisateur). Sans seed → « Pour toi ».
+    /// Contrairement à `getFeed`, la réponse est déjà filtrée `type: REEL` et porte
+    /// `isBookmarkedByMe` (cf. `enrichReelsForViewer`).
+    func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?) async throws -> APIPost
-    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?) async throws -> APIPost
+    /// Variante qui transporte un lieu partagé (`SharedPlace`) — même convention que
+    /// `addComment` ci-dessous (Task 9 gateway). Requirement séparée (et non un
+    /// paramètre par défaut sur la précédente) pour que les conformeurs existants
+    /// (mocks) restent valides via le défaut ci-dessous, qui ignore simplement
+    /// `location` s'il n'est pas surchargé.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -33,12 +50,27 @@ public protocol PostServiceProviding: Sendable {
     func removeBookmark(postId: String) async throws
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
+    /// Variante qui transporte un lieu partagé (`SharedPlace`) — même contrat
+    /// que le message et le post (Task 9 gateway). Requirement séparée (et non
+    /// un paramètre par défaut sur la précédente) pour que les conformeurs
+    /// existants (mocks) restent valides via le défaut ci-dessous, qui ignore
+    /// simplement `location` s'il n'est pas surchargé.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment
+    /// Idempotent text-only variant — sends `clientMutationId` as the
+    /// `X-Client-Mutation-Id` header so the gateway `MutationLog` replays the
+    /// recorded result instead of duplicating the comment on retry (offline
+    /// outbox flush, notification quick-comment). A default implementation
+    /// forwards to the full `addComment` so existing conformers stay
+    /// source-compatible.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, clientMutationId: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
+    func unlikeComment(postId: String, commentId: String) async throws
+    func deleteComment(postId: String, commentId: String) async throws
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost
     func share(postId: String) async throws
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
-    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
@@ -49,6 +81,61 @@ public protocol PostServiceProviding: Sendable {
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func recordImpressions(postIds: [String], source: String) async throws
+    func recordImpression(postId: String, source: String) async throws
+    func recordEngagement(_ sessions: [EngagementSession]) async throws
+}
+
+public extension PostServiceProviding {
+    /// Compat : la signature historique 8-params reste disponible pour les
+    /// call sites existants — les protocoles Swift ne portent pas de valeurs
+    /// par défaut. `storyEffects` / `mediaIds` (édition de story) partent à nil.
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost {
+        try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                         moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
+                         removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: nil)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature sans `location`
+    /// (mocks existants) reste valide — la position est simplement ignorée tant
+    /// que le type ne surcharge pas cette méthode. `PostService` la surcharge
+    /// réellement plus bas.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost {
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId)
+    }
+
+    /// Convenience texte-seul (attachements = nil). Préserve les appels existants
+    /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
+    /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
+    func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature sans
+    /// `location` (mocks existants) reste valide — la position est
+    /// simplement ignorée tant que le type ne surcharge pas cette méthode.
+    /// `PostService` la surcharge réellement plus bas.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage)
+    }
+
+    /// Default for the idempotent variant: drop the mutation id and fall
+    /// through to the full `addComment`. `PostService` overrides this to send
+    /// the `X-Client-Mutation-Id` header; mocks may override to record it.
+    func addComment(
+        postId: String,
+        content: String,
+        parentId: String?,
+        effectFlags: Int?,
+        clientMutationId: String?
+    ) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -63,8 +150,29 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)
     }
 
+    public func getPostsByHashtag(tag: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        try await api.paginatedRequest(endpoint: "/posts/hashtag/\(tag)", cursor: cursor, limit: limit)
+    }
+
+    public func getTrendingHashtags(limit: Int = 20) async throws -> [APIHashtag] {
+        try await api.request(endpoint: "/hashtags/trending?limit=\(limit)")
+    }
+
+    public func getReels(seedReelId: String? = nil, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
+        if let seedReelId { queryItems.append(URLQueryItem(name: "seed", value: seedReelId)) }
+        return try await api.request(endpoint: "/posts/feed/reels", queryItems: queryItems)
+    }
+
     public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId)
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `location` au gateway — même
+    /// convention que l'`addComment` porteur de lieu plus bas.
+    public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
@@ -85,9 +193,54 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
-        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage, location: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `location` au gateway — le
+    /// commentaire d'un post ET la réponse/commentaire d'une story empruntent
+    /// tous deux `POST /posts/:id/comments` (une story est un post de type
+    /// STORY), donc ce chemin unique couvre les deux surfaces.
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
+                                        attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                                        originalLanguage: originalLanguage, location: location)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+        return response.data
+    }
+
+    public func addComment(
+        postId: String,
+        content: String,
+        parentId: String? = nil,
+        effectFlags: Int? = nil,
+        clientMutationId: String? = nil
+    ) async throws -> APIPostComment {
+        guard let clientMutationId, !clientMutationId.isEmpty else {
+            return try await addComment(
+                postId: postId,
+                content: content,
+                parentId: parentId,
+                effectFlags: effectFlags,
+                attachmentIds: nil,
+                mobileTranscription: nil,
+                originalLanguage: nil
+            )
+        }
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
+        let response: APIResponse<APIPostComment> = try await api.requestWithHeaders(
+            endpoint: "/posts/\(postId)/comments",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": clientMutationId]
+        )
         return response.data
     }
 
@@ -101,12 +254,14 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         postId: String,
         targetType: PostType? = nil,
         content: String? = nil,
-        isQuote: Bool = false
+        isQuote: Bool = false,
+        visibility: String? = nil
     ) async throws -> APIPost {
         let body = RepostRequest(
             content: content,
             isQuote: isQuote,
-            targetType: targetType?.rawValue
+            targetType: targetType?.rawValue,
+            visibility: visibility
         )
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
         return response.data
@@ -182,13 +337,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
     }
 
-    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
         // Strip composer-local `file://` paths from mediaObjects before the
         // payload hits the wire — they only resolve in the author's sandbox
         // and break the canvas for every reader (cf. StoryEffects+Sanitization
         // and StoryMediaLayer.swift:132-134).
         let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
-        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
+        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
@@ -203,14 +358,23 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         case .post:
             return try await create(content: content, type: "POST", visibility: visibility)
         case .reel:
-            return try await create(content: content, type: "REEL", visibility: visibility)
+            // Règle produit 2026-08-02 : un REEL exige une composition
+            // qualifiante (vidéo || audio || >= 2 images —
+            // `ReelComposition.qualifiesAsReel`). Cette surface ne transporte
+            // aucun média : la composition ne peut jamais qualifier, on publie
+            // donc un POST. Les chemins avec médias passent par `create(...,
+            // mediaIds:)` avec `ReelComposition.defaultType` côté appelant.
+            return try await create(content: content, type: "POST", visibility: visibility)
         }
     }
 
     // MARK: - Update Post
 
-    public func update(postId: String, content: String? = nil, visibility: String? = nil, moodEmoji: String? = nil) async throws -> APIPost {
-        let body = UpdatePostRequest(content: content, visibility: visibility, moodEmoji: moodEmoji)
+    public func update(postId: String, content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil, mediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async throws -> APIPost {
+        // `visibilityUserIds` était déclaré dans `UpdatePostRequest` mais JAMAIS
+        // renseigné ici : il partait toujours à `nil`, et le `refine` Zod du
+        // gateway rejetait donc systématiquement EXCEPT/ONLY.
+        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location)
         let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
         return response.data
     }
@@ -269,6 +433,26 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Int]> = try await api.post(
             endpoint: "/posts/impressions/batch",
             body: BatchBody(postIds: postIds, source: source)
+        )
+    }
+
+    /// Records a single impression for one post. Unlike `recordImpressions`
+    /// (feed batch, deduped client-side per session), this is NOT deduped —
+    /// every Detail open is one more impression (`source: "detail"`).
+    public func recordImpression(postId: String, source: String = "detail") async throws {
+        struct Body: Encodable { let source: String }
+        let _: APIResponse<[String: Bool]> = try await api.post(
+            endpoint: "/posts/\(postId)/impression",
+            body: Body(source: source)
+        )
+    }
+
+    public func recordEngagement(_ sessions: [EngagementSession]) async throws {
+        guard !sessions.isEmpty else { return }
+        struct BatchBody: Encodable { let sessions: [EngagementSession] }
+        let _: APIResponse<[String: Int]> = try await api.post(
+            endpoint: "/posts/engagement/batch",
+            body: BatchBody(sessions: sessions)
         )
     }
 }

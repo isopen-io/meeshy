@@ -59,11 +59,11 @@ extension ConversationView {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
-                    .font(.system(size: 15))
+                    .font(MeeshyFont.relative(15))
                     .foregroundColor(theme.textPrimary)
                     .focused($isSearchFocused)
                     .autocorrectionDisabled()
@@ -75,10 +75,10 @@ extension ConversationView {
                 if !headerState.searchQuery.isEmpty {
                     Button {
                         headerState.searchQuery = ""
-                        viewModel.searchResults = []
+                        Task { await viewModel.endSearch() }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
+                            .font(MeeshyFont.relative(16))
                             .foregroundColor(theme.textMuted)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
@@ -101,148 +101,53 @@ extension ConversationView {
                 dismissSearch()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-        )
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16), tint: Color(hex: accentColor).opacity(0.12))
+        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
         .padding(.horizontal, 8)
         .padding(.top, 4)
     }
 
-    // MARK: - Search Results Overlay (blurred background)
+    // MARK: - Search Results Banner (filtered-conversation mode)
 
-    var searchResultsOverlay: some View {
-        VStack(spacing: 0) {
-            if viewModel.searchResults.isEmpty && !viewModel.isSearching && headerState.searchQuery.count >= 2 {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundColor(theme.textMuted.opacity(0.5))
-                    Text(String(localized: "conversation.view.search.no_results", defaultValue: "Aucun résultat", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !viewModel.searchResults.isEmpty {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 2) {
-                        ForEach(viewModel.searchResults) { result in
-                            searchResultRow(result)
-                                .onTapGesture {
-                                    Task { await jumpToSearchResult(result) }
-                                }
-                                .onAppear {
-                                    if result.id == viewModel.searchResults.last?.id && viewModel.searchHasMore {
-                                        Task { await viewModel.loadMoreSearchResults(query: headerState.searchQuery) }
-                                    }
-                                }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                }
-            }
+    /// In filtered-conversation search the real conversation behind the bar
+    /// already shows ONLY the matching bubbles (term highlighted, via the
+    /// MessageStore `.search` window). We no longer blur the conversation nor
+    /// list mini-cards — just a slim, non-interactive banner announcing the
+    /// match count (or the empty / searching state).
+    @ViewBuilder
+    var searchResultsBanner: some View {
+        let count = viewModel.searchResults.count
+        HStack(spacing: 6) {
+            Image(systemName: (count == 0 && !viewModel.isSearching) ? "magnifyingglass" : "text.magnifyingglass")
+                .font(MeeshyFont.relative(12, weight: .semibold))
+            Text(searchBannerLabel(count: count, searching: viewModel.isSearching))
+                .font(MeeshyFont.relative(12, weight: .medium))
+                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            Color.black.opacity(0.001)
-                .onTapGesture { dismissSearch() }
-        )
-    }
-
-    private func searchResultRow(_ result: SearchResultItem) -> some View {
-        HStack(spacing: 10) {
-            // Avatar
-            MeeshyAvatar(
-                name: result.senderName,
-                context: .messageBubble,
-                accentColor: DynamicColorGenerator.colorForName(result.senderName),
-                avatarURL: result.senderAvatar
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(result.senderName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    Text(formatSearchDate(result.createdAt))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                HStack(spacing: 4) {
-                    if result.matchType == "translation" {
-                        Image(systemName: "globe")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(hex: accentColor).opacity(0.7))
-                    }
-
-                    Text(highlightedText(result.matchedText, query: headerState.searchQuery))
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                }
-            }
-        }
+        .foregroundColor(theme.textSecondary)
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isDark ? Color.white.opacity(0.06) : Color.white.opacity(0.8))
-        )
-        .contentShape(Rectangle())
+        .padding(.vertical, 6)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        .padding(.top, 6)
     }
 
-    private func highlightedText(_ text: String, query: String) -> AttributedString {
-        var attributed = AttributedString(text.prefix(120) + (text.count > 120 ? "..." : ""))
-        let queryLower = query.lowercased()
-        let textLower = String(text.prefix(120)).lowercased()
-        if let range = textLower.range(of: queryLower) {
-            let start = text.distance(from: text.startIndex, to: range.lowerBound)
-            let end = text.distance(from: text.startIndex, to: range.upperBound)
-            let attrStart = attributed.index(attributed.startIndex, offsetByCharacters: start)
-            let attrEnd = attributed.index(attributed.startIndex, offsetByCharacters: min(end, text.prefix(120).count))
-            if attrStart < attributed.endIndex && attrEnd <= attributed.endIndex {
-                attributed[attrStart..<attrEnd].foregroundColor = Color(hex: accentColor)
-                attributed[attrStart..<attrEnd].font = .system(size: 13, weight: .bold)
-            }
+    private func searchBannerLabel(count: Int, searching: Bool) -> String {
+        if searching && count == 0 {
+            return String(localized: "conversation.view.search.searching", defaultValue: "Recherche…", bundle: .main)
         }
-        return attributed
-    }
-
-    private static let searchTimeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
-    private static let searchDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "dd/MM/yy"
-        return f
-    }()
-
-    private func formatSearchDate(_ date: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return Self.searchTimeFormatter.string(from: date)
+        if count == 0 {
+            return String(localized: "conversation.view.search.no_results", defaultValue: "Aucun résultat", bundle: .main)
         }
-        if calendar.isDateInYesterday(date) {
-            return String(localized: "date.yesterday", defaultValue: "Hier", bundle: .main)
-        }
-        return Self.searchDateFormatter.string(from: date)
+        let fmt = String(localized: "conversation.view.search.results_count", defaultValue: "%lld résultat(s)", bundle: .main)
+        return String(format: fmt, count)
     }
 
     // MARK: - Search Actions
@@ -261,43 +166,30 @@ extension ConversationView {
         let query = headerState.searchQuery
         searchDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled, query.count >= 2 else { return }
-            await viewModel.searchMessages(query: query)
+            guard !Task.isCancelled else { return }
+            if query.count >= 2 {
+                await viewModel.searchMessages(query: query)
+            } else {
+                // Query dropped below the threshold — exit the filter so the
+                // full conversation comes back.
+                await viewModel.endSearch()
+            }
         }
-    }
-
-    func jumpToSearchResult(_ result: SearchResultItem) async {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            headerState.showSearch = false
-        }
-        isSearchFocused = false
-        HapticFeedback.medium()
-
-        await viewModel.loadMessagesAround(messageId: result.id)
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        scrollState.scrollToMessageId = result.id
     }
 
     func dismissSearch() {
+        // Cancel any pending debounce so a stale `endSearch` / `searchMessages`
+        // can't fire after the search UI has been dismissed.
+        searchDebounceTask?.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""
             scrollState.highlightedMessageId = nil
         }
-        viewModel.searchResults = [SearchResultItem]()
-        viewModel.searchHasMore = false
         viewModel.searchNextCursor = nil as String?
         isSearchFocused = false
-    }
-
-    // MARK: - Search Overlay (combines bar + blur + results)
-
-    var searchOverlay: some View {
-        VStack(spacing: 0) {
-            searchBar
-            searchResultsBlurOverlay
-        }
+        // Restore the full conversation window + clear search state.
+        Task { await viewModel.endSearch() }
     }
 
     // MARK: - Search Results Blur Overlay (extracted for type-checker)
@@ -305,17 +197,17 @@ extension ConversationView {
     @ViewBuilder
     var searchResultsBlurOverlay: some View {
         if headerState.showSearch && headerState.searchQuery.count >= 2 {
-            Color.black.opacity(0.001)
-                .background(.ultraThinMaterial)
-                .ignoresSafeArea()
-                .zIndex(80)
-                .transition(.opacity)
-
+            // No full-screen blur: the conversation itself is filtered in-situ
+            // (MessageStore `.search` window) and MUST stay visible. We only
+            // float a slim results banner; taps fall through to the filtered
+            // bubbles so the user keeps interacting with the conversation.
             VStack(spacing: 0) {
                 Color.clear.frame(height: composerState.showOptions ? 140 : 100)
-                searchResultsOverlay
+                searchResultsBanner
+                Spacer()
             }
             .zIndex(81)
+            .allowsHitTesting(false)
             .transition(.opacity)
         }
     }
@@ -335,9 +227,9 @@ extension ConversationView {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.to.line")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(MeeshyFont.relative(12, weight: .bold))
                             Text(String(localized: "conversation.view.recent_messages", defaultValue: "Messages récents", bundle: .main))
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MeeshyFont.relative(12, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
@@ -348,7 +240,7 @@ extension ConversationView {
                                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
                         )
                     }
-                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages recents", bundle: .main))
+                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages récents", bundle: .main))
                     Spacer()
                 }
                 .padding(.bottom, composerHeight + 8)
@@ -395,13 +287,15 @@ extension ConversationView {
                 // Same behaviour as the previous inline "+" button: close the
                 // quick bar, then promote to the full detail sheet on the
                 // react tab. The slight delay lets the transition complete
-                // before the sheet animates in.
-                let resolved = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first
+                // before the sheet animates in. If the message is no longer
+                // resolvable (scrolled out of the loaded window, deleted),
+                // there is no safe fallback — NEVER default to
+                // `messages.first` (the oldest loaded message): that would
+                // silently open the sheet to react on the wrong message.
                 closeReactionBar()
-                guard let msg = resolved else { return }
+                guard let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .react
+                    overlayState.fullReactionPickerMessage = msg
                 }
             }
         )
@@ -418,7 +312,10 @@ extension ConversationView {
             }
             messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    UIPasteboard.general.string = msg.content
+                    // Prisme: copy what's actually DISPLAYED (the preferred
+                    // translation when one is showing), never blindly the
+                    // original — matches the long-press menu's Copier below.
+                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                 }
                 closeReactionBar()
             }
@@ -445,6 +342,9 @@ extension ConversationView {
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 3) {
+                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
+                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
+                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
                 Image(systemName: icon)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color(hex: color))
@@ -496,49 +396,6 @@ extension ConversationView {
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 
-    // MARK: - Failed Message Retry
-    func failedMessageBar(for msg: Message) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 11))
-                .foregroundColor(MeeshyColors.error)
-                .accessibilityHidden(true)
-
-            Text(String(localized: "conversation.view.send_failed", defaultValue: "Échec de l'envoi", bundle: .main))
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(MeeshyColors.error)
-
-            Text("·")
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-
-            Button {
-                HapticFeedback.light()
-                Task { await viewModel.retryMessage(messageId: msg.id) }
-            } label: {
-                Text(String(localized: "conversation.view.retry", defaultValue: "Réessayer", bundle: .main))
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "conversation.view.retry_send", defaultValue: "Reessayer l'envoi du message", bundle: .main))
-
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.removeFailedMessage(messageId: msg.id)
-                }
-            } label: {
-                Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "conversation.view.delete_failed", defaultValue: "Supprimer le message en echec", bundle: .main))
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
     // MARK: - Reply Count
 
     func replyCountFor(messageId: String) -> Int? {
@@ -559,9 +416,9 @@ extension ConversationView {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "arrowshape.turn.up.left.2.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
             }
             .foregroundColor(accent)
             .padding(.horizontal, 10)
@@ -576,7 +433,7 @@ extension ConversationView {
             )
         }
         .accessibilityLabel(label)
-        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller a la premiere reponse de ce message", bundle: .main))
+        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller à la première réponse de ce message", bundle: .main))
     }
 }
 

@@ -10,6 +10,7 @@
 
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { ConflictError } from '../errors/custom-errors';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -24,6 +25,17 @@ export interface PostReactionData {
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
+
+/**
+ * Résultat d'`addReaction` : la réaction PLUS un marqueur d'idempotence. `unchanged`
+ * est `true` quand la ligne existait déjà (re-fire d'un like : double-fire optimiste,
+ * retry socket, second appareil) — aucun état n'a changé en base. Le handler s'en
+ * sert pour NE PAS re-diffuser `post:liked`/`post:reaction-added` ni re-notifier
+ * l'auteur sur un no-op. Miroir de `ReactionService.addReaction` (`{ reaction,
+ * replacedEmojis, unchanged }`), forme aplatie ici car `MAX_REACTIONS_PER_USER = 1`
+ * (pas de `replacedEmojis`). Marqueur transitoire — jamais persisté ni diffusé.
+ */
+export type AddPostReactionResult = PostReactionData & { readonly unchanged: boolean };
 
 export interface PostReactionSync {
   readonly postId: string;
@@ -69,7 +81,7 @@ export class PostReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddPostReactionOptions): Promise<PostReactionData | null> {
+  async addReaction(options: AddPostReactionOptions): Promise<AddPostReactionResult | null> {
     const { postId, userId, emoji } = options;
 
     this.validatePostId(postId);
@@ -109,7 +121,13 @@ export class PostReactionService {
     const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
 
     if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-      throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per post reached`);
+      // Reachable domain guard (the user is changing their emoji, e.g. iOS
+      // reacting to a story via REST `POST /posts/:id/like`). Signal a typed
+      // conflict so the route maps it to HTTP 409 — never a 500 INTERNAL_ERROR.
+      throw new ConflictError(
+        `Maximum ${MAX_REACTIONS_PER_USER} different reactions per post reached`,
+        'REACTION_LIMIT_REACHED',
+      );
     }
 
     const existingReaction = await this.prisma.postReaction.findFirst({
@@ -121,7 +139,7 @@ export class PostReactionService {
     });
 
     if (existingReaction) {
-      return this.mapReactionToData(existingReaction);
+      return { ...this.mapReactionToData(existingReaction), unchanged: true };
     }
 
     try {
@@ -133,16 +151,16 @@ export class PostReactionService {
         }
       });
 
-      await this.updatePostReactionSummary(postId, sanitized, 'add');
+      await this.updatePostReactionSummary(postId);
 
-      return this.mapReactionToData(reaction);
+      return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         // Concurrent insert race: treat as idempotent success, summary already correct.
         const existing = await this.prisma.postReaction.findFirst({
           where: { postId, userId, emoji: sanitized }
         });
-        if (existing) return this.mapReactionToData(existing);
+        if (existing) return { ...this.mapReactionToData(existing), unchanged: true };
       }
       throw err;
     }
@@ -167,7 +185,7 @@ export class PostReactionService {
     });
 
     if (result.count > 0) {
-      await this.updatePostReactionSummary(postId, sanitized, 'remove', result.count);
+      await this.updatePostReactionSummary(postId);
     }
 
     return result.count > 0;
@@ -309,35 +327,39 @@ export class PostReactionService {
     };
   }
 
-  private async updatePostReactionSummary(
-    postId: string,
-    emoji: string,
-    action: 'add' | 'remove',
-    count: number = 1
-  ): Promise<void> {
+  private async updatePostReactionSummary(postId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const post = await tx.post.findUnique({
         where: { id: postId },
-        select: { reactionSummary: true, reactionCount: true }
+        select: { id: true }
       });
 
       if (!post) return;
 
-      const currentSummary = (post.reactionSummary as Record<string, number>) || {};
-      const currentCount = post.reactionCount || 0;
+      // Ventilation par emoji ET total recalculés depuis la table `PostReaction`
+      // (source de vérité), au lieu d'appliquer un delta add/remove sur une carte
+      // dénormalisée. Le pré-check des réactions dans addReaction/removeReaction se
+      // fait hors transaction, donc deux mutations concurrentes peuvent laisser un
+      // emoji fantôme dans reactionSummary (ligne présente, jamais reflétée dans la
+      // carte) ; recomputer depuis groupBy est auto-réparant, quel que soit l'état
+      // après la course. `reactionCount` ET `likeCount` synchronisés sur le total
+      // (parité REST/socket du like de post : `likePost` = reactions.length). Miroir
+      // de ReactionService.updateMessageReactionSummary / CommentReactionService.
+      const grouped = await tx.postReaction.groupBy({
+        by: ['emoji'],
+        where: { postId },
+        _count: { emoji: true }
+      });
 
-      if (action === 'add') {
-        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-      } else if (currentSummary[emoji]) {
-        currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
-      }
-
-      const newCount = action === 'add' ? currentCount + count : Math.max(0, currentCount - count);
+      const reactionSummary = grouped.reduce<Record<string, number>>((summary, group) => {
+        summary[group.emoji] = group._count.emoji;
+        return summary;
+      }, {});
+      const total = grouped.reduce((sum, group) => sum + group._count.emoji, 0);
 
       await tx.post.update({
         where: { id: postId },
-        data: { reactionSummary: currentSummary, reactionCount: newCount }
+        data: { reactionSummary, reactionCount: total, likeCount: total }
       });
     });
   }
