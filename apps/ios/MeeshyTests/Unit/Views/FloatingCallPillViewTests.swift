@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshyUI
 
 // MARK: - CallPillStatus Unit Tests
 
