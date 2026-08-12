@@ -228,7 +228,12 @@ export class ExpiredMessagesCleanupService {
     now: Date,
     announcer: RetractedNotificationAnnouncer | undefined,
   ): Promise<boolean> {
-    // Les fichiers d'abord : une fois la ligne effacée, plus rien ne les nomme.
+    // Les fichiers d'abord, et l'ordre porte la convergence : si l'effacement
+    // échoue, la ligne garde son `deletedAt` nul et la passe suivante la
+    // reprend — les fichiers déjà partis ne manquent à personne. Dans l'autre
+    // sens, un effacement réussi suivi d'une suppression de fichier en échec
+    // retirerait la ligne du prédicat, et les fichiers resteraient orphelins
+    // pour toujours.
     if (message.attachments.length > 0) {
       await Promise.allSettled(
         message.attachments.map((attachment) => this.attachmentRemover.deleteAttachment(attachment.id)),
