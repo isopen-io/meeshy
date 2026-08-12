@@ -7623,3 +7623,105 @@ sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vag
 sélecteur multi-périphériques, pas un quick fix) ; guard `!isAnonymous` sur le poll `active-call` du
 bandeau (Vague 112, faible sévérité — 401 gaspillés, aucun impact fonctionnel) ; `CallInfoOverlay`'s
 `participantCount` affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité).
+
+## Vague 116 — tout le chrome localisé de l'UI d'appel web s'affichait comme des clés brutes (`calls.controls.mute`), dans toutes les langues (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin`, branche locale `HEAD` alignée sur
+`origin/main` (`4ecd765e6`, contient la Vague 115 — PR #2900 mergée), 0 commit d'avance/retard.
+`list_pull_requests` n'a remonté qu'une seule PR ouverte (#2903, cycle 95 messaging/changelog — sans
+rapport, aucune collision). Contrainte de sandbox inchangée : pas de toolchain Swift (`xcodebuild`/
+`swift` absents), `ios-tests.yml` ne tourne pas sur PR et cette routine n'a pas `actions: write` pour
+le déclencher à la main — périmètre volontairement restreint à web+gateway, vérifiable localement.
+Audit dédié (agent Explore, lecture seule, périmètre gateway+web+ios léger) a remonté 2 candidats
+UI mineurs (overlays de qualité superposés, un mot anglais isolé) ; en creusant le second à la main
+avant de l'implémenter, une classe de bug bien plus large est apparue dans le même hook.
+
+- **Root cause confirmée par exécution directe de la logique du hook** (`apps/web/hooks/use-i18n.ts`) :
+  `loadTranslations` charge `locales/{locale}/calls.json`, dont la racine est `{ "calls": {...} }`
+  (comme TOUS les namespaces du dépôt — `auth.json` → `{ "auth": {...} }`, etc.), puis
+  `if (ns in translations) translations = translations[ns]` **déballe** ce wrapper avant de le confier
+  à `t()`. Les 16 fichiers de l'UI d'appel (`components/video-calls/*`, `components/video-call/*`,
+  `hooks/conversations/use-video-call.ts`, `use-call-retry-toast.ts`) appellent pourtant
+  `useI18n('calls')` puis **`t('calls.controls.mute')`** — la clé porte le préfixe du namespace en
+  plus, alors que l'objet déballé ne l'a plus. `t()` cherche `translations['calls']` → absent → tombe
+  sur `fallback || key` → **aucun de ces 16 fichiers n'a de fallback** → la clé brute complète
+  (`"calls.controls.mute"`, `"calls.error.title"`, `"calls.remoteAlerts.qualityDegraded"`, …) est
+  rendue littéralement à l'écran, en `aria-label`, en `title`, en texte visible — dans TOUTES les
+  langues, y compris l'anglais. Vérifié par relecture croisée : `PermissionRequest.tsx` et
+  `CallInfoOverlay.tsx`, dans le même dossier, avec le même `useI18n('calls')`, appellent correctement
+  `t('permissions.error.denied')`/`t('info.participant')` (sans préfixe) — la preuve qu'il existe un
+  pattern correct voisin, et que les 16 fichiers fautifs en dérivent par erreur de copier-coller.
+  Reproduit en isolant l'exact algorithme de `loadTranslations`/`t()` dans un script Node contre le
+  vrai `locales/en/calls.json` : `t('calls.quality.details')` → `"MISS:calls.quality.details"`,
+  `t('quality.details')` → `"Connection Quality Details"`.
+  Portée : **103 sites d'appel** à travers les 16 fichiers — boutons de contrôle d'appel
+  (mute/unmute/haut-parleur/caméra/raccrocher), overlay de qualité de connexion, bannière d'appel en
+  cours, notification d'appel entrant, bandeau d'attente, error boundary, sous-titres, tous les toasts
+  d'erreur d'appel. Ce n'est pas un défaut cosmétique isolé : c'est l'intégralité du chrome localisé
+  de la surface d'appel web qui n'a jamais affiché une seule chaîne traduite depuis l'introduction de
+  ces fichiers.
+- **Fix** : retrait mécanique du préfixe `calls.` redondant sur les 103 sites `t('calls.xxx')` →
+  `t('xxx')` dans les 16 fichiers de production, plus un site en template-ternaire
+  (`OngoingCallBanner.tsx:38`, `t(cond ? 'calls.banner.participant' : 'calls.banner.participants', …)`)
+  qu'un premier passage par `sed` ciblé sur `t('calls\.` avait manqué (le littéral n'est pas collé à
+  l'appel `t(`). Aucun changement de structure des fichiers de locale (`locales/*/calls.json`) —
+  le contenu était déjà correct, seule la clé de lookup était fautive.
+- **Tests** (TDD, RED confirmé avant fix) :
+  - Nouveau fichier `__tests__/components/video-calls/calls-i18n-regression.test.tsx` : contrairement
+    à la suite existante de chaque composant (qui mocke `t` en fonction identité `(k) => k` — une clé
+    fautive s'y "traduit" par elle-même, donc ne peut PAS détecter cette classe de bug), ce test rend
+    `CallControls` avec le VRAI hook `useI18n` et les VRAIS fichiers `locales/{en,fr}/calls.json`
+    (seul `@/stores` est mocké, pour piloter la locale), et affirme que les `aria-label` réels des
+    boutons "mute"/"end call" égalent les chaînes traduites du catalogue — plus un garde généraliste
+    (`queryByText(/^calls\./)`) qui échoue si un préfixe de namespace refait surface n'importe où dans
+    l'arbre rendu. RED confirmé par `git stash` du seul fichier `CallControls.tsx` puis
+    ré-exécution : les 2 nouveaux cas échouent avec `Received: "calls.controls.mute"` là où
+    `findByRole` attendait la vraie chaîne du catalogue — la classe de bug est bien détectée, pas
+    seulement supposée.
+  - Les 11 fichiers de test existants qui épinglaient l'ancien comportement fautif (`getByText`/
+    `getByRole({name:...})` attendant littéralement `'calls.controls.mute'` etc., cohérent avec le mock
+    identité) ont été mis à jour pour attendre la clé SANS préfixe — même contrat que `t: k => k`,
+    juste la bonne clé côté production. Un site raté au premier passage `sed` (littéral dans un
+    `RegExp`, `VideoCallInterface.test.tsx:314`, non capturé par un remplacement de chaînes entre
+    guillemets) corrigé après un sweep dédié aux regex.
+  - Sweep complet `--testPathPatterns="[Cc]all"` (web) : **51 suites / 428 tests verts** (+1 suite/+2
+    tests nets vs. la Vague 115). Gateway non touché ce cycle (bug 100% front-end), suite non
+    ré-exécutée.
+  - `npx tsc --noEmit` (apps/web) : **1757 erreurs, baseline documentée identique** (Vague 115 même
+    chiffre), zéro nouvelle erreur sur les 16 fichiers de production ni sur les fichiers de test
+    touchés (toutes les erreurs pré-existantes tombent sur des fichiers non liés :
+    `VideoLightbox.tsx`, `use-communities-query.ts`, `CallManager.tsx`/`VideoCallInterface.tsx` sur
+    des lignes `unknown`/socket-typing distinctes des lignes modifiées ici).
+  - `eslint`/`next lint` : indisponible dans ce sandbox (même erreur de config circulaire
+    pré-existante sur le plugin `react`, notée depuis plusieurs vagues).
+  - Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install
+    --ignore-scripts` (le script postinstall natif de `grpc-tools` échoue en réseau restreint, comme
+    documenté ; sans impact sur web/jest), puis `packages/shared && npx prisma generate --generator
+    client`.
+- **Découverte annexe traitée en amont, pas implémentée séparément** : le premier candidat de l'audit
+  (deux overlays de qualité de connexion superposés au même coin de l'écran,
+  `VideoCallInterface.tsx:652-668`) et le mot anglais isolé dans `ConnectionQualityBadgeCompact`
+  restent RÉELS et non corrigés ce cycle — la découverte du bug de préfixe namespace, bien plus large
+  et plus sévère (racine commune à la totalité de l'UI d'appel plutôt qu'à un seul composant), a pris
+  la priorité. Reportés au backlog ci-dessous.
+
+### Reste ouvert
+
+Reconduit (moins rien ce cycle, plus 2 items) : dead code / god-object `CallManager.swift` (~5880
+lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only
+(Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs.
+`supportsHolding = false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111, nécessite un vrai
+sélecteur multi-périphériques, pas un quick fix) ; guard `!isAnonymous` sur le poll `active-call` du
+bandeau (Vague 112, faible sévérité — 401 gaspillés, aucun impact fonctionnel) ; `CallInfoOverlay`'s
+`participantCount` affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité) ;
+**`CallStatusIndicator` et `CallQualityOverlay` (`ConnectionQualityBadge`) se superposent tous les
+deux en `absolute top-4 right-4` dans `VideoCallInterface.tsx` dès que la connexion se dégrade ou que
+l'utilisateur ouvre les stats** (Vague 116, `CallStatusIndicator` dérive sa propre qualité d'un
+`getQualityFromState` local au lieu des vraies `qualityStats`, et sa prop `callDuration` est morte —
+déstructurée `_callDuration`, jamais utilisée — signe qu'il s'agit d'un prédécesseur de
+`CallInfoOverlay` jamais retiré) ; **`ConnectionQualityBadgeCompact` (`ConnectionQualityBadge.tsx:130`)
+code en dur le mot anglais `"connection"` et n'appelle pas `useI18n`, seul point de l'UI d'appel
+encore non localisé après ce cycle** (Vague 116, nécessite 4 nouvelles clés de catalogue par locale,
+pas un simple retrait de préfixe comme le reste de ce cycle).

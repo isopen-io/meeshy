@@ -74,6 +74,6 @@ describe('CallCaptionsOverlay', () => {
   it('expose la région en aria-label i18n', () => {
     render(<CallCaptionsOverlay captions={[caption()]} />);
 
-    expect(screen.getByRole('log')).toHaveAttribute('aria-label', 'calls.captions.region');
+    expect(screen.getByRole('log')).toHaveAttribute('aria-label', 'captions.region');
   });
 });

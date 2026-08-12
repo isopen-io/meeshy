@@ -26,7 +26,7 @@ describe('useCallRetryToast', () => {
     });
 
     expect(toastError).toHaveBeenCalledTimes(1);
-    expect(toastError.mock.calls[0][0]).toBe('calls.toasts.callFailed');
+    expect(toastError.mock.calls[0][0]).toBe('toasts.callFailed');
     // The offer is consumed so it doesn't re-fire.
     expect(useCallStore.getState().pendingRetry['conv-1']).toBeUndefined();
   });

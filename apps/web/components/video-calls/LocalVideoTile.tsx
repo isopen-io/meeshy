@@ -64,7 +64,7 @@ export const LocalVideoTile = memo(function LocalVideoTile({
         muted={true}
         isLocal={true}
         className="w-full h-full object-cover transform -scale-x-100"
-        participantName={t('calls.you')}
+        participantName={t('you')}
         isAudioEnabled={audioEnabled}
         // When suspended the local track is stopped; hide the dead <video>.
         isVideoEnabled={videoEnabled && !videoSuspended}
@@ -85,10 +85,10 @@ export const LocalVideoTile = memo(function LocalVideoTile({
             />
           </div>
           <p className="text-[11px] font-semibold leading-tight text-white">
-            {t('calls.stream.videoSuspended')}
+            {t('stream.videoSuspended')}
           </p>
           <p className="text-[10px] leading-tight text-amber-200/90">
-            {t('calls.stream.videoSuspendedHint')}
+            {t('stream.videoSuspendedHint')}
           </p>
         </div>
       )}

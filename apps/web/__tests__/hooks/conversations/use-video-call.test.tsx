@@ -154,7 +154,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.selectConversation');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.selectConversation');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -167,7 +167,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.directOnly');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.directOnly');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -243,7 +243,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastSuccess).toHaveBeenCalledWith('calls.toasts.startingCall');
+      expect(mockToastSuccess).toHaveBeenCalledWith('toasts.startingCall');
     });
 
     it('should not show success toast when the ack is unsuccessful', async () => {
@@ -299,7 +299,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.startFailed');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.startFailed');
     });
 
     it('should handle disconnected socket', async () => {
@@ -316,7 +316,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.connectionError');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.connectionError');
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
@@ -331,7 +331,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.connectionError');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.connectionError');
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
@@ -375,7 +375,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micPermissionDenied');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.micPermissionDenied');
     });
 
     it('should handle NotFoundError (no device)', async () => {
@@ -391,7 +391,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micNotFound');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.micNotFound');
     });
 
     it('should handle generic Error with message', async () => {
@@ -408,7 +408,7 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith(
-        'calls.toasts.micAccessFailed|{"message":"Device busy"}'
+        'toasts.micAccessFailed|{"message":"Device busy"}'
       );
     });
 
@@ -423,7 +423,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micAccessFailedGeneric');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.micAccessFailedGeneric');
     });
 
     it('should cleanup stream on media error', async () => {
@@ -692,7 +692,7 @@ describe('useVideoCall', () => {
 
       await startPromise;
 
-      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.startFailed');
+      expect(mockToastError).toHaveBeenCalledWith('toasts.startFailed');
     });
 
     it('stops the pre-authorized stream tracks when the call:initiate ack times out (no orphaned hot mic/camera)', async () => {
@@ -778,7 +778,7 @@ describe('useVideoCall', () => {
 
       await startPromise;
 
-      expect(mockToastSuccess).toHaveBeenCalledWith('calls.toasts.startingCall');
+      expect(mockToastSuccess).toHaveBeenCalledWith('toasts.startingCall');
 
       await act(async () => {
         jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 5000);

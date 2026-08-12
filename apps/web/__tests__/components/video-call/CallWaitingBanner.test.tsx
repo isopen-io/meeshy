@@ -28,21 +28,21 @@ describe('CallWaitingBanner', () => {
     render(<CallWaitingBanner call={makeCall()} onReject={jest.fn()} onEndAndAnswer={jest.fn()} />);
     expect(screen.getByTestId('call-waiting-banner')).toBeInTheDocument();
     expect(screen.getByText('Alice')).toBeInTheDocument();
-    expect(screen.getByText('calls.callWaiting.reject')).toBeInTheDocument();
-    expect(screen.getByText('calls.callWaiting.endAndAnswer')).toBeInTheDocument();
+    expect(screen.getByText('callWaiting.reject')).toBeInTheDocument();
+    expect(screen.getByText('callWaiting.endAndAnswer')).toBeInTheDocument();
   });
 
   it('fires onReject when Decline is tapped', () => {
     const onReject = jest.fn();
     render(<CallWaitingBanner call={makeCall()} onReject={onReject} onEndAndAnswer={jest.fn()} />);
-    fireEvent.click(screen.getByText('calls.callWaiting.reject'));
+    fireEvent.click(screen.getByText('callWaiting.reject'));
     expect(onReject).toHaveBeenCalledTimes(1);
   });
 
   it('fires onEndAndAnswer when End & answer is tapped', () => {
     const onEndAndAnswer = jest.fn();
     render(<CallWaitingBanner call={makeCall()} onReject={jest.fn()} onEndAndAnswer={onEndAndAnswer} />);
-    fireEvent.click(screen.getByText('calls.callWaiting.endAndAnswer'));
+    fireEvent.click(screen.getByText('callWaiting.endAndAnswer'));
     expect(onEndAndAnswer).toHaveBeenCalledTimes(1);
   });
 });

@@ -121,6 +121,6 @@ describe('CallManager — VideoCallInterface is wrapped in CallErrorBoundary', (
 
     const { getByText } = render(<CallManager />);
 
-    expect(getByText('calls.error.title')).toBeInTheDocument();
+    expect(getByText('error.title')).toBeInTheDocument();
   });
 });

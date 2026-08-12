@@ -49,15 +49,15 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
           data-testid="survival-pill"
           className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-medium text-white shadow"
         >
-          {t('calls.toasts.videoSuspendedPoorConnection')}
+          {t('toasts.videoSuspendedPoorConnection')}
         </div>
       )}
       {remoteQualityDegraded && (
         <div
           role="status"
           data-testid="remote-quality-indicator"
-          title={t('calls.remoteAlerts.qualityDegraded').replace('{name}', participantName)}
-          aria-label={t('calls.remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+          title={t('remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+          aria-label={t('remoteAlerts.qualityDegraded').replace('{name}', participantName)}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/90 text-white shadow"
         >
           <WifiLow className="h-4 w-4" aria-hidden="true" />
@@ -69,7 +69,7 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
           data-testid="screen-capture-pill"
           className="rounded-full bg-red-600/90 px-3 py-1 text-xs font-medium text-white shadow"
         >
-          {t('calls.remoteAlerts.screenCapturing').replace('{name}', participantName)}
+          {t('remoteAlerts.screenCapturing').replace('{name}', participantName)}
         </div>
       )}
     </div>

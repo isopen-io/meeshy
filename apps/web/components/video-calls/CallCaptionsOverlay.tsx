@@ -31,7 +31,7 @@ export const CallCaptionsOverlay = memo(function CallCaptionsOverlay({
   return (
     <div
       role="log"
-      aria-label={t('calls.captions.region')}
+      aria-label={t('captions.region')}
       data-testid="call-captions"
       className="absolute bottom-28 left-1/2 z-10 w-full max-w-xl -translate-x-1/2 px-4"
     >

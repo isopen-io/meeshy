@@ -94,7 +94,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Stable error handler
   const handleWebRTCError = useCallback((error: Error) => {
     logger.error('[VideoCallInterface]', 'WebRTC error: ' + error.message);
-    toast.error(t('calls.toasts.connectionError') + ': ' + error.message);
+    toast.error(t('toasts.connectionError') + ': ' + error.message);
   }, []);
 
   // Initialize WebRTC
@@ -215,12 +215,12 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     suspend: () => runGuardedVideoToggle(async () => {
       await disableVideo();
       emitVideoToggle(false);
-      toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
+      toast.warning(t('toasts.videoSuspendedPoorConnection'));
     }),
     resume: () => runGuardedVideoToggle(async () => {
       await enableVideo();
       emitVideoToggle(true);
-      toast.success(t('calls.toasts.videoResumed'));
+      toast.success(t('toasts.videoResumed'));
     }),
   }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, runGuardedVideoToggle, t]);
 
@@ -428,7 +428,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         }
       } catch (error) {
         logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
-        toast.error(t('calls.toasts.videoSwitchFailed'));
+        toast.error(t('toasts.videoSwitchFailed'));
         return;
       }
 
@@ -463,10 +463,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       // group call's per-peer WebRTCService bookkeeping stays accurate.
       await switchCamera(newFacingMode);
 
-      toast.success(t('calls.toasts.cameraSwitched'));
+      toast.success(t('toasts.cameraSwitched'));
     } catch (error) {
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
-      toast.error(t('calls.toasts.cameraSwitchFailed'));
+      toast.error(t('toasts.cameraSwitchFailed'));
     } finally {
       cameraSwitchInFlightRef.current = false;
     }
@@ -505,7 +505,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
           type: controls.videoEnabled ? 'video' : 'audio',
         });
       } else {
-        toast.error(t('calls.toasts.connectTimeout'));
+        toast.error(t('toasts.connectTimeout'));
       }
       handleHangUpRef.current();
     }, CONNECT_WATCHDOG_MS);
@@ -642,7 +642,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   if (!user || !user.id) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <div className="text-white text-lg">{t('calls.loading')}</div>
+        <div className="text-white text-lg">{t('loading')}</div>
       </div>
     );
   }
@@ -699,7 +699,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
           <div
             role="button"
             tabIndex={0}
-            aria-label={t('calls.stream.fullscreen')}
+            aria-label={t('stream.fullscreen')}
             className="w-full h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
             onClick={() => handleToggleFullscreen(displayParticipant[0])}
             onKeyDown={(e) => {
@@ -746,9 +746,9 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                   {remoteParticipant?.username?.[0]?.toUpperCase() || '?'}
                 </span>
               </div>
-              <p className="text-lg">{remoteParticipant?.username || t('calls.waiting.forParticipant')}</p>
+              <p className="text-lg">{remoteParticipant?.username || t('waiting.forParticipant')}</p>
               <p className="text-sm text-gray-400 mt-2">
-                {connectionState === 'connecting' ? t('calls.status.connecting') : t('calls.waiting.noVideo')}
+                {connectionState === 'connecting' ? t('status.connecting') : t('waiting.noVideo')}
               </p>
             </div>
           </div>
