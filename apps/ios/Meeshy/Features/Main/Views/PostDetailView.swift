@@ -126,7 +126,7 @@ struct PostDetailView: View {
         let fallbackUrlString = "\(ShareableLink.webBaseURL)/feeds/post/\(post.id)"
         let resolvedString = trackingShortUrl ?? fallbackUrlString
         guard let resolvedUrl = URL(string: resolvedString) else {
-            FeedbackToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError(String(localized: "post.link.unavailable", defaultValue: "Lien indisponible", bundle: .main))
             return
         }
 
@@ -300,7 +300,7 @@ struct PostDetailView: View {
                 FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 isPostReposted = false
-                FeedbackToastManager.shared.showError("Erreur lors du repost")
+                FeedbackToastManager.shared.showError(String(localized: "post.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
             }
         }
     }

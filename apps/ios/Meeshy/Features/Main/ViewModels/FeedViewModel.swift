@@ -631,7 +631,7 @@ class FeedViewModel: ObservableObject {
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 self?.removeOptimisticPost(id: cmid)
-            }, toast: "Erreur lors de la publication")
+            }, toast: String(localized: "feed.post.publish.error", defaultValue: "Erreur lors de la publication", bundle: .main))
         } catch {
             removeOptimisticPost(id: cmid)
             publishError = error.localizedDescription
@@ -745,7 +745,7 @@ class FeedViewModel: ObservableObject {
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 self?.removeOptimisticPost(id: cmid)
-            }, toast: "Erreur lors de la publication")
+            }, toast: String(localized: "feed.post.publish.error", defaultValue: "Erreur lors de la publication", bundle: .main))
         } catch {
             removeOptimisticPost(id: cmid)
             publishError = error.localizedDescription

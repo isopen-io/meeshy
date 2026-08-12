@@ -882,9 +882,9 @@ struct StoryViewerView: View {
                             visibility: visibility
                         )
                         editAndRepostAsPostSource = nil
-                        FeedbackToastManager.shared.show("Publié")
+                        FeedbackToastManager.shared.show(String(localized: "story.publish.success", defaultValue: "Publié", bundle: .main))
                     } catch {
-                        FeedbackToastManager.shared.showError("Échec de la publication")
+                        FeedbackToastManager.shared.showError(String(localized: "story.publish.error", defaultValue: "Échec de la publication", bundle: .main))
                         throw error
                     }
                 },
@@ -1236,19 +1236,19 @@ struct StoryViewerView: View {
                 )
                 await MainActor.run {
                     HapticFeedback.success()
-                    FeedbackToastManager.shared.show("Republié dans ton feed")
+                    FeedbackToastManager.shared.show(String(localized: "story.repost.success", defaultValue: "Republié dans ton feed", bundle: .main))
                 }
             } catch APIError.serverError(404, _) {
                 await MainActor.run {
-                    FeedbackToastManager.shared.showError("La story n'est plus disponible")
+                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
                 }
             } catch APIError.serverError(403, _) {
                 await MainActor.run {
-                    FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
                 }
             } catch {
                 await MainActor.run {
-                    FeedbackToastManager.shared.showError("Échec de la republication")
+                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
                 }
             }
         }

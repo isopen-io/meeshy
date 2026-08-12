@@ -158,7 +158,7 @@ extension iPadRootView {
                 let conv = apiConv.toConversation(currentUserId: currentUserId)
                 openConversation(conv)
             } catch {
-                FeedbackToastManager.shared.showError("Impossible de creer la conversation")
+                FeedbackToastManager.shared.showError(String(localized: "conversation.create.error", defaultValue: "Impossible de créer la conversation", bundle: .main))
             }
         }
     }
@@ -479,7 +479,7 @@ extension iPadRootView {
             }
             let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
             let detail = underlying.map { " (\($0))" } ?? ""
-            FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation" + detail)
+            FeedbackToastManager.shared.showError(String(localized: "conversation.open.error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main) + detail)
         }
     }
 

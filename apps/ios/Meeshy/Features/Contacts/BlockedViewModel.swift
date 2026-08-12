@@ -73,12 +73,12 @@ final class BlockedViewModel: ObservableObject {
         let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
             try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
-            FeedbackToastManager.shared.showSuccess("Utilisateur debloque")
+            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.blocked.unblock.success", defaultValue: "Utilisateur débloqué", bundle: .main))
         } catch {
             blockedUsers = snapshot
             blockService.setBlockedOptimistic(userId: userId, blocked: true)
             HapticFeedback.error()
-            FeedbackToastManager.shared.showError("Impossible de debloquer")
+            FeedbackToastManager.shared.showError(String(localized: "contacts.blocked.unblock.error", defaultValue: "Impossible de débloquer", bundle: .main))
         }
     }
 
@@ -90,7 +90,7 @@ final class BlockedViewModel: ObservableObject {
                     guard let self else { return }
                     self.blockedUsers = snapshot
                     self.blockService.setBlockedOptimistic(userId: userId, blocked: true)
-                    FeedbackToastManager.shared.showError("Impossible de debloquer")
+                    FeedbackToastManager.shared.showError(String(localized: "contacts.blocked.unblock.error", defaultValue: "Impossible de débloquer", bundle: .main))
                     HapticFeedback.error()
                 }
             }

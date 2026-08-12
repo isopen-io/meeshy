@@ -2520,7 +2520,7 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                FeedbackToastManager.shared.showError("Impossible d'activer la vidéo")
+                FeedbackToastManager.shared.showError(String(localized: "call.video.enable.error", defaultValue: "Impossible d'activer la vidéo", bundle: .main))
             }
         }
     }
