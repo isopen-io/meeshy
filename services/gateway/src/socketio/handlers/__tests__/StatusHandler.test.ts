@@ -904,9 +904,14 @@ describe('StatusHandler', () => {
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 
-    it('does not reject when the blocked-viewer lookup fails', async () => {
-      // On the `conversation:leave` path an escaping rejection would abort the
-      // leave itself, stranding the socket in the room it asked to leave.
+    it('sheds its tracking entry before any I/O that could fail', async () => {
+      // La retraction NE rattrape PAS : chacun de ses deux appelants porte son
+      // propre try/catch (`handleTypingStop`, `handleConversationLeave`), et
+      // c'est la sortie de room qui doit survivre a un echec, pas la retraction.
+      // Ce qui doit tenir ici est l'ordre : untrack AVANT la requete des
+      // bloqueurs. Sinon une panne DB laisse l'entree `activeTypers` en place,
+      // et le socket reste eternellement « en train d'ecrire » pour ce que la
+      // suppression multi-appareils en deduira.
       const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
       const prisma = makePrisma({
         user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
@@ -917,7 +922,7 @@ describe('StatusHandler', () => {
 
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
 
-      await expect(handler.retractTypingIn(socket, CONV_ID)).resolves.toBeUndefined();
+      await expect(handler.retractTypingIn(socket, CONV_ID)).rejects.toThrow('DB unreachable');
       const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
       expect(activeTypers.has(SOCKET_ID)).toBe(false);
     });

@@ -103,7 +103,7 @@ function makeHandler({
   connectedUsers = makeConnectedUsers(),
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
   readStatusService = makeReadStatusService(),
-  retractTyping = makeRetractTyping(),
+  retractTyping = undefined as undefined | ((socket: any, conversationId: string) => Promise<void>),
 } = {}) {
   return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService: readStatusService as any, retractTyping });
 }
@@ -452,32 +452,95 @@ describe('ConversationHandler', () => {
       await expect(handler.handleConversationLeave(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
     });
 
-    // ── the typing indicator this socket broadcast is retracted on the way out ──
-    // Switching conversation does not disconnect the socket, so `disconnecting`
-    // — until now the ONLY server-side retraction — never fires. A user who was
-    // mid-word when they tapped another conversation left a phantom "typing…"
-    // with their peers until the client-side timeout expired, on every client
-    // that has no local retraction of its own (iOS, Android).
-
-    it('retracts this socket typing indicator before leaving the room', async () => {
-      const retractTyping = makeRetractTyping();
+    // Quitter une conversation en cours de frappe doit retracter l'indicateur.
+    // Seul `disconnecting` le faisait, et changer de conversation ne déconnecte
+    // pas le socket : les pairs gardaient un « X est en train d'écrire… »
+    // fantôme jusqu'à leur filet de sécurité local.
+    it('retracts this socket typing in the conversation being left', async () => {
+      const retractTyping = jest.fn<(socket: unknown, conversationId: string) => Promise<void>>()
+        .mockResolvedValue(undefined);
       const socket = makeSocket();
       const handler = makeHandler({ retractTyping });
 
       await handler.handleConversationLeave(socket, { conversationId: CONV_ID });
 
       expect(retractTyping).toHaveBeenCalledWith(socket, CONV_ID);
-      // "I take back what I broadcast, then I leave" — the retraction is
-      // addressed to the room, so it must be issued while still in it.
-      const retractOrder = (retractTyping.mock.invocationCallOrder as number[])[0];
-      const leaveOrder = ((socket.leave as jest.Mock).mock.invocationCallOrder as number[])[0];
-      expect(retractOrder).toBeLessThan(leaveOrder);
     });
 
+    // La retraction reçoit l'id DÉJÀ normalisé : `handleConversationLeave` l'a
+    // résolu, la refaire résoudre coûterait un second findUnique à chaque
+    // changement de conversation.
+    //
+    // Le double de validation du fichier rend un `conversationId` CONSTANT :
+    // tel quel, il ferait passer aussi bien la version juste que la version qui
+    // relaie l'identifiant brut. Ce test le fait donc échoïser l'entrée, et
+    // écarte l'id normalisé de l'identifiant reçu — sans quoi il ne
+    // discriminerait rien (leçon 128).
+    it('passes the normalized conversation id, not the raw one', async () => {
+      const RAW_IDENTIFIER = 'mshy_some-identifier-20260812';
+      mockValidateSocketEvent.mockImplementation((_schema: unknown, data: any) => ({
+        success: true,
+        data: { conversationId: data.conversationId },
+      }));
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      const retractTyping = jest.fn<(socket: unknown, conversationId: string) => Promise<void>>()
+        .mockResolvedValue(undefined);
+      const socket = makeSocket();
+      const handler = makeHandler({ retractTyping });
+
+      await handler.handleConversationLeave(socket, { conversationId: RAW_IDENTIFIER });
+
+      expect(retractTyping).toHaveBeenCalledWith(socket, CONV_ID);
+      expect(retractTyping).not.toHaveBeenCalledWith(socket, RAW_IDENTIFIER);
+    });
+
+    // Retracter AVANT de sortir de la room : l'énoncé reste « je retire ce que
+    // j'ai diffusé, puis je sors ».
+    it('retracts before leaving the room', async () => {
+      const order: string[] = [];
+      const retractTyping = jest.fn<(socket: unknown, conversationId: string) => Promise<void>>()
+        .mockImplementation(async () => { order.push('retract'); });
+      const socket = makeSocket();
+      (socket.leave as jest.Mock).mockImplementation(() => { order.push('leave'); });
+      const handler = makeHandler({ retractTyping });
+
+      await handler.handleConversationLeave(socket, { conversationId: CONV_ID });
+
+      expect(order).toEqual(['retract', 'leave']);
+    });
+
+    // Une retraction qui échoue ne doit pas empêcher la sortie de room : le
+    // client a demandé à partir, il part.
+    it('still leaves the room when the retraction throws', async () => {
+      const retractTyping = jest.fn<(socket: unknown, conversationId: string) => Promise<void>>()
+        .mockRejectedValue(new Error('typing state unavailable'));
+      const socket = makeSocket();
+      const handler = makeHandler({ retractTyping });
+
+      await expect(handler.handleConversationLeave(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_LEFT,
+        { conversationId: CONV_ID, userId: USER_ID }
+      );
+    });
+
+    // Aucune dépendance câblée (tous les call sites existants) : le handler
+    // reste fonctionnel, il ne retracte simplement rien.
+    it('leaves normally when no retraction is wired', async () => {
+      const socket = makeSocket();
+      const handler = makeHandler();
+
+      await expect(handler.handleConversationLeave(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
+    });
+
+    // La conversation n'est résolue QU'UNE FOIS. Router la retraction par le
+    // point d'entrée complet de `typing:stop` la ferait re-normaliser, soit un
+    // second `conversation.findUnique` facturé à CHAQUE changement de
+    // conversation. Le test « id normalisé, pas brut » ci-dessus prouve QUOI
+    // est passé ; celui-ci prouve ce que ça a coûté.
     it('resolves the conversation once — the retraction reuses the resolved id', async () => {
-      // `handleConversationLeave` already normalises for its room name. Routing
-      // the retraction through the full `typing:stop` entry point instead would
-      // bill a second `conversation.findUnique` to EVERY conversation switch.
       const retractTyping = makeRetractTyping();
       const socket = makeSocket();
       const handler = makeHandler({ retractTyping });
@@ -487,20 +550,8 @@ describe('ConversationHandler', () => {
       expect(mockNormalizeConversationId).toHaveBeenCalledTimes(1);
     });
 
-    it('still leaves the room when the retraction fails', async () => {
-      const retractTyping = jest.fn<any>().mockRejectedValue(new Error('DB unreachable'));
-      const socket = makeSocket();
-      const handler = makeHandler({ retractTyping });
-
-      await handler.handleConversationLeave(socket, { conversationId: CONV_ID });
-
-      expect(socket.leave).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_LEFT,
-        { conversationId: CONV_ID, userId: USER_ID }
-      );
-    });
-
+    // Un payload refusé sort avant toute résolution : rien n'a été diffusé sous
+    // cet identifiant, il n'y a rien à retracter — et surtout rien à facturer.
     it('does not retract when the payload was rejected', async () => {
       mockValidateSocketEvent.mockReturnValue({ success: false, error: 'Validation failed: x' });
       const retractTyping = makeRetractTyping();

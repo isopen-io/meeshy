@@ -309,104 +309,99 @@ export class StatusHandler {
       return;
     }
 
-    let normalizedId: string;
     try {
-      normalizedId = await normalizeConversationId(
+      const normalizedId = await normalizeConversationId(
         validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
+      await this.retractTypingIn(socket, normalizedId);
     } catch (error) {
       logger.error('typing:stop failed', { error });
-      return;
     }
-
-    await this.retractTypingIn(socket, normalizedId);
   }
 
   /**
-   * Retracts the typing indicator THIS socket broadcast in `normalizedId` —
-   * the whole of `typing:stop` past the point where the conversation id is
-   * known, and nothing else. The id must already be resolved.
+   * Retracte la frappe que CE socket a diffusée dans UNE conversation, déjà
+   * normalisée.
    *
-   * Split out because `typing:stop` is not the only way a burst ends:
-   * `conversation:leave` ends one too, and switching conversation does not
-   * disconnect the socket, so `handleSocketDisconnecting` never sees it. That
-   * caller has ALREADY resolved the conversation id for its own room name, so
-   * it takes an id rather than a payload — routing it through `handleTypingStop`
-   * would bill a second `conversation.findUnique` to every conversation switch.
+   * Deux entrées, un seul énoncé : le `typing:stop` explicite du client
+   * (ci-dessus) et le départ de la conversation
+   * (`ConversationHandler.handleConversationLeave`). La seconde existe parce
+   * que `disconnecting` était le seul autre chemin de retraction, et que
+   * changer de conversation ne déconnecte pas le socket — les pairs gardaient
+   * donc un « X est en train d'écrire… » fantôme jusqu'à leur propre filet de
+   * sécurité local.
    *
-   * Never rejects: on the leave path an escaping rejection would abort the leave
-   * and strand the socket in the room it asked to leave.
+   * Prend l'id DÉJÀ RÉSOLU : les deux appelants viennent de le normaliser, et
+   * le refaire coûterait un `findUnique` par changement de conversation.
    */
   async retractTypingIn(socket: Socket, normalizedId: string): Promise<void> {
-    try {
-      // A typing:stop retracts a typing:start THIS socket broadcast, and
-      // `activeTypers` is the record of exactly that — `_trackTyping` runs on
-      // every start that cleared the participant and privacy gates. So the
-      // tracking entry is at once the authorisation, the audience and the
-      // payload of the retraction, and nothing else may override it:
-      //
-      //  · No entry ⇒ nothing was ever shown to peers, so there is nothing to
-      //    take back. Returning here BEFORE any I/O also closes an
-      //    amplification asymmetry: typing:start is rate-limited, typing:stop
-      //    is not, and the old path spent `resolveParticipant` + the privacy
-      //    lookup + the blocked-viewer query and then fanned a spurious
-      //    retraction across the whole room for every unmatched packet a client
-      //    cared to send.
-      //  · An entry ⇒ the start already passed the participant and privacy
-      //    gates when it was broadcast. Re-checking them here can only refuse
-      //    to take back something peers have already been shown, which is how a
-      //    participant removed mid-burst — or one who turned the indicator off
-      //    mid-burst — left a phantom "typing…" behind.
-      //  · The entry carries the identity the start went out under, so the
-      //    retraction matches it even across a rename, and owes no lookup.
-      const tracked = (this.activeTypers.get(socket.id) ?? []).find(
-        t => t.conversationId === normalizedId
-      );
-      if (!tracked) return;
-      const userId = tracked.userId;
+    // A typing:stop retracts a typing:start THIS socket broadcast, and
+    // `activeTypers` is the record of exactly that — `_trackTyping` runs on
+    // every start that cleared the participant and privacy gates. So the
+    // tracking entry is at once the authorisation, the audience and the
+    // payload of the retraction, and nothing else may override it:
+    //
+    //  · No entry ⇒ nothing was ever shown to peers, so there is nothing to
+    //    take back. Returning here BEFORE any I/O also closes an
+    //    amplification asymmetry: typing:start is rate-limited, typing:stop
+    //    is not, and the old path spent `resolveParticipant` + the privacy
+    //    lookup + the blocked-viewer query and then fanned a spurious
+    //    retraction across the whole room for every unmatched packet a client
+    //    cared to send.
+    //  · An entry ⇒ the start already passed the participant and privacy
+    //    gates when it was broadcast. Re-checking them here can only refuse
+    //    to take back something peers have already been shown, which is how a
+    //    participant removed mid-burst — or one who turned the indicator off
+    //    mid-burst — left a phantom "typing…" behind.
+    //  · The entry carries the identity the start went out under, so the
+    //    retraction matches it even across a rename, and owes no lookup.
+    const tracked = (this.activeTypers.get(socket.id) ?? []).find(
+      t => t.conversationId === normalizedId
+    );
+    if (!tracked) return;
+    const userId = tracked.userId;
 
-      // Cleanup is unconditional from here: a socket that reaches this point
-      // MUST shed its tracking entry and throttle window even if the retraction
-      // below is suppressed (another device still typing) — otherwise the leak
-      // this guard fixes would reappear on that path.
-      this._untrackTyping(socket.id, normalizedId);
-      // An explicit stop ends the typing burst, so drop the throttle window for
-      // this (user, conversation): the next typing:start is a NEW burst and must
-      // not be swallowed by the 2s coalescing guard (start→stop→start is the
-      // common "send a message then immediately type the next" flow).
-      this.typingThrottleMap.delete(`${userId}:${normalizedId}`);
+    // Cleanup is unconditional from here: a socket that reaches this point
+    // MUST shed its tracking entry and throttle window even if the retraction
+    // below is suppressed (another device still typing) — otherwise the leak
+    // this guard fixes would reappear on that path.
+    this._untrackTyping(socket.id, normalizedId);
+    // A retraction ends the typing burst — whether the client asked for it or
+    // left the conversation — so drop the throttle window for this
+    // (user, conversation): the next typing:start is a NEW burst and must not
+    // be swallowed by the 2s coalescing guard (start→stop→start is the common
+    // "send a message then immediately type the next" flow, and
+    // leave→re-enter→type is its equivalent across a conversation switch).
+    this.typingThrottleMap.delete(`${userId}:${normalizedId}`);
 
-      const typingEvent: TypingEvent = {
-        userId: userId,
-        username: tracked.username,
-        displayName: tracked.displayName,
-        conversationId: normalizedId,
-        isTyping: false
-      };
+    const typingEvent: TypingEvent = {
+      userId: userId,
+      username: tracked.username,
+      displayName: tracked.displayName,
+      conversationId: normalizedId,
+      isTyping: false
+    };
 
-      // Multi-device suppression: the typing indicator is a per-USER signal
-      // (peers render one "Alice is typing…" per user, not per device). If the
-      // same user is still tracked as typing on ANOTHER socket in this
-      // conversation, an explicit stop from this device must NOT retract the
-      // indicator peers still owe to the other device. Mirrors the disconnect
-      // guard in `handleSocketDisconnecting`; without it, a second device that
-      // started typing within the shared 2s throttle window (tracked but not
-      // re-broadcast) has its "still typing" state wrongly cleared. Checked
-      // AFTER this socket is untracked above — it inspects OTHER sockets only
-      // (`sid !== socket.id`), so untracking self does not affect the result.
-      const anotherIsTyping = [...(this.userSockets.get(userId) ?? [])].some(
-        sid => sid !== socket.id &&
-          (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === normalizedId)
-      );
-      if (!anotherIsTyping) {
-        const room = ROOMS.conversation(normalizedId);
-        const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
-        const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
-        emitter.emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
-      }
-    } catch (error) {
-      logger.error('typing retraction failed', { error, conversationId: normalizedId });
+    // Multi-device suppression: the typing indicator is a per-USER signal
+    // (peers render one "Alice is typing…" per user, not per device). If the
+    // same user is still tracked as typing on ANOTHER socket in this
+    // conversation, an explicit stop from this device must NOT retract the
+    // indicator peers still owe to the other device. Mirrors the disconnect
+    // guard in `handleSocketDisconnecting`; without it, a second device that
+    // started typing within the shared 2s throttle window (tracked but not
+    // re-broadcast) has its "still typing" state wrongly cleared. Checked
+    // AFTER this socket is untracked above — it inspects OTHER sockets only
+    // (`sid !== socket.id`), so untracking self does not affect the result.
+    const anotherIsTyping = [...(this.userSockets.get(userId) ?? [])].some(
+      sid => sid !== socket.id &&
+        (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === normalizedId)
+    );
+    if (!anotherIsTyping) {
+      const room = ROOMS.conversation(normalizedId);
+      const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
+      const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
+      emitter.emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
     }
   }
 

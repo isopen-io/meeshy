@@ -22,11 +22,19 @@ export interface ConversationHandlerDependencies {
   socketToUser: Map<string, string>;
   readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
   /**
-   * Retracts the typing indicator this socket broadcast in an ALREADY-resolved
-   * conversation — `StatusHandler.retractTypingIn`. Injected as a function so a
-   * leave owes nothing to the typing handler beyond this one obligation.
+   * Retracte la frappe que CE socket a diffusée dans la conversation qu'il
+   * quitte — `StatusHandler.retractTypingIn` en pratique.
+   *
+   * Sans elle, seul `disconnecting` retracte, et changer de conversation ne
+   * déconnecte pas le socket : les pairs gardent un « X est en train
+   * d'écrire… » fantôme jusqu'à leur propre filet de sécurité. La conversation
+   * est passée DÉJÀ NORMALISÉE — ce handler l'a résolue, la faire re-résoudre
+   * coûterait un second `findUnique` à chaque changement de conversation.
+   *
+   * Optionnelle : un `ConversationHandler` construit sans elle quitte
+   * normalement, il ne retracte simplement rien.
    */
-  retractTyping: (socket: Socket, normalizedConversationId: string) => Promise<void>;
+  retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
 }
 
 export class ConversationHandler {
@@ -34,7 +42,7 @@ export class ConversationHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
-  private retractTyping: (socket: Socket, normalizedConversationId: string) => Promise<void>;
+  private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -200,18 +208,17 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      // Take back what this socket broadcast, then leave. Switching conversation
-      // does NOT disconnect the socket, so `StatusHandler.handleSocketDisconnecting`
-      // — the only other server-side retraction — never fires here: a user who was
-      // mid-word when they opened another conversation left a phantom "typing…"
-      // with every peer, on every client with no local retraction of its own.
-      // Issued while still in the room (the retraction is addressed to it), with
-      // the id `normalizeConversationId` already resolved above so a switch pays
-      // no second lookup — and non-blocking, since a failed retraction must not
-      // strand this socket in a room it asked to leave.
-      await this.retractTyping(socket, normalizedId).catch(error => {
-        logger.warn('typing retraction on conversation:leave failed (non-blocking)', { conversationId: normalizedId, error });
-      });
+      // Retracter AVANT de sortir : « je retire ce que j'ai diffusé, puis je
+      // sors ». Le try/catch est local et non le try/catch général — une
+      // retraction qui échoue ne doit pas transformer un départ demandé par le
+      // client en `conversation:leave` refusé.
+      if (this.retractTyping) {
+        try {
+          await this.retractTyping(socket, normalizedId);
+        } catch (error) {
+          logger.error('conversation:leave — typing retraction failed', { error, conversationId: normalizedId });
+        }
+      }
 
       const room = ROOMS.conversation(normalizedId);
       await socket.leave(room);
